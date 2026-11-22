@@ -646,7 +646,7 @@ def validate_expression_data(native, proof, title, composition):
         if item.get('alias') != alias or item.get('path') != paths[index] or expression_parameter(item.get('parameter')) != expected_parameters[index] or \
                 after.get('expressionType') != syntax or definition.get('language') != syntax or definition.get('source') != sources[index] or \
                 definition.get('resultType', {}).get('alias') != 'String' or definition.get('resultType', {}).get('collectionKind', 'Single') != 'Single' or \
-                definition.get('capabilityProfile') != 'binding-pure-v1':
+                definition.get('capabilityProfile') != 'binding-readonly-v1':
             raise ValueError('Expression source/carrier differs from the installed adapter contract')
         parameters = definition.get('parameters', {})
         previous = before.get('value', {})
@@ -693,7 +693,7 @@ def validate_expression_preservation(native, proof):
         if item.get('before') != item.get('after') or item.get('noWritesOpeningOrCancelling') is not True or \
                 item.get('before', {}).get('expressionType') != item['syntax'] or definition.get('language') != item['syntax'] or \
                 definition.get('parameters') != {'manual': {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None}} or \
-                definition.get('options') != {'preserve': True} or definition.get('metadata') != {'original': 'keep'} or definition.get('capabilityProfile') != 'binding-pure-v1' or \
+                definition.get('options') != {'preserve': True} or definition.get('metadata') != {'original': 'keep'} or definition.get('capabilityProfile') != 'binding-readonly-v1' or \
                 definition.get('futureCarrier') != {'opaque': ['keep', None, 7]} or argument != item.get('afterArgument') or argument.get('value') != item['before'] or \
                 argument.get('referenceKey') != 'text' or argument.get('autoEvaluate') is not False or conversion.get('mode') != 'profile' or \
                 conversion.get('profile') != {'id': 'partner.customer-json', 'version': '3'} or conversion.get('limits', {}).get('maxDepth') != 8 or conversion.get('options') != {'preserved': True}:
@@ -1232,7 +1232,11 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                     report['playbackHostProfiles'] = profiles
                     report['playbackPinReadPolicy'] = 'Owned default copy has executable cache disabled for an exact native READ fault'
                     playback_profiles(owned, data, backend_project, studio_project, output, env, owned_processes, report['ownedPids'], profiles)
-                    browser_env['UX_PLAYBACK_PROFILES'] = json.dumps(profiles)
+                    # Keep full binary/config provenance in the report. The browser only needs routing and
+                    # feature omissions; passing all file hashes can exceed the OS's per-environment limit.
+                    browser_env['UX_PLAYBACK_PROFILES'] = json.dumps({
+                        name: {key: profile[key] for key in ('backendUrl', 'studioUrl', 'removedFeatures')}
+                        for name, profile in profiles.items()})
                 report['stage'] = 'journeys'
                 browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                 if journey is not None:

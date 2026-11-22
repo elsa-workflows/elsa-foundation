@@ -67,7 +67,7 @@ try
     var context = host.Services.GetRequiredService<RuntimeDbContext>();
     if (context.Database.HasPendingModelChanges()) throw new InvalidDataException("Fixture model has pending changes.");
     var migrations = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
-    if (migrations.Length != 8) throw new InvalidDataException("The eight official Runtime migrations were not applied.");
+    if (migrations.Length != 9) throw new InvalidDataException("The nine official Runtime migrations were not applied.");
     var gate = host.Services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType())
         ?? throw new InvalidDataException("Missing actual schema gate.");
     var version = gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)?.WriteVersion;

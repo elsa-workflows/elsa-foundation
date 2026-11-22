@@ -295,7 +295,7 @@ internal static partial class RuntimeHistoryCheckpointProviderContract
         internal async Task Create(bool captured)
         {
             await using var context = Open(); Assert.False(context.Database.HasPendingModelChanges()); await context.Database.MigrateAsync();
-            Assert.Equal(8, (await context.Database.GetAppliedMigrationsAsync()).Count()); Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+            Assert.Equal(9, (await context.Database.GetAppliedMigrationsAsync()).Count()); Assert.Empty(await context.Database.GetPendingMigrationsAsync());
             var native = EfWorkflowExecutionStateStore.ToEntity(Workflow(Scope, captured), Scope, EfWorkflowExecutionStateStore.CreateId(Scope, RunId), 1);
             var foreign = EfWorkflowExecutionStateStore.ToEntity(Workflow(ForeignScope, true), ForeignScope, EfWorkflowExecutionStateStore.CreateId(ForeignScope, RunId), 1);
             foreignContent = foreign.ContentJson; context.WorkflowExecutionStates.AddRange(native, foreign); await context.SaveChangesAsync();

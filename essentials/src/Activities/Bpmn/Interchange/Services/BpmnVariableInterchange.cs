@@ -9,7 +9,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 internal static class BpmnVariableInterchange
 {
     private static readonly HashSet<string> ScalarAliases = new(StringComparer.Ordinal)
-        { "Object", "String", "Boolean", "Int32", "Int64", "Decimal", "Double", "Single", "Elsa.Any" };
+        { TypeAliasConvention.AnyAlias, "Object", "String", "Boolean", "Int32", "Int64", "Decimal", "Double", "Single", "Elsa.Any" };
 
     public static bool TryExport(VariableDefinition variable, out LibModel.BpmnVariableDeclaration declaration, out string? reason)
     {

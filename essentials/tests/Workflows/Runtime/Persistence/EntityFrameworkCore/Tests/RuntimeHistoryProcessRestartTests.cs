@@ -67,7 +67,7 @@ public sealed class RuntimeHistoryProcessRestartTests(ITestOutputHelper output)
                 Assert.Equal(seed.Version, reply.Version); Assert.Equal(seed.AppliedMigrations, reply.AppliedMigrations);
                 Assert.Equal(new[] { "20261017151421_Initial", "20261028210825_ModelExecutionState",
                     "20261028214345_ModelMaterialKind", "20261102222549_UserTasks",
-                    "20261103045250_OutboxClaimDeliveredAt", "20261113205347_StandaloneTriggers", "20261114005143_RunHistoryTimeline", "20261121222332_TimerHistoryOwnership" }, reply.AppliedMigrations);
+                    "20261103045250_OutboxClaimDeliveredAt", "20261113205347_StandaloneTriggers", "20261114005143_RunHistoryTimeline", "20261118120000_VariableLifecycleInspection", "20261121222332_TimerHistoryOwnership" }, reply.AppliedMigrations);
             });
             output.WriteLine(JsonSerializer.Serialize(new { mode, replies }, Json));
         }

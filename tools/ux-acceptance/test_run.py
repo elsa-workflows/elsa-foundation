@@ -34,7 +34,7 @@ def expression_fixture(syntax='JavaScript', composition='normal'):
     before_sources = ['', sources[1].removesuffix('args.data2' if syntax == 'JavaScript' else '{{ data2 }}'),
                       sources[2].removesuffix('args.data3' if whole_only else 'args.data3["a.b"][""]' if syntax == 'JavaScript' else '{{ data3["a.b"][""] }}')]
     carrier = {'language': syntax, 'source': '', 'resultType': {'alias': 'String', 'collectionKind': 'Single'},
-               'parameters': {}, 'options': {}, 'capabilityProfile': 'binding-pure-v1'}
+               'parameters': {}, 'options': {}, 'capabilityProfile': 'binding-readonly-v1'}
     insertions, contexts = [], []
     for index, (alias, path) in enumerate(zip(['data', 'data2', 'data3'], paths)):
         before = {'expressionType': syntax, 'value': {**copy.deepcopy(carrier), 'source': before_sources[index]}} if index else {'expressionType': syntax, 'value': ''}
@@ -863,7 +863,16 @@ class OrchestrationTests(unittest.TestCase):
                 events.append(('restrict', root.name))
                 return {'subject': 'reader-id'}
 
+            original_fingerprints = acceptance.fingerprints
+
+            def large_host_fingerprints(directory):
+                hashes = original_fingerprints(directory)
+                if directory.name in ('workbench', 'studio'):
+                    hashes.update({f'qualification-asset-{index}.dll': 'a' * 64 for index in range(2000)})
+                return hashes
+
             with patch.object(acceptance, 'ROOT', source), patch.object(acceptance, 'command', fake_command), patch.object(acceptance, 'host', fake_host), \
+                    patch.object(acceptance, 'fingerprints', large_host_fingerprints), \
                     patch.object(acceptance, 'prepare_host', fake_prepare), patch.object(acceptance, 'restrict_seeded_reader', fake_restrict), \
                     patch.object(acceptance, 'verdict', return_value=70), \
                     patch.object(acceptance.subprocess, 'check_output', side_effect=lambda args, **_: 'abc' if 'rev-parse' in args else ''), \
@@ -893,13 +902,16 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
         profiles = json.loads(browser['UX_PLAYBACK_PROFILES'])
         self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+        self.assertGreater(len(json.dumps(report['playbackHostProfiles']).encode()), 128 * 1024)
+        self.assertLess(len(browser['UX_PLAYBACK_PROFILES'].encode()), 4096)
         for index, name in enumerate(('disabled', 'uncaptured', 'unsupported')):
             backend, studio = owned[4 + index * 2:6 + index * 2]
             self.assertEqual(('dashboard-reader', 'history-reader'), backend[9])
             self.assertEqual('/__qualification/ready', backend[8])
             self.assertEqual(backend[3], studio[6])
             self.assertEqual((backend[3], studio[3]), (profiles[name]['backendUrl'], profiles[name]['studioUrl']))
-            self.assertTrue(all(profiles[name]['binaryAndConfigHashes'].values()))
+            self.assertEqual({'backendUrl', 'studioUrl', 'removedFeatures'}, set(profiles[name]))
+            self.assertTrue(all(report['playbackHostProfiles'][name]['binaryAndConfigHashes'].values()))
         self.assertEqual({'Enabled': False}, owned[4][10]['history'])
         self.assertIsNone(owned[6][10]['history'])
         self.assertIs(owned[8][10]['omitted'], True)
@@ -1188,7 +1200,7 @@ class ExpressionProofTests(unittest.TestCase):
 
     def test_expression_proof_rejects_wrong_authority_path_carrier_context_and_runtime(self):
         for change in ['canonical-identity', 'literal-path', 'requested-path', 'snapshot', 'before', 'stored-parameter', 'source', 'capability',
-                       'raw-options', 'metadata-loss', 'runtime', 'recorded-response', 'wrong-context', 'definition-mix', 'member-default']:
+                       'raw-options', 'metadata-loss', 'runtime', 'recorded-response', 'wrong-context', 'definition-mix', 'member-default', 'retired-profile']:
             with self.subTest(change=change):
                 native, proof = copy.deepcopy(expression_fixture(composition='default-off'))
                 item = proof['insertions'][2]; admission = item['admission']
@@ -1199,6 +1211,7 @@ class ExpressionProofTests(unittest.TestCase):
                 if change == 'before': admission['request']['snapshot']['rootActivity']['structure']['payload']['activities'][0]['inputs'][0]['value'] = {'expressionType': 'Literal', 'value': 'not-before'}
                 if change == 'stored-parameter': item['after']['value']['parameters']['data3']['kind'] = 'VariableMember'
                 if change == 'source': item['after']['value']['source'] = 'args.data3.a.b'
+                if change == 'retired-profile': item['after']['value']['capabilityProfile'] = 'binding-pure-v1'
                 if change == 'capability': admission['response']['analysis']['expressionParametersEnabled'] = False
                 if change == 'raw-options': proof['insertions'][0]['after']['value']['options'] = {'ambient': True}
                 if change == 'metadata-loss': item['before']['value']['metadata'] = {'manual': 'keep'}
@@ -1215,7 +1228,7 @@ class ExpressionProofTests(unittest.TestCase):
         for syntax in ['JavaScript', 'Liquid']:
             binding = {'expressionType': syntax, 'value': {'language': syntax, 'source': 'manual source',
                 'parameters': {'manual': {'kind': 'WorkflowRequest', 'memberKey': 'suffix', 'path': None}},
-                'options': {'preserve': True}, 'metadata': {'original': 'keep'}, 'capabilityProfile': 'binding-pure-v1', 'futureCarrier': {'opaque': ['keep', None, 7]}}}
+                'options': {'preserve': True}, 'metadata': {'original': 'keep'}, 'capabilityProfile': 'binding-readonly-v1', 'futureCarrier': {'opaque': ['keep', None, 7]}}}
             argument = {'referenceKey': 'text', 'value': binding, 'autoEvaluate': False,
                         'conversion': {'mode': 'profile', 'profile': {'id': 'partner.customer-json', 'version': '3'}, 'limits': {'maxDepth': 8}, 'options': {'preserved': True}}}
             proof['preserved'].append({'syntax': syntax, 'before': copy.deepcopy(binding), 'after': copy.deepcopy(binding),

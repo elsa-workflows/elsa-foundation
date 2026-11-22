@@ -135,7 +135,7 @@ public sealed class NativeBlockLifecycleTests
                 ["expressionType"] = "JavaScript",
                 ["value"] = new JsonObject
                 {
-                    ["language"] = "JavaScript", ["source"] = "args.instance", ["capabilityProfile"] = "binding-pure-v1", ["options"] = new JsonObject(),
+                    ["language"] = "JavaScript", ["source"] = "args.instance", ["capabilityProfile"] = "binding-readonly-v1", ["options"] = new JsonObject(),
                     ["resultType"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "single" },
                     ["parameters"] = new JsonObject { ["instance"] = new JsonObject { ["kind"] = "WorkflowInstance", ["member"] = "instanceId" } }
                 }

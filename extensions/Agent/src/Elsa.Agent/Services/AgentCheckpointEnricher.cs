@@ -79,13 +79,36 @@ internal sealed class AgentCheckpointEnricher(AgentSettlementBoundary boundary, 
             .Concat(evidence.Plan.ScannedFacades?.Keys ?? []).ToHashSet(StringComparer.Ordinal);
         var final = RelevantActivities(commit, evidence.Plan.FacadeNodes, knownInvocations).ToDictionary(change => change.Id, StringComparer.Ordinal);
         foreach (var before in evidence.Activities)
-            if (!final.Remove(before.Id, out var after) || before != after) throw AgentSettlementBoundary.Invalid();
+            if (!final.Remove(before.Id, out var after) || before.Operation != after.Operation || !SameNativeState(before.State, after.State))
+                throw AgentSettlementBoundary.Invalid();
         // The later control producer can add a previously scanned root to the change set. It
         // may decorate its control fields, but cannot change the native cancellation identity.
         foreach (var added in final.Values)
             if (!evidence.WholeCancelled || added.Operation != RuntimeStateChangeOperation.Upsert ||
                 evidence.Plan.ScannedFacades?.TryGetValue(added.Id, out var scanned) != true ||
-                added.State != WithoutControl(scanned)) throw AgentSettlementBoundary.Invalid();
+                !SameNativeState(WithoutControl(scanned), added.State)) throw AgentSettlementBoundary.Invalid();
+    }
+
+    private static bool SameNativeState(ActivityExecutionState before, ActivityExecutionState after)
+    {
+        // The committer owns lifecycle numbering after enrichment. Keep every write's semantic evidence,
+        // including its order, while allowing that phase to replace only its commit sequence.
+        if (before.VariableWrites is { } priorWrites && after.VariableWrites is { } finalWrites)
+        {
+            if (priorWrites.Count != finalWrites.Count || priorWrites.Zip(finalWrites).Any(pair =>
+                    pair.First != (pair.Second with { CommitSequence = pair.First.CommitSequence })))
+                return false;
+        }
+        else if (before.VariableWrites != after.VariableWrites) return false;
+
+        return before == after with
+        {
+            VariableWrites = before.VariableWrites,
+            Transitions = before.Transitions,
+            FirstCommitSequence = before.FirstCommitSequence,
+            LastCommitSequence = before.LastCommitSequence,
+            LostUpdateWarningCount = before.LostUpdateWarningCount
+        };
     }
 
     private static ActivityExecutionState WithoutControl(ActivityExecutionState state) =>

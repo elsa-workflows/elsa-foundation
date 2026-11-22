@@ -186,7 +186,7 @@ public sealed partial class StandaloneTriggerManagementTests
     [Fact]
     public void Expression_wire_roundtrip_keeps_template_shape_explicit_null_and_exact_large_integer()
     {
-        var wire = Element("""[{"inputName":"Amount","binding":{"kind":"Expression","template":{"language":"javascript","source":"amount","resultType":{"alias":"UInt64","collectionKind":"Single"},"options":{},"capabilityProfile":"binding-pure-v1"},"parameters":{"amount":{"kind":"Literal","value":18446744073709551615},"optional":{"kind":"Literal","value":null},"name":{"kind":"SourceField","path":["payload","name"]}}}}]""");
+        var wire = Element("""[{"inputName":"Amount","binding":{"kind":"Expression","template":{"language":"javascript","source":"amount","resultType":{"alias":"UInt64","collectionKind":"Single"},"options":{},"capabilityProfile":"binding-readonly-v1"},"parameters":{"amount":{"kind":"Literal","value":18446744073709551615},"optional":{"kind":"Literal","value":null},"name":{"kind":"SourceField","path":["payload","name"]}}}}]""");
         var mapping = Assert.Single(TriggerManagement.ReadMappings(wire));
         var expression = Assert.IsType<TriggerExpressionBinding>(mapping.Binding);
         Assert.Equal("18446744073709551615", Assert.IsType<TriggerLiteralBinding>(expression.Parameters["amount"]).Value.GetRawText());

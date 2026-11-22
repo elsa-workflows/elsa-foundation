@@ -43,7 +43,7 @@ internal sealed class PrimitiveReleaseOccurrenceInspector(IReleaseRuntimeSiteRea
             if (contract.ActivityTypeKey != node.ActivityType || contract.ContractVersion != node.ActivityTypeVersion ||
                 contract.DescriptorKind != typeof(ClrActivityDescriptor).FullName || contract.Activation.DescriptorKind != contract.DescriptorKind ||
                 contract.Activation.Capability != alias || !JsonElement.DeepEquals(contract.DescriptorPayload, node.DescriptorPayload) ||
-                contract.SideEffectProfile != SideEffectProfile.ReplaySafe || contract.SupportsBackgroundExecution ||
+                contract.SideEffectProfile != SideEffectProfile.ReplaySafe ||
                 contract.Result.Type != new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(ActivityUnit))) ||
                 !contract.Result.IsRequired || contract.Result.Projections.Count != 0 || !contract.Outcomes.ToHashSet(StringComparer.Ordinal).SetEquals(["Done"]) ||
                 contract.Inputs.Count != 1 || !contract.Inputs.TryGetValue(inputKey, out var input) ||

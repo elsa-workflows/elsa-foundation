@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Publishing.Releases.Runtime.Tests;
 
 public sealed class ActivityTemplateHasherTests
 {
-    // Observed through the original Publishing helper before the algorithm moved to Runtime.
-    // Original helper source SHA-256: 9934b25ad5ed04b700db83d56cbb634e327c428098a695c56aecb844bddde853.
+    // Minimal/value vectors retain the original Publishing helper's contract. The expression-bearing vector
+    // follows the accepted capability profile, which is itself part of the captured behavioral identity.
     private const string MinimalHash = "sha256:82189d4ffd4a775a87743a10a428873bdcc6a27735d9b9d38b5c48457f20b4d0";
     private const string RichHash = "sha256:54c70f6834ebefa6b00199623344ebd4dddbb6d05bed588c99b9242096c67cee";
     private const string ValueHash = "sha256:913d823b7d53f28a0f2954f196284e8c3526e53ea31dafc74f4378c5b4459895";
@@ -29,7 +29,7 @@ public sealed class ActivityTemplateHasherTests
             "rich" => Hash(Rich()),
             _ => ActivityTemplateHasher.ComputeCanonicalValueHash(Json(CanonicalValue))
         };
-        Assert.Equal(expected, actual);
+        Assert.True(StringComparer.Ordinal.Equals(expected, actual), $"Captured {vector} hash: expected {expected}; observed {actual}.");
     }
 
     [Fact]
@@ -132,7 +132,8 @@ public sealed class ActivityTemplateHasherTests
                         ["variable"] = new VariableExpressionParameterBinding("workflow", "balance"),
                         ["result"] = new ActivityResultExpressionParameterBinding("previous", "Result", true),
                         ["instance"] = new WorkflowInstanceExpressionParameterBinding("correlationId")
-                    }, options: Json("{\"strict\":true}"), parameterConversionPlans: new Dictionary<string, ValueConversionPlan> { ["literal"] = conversion })),
+                    }, options: Json("{\"strict\":true}"), capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1,
+                    parameterConversionPlans: new Dictionary<string, ValueConversionPlan> { ["literal"] = conversion })),
             ["secret"] = new("secret", type, policy, RuntimeInputBindingSource.SecretRead,
                 secret: new("payments-key", "api-key", "finance")),
             ["withheld"] = new("withheld", type, policy, RuntimeInputBindingSource.Literal,

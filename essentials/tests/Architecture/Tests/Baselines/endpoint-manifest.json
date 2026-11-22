@@ -48,7 +48,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyList`1[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Diagnostics.StructuredLogs.Core.Models.LogSource, Elsa.Diagnostics.StructuredLogs.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -437,7 +437,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView`1[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -670,7 +670,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView`1[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -827,7 +827,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView`1[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -2083,7 +2083,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IEnumerable`1[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -2740,7 +2740,7 @@
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: GET publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export",
+      "displayName": "HTTP: GET publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/executable-export",
       "methods": [
         "GET"
       ],
@@ -2766,7 +2766,7 @@
         }
       ],
       "route": {
-        "value": "/publishing/workflows/{param:regex(^(?!drafts$).+$)}/executable-export"
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/executable-export"
       },
       "securityDisposition": {
         "kind": "Permission",
@@ -2779,7 +2779,7 @@
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight",
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
       "methods": [
         "POST"
       ],
@@ -2805,7 +2805,7 @@
         }
       ],
       "route": {
-        "value": "/publishing/workflows/{param:regex(^(?!drafts$).+$)}/preflight"
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/preflight"
       },
       "securityDisposition": {
         "kind": "Permission",
@@ -2818,7 +2818,7 @@
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish",
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
       "methods": [
         "POST"
       ],
@@ -2844,7 +2844,7 @@
         }
       ],
       "route": {
-        "value": "/publishing/workflows/{param:regex(^(?!drafts$).+$)}/publish"
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/publish"
       },
       "securityDisposition": {
         "kind": "Permission",
@@ -2857,7 +2857,7 @@
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs",
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs",
       "methods": [
         "POST"
       ],
@@ -2883,7 +2883,7 @@
         }
       ],
       "route": {
-        "value": "/publishing/workflows/{param:regex(^(?!drafts$).+$)}/test-runs"
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/test-runs"
       },
       "securityDisposition": {
         "kind": "Permission",
@@ -4115,7 +4115,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection`1[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -4427,7 +4427,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection`1[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -5207,7 +5207,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyList`1[[Elsa.Workflows.Runtime.Api.Models.VariableSummaryView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyList\u00601[[Elsa.Workflows.Runtime.Api.Models.VariableSummaryView, Elsa.Workflows.Runtime.Api, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],

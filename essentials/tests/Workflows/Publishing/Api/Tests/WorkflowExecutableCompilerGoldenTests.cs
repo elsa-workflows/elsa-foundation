@@ -23,6 +23,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Xunit.Abstractions;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -37,7 +38,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// change a semantic input to content hashing. The hash is the sharpest guard (any drift in the canonical hashing
 /// payload changes it), so it is asserted explicitly in addition to being embedded in the serialized golden.
 /// </summary>
-public sealed class WorkflowExecutableCompilerGoldenTests
+public sealed class WorkflowExecutableCompilerGoldenTests(ITestOutputHelper output)
 {
     private static readonly DateTimeOffset Now = new(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
@@ -106,7 +107,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         AssertMatchesGolden("legacy-null-compatibility", restored);
     }
 
-    private static void AssertMatchesGolden(string corpusName, WorkflowExecutable executable)
+    private void AssertMatchesGolden(string corpusName, WorkflowExecutable executable)
     {
         var actualJson = CanonicalJson(executable);
         var goldenPath = GoldenPath(corpusName);
@@ -128,6 +129,8 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         }
 
         var expectedJson = File.ReadAllText(goldenPath);
+        if (!StringComparer.Ordinal.Equals(Normalize(expectedJson), Normalize(actualJson)))
+            output.WriteLine($"Observed canonical golden for {corpusName}:\n{actualJson}");
         Assert.Equal(Normalize(expectedJson), Normalize(actualJson));
 
         // Explicit, independent hash pin: the sharpest byte-identity guard.

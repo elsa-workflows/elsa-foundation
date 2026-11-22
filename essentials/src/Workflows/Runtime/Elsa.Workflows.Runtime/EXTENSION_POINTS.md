@@ -1398,7 +1398,7 @@ User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 by
 ### `ITriggerInputMapper` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Scoped replacement using the ordinary declared workflow-input validator.
 - **Signature:** `ValidateMappings(contract, mappings)` performs preflight without evaluation; `MapAsync(contract, mappings, detachedSource, ...)` returns validated normalized values/findings.
-- **Implementation/registration:** Runtime's internal `TriggerInputMapper` supports literal/source selectors and installed binding-pure expressions. `StandaloneTriggerRuntimeRegistration` selects the scoped mapper with `TryAdd`; a host may explicitly replace it. Duplicate final registrations fail composition.
+- **Implementation/registration:** Runtime's internal `TriggerInputMapper` supports literal/source selectors and installed binding-readonly-v1 expressions. `StandaloneTriggerRuntimeRegistration` selects the scoped mapper with `TryAdd`; a host may explicitly replace it. Duplicate final registrations fail composition.
 - **Usage/override:** preserve missing versus explicit null, exact numeric values, declared destinations and safe failures. Unknown languages/profiles, unavailable evaluators and incompatible values refuse before admission. Only detached declared parameters reach expressions, and evaluator exception text is not disclosed. Mapping installs no trigger or delivery pump.
 
 ## Standalone delivery protocol contracts

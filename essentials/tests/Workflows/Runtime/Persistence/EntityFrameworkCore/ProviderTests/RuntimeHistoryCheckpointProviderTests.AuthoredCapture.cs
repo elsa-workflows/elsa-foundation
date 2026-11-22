@@ -48,7 +48,7 @@ internal static partial class RuntimeHistoryCheckpointProviderContract
         host.InitializeActivityTypes();
         var context = host.Services.GetRequiredService<RuntimeDbContext>();
         Assert.False(context.Database.HasPendingModelChanges());
-        Assert.Equal(8, (await context.Database.GetAppliedMigrationsAsync()).Count());
+        Assert.Equal(9, (await context.Database.GetAppliedMigrationsAsync()).Count());
         var reader = host.Services.GetRequiredService<IRuntimeHistoryStore>();
         var writer = host.Services.GetRequiredService<IRuntimeCheckpointCommitStore>();
         Assert.True(writer.SupportsHistory); Assert.True(writer.CanCommitHistory(reader));

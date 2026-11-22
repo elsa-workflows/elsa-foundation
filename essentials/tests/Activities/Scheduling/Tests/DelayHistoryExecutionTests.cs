@@ -59,7 +59,7 @@ public sealed class DelayHistoryExecutionTests
             {
                 var context = harness.Services.GetRequiredService<RuntimeDbContext>();
                 Assert.False(context.Database.HasPendingModelChanges());
-                Assert.Equal(8, (await context.Database.GetAppliedMigrationsAsync()).Count());
+                Assert.Equal(9, (await context.Database.GetAppliedMigrationsAsync()).Count());
                 var gate = harness.Services.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(context.GetType());
                 Assert.NotNull(gate);
                 Assert.Equal(RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);

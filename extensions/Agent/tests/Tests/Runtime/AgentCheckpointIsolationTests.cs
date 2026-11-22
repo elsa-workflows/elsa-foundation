@@ -152,6 +152,12 @@ public sealed partial class AgentNativeTests
         Assert.Equal(cancel && facade && !alreadyTerminal ? 1 : 0, final.PostCommitIntents.Count);
         Assert.NotSame(enriched.Checkpoint, final.Checkpoint);
         Assert.True(Assert.Single(final.StateChanges.ActivityExecutions).State.ProducedControl!.IsTerminal);
+        final = final with { StateChanges = final.StateChanges.WithActivityExecutions(final.StateChanges.ActivityExecutions
+            .Select(change => change with { State = change.State with
+            {
+                Transitions = [new(cancel ? ActivityLifecycleTransitionKind.Cancelled : ActivityLifecycleTransitionKind.Completed, 42)],
+                FirstCommitSequence = 42, LastCommitSequence = 42, LostUpdateWarningCount = 0
+            } }).ToArray()) };
         await agentEnricher.ValidateFinalAsync(final);
         Assert.Equal(0, ((ForbiddenCheckpointStore)(object)nativeWorkflows).Calls);
         Assert.Equal(0, ((ForbiddenCheckpointStore)(object)nativeActivities).Calls);

@@ -100,9 +100,11 @@ public sealed partial class RetryFaultedActivityAlterationHandlerTests
         if (!captured) { Assert.Null(page.Head); Assert.Empty(page.Items); await AssertReplayUnchangedAsync(); return; }
         var successorId = superseded.SupersededByActivityExecutionId!;
         var successor = (await selected.GetRequiredService<IActivityExecutionStateStore>().FindAsync("workflow", successorId))!;
-        Assert.Equal(pinned ? ActivityExecutionStatus.Running : ActivityExecutionStatus.Scheduled, successor.Status);
+        var startsWithPinnedInputs = pinned && !reschedule;
+        Assert.Equal(startsWithPinnedInputs ? ActivityExecutionStatus.Running : ActivityExecutionStatus.Scheduled, successor.Status);
+        if (reschedule) Assert.Null(successor.InputSnapshot);
         var created = Assert.Single(page.Items, item => item.ActivityExecutionId == successorId &&
-            item.Name == (pinned ? "ActivityStarted" : "ActivityScheduled"));
+            item.Name == (startsWithPinnedInputs ? "ActivityStarted" : "ActivityScheduled"));
         Assert.Equal(now, created.OccurredAt);
         var sourceControl = Assert.Single(page.Items, item => item.Name == "ControlApplied" && item.ActivityExecutionId == "source");
         Assert.Equal(successorId, sourceControl.Metadata["history.relatedActivityExecutionId"]); Assert.Equal(now, sourceControl.OccurredAt);
