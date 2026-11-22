@@ -152,6 +152,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private State _state = new();
     private bool _writes;
     private int _opaqueDepth;
+    private readonly List<bool> _optionalChains = [];
 
     public bool MayWrite(Script script)
     {
@@ -427,10 +428,22 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             case ClassExpression type: result = ClassValue(type, type.Id, type.Body, type.SuperClass); break;
             case MemberExpression member:
                 var memberReceiver = Evaluate(member.Object);
+                OptionalAccess(member.Optional, memberReceiver);
                 if (member.Computed) EvaluateKey(member.Property);
                 result = Member(memberReceiver, Name(member), member.Object is Super ? _receivers.LastOrDefault() : null);
                 break;
-            case ChainExpression chain: result = Evaluate(chain.Expression); break;
+            case ChainExpression chain:
+                var beforeChain = _state.Copy();
+                _optionalChains.Add(false);
+                result = Evaluate(chain.Expression);
+                var skipped = _optionalChains[^1];
+                _optionalChains.RemoveAt(_optionalChains.Count - 1);
+                if (skipped)
+                {
+                    _state.Join(beforeChain);
+                    result = result.Union(Value.Primitive);
+                }
+                break;
             case YieldExpression yielded:
                 // Iterator suspension/resumption is not interpreted here. A called generator that can hand a
                 // workflow-owned value to that protocol is refused conservatively, rather than losing its ownership
@@ -520,7 +533,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 var beforeRight = _state.Copy();
                 var last = Evaluate(logical.Right);
                 _state.Join(beforeRight);
-                result = logical.Operator == Operator.LogicalAnd ? last : first.Union(last); break;
+                result = logical.Operator == Operator.LogicalAnd
+                    ? first.MayBePrimitive ? last.Union(Value.Primitive) : last
+                    : first.Union(last); break;
             case ObjectExpression value:
                 result = Allocate(node);
                 foreach (var property in value.Properties)
@@ -697,7 +712,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private bool DefinitelyHasProperty(Value receiver, string name, HashSet<Node>? seen = null)
     {
-        if (receiver.Session || receiver.Objects.Count == 0) return false;
+        if (receiver.Session || receiver.MayBePrimitive || receiver.Objects.Count == 0) return false;
         seen ??= new(ReferenceEqualityComparer.Instance);
         foreach (var item in receiver.Objects)
         {
@@ -1460,10 +1475,12 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         else
         {
             receiver = Evaluate(member.Object);
+            OptionalAccess(member.Optional, receiver);
             if (member.Computed) EvaluateKey(member.Property);
             function = Member(receiver, Name(member), member.Object is Super ? _receivers.LastOrDefault() : null);
             if (member.Object is Super) receiver = _receivers.LastOrDefault() ?? Value.Local;
         }
+        OptionalAccess(call.Optional, function);
         var arguments = Arguments(call.Arguments, function);
         if (call.Callee is Super)
         {
@@ -1697,7 +1714,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             foreach (var argument in arguments) Put(concatenated, "*", Member(concatenated, "*").Union(argument).Union(Member(argument, "*")));
             return concatenated with { MayBeString = !array };
         }
-        if (method is "pop" or "shift") return Member(receiver, "*");
+        if (method is "pop" or "shift") return Member(receiver, "*").Union(Value.Primitive);
         if (method is "sort" or "reverse" or "fill" or "copyWithin") return receiver;
         if (method is "slice" or "splice" or "filter" or "toReversed" or "toSorted" or "toSpliced" or "with")
         {
@@ -1705,7 +1722,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             var array = method != "slice" || KnownArray(receiver);
             return LocalCopy(call, receiver, array) with { MayBeString = !array };
         }
-        if (method is "at" or "find" or "findLast") return Member(receiver, "*");
+        if (method is "at" or "find" or "findLast") return Member(receiver, "*").Union(Value.Primitive);
         if (method == "valueOf")
         {
             // Generic Object/Array valueOf is identity. Known boxed primitive implementations return a scalar.
@@ -1738,6 +1755,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private static int? LiteralArrayBound(Node expression) => expression is ArrayExpression array &&
         array.Elements.All(item => item is not SpreadElement) ? array.Elements.Count : null;
+
+    private void OptionalAccess(bool optional, Value receiver)
+    {
+        if (optional && receiver.MayBePrimitive && _optionalChains.Count > 0) _optionalChains[^1] = true;
+    }
 
     private Value Flattened(Value source)
     {
