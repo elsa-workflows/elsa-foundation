@@ -1576,6 +1576,25 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             }
 
             // A non-computed object key is a name, not a reference.
+            if (node is MethodDefinition method)
+            {
+                if (method.Computed) Visit(method.Key);
+                Visit(method.Value);
+                return;
+            }
+            if (node is PropertyDefinition field)
+            {
+                if (field.Computed) Visit(field.Key);
+                if (field.Value is not null) Visit(field.Value);
+                return;
+            }
+            if (node is LabeledStatement label)
+            {
+                Visit(label.Body);
+                return;
+            }
+            if (node is BreakStatement or ContinueStatement)
+                return;
             if (node is Property { Computed: false, Shorthand: false } objectProperty)
             {
                 Visit(objectProperty.Value);

@@ -35,7 +35,7 @@ CAPTURES = {
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
-    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'cancelled', 'protected'],
+    'workflow state native and imported authoring and inspection': ['reference', 'native-effects', 'known-effects', 'computed-effects', 'empty-effects', 'native-completed', 'current-state', 'current-outputs', 'accepted-timeline', 'cleared-state', 'imported-effects', 'imported-completed', 'faulted', 'cancelled', 'protected'],
 }
 JOURNEYS = set(CAPTURES)
 

@@ -15,6 +15,17 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 public sealed class RunJavaScriptSetsWorkflowStateRunTests(ITestOutputHelper output)
 {
     [Fact]
+    public async Task Local_class_members_and_labels_named_like_helpers_import_and_run_unchanged()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var workflow = await ImportBody(host, "class Local { getCorrelationId = 7; setCorrelationId(value) { return value; } } setOutput: { break setOutput; } setOutput('Local', new Local().setCorrelationId('local')); return 1;");
+        var run = await host.RunAsync(workflow);
+        Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Null(run.Workflow.CorrelationId);
+        Assert.Equal("local", Assert.Single(await Values(host, run.Workflow.WorkflowExecutionId), value => value.ValueId == "output:Local").InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task Imported_body_publishes_runs_and_commits_outputs_identity_and_variable_together()
     {
         await using var host = await Elsa3ImportHost.StartAsync();

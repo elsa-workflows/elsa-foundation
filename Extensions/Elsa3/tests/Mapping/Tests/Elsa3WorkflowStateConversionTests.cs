@@ -17,6 +17,9 @@ public sealed class Elsa3WorkflowStateConversionTests
     [InlineData("false && setCorrelationId('new'); return getCorrelationId();", "false && workflowState.setCorrelationId(workflowState.requireExactIdentity(('new'))); return workflowState.getCorrelationId();")]
     [InlineData("setCorrelationId(getCorrelationId()); return 1;", "workflowState.setCorrelationId(workflowState.requireExactIdentity((workflowState.getCorrelationId()))); return 1;")]
     [InlineData("setWorkflowInstanceName(getWorkflowInstanceName()); return 1;", "workflowState.setInstanceName(workflowState.requireExactIdentity((workflowState.getInstanceName()))); return 1;")]
+    [InlineData("class Local { setCorrelationId(value) { return value; } } return new Local().setCorrelationId('local');", "class Local { setCorrelationId(value) { return value; } } return new Local().setCorrelationId('local');")]
+    [InlineData("class Local { getCorrelationId = 1; } return new Local().getCorrelationId;", "class Local { getCorrelationId = 1; } return new Local().getCorrelationId;")]
+    [InlineData("setOutput: { break setOutput; } return 1;", "setOutput: { break setOutput; } return 1;")]
     public async Task Direct_body_calls_lower_without_reordering_or_changing_local_helpers(string source, string expected)
     {
         var converted = await ConvertAsync(source);
@@ -44,6 +47,7 @@ public sealed class Elsa3WorkflowStateConversionTests
     [InlineData("getWorkflowInstanceName(1);")]
     [InlineData("setInput('x', 1);")]
     [InlineData("setResult(1);")]
+    [InlineData("class Local { [setCorrelationId]() {} }")]
     public async Task Unsupported_alias_collision_arity_and_retained_helpers_refuse(string source)
     {
         var result = await ConvertAsync(source);

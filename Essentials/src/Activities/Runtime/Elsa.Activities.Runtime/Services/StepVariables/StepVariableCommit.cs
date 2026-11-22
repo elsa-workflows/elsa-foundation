@@ -33,7 +33,7 @@ internal static class StepVariableCommit
     {
         try
         {
-            var sourcePolicy = workflowState?.ReadPolicies.Any() == true ? workflowState.SourcePolicy() : null;
+            var sourcePolicy = session?.Intents.Count > 0 && workflowState?.ReadPolicies.Any() == true ? workflowState.SourcePolicy() : null;
             var variables = await ApplyAsync(session, workflowExecutionStateStore, activityExecutionStateStore, workflowExecutionId, node, invocation, occurredAt, cancellationToken, sourcePolicy);
             return await StepStateCommit.PrepareAsync(workflowState, variables, workflowExecutionStateStore, preparer,
                 workflowExecutionId, invocation, occurredAt, cancellationToken);

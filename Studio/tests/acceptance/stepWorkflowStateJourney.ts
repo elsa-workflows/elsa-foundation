@@ -101,6 +101,8 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await expect(inspector()).toContainText("order-42");
   await expect(inspector().getByRole("region", { name: "Workflow outputs", exact: true })).toContainText("Count");
   await capture(page, info, "current-state");
+  await inspector().getByRole("region", { name: "Workflow outputs", exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, info, "current-outputs");
   await inspector().getByRole("tab", { name: "Timeline", exact: true }).press("Enter");
   await expect(inspector()).toContainText("Completion accepted");
   await capture(page, info, "accepted-timeline");

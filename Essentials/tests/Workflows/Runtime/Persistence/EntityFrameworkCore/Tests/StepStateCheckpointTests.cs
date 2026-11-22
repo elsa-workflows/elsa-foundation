@@ -15,6 +15,27 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class EfRuntimeCheckpointCommitStoreTests
 {
+    [Fact]
+    public async Task Cleared_identity_and_json_null_output_survive_checkpoint_restart_and_redelivery()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var original = StepStateCommit("step-state-null");
+        var workflow = C.Execution("workflow-a");
+        var values = RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges("workflow-a", new Dictionary<string, object?> { ["Null"] = null }, OccurredAt)
+            .Concat(RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-a", true, null, true, null, OccurredAt)).ToArray();
+        var commit = original with { StateChanges = new RuntimeCheckpointStateChangeSet(C.Change("workflow-a", workflow), null,
+            [C.Change("body", C.Activity("body"))], [], values, [], []).WithPostCommitOutbox(original.StateChanges.PostCommitOutbox) };
+        await using (var context = database.Open("tenant-a"))
+            await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager()).CommitAsync(commit, Decision());
+        await using var restarted = database.Open("tenant-a");
+        await new EfRuntimeCheckpointCommitStore(restarted, new FixedAccessor("tenant-a"), new FixedTimeProvider(OccurredAt), new PassThroughRootWriteLeaseManager()).CommitAsync(commit, Decision());
+        var restored = await new EfDurableValueStateStore(restarted, new FixedAccessor("tenant-a"), new NoopContinuationCodec()).ListAllDurableValueStatesAsync("workflow-a");
+        Assert.Equal(3, restored.Count);
+        Assert.All(restored, row => Assert.Equal(JsonValueKind.Null, row.InlineValue!.Value.ValueKind));
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
