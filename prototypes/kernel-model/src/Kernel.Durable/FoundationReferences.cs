@@ -10,7 +10,11 @@ public sealed partial class InMemoryStore
 {
     private sealed record ReferenceBinding(string Tenant, string Reference, CreationAddress Address, InboxKey Creator, string Fingerprint);
     internal sealed record FoundationParkMark(long Revision, long At);
-    internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, long? EndedAt, FoundationHeaderChange Header, FoundationParkMark? Park);
+    internal sealed record FoundationTerminalMark(long Revision, long At);
+    internal sealed record ActorCheckpoint(string Reference, InstanceRow Row, FoundationTerminalMark? Terminal, FoundationHeaderChange Header, FoundationParkMark? Park)
+    {
+        internal long? EndedAt => Terminal?.At;
+    }
     internal sealed record ActorRead(long AsOf, ActorCheckpoint? Actor);
     internal sealed record ActorReadSet(long AsOf, IReadOnlyList<ActorCheckpoint> Actors);
     internal sealed record ActorJournalRead(long AsOf, IReadOnlyList<JournalRow> Rows);
@@ -18,7 +22,7 @@ public sealed partial class InMemoryStore
     private readonly Lazy<byte[]> _referenceKey = new(() => RandomNumberGenerator.GetBytes(32));
     private readonly Dictionary<string, ReferenceBinding> _referenceBindings = new(StringComparer.Ordinal);
     private readonly Dictionary<CreationAddress, ReferenceBinding> _referenceBirths = [];
-    private readonly Dictionary<CreationAddress, long> _foundationEnds = [];
+    private readonly Dictionary<CreationAddress, FoundationTerminalMark> _foundationEnds = [];
     internal TimeSpan IngressDeduplicationWindow { get; init; } = TimeSpan.FromMinutes(1);
     private readonly Dictionary<CreationAddress, FoundationHeaderChange> _foundationHeaders = [];
     private readonly Dictionary<CreationAddress, FoundationParkMark> _foundationParks = [];
@@ -246,7 +250,7 @@ public sealed partial class InMemoryStore
     }
 
     private ActorCheckpoint Checkpoint(InstanceRow row, ReferenceBinding binding) =>
-        new(binding.Reference, row, _foundationEnds.TryGetValue(binding.Address, out var endedAt) ? endedAt : null,
+        new(binding.Reference, row, _foundationEnds.GetValueOrDefault(binding.Address),
             _foundationHeaders.GetValueOrDefault(binding.Address) ?? LegacyProjection(row),
             _foundationParks.GetValueOrDefault(binding.Address));
 
@@ -285,7 +289,13 @@ public sealed partial class InMemoryStore
             if (row.ParkRecovery is null) _foundationParks.Remove(address);
         }
         else
-            _foundationEnds.TryAdd(address, now);
+        {
+            var continuingPark = row.Status == InstanceStatus.Faulted && row.ParkRecovery is null && !row.ParkDiscarded
+                ? _foundationParks.GetValueOrDefault(address) : null;
+            var mark = continuingPark is null ? new FoundationTerminalMark(row.Revision, now)
+                : new(continuingPark.Revision, continuingPark.At);
+            _foundationEnds.TryAdd(address, mark);
+        }
         if (previous?.ParkRecovery is not null && row.ParkRecovery is null && turn.FoundationKept is null)
         {
             _foundationParks.Remove(address);
@@ -293,7 +303,7 @@ public sealed partial class InMemoryStore
         }
         else RecordParkExpiry(turn, row, address, firstExpiry);
         if (row.ParkDiscarded && _foundationParks.Remove(address))
-            _foundationEnds[address] = now;
+            _foundationEnds[address] = new(row.Revision, now);
         if (turn.OpensPark)
             _foundationParks[address] = new(row.Revision, now);
     }
