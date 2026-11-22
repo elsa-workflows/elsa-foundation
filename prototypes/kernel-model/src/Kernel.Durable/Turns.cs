@@ -126,6 +126,22 @@ public sealed class Delivery(Message message, long seq)
     internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job or Kinds.JobDeadline;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
     internal bool DiscardedAt(Slot slot) => DiscardedInput || Message.SuppliedCreator && slot.CurrentRow is null;
+    internal bool IsJobWork => Message.Kind == Kinds.Job && !SuppliedTicket || Message.FoundationJobResult || IsWorkerJobCompletion;
+
+    private string? _logicalJobKey;
+    internal string LogicalJobKey => _logicalJobKey ??= Message.Kind == Kinds.Job ? Message.Read<JobTicket>().Key : Message.Read<JobFinished>().Key;
+
+    internal bool IsObsoleteJob(InstanceRow row)
+    {
+        if (Message.TargetCreation != row.Creation) return false; // the creation check gives its own refusal
+        var generation = Message.JobGeneration;
+        if (row.Jobs is null || generation < 0 || generation > 0 && row.Creation <= 0) return true;
+
+        var key = LogicalJobKey;
+        var address = Message.FoundationJobResult ? InboxKey.JobResult(row.Id, key, row.Creation, generation)
+            : InboxKey.Ticket(row.Id, key, row.Creation, generation);
+        return Message.InboxKey != address || JobRegistry.Generation(row, key) != generation;
+    }
     internal bool JobEntered;         // physical model entry, distinct from a scheduled driver
     internal volatile bool WithdrawingJob; // set under the publication lock before signalling cancellation
     internal long? JobDeadline;
@@ -282,20 +298,27 @@ public sealed class DurableTurn
     private readonly List<RequestReply> _replied = [];
     private readonly HashSet<SubscriptionRow> _kept = [];
     private readonly HashSet<string> _custom;
-    private readonly List<string> _jobs;
+    private readonly List<JobRegistration> _jobs;
+    private readonly bool _allocateJobGenerations;
+    private long? _nextJobGeneration;
     private readonly List<InboxKey> _cancelled = [];
     private int _ordinal;
     private CommitWindow? _window;
 
-    public DurableTurn(TurnInput input)
+    public DurableTurn(TurnInput input) : this(input, foundation: false) { }
+
+    internal DurableTurn(TurnInput input, bool foundation)
     {
         _input = input;
+        _allocateJobGenerations = foundation && input.Creation > 0;
+        // A checkpoint from before the counter can still have a generation-zero result in its inbox.
+        _nextJobGeneration = input.Row?.NextJobGeneration ?? (_allocateJobGenerations ? (input.Row is null ? 0L : 1L) : null);
         Actor = new InstanceRef(input.Actor);
         _custom = input.Row?.CustomHandles is { } handles ? DurableKeyJson.ReadKeys(handles).ToHashSet(StringComparer.Ordinal) : [];
         Inbox = input.Taken.Skip(input.From).Select(i => i.Message).ToList();
-        _jobs = input.Row?.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : [];
+        _jobs = JobRegistry.Read(input.Row?.Jobs);
         foreach (var delivery in input.Taken.Skip(input.From))
-            if (CompletedTicket(delivery, out var key)) _jobs.Remove(key);
+            if (CompletedTicket(delivery, out var job)) _jobs.Remove(job);
         Revision = (input.Row?.Revision ?? 0) + 1;
         Clock = new TurnClock(input.Row, Revision, input.Services);
     }
@@ -395,7 +418,7 @@ public sealed class DurableTurn
     }
 
     private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null,
-        bool actorAuthored = false, bool encodedPayload = false, bool boundMessage = false)
+        bool actorAuthored = false, bool encodedPayload = false, bool boundMessage = false, long jobGeneration = 0)
     {
         if (options is { Delay: not null, DueAt: not null })
             throw new ArgumentException("Supply either an absolute due time or a delay.", nameof(options));
@@ -404,7 +427,7 @@ public sealed class DurableTurn
         var body = actorAuthored || encodedPayload ? (string?)payload : payload is null ? null : Json.Write(payload);
         var message = (new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
             due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation)
-            { ActorAuthored = actorAuthored }).WithInboxScope(id.Scope);
+            { ActorAuthored = actorAuthored, JobGeneration = jobGeneration }).WithInboxScope(id.Scope);
         if (boundMessage && !FoundationMetadataLimits.FitsComposed(message))
             throw new MetadataLimitExceeded(nameof(payload), FoundationMetadataLimits.MessageContentBytes);
         _sent.Add(kind is Kinds.Job or Kinds.JobDeadline or Kinds.Meet or Kinds.Publish ? message.AsKernelTicket() : message);
@@ -487,29 +510,39 @@ public sealed class DurableTurn
 
     internal void StartJobWithPayload(string key, string? arguments, long? deadline = null, bool boundMessage = false)
     {
-        if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
+        if (_jobs.Exists(job => job.Key == key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
         if (boundMessage) FoundationMetadataLimits.RequireContent(arguments, nameof(arguments));
         var timer = deadline is null ? null : IssuedAt(_ordinal).Id;
         var ticket = Json.Write(new JobTicket(_input.Model, key, arguments, deadline, timer));
         if (boundMessage) FoundationMetadataLimits.RequireContent(ticket, nameof(arguments));
 
-        _jobs.Add(key);
+        var generation = _allocateJobGenerations ? _nextJobGeneration!.Value : 0;
+        if (_allocateJobGenerations) _nextJobGeneration = checked(generation + 1);
+        _jobs.Add(new(key, generation));
         if (deadline is { } at) SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at));
         _started.Add(key, timer);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, ticket, encodedPayload: true);
+        Send(InboxKey.Ticket(Id, key, _input.Creation, generation), Actor, Kinds.Job, ticket, encodedPayload: true, jobGeneration: generation);
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
-    public void CancelJob(string key) => CancelJob(key, InboxKey.Ticket(Id, key, _input.Creation), null);
+    internal long? JobGeneration(string key)
+    {
+        var index = _jobs.FindIndex(job => job.Key == key);
+        return index >= 0 ? _jobs[index].Generation : null;
+    }
+
+    public void CancelJob(string key) =>
+        CancelJob(key, InboxKey.Ticket(Id, key, _input.Creation, JobGeneration(key) ?? 0), null);
 
     internal void CancelJob(string key, InboxKey? pending, string? deadline)
     {
-        if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
+        if (JobGeneration(key) is not { } generation) return; // never started, done, or its result is in this turn's inbox
+        _jobs.Remove(new(key, generation));
         if (_started.Remove(key, out var timer))
         {
-            var ticket = InboxKey.Ticket(Id, key, _input.Creation);
+            var ticket = InboxKey.Ticket(Id, key, _input.Creation, generation);
             _sent.RemoveAll(m => m.InboxKey == ticket);
             if (timer is not null) Recall(timer);
             return;
@@ -523,9 +556,9 @@ public sealed class DurableTurn
         if (deadline is not null) Recall(deadline);
     }
 
-    internal void ReportFoundationJobResult(JobFinished result)
+    internal void ReportFoundationJobResult(JobFinished result, long generation)
     {
-        Send(InboxKey.JobResult(Id, result.Key, _input.Creation), Actor, Kinds.JobFinished, result);
+        Send(InboxKey.JobResult(Id, result.Key, _input.Creation, generation), Actor, Kinds.JobFinished, result, jobGeneration: generation);
         _sent[^1] = _sent[^1] with { FoundationJobResult = true };
     }
 
@@ -591,25 +624,28 @@ public sealed class DurableTurn
     /// <summary>A held job result is still in flight; then the row's <c>Jobs</c>.</summary>
     public string? Jobs()
     {
-        var jobs = new List<string>(_jobs);
+        var jobs = new List<JobRegistration>(_jobs);
         foreach (var delivery in _input.Taken.Skip(_input.From))
         {
-            if (!_held.Contains(delivery.Message.InboxKey) || !CompletedTicket(delivery, out var key)) continue;
-            if (_started.ContainsKey(key)) throw new InvalidOperationException($"A held result keeps job '{key}' in flight.");
-            if (!jobs.Contains(key)) jobs.Add(key);
+            if (!_held.Contains(delivery.Message.InboxKey) || !CompletedTicket(delivery, out var job)) continue;
+            if (_started.ContainsKey(job.Key)) throw new InvalidOperationException($"A held result keeps job '{job.Key}' in flight.");
+            if (!jobs.Contains(job)) jobs.Add(job);
         }
-        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
+        return JobRegistry.Write(jobs);
     }
 
-    private bool CompletedTicket(Delivery delivery, out string key)
+    private bool CompletedTicket(Delivery delivery, out JobRegistration job)
     {
-        key = "";
+        job = default;
         var message = delivery.Message;
         if (!delivery.IsWorkerJobCompletion && !message.FoundationJobResult) return false;
-        key = message.Read<JobFinished>().Key;
+        var key = delivery.LogicalJobKey;
+        var generation = message.JobGeneration;
         var expected = message.FoundationJobResult
-            ? InboxKey.JobResult(Id, key, _input.Creation) : InboxKey.Ticket(Id, key, _input.Creation);
-        return message.Target == Actor && message.InboxKey == expected;
+            ? InboxKey.JobResult(Id, key, _input.Creation, generation) : InboxKey.Ticket(Id, key, _input.Creation, generation);
+        job = new(key, generation);
+        return message.Target == Actor && message.InboxKey == expected &&
+            (!_allocateJobGenerations || JobRegistry.Generation(_input.Row, key) == generation);
     }
 
     /// <summary>What the turn consumed, held, cancelled and emitted. The row comes with <see cref="Seal"/>.</summary>
@@ -638,7 +674,11 @@ public sealed class DurableTurn
         // retracting a staged twin leaves a previously committed row and its old membership intact.
         foreach (var message in _sent)
             if (message.InboxKey.Scope == InboxKey.ChildCreatorScope || message.InboxKey == InboxKey.Custom(Origin, message.Id)) _custom.Add(message.Id);
-        unit.Row = row with { CommitTimes = ((TurnClock)Clock).Snapshot(), CustomHandles = _custom.Count == 0 ? null : DurableKeyJson.WriteKeys(_custom) };
+        unit.Row = row with
+        {
+            CommitTimes = ((TurnClock)Clock).Snapshot(), CustomHandles = _custom.Count == 0 ? null : DurableKeyJson.WriteKeys(_custom),
+            NextJobGeneration = _nextJobGeneration
+        };
         unit.Expected = _input.Unwritten ? null : _input.Previous?.Revision;
         unit.State = state;
         unit.Journal = journal;

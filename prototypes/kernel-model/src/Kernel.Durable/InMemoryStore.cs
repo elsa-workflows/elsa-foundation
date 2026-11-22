@@ -257,6 +257,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
+                    if (turn.Row is { Retired: false } owner && previous?.Creation == owner.Creation &&
+                        previous.NextJobGeneration is { } oldGeneration &&
+                        (owner.NextJobGeneration is null || owner.NextJobGeneration.Value < oldGeneration))
+                        throw new StoreException(Failure.Definite, "A job generation counter cannot move backwards within its creation.");
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
                     if (ValidateParkDrain(turn, previous, epochs, now) is { } expiryWindow)

@@ -28,7 +28,7 @@ internal sealed partial class ActorAdapter
         {
             _store = store;
             _input = input;
-            _turn = new(input);
+            _turn = new(input, foundation: true);
             Header = header;
             Ambient = ambient;
             _row = input.Row ?? NewRow(input.Actor, input.Spec!, input.Taken[input.From].Message);
@@ -113,14 +113,15 @@ internal sealed partial class ActorAdapter
 
         public void CancelJob(string key)
         {
-            var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation);
-            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key).Ticket;
+            if (_turn.JobGeneration(key) is not { } generation) return;
+            var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
+            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
             if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
                 ticket = local.Read<Durable.JobTicket>();
 
             var pending = ticket is null ? (Durable.InboxKey?)null : ticketKey;
-            if (_store.HasFoundationJobResult(_row.Id, _row.Creation, key))
-                pending = Durable.InboxKey.JobResult(_row.Id, key, _row.Creation);
+            if (_store.HasFoundationJobResult(_row.Id, _row.Creation, key, generation))
+                pending = Durable.InboxKey.JobResult(_row.Id, key, _row.Creation, generation);
 
             var deadline = ticket?.Timer;
             if (deadline is not null && !_store.HasStoredJobDeadline(_row.Id, _row.Creation, deadline) &&
@@ -177,8 +178,8 @@ internal sealed partial class ActorAdapter
             if (cascades)
             {
                 foreach (var child in _children) _turn.Send(new(child.Id), Contract.Kinds.Terminate, options: new(TargetCreation: child.Creation));
-                foreach (var job in _turn.Jobs() is { } jobs ? Durable.DurableKeyJson.ReadKeys(jobs) : [])
-                    CancelJob(job);
+                foreach (var job in Durable.JobRegistry.Read(_turn.Jobs()))
+                    CancelJob(job.Key);
             }
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
