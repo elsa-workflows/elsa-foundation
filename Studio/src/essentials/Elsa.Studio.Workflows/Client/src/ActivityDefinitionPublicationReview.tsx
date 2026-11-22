@@ -171,7 +171,7 @@ export function ActivityDefinitionPublicationReview({
       setPreflight(null);
       setBinding(null);
       setPhase("stale");
-      setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
+      setFailure("The reviewed revision or latest published version is stale. Studio reopened preflight without publishing.");
       operationKeyRef.current = null;
       onPublicationPending(false);
       return;
@@ -246,7 +246,7 @@ export function ActivityDefinitionPublicationReview({
         setPreflight(null);
         setBinding(null);
         setPhase("stale");
-        setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
+        setFailure("The reviewed revision or latest published version is stale. Studio reopened preflight without publishing.");
         operationKeyRef.current = null;
         onPublicationPending(false);
         return;
@@ -391,8 +391,8 @@ export function ActivityDefinitionPublicationReview({
 function PublicationSummary({ preflight, publishedOutcome, version, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; version: string; compact?: boolean }) {
   if (!compact) return <StudioFactList>
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
-    <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
-    <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
+    <div><dt>Latest published version</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No latest published version"}</dd></div>
+    <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with latest published version" : "First publication · no published baseline exists"}</dd></div>
     <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
   </StudioFactList>;
   return <>
@@ -400,12 +400,12 @@ function PublicationSummary({ preflight, publishedOutcome, version, compact = fa
       <div><dt>Version</dt><dd>{version || "Not selected"}</dd></div>
       <div><dt>Readiness</dt><dd>{preflight.isPublishable && !blocked ? "Ready to publish" : "Blocked"}</dd></div>
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
-      <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>
+      <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with latest published version" : "No published baseline exists"}</dd></div>
     </StudioFactList>
     <TechnicalDetails label="Exact publication identities">
       <StudioFactList>
         <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
-        <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
+        <div><dt>Latest published version</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No latest published version"}</dd></div>
         <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
       </StudioFactList>
     </TechnicalDetails>

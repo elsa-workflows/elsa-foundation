@@ -30,21 +30,21 @@ afterEach(() => { flushSync(() => root.unmount()); container.remove(); vi.restor
 describe("Runtime panel information hierarchy", () => {
   it("keeps pending cancellation visible until Runtime confirms a terminal execution", () => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status: "StopRequested" }} observation={observation("Running")} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-status-badge")?.textContent).toBe("Stopping");
+    expect(container.querySelector(".studio-status-chip")?.textContent).toBe("Stopping");
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("Waiting for runtime confirmation");
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status: "StopRequested" }} observation={observation("Cancelled")} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-status-badge")?.textContent).toBe("Cancelled");
+    expect(container.querySelector(".studio-status-chip")?.textContent).toBe("Cancelled");
   });
 
   it("reports a stopped prepared test without a root as stopped", () => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status: "Stopped", workflowExecutionId: null }} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-status-badge")?.textContent).toBe("Stopped");
+    expect(container.querySelector(".studio-status-chip")?.textContent).toBe("Stopped");
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).not.toContain("Waiting");
   });
 
   it.each([["DispatchDeferred", "Deferred"], ["DispatchRejected", "Rejected"], ["FutureState", "FutureState"]])("does not label %s as accepted", (status, expected) => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status, commandDispatchStatus: null }} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-status-badge")?.textContent).toBe(expected);
+    expect(container.querySelector(".studio-status-chip")?.textContent).toBe(expected);
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).not.toContain("Test accepted");
   });
 
@@ -89,7 +89,7 @@ describe("Runtime panel information hierarchy", () => {
 
   it.each(["Faulted", "Cancelled", "Suspended", "Running"])("uses confirmed %s execution rather than the dispatch receipt", status => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={receipt} observation={observation(status)} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-runtime-card .wf-status-badge")?.textContent).toBe(status === "Suspended" ? "Waiting" : status);
+    expect(container.querySelector(".wf-runtime-card .studio-status-chip")?.textContent).toBe(status === "Suspended" ? "Waiting" : status);
     if (status === "Faulted") expect(container.querySelector(".wf-runtime-incident-warning")).not.toBeNull();
   });
 
@@ -114,7 +114,7 @@ describe("Runtime panel information hierarchy", () => {
 
   it("shows expired evidence rather than a successful dispatch badge", () => {
     flushSync(() => root.render(<WorkflowRuntimePanel testRun={{ ...receipt, status: "Expired" }} onOpenRun={() => {}} />));
-    expect(container.querySelector(".wf-runtime-card .wf-status-badge")?.textContent).toBe("Expired");
+    expect(container.querySelector(".wf-runtime-card .studio-status-chip")?.textContent).toBe("Expired");
     expect(container.querySelector(".wf-runtime-outcome")?.textContent).toContain("expired");
   });
 });

@@ -238,11 +238,6 @@
   display: contents;
 }
 
-.studio-workspace-tab-error-actions {
-  display: flex;
-  gap: 8px;
-}
-
 @media (max-width: 600px) {
   .studio-workspace-tab {
     max-width: 168px;

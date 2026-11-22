@@ -75,6 +75,10 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 | Weaver workflows | Inspected the metadata, workflow-definition and executable prompt registrations and contextual attachments. Confirmed provider-off and menu states separately in PR #5310. |
 | JavaScript and Liquid expression editors | Inspected both inline and expanded registrations, source renderers, read-only state, source insertion and shared code editor bindings. JavaScript also supplies result checks, variable-addition preservation and language tooling. |
 
+### Host audit follow-up
+
+PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -328,16 +332,16 @@ Extensions:
   (`EXT/Connections/styles.css:31` [verified]). **[check]** the footer was not read.
 - [x] **X3.28** (#5064, PR #5327) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
 - [x] **X3.29** (#5065, PR #5327) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
-- [ ] **X3.30** (#5066) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
+- [x] **X3.30** (#5066, PR #5333) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
   and a raw `primary` class. Locate them in `EXT/FeatureManagement/module.tsx`.
-- [ ] **X3.31** (#5067) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
+- [x] **X3.31** (#5067, PR #5333) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
   reassign dialogs were not read.
-- [ ] **X3.32** (#5068) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
+- [x] **X3.32** (#5068, PR #5333) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
   popover → `AnchoredPopover`.
 
 Browser dialogs and busy labels (no kit prerequisite):
 
-- [ ] **X3.33** (#5069) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
+- [x] **X3.33** (#5069, PR #5333) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
   `api.dialogs.confirm`.
 - [x] **X3.34** (#5070, PR #5319) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [x] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
@@ -440,12 +444,12 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 - [x] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`) (PR #5322)
   `wf-status-badge`. See also W6.
-- [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
+- [x] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`, (PR #5334)
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
 - [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
 - [x] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance. (PR #5304)
-- [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
+- [x] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip` (PR #5334)
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
 - [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
@@ -496,12 +500,12 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `EXT/Agent/HumanReviewPage.tsx` stale and receipt paragraphs (around line 106),
   `H/App.tsx:1895` (`backend-connection-notice`) and `:1911`,
   `H/workspace/WorkspaceTabPanels.tsx:92–93`, `DASH/WidgetFrame.tsx:89, 148`.
-  [check] `.etl-error`, `.external-auth-error`.
+  [check] `.etl-error`, `.external-auth-error`. Host startup, workspace tabs, ETL and Identity completed in PR #5339.
 - [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
 - [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
-- [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
+- [x] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right: (PR #5334)
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
 - [x] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`; (PR #5320)
   action results belong in `api.notifications.notify`.
@@ -512,7 +516,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 Replace local date formatting with `StudioTimestamp`.
 
-- [ ] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`.
+- [x] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`. (PR #5334)
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
@@ -535,12 +539,12 @@ Counts are raw `<button` occurrences. Canvas and context-toolbar buttons may be 
 the designer header is a documented exception.
 
 - [ ] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20).
-- [ ] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19).
+- [x] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19). (PR #5334)
 - [ ] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12).
-- [ ] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and
+- [x] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and (PR #5332)
   20px `.ad-primary-action` buttons.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
-- [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
+- [x] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11). (PR #5334)
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
 - [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
@@ -552,7 +556,7 @@ the designer header is a documented exception.
   (6), `WF/ActivityDefinitionsPage.tsx` (8), `WF/ActivityDataChooser.tsx` (10),
   `WF/ActivityDataMemberBrowser.tsx` (7), `WF/CollectionValueEditor.tsx` (4),
   `WF/DictionaryValueEditor.tsx` (3), `WF/WorkflowLazyBoundary.tsx` (2).
-- [ ] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9),
+- [x] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9), (PR #5334)
   `ActivityExecutionBrowser.tsx` (9), `WorkflowFolderNavigation.tsx` (8),
   `WorkflowLibraryControls.tsx` (7), `InspectorPanel.tsx` (6).
 - [ ] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9),
@@ -649,7 +653,7 @@ Raw font sizes, weights, radii and colours:
 - [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
-- [ ] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move
+- [x] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move (PR #5332)
   it to CSS with tokens.
 
 ### X14. Developer jargon in user-facing copy
@@ -657,19 +661,19 @@ Raw font sizes, weights, radii and colours:
 D9 decided the Executable, evidence and Provider wording. X14.7 also needs the glossary change G1, and
 X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
-- [ ] **X14.1** (#5202) [seen] Activity definitions, Upgrades, Elsa 3 import: "Exact immutable version",
+- [x] **X14.1** (#5202) [seen] Activity definitions, Upgrades, Elsa 3 import: "Exact immutable version", (PR #5332)
   "Authoritative dependency closure", "Review authoritative plan", "Analyze immutable collection", "No
   Execute-Workflow fallback", "Immutable public contract", "Provider key" (becomes "Provider" under D9;
   see the **[check]** there).
-- [ ] **X14.2** (#5203) [source] `WF/ActivityDefinitionWorkbench.tsx`: "Design-owned mutable work", "Immutable
+- [x] **X14.2** (#5203) [source] `WF/ActivityDefinitionWorkbench.tsx`: "Design-owned mutable work", "Immutable (PR #5332)
   publication", "Unavailable contribution" (`:204`).
-- [ ] **X14.3** (#5204) [source] `WF/ActivityDefinitionContractEditor.tsx`: "Durable storage driver" (`:488`),
+- [x] **X14.3** (#5204) [source] `WF/ActivityDefinitionContractEditor.tsx`: "Durable storage driver" (`:488`), (PR #5332)
   "Published baseline unavailable." (`:317`); `ActivityDefinitionContractProposalReview.tsx:166–168`
   "Exact proposal binding", "Provider"; `ActivityDefinitionContractProposalChangeList.tsx:51` "The
   opaque provider payload is intentionally not rendered."
-- [ ] **X14.4** (#5205) [source] `WF/ActivityDefinitionPublicationReview.tsx:418, 433` "Published head";
+- [x] **X14.4** (#5205) [source] `WF/ActivityDefinitionPublicationReview.tsx:418, 433` "Published head"; (PR #5332)
   management dialog busy label "Applying atomically…".
-- [ ] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable
+- [x] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable (PR #5332)
   apply receipt", "Outcome unknown"; `WF/Elsa3ReusableImportPage.tsx`: "Side-effect-free analysis",
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
 - [x] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
@@ -714,13 +718,13 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
 - [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
-- [ ] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`.
+- [x] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`. (PR #5334)
 - [ ] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with
   inconsistent parenting; Upgrades and Elsa 3 import have no nav entry.
 - [ ] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a
   trailing space, a duplicate `aria-label` and a `<small>Optional</small>`. Under D13 the optional
   marker goes. `needs: D13`
-- [ ] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in
+- [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 

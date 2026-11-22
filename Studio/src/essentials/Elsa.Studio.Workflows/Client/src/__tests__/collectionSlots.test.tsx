@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeCollectionItem, renameCollectionItem } from "../collectionSlots";
 import { createActivityNode } from "../workflowAdapter";
+import { setDialogs } from "../workflow-editor/dialogs";
 import { CollectionSlotEditor } from "../workflow-editor/CollectionSlotEditor";
 import { collectionActivity, sequenceNode, leafNode } from "./fixtures";
 import type { ActivityNode } from "../workflowTypes";
@@ -114,16 +115,18 @@ describe("rendered collection editor", () => {
     expect(collectionSlotItems(view.current(), descriptor)![0].match).toBe("remote");
   });
 
-  it("confirms populated deletion, supports cancellation and removes empty cases directly", () => {
+  it("confirms populated deletion, supports cancellation and removes empty cases directly", async () => {
     const node = addCollectionItem(empty(), descriptor);
     collectionSlotItems(node, descriptor)![0].activity = sequenceNode("body", [leafNode("nested")]);
     const view = mount(node);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const confirm = vi.fn().mockResolvedValue(false);
+    setDialogs({ confirm, alert: vi.fn(), prompt: vi.fn() });
     click(view.element.querySelector('[aria-label="Remove case 1"]')!);
     expect(collectionSlotItems(view.current(), descriptor)).toHaveLength(1);
-    confirm.mockReturnValue(true);
+    await Promise.resolve();
+    confirm.mockResolvedValue(true);
     click(view.element.querySelector('[aria-label="Remove case 1"]')!);
-    expect(collectionSlotItems(view.current(), descriptor)).toHaveLength(0);
+    await vi.waitFor(() => expect(collectionSlotItems(view.current(), descriptor)).toHaveLength(0));
     click(view.element.querySelector("button")!);
     click(view.element.querySelector('[aria-label="Remove case 1"]')!);
     expect(confirm).toHaveBeenCalledTimes(2);

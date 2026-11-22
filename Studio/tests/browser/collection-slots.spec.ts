@@ -104,11 +104,12 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(first).toHaveValue("[$&]{match}東京");
     expect(await savedOwner(page)).toEqual(beforeReload);
 
-    page.once("dialog", dialog => dialog.dismiss());
     await cases(page).getByRole("button", { name: "Remove case 1", exact: true }).click();
+    const confirmRemoval = page.getByRole("dialog", { name: "Remove case?" });
+    await confirmRemoval.getByRole("button", { name: "Cancel" }).click();
     await expect(cases(page).getByRole("textbox")).toHaveCount(2);
-    page.once("dialog", dialog => dialog.accept());
     await cases(page).getByRole("button", { name: "Remove case 1", exact: true }).click();
+    await confirmRemoval.getByRole("button", { name: "Remove case", exact: true }).click();
     await expect(cases(page).getByRole("textbox")).toHaveCount(1);
     await page.getByRole("button", { name: /^Undo(?: Activity Graph edit)?$/ }).click();
     if (host === "workflow") await ownerNode(page).click();

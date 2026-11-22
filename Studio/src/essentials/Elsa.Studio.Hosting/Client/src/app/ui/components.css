@@ -55,7 +55,7 @@
 .studio-status-chip[data-tone="accent"] {
   border-color: color-mix(in srgb, var(--studio-accent) 48%, var(--studio-border));
   background: var(--studio-accent-soft);
-  color: var(--studio-accent);
+  color: color-mix(in srgb, var(--studio-accent) 48%, var(--studio-text));
 }
 
 .studio-alert {

@@ -295,7 +295,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                         <span>{executable.artifactVersion}</span>
                       </span>
                       {references.length > 0 ? (
-                        <button
+                        <StudioButton
                           type="button"
                           className="wf-link-button wf-reference-toggle"
                           aria-expanded={expanded}
@@ -304,7 +304,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                         >
                           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           {references.length} reference{references.length === 1 ? "" : "s"}
-                        </button>
+                        </StudioButton>
                       ) : null}
                     </span>
                     <span className="wf-executable-root" role="cell">{formatExecutableRoot(executable)}</span>
@@ -312,7 +312,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                       <StudioTimestamp value={executable.publishedAt ?? executable.createdAt} fallback={executable.publishedAt ?? executable.createdAt ?? ""} />
                     </span>
                     <span className="wf-row-actions" role="cell" onClick={event => event.stopPropagation()}>
-                      <button type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</button>
+                      <StudioButton type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</StudioButton>
                       <ExecutableRunButton
                         target={runTarget}
                         runningArtifactId={executableRun.runningArtifactId}
@@ -408,7 +408,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
       {definitionIds.map(definitionId => {
         const name = definitionNames.get(definitionId) ?? "Workflow definition";
         return (
-          <button
+          <StudioButton
             type="button"
             className="wf-executable-workflow-name"
             key={definitionId}
@@ -417,7 +417,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
             onClick={() => openSourceDefinition(definitionId)}
           >
             {name}
-          </button>
+          </StudioButton>
         );
       })}
       {definitionIds.length === 0 ? <strong title="Source unavailable">Source unavailable</strong> : null}
@@ -548,8 +548,8 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
       ) : null}
       <div className="wf-artifacts-toolbar">
         <span>{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span>
-        <button type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</button>
-        <button type="button" onClick={openExecutablePage}>Open list</button>
+        <StudioButton type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</StudioButton>
+        <StudioButton type="button" onClick={openExecutablePage}>Open list</StudioButton>
       </div>
       {state === "failed" || error ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
@@ -575,9 +575,9 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                     slot. The backend answers with a 404 (surfaced above as an error) when there is nothing to
                     restore. */}
                 {!slot.activeActivationId ? (
-                  <button type="button" aria-label={`Restore publication slot ${slot.slotName}`} disabled={!lifecycleSupport.restore} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</button>
+                  <StudioButton type="button" aria-label={`Restore publication slot ${slot.slotName}`} disabled={!lifecycleSupport.restore} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</StudioButton>
                 ) : slot.publication ? (
-                  <button type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} disabled={!lifecycleSupport.unpublish} onClick={() => void unpublish(slot)}>Unpublish</button>
+                  <StudioButton type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} disabled={!lifecycleSupport.unpublish} onClick={() => void unpublish(slot)}>Unpublish</StudioButton>
                 ) : null}
               </div>
             </article>
@@ -619,7 +619,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                 <div><dt>Root</dt><dd>{formatExecutableRoot(artifact)}</dd></div>
               </dl>
               <div className="wf-row-actions">
-                <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
+                <StudioButton type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</StudioButton>
                 <ExecutableRunButton
                   target={runTarget}
                   runningArtifactId={executableRun.runningArtifactId}
@@ -634,7 +634,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
                     onRequest={artifactExport.exportArtifact}
                   />
                 ) : null}
-                {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
+                {explainExecutableAction ? <StudioButton type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</StudioButton> : null}
               </div>
               </article>
             );

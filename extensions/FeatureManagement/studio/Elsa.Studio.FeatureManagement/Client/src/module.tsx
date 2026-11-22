@@ -3,7 +3,6 @@ import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw 
 import {
   defaultStudioHostId,
   useAuthSession,
-  useDialogFocus,
   usePermissions,
   studioBackendCapabilitiesChangedEvent,
   studioNavigationRequestedEvent,
@@ -18,6 +17,8 @@ import { registerBuiltInSettingEditors,
   selectSettingEditor,
   SkeletonRows,
   StudioAlert,
+  StudioDialog,
+  StudioDialogFooter,
   StudioTabs,
   StudioTabPanel,
   StudioToolbar,
@@ -1222,9 +1223,7 @@ function FeatureImpactReviewDialog({
   onClose(): void;
   onApply(): void;
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
-  useDialogFocus(dialogRef, applying ? null : onClose);
 
   useLayoutEffect(() => {
     if (error) {
@@ -1233,24 +1232,9 @@ function FeatureImpactReviewDialog({
   }, [error]);
 
   return (
-    <div className="feature-management-dialog-backdrop" role="presentation">
-      <section
-        ref={dialogRef}
-        className="feature-management-settings-dialog feature-management-impact-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Feature impact review"
-        aria-labelledby="feature-management-impact-title"
-        tabIndex={-1}
-      >
-        <div className="feature-management-dialog-heading">
-          <div>
-            <span>{hostLabel} feature configuration</span>
-            <h3 id="feature-management-impact-title">Review changes</h3>
-          </div>
-          <button type="button" onClick={onClose} disabled={applying} data-dialog-initial-focus>Close</button>
-        </div>
-
+    <StudioDialog open title="Review changes" onClose={onClose} dismissDisabled={applying} dismissOnOutsideClick={false}
+      className="feature-management-impact-dialog" footer={<StudioDialogFooter onCancel={onClose} cancelDisabled={applying}
+        confirmType="button" onConfirm={onApply} confirmLabel={applying ? "Applying…" : "Apply"} confirmDisabled={!dirty || applying || readOnly} />}>
         <div className="feature-management-dialog-body">
           {error ? (
             <div ref={errorRef} tabIndex={-1}>
@@ -1270,17 +1254,8 @@ function FeatureImpactReviewDialog({
           )}
         </div>
 
-        <div className="feature-management-dialog-actions">
-          <span>Reviewing {entries.length} changed feature{entries.length === 1 ? "" : "s"}.</span>
-          <div>
-            <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
-            <button type="button" className="primary" onClick={onApply} disabled={!dirty || applying || readOnly}>
-              {applying ? "Applying" : "Apply"}
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
+        <p className="feature-management-dialog-note">Reviewing {entries.length} changed feature{entries.length === 1 ? "" : "s"}.</p>
+    </StudioDialog>
   );
 }
 
@@ -2034,21 +2009,10 @@ function FeatureSettingsDialog({
   }
 
   return (
-    <div className="feature-management-dialog-backdrop" role="presentation">
-      <section
-        className="feature-management-settings-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="feature-management-settings-dialog-title"
-      >
-        <div className="feature-management-dialog-heading">
-          <div>
-            <span>Settings</span>
-            <h3 id="feature-management-settings-dialog-title">{feature.displayName || feature.id}</h3>
-          </div>
-          <button type="button" onClick={onClose}>Close</button>
-        </div>
-
+    <StudioDialog open title={feature.displayName || feature.id} onClose={onClose} dismissOnOutsideClick={false}
+      className="feature-management-settings-dialog" footer={<StudioDialogFooter onCancel={onClose}
+        extra={<StudioButton onClick={resetDialogChanges} disabled={disabled}>Reset changes</StudioButton>}
+        confirmType="button" onConfirm={saveDraft} confirmLabel="Save" confirmDisabled={disabled} />}>
         <div className="feature-management-dialog-body">
           <div className="feature-management-settings">
             {settingGroups.map(group => (
@@ -2076,16 +2040,8 @@ function FeatureSettingsDialog({
           </div>
         </div>
 
-        <div className="feature-management-dialog-actions">
-          <span>Save keeps changes local until you review changes and apply the reviewed draft.</span>
-          <div>
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="button" onClick={resetDialogChanges} disabled={disabled}>Reset changes</button>
-            <button type="button" className="primary" onClick={saveDraft} disabled={disabled}>Save</button>
-          </div>
-        </div>
-      </section>
-    </div>
+        <p className="feature-management-dialog-note">Save keeps changes local until you review changes and apply the reviewed draft.</p>
+    </StudioDialog>
   );
 }
 
