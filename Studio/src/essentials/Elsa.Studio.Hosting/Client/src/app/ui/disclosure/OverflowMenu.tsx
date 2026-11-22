@@ -65,6 +65,7 @@ function ActionMenu({
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
+  const previousDisabled = useRef(disabled);
   const returnFocus = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(defaultOpen);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -79,6 +80,8 @@ function ActionMenu({
 
   // Preserve the initiating control across a busy command without stealing focus from a dialog.
   useLayoutEffect(() => {
+    if (previousDisabled.current === disabled) return;
+    previousDisabled.current = disabled;
     if (disabled) {
       if (open) {
         returnFocus.current = triggerRef.current;
@@ -93,7 +96,7 @@ function ActionMenu({
       if (target.isConnected && !target.disabled && document.activeElement === document.body) target.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [disabled]);
+  }, [disabled, open]);
 
   function close(restoreFocus = true) {
     setOpen(false);
