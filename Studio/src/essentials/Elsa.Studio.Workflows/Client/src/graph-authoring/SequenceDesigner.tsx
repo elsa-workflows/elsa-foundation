@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { graphBoundaryCompleteTypeKey } from "../workflowAdapter";
 import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
@@ -159,7 +160,7 @@ export function SequenceDesigner({
   };
 
   const boundary = (index: number, label: string, isEmpty = false, isEnd = false) => !readOnly ? (
-    <button
+    <StudioButton
       key={`boundary-${index}`}
       type="button"
       className={`wf-sequence-insert${isEmpty ? " wf-sequence-insert-empty" : ""}${isEnd ? " wf-sequence-insert-end" : ""}`}
@@ -172,7 +173,7 @@ export function SequenceDesigner({
     >
       <Plus size={14} aria-hidden="true" />
       {isEmpty ? <span>Add first step</span> : isEnd ? <span>Add step</span> : null}
-    </button>
+    </StudioButton>
   ) : null;
 
   return (
@@ -181,12 +182,12 @@ export function SequenceDesigner({
     }}>
       <header className="wf-sequence-heading">
         <span className="wf-sequence-mode-pill">Sequence · runs top to bottom</span>
-        <button type="button" className="wf-sequence-preview-setting" aria-label="Preview activities" aria-pressed={previewEnabled}
+        <StudioButton type="button" className="wf-sequence-preview-setting" aria-label="Preview activities" aria-pressed={previewEnabled}
           title={previewEnabled ? "Hide previews for all sequence activities" : "Show previews for all sequence activities"}
           onClick={() => setPreviewEnabled(!previewEnabled)}>
           <Eye size={14} aria-hidden="true" />
           <span>Preview activities</span>
-        </button>
+        </StudioButton>
       </header>
 
       <div className="wf-sequence-content">
@@ -319,7 +320,7 @@ function SequenceStep({
   return (
     <article className={`wf-sequence-item${selected ? " is-selected" : ""}${availability ? " wf-sequence-unavailable" : ""}${data.runtime ? " wf-sequence-runtime" : ""}${data.runtime?.hasBlockingIncident ? " faulted" : ""}`} role="listitem" data-icon={icon} data-tone={tone} title={availabilityLabel ?? undefined}>
       <ExecutionActivityPulse pulse={data.executionPulse} status={data.runtime?.status} />
-      <button
+      <StudioButton
         type="button"
         className="wf-sequence-step"
         data-id={node.id}
@@ -347,7 +348,7 @@ function SequenceStep({
           {typeLabel && typeLabel !== title ? <span className="wf-sequence-type">{typeLabel}</span> : null}
           {data.activityTypeKey === graphBoundaryCompleteTypeKey ? <span className="wf-sequence-summary" title="Completes the nearest reusable activity and cancels the rest of its body. No outgoing continuation runs.">Ends reusable activity</span> : summary ? <span className="wf-sequence-summary">{summary}</span> : null}
         </span>
-      </button>
+      </StudioButton>
 
       {data.childSlots.length || (!readOnly && data.collectionSlots?.length) ? (
         <div className="wf-sequence-slots" aria-label={`${data.label} child slots`}>
@@ -361,21 +362,21 @@ function SequenceStep({
 
       {selected && !readOnly ? (
         <div className="wf-sequence-actions" aria-label={`${data.label} actions`}>
-          <button type="button" aria-label={`Move ${data.label} up`} title="Move up" disabled={index === 0} onClick={() => onMove(index - 1)}>
+          <StudioButton type="button" aria-label={`Move ${data.label} up`} title="Move up" disabled={index === 0} onClick={() => onMove(index - 1)}>
             <ArrowUp size={15} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label={`Move ${data.label} down`} title="Move down" disabled={index === listSize - 1} onClick={() => onMove(index + 2)}>
+          </StudioButton>
+          <StudioButton type="button" aria-label={`Move ${data.label} down`} title="Move down" disabled={index === listSize - 1} onClick={() => onMove(index + 2)}>
             <ArrowDown size={15} aria-hidden="true" />
-          </button>
-          {onSetWorkflowStart && data.workflowStartEnabled !== undefined ? <button
+          </StudioButton>
+          {onSetWorkflowStart && data.workflowStartEnabled !== undefined ? <StudioButton
             type="button"
             aria-label={`Start new workflows from ${data.label}`}
             aria-pressed={data.workflowStartEnabled}
             title={data.workflowStartEnabled ? "Disable workflow start" : "Enable workflow start"}
             onClick={() => onSetWorkflowStart(!data.workflowStartEnabled)}
-          ><Power size={15} aria-hidden="true" /></button> : null}
-          {onDuplicate ? <button type="button" aria-label={`Duplicate ${data.label}`} title="Duplicate" onClick={onDuplicate}><Copy size={15} aria-hidden="true" /></button> : null}
-          <button type="button" aria-label={`Delete ${data.label}`} title="Delete" onClick={onDelete}><Trash2 size={15} aria-hidden="true" /></button>
+          ><Power size={15} aria-hidden="true" /></StudioButton> : null}
+          {onDuplicate ? <StudioButton type="button" aria-label={`Duplicate ${data.label}`} title="Duplicate" onClick={onDuplicate}><Copy size={15} aria-hidden="true" /></StudioButton> : null}
+          <StudioButton type="button" aria-label={`Delete ${data.label}`} title="Delete" onClick={onDelete}><Trash2 size={15} aria-hidden="true" /></StudioButton>
         </div>
       ) : null}
     </article>
@@ -395,7 +396,7 @@ function SequenceSlotList({ slots, previews, previewEnabled, onOpen }: {
       {slots.map((slot, index) => {
         const summary = slotSummary(slot);
         const contentId = `${id}-slot-${index}`;
-        return <button key={slot.id} type="button" className="wf-sequence-slot" aria-label={`Open ${slot.label}, ${summary}`}
+        return <StudioButton key={slot.id} type="button" className="wf-sequence-slot" aria-label={`Open ${slot.label}, ${summary}`}
           aria-describedby={previewEnabled && slot.activities.length ? contentId : undefined} disabled={!onOpen} onClick={() => onOpen?.(slot)}>
           <span className="wf-sequence-slot-label">{slot.label}</span>
           <span className="wf-sequence-slot-summary">{!previewEnabled && summary}<ChevronRight size={14} aria-hidden="true" /></span>
@@ -409,7 +410,7 @@ function SequenceSlotList({ slots, previews, previewEnabled, onOpen }: {
               </span>;
             })}
           </span>}
-        </button>;
+        </StudioButton>;
       })}
     </div>
   );

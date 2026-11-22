@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
 import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Timer, Trash2, Undo2, UserCheck, X } from "lucide-react";
@@ -133,24 +133,24 @@ export function CompensationScopeDesigner({
     return (
       <span className="wf-compensation-operator-actions">
         {actions.sourceActivityExecutionId ? (
-          <button
+          <StudioButton
             type="button"
             className="wf-compensation-operator-action"
             aria-label={actions.target === "handler" ? `Retry the compensation of ${name}` : `Retry ${name}`}
             onClick={() => operator!.onAction(retryActionModel(row, actionContext), fallback)}
           >
             <RotateCw size={12} aria-hidden="true" /> Retry
-          </button>
+          </StudioButton>
         ) : null}
         {canResolve ? (
-          <button
+          <StudioButton
             type="button"
             className="wf-compensation-operator-action"
             aria-label={`Resolve ${name}`}
             onClick={() => operator!.onAction(resolveActionModel(row, actionContext), fallback)}
           >
             <UserCheck size={12} aria-hidden="true" /> Resolve…
-          </button>
+          </StudioButton>
         ) : null}
       </span>
     );
@@ -196,7 +196,7 @@ export function CompensationScopeDesigner({
           </span>
         ) : null}
         {runtime && canAct && abandonRow && actionContext ? (
-          <button
+          <StudioButton
             type="button"
             className="wf-compensation-operator-action"
             data-tone="danger"
@@ -204,7 +204,7 @@ export function CompensationScopeDesigner({
             onClick={() => operator!.onAction(abandonActionModel(actionContext), focusChip(".wf-compensation-phase"))}
           >
             <OctagonX size={12} aria-hidden="true" /> Abandon recovery…
-          </button>
+          </StudioButton>
         ) : null}
         {runtime?.occurrences && onSelectExecution ? (
           <div className="wf-compensation-occurrence"><StudioField controlId={`${headingId}-occurrence`} label="Occurrence">
@@ -252,14 +252,14 @@ export function CompensationScopeDesigner({
             </span>
           )}
           {onSelectExecution ? (
-            <button type="button" className="wf-compensation-link" onClick={() => onSelectExecution(runtime.cause!.activityExecutionId)}>
+            <StudioButton type="button" className="wf-compensation-link" onClick={() => onSelectExecution(runtime.cause!.activityExecutionId)}>
               {runtime.cause.kind === "explicit" ? "Show request" : "Show failed step"}
-            </button>
+            </StudioButton>
           ) : null}
           {runtime.cause.incidentId && onOpenIncident && runtime.cause.kind !== "explicit" ? (
-            <button type="button" className="wf-compensation-link" aria-label="Show the incident that started recovery" onClick={() => onOpenIncident(runtime.cause!.incidentId!)}>
+            <StudioButton type="button" className="wf-compensation-link" aria-label="Show the incident that started recovery" onClick={() => onOpenIncident(runtime.cause!.incidentId!)}>
               Show incident
-            </button>
+            </StudioButton>
           ) : null}
         </p>
       ) : null}
@@ -276,9 +276,9 @@ export function CompensationScopeDesigner({
           <h4>No steps yet</h4>
           <p>{readOnly ? "This scope has no steps." : "Add the first step, then pair it with the activity that undoes it."}</p>
           {!readOnly ? (
-            <button type="button" className="wf-compensation-add" onClick={event => request({ kind: "new-step", index: 0 }, event)}>
+            <StudioButton type="button" className="wf-compensation-add" onClick={event => request({ kind: "new-step", index: 0 }, event)}>
               <Plus size={14} aria-hidden="true" /> Add first step
-            </button>
+            </StudioButton>
           ) : null}
         </section>
       ) : (
@@ -319,18 +319,18 @@ export function CompensationScopeDesigner({
                   )}
                   {!readOnly ? (
                     <div className="wf-compensation-actions" aria-label={`${name} actions`}>
-                      <button type="button" aria-label={`Move ${name} up`} title="Move up" disabled={index === 0}
+                      <StudioButton type="button" aria-label={`Move ${name} up`} title="Move up" disabled={index === 0}
                         onClick={() => change(current => moveCompensationStep(current, index, index - 1), `Moved ${name} up`)}>
                         <ArrowUp size={14} aria-hidden="true" />
-                      </button>
-                      <button type="button" aria-label={`Move ${name} down`} title="Move down" disabled={index === steps.length - 1}
+                      </StudioButton>
+                      <StudioButton type="button" aria-label={`Move ${name} down`} title="Move down" disabled={index === steps.length - 1}
                         onClick={() => change(current => moveCompensationStep(current, index, index + 1), `Moved ${name} down`)}>
                         <ArrowDown size={14} aria-hidden="true" />
-                      </button>
-                      <button type="button" aria-label={`Delete step ${name}`} title="Delete step"
+                      </StudioButton>
+                      <StudioButton type="button" aria-label={`Delete step ${name}`} title="Delete step"
                         onClick={() => change(current => removeCompensationStep(current, index), `Deleted step ${name}`)}>
                         <Trash2 size={14} aria-hidden="true" />
-                      </button>
+                      </StudioButton>
                     </div>
                   ) : null}
                 </header>
@@ -382,9 +382,9 @@ export function CompensationScopeDesigner({
                   ) : readOnly ? (
                     <span className="wf-compensation-none">No compensation</span>
                   ) : (
-                    <button type="button" className="wf-compensation-add" data-empty-cell="compensation" aria-label={`Add compensation for ${name}`} onClick={event => request({ kind: "compensation", index }, event)}>
+                    <StudioButton type="button" className="wf-compensation-add" data-empty-cell="compensation" aria-label={`Add compensation for ${name}`} onClick={event => request({ kind: "compensation", index }, event)}>
                       <Plus size={14} aria-hidden="true" /> Add compensation
-                    </button>
+                    </StudioButton>
                   )}
                   {row ? <RecoveryState row={row} name={name} onSelectExecution={onSelectExecution} onOpenIncident={onOpenIncident} /> : null}
                   {row ? pendingChip(row) : null}
@@ -417,14 +417,14 @@ export function CompensationScopeDesigner({
                       <span className="wf-compensation-name">{row.step}</span>
                       {row.origin ? (
                         onSelectExecution && row.origin.activityExecutionId ? (
-                          <button
+                          <StudioButton
                             type="button"
                             className="wf-compensation-link"
                             aria-label={`Show ${originLabel(row.origin)}, where ${row.step} ran`}
                             onClick={() => onSelectExecution(row.origin!.activityExecutionId!)}
                           >
                             From {originLabel(row.origin)}
-                          </button>
+                          </StudioButton>
                         ) : <span className="wf-compensation-origin">From {originLabel(row.origin)}</span>
                       ) : null}
                       <StateChip
@@ -449,9 +449,9 @@ export function CompensationScopeDesigner({
           ) : null}
           {!readOnly ? (
             <div className="wf-compensation-footer">
-              <button type="button" className="wf-compensation-add" onClick={event => request({ kind: "new-step", index: steps.length }, event)}>
+              <StudioButton type="button" className="wf-compensation-add" onClick={event => request({ kind: "new-step", index: steps.length }, event)}>
                 <Plus size={14} aria-hidden="true" /> Add step
-              </button>
+              </StudioButton>
             </div>
           ) : null}
         </div>
@@ -484,20 +484,20 @@ function ActivityCell({
   onRemove?(): void;
   onOpenSlot?: CompensationScopeDesignerProps["onOpenSlot"];
 }) {
-  const removeButton = !readOnly && onRemove ? <button
+  const removeButton = !readOnly && onRemove ? <StudioButton
     type="button"
     className="wf-compensation-icon-button"
     aria-label={role === "step" ? `Remove activity from ${stepName}` : `Remove compensation for ${stepName}`}
     title={role === "step" ? "Remove step activity" : "Remove compensation"}
     onClick={onRemove}
-  ><X size={14} aria-hidden="true" /></button> : null;
+  ><X size={14} aria-hidden="true" /></StudioButton> : null;
   if (!node) {
     if (readOnly) return <span className="wf-compensation-none">No activity</span>;
     return <div className="wf-compensation-cell" data-role={role}>
-      {onChoose ? <button type="button" className="wf-compensation-add" data-empty-cell={role}
+      {onChoose ? <StudioButton type="button" className="wf-compensation-add" data-empty-cell={role}
         aria-label={`Choose the activity for ${stepName}`} onClick={onChoose}>
         <Plus size={14} aria-hidden="true" /> Choose activity
-      </button> : <span className="wf-compensation-none">No activity</span>}
+      </StudioButton> : <span className="wf-compensation-none">No activity</span>}
       {removeButton}
     </div>;
   }
@@ -506,7 +506,7 @@ function ActivityCell({
   const purpose = role === "step" ? `Step ${stepIndex + 1}, ${stepName}` : `Compensation for ${stepName}`;
   return (
     <div className={`wf-compensation-cell${selected ? " is-selected" : ""}`} data-role={role}>
-      <button
+      <StudioButton
         type="button"
         className="wf-compensation-activity"
         data-graph-node-id={node.id}
@@ -520,10 +520,10 @@ function ActivityCell({
           {renderActivityIcon(icon, fallback)}
         </span>
         <span className="wf-compensation-activity-label">{node.data.label}</span>
-      </button>
+      </StudioButton>
       {removeButton}
       {onOpenSlot ? node.data.childSlots.map(slot => (
-        <button
+        <StudioButton
           key={slot.id}
           type="button"
           className="wf-compensation-slot"
@@ -531,7 +531,7 @@ function ActivityCell({
           onClick={() => onOpenSlot(node.id, node.data.label, slot)}
         >
           {slot.label} <ChevronRight size={12} aria-hidden="true" />
-        </button>
+        </StudioButton>
       )) : null}
     </div>
   );
@@ -559,14 +559,14 @@ function RecoveryState({
         onSelect={target && onSelectExecution ? () => onSelectExecution(target) : undefined}
       />
       {recovery.confirmedBy && onSelectExecution ? (
-        <button type="button" className="wf-compensation-link" aria-label={`Show what confirmed ${name}`} onClick={() => onSelectExecution(recovery.confirmedBy!)}>
+        <StudioButton type="button" className="wf-compensation-link" aria-label={`Show what confirmed ${name}`} onClick={() => onSelectExecution(recovery.confirmedBy!)}>
           Show confirmation
-        </button>
+        </StudioButton>
       ) : null}
       {recovery.incidentId && onOpenIncident ? (
-        <button type="button" className="wf-compensation-link" aria-label={`Show the incident ${name} is waiting on`} onClick={() => onOpenIncident(recovery.incidentId!)}>
+        <StudioButton type="button" className="wf-compensation-link" aria-label={`Show the incident ${name} is waiting on`} onClick={() => onOpenIncident(recovery.incidentId!)}>
           Show incident
-        </button>
+        </StudioButton>
       ) : null}
     </>
   );
@@ -598,9 +598,9 @@ function StateChip({
   const content = <><StateIcon state={state} /> <span>{label}</span></>;
   const prefix = kind === "forward" ? "Forward" : "Recovery";
   return onSelect ? (
-    <button type="button" className="wf-compensation-state" data-kind={kind} data-state={state} aria-label={`${prefix}: ${label}. Show this occurrence`} onClick={onSelect}>
+    <StudioButton type="button" className="wf-compensation-state" data-kind={kind} data-state={state} aria-label={`${prefix}: ${label}. Show this occurrence`} onClick={onSelect}>
       {content}
-    </button>
+    </StudioButton>
   ) : (
     <span className="wf-compensation-state" data-kind={kind} data-state={state} aria-label={`${prefix}: ${label}`} tabIndex={-1}>{content}</span>
   );
@@ -682,9 +682,9 @@ function OperatorHistory({
             </span>
             {entry.notApplied ? <span className="wf-compensation-history-note">Decision not applied: the scope was cancelled first</span> : null}
             {onOpenIncident ? (
-              <button type="button" className="wf-compensation-link" aria-label={`Show the incident for ${operatorHistoryLabel(entry)}${entry.step ? ` on ${entry.step}` : ""}`} onClick={() => onOpenIncident(entry.incidentId)}>
+              <StudioButton type="button" className="wf-compensation-link" aria-label={`Show the incident for ${operatorHistoryLabel(entry)}${entry.step ? ` on ${entry.step}` : ""}`} onClick={() => onOpenIncident(entry.incidentId)}>
                 Show incident
-              </button>
+              </StudioButton>
             ) : null}
           </li>
         ))}

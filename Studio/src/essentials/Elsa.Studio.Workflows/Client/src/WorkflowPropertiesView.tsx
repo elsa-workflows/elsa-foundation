@@ -172,14 +172,14 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   // No descriptors available → free-text fallback so the field stays editable.
   if (!options) {
     return (
-      <input
-        type="text"
+      <StudioField label={ariaLabel}><input
         aria-label={ariaLabel}
+        type="text"
         disabled={disabled}
         value={value}
         placeholder={placeholder}
         onChange={event => onChange(event.target.value)}
-      />
+      /></StudioField>
     );
   }
 
@@ -189,7 +189,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   const grouped = groups.length > 0;
 
   return (
-    <select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
       {allowEmpty ? <option value="">{placeholder ?? "—"}</option> : null}
       {/* An alias the descriptor list doesn't know about is preserved but shown as an unresolved, disabled option. */}
       {!hasValue ? <option value={value} disabled>{value} (unresolved)</option> : null}
@@ -202,7 +202,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
             </optgroup>
           ))
         : options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select>
+    </select></StudioField>
   );
 }
 
@@ -219,9 +219,9 @@ function CollectionKindCell({ value, ariaLabel, onChange }: {
   onChange(kind: CollectionKind): void;
 }) {
   return (
-    <select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
       {collectionKinds.map(kind => <option key={kind} value={kind}>{collectionKindLabels[kind]}</option>)}
-    </select>
+    </select></StudioField>
   );
 }
 

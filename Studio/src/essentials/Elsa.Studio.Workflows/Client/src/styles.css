@@ -9,13 +9,13 @@
 .wf-page,
 .wf-editor,
 .wf-tokens {
-  --wf-panel: var(--card, #ffffff);
-  --wf-panel-muted: var(--muted, #f8fafc);
-  --wf-canvas: color-mix(in srgb, var(--background, #ffffff) 88%, var(--muted, #f8fafc));
+  --wf-panel: var(--studio-surface);
+  --wf-panel-muted: var(--studio-surface-muted);
+  --wf-canvas: color-mix(in srgb, var(--studio-bg) 88%, var(--studio-surface-muted));
   /* Field surfaces: --wf-surface is the raised control/panel tone, --wf-bg the recessed page tone.
      Inputs blend the two into a subtly recessed "well" that stays distinct from the panel in both themes. */
-  --wf-surface: var(--card, #ffffff);
-  --wf-bg: var(--background, #ffffff);
+  --wf-surface: var(--studio-surface);
+  --wf-bg: var(--studio-bg);
   /* Flat colour of the panel tiers. Material themes remap --wf-panel / -muted to surface
      recipes that may be gradient or texture stacks, and a gradient is not a <color>: inside
      color-mix(), as a gradient stop or as a border colour it invalidates the whole declaration.
@@ -29,25 +29,25 @@
      lists render as one container slab + flat hairline rows (not a raised slab per row). */
   --wf-row: var(--wf-panel);
   --wf-row-bg-size: auto;
-  --wf-well: var(--muted, #f8fafc);
+  --wf-well: var(--studio-surface-muted);
   --wf-well-bg-size: auto;
   --wf-well-shadow: none;
-  --wf-border: color-mix(in srgb, var(--border, #d9e2ec) 88%, transparent);
-  --wf-border-strong: color-mix(in srgb, var(--border, #d9e2ec) 70%, var(--foreground, #0f172a));
-  --wf-text: var(--foreground, #0f172a);
-  --wf-muted-text: var(--muted-foreground, #64748b);
-  --wf-accent: var(--primary, #0ea5e9);
-  --wf-accent-soft: color-mix(in srgb, var(--primary, #0ea5e9) 12%, var(--card, #ffffff));
-  --wf-danger: var(--danger, #dc2626);
-  --wf-danger-soft: color-mix(in srgb, var(--danger, #dc2626) 12%, var(--card, #ffffff));
-  --wf-success: var(--success, #047857);
-  --wf-success-soft: color-mix(in srgb, var(--success, #047857) 12%, var(--card, #ffffff));
+  --wf-border: color-mix(in srgb, var(--studio-border) 88%, transparent);
+  --wf-border-strong: color-mix(in srgb, var(--studio-border) 70%, var(--studio-text));
+  --wf-text: var(--studio-text);
+  --wf-muted-text: var(--studio-text-muted);
+  --wf-accent: var(--studio-accent);
+  --wf-accent-soft: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
+  --wf-danger: var(--studio-danger);
+  --wf-danger-soft: color-mix(in srgb, var(--studio-danger) 12%, var(--studio-surface));
+  --wf-success: var(--studio-success);
+  --wf-success-soft: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
   /* Warning tone. --wf-warning is the saturated fill (borders/badges); --wf-warning-text is
      the AA-readable dark-amber *text* colour for warning tints (the fill fails AA as text).
      Replaces raw #f59e0b / #d97706 / #b45309 hexes scattered through this sheet. */
-  --wf-warning: var(--warning, #d97706);
-  --wf-warning-soft: color-mix(in srgb, var(--warning, #d97706) 12%, var(--card, #ffffff));
-  --wf-warning-text: var(--studio-warning-fg, #b45309);
+  --wf-warning: var(--studio-warning);
+  --wf-warning-soft: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
+  --wf-warning-text: var(--studio-warning-fg);
 
   /* Toggle-switch thumb. A near-white constant (not a raw #fff) that stays lighter than both
      the off track (--wf-muted-text) and the on track (--wf-accent) in light AND dark mode,
