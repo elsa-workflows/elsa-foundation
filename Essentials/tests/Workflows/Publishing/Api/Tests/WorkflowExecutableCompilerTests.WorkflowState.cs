@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed partial class WorkflowExecutableCompilerTests
 {
-    private static ScriptVariableReadResolver StateReadResolver()
+    internal static ScriptVariableReadResolver StateReadResolver()
     {
         var services = new ServiceCollection();
         new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
@@ -45,6 +45,12 @@ public sealed partial class WorkflowExecutableCompilerTests
     [Theory]
     [InlineData("return { workflowState: 1 };")]
     [InlineData("return args.workflowState;")]
+    [InlineData("return { globalThis: 1, Function: 2, eval: 3, Object: 4, Reflect: 5 };")]
+    [InlineData("return args.Function;")]
+    [InlineData("const globalThis={total:1}; return globalThis.total;")]
+    [InlineData("const Function=x=>x; return Function(1);")]
+    [InlineData("const Reflect={get:x=>x}; return Reflect.get(1);")]
+    [InlineData("const Object={total:1}; return Object;")]
     [InlineData("switch (1) { case 1: const workflowState={setOutput(){}}; workflowState.setOutput('',1); }")]
     [InlineData("class Local { static { var workflowState={setOutput(){}}; workflowState.setOutput('',1); } }")]
     public void Local_lookalikes_and_plain_property_keys_have_no_capability_effects(string script)
@@ -59,17 +65,45 @@ public sealed partial class WorkflowExecutableCompilerTests
     [InlineData("function f(x = workflowState.setCorrelationId('new')) { var workflowState; } f();")]
     [InlineData("switch (workflowState.setCorrelationId('new')) { case 1: const workflowState = {}; }")]
     [InlineData("return { workflowState };")]
+    [InlineData("return { globalThis };")]
+    [InlineData("const constructor = Function; return constructor('return 1')();")]
     public void Real_references_preserve_the_independent_capability_signal(string script) =>
         Assert.True(StateReadResolver().Analyze("JavaScript", script, scriptBody: true)!.WorkflowState.AccessesState);
 
     [Theory]
     [InlineData("args.workflowState")]
     [InlineData("({workflowState: 1})")]
+    [InlineData("args.Function")]
+    [InlineData("args.eval")]
+    [InlineData("args.globalThis")]
+    [InlineData("args.Object")]
+    [InlineData("args.Reflect")]
     public async Task Plain_property_names_remain_valid_in_read_only_input_expressions(string source) =>
         await CompileReadsAsync(Node("consumer", JavaScriptText(source)), [Greeting], StateReadResolver());
 
     internal async Task<Elsa.Workflows.Runtime.Core.Models.ExecutableNode> NativeStateScriptNodeAsync() =>
         (await CompileBodyAsync("return 1;", typeof(NativeStateScriptProbe), StateReadResolver())).RootActivity;
+
+    internal async Task<Elsa.Workflows.Runtime.Core.Models.ExecutableNode> EngineStateScriptNodeAsync() =>
+        (await CompileBodyAsync("return 1;", typeof(EngineStateScriptProbe), StateReadResolver())).RootActivity;
+
+    internal static Elsa.Serialization.Core.IWellKnownTypeRegistry StateScriptTypes()
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        foreach (var type in new[] { typeof(EngineStateScriptProbe), typeof(NativeStateScriptProbe) })
+            registry.RegisterType(type, Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(type));
+        return registry;
+    }
+
+    [Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomes("script")]
+    private sealed class EngineStateScriptProbe : Elsa.Activities.Runtime.Core.Models.Activity, Elsa.Activities.Runtime.Core.Contracts.IStepWorkflowStateConsumer
+    {
+        [Elsa.Activities.Runtime.Core.Attributes.ActivityInput(Key = "script")]
+        public string? Script { get; set; }
+        protected override ValueTask<Elsa.Activities.Runtime.Core.Models.ActivityTransition<Elsa.Activities.Runtime.Core.Models.ActivityUnit>> ExecuteAsync(
+            Elsa.Activities.Runtime.Core.Models.ActivityExecutionContext context) => ValueTask.FromResult(
+                Elsa.Activities.Runtime.Core.Models.ActivityTransition<Elsa.Activities.Runtime.Core.Models.ActivityUnit>.Complete(Elsa.Activities.Runtime.Core.Models.ActivityUnit.Value));
+    }
 
     [Fact]
     public async Task Explicit_native_capability_remains_conservative_beside_a_read_only_script()

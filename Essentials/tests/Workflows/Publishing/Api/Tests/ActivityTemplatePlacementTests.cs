@@ -20,7 +20,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class ActivityTemplatePlacementTests
+public sealed partial class ActivityTemplatePlacementTests
 {
     [Fact]
     public async Task Graph_authored_occurrence_names_override_child_template_names_at_each_placed_identity()
@@ -797,7 +797,10 @@ public sealed class ActivityTemplatePlacementTests
         string? formatInputs = null,
         string? computeOutputs = null,
         bool includeGraphContract = false,
-        ExecutableNode? computeRoot = null)
+        ExecutableNode? computeRoot = null,
+        string? computeInputs = null,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Serialization.Core.IWellKnownTypeRegistry? registry = null)
     {
         var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
@@ -808,7 +811,7 @@ public sealed class ActivityTemplatePlacementTests
                  ]
                  """),
             null);
-        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json("[]"), null, computeOutputs is null ? null : Json(computeOutputs));
+        var emptyOverlay = new ExecutableActivityTemplateOccurrenceOverlay("1", Json(computeInputs ?? "[]"), null, computeOutputs is null ? null : Json(computeOutputs));
         var payload = scopeModel is null
             ? Json("""{"entryOccurrenceId":"compute"}""")
             : Json($$"""{"entryOccurrenceId":"compute","scopeModel":"{{scopeModel}}","variables":[{"referenceKey":"total","name":"Total","type":{"alias":"object","collectionKind":"Single"},"storageDriverKey":"elsa.json"}]}""");
@@ -842,7 +845,7 @@ public sealed class ActivityTemplatePlacementTests
             new PublicationStore([graphPublication, computePublication, formatPublication]),
             new TemplateReader([graphTemplate, computeTemplate, formatTemplate]),
             new SourceReader(references),
-            new Sha256ActivityPlacementHasher());
+            new Sha256ActivityPlacementHasher(), readResolver, registry);
         return (placer, new(
             graphPublication,
             graphTemplate,
@@ -971,7 +974,8 @@ public sealed class ActivityTemplatePlacementTests
         IExecutableActivityTemplateReader templates,
         IWorkflowExecutableSourceReferenceReader references,
         IActivityPlacementHasher hasher,
-        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null) => new(
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Serialization.Core.IWellKnownTypeRegistry? registry = null) => new(
         publications,
         templates,
         references,
@@ -979,7 +983,7 @@ public sealed class ActivityTemplatePlacementTests
         new SequenceOccurrenceStructureService(),
         new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create()),
         new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()])),
-        BackgroundLeafTypes(),
+        registry ?? BackgroundLeafTypes(),
         readResolver);
 
     private static Elsa.Serialization.Core.IWellKnownTypeRegistry BackgroundLeafTypes()

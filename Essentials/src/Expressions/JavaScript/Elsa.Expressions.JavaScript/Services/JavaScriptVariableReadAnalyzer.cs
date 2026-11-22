@@ -77,41 +77,50 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         var correlation = false;
         var instanceName = false;
         var invalid = false;
-        void Visit(Node node, Node? parent, bool shadowed)
+        string[] roots = ["workflowState", "eval", "Function", "globalThis", "Object", "Reflect"];
+        int DeclaredBindings(Node scope, Node? owner)
+        {
+            var mask = 0;
+            for (var i = 0; i < roots.Length; i++)
+                if (DeclaresTrackedRootInScope(scope, owner, roots[i])) mask |= 1 << i;
+            return mask;
+        }
+        void Visit(Node node, Node? parent, int shadowed)
         {
             // Case declarations share one lexical environment, entered after evaluating the discriminant.
             if (node is SwitchStatement selection)
             {
                 Visit(selection.Discriminant, node, shadowed);
-                var caseShadowed = shadowed || DeclaresStateRootInScope(node, parent);
+                var caseShadowed = shadowed | DeclaredBindings(node, parent);
                 foreach (var item in selection.Cases) Visit(item, node, caseShadowed);
                 return;
             }
-            shadowed |= DeclaresStateRootInScope(node, parent);
-            if (!shadowed && node is Identifier { Name: "workflowState" } identifier && IsStateReference(identifier, parent))
+            shadowed |= DeclaredBindings(node, parent);
+            bool IsShadowed(string name) => (shadowed & (1 << Array.IndexOf(roots, name))) != 0;
+            if (!IsShadowed("workflowState") && node is Identifier { Name: "workflowState" } identifier && IsReference(identifier, parent))
             {
                 access = true;
                 if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
                     opaque = true;
             }
-            if (node is Identifier { Name: "eval" or "Function" or "globalThis" } || node is ThisExpression)
+            if (node is Identifier { Name: "eval" or "Function" or "globalThis" } global && !IsShadowed(global.Name) && IsReference(global, parent) || node is ThisExpression)
             { access = true; opaque = true; }
             if (node is MemberExpression dynamicMember &&
                 dynamicMember.Object is not Identifier { Name: "variables" or "args" } &&
                 dynamicMember.Object is not CallExpression { Callee: Identifier { Name: "getVariable" } } &&
-                (IsOpaqueStateMember(dynamicMember.Property, dynamicMember.Computed) || dynamicMember.Object is Identifier { Name: "Reflect" }))
+                (IsOpaqueStateMember(dynamicMember.Property, dynamicMember.Computed) || dynamicMember.Object is Identifier { Name: "Reflect" } && !IsShadowed("Reflect")))
             { access = true; opaque = true; }
-            if (node is Identifier { Name: "Object" or "Reflect" } intrinsic &&
+            if (node is Identifier { Name: "Object" or "Reflect" } intrinsic && !IsShadowed(intrinsic.Name) && IsReference(intrinsic, parent) &&
                 !(parent is MemberExpression accessMember && ReferenceEquals(accessMember.Object, intrinsic) ||
                   parent is CallExpression invocation && ReferenceEquals(invocation.Callee, intrinsic) || parent is NewExpression))
             { access = true; opaque = true; }
-            if (!shadowed && node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
+            if (!IsShadowed("workflowState") && node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
             {
                 if (member.Computed || member.Property is not Identifier method || parent is not CallExpression call || !ReferenceEquals(call.Callee, member))
                     opaque = true;
                 else
                 {
-                    if (!shadowed && !call.Arguments.Any(argument => argument is SpreadElement))
+                    if (!IsShadowed("workflowState") && !call.Arguments.Any(argument => argument is SpreadElement))
                     {
                         var expected = method.Name switch
                         {
@@ -144,13 +153,13 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
             }
             foreach (var child in node.ChildNodes) Visit(child, node, shadowed);
         }
-        Visit(parsed, null, false);
+        Visit(parsed, null, 0);
         return new ScriptWorkflowStateEffects { AccessesState = access, OutputNames = names.Order(StringComparer.Ordinal).ToArray(),
             WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque, HasInvalidLiteralCall = invalid };
     }
 
-    // Lexical ownership is needed only for the reserved capability root: local lookalikes are ordinary data.
-    private static bool IsStateReference(Identifier identifier, Node? parent) => parent switch
+    // Track lexical ownership of the capability root and conservative globals; local lookalikes are ordinary data.
+    private static bool IsReference(Identifier identifier, Node? parent) => parent switch
     {
         MemberExpression member when !member.Computed && ReferenceEquals(member.Property, identifier) => false,
         Property property when !property.Computed && !property.Shorthand && ReferenceEquals(property.Key, identifier) => false,
@@ -162,11 +171,11 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         _ => true
     };
 
-    private static bool DeclaresStateRootInScope(Node scope, Node? parent)
+    private static bool DeclaresTrackedRootInScope(Node scope, Node? parent, string name)
     {
         bool Binds(Node? binding) => binding switch
         {
-            Identifier { Name: "workflowState" } => true,
+            Identifier identifier => identifier.Name == name,
             AssignmentPattern pattern => Binds(pattern.Left),
             RestElement rest => Binds(rest.Argument),
             ArrayPattern pattern => pattern.Elements.Any(Binds),
