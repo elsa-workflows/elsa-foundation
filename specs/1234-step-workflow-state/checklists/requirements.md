@@ -16,4 +16,4 @@
 - [x] Runtime/store/inspection and Studio delivery/acceptance are part of the same approved implementation scope.
 - [x] Dependencies, assumptions and approval boundary are explicit; research review is not spec approval.
 
-Author checklist complete. Independent proposal review and coordinator approval remain separate and must be recorded on the proposal PR. No runtime, recovery, Studio or CI execution is claimed by these checks.
+Author checklist complete. Independent proposal review and coordinator agreement are recorded separately on the proposal PR. No runtime, recovery, Studio or CI execution is claimed by these checks.

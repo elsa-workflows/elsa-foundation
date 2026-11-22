@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: Complete ADR 0090's workflow-output, correlation-ID and instance-name capability for native activity bodies and imported Elsa 3 scripts, reusing the step transaction and keeping input expressions pure.
 
@@ -138,4 +138,4 @@ An author sees a node's possible workflow-state effects. An operator sees commit
 
 ## Dependencies and assumptions
 
-Spec 1231's leaf session integration, spec 1221's variable lifecycle and spec 1208's result/outcome contract are the baseline. Their placement boundaries stay explicit. ADR 0090 A-3 is accepted; this draft grants no implementation or new architecture approval. Existing intrinsic normalization, precision/storage policies and bookmark behavior are reused. Alternatives are those in ADR 0090; inspected extension paths/design choices are in [research](research.md). Live approval/questions belong on the proposal PR.
+Spec 1231's leaf session integration, spec 1221's variable lifecycle and spec 1208's result/outcome contract are the baseline. Their placement boundaries stay explicit. ADR 0090 A-3 is accepted; implementation authorization and the scoped delivery sequence are recorded in the proposal forum. This document grants no new architecture approval. Existing intrinsic normalization, precision/storage policies and bookmark behavior are reused. Alternatives are those in ADR 0090; inspected extension paths/design choices are in [research](research.md). Live approval/questions belong on the proposal PR.

@@ -4,7 +4,7 @@
 
 ## Summary
 
-Extend the existing inline leaf evaluation with workflow output/identity intents. Prepare all changes immutably, merge them with S-7 variable changes, project captures last, and submit one `RuntimeCheckpointCommit`. No setter persists. Add a narrow body-only script bridge, faithful Elsa 3 lowering, pinned capability metadata, existing runtime inspection/Studio presentation and recovery proofs. Implementation begins only after this specification is approved and merged; it uses a separate implementation PR targeting the initiative.
+Extend the existing inline leaf evaluation with workflow output/identity intents. Prepare all changes immutably, merge them with S-7 variable changes, project captures last, and submit one `RuntimeCheckpointCommit`. No setter persists. Add a narrow body-only script bridge, faithful Elsa 3 lowering, pinned capability metadata, existing runtime inspection/Studio presentation and recovery proofs. Implementation follows the recorded coordinator agreement and continues on the same PR targeting the initiative under this work unit's scoped delivery sequence. The spec is not represented as already merged.
 
 ## Technical Context
 
@@ -59,7 +59,7 @@ Studio/src/essentials/Elsa.Studio.Workflows/Client/src/
 
 ## Phase 0 — Research
 
-[research.md](research.md) identifies existing slot/projection/checkpoint paths, S-7 restrictions, source conversion semantics, protection hazards and alternatives within the accepted ADR. No research question remains that prevents proposing this bounded design. Scope/API choices are concrete recommendations for coordinator approval, not implied agreement.
+[research.md](research.md) identifies existing slot/projection/checkpoint paths, S-7 restrictions, source conversion semantics, protection hazards and alternatives within the accepted ADR. No research question remains that prevents proposing this bounded design. Scope/API choices are the concrete reviewed design; agreement and delivery authorization are recorded in the proposal forum.
 
 ## Phase 1 — Design
 

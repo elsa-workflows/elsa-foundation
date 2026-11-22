@@ -2,11 +2,11 @@
 
 **Input**: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](data-model.md), [contract](contracts/workflow-state.md), [validation guide](quickstart.md).
 
-All tasks below are implementation work and remain unchecked until the specification is approved/merged. Use a separate implementation branch/PR targeting the initiative. No ADR decisions or graph support are authorized by this task list. Tests develop alongside the behavior slices under the plan's risk-based cadence; the list is dependency ordered, not a new TDD mandate.
+All tasks below are implementation work and remain unchecked until executed. Continue the existing isolated branch and same PR targeting the initiative under the recorded coordinator agreement and scoped delivery sequence. No ADR decisions or graph support are authorized by this task list. Tests develop alongside the behavior slices under the plan's risk-based cadence; the list is dependency ordered, not a new TDD mandate.
 
 ## Phase 1 — Setup
 
-- [ ] T001 Re-read the approved `specs/1234-step-workflow-state/spec.md` and exact merged initiative head; record approved scope/source on the implementation PR and create its separate isolated branch.
+- [ ] T001 Re-read the approved `specs/1234-step-workflow-state/spec.md` and exact merged initiative head; record approved scope/source on the existing PR and take exclusive ownership of its isolated checkout/branch without editing the shared root.
 - [ ] T002 Inventory current commit/replay/protection call sites against `specs/1234-step-workflow-state/research.md`, checking incoming initiative changes before implementing the named paths.
 - [ ] T003 Define exact affected suites and owned composed-host journeys from `specs/1234-step-workflow-state/quickstart.md`; record baseline failures/not-run states on the implementation PR.
 
