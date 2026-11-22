@@ -31,6 +31,12 @@ public sealed partial class InMemoryStore
     private readonly Dictionary<string, long> _foundationSweepHorizon = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, SortedList<string, EventRow>>> _foundationPublicationsByTenant = new(StringComparer.Ordinal);
 
+    internal int ReadCatchUpCoverageCount(CreationAddress actor)
+    {
+        lock (_gate) return _foundationCatchUpCoverage.Values.Count(entry =>
+            entry.Wait.Instance == actor.Id && entry.Wait.Creation == actor.Creation);
+    }
+
     private static Message CatchUpMessage(string id, string actor, long creation, ParkCatchUpTicket ticket) =>
         new Message(id, new(actor), Kinds.Meet, Sender: actor, TargetCreation: creation, SenderCreation: creation)
             { ParkCatchUp = ticket }.AsIssued().AsKernelTicket();
