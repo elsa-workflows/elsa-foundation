@@ -213,6 +213,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   let lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true })).toBeVisible();
   await capture(page, info, "diagnostics-approval-consumed");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-approval-consumed-action");
   await restart();
   const retained = { occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?limit=50`), history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
   assertRestartPrefix(completed.history, retained.history);
@@ -221,6 +223,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1);
   await capture(page, info, "diagnostics-approval-retained-after-restart");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-approval-retained-action");
 
   const expiry = await publish("passive expiry", [node("wait", event, { EventName: `expiry-${crypto.randomUUID()}`, CanStartWorkflow: false, ExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString() })]);
   const expiryBefore = { history: await history(expiry.id), bookmarks: await bookmarks(expiry.id) };
@@ -234,6 +238,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   lifecycle = await openLifecycle(expiry.id, passive.createdHistoryEventId!);
   await expect(lifecycle).toContainText("Expired"); await expect(lifecycle).toContainText("It does not wake, time out or cancel the activity.");
   await capture(page, info, "diagnostics-passive-expiry");
+  await frame(lifecycle.getByText("Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.", { exact: true }));
+  await capture(page, info, "diagnostics-passive-expiry-explanation");
   await openOwner(expiry.id, passive.createdHistoryEventId!, "Journal");
   const expiryJournal = page.getByRole("region", { name: "Activity journal", exact: true });
   await expect(expiryJournal).toContainText("Bookmark created");
@@ -258,6 +264,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "diagnostics-duplicate-delivery");
   lifecycle = await openLifecycle(duplicate.id, duplicateBefore.items[0].createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1); await capture(page, info, "diagnostics-single-consumption");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-single-consumption-action");
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline`); await waitCapturedPlaybackReady(page);
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
   await timeline.getByText("Filter events", { exact: true }).click();
