@@ -33,6 +33,7 @@ public static class LeaseChecks
         await ContractStatechartChecks.Run(Check);
         await ContractNativeChecks.Run(Check);
         await PassTurnBudgetChecks.Run(Check);
+        await TenantPassChecks.Run(Check);
         await ParkHandoffCreditChecks.Run(Check);
         await ContractHeldRequestChecks.Run(Check, flaw);
         await FoundationEventSendChecks.Run(Check);

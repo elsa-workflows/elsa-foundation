@@ -267,6 +267,10 @@ public interface IKernelStore : IMembership
     /// <summary>The shared Unix-millisecond source, when the built-in foundation can read it locally.</summary>
     Func<long>? FoundationClock { get; }
 
+    // The in-memory store keeps the tenant with the admitted exact creation.
+    // A provider supplies the tenant alongside the actor or the creation envelope it already loaded.
+    internal string? FoundationScheduleTenant(CreationAddress address) => null;
+
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
     bool SupportsCascadePages => false;

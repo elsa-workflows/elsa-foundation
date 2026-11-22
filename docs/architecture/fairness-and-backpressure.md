@@ -211,18 +211,18 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 
 ## Fair scheduling within a pass
 
-**Proposed changes to the Worker (layer 2):**
+**Worker scheduling (layer 2):**
 
-1. **A turn budget per pass.** A pass runs at most `PassTurnBudget` turns, flushes, and returns `TimeSpan.Zero` while
+1. **A turn budget per pass (K3, in-memory).** A pass runs at most `PassTurnBudget` turns, flushes, and returns `TimeSpan.Zero` while
    ready work remains. Layer 1 then runs its other scopes before this one again. The flush cap stays.
-2. **Deficit round robin by tenant.** The ready instances are grouped by the tenant on their row. Each round gives every
+2. **Deficit round robin by tenant (K3, in-memory).** The ready instances are grouped by the tenant on their row. Each round gives every
    tenant with ready instances a quantum of turns (its weight; equal by default). Within a tenant, instances rotate: a
    newly ready instance joins the back of its tenant's queue, in the order its oldest deliverable message was
    observed, and an instance that takes a turn and is still ready goes to the back. An instance therefore takes at
    most one turn before every instance ahead of it in its tenant's queue has taken one. A cursor carries the rounds
    from pass to pass; a reset drops it with the rest of memory. The ordinal order of today starves high ids once a
    budget exists, so it goes.
-3. **An age hint for layer 1.** `RunAsync` also reports the age of its oldest waiting deliverable message. The
+3. **An age hint for layer 1 (proposed).** `RunAsync` also reports the age of its oldest waiting deliverable message. The
    built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
    the scopes go in order of their oldest waiting work, scope order breaking ties. The age orders a round and never
    gives one scope a second pass before every other ready scope has had one. Layer 1 learns an age and nothing about
@@ -231,8 +231,14 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 The per-target order rule is unchanged: a target's messages are handled in `seq` order, and one sender's messages to
 one target arrive in the order sent. The selection only chooses which instance takes the next turn.
 
-**Cost.** In memory, O(ready instances) per pass. No database call. The seam change is one field in the result of
-`RunAsync`.
+**Cost.** Keep the ready queues in memory. The K3 pass scans the ready actors and sorts newly ready actors by observation
+order before they join the queues. The in-memory store supplies the tenant from the admitted exact creation. There is
+no database call. K4 qualifies the tenant column and provider loads. The age hint adds one field to
+the result of `RunAsync`.
+
+The in-memory `--pass-turn-budget-check` and `--tenant-pass-check` run the real Worker. They cover a perpetually
+productive actor, equal and weighted rounds, a cold owner, and a weight spread across passes when the tenant has one
+ready actor. The tests check per-actor order, the pass cap and the quiet tenant's first turn.
 
 **What it cannot do.** The poll stays first in, first out: one query, one index. A tenant's message beyond the poll
 window is not in memory, so the in-pass selection cannot reach it. The ingress threshold limits how far outside starts

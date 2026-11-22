@@ -130,6 +130,12 @@ if (args.Contains("--park-cohort-tuple-check"))
     await ParkCohortTupleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--tenant-pass-check"))
+{
+    var failed = false;
+    await TenantPassChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--pass-turn-budget-check"))
 {
     var failed = false;
