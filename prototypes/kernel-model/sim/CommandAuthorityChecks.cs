@@ -154,6 +154,7 @@ internal static class CommandAuthorityChecks
             "ordinary ingress resets a cascade mark and its issued scope");
         await Pump();
         check(Row(children.Ended).Status == InstanceStatus.Cancelled, "the ordinary terminate keeps its existing authority");
+        var settledChild = Row(children.Ended);
 
         await ingress.SendAsync(scope, new Contract.Target.Ref(parentRef), "cancel-tree", "cancel-tree");
         await Pump();
@@ -161,6 +162,9 @@ internal static class CommandAuthorityChecks
             { Kind: Kinds.Terminate, CascadeOrigin: true } && message.Target == target && message.Sender == parent.Id &&
             message.SenderCreation == parent.Creation && message.TargetCreation == child.Creation),
             "the real terminal turn marks its descendant send and the recorded child obeys it");
+        check(Row(children.Ended) == settledChild && actor.EndedCalls == 0 &&
+            emitted.All(message => message.Kind != "unexpected-termination"),
+            "a marked cascade to an already ended leaf settles without re-entering the model");
 
         ValueTask<Committed> SendRaw(Message message) => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position,
             Defaults.Lease, false, [new(foreign.Id, null, null, [], [], [message], [], [], null)], [], []));
