@@ -1265,7 +1265,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _options.OnObservedDelivery?.Invoke(row);
             }
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
-                suspect: !row.PersistedHold && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
+                // A released hold is local to the owner that made it. A cold owner requalifies it by trial.
+                suspect: (!row.PersistedHold || row.ReleasedBy is not null) && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
                 cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy);
             if (!LeaseUsable()) return;
         }
@@ -1711,6 +1712,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 continue;
             }
             if (item.UncheckedReference is not null || Awaits(item)) break;
+            if (CohortInput(item, slot) && PoisonInput(item, slot))
+            {
+                // Resolve the prefix first. Only already-held predecessors can join the poison turn.
+                if (due.TrueForAll(predecessor => predecessor.Held)) due.Add(item);
+                break;
+            }
             var command = item.Message.IsControl;
             var identityReply = CreationError(slot, item.Message) is not null;
             var continuingStart = !identityReply && slot.Row?.PendingStart == item.Message.InboxKey;
