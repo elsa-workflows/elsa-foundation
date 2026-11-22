@@ -90,6 +90,8 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   const requested = one(parentHistory, "ChildWorkflowDispatchRequested");
   const childRunId = requested.metadata["history.relatedWorkflowExecutionId"];
   expect(childRunId).toBeTruthy(); expect(childRunId).not.toBe(parentRun.workflowExecutionId);
+  const childDetails = await api<WorkflowInstanceDetails>(`/runtime/workflows/instances/${childRunId}`);
+  expect(childDetails.instance).toMatchObject({ parentWorkflowExecutionId: parentRun.workflowExecutionId, sourceReferenceId: null });
   const childHistory = await history(childRunId);
   const childStarted = one(childHistory, "WorkflowStarted");
   const settled = one(childHistory, "ChildWorkflowSettled");
@@ -135,7 +137,10 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   await details.getByRole("button", { name: "Open related run →", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(childRunId)}\\?view=timeline`));
   await waitCapturedPlaybackReady(page);
-  await openEvent(settled, "Child run settled"); await capture(page, info, "child-settlement");
+  await openEvent(settled, "Child run settled");
+  await expect(page.getByRole("heading", { name: `Child run · ${childRunId.slice(-8)}`, exact: true, level: 2 })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Run workspace actions", exact: true }).getByRole("button", { name: "Open definition", exact: true })).toHaveCount(0);
+  await capture(page, info, "child-settlement");
   await openEvent(receipt, "Delivery received");
   await details.getByRole("button", { name: "Inspect causal event →", exact: true }).click();
   const settledHeading = details.getByRole("heading", { name: "Child run settled", exact: true });
@@ -171,6 +176,6 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "compensation-journal");
   const oracle = info.outputPath("native-history-owners-oracle.json");
   writeFileSync(oracle, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, child, parent, parentRun, parentHistory,
-    childRunId, childHistory, bookmarks, confirmed, confirmRun, confirmHistory, recovery, recoveryRun, recoveryHistory }, null, 2));
+    childRunId, childDetails, childHistory, bookmarks, confirmed, confirmRun, confirmHistory, recovery, recoveryRun, recoveryHistory }, null, 2));
   await info.attach("native-history-owners-oracle.json", { path: oracle, contentType: "application/json" });
 }

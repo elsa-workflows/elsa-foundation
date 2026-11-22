@@ -18,6 +18,8 @@
 }
 
 .wf-playback-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   margin-bottom: 10px;
 }
 
@@ -28,7 +30,9 @@
 }
 
 .wf-playback-state {
-  margin-inline-start: auto;
+  grid-column: 1 / -1;
+  min-height: 1.4em;
+  margin-inline-start: 0;
 }
 
 .wf-playback-transport > .studio-field {

@@ -23,6 +23,7 @@ import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackend
 import { listActivities } from "../api/activityDesign";
 import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "../api/capabilities";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
+import { hasUnattributedChildDefinition } from "../workflowInstanceInspection";
 import { formatNamedIdentityTitle, formatRunPageTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionLayout, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
@@ -1070,17 +1071,20 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     labelOf: labelOfNode,
     refreshRun
   });
+  const unattributedChildDefinition = hasUnattributedChildDefinition(data?.details.instance);
+  const selectedDefinitionId = unattributedChildDefinition ? undefined : data?.details.instance.definitionId;
   const definitionAccess = useDefinitionReviewAccess(
     context,
-    data?.details.instance.definitionId,
-    state === "ready" && !!data
+    selectedDefinitionId,
+    state === "ready" && !!data && !unattributedChildDefinition
   );
-  const selectedDefinitionId = data?.details.instance.definitionId;
   const selectedDefinitionCanBeReviewed = canReviewDefinition(definitionAccess, context, selectedDefinitionId);
-  const runDisplayName = data?.definitionName ?? data?.definitionVersion?.definition.name;
+  const runDisplayName = unattributedChildDefinition
+    ? `Child run · ${(data?.details.instance.workflowExecutionId ?? workflowExecutionId).slice(-8)}`
+    : data?.definitionName ?? data?.definitionVersion?.definition.name;
   useEffect(() => {
-    onRunTitleChange?.(formatRunPageTitle(runDisplayName, data?.details.instance.definitionId));
-  }, [data?.details.instance.definitionId, onRunTitleChange, runDisplayName]);
+    onRunTitleChange?.(unattributedChildDefinition ? runDisplayName ?? "Child run" : formatRunPageTitle(runDisplayName, data?.details.instance.definitionId));
+  }, [data?.details.instance.definitionId, onRunTitleChange, runDisplayName, unattributedChildDefinition]);
 
   // The selected occurrence lives in the URL (spec 260 FR-423): an activity execution, or the one an incident names.
   const selectedUrlActivityId = state !== "ready" || !selectedEvidenceId
@@ -1216,7 +1220,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       definitionNameAbort.current?.abort();
       const namesAbort = new AbortController();
       definitionNameAbort.current = namesAbort;
-      void loadDefinitionDisplayNames(context, [details.instance.definitionId], namesAbort.signal).then(
+      if (!hasUnattributedChildDefinition(details.instance)) void loadDefinitionDisplayNames(context, [details.instance.definitionId], namesAbort.signal).then(
         definitionNames => {
           if (generation !== loadGeneration.current) return;
           const definitionName = definitionNames.get(details.instance.definitionId);
@@ -1270,7 +1274,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   const openDefinitionDesigner = (requestedDefinitionId?: string) => {
     const definitionId = requestedDefinitionId ?? data?.details.instance.definitionId;
-    if (!definitionId) return;
+    if (!definitionId || hasUnattributedChildDefinition(data?.details.instance)) return;
 
     navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
   };
@@ -1931,6 +1935,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   const definitionId = currentData?.details.instance.definitionId?.trim();
   const runPageTitle = !currentData
     ? "Run"
+    : unattributedChildDefinition ? runDisplayName ?? "Child run"
     : runDisplayName?.trim() && runDisplayName.trim() !== definitionId
       ? formatRunPageTitle(runDisplayName, definitionId)
       : definitionId ? `Run · ${definitionId}` : "Run";
@@ -2063,7 +2068,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             </div>
           ) : null}
           <div className="wf-run-history-view" hidden={historyLocation.view !== "timeline"}><Suspense fallback={<p role="status">Loading run history workspace…</p>}>
-            <RunHistorySummary context={context} instance={currentData.details.instance} name={currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
+            <RunHistorySummary context={context} instance={currentData.details.instance} name={unattributedChildDefinition ? runDisplayName ?? "Child run" : currentData.definitionName ?? currentData.definitionVersion?.definition.name ?? currentData.details.instance.definitionId}
               activities={currentData.details.activities} labelForActivity={labelForExecution} activitiesLimited={!!currentData.details.activityNextContinuationToken} enabled={historyLocation.view === "timeline"}
               onBookmark={id => selectHistoryTarget({ kind: "bookmark", id })} />
             <RunHistoryTimeline context={context} workflowExecutionId={workflowExecutionId} filters={historyLocation.filters}
@@ -2165,11 +2170,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             onSelectActivityExecution={selectActivityExecution}
             renderIncidentActions={operator.renderIncidentActions}
             guidanceForIncident={operator.guidanceForIncident}
-            onOpenDefinition={openDefinitionDesigner}
+            onOpenDefinition={unattributedChildDefinition ? undefined : openDefinitionDesigner}
             definitionAccess={definitionAccess}
             activityCatalog={currentData.activityCatalog}
             executableGraph={currentData.executableGraph}
-            definitionName={currentData.definitionName ?? currentData.definitionVersion?.definition.name}
+            definitionName={unattributedChildDefinition ? null : currentData.definitionName ?? currentData.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
             backendSession={backendSession} runRelatedLinks={runRelatedLinks} incidentRootCauseProviders={incidentRootCauseProviders}
             graphNodeIds={currentData.definitionVersion ? collectWorkflowGraphNodeIds(currentData.definitionVersion, currentData.activityCatalog) : undefined}
@@ -2976,14 +2981,14 @@ function WorkflowInstanceInspector({
                     <dd>{formatRunKind(summary.runKind)}</dd>
                     <dt>Executable</dt>
                     <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
-                    <dt>Definition</dt>
-                    <dd>
-                      <NamedIdentity
-                        name={definitionName}
-                        id={summary.definitionId}
-                        secondary={summary.definitionVersionId}
-                      />
-                    </dd>
+                    <dt>{hasUnattributedChildDefinition(summary) ? "Source definition" : "Definition"}</dt>
+                    <dd>{hasUnattributedChildDefinition(summary) ? <>
+                      <p>Source definition is unavailable for this child run.</p>
+                      <details><summary>Executable definition metadata</summary>
+                        <CopyableIdentifier label="Executable definition ID" value={summary.definitionId} />
+                        <CopyableIdentifier label="Executable definition version ID" value={summary.definitionVersionId} />
+                      </details>
+                    </> : <NamedIdentity name={definitionName} id={summary.definitionId} secondary={summary.definitionVersionId} />}</dd>
                     <dt>Created</dt>
                     <dd><StudioTimestamp value={summary.createdAt} fallback="—" /></dd>
                     <dt>Started</dt>
