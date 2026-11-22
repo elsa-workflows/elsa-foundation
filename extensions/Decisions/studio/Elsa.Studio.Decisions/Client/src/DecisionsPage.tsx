@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Plus, RefreshCw, Upload } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StatusChip, PeerViewSwitch, studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { can, cloneVersion, createDecision, exportDecision, failureMessage, getDecision, isConflict, listDecisions, listRecycleBin, publishDecision, purgeDecision, recycleDecision, restoreDecision, saveDecision, unpublishDecision, validateDecision, version, versions, type DecisionAsset, type DecisionVersion, type Diagnostic } from "./decisionsApi";
 import { decodeDecisionXml, newDecisionXml, parseTable } from "./decisionXml";
 import { TableEditor } from "./TableEditor";
@@ -18,7 +18,7 @@ function diagnosticLocation(item: Diagnostic, table: ReturnType<typeof parseTabl
 export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false, handoff }: DecisionsPageProps) {
   const [assets, setAssets] = useState<DecisionAsset[]>([]), [asset, setAsset] = useState<DecisionAsset | null>(null), [published, setPublished] = useState<DecisionVersion | undefined>(), [availableVersions, setAvailableVersions] = useState<DecisionVersion[]>([]);
   const [name, setName] = useState(""), [description, setDescription] = useState(""), [xml, setXml] = useState(""), [sensitive, setSensitive] = useState(false);
-  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [conflict, setConflict] = useState(false), [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]), [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [conflict, setConflict] = useState(false), [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]), [search, setSearch] = useState("");
   const [recycleBin, setRecycleBin] = useState(false), [editorView, setEditorView] = useState<"rules" | "tests" | "settings">(isNew ? "settings" : "rules");
   const [caseDirty, setCaseDirty] = useState(false), [caseBusy, setCaseBusy] = useState(false), casePending = useRef(false);
   const reportCaseState = useCallback((changed: boolean, pending: boolean) => { setCaseDirty(changed); setCaseBusy(pending); casePending.current = pending; }, []);
@@ -48,7 +48,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     setAsset(next); setPublished(candidate); setName(next.name); setDescription(next.description ?? ""); setSensitive(candidate?.isSensitive ?? next.isSensitive); setXml(candidate?.xml ?? (candidate ? "" : next.xml ?? "")); setConflict(false); setDiagnostics([]);
   }, []);
   const load = useCallback(async () => {
-    const ticket = ++generation.current; writing.current = false; setBusy(false); setLoading(true); setError(""); setNotice(""); setConflict(false); setAsset(null); setPublished(undefined); setAvailableVersions([]); setDiagnostics([]);
+    const ticket = ++generation.current; writing.current = false; setBusy(false); setLoading(true); setError(""); setConflict(false); setAsset(null); setPublished(undefined); setAvailableVersions([]); setDiagnostics([]);
     try {
       if (isNew) { const initial = newDecisionXml(); initialXml.current = initial; setName(""); setDescription(""); setSensitive(false); setXml(initial); }
       else if (assetId) {
@@ -104,7 +104,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     return () => { window.removeEventListener("beforeunload", beforeUnload); window.removeEventListener(studioNavigationRequestedEvent, guard); };
   }, [leave]);
   const work = async (action: (ticket: number) => Promise<void>) => {
-    if (writing.current) return; const ticket = generation.current; writing.current = true; setBusy(true); setError(""); setNotice("");
+    if (writing.current) return; const ticket = generation.current; writing.current = true; setBusy(true); setError("");
     try { await action(ticket); } catch (failure) { if (ticket === generation.current) { setError(failureMessage(failure)); setConflict(editor && isConflict(failure)); } }
     finally { if (ticket === generation.current) { writing.current = false; setBusy(false); notifyStudioNavigationGuardReleased(); } }
   };
@@ -128,7 +128,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   });
   const validate = () => work(async ticket => {
     if (!asset) return; const result = await validateDecision(api, asset);
-    if (ticket === generation.current) { setDiagnostics(result.diagnostics); setNotice(result.success ? "The saved draft is valid for the supported DMN profile." : "Validation found unsupported or invalid content."); }
+    if (ticket === generation.current) { setDiagnostics(result.diagnostics); api.notifications?.notify({ level: result.success ? "success" : "warning", title: result.success ? "The saved draft is valid for the supported DMN profile." : "Validation found unsupported or invalid content." }); }
   });
   const publish = () => work(async ticket => {
     if (!asset) return; const result = await publishDecision(api, asset);
@@ -154,7 +154,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     if (fromCollection) {
       const items = await listDecisions(api);
       if (ticket !== generation.current) return;
-      setAssets(items); setNotice(`${target.name} was moved to the recycle bin.`);
+      setAssets(items);
       api.notifications?.notify({ level: "success", title: "Decision moved to recycle bin" });
     } else {
       api.notifications?.notify({ level: "success", title: "Decision moved to recycle bin" }); savedNavigation(path());
@@ -163,31 +163,30 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const restore = (item: DecisionAsset) => work(async ticket => {
     await restoreDecision(api, item);
     const items = await listRecycleBin(api);
-    if (ticket === generation.current) { setAssets(items); setNotice(`${item.name} was restored as an unpublished decision.`); }
+    if (ticket === generation.current) { setAssets(items); api.notifications?.notify({ level: "success", title: `${item.name} was restored as an unpublished decision.` }); }
   });
   const purge = (item: DecisionAsset) => work(async ticket => {
     if (!await api.dialogs.confirm({ title: "Permanently delete decision", message: `This permanently deletes ${item.name}, its versions, saved cases and test history. Already-frozen workflow executions remain unchanged. This cannot be undone.`, confirmLabel: "Delete permanently", tone: "danger" })) return;
     await purgeDecision(api, item);
     const items = await listRecycleBin(api);
-    if (ticket === generation.current) { setAssets(items); setNotice(`${item.name} was permanently deleted.`); }
+    if (ticket === generation.current) { setAssets(items); api.notifications?.notify({ level: "success", title: `${item.name} was permanently deleted.` }); }
   });
   const filtered = assets.filter(item => `${item.name} ${item.description ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   return <StudioPage className="decisions-page" aria-labelledby={editor ? "decision-title" : "decisions-title"}>
     {!editor ? <StudioPageHeader title="Decisions" titleId="decisions-title"
       description="Reusable business policies with versioned decision tables, saved cases and explanations."
+      refresh={{ id: "decisions", label: "Refresh decisions", refreshing: loading, disabled: busy, autoRefresh: true, onRefresh: load }}
       actions={<>
         <StudioButton ref={collectionCreateButton} variant="primary" disabled={busy || !can(api, "decisions:manage")} onClick={() => navigate(qualifyStudioBackendPath("/decisions?new=1"))}><Plus size={15} /> New decision</StudioButton>
         <StudioButton disabled={busy || !can(api, "decisions:manage")} onClick={() => importFile.current?.click()}><Upload size={15} /> Import DMN</StudioButton>
-        <StudioButton disabled={busy || loading} onClick={() => void load()}><RefreshCw size={15} /> Refresh</StudioButton>
       </>} /> : null}
     <input ref={importFile} hidden type="file" accept=".dmn,.xml,application/xml,text/xml" aria-label="Import DMN file" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void importDocument(file); }} />
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
-    {notice ? <StudioAlert tone="success">{notice}</StudioAlert> : null}
     {conflict ? <div className="decision-conflict"><p>Your unsaved work is still here. Reload the current server draft or save your work as a separate decision.</p><div className="decision-actions"><StudioButton onClick={() => void api.dialogs.confirm({ title: "Reload decision", message: "Discard your unsaved changes and load the server draft?", confirmLabel: "Reload" }).then(confirmed => { if (confirmed) void load(); })}>Reload server draft</StudioButton><StudioButton disabled={busy} onClick={() => void work(async ticket => { const copy = await createDecision(api, { name: `${name.trim()} copy`, description, xml, isSensitive: sensitive }); if (ticket === generation.current) savedNavigation(path(copy.id)); })}>Save as a copy</StudioButton></div></div> : null}
     {!editor ? <>
       <div className="decision-collection-toolbar">
         <StudioCollectionToolbar><StudioSearchInput aria-label="Search decisions" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search decisions" /></StudioCollectionToolbar>
-        <StudioTabs className="decision-collection-views" baseId={collectionTabsId} ariaLabel="Decision collections" tabs={[{ id: "decisions", label: "Decisions" }, { id: "recycle-bin", label: "Recycle bin" }]} activeTab={recycleBin ? "recycle-bin" : "decisions"} onSelect={id => { setSearch(""); setRecycleBin(id === "recycle-bin"); }} />
+        <PeerViewSwitch baseId={collectionTabsId} ariaLabel="Decision collections" views={[{ id: "decisions", label: "Decisions" }, { id: "recycle-bin", label: "Recycle bin" }]} value={recycleBin ? "recycle-bin" : "decisions"} onChange={id => { setSearch(""); setRecycleBin(id === "recycle-bin"); }} />
       </div>
       <StudioTabPanel baseId={collectionTabsId} index={0} hidden={recycleBin}>
         {loading ? <SkeletonRows label="Loading decisions" /> : !recycleBin ? !assets.length ? error ? <StudioResultState tone="danger" title="Decisions could not be loaded" description="Refresh after the backend or your access is restored." />
@@ -210,7 +209,10 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
               <table className="studio-table decision-assets"><thead><tr><th scope="col">Decision</th><th scope="col">Recycled</th><th scope="col">Actions</th></tr></thead>
                 <tbody>{filtered.map(item => <tr key={item.id}><th scope="row">{item.name}{item.description ? <p className="decision-muted">{item.description}</p> : null}</th>
                   <td><StudioTimestamp value={item.deletedAt} fallback="Recycled" invalidFallback="Invalid Date" /></td>
-                  <td><div className="decision-actions"><StudioButton disabled={busy || !can(api, "decisions:manage")} onClick={() => void restore(item)}>Restore</StudioButton><StudioButton disabled={busy || !can(api, "decisions:manage")} onClick={() => void purge(item)}>Delete permanently</StudioButton></div></td></tr>)}</tbody>
+                  <td><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[
+                    { id: "restore", label: "Restore", disabled: busy || !can(api, "decisions:manage"), onSelect: () => void restore(item) },
+                    { id: "purge", label: "Delete permanently", destructive: true, disabled: busy || !can(api, "decisions:manage"), onSelect: () => void purge(item) }
+                  ]} /></td></tr>)}</tbody>
               </table>
             </StudioTableContainer> : null}
       </StudioTabPanel>
@@ -225,7 +227,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
           }}>{item.label}</a>} />
           <span className="decision-editor-title">
             <h1 id="decision-title" ref={heading} tabIndex={-1} title={editorTitle}>{editorTitle}</h1>
-            {editorStatus ? <span className="decision-draft-status">{editorStatus}</span> : null}
+            {editorStatus ? <StatusChip tone={dirty || isNew ? "warning" : "neutral"}>{editorStatus}</StatusChip> : null}
           </span></>
           {shown ? <StudioField className="decision-version-picker" label="View"><select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(shown.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField> : null}
         </div>

@@ -135,7 +135,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, output approvalLevel`, exact: true }).fill(row[2]);
   }
   const asset = await save(); await confirmation("decision-saved-toast", "Decision saved"); await tabTitle(`Approval policy ${suffix} · Draft`); await decisionAction("Validate");
-  await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
+  await expect(page.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
   await tabTitle(`Approval policy ${suffix} · Draft`);
   await part("decision-table", surface.getByRole("heading", { name: "Rules", exact: true }));

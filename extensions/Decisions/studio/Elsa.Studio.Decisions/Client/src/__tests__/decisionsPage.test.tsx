@@ -173,8 +173,8 @@ describe("Decisions Studio journeys", () => {
     expect(decisionMenuItem(host, "Publish").disabled).toBe(false);
     api.backend.http.postJson.mockResolvedValue({ success: true, diagnostics: [] } as never);
     decisionAction(host, "Validate");
-    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid"));
-    expect(api.notifications.notify).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid") })));
+    expect(api.notifications.notify).toHaveBeenCalledTimes(2);
   });
 
   it("distinguishes a populated collection, an unmatched search and an empty collection", async () => {
@@ -209,7 +209,7 @@ describe("Decisions Studio journeys", () => {
       expect.stringContaining("/decisions/approval/recycle"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
     expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Move decision to recycle bin", confirmLabel: "Move to recycle bin", tone: "danger" }));
-    await vi.waitFor(() => expect(host.textContent).toContain("Approval was moved to the recycle bin."));
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Decision moved to recycle bin") })));
     expect(host.querySelector("tbody tr")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
     expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision moved to recycle bin" });
@@ -282,12 +282,12 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
     click(button(host, "Recycle bin"));
-    await vi.waitFor(() => expect(host.textContent).toContain("Recycled"));
-    click(button(host, "Restore"));
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Recycled decisions table"] time')?.getAttribute("datetime")).toBe(recycled.deletedAt));
+    click(collectionMenuItem(host, "Approval", "Restore"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/restore"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
-    expect(host.textContent).toContain("restored as an unpublished decision");
+    expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("restored as an unpublished decision") }));
   });
   it("requires a destructive confirmation before permanently purging a recycled decision", async () => {
     const api = stubApi(), recycled = { ...asset, deletedAt: "2026-11-20T12:00:00Z" };
@@ -296,7 +296,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("No decisions yet"));
     click(button(host, "Recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(button(host, "Delete permanently"));
+    click(collectionMenuItem(host, "Approval", "Delete permanently"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/purge"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
@@ -446,7 +446,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector("h1#decision-title")?.textContent).toBe(asset.name);
     expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(asset.name);
-    expect(host.querySelector(".decision-draft-status")?.textContent).toBe("Version 1 · Read only");
+    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1 · Read only");
     expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
     click(button(host, "Clone to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
@@ -460,11 +460,10 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     decisionAction(host, "Validate");
-    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid for the supported DMN profile."));
-    expect(api.notifications.notify).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid for the supported DMN profile.") })));
     decisionAction(host, "Publish");
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval&version=v1"));
-    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
+    expect(api.notifications.notify).toHaveBeenCalledTimes(2); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
     expect(host.textContent).not.toContain("Version 1 published");
   });
   it("keeps failed saves inline and confirms only the successful retry", async () => {

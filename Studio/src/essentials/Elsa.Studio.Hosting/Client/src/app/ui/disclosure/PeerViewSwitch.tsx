@@ -9,6 +9,8 @@ export interface PeerViewItem {
 }
 
 export interface PeerViewSwitchProps extends DisclosureControlProps {
+  /** Associates each view with its StudioTabPanel when supplied. */
+  baseId?: string;
   views: PeerViewItem[];
   value?: string;
   defaultValue?: string;
@@ -17,6 +19,7 @@ export interface PeerViewSwitchProps extends DisclosureControlProps {
 }
 
 export function PeerViewSwitch({
+  baseId: panelBaseId,
   views,
   value,
   defaultValue,
@@ -24,7 +27,8 @@ export function PeerViewSwitch({
   persistKey,
   ariaLabel = "View"
 }: PeerViewSwitchProps) {
-  const baseId = useId();
+  const generatedId = useId();
+  const baseId = panelBaseId ?? generatedId;
   const fallback = defaultValue ?? views[0]?.id ?? "";
   const [stored, setStored] = useDisclosureState(persistKey, fallback, isDisclosureString);
   const active = value ?? stored;
@@ -49,6 +53,7 @@ export function PeerViewSwitch({
           <button
             key={view.id}
             id={`${baseId}-tab-${index}`}
+            aria-controls={panelBaseId ? `${baseId}-panel-${index}` : undefined}
             data-tab-id={view.id}
             type="button"
             role="tab"

@@ -163,7 +163,7 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
     <div className="decision-grid-toolbar" aria-label="Decision table tools">
       {!readOnly ? <div className="decision-grid-tool-group" role="group" aria-label="History"><StudioButton size="sm" disabled={!undoStack.length} onClick={undo} aria-label="Undo table edit">Undo</StudioButton><StudioButton size="sm" disabled={!redoStack.length} onClick={redo} aria-label="Redo table edit">Redo</StudioButton></div> : null}
       <div className="decision-grid-tool-group" role="group" aria-label="Structure">
-        {!readOnly ? <StudioButton size="sm" variant="primary" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}>Add rule</StudioButton> : null}
+        {!readOnly ? <StudioButton size="sm" onClick={() => change({ kind: "add-rule" })} disabled={table.rules.length >= 1000}>Add rule</StudioButton> : null}
         <OverflowMenu ariaLabel="More table actions" items={[
           ...(!readOnly ? [
             { id: "add-input", label: "Add input", disabled: table.inputs.length >= 32, onSelect: () => addColumn(false) },
