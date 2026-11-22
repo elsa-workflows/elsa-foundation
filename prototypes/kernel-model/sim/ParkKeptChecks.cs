@@ -269,6 +269,8 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
         await CheckTerminalCohort(takeover: false, check);
         await CheckTerminalCohort(takeover: true, check);
+        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check);
+        await CheckDeleteAfterRecoveryEnd(protectAtComplete: true, check);
         await CheckTerminalCohort(takeover: false, check, cutAfter: false);
         await CheckTerminalCohort(takeover: false, check, cutAfter: true);
         await CheckTerminalChildNotice(keptBeforeResume: false, check);
@@ -492,6 +494,133 @@ internal static class ParkKeptChecks
                 check(probe.TerminalQueryOffer.SequenceEqual(["terminal-query"]),
                     "terminal dispatch after Complete still accepts a model query without returning the old held input");
             }
+        }
+    }
+
+    private static async Task CheckDeleteAfterRecoveryEnd(bool protectAtComplete, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_029_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe { FaultOnAdvance = true, HoldTerminalInput = true };
+        var scope = new Contract.BoundScope("terminal-recovery-delete");
+        var replies = new Requests("terminal-recovery-delete");
+        var ingress = new InMemoryIngress(store, replies, "terminal-recovery-delete",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
+        var landed = new List<TurnCommit>();
+        var testedGuard = false;
+        var wire = new CountingStore(store, () => { }, (batch, committed) =>
+        {
+            if (committed) landed.AddRange(batch.Turns);
+        }, async batch =>
+        {
+            if (testedGuard || batch.Turns.FirstOrDefault(turn => turn.Row?.ParkRecovery?.Deletion is not null) is not { } attach)
+                return;
+            testedGuard = true;
+            var row = attach.Row!;
+            var drain = row.ParkRecovery!;
+            var prior = store.Instances[row.Id];
+            var forged = attach with { Row = row with { ParkRecovery = drain with { Control = new("forged", ParkDrainEnvelope.Scope) } } };
+            var altered = batch with { Turns = batch.Turns.Select(turn => ReferenceEquals(turn, attach) ? forged : turn).ToArray() };
+            check(await DefiniteRejection(() => store.CommitAsync(altered)) && store.Instances[row.Id] == prior &&
+                store.Messages.ContainsKey(drain.Control),
+                "the fenced writer refuses a takeover that changes the outstanding control");
+        });
+        var first = Owner("ended-delete-first");
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        var root = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root", null)), "parent", Contract.Kinds.Start);
+        var parent = new Contract.Target.Ref(root.Actor!.Value);
+        var parentId = store.FoundationTarget(scope.Tenant, parent.Actor.Id)!.Id;
+        await Pump(active);
+        await ingress.SendAsync(scope, parent, "spawn", "spawn");
+        await Pump(active);
+        var target = new Contract.Target.Ref(probe.Child!.Value);
+        var id = Checkpoint().Row.Id;
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(active);
+        await ingress.SendAsync(scope, target, "advance", "advance");
+        for (var index = 0; index < 2 * InMemoryStore.ParkPageLimit; index++)
+            await ingress.SendAsync(scope, target, $"kept-{index:D4}", "terminal-pending");
+        await Pump(active);
+
+        var reads = new ActorList(store, 5);
+        var park = (await reads.GetAsync(scope, target.Actor))!.Selection!;
+        await ingress.SendAsync(scope, target, "resume-ended-delete", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(park, Contract.RecoverMode.Resume)));
+        await Step(first);
+        for (var pass = 0; pass < 5 && Checkpoint().Row.Status == InstanceStatus.Running; pass++)
+            await Step(first);
+        var ended = Checkpoint();
+        var drain = ended.Row.ParkRecovery;
+        var waitingControl = drain is not null && store.Messages.GetValueOrDefault(drain.Control)?.Message.Due > now;
+        var endedWithSuffix = ended.Row.Status == InstanceStatus.Faulted && drain?.Cursor is not null && waitingControl &&
+            ended.Terminal is not null && Kept() > 0;
+        check(endedWithSuffix, "the model ends with its own mark while the delayed recovery page still has a kept suffix");
+        if (!endedWithSuffix) return;
+
+        var selection = (await reads.GetAsync(scope, target.Actor))!.Selection!;
+        var invalid = await ingress.SendAsync(scope, target, "old-park-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(park)));
+        var oldRejected = invalid is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection };
+        var admitted = await ingress.SendAsync(scope, target, "after-end-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(first);
+        var attached = Checkpoint();
+        var deletion = new ParkRecoveryDeletion("after-end-delete", selection);
+        var preserves = oldRejected && admitted.Outcome == Contract.AdmissionOutcome.Accepted &&
+            attached.Terminal == ended.Terminal && attached.Row == (ended.Row with
+            {
+                Revision = ended.Row.Revision + 1,
+                ParkRecovery = drain! with { Deletion = deletion }
+            });
+        check(preserves, "Delete rejects the old Park mark and attaches to the ended Recover under the model end's exact mark");
+        if (!preserves) return;
+
+        probe.ProtectAfterRecoveryEnd = true;
+        var second = ingress.RequestAsync(scope, target, "competing-ended-delete", Contract.Kinds.Delete,
+            Json.Write(new Contract.OperatorCommand(selection)), null, new Contract.RequestOptions(null, now + 1_000)).AsTask();
+        await Step(first);
+        var competing = await second.WaitAsync(TimeSpan.FromSeconds(5));
+        check(testedGuard && competing is { Error: "in progress", Item: "after-end-delete" } && Checkpoint().Row == attached.Row,
+            "a competing Delete sees the owning operation even after deletion protection begins");
+        probe.ProtectAfterRecoveryEnd = protectAtComplete;
+        await active.DisposeAsync();
+        now += 11;
+        var cold = Owner("ended-delete-cold");
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 30 && store.Instances[id].ParkRecovery is not null; pass++)
+        {
+            now += 11;
+            await Step(cold);
+        }
+        var completed = store.Instances[id];
+        var journal = store.Journal.Values.Where(row => row.Instance == id).ToArray();
+        var receipt = journal.SingleOrDefault(row => row.Entries.Contains("after-end-delete", StringComparison.Ordinal));
+        var noticeCount = landed.SelectMany(turn => turn.Sent).Count(message =>
+            message.Kind == Kinds.ChildFinished && message.Sender == id && message.Read<FoundationChildNotice>().Final);
+        check(completed.ParkRecovery is null && Kept() == 0 && noticeCount == 1 && receipt is not null &&
+            receipt.Entries.Contains("resume-ended-delete", StringComparison.Ordinal) &&
+            (protectAtComplete
+                ? !completed.Retired && Checkpoint().Terminal == ended.Terminal && receipt.Entries.Contains("protected", StringComparison.Ordinal)
+                : completed.Retired && journal is [{ Revision: -1 }] && receipt.Entries.Contains("deleted", StringComparison.Ordinal)),
+            protectAtComplete
+                ? "Complete preserves the model end mark when protection starts after an ended Recover is taken over"
+                : "a cold successor settles the suffix and retires an ended Recover without sending a second parent notice");
+
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial, PollLimit = 1_024,
+                Transport = new OperatorReplies(replies, _ => { })
+            });
+        InMemoryStore.ActorCheckpoint Checkpoint() => store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        int Kept() => store.Messages.Values.Count(message => message.Message.Target.Id == id && message.KeptBy is not null);
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parentId);
+            worker.RunTurn(id);
+            await worker.FlushAsync();
         }
     }
 
@@ -2241,6 +2370,7 @@ internal static class ParkKeptChecks
         public string[] LateOffer { get; private set; } = [];
         public bool PausePages { get; set; }
         public bool HoldSuspend { get; init; }
+        public bool ProtectAfterRecoveryEnd { get; set; }
         public int SuspendOffers { get; private set; }
         public Contract.ActorRef? Child { get; private set; }
         public List<Contract.ChildFinished> Notices { get; } = [];
@@ -2299,7 +2429,7 @@ internal static class ParkKeptChecks
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => ProtectAfterRecoveryEnd;
     }
 
     private sealed class KeepingRecoveryProbe : Contract.IActorType

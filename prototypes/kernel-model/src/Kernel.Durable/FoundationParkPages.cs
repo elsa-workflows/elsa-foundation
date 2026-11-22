@@ -25,6 +25,8 @@ internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? S
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
 
+internal sealed record ParkRecoveryDeletion(string Operation, string Selection);
+
 internal enum ParkRecoveryMode { Resume, Retry, RetryAll }
 
 internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode, ParkPageCursor? Cursor,
@@ -34,6 +36,7 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
     internal long Cleared { get; init; }
     internal InboxKey? Gate { get; init; }
     internal int AlreadyRearmed { get; init; }
+    internal ParkRecoveryDeletion? Deletion { get; init; }
 
     internal bool Restores(ParkPageRow row, InstanceStatus status) => row.Kind == Kinds.Publish ||
         status != InstanceStatus.Running && row.Kind == Kinds.ChildFinished ||
