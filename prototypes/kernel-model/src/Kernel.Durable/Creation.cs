@@ -7,6 +7,14 @@ public sealed record CreationAddress(string Id, long Creation);
 
 public sealed record CreationResult(string Actor, string Result, long? Requested, long? Current);
 
+internal sealed record FoundationChildNotice(string Child, InstanceStatus Status, string? Output, long Creation, bool Final)
+{
+    internal static Message Create(InstanceRow row, string? output, bool final) =>
+        new Message(CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision),
+            new(row.Parent!), Kinds.ChildFinished, Json.Write(new FoundationChildNotice(row.Id, row.Status, output, row.Creation, final)),
+            row.Id, TargetCreation: row.ParentCreation, SenderCreation: row.Creation).AsIssued();
+}
+
 /// <summary>Prototype shared lifecycle rules. The execution model never owns the creation header.</summary>
 public static class CreationProtocol
 {

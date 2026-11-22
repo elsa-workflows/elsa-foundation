@@ -30,10 +30,24 @@ internal sealed partial class ActorAdapter
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
 
         var expiry = store.FoundationExpiry(row);
-        var outcome = BeginDiscard(input, row, park, expiry, expired: false);
+        var outcome = BeginClear(input, row, park, expiry, Durable.ParkClearKind.Discard);
         if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
         outcome.ReplyTo(input.Taken[input.From], "started");
         return outcome;
+    }
+
+    private Durable.TurnOutcome OpenParkTerminate(Durable.TurnInput input, Durable.InstanceRow row, Durable.InMemoryStore.FoundationParkMark park)
+    {
+        var message = input.Taken[input.From].Message;
+        if (!store.AuthorizesDrainingTerminate(row, message))
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, message.Operator is null ? "ResolutionUnavailable" : "StaleSelection");
+
+        var expiry = store.FoundationExpiry(row);
+        var outcome = BeginClear(input, row, park, expiry, Durable.ParkClearKind.Terminate);
+        if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
+        outcome.Unsubscribe = true;
+        outcome.ReplyTo(input.Taken[input.From], "started");
+        return Durable.CascadeProtocol.Open(outcome, Durable.CascadeRegistry.From(row));
     }
 
     private Durable.TurnOutcome ExpirePark(Durable.TurnInput input)
@@ -48,19 +62,19 @@ internal sealed partial class ActorAdapter
         if (!envelope.MatchesExpiry(message, row, expiry))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         if (input.Services.Now >= expiry.At)
-            return BeginDiscard(input, row, park, expiry, expired: true);
+            return BeginClear(input, row, park, expiry, Durable.ParkClearKind.Expiry);
 
         var early = ParkCheckpoint(input, row, row);
         early.Sent.Add(envelope.Issue(row, checked(expiry.Serial + 1), expiryAt: expiry.At));
         return early;
     }
 
-    private static Durable.TurnOutcome BeginDiscard(Durable.TurnInput input, Durable.InstanceRow row,
-        Durable.InMemoryStore.FoundationParkMark park, Durable.ParkExpiry? expiry, bool expired)
+    private static Durable.TurnOutcome BeginClear(Durable.TurnInput input, Durable.InstanceRow row,
+        Durable.InMemoryStore.FoundationParkMark park, Durable.ParkExpiry? expiry, Durable.ParkClearKind kind)
     {
         var next = row with { ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1) };
-        return AdvanceDiscard(input, row, next, park, input.Taken[input.From].Message.Id, null, 0,
-            checked((expiry?.Serial ?? 0) + 1), expired);
+        return AdvanceClear(input, row, next, park, input.Taken[input.From].Message.Id, null, 0,
+            checked((expiry?.Serial ?? 0) + 1), kind);
     }
 
     private Durable.TurnOutcome ContinueDiscard(Durable.TurnInput input)
@@ -75,24 +89,32 @@ internal sealed partial class ActorAdapter
         if (page is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         if (page.Count > 0)
-            return AdvanceDiscard(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Expired);
+            return AdvanceClear(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Kind);
 
         var completed = row with { ParkDiscard = null, ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null };
+        if (drain.Kind == Durable.ParkClearKind.Terminate)
+            completed = completed with { Status = Durable.InstanceStatus.Cancelled, Suspended = false };
         var outcome = ParkCheckpoint(input, row, completed);
-        outcome.Journal = Durable.Json.Write(new { Outcome = drain.Expired ? "expired" : "discarded", drain.Operation, drain.Cleared });
+        var resolution = drain.Kind switch
+        {
+            Durable.ParkClearKind.Terminate => "terminated",
+            Durable.ParkClearKind.Expiry => "expired",
+            _ => "discarded"
+        };
+        outcome.Journal = Durable.Json.Write(new { Outcome = resolution, drain.Operation, drain.Cleared });
         if (outcome.Row!.Parent is not null)
             outcome.Sent.Add(Notice(outcome.Row, null, final: true));
         return outcome;
     }
 
-    private static Durable.TurnOutcome AdvanceDiscard(Durable.TurnInput input, Durable.InstanceRow row,
+    private static Durable.TurnOutcome AdvanceClear(Durable.TurnInput input, Durable.InstanceRow row,
         Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, string operation, IReadOnlyList<Durable.ParkPageRow>? page,
-        long cleared, long serial, bool expired)
+        long cleared, long serial, Durable.ParkClearKind kind)
     {
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
         var drain = new Durable.ParkDiscardDrain(operation, page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey)
         {
-            Expired = expired
+            Kind = kind
         };
         var outcome = ParkCheckpoint(input, row, next with { ParkDiscard = drain });
         outcome.Sent.Add(control);
