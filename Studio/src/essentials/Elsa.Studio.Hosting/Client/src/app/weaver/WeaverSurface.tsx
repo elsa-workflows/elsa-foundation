@@ -314,7 +314,11 @@ function WeaverAutoApplyMenu({
       </StudioButton>
       <AnchoredPopover anchorRef={trigger} open={open} className="weaver-mode-menu" minWidth={320} onDismiss={closeMenu} onPositioned={() => focusIndexedItem(menuId, focusIndex)}>
         <div id={menuId} role="menu" aria-label="Auto-apply mode" onKeyDown={event => {
-          if (event.key === "Tab") {
+          if (event.key === "Escape" || event.key === "Tab") {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+            }
             closeMenu();
             return;
           }
