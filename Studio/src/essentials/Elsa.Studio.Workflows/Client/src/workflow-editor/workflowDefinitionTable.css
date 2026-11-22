@@ -8,7 +8,6 @@
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-description { display: block; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
-html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(124px, 1fr) 104px 72px minmax(168px, .22fr) 104px 120px 60px; min-width: 936px; }
 html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modified { white-space: normal; }
 /* Keep actions reachable while optional controls settle or overflowing columns scroll.
@@ -102,9 +101,9 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 .wf-definitions-list .wf-definition-grid {
   --wf-definition-selection-track: 28px;
   --wf-definition-column-gap: 10px;
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 60px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(170px, 1fr) minmax(115px, .6fr) 76px minmax(130px, .35fr) minmax(117px, .28fr) max-content 60px;
   column-gap: var(--wf-definition-column-gap);
-  min-width: 1174px;
+  min-width: 975px;
   overflow: visible;
 }
 
@@ -118,13 +117,13 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 
 .wf-definitions-list .wf-definition-grid[data-library-columns="tags"],
 .wf-definitions-list .wf-definition-grid[data-library-columns="location"] {
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 180px 60px;
-  min-width: 1364px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(170px, 1fr) minmax(115px, .6fr) 76px minmax(130px, .35fr) minmax(117px, .28fr) max-content 180px 60px;
+  min-width: 1165px;
 }
 
 .wf-definitions-list .wf-definition-grid[data-library-columns="both"] {
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px minmax(180px, .22fr) 132px max-content 180px 180px 60px;
-  min-width: 1554px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(170px, 1fr) minmax(115px, .6fr) 76px minmax(130px, .35fr) minmax(117px, .28fr) max-content 180px 180px 60px;
+  min-width: 1355px;
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-row:last-child {
@@ -225,34 +224,9 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
   line-height: 1.35;
 }
 
-.wf-definitions-list .wf-definition-version .wf-status-badge {
-  min-height: 21px;
-  border-color: var(--studio-border);
-  border-radius: 999px;
-  background: var(--studio-surface-muted);
-  color: var(--studio-text);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 0 7px;
-}
 
-.wf-definitions-list .wf-definition-version .wf-status-badge[data-status="completed"] {
-  border-color: color-mix(in srgb, var(--studio-success) 35%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-success) 10%, var(--studio-surface));
-  color: var(--studio-success-fg);
-}
 
-.wf-definitions-list .wf-definition-version .wf-status-badge[data-status="suspended"] {
-  border-color: color-mix(in srgb, var(--studio-warning) 35%, var(--studio-border));
-  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
-  color: var(--studio-warning-fg);
-}
 
-.wf-definitions-list .wf-definition-version .wf-status-badge[data-status="cancelled"] {
-  border-color: var(--studio-border);
-  background: var(--studio-surface-muted);
-  color: var(--studio-text-muted);
-}
 
 .wf-definitions-list .wf-definition-draft-details {
   min-width: 0;
@@ -290,10 +264,6 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modifie
 }
 
 .wf-definitions-list .wf-definition-version small,
-.wf-definitions-list .wf-definition-version .wf-status-badge {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
 
 .wf-definitions-list .wf-definition-version-empty {
   color: var(--studio-text-muted);

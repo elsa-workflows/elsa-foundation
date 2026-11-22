@@ -6532,7 +6532,7 @@ async function waitForText(container: HTMLElement, text: string) {
 
 async function waitForStatusBadge(row: Element | null, text: string) {
   await vi.waitFor(() => {
-    if (!Array.from(row?.querySelectorAll(".wf-status-badge") ?? []).some(badge => badge.textContent === text)) {
+    if (!Array.from(row?.querySelectorAll(".studio-status-chip") ?? []).some(badge => badge.textContent === text)) {
       throw new Error(`Timed out waiting for status badge '${text}'.`);
     }
   }, { timeout: 5_000, interval: 20 });

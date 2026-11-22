@@ -1,4 +1,5 @@
 import React from "react";
+import { StudioTableContainer, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { FailingDefinition, RunBucket, RunHealthSettings, WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
@@ -23,7 +24,7 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
 
   return (
     <div className="workflow-run-health">
-      <dl className="workflow-dashboard-metrics" aria-label="Workflow run metrics">
+      <div role="group" className="workflow-dashboard-metrics" aria-label="Workflow run metrics">
         <WorkflowDashboardMetric label="Started" value={snapshot.startedCount} detail={startDetail} tone="accent" />
         {typeof snapshot.succeededCount === "number" && (
           <WorkflowDashboardMetric label="Succeeded" value={snapshot.succeededCount} detail="Completed successfully" tone="success" />
@@ -32,7 +33,7 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
         <WorkflowDashboardMetric label="Runs with incidents" value={snapshot.incidentBearingRunCount} detail={incidentBearingDetail} tone="warning" />
         <WorkflowDashboardMetric label="Incidents" value={snapshot.incidentCount} detail="Historical records" tone="warning" />
         <WorkflowDashboardMetric label="Running now" value={snapshot.runningCount} detail="Across all start times" tone="accent" />
-      </dl>
+      </div>
 
       <p className="workflow-run-health__scope">
         Start window: <time dateTime={snapshot.from}>{formatFullTime(snapshot.from, snapshot.timeZone)}</time>
@@ -141,10 +142,9 @@ function BucketDetails({ buckets, timeZone }: { buckets: RunBucket[]; timeZone: 
   if (buckets.length === 0) return null;
 
   return (
-    <details className="workflow-run-health__bucket-details">
-      <summary>View exact bucket counts</summary>
-      <div className="workflow-run-health__table-scroll">
-        <table>
+    <TechnicalDetails label="View exact bucket counts">
+      <StudioTableContainer role="region" aria-label="Exact bucket counts" tabIndex={0} className="workflow-run-health__table-scroll">
+        <table className="studio-table">
           <caption className="workflow-dashboard-sr-only">Exact workflow run counts for every time bucket, displayed in {timeZone}.</caption>
           <thead>
             <tr>
@@ -169,8 +169,8 @@ function BucketDetails({ buckets, timeZone }: { buckets: RunBucket[]; timeZone: 
             ))}
           </tbody>
         </table>
-      </div>
-    </details>
+      </StudioTableContainer>
+    </TechnicalDetails>
   );
 }
 
