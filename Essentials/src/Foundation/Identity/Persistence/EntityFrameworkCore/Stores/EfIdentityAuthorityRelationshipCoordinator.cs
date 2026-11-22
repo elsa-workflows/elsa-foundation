@@ -319,7 +319,10 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         }, cancellationToken);
 
     private Task<EfIdentityWriteResult> MutateMembershipAsync(TenantMembershipEntity membership, long? expectedVersion, bool enforce, CancellationToken cancellationToken) =>
-        ExecuteAsync(membership.TenantId, "save-tenant-membership", Fingerprint("save-tenant-membership", membership.TenantId, membership.UserId, membership.Status.ToString(CultureInfo.InvariantCulture), membership.RoleIdsJson, membership.DirectPermissionsJson, expectedVersion?.ToString(CultureInfo.InvariantCulture), enforce.ToString()), async token =>
+        ExecuteAsync(membership.TenantId, "save-tenant-membership", EfIdentityStoreSupport.JsonFingerprint("save-tenant-membership", membership.TenantId, membership.UserId, membership.Status.ToString(CultureInfo.InvariantCulture),
+            EfIdentityStoreSupport.SetProjection(membership.SchemaVersion is null ? EfIdentityStoreSupport.DeserializeSet(membership.RoleIdsJson) : EfIdentityStoreSupport.ReadSet(membership, nameof(membership.RoleIdsJson))),
+            EfIdentityStoreSupport.SetProjection(membership.SchemaVersion is null ? EfIdentityStoreSupport.DeserializeSet(membership.DirectPermissionsJson) : EfIdentityStoreSupport.ReadSet(membership, nameof(membership.DirectPermissionsJson))),
+            expectedVersion?.ToString(CultureInfo.InvariantCulture), enforce.ToString()), async token =>
         {
             var user = await LoadUserAsync(membership.TenantId, membership.UserId, token);
             if (user is null)

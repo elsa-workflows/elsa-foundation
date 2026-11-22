@@ -42,6 +42,7 @@ public partial class WeaverJsonContext : JsonSerializerContext
     private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
         var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.Converters.Add(new WeaverCamelCaseEnumConverter());
         Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         return options;
     }
@@ -69,6 +70,7 @@ public partial class WeaverSseJsonContext : JsonSerializerContext
     private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
         var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.Converters.Add(new WeaverCamelCaseEnumConverter());
         Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         return options;
     }

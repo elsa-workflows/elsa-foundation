@@ -53,7 +53,8 @@ public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWrite
     {
         await Ensure(caller, DecisionPermissions.Publish, id, ct); await Ensure(caller, DecisionPermissions.Read, id, ct);
         var operation = Operation(caller, request.OperationId);
-        var fingerprint = Fingerprint(new { kind = "publish", command = new { AssetId = id, request.ExpectedRevision } });
+        // Match the store's explicit object command slot, including its CLR-versus-carried-JSON discriminator.
+        var fingerprint = Fingerprint(new { kind = "publish", command = (object)new { AssetId = id, request.ExpectedRevision } });
         if (await reader.FindOperationAsync(operation, ct) is { } prior)
         {
             if (prior.Kind != "publish" || prior.Fingerprint != fingerprint) throw Conflict();

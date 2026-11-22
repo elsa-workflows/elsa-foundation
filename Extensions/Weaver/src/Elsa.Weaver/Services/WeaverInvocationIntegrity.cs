@@ -35,10 +35,10 @@ internal static class WeaverInvocationIntegrity
 
     public static string Digest<T>(T value) => Elsa.Serialization.Core.JsonHashInput.Hash(value);
 
-    /// <summary>The canonical JSON text retained with the digest; carried values remain readable through the shared baseline.</summary>
+    /// <summary>The retained snapshot JSON; carried values remain readable through the shared baseline.</summary>
     public static string Canonical<T>(T value) => JsonSerializer.Serialize(value, SnapshotOptions);
 
-    /// <summary>The digest of recorded canonical JSON text, exactly as <see cref="Digest{T}"/> computes it for the value it was written from.</summary>
+    /// <summary>The digest of recorded snapshot JSON, exactly as <see cref="Digest{T}"/> computes it for the value it was written from.</summary>
     public static string DigestCanonical(string canonical) => Elsa.Serialization.Core.JsonHashInput.HashJson(canonical);
 
     public static string PreparedDigest(WeaverPreparedToolInvocation value) => Digest(new

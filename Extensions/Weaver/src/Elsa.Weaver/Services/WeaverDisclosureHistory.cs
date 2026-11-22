@@ -132,7 +132,7 @@ internal sealed class WeaverDisclosureHistory
             or WeaverContributionException) { return null; }
     }
 
-    /// <summary>The record of a frozen snapshot: its canonical text and the digest over it, which becomes its identity.</summary>
+    /// <summary>The record of a frozen snapshot: retained JSON and its canonical value digest, which becomes its identity.</summary>
     internal static WeaverDisclosureSnapshotRecord Record(WeaverDisclosureSnapshot snapshot)
     {
         var canonical = WeaverInvocationIntegrity.Canonical(snapshot);

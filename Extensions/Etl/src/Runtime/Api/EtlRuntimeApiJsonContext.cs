@@ -23,6 +23,7 @@ internal partial class EtlRuntimeApiJsonContext : JsonSerializerContext
     private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
         var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
         Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         return options;
     }

@@ -396,7 +396,7 @@ public sealed class AgentJournalTests
         var body = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(request, AgentJson.Options))!.AsObject();
         body.Remove("effectiveLimits");
         var oldJson = body.ToJsonString(AgentJson.Options);
-        var hash = Elsa.Serialization.Core.JsonHashInput.HashJson(oldJson);
+        var hash = Elsa.Serialization.Core.JsonHashInput.Hash(request);
         var protector = services.GetRequiredService<ISecretValueProtector>();
         var envelope = JsonSerializer.Serialize(new { purpose = "elsa.agent.turn/request/1", identity = request.Identity, hash, request = Json(oldJson) }, AgentJson.Options);
         var document = new AgentTurnDocument(new string('a', 64), AgentTurnDocument.CalculateOperationKey(request.Identity), hash, request.Identity,

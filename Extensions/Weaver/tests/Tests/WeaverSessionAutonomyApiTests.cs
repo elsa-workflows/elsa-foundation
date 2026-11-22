@@ -21,6 +21,8 @@ namespace Elsa.Weaver.Tests;
 /// </summary>
 public sealed class WeaverSessionAutonomyApiTests
 {
+    private static WeaverJsonContext WireContext => (WeaverJsonContext)typeof(WeaverJsonContext)
+        .GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
     private const string Actor = "actor-1";
     private const string Tenant = "tenant-1";
 
@@ -367,7 +369,7 @@ public sealed class WeaverSessionAutonomyApiTests
         var domain = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(message, domainOptions))!.AsObject();
         var response = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(
             WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
+            WireContext.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
 
         Assert.Equal(domain.Select(x => x.Key).ToArray(), response.Select(x => x.Key).ToArray());
         domain.Remove("acceptedPolicy");
@@ -380,7 +382,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var message = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Pending, null, DateTimeOffset.UtcNow, null, null, [], [], []);
         var json = JsonSerializer.Serialize(WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
+            WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy").ValueKind);
@@ -391,7 +393,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var view = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Completed, null, DateTimeOffset.UtcNow, null, null, [], [], [])
             .ToViewModel();
-        var json = JsonSerializer.Serialize(view, WeaverJsonContext.WireContext.WeaverMessageViewModelResponse);
+        var json = JsonSerializer.Serialize(view, WireContext.WeaverMessageViewModelResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("acceptedPolicyRevision").ValueKind);

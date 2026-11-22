@@ -9,10 +9,9 @@ namespace Elsa.Agent.Review.Services;
 internal static class HumanReviewJson
 {
     /// <summary>
-    /// Private state and the decision delivery: the native runtime writes both with default options (PascalCase),
-    /// and the delivery is serialized by the decision service before dispatch.
+    /// Private state and decision delivery share the native runtime's scoped, exact camelCase conversion contract.
     /// </summary>
-    public static readonly JsonSerializerOptions Runtime = JsonSerializerOptions.Default;
+    public static readonly JsonSerializerOptions Runtime = Elsa.Serialization.Core.JsonConversionContract.Default.Options;
 
     /// <summary>The protected envelope plaintext and the typed terminal result (camelCase).</summary>
     public static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);

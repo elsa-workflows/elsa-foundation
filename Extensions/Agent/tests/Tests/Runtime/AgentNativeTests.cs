@@ -221,7 +221,7 @@ public sealed partial class AgentNativeTests
         await using var provider = await ServicesAsync(factory, durable ? files.ConnectionString : null, leaseTrace: trace);
         var agent = await ExecutableAsync(provider, allowContinuity: true, invocationControls: true);
         var alias = typeof(RetryInterventionActivity).FullName!;
-        var payload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias));
+        var payload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(alias), Elsa.Serialization.Core.JsonBaseline.Options);
         var descriptorKind = typeof(ClrActivityDescriptor).FullName!;
         var contract = new ActivityContract(alias, "1.0.0", descriptorKind, payload, [],
             new(new(typeof(ActivityUnit).FullName!), true, ActivityValuePolicy.Default, []), ["Done"], new(descriptorKind, alias), SideEffectProfile.ReplaySafe);
@@ -670,7 +670,7 @@ public sealed partial class AgentNativeTests
         Assert.Equal(first.Placement.Root.DescriptorPayload.GetProperty("templateHash").GetString(), second.Placement.Root.DescriptorPayload.GetProperty("templateHash").GetString());
         var children = new[] { first.Placement.Root, second.Placement.Root };
         var sequenceAlias = typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!;
-        var sequencePayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(sequenceAlias));
+        var sequencePayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor(sequenceAlias), Elsa.Serialization.Core.JsonBaseline.Options);
         var sequenceDescriptor = typeof(ClrActivityDescriptor).FullName!;
         var sequenceContract = new ActivityContract(sequenceAlias, "1.0.0", sequenceDescriptor, sequencePayload, [],
             new(new(typeof(ActivityUnit).FullName!), true, ActivityValuePolicy.Default, []), ["Done", "Break"], new(sequenceDescriptor, sequenceAlias), SideEffectProfile.ReplaySafe);

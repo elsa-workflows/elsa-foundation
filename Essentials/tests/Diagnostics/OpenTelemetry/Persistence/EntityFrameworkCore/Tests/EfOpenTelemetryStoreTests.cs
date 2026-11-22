@@ -509,7 +509,7 @@ public sealed class EfOpenTelemetryStoreTests
             .Where(item => item.BatchId == batchId.Value)
             .Select(item => item.Fingerprint)
             .SingleAsync());
-        Assert.Equal("0db20969a84d22f8d700db369c437439e88f2406d5fc711631b5e39480c323a2", fingerprint);
+        Assert.True("0db20969a84d22f8d700db369c437439e88f2406d5fc711631b5e39480c323a2" == fingerprint, $"First-stable batch hash: {fingerprint}");
 
         var changed = batch with { Traces = [batch.Traces.Single() with { Name = "changed" }] };
         await Assert.ThrowsAnyAsync<Exception>(() => fixture.EfStore.WriteAsync(batchId, changed).AsTask());

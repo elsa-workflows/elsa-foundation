@@ -39,6 +39,9 @@ internal partial class EtlDesignJsonContext : JsonSerializerContext
     private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
     {
         var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        options.Converters.Add(new EtlCamelCaseEnumConverter());
+        options.Converters.Add(new EtlPipelineV2JsonConverter());
         Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         return options;
     }
