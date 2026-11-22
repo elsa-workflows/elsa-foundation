@@ -389,6 +389,7 @@
 }
 
 .feature-management-switch {
+  appearance: none;
   width: 28px;
   height: 16px;
   border-radius: 999px;
@@ -411,12 +412,12 @@
   background: white;
 }
 
-.feature-management-switch.enabled {
+.feature-management-switch:checked {
   background: var(--studio-accent, var(--primary));
   border-color: var(--studio-accent, var(--primary));
 }
 
-.feature-management-switch.enabled::after {
+.feature-management-switch:checked::after {
   left: 14px;
 }
 

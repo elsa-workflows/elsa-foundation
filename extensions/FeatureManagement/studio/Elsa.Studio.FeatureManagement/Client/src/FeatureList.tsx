@@ -204,12 +204,13 @@ export function FeatureCard({
         aria-label={`Select ${feature.displayName || feature.id}`}
         onChange={event => onCheckedChange(event.target.checked)}
       />
-      <StudioButton
-        className={feature.enabled ? "feature-management-switch enabled" : "feature-management-switch"}
-        onClick={onToggle}
-        disabled={disabled}
+      <input
+        type="checkbox"
+        className="feature-management-switch"
         role="switch"
-        aria-checked={feature.enabled}
+        checked={feature.enabled}
+        onChange={onToggle}
+        disabled={disabled}
         aria-label={`${feature.enabled ? "Disable" : "Enable"} ${feature.displayName || feature.id}`}
       />
       <StudioButton className="feature-management-feature-button" onClick={onSelect}>
