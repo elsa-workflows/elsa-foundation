@@ -79,6 +79,23 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Form and decision authoring audit
+
+The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
+
+### Narrow viewport review
+
+The audit reviewed the following composed Studio states at 360–390px widths. The Executable Inspector maximize defect reproduced during the initial run was repaired and retested in #5305.
+
+| Area | Reviewed evidence |
+|---|---|
+| Theme, notifications, Weaver and user menus | [Host overlays](https://github.com/elsa-workflows/elsa-foundation/pull/5339#issuecomment-7072890665), [Weaver](https://github.com/elsa-workflows/elsa-foundation/pull/5310#issuecomment-7072317218) |
+| Bottom dock | [Dock and dock actions](https://github.com/elsa-workflows/elsa-foundation/pull/5292#issuecomment-7071892351) |
+| Activity draft and publication | [Activity authoring dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5306#issuecomment-7072249665), [publication disclosures](https://github.com/elsa-workflows/elsa-foundation/pull/5316#issuecomment-7072420893) |
+| Run detail and Executable Inspector | [Run data and detail](https://github.com/elsa-workflows/elsa-foundation/pull/5300#issuecomment-7072119611), [activity and executable views](https://github.com/elsa-workflows/elsa-foundation/pull/5334#issuecomment-7072894933), [maximized inspector retest](https://github.com/elsa-workflows/elsa-foundation/issues/5264#issuecomment-7072194268) |
+| Decisions Tests and Settings | [Saved decision at both widths](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/3d6c772650353cea14f07f8800303da448dfd68a/Studio/qa-evidence/5340-273b42af20-visual.zip) |
+| Dark dialogs | [Form and Decision creation](https://github.com/elsa-workflows/elsa-foundation/pull/5331#issuecomment-7072854830), [dashboard discard confirmation](https://github.com/elsa-workflows/elsa-foundation/pull/5319) |
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -512,6 +529,8 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X9.9** (#5137) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
   `EXT/Workflows.Dashboard/WorkflowRunHealthWidget.tsx:66`, `WorkflowDashboardUnavailable.tsx:5`.
 
+- [ ] **X9.10** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` uses bare `role="alert"` elements for invalid actions, assignment choices, unavailable versions and form loading errors. The Decisions table parser uses the same pattern in `EXT/Decisions/TableEditor.tsx`. Use the shared alert while retaining the recovery action.
+
 ### X10. Timestamps and identifiers
 
 Replace local date formatting with `StudioTimestamp`.
@@ -597,6 +616,8 @@ the designer header is a documented exception.
   `WF/Elsa3ReusableImportPage.tsx:716–743`, `WF/ActivityDefinitionPublicationReview.tsx:337–467`.
 - [x] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`. (PR #5321)
+
+- [ ] **X12.13** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
 ### X13. CSS texture
 
@@ -779,6 +800,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AgentEditor.tsx:248`). `EXT/Connections/ConnectionCreateDialog.tsx:312` already uses the
   "(required)" suffix. **[check]** whether `StudioField` should render the suffix itself.
   `needs: D13`
+
+- [ ] **E21** (#5266) [verified] `EXT/Decisions/TableEditor.tsx` calls `event.preventDefault()` even when `moveTab` reaches the first or last cell. Allow Tab and Shift+Tab to leave the grid at its boundaries, including while editing a cell.
+- [ ] **E22** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` resolves source rows with `rowsByKey.get(field.key) ?? rows[index]`. Inserting a new field before an unchanged field can give both rows the same selection and drag identity.
+- [ ] **E23** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` rejects the reserved action name `"Unmatched"`, while the validation message only describes spaces and uniqueness. Explain the reserved name when it prevents saving.
 
 ### Host
 
