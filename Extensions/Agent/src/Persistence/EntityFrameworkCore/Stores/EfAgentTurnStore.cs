@@ -324,7 +324,7 @@ internal sealed partial class EfAgentTurnStore(DbContext context, IPersistenceAc
         var scope = access.Current.RequireScope();
         access.Current.EnsureTenantScope(tenantId);
         if (scope.Value != persistencePartition) throw new InvalidOperationException("The agent operation does not belong to the selected persistence scope.");
-        return Convert.ToHexString(SHA256.HashData(Utf8.GetBytes(JsonSerializer.Serialize(new[] { persistencePartition, tenantId })))).ToLowerInvariant();
+        return Elsa.Serialization.Core.JsonHashInput.Hash(new[] { persistencePartition, tenantId });
     }
 
     private static AgentTurnDocument Replay(AgentTurnDocument existing, AgentTurnDocument candidate)

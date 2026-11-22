@@ -332,7 +332,7 @@ public static class EfDesignAtomicCommand
         };
     }
 
-    private static string Fingerprint(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    private static string Fingerprint(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value).ToUpperInvariant();
 
     private static string SerializeOrThrow<T>(T value, JsonSerializerOptions options, string operation)
     {

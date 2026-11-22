@@ -166,10 +166,8 @@ internal sealed class AgentTurnJournal(IAgentTurnStore store, ISecretValueProtec
         document.DeliveryProtocol == 0 ? document.Identity == identity && document.ChildInvocationId == child :
         document.Deliveries!.Any(x => x.Identity == identity && x.ChildInvocationId == child);
 
-    private static string RequestHash(AgentTurnRequest request, string purpose) => Hash(JsonSerializer.Serialize(
-        purpose == DeliveryRequestPurpose ? request with { Identity = request.Identity with { ActivityExecutionId = "" } } : request, AgentJson.Options));
-
-    private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+    private static string RequestHash(AgentTurnRequest request, string purpose) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        purpose == DeliveryRequestPurpose ? request with { Identity = request.Identity with { ActivityExecutionId = "" } } : request);
     private static AgentTurnException Failure(string code, string message, Exception? innerException = null) => AgentModelRunner.Failure(code, message, innerException);
     private sealed record RequestEnvelope(string Purpose, AgentInvocationIdentity Identity, string Hash, AgentTurnRequest Request);
     private sealed record ResultEnvelope(string Purpose, AgentInvocationIdentity Identity, string RequestHash, string ChildInvocationId, string Fence, AgentTurnResult Result, int AdmissionGeneration = 0, AgentInvocationIdentity? DispatchIdentity = null);

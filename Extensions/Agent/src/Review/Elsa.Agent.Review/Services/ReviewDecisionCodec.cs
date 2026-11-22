@@ -80,12 +80,10 @@ internal sealed class ReviewDecisionCodec(ISecretValueProtector protector)
         return claims;
     }
 
-    // One canonical encoding (compact, default encoder) bounds, hashes and identifies content, so neither whitespace nor
-    // the escaping of any upstream writer or persistence round trip changes its size or identity.
-    // It does not normalize key order or number spelling, so stores must keep private state and results as written.
-    internal static byte[] CanonicalBytes(JsonElement content) => JsonSerializer.SerializeToUtf8Bytes(content);
+    // Bounds and identity use the same exact canonical JSON form. Storage retains the original data.
+    internal static byte[] CanonicalBytes(JsonElement content) => Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(content);
 
-    internal static string HashContent(JsonElement content) => Convert.ToHexStringLower(SHA256.HashData(CanonicalBytes(content)));
+    internal static string HashContent(JsonElement content) => Elsa.Serialization.Core.JsonHashInput.Hash(content);
 
     internal static string WaitId(string workflowExecutionId, string activityExecutionId, string contentHash) =>
         "agent-review:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(

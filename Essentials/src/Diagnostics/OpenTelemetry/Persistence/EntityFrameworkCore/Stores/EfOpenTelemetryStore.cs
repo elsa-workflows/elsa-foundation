@@ -1145,32 +1145,10 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private string Fingerprint(OpenTelemetryBatch batch)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        AppendFingerprintInteger(hash, 6);
-        Append(hash, batch.Resources);
-        Append(hash, batch.Instruments);
-        Append(hash, batch.Traces);
-        Append(hash, batch.Spans);
-        Append(hash, batch.MetricPoints);
-        Append(hash, batch.Logs);
-        return Convert.ToHexStringLower(hash.GetHashAndReset());
-    }
-    private static void Append<T>(IncrementalHash hash, IReadOnlyCollection<T> values)
-    {
-        AppendFingerprintInteger(hash, values.Count);
-        foreach (var value in values)
+        return Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
-            var bytes = Encoding.UTF8.GetBytes(Serialize(value));
-            AppendFingerprintInteger(hash, bytes.Length);
-            hash.AppendData(bytes);
-        }
-    }
-
-    private static void AppendFingerprintInteger(IncrementalHash hash, int value)
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32LittleEndian(bytes, value);
-        hash.AppendData(bytes);
+            batch.Resources, batch.Instruments, batch.Traces, batch.Spans, batch.MetricPoints, batch.Logs
+        }, _ => null));
     }
 
     private OpenTelemetryResourceEntity ToResourceEntity(TelemetryResource x) => new() { ScopeKey = binding.ScopeKey, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), ServiceName = x.ServiceName, ServiceNameSearchKey = OpenTelemetrySearchKeys.ServiceName(x.ServiceName), ServiceNameKey = OpenTelemetrySearchKeys.Hash(OpenTelemetrySearchKeys.ServiceName(x.ServiceName)), Status = (int)x.Status, LastSeenTicks = x.LastSeen.UtcTicks, LastSeenOffsetMinutes = Offset(x.LastSeen), PayloadJson = Serialize(x), SchemaVersion = EfOpenTelemetryModule.SchemaVersion };

@@ -172,8 +172,7 @@ public sealed class AgentJournalTests
         var store = new InMemoryAgentTurnStore(new Access("tenant"), state);
         var journal = Journal(store, services);
         var request = Request();
-        var serialized = JsonSerializer.Serialize(request, AgentJson.Options);
-        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(serialized))).ToLowerInvariant();
+        var hash = Elsa.Serialization.Core.JsonHashInput.Hash(request);
         var protector = services.GetRequiredService<ISecretValueProtector>();
         var protectedRequest = protector.Protect(JsonSerializer.Serialize(new { purpose = "elsa.agent.turn/request/1", identity = request.Identity, hash, request }, AgentJson.Options));
         var protectedResult = protector.Protect(JsonSerializer.Serialize(new { purpose = "elsa.agent.turn/result/1", identity = request.Identity, requestHash = hash,
@@ -397,7 +396,7 @@ public sealed class AgentJournalTests
         var body = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(request, AgentJson.Options))!.AsObject();
         body.Remove("effectiveLimits");
         var oldJson = body.ToJsonString(AgentJson.Options);
-        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(oldJson))).ToLowerInvariant();
+        var hash = Elsa.Serialization.Core.JsonHashInput.HashJson(oldJson);
         var protector = services.GetRequiredService<ISecretValueProtector>();
         var envelope = JsonSerializer.Serialize(new { purpose = "elsa.agent.turn/request/1", identity = request.Identity, hash, request = Json(oldJson) }, AgentJson.Options);
         var document = new AgentTurnDocument(new string('a', 64), AgentTurnDocument.CalculateOperationKey(request.Identity), hash, request.Identity,

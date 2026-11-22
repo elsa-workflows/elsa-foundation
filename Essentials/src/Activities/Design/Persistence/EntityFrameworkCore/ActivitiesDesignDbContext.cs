@@ -605,12 +605,22 @@ internal static class ActivityAuthorityIntegrity
         string? sourceId,
         ActivityContentAuthorityKind kind)
     {
-        var material = string.Join("|", new[]
+        var material = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
-            raw, canonical, authorityKeyToken, sourceIdToken, authorityKey, sourceId,
-            ((int)kind).ToString(CultureInfo.InvariantCulture)
-        }.Select(value => value is null ? "-1:" : $"{value.Length.ToString(CultureInfo.InvariantCulture)}:{value}"));
-        return Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(material)));
+            HasRaw = raw is not null, Raw = Parse(raw),
+            HasCanonical = canonical is not null, Canonical = Parse(canonical),
+            HasAuthorityKeyToken = authorityKeyToken is not null, AuthorityKeyToken = Parse(authorityKeyToken),
+            HasSourceIdToken = sourceIdToken is not null, SourceIdToken = Parse(sourceIdToken),
+            authorityKey, sourceId, kind
+        }, _ => null);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(material).ToUpperInvariant();
+    }
+
+    private static JsonElement? Parse(string? value)
+    {
+        if (value is null) return null;
+        using var document = JsonDocument.Parse(value);
+        return document.RootElement.Clone();
     }
 }
 

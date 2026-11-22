@@ -62,7 +62,9 @@ public sealed class EfWeaverSessionRecordStoreTests
         var clock = new RestartTestClock();
         // Canonical text with escapes, non-ASCII and a separator character, digested exactly as the owner does.
         var canonical = "{\"a\":1.50,\"b\":\"café \\u2028 \u2028 ñ\",\"c\":[true,null]}";
-        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+        // Independently pinned SHA-256 of the exact canonical JSON value (15e-1 and fixed escaping).
+        const string digest = "101427b142a3d93cd51ff11add3dce81945a1a10f6ba29c87ebbb4127cca0bc0";
+        Assert.Equal(digest, WeaverInvocationIntegrity.DigestCanonical(canonical));
         var session = Records.Session("session-1") with { Workspace = "workspace-1", ContinuedFrom = "session-0", PolicyRevision = 3 };
         var message = new WeaverMessageRecord(Records.Message(session.Id, "message-1") with
         {
