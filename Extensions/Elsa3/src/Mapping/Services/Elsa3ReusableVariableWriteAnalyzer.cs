@@ -1619,10 +1619,14 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     ? Math.Max(0, count - 1) : callbackBound;
                 var minimum = maximum is > 0 && call.Callee is MemberExpression { Object: ArrayExpression literalArray } &&
                     literalArray.Elements.All(item => item is not null) ? 1 : 0;
-                callbackResult = Repeated(accumulator => Apply(arguments[0], method is "reduce" or "reduceRight"
-                    ? [accumulator, Member(receiver, "*"), Value.Local, receiver]
-                    : [Member(receiver, "*"), Value.Local, receiver],
-                    method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local),
+                callbackResult = Repeated(accumulator =>
+                    {
+                        var returned = Apply(arguments[0], method is "reduce" or "reduceRight"
+                            ? [accumulator, Member(receiver, "*"), Value.Local, receiver]
+                            : [Member(receiver, "*"), Value.Local, receiver],
+                            method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local);
+                        return method == "flatMap" ? Flattened(returned) : returned;
+                    },
                     method is "reduce" or "reduceRight" ? arguments.Length > 1 ? arguments[1] : Member(receiver, "*") : null,
                     maximum, minimum);
             }
@@ -1645,7 +1649,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         {
             var mapped = Value.Object(call);
             _arrays.Add(call);
-            Put(mapped, "*", method == "flatMap" ? Member(callbackResult, "*") : callbackResult);
+            Put(mapped, "*", callbackResult);
             return mapped;
         }
         if (method == "concat")
@@ -1696,6 +1700,25 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private static int? LiteralArrayBound(Node expression) => expression is ArrayExpression array &&
         array.Elements.All(item => item is not SpreadElement) ? array.Elements.Count : null;
+
+    private Value Flattened(Value source)
+    {
+        // flatMap reads returned array indices immediately after each callback, including non-enumerable indices.
+        // Ordinary object/function returns are not flattened. Unknown native containers may be arrays or objects.
+        var possibleArrays = source.Objects.Where(item => _arrays.Contains(item) ||
+            item is not (ObjectExpression or IFunction) && !_primitiveBoxes.ContainsKey(item)).ToImmutableHashSet();
+        var result = source with { Objects = source.Objects.Except(_arrays).ToImmutableHashSet() };
+        OwnProperties(source with { Session = false, Objects = possibleArrays, Functions = [] },
+            (_, _, element) => result = result.Union(element), elementsOnly: true);
+        foreach (var item in possibleArrays)
+        {
+            // Custom prototypes are an opaque indexed-access boundary: retain their possible effects and aliases.
+            var before = _state.Copy();
+            result = result.Union(Member(_state.Prototypes.GetValueOrDefault(item, Value.Local), "*"));
+            _state.Join(before);
+        }
+        return result;
+    }
 
     private Value Repeated(Func<Value, Value> invoke, Value? initial = null, int? maximumCalls = null, int minimumCalls = 0)
     {

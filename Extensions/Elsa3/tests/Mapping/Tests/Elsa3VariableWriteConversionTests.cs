@@ -342,6 +342,8 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("let o = {}, next = getVariable('Order'); [1, 2].forEach((x, i, a) => { o = next; next = {}; a.length = 0; }); o.Status = 'Paid'; return 1;")]
     [InlineData("let o = {}; let step = () => { o = getVariable('Order'); step = () => { o = {}; }; return true; }; [1, 2].some(() => step()); o.Status = 'Paid'; return 1;")]
     [InlineData("const o = [].reduce(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
+    [InlineData("const owned = getVariable('Order'); let o = {}; const a = []; Object.defineProperty(a, '0', { get() { o.Status = 'Paid'; o = owned; return 1; } }); [1, 2].flatMap(() => a); return 1;")]
+    [InlineData("const owned = getVariable('Order'); let o = {}; const a = Reflect.construct(Array, []); Object.defineProperty(a, '0', { get() { o.Status = 'Paid'; o = owned; return 1; } }); [1, 2].flatMap(() => a); return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -522,6 +524,11 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const o = [1].reduce(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
     [InlineData("const o = [1].reduceRight(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
     [InlineData("const o = [getVariable('Order'), 1].reduce(() => ({})); o.Status = 'Paid'; return 1;")]
+    [InlineData("const owned = getVariable('Order'); const a = []; Object.defineProperty(a, '0', { get() { return owned.Status; } }); return [1, 2].flatMap(() => a);")]
+    [InlineData("const owned = getVariable('Order'); let o = {}; const a = []; Object.defineProperty(a, '0', { get() { o = {}; o.Status = 'Paid'; o = owned; return 1; } }); [1, 2].flatMap(() => a); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { get x() { o.Status = 'Paid'; return 1; } }; return [1, 2].flatMap(() => h);")]
+    [InlineData("const o = getVariable('Order'); const h = { get 0() { o.Status = 'Paid'; return 1; } }; return [1, 2].flatMap(() => h);")]
+    [InlineData("const o = getVariable('Order'); const a = []; Object.defineProperty(a, 'extra', { get() { o.Status = 'Paid'; return 1; } }); return [1, 2].flatMap(() => a);")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
