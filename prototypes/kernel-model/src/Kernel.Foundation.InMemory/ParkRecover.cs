@@ -7,6 +7,7 @@ internal sealed partial class ActorAdapter
 {
     Durable.ParkPageCursor? Durable.IActorType.FirstUnheldRecoveryInput(Durable.InstanceRow row, Durable.ParkRelease release,
         Predicate<Durable.InboxKey> isHeld) => store.FirstUnheldRecoveryInput(row, release, isHeld);
+    bool Durable.IActorType.OwnsParkCatchUp(Durable.InstanceRow row, Durable.Message ticket) => store.OwnsParkCatchUp(row, ticket);
 
     private Durable.TurnOutcome OpenRecover(Durable.TurnInput input)
     {

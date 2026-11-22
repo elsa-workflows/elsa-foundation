@@ -461,6 +461,11 @@ internal static class ContractNativeChecks
         var invalidWait = new string((char)0xD800, 1);
         check(store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, [new("approval", invalidWait, false)], bytes: 0) is null,
             "restore refuses a wait that ordinary subscription admission cannot round-trip");
+        var keeping = maximum[..2_578].Select(wait => wait with { Keep = true }).ToArray();
+        check(store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, keeping[..^1], bytes: 0) is { Count: 2577 } &&
+            store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, keeping, bytes: 0) is null &&
+            store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, keeping[..^1], bytes: 6657) is null,
+            "keeping waits share one catch-up ticket charge and each pay the coverage allowance");
         var folded = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
         check(folded.PlanFoundationSubscriptions(resumed.Row, scope.Tenant,
                 [new("topic", "wait", false), new("Topic", "WAIT", false)], bytes: 0) is null,

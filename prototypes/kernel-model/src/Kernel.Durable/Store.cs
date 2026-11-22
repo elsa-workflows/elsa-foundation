@@ -56,6 +56,9 @@ public sealed record SubscriptionRow(
 {
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal string? FoundationTenant { get; init; }
+    internal bool FoundationKeepsEvents { get; init; }
+    internal Guid? FoundationIncarnation { get; init; }
+    internal long? FoundationRegisteredAt { get; init; }
 }
 
 public sealed record EventRow(
@@ -163,6 +166,10 @@ public sealed record TurnCommit(
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }
+    internal InboxKey? FoundationCatchUpStep { get; init; }
+    internal long? FoundationCatchUpBefore { get; init; }
+    internal int? FoundationCatchUpExpected { get; init; }
+    internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
