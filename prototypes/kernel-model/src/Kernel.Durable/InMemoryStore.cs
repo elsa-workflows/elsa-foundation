@@ -175,7 +175,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (died && !expired.Contains(p.Owner!)) continue;
             if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
                 foreach (var row in Messages.Values)
-                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition) row.Attempts++;
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition && row.Message.ParkCatchUp is null)
+                        row.Attempts++;
+            CountAbandonedParkCatchUpTrials(partition, p.Epoch);
             (p.Owner, p.Epoch) = (node, p.Epoch + 1);
             taken.Add((partition, new Lease(p.Epoch, p.Position, now)));
         }
@@ -406,6 +408,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                 }
                 ApplyParkCatchUpFailure(turn);
+                if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
                 foreach (var id in turn.Consumed) Messages.Remove(id);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
@@ -468,7 +471,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             foreach (var id in batch.Seen)
                 if (Messages.GetValueOrDefault(id) is { } seen) seen.Seen = MarkEpoch(seen);
             foreach (var id in batch.Trial)
-                if (Messages.GetValueOrDefault(id) is { } tried) (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
+                if (Messages.GetValueOrDefault(id) is { } tried)
+                {
+                    (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
+                    if (tried.Message.ParkCatchUp is not null) MarkParkCatchUpTrial(id, tried);
+                }
             foreach (var id in batch.ClearJobTrials) Messages[id].Trial = 0;
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
                 if (Messages.GetValueOrDefault(id) is { } held)
@@ -547,7 +554,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
             if (countDeaths)
                 foreach (var message in Messages.Values)
-                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition) message.Attempts++;
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition && message.Message.ParkCatchUp is null)
+                        message.Attempts++;
+            CountAbandonedParkCatchUpTrials(partition, row.Epoch);
             row.Epoch++;
             return new(new Lease(row.Epoch, row.Position, now));
         }

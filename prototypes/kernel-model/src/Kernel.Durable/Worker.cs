@@ -271,7 +271,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         !Loaded(s) && s.Inbox.Exists(i => !i.Taken && (i.Message.Due is not { } due || due <= Now)));
     public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0 || Outgrown().Any();
     public IEnumerable<string> Trial => TrialItems.Select(i => i.Message.Id);
-    public bool NeedsMeet => _meets.Exists(i => !Awaits(i) && !i.Taken);
+    public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.ParkCatchUp is not null || !Awaits(i)));
     public IEnumerable<string> Ready => ReadyForTurns(default);
 
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
@@ -1470,7 +1470,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private bool Unmarked(Delivery item) => item.Durable && !item.AwaitPoll && !item.Marked && !item.Taken && (!item.Suspect || (!item.Shelved && Shelf(item)));
+    private bool Unmarked(Delivery item) => item.Message.ParkCatchUp is null && item.Durable && !item.AwaitPoll &&
+        !item.Marked && !item.Taken && (!item.Suspect || (!item.Shelved && Shelf(item)));
 
     /// <summary>
     /// Finding F12: an authored suspect whose instance is suspended cannot be tried, and while its row says unseen it fills a place
@@ -2371,7 +2372,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (_meeting || _flushing || !LeaseUsable()) return;
         var generation = _generation;
-        var catchUp = _meets.FirstOrDefault(i => i.Message.ParkCatchUp is not null && !Awaits(i) && !i.Taken);
+        var catchUp = _meets.FirstOrDefault(i => i.Message.ParkCatchUp is not null && !i.Taken);
         if (catchUp is not null)
         {
             _meets.Remove(catchUp);
@@ -2439,6 +2440,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         else
         {
+            if (ParkCatchUpBudget() is null) return;
+            var reserved = await CommitAsync([], [], [ticket], generation, cancellationToken);
+            if (reserved == Outcome.Refused && generation == _generation) Reset();
+            if (reserved != Outcome.Landed) return;
             if (ParkCatchUpBudget() is not { } budget) return;
             step.FoundationCatchUpStep = failure.Key;
             step.FoundationCatchUpBefore = checked(Now + (long)budget.TotalMilliseconds);

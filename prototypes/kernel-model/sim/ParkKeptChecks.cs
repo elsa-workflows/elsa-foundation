@@ -680,6 +680,83 @@ internal static class ParkKeptChecks
         await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true, realMonotonic: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: false);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: true);
+    }
+
+    private static async Task CheckLostCatchUpStep(Action<bool, string> check, bool landedBeforeLoss)
+    {
+        var now = 1_701_400_030_200L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new KeepingRecoveryProbe();
+        var scope = new Contract.BoundScope("catch-up-lost-step");
+        var losses = 0;
+        var forward = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is [{ FoundationCatchUpStep: not null }] && landed == landedBeforeLoss &&
+                (!landedBeforeLoss || losses == 0))
+            {
+                losses++;
+                throw new StoreException(Failure.Unknown, "the page result was lost");
+            }
+        });
+        Worker TakeWorker(string name) => new(name, 0, forward, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0, MaxAttempts = 2 });
+        var worker = TakeWorker("first-catch-up-owner");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(begun.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var id = store.Instances.Values.Single().Id;
+        var count = landedBeforeLoss ? InMemoryStore.ParkPageLimit + 1 : 1;
+        for (var index = 0; index < count; index++)
+            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"owed-{index:D3}", Contract.Kinds.Event, "payload",
+                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+        var mark = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(mark)));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        var key = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null).Key;
+        await worker.PollAsync();
+        await worker.MeetAsync();
+        check(!worker.Owns && losses == 1 && (!landedBeforeLoss ?
+                store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 0, Trial: > 0 } :
+                !store.Messages.ContainsKey(key)),
+            "an unknown page leaves evidence only when the reserved ticket is still pending");
+
+        // A same-node take after reset advances the fence without treating ordinary job or model trials as deaths.
+        worker = TakeWorker("first-catch-up-owner");
+        await using var replacement = (await new DurableHost([worker]).ActivateAsync(0))!;
+        if (landedBeforeLoss)
+        {
+            check(store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) is
+                { Attempts: 0, Trial: 0, Message.ParkCatchUp.Page: 1 },
+                "a new take leaves the successor of an acknowledged-late page uncharged");
+            await Pump(replacement);
+            check(probe.Received.Count == count && probe.Received.Distinct().Count() == count,
+                "after an unknown landed page all entitled events still reach the model once");
+            return;
+        }
+        check(store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 1, Trial: 0 },
+            "the next fence charges an unresolved step even on a same-node take");
+        await worker.PollAsync();
+        await worker.MeetAsync();
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        worker = TakeWorker("different-catch-up-owner");
+        await using var last = (await new DurableHost([worker]).ActivateAsync(0))!;
+        check(store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 2, Trial: 0 },
+            "another owner charges the second abandoned step exactly once");
+        await Pump(last);
+        await store.SweepAsync();
+        check(losses == 2 && store.Instances[id] is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            store.Subscriptions.Count == 0 && store.FoundationEvents.Count == 0 && probe.Received.Count == 0,
+            "repeated unknown pre-commit outcomes eventually re-park and release sweep coverage");
     }
 
     private static async Task CheckFailedCatchUp(Action<bool, string> check, bool recoverAfterFailure,
@@ -914,6 +991,7 @@ internal static class ParkKeptChecks
 
         if (revoke)
         {
+            await Reserve(originalTicket);
             var originalWait = store.Subscriptions.Single();
             var replacement = originalWait with { FoundationIncarnation = Guid.NewGuid() };
             var step = new TurnCommit(id, null, null, [originalTicket.InboxKey], [], [], [], [], null)
@@ -936,6 +1014,7 @@ internal static class ParkKeptChecks
             var firstPageSize = byteCut ? 1 : InMemoryStore.ParkPageLimit;
             if (verifyCollisions)
             {
+                await Reserve(originalTicket);
                 var nextId = FoundationEventIdentity.CatchUpSuccessor(originalTicket.ParkCatchUp.Chain, 1);
                 var successorCollision = (originalTicket with { Id = nextId, Kind = "ordinary", ParkCatchUp = null }).AsIssued();
                 var publication = store.FoundationEvents.Values.Single(row => row.Id == expected[0]);
@@ -1009,6 +1088,16 @@ internal static class ParkKeptChecks
                 await Pump(active);
                 now += 11;
             }
+        }
+
+        async Task Reserve(Message ticket)
+        {
+            // Keep the ticket in the Worker's inbox when exercising the store's prepare checks directly.
+            await worker.PollAsync();
+            var fence = worker.Fences.Single();
+            var reserved = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+                false, [], [], [ticket.InboxKey]));
+            check(reserved.Landed, "the exact pending catch-up step reserves a trial under its partition fence");
         }
     }
 

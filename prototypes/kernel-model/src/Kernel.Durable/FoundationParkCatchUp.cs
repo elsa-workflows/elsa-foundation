@@ -21,6 +21,7 @@ public sealed partial class InMemoryStore
     private sealed record CatchUpCoverage(SubscriptionRow Wait, ParkCatchUpTicket Ticket);
     private sealed record CatchUpStep(ParkCatchUpTicket Ticket, IReadOnlyList<EventDelivery> Deliveries, Message? Next);
     private readonly Dictionary<Guid, CatchUpCoverage> _foundationCatchUpCoverage = [];
+    private readonly Dictionary<int, HashSet<InboxKey>> _parkCatchUpTrials = [];
     private readonly Dictionary<string, long> _foundationSweepHorizon = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, SortedList<string, EventRow>>> _foundationPublicationsByTenant = new(StringComparer.Ordinal);
 
@@ -73,7 +74,7 @@ public sealed partial class InMemoryStore
             turn.FoundationCatchUpExpected is not { } expected || turn.FoundationCatchUpBefore is null ||
             Messages.GetValueOrDefault(key) is not { Done: false, Message: { ParkCatchUp: { } ticket, Kind: Kinds.Meet } source } stored ||
             expected != stored.Attempts ||
-            source.Target.Id != turn.Instance || !epochs.ContainsKey(source.Target.Partition))
+            source.Target.Id != turn.Instance || !epochs.TryGetValue(source.Target.Partition, out var epoch) || stored.Trial != epoch)
             throw new StoreException(Failure.Definite, "A catch-up step must consume its exact ticket under its partition's fence.");
 
         var deliveries = new List<EventDelivery>();
@@ -108,7 +109,8 @@ public sealed partial class InMemoryStore
         if (turn.FoundationCatchUpStep is not null || turn.FoundationCatchUpBefore is not null ||
             turn.FoundationCatchUpExpected is not null || failed.Limit <= 0 ||
             Messages.GetValueOrDefault(failed.Key) is not { Done: false, Message: { Kind: Kinds.Meet, ParkCatchUp: not null } envelope } stored ||
-            stored.Attempts != failed.Attempts || envelope.Target.Id != turn.Instance || !epochs.ContainsKey(envelope.Target.Partition) ||
+            stored.Attempts != failed.Attempts || envelope.Target.Id != turn.Instance ||
+            !epochs.TryGetValue(envelope.Target.Partition, out var epoch) || failed.Attempts < failed.Limit && stored.Trial != epoch ||
             turn.Delete || turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
             turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0)
             throw InvalidCatchUpFailure();
@@ -142,10 +144,37 @@ public sealed partial class InMemoryStore
     {
         if (turn.FoundationCatchUpFailed is not { } failed) return;
         var ticket = Messages[failed.Key];
+        ClearParkCatchUpTrial(failed.Key, ticket);
         if (failed.Attempts < failed.Limit)
             ticket.Attempts++;
         else if (turn.Row is null)
             ApplyParkCatchUp(new(ticket.Message.ParkCatchUp!, [], null));
+    }
+
+    private void MarkParkCatchUpTrial(InboxKey key, MessageRow ticket)
+    {
+        var partition = ticket.Message.Target.Partition;
+        if (!_parkCatchUpTrials.TryGetValue(partition, out var trials)) _parkCatchUpTrials.Add(partition, trials = []);
+        trials.Add(key);
+    }
+
+    private void ClearParkCatchUpTrial(InboxKey key, MessageRow ticket)
+    {
+        ticket.Trial = 0;
+        var partition = ticket.Message.Target.Partition;
+        if (_parkCatchUpTrials.TryGetValue(partition, out var trials) && trials.Remove(key) && trials.Count == 0)
+            _parkCatchUpTrials.Remove(partition);
+    }
+
+    private void CountAbandonedParkCatchUpTrials(int partition, long epoch)
+    {
+        if (!_parkCatchUpTrials.Remove(partition, out var trials)) return;
+        foreach (var key in trials)
+            if (Messages.GetValueOrDefault(key) is { Done: false } ticket && ticket.Trial == epoch)
+            {
+                ticket.Attempts++;
+                ticket.Trial = 0;
+            }
     }
 
     private IEnumerable<(EventRow Publication, SubscriptionRow Wait)> CatchUpMatches(ParkCatchUpTicket ticket, Message source, IReadOnlySet<Guid>? revoked)

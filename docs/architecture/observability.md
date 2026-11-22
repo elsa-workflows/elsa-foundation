@@ -1818,8 +1818,11 @@ calls one new model hook.
           the old ticket. A failed-attempt write that wins invalidates a late page with the previous count. Only a
           chain retaining coverage can re-park the instance. An exhausted superseded chain settles without touching
           the instance or its new waits. The step budget is capped at one lease and leaves a reserve inside the
-          current owner's local lease deadline for the failure write. The physical-provider deadline and query-cost
-          cases remain at K4 and K12.
+          current owner's local lease deadline for the failure write. The owner marks the ticket's trial at the
+          start of its isolated step in place of the ordinary seen mark. A take or retake charges a reservation
+          that still has its pending ticket at the previous epoch. A landed page removed that ticket and leaves the
+          successor uncharged. A known failed step clears the trial when it records the attempt, so a later take
+          cannot charge it again. The physical-provider deadline and query-cost cases remain at K4 and K12.
         - a start subscription's meet ticket has no instance to park: it is set aside as a dead letter with an alert,
           and its coverage entries are released, so the sweep may delete the events it still owed;
         - a turn's publish ticket parks its publishing instance. Park keeps the ticket, so the sweep's ticket check
