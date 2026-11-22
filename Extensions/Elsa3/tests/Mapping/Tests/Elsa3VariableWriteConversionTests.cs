@@ -151,6 +151,34 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("let o = getVariable('Order'); function reset() { o = {}; } o.Status = 'Paid'; return 1;")]
     [InlineData("function write() { o.Status = 'Paid'; } let o = getVariable('Order'); write(); o = {}; return 1;")]
     [InlineData("let Lines; ({ Lines } = getVariable('Order')); Lines.push(1); return 1;")]
+    [InlineData("let o = getVariable('Order'); const alias = o; o = {}; alias.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); const lines = o.Lines; o = {}; lines.push(1); return 1;")]
+    [InlineData("let o = {}; for (let i = 0; i < 2; i++) { o.Status = 'Paid'; o = getVariable('Order'); } return 1;")]
+    [InlineData("let o = {}; while (getVariable('Total')) { o.Status = 'Paid'; o = getVariable('Order'); } return 1;")]
+    [InlineData("let o = getVariable('Order'); for (const x of []) o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); for (const x in {}) o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = {}; while (getVariable('Total')) { if (getVariable('Total')) { o = getVariable('Order'); break; } else o = {}; } o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = {}; for (let i = 0; i < 2; i++) { if (getVariable('Total')) { o = getVariable('Order'); continue; } o.Status = 'Paid'; o = {}; } return 1;")]
+    [InlineData("let o = getVariable('Order'); switch (getVariable('Total')) { case 0: o = {}; break; } o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); switch (getVariable('Total')) { case 0: return 1; } o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); try { o = {}; } catch (e) {} o.Status = 'Paid'; return 1;")]
+    [InlineData("function mutate(x) { x.Status = 'Paid'; } mutate(getVariable('Order')); return 1;")]
+    [InlineData("function identity(x) { return x; } identity(getVariable('Order')).Status = 'Paid'; return 1;")]
+    [InlineData("let o = {}; function mutate() { o.Status = 'Paid'; } o = getVariable('Order'); mutate(); return 1;")]
+    [InlineData("const a = []; a.push(getVariable('Order')); a[0].Status = 'Paid'; return 1;")]
+    [InlineData("[1].map(() => getVariable('Order'))[0].Status = 'Paid'; return 1;")]
+    [InlineData("const o = [1].reduce(() => getVariable('Order'), {}); o.Status = 'Paid'; return 1;")]
+    [InlineData("function make(o) { function mutate() { o.Status = 'Paid'; } return mutate; } make(getVariable('Order'))(); return 1;")]
+    [InlineData("function make(o) { return () => { o.Status = 'Paid'; }; } make(getVariable('Order'))(); return 1;")]
+    [InlineData("getVariable('Order').Lines.forEach(x => { x.Status = 'Paid'; }); return 1;")]
+    [InlineData("function recurse(x) { return recurse(x); } recurse(getVariable('Order')); return 1;")]
+    [InlineData("const o = [getVariable('Order')].pop(); o.Status = 'Paid'; return 1;")]
+    [InlineData("const a = [].concat(getVariable('Order')); a[0].Status = 'Paid'; return 1;")]
+    [InlineData("function mutate(s, o) { o.Status = 'Paid'; } mutate`${getVariable('Order')}`; return 1;")]
+    [InlineData("const h = { o: getVariable('Order'), mutate() { this.o.Status = 'Paid'; } }; h.mutate(); return 1;")]
+    [InlineData("const h = { get x() { getVariable('Order').Status = 'Paid'; return 1; } }; return h.x;")]
+    [InlineData("function Change(o) { o.Status = 'Paid'; } new Change(getVariable('Order')); return 1;")]
+    [InlineData("let o = getVariable('Order'); o.Status = (o = {}, 'Paid'); return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -177,10 +205,28 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const o = getVariable('Order'); return o.Lines.push();")]
     [InlineData("const { Lines } = { Lines: [] }; Lines.push(1); return 1;")]
     [InlineData("const o = getVariable('Order') && {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = {}; const alias = o; o = getVariable('Order'); alias.Status = 'Paid'; return 1;")]
+    [InlineData("function read(x) { return x.Status; } return read(getVariable('Order'));")]
+    [InlineData("function identity(x) { return x; } return identity(getVariable('Order'));")]
+    [InlineData("function copy(x) { return { ...x }; } const o = copy(getVariable('Order')); o.Status = 'Paid'; return o;")]
+    [InlineData("function mutate(x) { x.Status = 'Paid'; } mutate({}); return 1;")]
+    [InlineData("let o = {}; function mutate() { o.Status = 'Paid'; } mutate(); o = getVariable('Order'); return o;")]
+    [InlineData("function unused() { getVariable('Order').Lines.push(1); } return 1;")]
+    [InlineData("const o = getVariable('Order'); return o.Lines.map(x => x.Status);")]
+    [InlineData("const o = getVariable('Order'); o.Lines.map(() => ({}))[0].Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); do { o = {}; } while (false); o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); try { o = {}; } catch (e) { o = {}; } finally { o = {}; } o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = {}; while (getVariable('Total')) { try { o = getVariable('Order'); break; } finally { o = {}; } } o.Status = 'Paid'; return 1;")]
+    [InlineData("function read(s, o) { return o.Status; } return read`${getVariable('Order')}`;")]
+    [InlineData("const h = { o: getVariable('Order'), read() { return this.o.Status; } }; return h.read();")]
+    [InlineData("const h = { get x() { return getVariable('Order').Status; } }; return h.x;")]
+    [InlineData("function Read(o) { this.status = o.Status; } return new Read(getVariable('Order'));")]
+    [InlineData("let o = {}; o.Status = (o = getVariable('Order'), 'Paid'); return 1;")]
+    [InlineData("const o = getVariable('Order'); return new String(o.Status);")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Order]), isReusable: true);
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }

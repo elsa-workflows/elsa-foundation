@@ -1,0 +1,620 @@
+using System.Collections.Immutable;
+using Acornima;
+using Acornima.Ast;
+
+namespace Elsa3.Mapping.Services;
+
+/// <summary>
+/// Mutation-only interpretation of a reusable script. It never produces source edits: loop back edges and local
+/// helper calls can therefore be followed without rewriting the same source range twice. Values record ownership,
+/// local container identity and local functions; merely reading or returning a workflow value is not a write.
+/// </summary>
+internal sealed class Elsa3ReusableVariableWriteAnalyzer(
+    Func<Node, HashSet<string>?> scopeOf,
+    Func<Elsa3AmbientReferenceKind, string, bool> isSessionVariable,
+    Func<string, string?> generatedAccessor)
+{
+    private readonly record struct Binding(HashSet<string> Scope, string Name);
+    private sealed record Value(bool Session, ImmutableHashSet<Node> Objects, ImmutableHashSet<Node> Functions)
+    {
+        public static readonly Value Local = new(false, [], []);
+        public static readonly Value Owned = new(true, [], []);
+        public static Value Object(Node node) => new(false, [node], []);
+        public static Value Function(Node node) => new(false, [], [node]);
+        public Value Union(Value other) => new(Session || other.Session, Objects.Union(other.Objects), Functions.Union(other.Functions));
+        public bool Same(Value other) => Session == other.Session && Objects.SetEquals(other.Objects) && Functions.SetEquals(other.Functions);
+    }
+
+    private sealed class State
+    {
+        public Dictionary<Binding, Value> Bindings { get; } = [];
+        public Dictionary<(Node Object, string Member), Value> Members { get; } = [];
+        public State Copy()
+        {
+            var copy = new State();
+            foreach (var item in Bindings) copy.Bindings[item.Key] = item.Value;
+            foreach (var item in Members) copy.Members[item.Key] = item.Value;
+            return copy;
+        }
+        public void Join(State other)
+        {
+            foreach (var (key, value) in other.Bindings) Bindings[key] = Bindings.GetValueOrDefault(key, Value.Local).Union(value);
+            foreach (var (key, value) in other.Members) Members[key] = Members.GetValueOrDefault(key, Value.Local).Union(value);
+        }
+        public bool Same(State other) => Bindings.Count == other.Bindings.Count && Members.Count == other.Members.Count &&
+            Bindings.All(item => other.Bindings.TryGetValue(item.Key, out var value) && item.Value.Same(value)) &&
+            Members.All(item => other.Members.TryGetValue(item.Key, out var value) && item.Value.Same(value));
+    }
+
+    private static State? Join(State? first, State? second)
+    {
+        if (first is null) return second?.Copy();
+        var joined = first.Copy();
+        if (second is not null) joined.Join(second);
+        return joined;
+    }
+    private readonly record struct Flow(bool Normal, Value Returned, State? Returns = null, State? Breaks = null, State? Continues = null, State? Throws = null)
+    {
+        public static readonly Flow Next = new(true, Value.Local);
+        public Flow Union(Flow other) => new(Normal || other.Normal, Returned.Union(other.Returned),
+            Join(Returns, other.Returns), Join(Breaks, other.Breaks), Join(Continues, other.Continues), Join(Throws, other.Throws));
+    }
+    private sealed record Closure(HashSet<string>[] Scopes, Dictionary<Binding, Value> Captured, Value This);
+    private readonly List<HashSet<string>> _scopes = [];
+    private readonly Dictionary<Node, Closure> _closures = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Node> _calls = new(ReferenceEqualityComparer.Instance);
+    private readonly List<State> _exceptionStates = [];
+    private readonly List<Value> _receivers = [];
+    private readonly Dictionary<(Node Object, string Member), Value> _getters = [];
+    private readonly Dictionary<(Node Object, string Member), Value> _setters = [];
+    private State _state = new();
+    private bool _writes;
+
+    public bool MayWrite(Script script)
+    {
+        Execute(script);
+        return _writes;
+    }
+
+    private Binding? Resolve(string name)
+    {
+        for (var index = _scopes.Count - 1; index >= 0; index--)
+            if (_scopes[index].Contains(name)) return new Binding(_scopes[index], name);
+        return null;
+    }
+    private Value Read(string name) => Resolve(name) is { } binding ? _state.Bindings.GetValueOrDefault(binding, Value.Local) : Value.Local;
+    private bool Global(string name) => Resolve(name) is null;
+
+    private Flow Execute(Node node)
+    {
+        if (_writes) return Flow.Next;
+        // A definition is a value; its body runs only at a call site with that call's actual parameters.
+        if (node is IFunction) return Flow.Next;
+        var scope = scopeOf(node);
+        if (scope is not null) EnterScope(node, scope);
+        try { return ExecuteCore(node); }
+        finally
+        {
+            foreach (var exceptional in _exceptionStates) exceptional.Join(_state);
+            if (scope is not null) _scopes.RemoveAt(_scopes.Count - 1);
+        }
+    }
+
+    private void EnterScope(Node node, HashSet<string> scope)
+    {
+        _scopes.Add(scope);
+        foreach (var name in scope) _state.Bindings[new Binding(scope, name)] = Value.Local;
+        IEnumerable<Node> statements = node switch
+        {
+            Script script => script.Body,
+            BlockStatement block => block.Body,
+            SwitchStatement choice => choice.Cases.SelectMany(item => item.Consequent),
+            _ => []
+        };
+        foreach (var function in statements.OfType<FunctionDeclaration>())
+            if (function.Id is { } name) Bind(name, FunctionValue(function));
+    }
+
+    private Flow Sequence(IEnumerable<Node> statements)
+    {
+        var result = Flow.Next;
+        foreach (var statement in statements)
+        {
+            if (!result.Normal || _writes) break;
+            var next = Execute(statement);
+            result = result.Union(next) with { Normal = next.Normal };
+        }
+        return result;
+    }
+
+    private Flow ExecuteCore(Node node)
+    {
+        switch (node)
+        {
+            case Script script: return Sequence(script.Body);
+            case BlockStatement block: return Sequence(block.Body);
+            case ExpressionStatement expression: Evaluate(expression.Expression); return Flow.Next;
+            case VariableDeclaration declaration:
+                foreach (var item in declaration.Declarations) Bind(item.Id, Evaluate(item.Init));
+                return Flow.Next;
+            case ReturnStatement returned:
+                var returnedValue = Evaluate(returned.Argument);
+                return new Flow(false, returnedValue, Returns: _state.Copy());
+            case ThrowStatement thrown: Evaluate(thrown.Argument); return new Flow(false, Value.Local, Throws: _state.Copy());
+            case BreakStatement: return new Flow(false, Value.Local, Breaks: _state.Copy());
+            case ContinueStatement: return new Flow(false, Value.Local, Continues: _state.Copy());
+            case LabeledStatement labeled: return Execute(labeled.Body);
+            case IfStatement branch:
+                Evaluate(branch.Test);
+                return Branch(() => Execute(branch.Consequent), () => branch.Alternate is null ? Flow.Next : Execute(branch.Alternate));
+            case ForStatement loop:
+                if (loop.Init is VariableDeclaration init) Execute(init); else Evaluate(loop.Init);
+                return Loop(() => Evaluate(loop.Test), () => Execute(loop.Body), () => Evaluate(loop.Update));
+            case WhileStatement loop: return Loop(() => Evaluate(loop.Test), () => Execute(loop.Body), () => Value.Local);
+            case DoWhileStatement loop: return Loop(() => Value.Local, () => Execute(loop.Body), () => Evaluate(loop.Test), atLeastOnce: true);
+            case ForOfStatement loop:
+                var values = Evaluate(loop.Right);
+                return Loop(() => Value.Local, () => { BindLoop(loop.Left, Member(values, "*")); return Execute(loop.Body); }, () => Value.Local);
+            case ForInStatement loop:
+                Evaluate(loop.Right);
+                return Loop(() => Value.Local, () => { BindLoop(loop.Left, Value.Local); return Execute(loop.Body); }, () => Value.Local);
+            case SwitchStatement choice:
+                Evaluate(choice.Discriminant);
+                var entry = _state.Copy();
+                State? exits = choice.Cases.Any(item => item.Test is null) ? null : entry.Copy();
+                var flow = new Flow(false, Value.Local);
+                for (var index = 0; index < choice.Cases.Count; index++)
+                {
+                    _state = entry.Copy();
+                    Evaluate(choice.Cases[index].Test);
+                    var path = Sequence(choice.Cases.Skip(index).SelectMany(item => item.Consequent));
+                    exits = Join(exits, path.Normal ? _state : null);
+                    exits = Join(exits, path.Breaks);
+                    flow = flow.Union(path with { Normal = path.Normal || path.Breaks is not null, Breaks = null });
+                }
+                _state = exits ?? entry;
+                return flow with { Normal = exits is not null };
+            case TryStatement attempt:
+                var exceptions = _state.Copy();
+                _exceptionStates.Add(exceptions);
+                var tried = Execute(attempt.Block);
+                _exceptionStates.RemoveAt(_exceptionStates.Count - 1);
+                var completed = tried.Normal ? _state.Copy() : null;
+                if (attempt.Handler is { } handler)
+                {
+                    _state = exceptions;
+                    var caught = Execute(handler);
+                    completed = Join(completed, caught.Normal ? _state : null);
+                    tried = (tried with { Throws = null }).Union(caught);
+                }
+                _state = completed ?? exceptions;
+                if (attempt.Finalizer is { } finalizer)
+                    return Finally(tried, completed, finalizer);
+                return tried;
+            case CatchClause caught:
+                if (caught.Param is { } parameter) Bind(parameter, Value.Local);
+                return Execute(caught.Body);
+            default:
+                Evaluate(node);
+                return Flow.Next;
+        }
+    }
+
+    private Flow Finally(Flow incoming, State? normal, Node finalizer)
+    {
+        var result = new Flow(false, Value.Local);
+        State? normalExit = null;
+        Run(normal, 0); Run(incoming.Returns, 1); Run(incoming.Breaks, 2); Run(incoming.Continues, 3); Run(incoming.Throws, 4);
+        _state = normalExit ?? normal ?? _state;
+        return result;
+
+        void Run(State? state, int kind)
+        {
+            if (state is null || _writes) return;
+            _state = state.Copy();
+            var completion = Execute(finalizer);
+            result = result.Union(completion with { Normal = false });
+            if (!completion.Normal) return;
+            var resumed = kind switch
+            {
+                1 => new Flow(false, incoming.Returned, Returns: _state.Copy()),
+                2 => new Flow(false, Value.Local, Breaks: _state.Copy()),
+                3 => new Flow(false, Value.Local, Continues: _state.Copy()),
+                4 => new Flow(false, Value.Local, Throws: _state.Copy()),
+                _ => Flow.Next
+            };
+            if (kind == 0) normalExit = Join(normalExit, _state);
+            result = result.Union(resumed);
+        }
+    }
+
+    private Flow Branch(Func<Flow> left, Func<Flow> right)
+    {
+        var before = _state.Copy();
+        var first = left();
+        var firstState = _state.Copy();
+        _state = before;
+        var second = right();
+        // A returning arm cannot change the aliases used by the subsequent, continuing arm.
+        if (first.Normal && second.Normal) _state.Join(firstState);
+        else if (first.Normal) _state = firstState;
+        return first.Union(second);
+    }
+
+    private Flow Loop(Func<Value> test, Func<Flow> body, Func<Value> update, bool atLeastOnce = false)
+    {
+        var entry = _state.Copy();
+        var head = entry.Copy();
+        var returns = Value.Local;
+        State? returnStates = null;
+        State? thrownStates = null;
+        State? exits = null;
+        while (!_writes)
+        {
+            _state = head.Copy();
+            test();
+            if (!atLeastOnce) { exits ??= _state.Copy(); exits.Join(_state); }
+            var flow = body();
+            returns = returns.Union(flow.Returned);
+            returnStates = Join(returnStates, flow.Returns);
+            thrownStates = Join(thrownStates, flow.Throws);
+            exits = Join(exits, flow.Breaks);
+            var back = Join(flow.Normal ? _state : null, flow.Continues);
+            if (back is not null)
+            {
+                _state = back;
+                update();
+                if (atLeastOnce) exits = Join(exits, _state);
+            }
+            var next = entry.Copy();
+            if (back is not null) next.Join(_state);
+            if (next.Same(head)) break;
+            head = next;
+        }
+        _state = exits ?? entry;
+        return new Flow(exits is not null, returns, Returns: returnStates, Throws: thrownStates);
+    }
+
+    private void BindLoop(Node target, Value value)
+    {
+        if (target is VariableDeclaration declaration)
+            foreach (var item in declaration.Declarations) Bind(item.Id, value);
+        else Bind(target, value);
+    }
+
+    private Value Evaluate(Node? node)
+    {
+        if (node is null || _writes) return Value.Local;
+        Value result;
+        switch (node)
+        {
+            case Identifier name: result = name.Name == "variables" && Global(name.Name) ? Value.Owned : Read(name.Name); break;
+            case ThisExpression: result = _receivers.Count > 0 ? _receivers[^1] : Value.Local; break;
+            case Literal: result = Value.Local; break;
+            case IFunction: result = FunctionValue(node); break;
+            case MemberExpression member:
+                result = Member(Evaluate(member.Object), Name(member));
+                if (member.Computed) Evaluate(member.Property);
+                break;
+            case ChainExpression chain: result = Evaluate(chain.Expression); break;
+            case SequenceExpression sequence:
+                result = Value.Local;
+                foreach (var expression in sequence.Expressions) result = Evaluate(expression);
+                break;
+            case AssignmentExpression assignment:
+                if (assignment.Left is MemberExpression target)
+                {
+                    // JavaScript evaluates the reference before the RHS can reassign the receiver's local binding.
+                    var targetValue = Evaluate(target.Object);
+                    if (target.Computed) Evaluate(target.Property);
+                    result = Evaluate(assignment.Right);
+                    AssignMember(targetValue, Name(target), assignment.Operator == Operator.Assignment ? result : Value.Local);
+                    break;
+                }
+                result = Evaluate(assignment.Right);
+                if (assignment.Operator != Operator.Assignment) result = Value.Local;
+                Bind(assignment.Left, result);
+                break;
+            case UpdateExpression update: Bind(update.Argument, Value.Local); result = Value.Local; break;
+            case UnaryExpression unary:
+                if (unary.Operator == Operator.Delete && unary.Argument is MemberExpression deleted) WriteMember(deleted, Value.Local);
+                else Evaluate(unary.Argument);
+                result = Value.Local; break;
+            case ConditionalExpression conditional:
+                Evaluate(conditional.Test);
+                var left = Value.Local; var right = Value.Local;
+                Branch(() => { left = Evaluate(conditional.Consequent); return Flow.Next; }, () => { right = Evaluate(conditional.Alternate); return Flow.Next; });
+                result = left.Union(right); break;
+            case LogicalExpression logical:
+                var first = Evaluate(logical.Left);
+                var beforeRight = _state.Copy();
+                var last = Evaluate(logical.Right);
+                _state.Join(beforeRight);
+                result = logical.Operator == Operator.LogicalAnd ? last : first.Union(last); break;
+            case ObjectExpression value:
+                result = Value.Object(node);
+                foreach (var property in value.Properties)
+                {
+                    if (property is Property item)
+                    {
+                        if (item.Computed) Evaluate(item.Key);
+                        var propertyValue = Evaluate(item.Value);
+                        if (item.Kind is PropertyKind.Get or PropertyKind.Set)
+                            (item.Kind == PropertyKind.Get ? _getters : _setters)[(node, PropertyName(item))] = propertyValue;
+                        else Put(result, PropertyName(item), propertyValue);
+                    }
+                    else if (property is SpreadElement spread) CopyMembers(result, Evaluate(spread.Argument));
+                }
+                break;
+            case ArrayExpression array:
+                result = Value.Object(node);
+                for (var index = 0; index < array.Elements.Count; index++)
+                    if (array.Elements[index] is { } item)
+                        Put(result, item is SpreadElement ? "*" : index.ToString(System.Globalization.CultureInfo.InvariantCulture), Evaluate(item is SpreadElement spread ? spread.Argument : item));
+                break;
+            case CallExpression call: result = Call(call); break;
+            case TaggedTemplateExpression tagged:
+                result = Apply(Evaluate(tagged.Tag), [Value.Object(tagged.Quasi), .. tagged.Quasi.Expressions.Select(Evaluate)], Value.Local);
+                break;
+            case NewExpression construction:
+                var constructor = Evaluate(construction.Callee);
+                var constructorArguments = construction.Arguments.Select(Evaluate).ToArray();
+                result = Value.Object(node);
+                if (constructor.Functions.Count > 0)
+                {
+                    var explicitResult = Apply(constructor, constructorArguments, result);
+                    result = result.Union(explicitResult);
+                }
+                else if (construction.Callee is Identifier native && Global(native.Name) && native.Name is "Date" or "RegExp" or "String" or "Number" or "Boolean") { }
+                else if (construction.Callee is Identifier { Name: "Object" } && Global("Object")) result = constructorArguments.FirstOrDefault() ?? result;
+                else if (construction.Callee is Identifier { Name: "Array" } && Global("Array"))
+                    foreach (var argument in constructorArguments) Put(result, "*", Member(result, "*").Union(argument));
+                else _writes |= constructorArguments.Any(argument => OpaqueOwnership(argument));
+                break;
+            default:
+                foreach (var child in node.ChildNodes)
+                    if (child is Statement) Execute(child); else Evaluate(child);
+                result = Value.Local; break;
+        }
+        foreach (var exceptional in _exceptionStates) exceptional.Join(_state);
+        return result;
+    }
+
+    private void Bind(Node pattern, Value value)
+    {
+        switch (pattern)
+        {
+            case Identifier name when Resolve(name.Name) is { } binding: _state.Bindings[binding] = value; break;
+            case MemberExpression member: WriteMember(member, value); break;
+            case AssignmentPattern assignment: Bind(assignment.Left, value.Union(Evaluate(assignment.Right))); break;
+            case ObjectPattern patternObject:
+                foreach (var property in patternObject.Properties)
+                    if (property is Property item) Bind(item.Value, Member(value, PropertyName(item)));
+                    else if (property is RestElement rest) Bind(rest.Argument, LocalCopy(pattern, value));
+                break;
+            case ArrayPattern array:
+                for (var index = 0; index < array.Elements.Count; index++)
+                    if (array.Elements[index] is { } item)
+                        Bind(item is RestElement rest ? rest.Argument : item, item is RestElement ? LocalCopy(pattern, value) : Member(value, index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                break;
+        }
+    }
+
+    private void WriteMember(MemberExpression member, Value value)
+    {
+        var receiver = Evaluate(member.Object);
+        if (member.Computed) Evaluate(member.Property);
+        AssignMember(receiver, Name(member), value);
+    }
+    private void AssignMember(Value receiver, string name, Value value)
+    {
+        if (receiver.Session) _writes = true;
+        foreach (var item in receiver.Objects)
+            if (_setters.TryGetValue((item, name), out var setter)) Apply(setter, [value], receiver);
+        Put(receiver, name, value);
+    }
+    private Value Member(Value receiver, string name)
+    {
+        var result = receiver.Session ? Value.Owned : Value.Local;
+        foreach (var item in receiver.Objects)
+        {
+            if (_getters.TryGetValue((item, name), out var getter)) result = result.Union(Apply(getter, [], receiver));
+            result = result.Union(_state.Members.GetValueOrDefault((item, name), Value.Local));
+            result = result.Union(_state.Members.GetValueOrDefault((item, "*"), Value.Local));
+            if (name == "*")
+                foreach (var (key, value) in _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item))) result = result.Union(value);
+        }
+        return result;
+    }
+    private void Put(Value receiver, string name, Value value)
+    {
+        foreach (var item in receiver.Objects) _state.Members[(item, name)] = value;
+    }
+    private Value LocalCopy(Node identity, Value source)
+    {
+        var copy = Value.Object(identity);
+        CopyMembers(copy, source);
+        return copy;
+    }
+    private void CopyMembers(Value target, Value source)
+    {
+        if (source.Session) Put(target, "*", Value.Owned);
+        foreach (var item in source.Objects)
+            foreach (var (key, value) in _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item)).ToArray()) Put(target, key.Member, value);
+    }
+    private bool ContainsSession(Value value, HashSet<Node>? seen = null)
+    {
+        if (value.Session) return true;
+        seen ??= new(ReferenceEqualityComparer.Instance);
+        return value.Objects.Any(item => seen.Add(item) && _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item)).Any(entry => ContainsSession(entry.Value, seen))) ||
+               value.Functions.Any(item => seen.Add(item) && _closures.TryGetValue(item, out var closure) && closure.Captured.Values.Any(captured => ContainsSession(captured, seen)));
+    }
+
+    private Value FunctionValue(Node function)
+    {
+        if (!_closures.ContainsKey(function))
+            _closures[function] = new Closure(_scopes.ToArray(), new Dictionary<Binding, Value>(_state.Bindings), _receivers.LastOrDefault() ?? Value.Local);
+        return Value.Function(function);
+    }
+
+    private Value Invoke(Node node, IReadOnlyList<Value> arguments, Value? receiver = null)
+    {
+        if (node is not IFunction function || !_closures.TryGetValue(node, out var closure)) return Value.Local;
+        // A recursive/opaque cycle is not unrolled indefinitely. Refuse when it carries workflow ownership;
+        // otherwise its unknown result cannot introduce workflow ownership into a later local mutation.
+        if (!_calls.Add(node))
+        {
+            _writes |= arguments.Any(argument => ContainsSession(argument)) || closure.Captured.Values.Any(value => ContainsSession(value));
+            return Value.Local;
+        }
+        var callerScopes = _scopes.ToArray();
+        var previous = new Dictionary<Binding, Value>(_state.Bindings);
+        _scopes.Clear(); _scopes.AddRange(closure.Scopes);
+        foreach (var (binding, value) in closure.Captured) _state.Bindings.TryAdd(binding, value);
+        var local = scopeOf(node);
+        if (local is not null) EnterScope(node, local);
+        _receivers.Add(node is ArrowFunctionExpression ? closure.This : receiver ?? Value.Local);
+        try
+        {
+            for (var index = 0; index < function.Params.Count; index++) Bind(function.Params[index], index < arguments.Count ? arguments[index] : Value.Local);
+            var flow = function.Body is BlockStatement ? Execute(function.Body) : new Flow(false, Evaluate(function.Body), Returns: _state.Copy());
+            var exits = Join(flow.Normal ? _state : null, flow.Returns);
+            if (exits is not null) _state = exits;
+            if (flow.Throws is not null) foreach (var exceptional in _exceptionStates) exceptional.Join(flow.Throws);
+            // Hoisted nested functions were created before this invocation's parameters were bound. Retain the
+            // actual lexical cells before restoring the caller, including a returned closure's parameter aliases.
+            if (local is not null)
+                foreach (var nested in _closures.Values.Where(item => item.Scopes.Contains(local)))
+                    foreach (var (binding, value) in _state.Bindings.Where(item => nested.Scopes.Contains(item.Key.Scope)))
+                        nested.Captured[binding] = nested.Captured.GetValueOrDefault(binding, Value.Local).Union(value);
+            return flow.Returned;
+        }
+        finally
+        {
+            foreach (var binding in _state.Bindings.Keys.Where(binding => !closure.Scopes.Contains(binding.Scope)).ToArray())
+                if (previous.TryGetValue(binding, out var value)) _state.Bindings[binding] = value; else _state.Bindings.Remove(binding);
+            _scopes.Clear(); _scopes.AddRange(callerScopes);
+            _receivers.RemoveAt(_receivers.Count - 1);
+            _calls.Remove(node);
+        }
+    }
+
+    private Value Apply(Value function, IReadOnlyList<Value> arguments, Value receiver)
+    {
+        if (function.Functions.Count == 0)
+        {
+            _writes |= OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument));
+            return Value.Local;
+        }
+        var entry = _state.Copy(); State? exits = null; var result = Value.Local;
+        foreach (var target in function.Functions)
+        {
+            _state = entry.Copy(); result = result.Union(Invoke(target, arguments, receiver));
+            exits ??= _state.Copy(); exits.Join(_state);
+        }
+        _state = exits ?? entry;
+        return result;
+    }
+
+    private bool OpaqueOwnership(Value value)
+    {
+        if (ContainsSession(value)) return true;
+        foreach (var function in value.Functions) if (ContainsSession(Invoke(function, []))) return true;
+        foreach (var item in value.Objects)
+            foreach (var (key, getter) in _getters.Where(entry => ReferenceEquals(entry.Key.Object, item)))
+                if (ContainsSession(Apply(getter, [], value))) return true;
+        return _writes;
+    }
+
+    private Value Call(CallExpression call)
+    {
+        if (call.Callee is Identifier reader && Global(reader.Name))
+        {
+            if (reader.Name == "getVariable" && call.Arguments.Count == 1)
+            {
+                Evaluate(call.Arguments[0]);
+                return call.Arguments[0] is Literal { Value: string name } ?
+                    (isSessionVariable(Elsa3AmbientReferenceKind.Variable, name) ? Value.Owned : Value.Local) : Value.Owned;
+            }
+            if (call.Arguments.Count == 0 && generatedAccessor(reader.Name) is { } accessor)
+                return isSessionVariable(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor) ? Value.Owned : Value.Local;
+        }
+        Value receiver = Value.Local;
+        MemberExpression? member = call.Callee as MemberExpression;
+        var function = member is null ? Evaluate(call.Callee) : Member(receiver = Evaluate(member.Object), Name(member));
+        if (member?.Computed == true) Evaluate(member.Property);
+        var arguments = call.Arguments.Select(argument => Evaluate(argument is SpreadElement spread ? spread.Argument : argument)).ToArray();
+        if (function.Functions.Count > 0)
+            return Apply(function, arguments, receiver);
+        var method = member is null ? null : Name(member);
+        if (member?.Object is Identifier global && Global(global.Name))
+        {
+            if (global.Name == "Object" && method == "assign" && arguments.Length > 0)
+            {
+                if (arguments[0].Session && call.Arguments.Skip(1).Any(source => !EmptySource(source))) _writes = true;
+                foreach (var source in arguments.Skip(1)) CopyMembers(arguments[0], source);
+                return arguments[0];
+            }
+            if (arguments.Length > 0 && arguments[0].Session &&
+                (global.Name == "Object" && method is "defineProperty" or "defineProperties" or "setPrototypeOf" ||
+                 global.Name == "Reflect" && method is "set" or "deleteProperty" or "defineProperty" or "setPrototypeOf")) _writes = true;
+            if (global.Name is "JSON" or "Math" or "Object" or "Reflect" or "Array" or "Number" or "String" or "Boolean" or "Date" or "Intl" or "Temporal")
+                return global.Name == "Object" && method is "values" or "entries" || global.Name == "Array" && method == "from"
+                    ? LocalCopy(call, arguments.FirstOrDefault() ?? Value.Local) : Value.Local;
+        }
+        if (method is "push" or "unshift" or "splice" or "copyWithin") _writes |= receiver.Session && arguments.Length > 0;
+        else if (method is "pop" or "shift" or "sort" or "reverse" or "fill") _writes |= receiver.Session;
+        if (method is "push" or "unshift" or "splice" or "fill")
+        {
+            var inserted = method == "splice" ? arguments.Skip(2) : method == "fill" ? arguments.Take(1) : arguments;
+            var members = Member(receiver, "*");
+            foreach (var value in inserted) members = members.Union(value);
+            Put(receiver, "*", members);
+        }
+        var callbackResult = Value.Local;
+        if (method is "map" or "filter" or "find" or "findIndex" or "findLast" or "findLastIndex" or "some" or "every" or "forEach" or "flatMap" or "reduce" or "reduceRight")
+            foreach (var callback in arguments.SelectMany(argument => argument.Functions))
+                callbackResult = callbackResult.Union(Invoke(callback, method is "reduce" or "reduceRight"
+                    ? [arguments.Length > 1 ? arguments[1] : Member(receiver, "*"), Member(receiver, "*"), Value.Local, receiver]
+                    : [Member(receiver, "*"), Value.Local, receiver]));
+        if (method is "reduce" or "reduceRight") return callbackResult.Union(arguments.Length > 1 ? arguments[1] : Member(receiver, "*"));
+        if (method is "map" or "flatMap")
+        {
+            var mapped = Value.Object(call);
+            Put(mapped, "*", method == "flatMap" ? Member(callbackResult, "*") : callbackResult);
+            return mapped;
+        }
+        if (method == "concat")
+        {
+            var concatenated = LocalCopy(call, receiver);
+            foreach (var argument in arguments) Put(concatenated, "*", Member(concatenated, "*").Union(argument).Union(Member(argument, "*")));
+            return concatenated;
+        }
+        if (method is "pop" or "shift") return Member(receiver, "*");
+        if (method is "sort" or "reverse" or "fill" or "copyWithin") return receiver;
+        if (method is "slice" or "splice" or "filter" or "toReversed" or "toSorted" or "toSpliced" or "with") return LocalCopy(call, receiver);
+        if (method is "at" or "find" or "findLast") return Member(receiver, "*");
+        if (method is "push" or "unshift" or "splice" or "copyWithin" or "pop" or "shift" or "sort" or "reverse" or "fill" or
+            "join" or "includes" or "indexOf" or "lastIndexOf" or "findIndex" or "findLastIndex" or "some" or "every" or "forEach" or "reduce" or "reduceRight" or
+            "toString" or "toLocaleString" or "valueOf" or "hasOwnProperty" or "isPrototypeOf" or "propertyIsEnumerable" or
+            "charAt" or "charCodeAt" or "codePointAt" or "substring" or "substr" or "split" or "replace" or "replaceAll" or "trim" or "toUpperCase" or "toLowerCase" or "startsWith" or "endsWith") return Value.Local;
+        if (call.Callee is Identifier pure && Global(pure.Name) && pure.Name is "String" or "Number" or "Boolean" or "parseInt" or "parseFloat" or "isNaN" or "isFinite") return Value.Local;
+        if (call.Callee is Identifier { Name: "Object" } && Global("Object")) return arguments.FirstOrDefault() ?? Value.Object(call);
+        // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
+        // change it. Unlike a known local helper, its read-only behavior cannot be established here.
+        _writes |= OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument));
+        return Value.Local;
+    }
+
+    private bool EmptySource(Node source) => source switch
+    {
+        Literal literal => literal.Value is not string text || text.Length == 0,
+        ObjectExpression value => value.Properties.Count == 0,
+        ArrayExpression value => value.Elements.All(item => item is null),
+        Identifier { Name: "undefined" or "NaN" or "Infinity" } name => Global(name.Name),
+        _ => false
+    };
+    private static string Name(MemberExpression member) => !member.Computed && member.Property is Identifier name ? name.Name : Key(member.Property);
+    private static string PropertyName(Property property) => !property.Computed && property.Key is Identifier name ? name.Name : Key(property.Key);
+    private static string Key(Node node) => node is Literal literal ? Convert.ToString(literal.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "*" : "*";
+}
