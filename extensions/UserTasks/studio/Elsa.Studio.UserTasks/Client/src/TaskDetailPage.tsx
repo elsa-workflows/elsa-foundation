@@ -1,7 +1,7 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, History as HistoryIcon } from "lucide-react";
-import { OverflowMenu, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { History as HistoryIcon } from "lucide-react";
+import { StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { actor, basicProvider, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { resolveTaskFieldControl } from "./fieldControls";
 import { TaskStatus } from "./TaskStatus";
@@ -30,7 +30,8 @@ export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi
   if (identity && (identity.canRead || identity.canManage)) return <TaskDetail key={JSON.stringify([id, identity.userId])} api={api} id={id} identity={identity} onClose={() => navigate(backPath)}
     accessNotice={error ? <StudioAlert tone="danger">Could not refresh task access: {error}<StudioButton onClick={() => setRevision(value => value + 1)}>Retry access</StudioButton></StudioAlert> : undefined} />;
   return <StudioPage className="user-tasks" aria-label="User task">
-    <StudioPageHeader title="User task" actions={<StudioButton variant="ghost" onClick={() => navigate(backPath)}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton>} />
+    <StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: () => navigate(backPath) }]} current="User task" />
+    <StudioPageHeader title="User task" />
     {identity ? <StudioResultState title="Task access unavailable" description="You do not have permission to view this task." /> : error ? <StudioResultState tone="danger" title="Task unavailable" description={error} actions={<StudioButton onClick={() => setRevision(value => value + 1)}>Retry</StudioButton>} /> : <p role="status">Loading task…</p>}
   </StudioPage>;
 }
@@ -134,7 +135,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       if (!busyRef.current && !attempt.current && (!edited.current || task?.decision)) return;
       event.preventDefault();
       if (event.type === studioNavigationRequestedEvent && (event as CustomEvent<StudioNavigationRequest>).detail.intent !== "probe") {
-        setNotice(busyRef.current || attempt.current ? "Wait for the task update, or refresh to confirm its result, before leaving." : "You have an unsent response. Finish it or use Back to task list to discard it.");
+        setNotice(busyRef.current || attempt.current ? "Wait for the task update, or refresh to confirm its result, before leaving." : "You have an unsent response. Finish it or select User tasks in the breadcrumb to discard it.");
       }
     };
     window.addEventListener(studioNavigationRequestedEvent, preventLeaving);
@@ -142,12 +143,10 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
     return () => { window.removeEventListener(studioNavigationRequestedEvent, preventLeaving); window.removeEventListener("beforeunload", preventLeaving); };
   }, [task?.decision]);
   useEffect(() => { if (!guarded) notifyStudioNavigationGuardReleased(); }, [guarded]);
-  const frame = (children: React.ReactNode) => <StudioPage className="user-tasks" aria-label={task?.title ?? "Task details"} aria-busy={busy}><div ref={content} className="user-task-detail">{children}</div></StudioPage>;
+  const frame = (children: React.ReactNode) => <StudioPage className="user-tasks" aria-label={task?.title ?? "Task details"} aria-busy={busy}>{onClose ? <StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: leave, disabled: busy || Boolean(attempt.current) }]} current={task?.title ?? "User task"} /> : null}<div ref={content} className="user-task-detail">{children}</div></StudioPage>;
   const leave = () => { void canLeave().then(allowed => { if (allowed) onClose?.(); }); };
-  const back = onClose ? <StudioButton variant="ghost" disabled={busy || Boolean(attempt.current)} onClick={() => leave()}><ArrowLeft size={16} aria-hidden="true" />Back to task list</StudioButton> : null;
-  if (missing) return frame(<><StudioPageHeader title="User task" actions={back} /><StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group."
-    actions={onClose ? <StudioButton variant="primary" onClick={leave}>Back to task list</StudioButton> : undefined} /></>);
-  if (!task) return frame(<><StudioPageHeader title="User task" actions={back} />{notice ? <p role="alert">{notice}</p> : <p role="status">Loading task…</p>}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></>);
+  if (missing) return frame(<><StudioPageHeader title="User task" /><StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group." /></>);
+  if (!task) return frame(<><StudioPageHeader title="User task" />{notice ? <p role="alert">{notice}</p> : <p role="status">Loading task…</p>}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></>);
   const terminal = task.status === "Completed" || task.status === "Cancelled";
   const pending = task.status === "CompletionPending";
   const own = task.assigneeId === identity.userId || task.claimantId === identity.userId;
@@ -163,7 +162,6 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const manageable = identity.canManage && !terminal && !pending;
   return frame(<>
     <StudioPageHeader title={task.title} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<div className="user-task-detail-tools">
-      {back}
       <StudioButton aria-controls="user-task-history-dialog" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}><HistoryIcon size={16} aria-hidden="true" />History</StudioButton>
       <OverflowMenu ariaLabel="Task actions" items={[
         { id: "refresh", label: "Refresh task", onSelect: () => void refresh(), disabled: busy },

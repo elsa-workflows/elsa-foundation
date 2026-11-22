@@ -58,7 +58,7 @@ describe("workflow tag pages", () => {
   it("loads continuation pages including retired tags and searches on the server", async () => {
     const { fetcher, reads } = fixture();
     const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities());
-    await waitForText(container, "1 tags loaded");
+    await waitForText(container, "1 tag loaded");
     await click(button(container, "Load more tags"));
     await waitForText(container, "2 tags loaded");
     expect(container.textContent).toContain("Retired");

@@ -1,3 +1,4 @@
+import { StudioPage, StudioResultState, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import React from "react";
 import { KeyRound } from "lucide-react";
 import { useStudioRouteLocation, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
@@ -60,7 +61,10 @@ export function register(api: ElsaStudioModuleApi) {
 function SecretEditRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
   let name: string;
-  try { name = decodeURIComponent(location.pathname.split("/").at(-2) ?? ""); } catch { return <p role="alert">Invalid secret address.</p>; }
+  try { name = decodeURIComponent(location.pathname.split("/").at(-2) ?? ""); } catch {
+    return <StudioPage><StudioShellBreadcrumbs items={[{ label: "Secrets", onClick: () => navigate("/security/secrets") }]} current="Invalid secret address" />
+      <StudioResultState tone="danger" title="Invalid secret address" description="Open the collection and select a record to continue." /></StudioPage>;
+  }
   return <SecretEditorPage key={JSON.stringify([api.backendSession?.key ?? api.backend.baseUrl, name.toLowerCase()])} api={api} name={name} navigate={navigate} />;
 }
 
