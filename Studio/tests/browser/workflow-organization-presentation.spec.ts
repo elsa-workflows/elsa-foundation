@@ -34,7 +34,7 @@ for (const minimal of [false, true]) for (const dark of [false, true]) for (cons
     await expect(edit).toBeFocused();
     await edit.click();
     await expect(dialog.getByRole("button", { name: "Remove Customer-facing", exact: true })).toBeVisible();
-    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await entry.getByRole("button", { name: "Move to folder", exact: true }).click();
     const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
     await move.getByRole("radio", { name: "Finance", exact: true }).check();
@@ -132,7 +132,7 @@ test("failed inline creation retains existing chips and allows recovery", async 
   await expect(dialog.getByRole("button", { name: "Remove Owning team: Billing", exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Tags", exact: true })).toHaveValue("Concurrent label");
   await expect(dialog.getByRole("button", { name: "Save tags", exact: true })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toBeHidden();
 });
 

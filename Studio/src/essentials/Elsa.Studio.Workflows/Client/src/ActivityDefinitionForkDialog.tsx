@@ -191,7 +191,7 @@ function ForkReview({ preview }: { preview: ActivityDefinitionForkPreview }) {
   return <>
     <dl className="ad-review-facts">
       <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code>{preview.source.versionId}</code></dd></div>
-      <div><dt>New Activity Type Key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
+      <div><dt>New activity type key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
       <div><dt>New definition</dt><dd><code>{preview.target.definitionId}</code></dd></div>
       <div><dt>Initial draft</dt><dd><code>{preview.target.draftId}</code></dd></div>
       <div><dt>Provider conversion</dt><dd><code>{preview.providerMigration.sourceProviderKey}</code> schema {preview.providerMigration.sourceProviderSchemaVersion} → <code>{preview.providerMigration.targetProviderKey}</code> schema {preview.providerMigration.targetProviderSchemaVersion}</dd></div>

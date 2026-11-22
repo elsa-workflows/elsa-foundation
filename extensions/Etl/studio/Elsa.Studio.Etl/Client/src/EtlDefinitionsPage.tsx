@@ -649,7 +649,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
           <div className="etl-actions">
             <button type="button" disabled={mutation !== null} onClick={() => void reloadSelectedDraft()}>Reload draft</button>
             <button type="button" disabled={!isDirty || mutation !== null} onClick={() => void saveDraft()}>
-              {mutation === "saving" ? "Saving…" : "Save draft"}
+              {mutation === "saving" ? "Saving…" : "Save"}
             </button>
             <button type="button" disabled={!canValidate} onClick={() => void validateDraft()}>
               {mutation === "validating" ? "Validating…" : "Validate saved revision"}

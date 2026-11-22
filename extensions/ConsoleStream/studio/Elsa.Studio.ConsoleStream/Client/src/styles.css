@@ -26,15 +26,15 @@
   flex-wrap: wrap;
   gap: 8px;
   color: var(--studio-text-muted);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
 }
 
 .console-stream-hosts {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--studio-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--studio-radius-sm);
   overflow: hidden;
 }
 
@@ -54,7 +54,7 @@
 .console-stream-tools > span:not(.console-stream-status) {
   padding: 3px 7px;
   border: 1px solid var(--studio-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--studio-radius-sm);
   background: var(--studio-surface);
 }
 
@@ -76,11 +76,11 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--studio-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--studio-radius-sm);
   background: var(--studio-surface);
   color: var(--studio-text);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 0 8px;
 }
 
@@ -88,11 +88,11 @@
   height: 28px;
   max-width: min(260px, 32vw);
   border: 1px solid var(--studio-border);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--studio-radius-sm);
   background: var(--studio-surface);
   color: var(--studio-text);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 0 28px 0 8px;
 }
 
@@ -106,8 +106,8 @@
   min-height: 0;
   overflow: auto;
   padding: 10px 16px 16px;
-  font-family: var(--font-mono, "SF Mono", Monaco, Consolas, monospace);
-  font-size: 12px;
+  font-family: var(--studio-font-mono);
+  font-size: var(--studio-label-size);
   line-height: 1.5;
 }
 
@@ -145,7 +145,7 @@
 }
 
 .console-stream-ansi-bold {
-  font-weight: 760;
+  font-weight: bold;
 }
 
 .console-stream-ansi-dim {
@@ -359,6 +359,11 @@ html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-white {
   }
 
   .console-stream-line {
-    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
+    row-gap: var(--studio-space-1);
+  }
+
+  .console-stream-line code {
+    grid-column: 1 / -1;
   }
 }

@@ -261,7 +261,7 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   const header = page.locator("header").filter({ has: heading });
   const actions = header.getByRole("group", { name: "Workflow definition page actions" });
   await expect(header.getByText("Create and organize workflow definitions")).toBeVisible();
-  await expect(actions.getByRole("button", { name: "Create workflow" })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "New workflow" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeVisible();
   const search = page.getByRole("searchbox", { name: "Search selected folder" });
   await expect(page.getByText("All workflow states", { exact: true })).toBeVisible();
@@ -272,8 +272,8 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   expect(searchBounds).not.toBeNull();
   expect(headingBounds!.y).toBeLessThan(searchBounds!.y);
 
-  await actions.getByRole("button", { name: "Create workflow" }).click();
-  await expect(page.getByRole("dialog", { name: "Create workflow" })).toBeVisible();
+  await actions.getByRole("button", { name: "New workflow" }).click();
+  await expect(page.getByRole("dialog", { name: "New workflow" })).toBeVisible();
 });
 
 for (const { width, expectedInset } of [{ width: 1280, expectedInset: 0 }, { width: 390, expectedInset: 0 }]) {
@@ -333,10 +333,10 @@ test("definition header actions use the shared button recipe in the custom mater
   await page.goto("/?mode=activity-definitions&theme=material");
   await expect(page.getByRole("heading", { name: "No designed activities yet" })).toBeVisible();
   const activityHeader = page.locator("header").filter({ has: page.getByRole("heading", { name: "Activity definitions" }) });
-  const activityCreate = activityHeader.getByRole("button", { name: "Create activity" });
+  const activityCreate = activityHeader.getByRole("button", { name: "New activity definition" });
   await expectMaterialPrimaryRecipe(activityCreate);
   await activityCreate.click();
-  await expect(page.getByRole("dialog", { name: "Create Activity Definition" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "New activity definition" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
   const activityReadsBeforeRefresh = activityReads;
   holdActivityRefresh = true;
@@ -353,10 +353,10 @@ test("definition header actions use the shared button recipe in the custom mater
   await expect.poll(() => activityReads).toBeGreaterThan(activityReadsBeforeRefresh);
 
   await page.goto(`${browseUrl}&theme=material`);
-  const workflowCreate = page.getByRole("button", { name: "Create workflow" });
+  const workflowCreate = page.getByRole("button", { name: "New workflow" });
   await expectMaterialPrimaryRecipe(workflowCreate);
   await workflowCreate.click();
-  const workflowCreateDialog = page.getByRole("dialog", { name: "Create workflow" });
+  const workflowCreateDialog = page.getByRole("dialog", { name: "New workflow" });
   await expect(workflowCreateDialog).toBeVisible();
   await workflowCreateDialog.getByRole("button", { name: "Cancel" }).click();
   const requestsBeforeRefresh = (await recordedPageRequests(page)).length;

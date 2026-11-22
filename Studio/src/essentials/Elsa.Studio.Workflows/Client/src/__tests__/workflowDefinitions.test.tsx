@@ -131,10 +131,10 @@ describe("workflow definition list", () => {
     expect(container.querySelector("button[aria-label='Recycle bin']")).not.toBeNull();
     expect(header?.querySelector("p")?.textContent).toContain("Create and organize workflow definitions");
     const actions = header?.querySelector<HTMLElement>('[role="group"][aria-label="Workflow definition page actions"]');
-    expect(actions?.querySelector("button[aria-label='Create workflow']")).toBeTruthy();
+    expect(actions?.querySelector("button[aria-label='New workflow']")).toBeTruthy();
     expect(actions?.querySelector("button[aria-label='Refresh workflow definitions']")).toBeTruthy();
     expect(header!.compareDocumentPosition(search!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(actions?.querySelector("button")?.textContent).toContain("Create workflow");
+    expect(actions?.querySelector("button")?.textContent).toContain("New workflow");
   });
 
   it("discloses the saved templates its create dialog offers, so a Weaver prefill can choose one (spec 1193 FR-023)", async () => {
@@ -148,7 +148,7 @@ describe("workflow definition list", () => {
     const weaver = registerWorkflowWeaver(weaverRegistry);
     const container = render(context(getJson), vi.fn(), weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
-    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     await vi.waitFor(() => {
       const dialog = [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
       expect((dialog?.content as { templates?: Array<{ id: string; revision: string }> } | undefined)?.templates).toEqual([
@@ -172,7 +172,7 @@ describe("workflow definition list", () => {
     const container = render(context(getJson), vi.fn(), weaver);
     const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
-    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     await vi.waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).endsWith("design/workflows/templates"))).toBe(true), { timeout: 5_000, interval: 20 });
     await settle();
     expect(nameInput()).not.toBeNull();
@@ -266,7 +266,7 @@ describe("workflow definition list", () => {
     const disclosed = recordDialogDisclosures(weaver);
     const container = render(context(getJson), vi.fn(), weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
-    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     await vi.waitFor(() => expect(templateReads).toBe(1), { timeout: 5_000, interval: 20 });
     await settle();
     releaseCatalog();
@@ -285,7 +285,7 @@ describe("workflow definition list", () => {
     const first = context(getJson);
     const { container, rerender } = renderWithContext(first, weaver);
     await waitFor(() => expect(container.textContent).toContain("Invoice evaluator"));
-    click(container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     const dialog = () => [...weaver.library!.snapshots].find(([key]) => key.startsWith("workflows.create-dialog:"))?.[1];
     await vi.waitFor(() => expect(dialog()).toBeDefined(), { timeout: 5_000, interval: 20 });
     const snapshot = dialog()!;
@@ -316,7 +316,7 @@ describe("workflow definition list", () => {
     const tab = renderInTab(context(getJson), vi.fn());
 
     await waitFor(() => expect(tab.container.textContent).toContain("Invoice evaluator"));
-    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     await vi.waitFor(() => expect(nameInput()).not.toBeNull(), { timeout: 5_000, interval: 20 });
     await fill(nameInput()!, "Kept across tabs");
 
@@ -338,7 +338,7 @@ describe("workflow definition list", () => {
     const tab = renderInTab(context(getJson, postJson), onOpen);
 
     await waitFor(() => expect(tab.container.textContent).toContain("Invoice evaluator"));
-    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='Create workflow']")!);
+    click(tab.container.querySelector<HTMLButtonElement>("button[aria-label='New workflow']")!);
     await vi.waitFor(() => expect(nameInput()).not.toBeNull(), { timeout: 5_000, interval: 20 });
     await fill(nameInput()!, "Created in background");
     await waitFor(() => expect(createButton()?.getAttribute("aria-disabled")).toBe("false"));

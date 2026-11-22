@@ -20,7 +20,7 @@ test("enables autosave by default without writing when opening an unchanged publ
 
 test("debounces draft saves, serializes revisions, and keeps editing during a slow save", async ({ page }) => {
   await page.goto("/form-designer.html?save-delay=1800");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Form settings", exact: true }).click();
 
@@ -57,7 +57,7 @@ test("pauses autosave after an error and allows an explicit retry", async ({ pag
   await page.waitForTimeout(1500);
   expect(await draftRequests(page)).toHaveLength(1);
 
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Draft save failed in fixture.");
   expect(await draftRequests(page)).toHaveLength(2);
   await expect(name).toHaveValue("Still local");
@@ -65,21 +65,21 @@ test("pauses autosave after an error and allows an explicit retry", async ({ pag
 
 test("turning autosave off keeps edits local until an explicit save", async ({ page }) => {
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("checkbox", { name: "Auto-save" }).uncheck();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("manual-only");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Manual only");
   await page.waitForTimeout(1400);
   expect(await draftRequests(page)).toHaveLength(0);
 
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   expect(await draftRequests(page)).toHaveLength(1);
 });
 
 test("Cancel flushes pending autosave changes before leaving the editor", async ({ page }) => {
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("flush-on-leave");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Saved on cancel");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -91,7 +91,7 @@ test("Cancel flushes pending autosave changes before leaving the editor", async 
 
 test("unapplied JSON source edits are not autosaved", async ({ page }) => {
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("source-pending");
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   const source = page.locator("[data-studio-code-editor] .cm-content");

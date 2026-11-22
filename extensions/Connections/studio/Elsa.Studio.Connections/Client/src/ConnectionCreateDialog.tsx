@@ -465,7 +465,7 @@ export function ConnectionCreateDialog({
           <header className="connections-create-header">
             <div>
               <p className="connections-create-eyebrow">{isEdit ? "Edit" : "New"} connection</p>
-              <h2 id={dialogTitleId}>{isEdit ? "Edit connection" : "Create connection"}</h2>
+              <h2 id={dialogTitleId}>{isEdit ? "Edit connection" : "New connection"}</h2>
               <p className="connections-modal-help">{isEdit ? "Update settings and credentials for this connection. Secret values are never shown here." : "Choose a service and how it authenticates. Secret values are never shown here."}</p>
             </div>
             <button
@@ -565,7 +565,7 @@ export function ConnectionCreateDialog({
 
           <div className="connections-create-actions">
             <button type="button" disabled={submitting} onClick={onCancel}>Cancel</button>
-            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create")}</button>
+            <button type="submit" disabled={!canSubmit || submitting}>{submitting ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save" : "Create")}</button>
           </div>
         </form>
       </section>

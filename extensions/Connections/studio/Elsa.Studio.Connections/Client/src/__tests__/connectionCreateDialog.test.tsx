@@ -30,11 +30,11 @@ describe("connection editing", () => {
     expect(control<HTMLInputElement>(container, "Display name").value).toBe("Payments");
     expect(control<HTMLInputElement>(container, "Tags").value).toBe("production, billing");
     expect(container.querySelector('input[value="unchanged"]')).toHaveProperty("checked", true);
-    expect(button(container, "Save changes").disabled).toBe(false);
+    expect(button(container, "Save").disabled).toBe(false);
     expect(container.querySelector("form")!.checkValidity()).toBe(true);
     changeText(container, "Display name", "Updated payments");
     changeText(container, "Tags", tags);
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", {
       displayName: "Updated payments", tags: tags ? ["updated", "finance"] : [],
@@ -45,16 +45,16 @@ describe("connection editing", () => {
   it("validates replacement credentials and allows returning to the stored credential", async () => {
     const { container, putJson } = renderEdit();
     chooseRadio(container, "New value");
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     changeText(container, "New value for API key", "   ");
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     chooseRadio(container, "Existing Secret");
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     chooseRadio(container, "Keep stored credential");
-    expect(button(container, "Save changes").disabled).toBe(false);
+    expect(button(container, "Save").disabled).toBe(false);
     chooseRadio(container, "New value");
     changeText(container, "New value for API key", "replacement");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
       secretFields: { apiKey: { value: "replacement" } }
@@ -64,10 +64,10 @@ describe("connection editing", () => {
   it("requires a credential when the edited connection has no stored credential", async () => {
     const { container, putJson } = renderEdit([]);
     expect(container.querySelector('input[value="unchanged"]')).toBeNull();
-    expect(button(container, "Save changes").disabled).toBe(true);
+    expect(button(container, "Save").disabled).toBe(true);
     await waitFor(() => container.textContent?.includes("Payments API") === true);
     chooseSecret(container, "API key", "payments.api");
-    clickButton(container, "Save changes");
+    clickButton(container, "Save");
     await waitFor(() => putJson.mock.calls.length === 1);
     expect(putJson).toHaveBeenCalledWith("/connections/provider.connection", expect.objectContaining({
       secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "payments.api" } }
@@ -609,7 +609,7 @@ describe("connection credential creation", () => {
     expect(button(container, "Create").disabled).toBe(false);
   });
 
-  it("restores focus to the Create connection opener while the post-create refresh is pending", async () => {
+  it("restores focus to the New connection opener while the post-create refresh is pending", async () => {
     const refresh = deferred<{ items: ConnectionMetadata[] }>();
     let listCalls = 0;
     const getJson = vi.fn((url: string) => {
@@ -625,8 +625,8 @@ describe("connection credential creation", () => {
     (context.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = getJson;
     const { container: host } = renderConnectionsPage(context);
 
-    await waitFor(() => !button(host, "Create connection").disabled);
-    const opener = button(host, "Create connection");
+    await waitFor(() => !button(host, "New connection").disabled);
+    const opener = button(host, "New connection");
     opener.focus();
     flushSync(() => opener.click());
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
@@ -664,19 +664,19 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    expect(button(host, "Create connection").disabled).toBe(false);
+    expect(button(host, "New connection").disabled).toBe(false);
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B is unavailable.") === true);
 
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "Create connection").disabled).toBe(true);
+    expect(button(host, "New connection").disabled).toBe(true);
 
     endpointBUnavailable = false;
-    clickButton(host, "Search");
+    clickButton(host, "Retry");
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
     expect(host.textContent).not.toContain("Endpoint A Connection");
-    expect(button(host, "Create connection").disabled).toBe(false);
-    clickButton(host, "Create connection");
+    expect(button(host, "New connection").disabled).toBe(false);
+    clickButton(host, "New connection");
     await waitFor(() => host.querySelector('[role="dialog"]') !== null);
     expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });
@@ -701,9 +701,9 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA, dialogs);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, action);
-    expect(dialogs.confirm).toHaveBeenCalledWith({ message: `${action} a.connection?`, tone: "danger" });
+    expect(dialogs.confirm).toHaveBeenCalledWith({ title: `${action} connection`, confirmLabel: action, message: `${action} a.connection?`, tone: "danger" });
 
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
@@ -725,7 +725,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
     expect(endpointA.http.postJson).toHaveBeenCalledWith("/connections/a.connection/test", {});
 
@@ -749,7 +749,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
 
     rerender(endpointB);

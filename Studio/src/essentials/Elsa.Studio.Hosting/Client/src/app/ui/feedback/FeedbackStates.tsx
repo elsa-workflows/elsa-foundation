@@ -1,18 +1,27 @@
 import React from "react";
 
+import { X } from "lucide-react";
+import { StudioIconButton } from "../forms/Button";
+
 export type StudioFeedbackTone = "info" | "success" | "warning" | "danger";
 
 export function StudioAlert({
   tone = "info",
+  dismiss,
   children,
   ...elementProps
 }: {
   tone?: StudioFeedbackTone;
+  dismiss?: { label: string; onDismiss(): void };
   children: React.ReactNode;
 } & Pick<React.ComponentPropsWithRef<"div">, "id" | "ref" | "tabIndex">) {
   // Urgent tones (errors/warnings) use role="alert" (assertive) so screen readers announce them
   // immediately; informational tones use role="status" (polite) to avoid interrupting the user.
   const role = tone === "danger" || tone === "warning" ? "alert" : "status";
+  if (dismiss) return <div {...elementProps} className="studio-alert studio-alert-dismissible" data-tone={tone}>
+    <div role={role}>{children}</div>
+    <StudioIconButton aria-label={dismiss.label} onClick={dismiss.onDismiss}><X /></StudioIconButton>
+  </div>;
   return <div {...elementProps} className="studio-alert" role={role} data-tone={tone}>{children}</div>;
 }
 
