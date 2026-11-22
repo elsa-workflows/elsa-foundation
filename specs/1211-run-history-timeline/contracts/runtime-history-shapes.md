@@ -78,7 +78,7 @@ Pin profile on actual new admitted start payload and run state before durable ad
 
 ## Current admitted profile and retained source contribution
 
-New admissions use `runtime-history-v5`/version5. Retained v3 and v4 capture policies keep their original meaning; legacy absent-policy replays remain uncaptured. Readable older records are not retrofitted into newly supported sources. History event/storage schema `1.0.0`, capture profile version5 and timer operational format `1.2.0` are distinct contracts.
+New admissions use `runtime-history-v5`/version5. Retained v3 and v4 capture policies keep their original meaning; legacy absent-policy replays remain uncaptured. Readable older records are not retrofitted into newly supported sources. The event envelope uses integer `SchemaVersion = 1`; the history storage family uses string schema version `1.0.0`. Those are distinct from capture profile version5 and timer operational format `1.2.0`.
 
 The current native catalog includes source-owned timer scheduling/dispatch/retirement, child start and settlement/control, retries and the nine compensation decisions. `TimerCancellationRequested` is not advertised without an actual native owner; terminal `TimerRetired` remains distinct. Passive expiry is eligibility at the server observation time, never an invented consumption, timeout or wake-up event. An optional Event match deadline is taken from the actual suspension and staged in the existing durable CreateBookmark payload on initial and replacement waits; it adds no retained-registration field or schema-family upgrade.
 
