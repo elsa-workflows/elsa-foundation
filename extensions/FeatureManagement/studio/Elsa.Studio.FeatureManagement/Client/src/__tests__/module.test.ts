@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -113,10 +113,10 @@ describe("feature management module", () => {
     register(api);
     const page = await renderFeatureManagementPage();
     await click(buttonByText(page.container, "Edit settings"));
-    const toggle = page.container.querySelector<HTMLInputElement>(".feature-management-settings-dialog input[type='checkbox']");
+    const toggle = document.querySelector<HTMLInputElement>(".feature-management-settings-dialog input[type='checkbox']");
     expect(toggle?.checked).toBe(true);
     await click(toggle);
-    await click(buttonByText(page.container.querySelector(".feature-management-settings-dialog")!, "Save"));
+    await click(buttonByText(document.querySelector(".feature-management-settings-dialog")!, "Save"));
     let review = await openImpactReview(page.container);
     const row = impactRowText(review, "WorkflowsDesignApi");
     expect(row).toContain("Workflow organization");
@@ -471,8 +471,8 @@ describe("feature management module", () => {
     const review = await openImpactReview(container);
     await click(buttonByText(review, "Apply"));
 
-    expect(container.textContent).toContain(reason);
-    expect(container.textContent).not.toContain("The feature catalog changed");
+    expect(review.textContent).toContain(reason);
+    expect(review.textContent).not.toContain("The feature catalog changed");
     expect(container.textContent).not.toContain("Applied 1 descriptor");
 
     await unmount();
@@ -636,7 +636,7 @@ describe("feature management module", () => {
 
     await click(buttonByText(container, "Edit settings"));
 
-    const dialog = container.querySelector(".feature-management-settings-dialog");
+    const dialog = document.querySelector(".feature-management-settings-dialog");
     const timeoutInput = dialog?.querySelector("input[type='number']") as HTMLInputElement | null;
     const timestampSwitch = dialog?.querySelector(".feature-management-setting.boolean .feature-management-setting-switch-input") as HTMLInputElement | null;
     expect(dialog?.textContent).toContain("Save");
@@ -647,7 +647,7 @@ describe("feature management module", () => {
     await click(buttonByText(dialog!, "Save"));
 
     const updatedSettingsSection = container.querySelector("[aria-label='Feature settings']");
-    expect(container.querySelector(".feature-management-settings-dialog")).toBeNull();
+    expect(document.querySelector(".feature-management-settings-dialog")).toBeNull();
     expect(container.textContent).toContain("Unsaved changes");
     expect(updatedSettingsSection?.textContent).toContain("12");
 
@@ -1115,7 +1115,7 @@ describe("feature impact review", () => {
     opener.focus();
     await click(opener);
     const review = impactReviewRegion(container);
-    const close = buttonByText(review!, "Close");
+    const close = review!.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')!;
 
     expect(document.activeElement).toBe(close);
     await unmount();
@@ -1130,9 +1130,9 @@ describe("feature impact review", () => {
     const opener = buttonByText(container, "Review changes") as HTMLButtonElement;
     opener.focus();
     await click(opener);
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(impactReviewRegion(container)).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
     await unmount();
   });
 
@@ -1143,14 +1143,14 @@ describe("feature impact review", () => {
 
     await click(container.querySelector("[aria-label='Disable FeatureA']"));
     const review = await openImpactReview(container);
-    const close = buttonByText(review, "Close");
+    const close = review.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')!;
     const apply = buttonByText(review, "Apply") as HTMLButtonElement;
 
     apply.focus();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(close);
     close.focus();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.activeElement).toBe(apply);
     await unmount();
   });
@@ -1331,7 +1331,7 @@ describe("feature impact review", () => {
     await click(container.querySelector("[aria-label='Enable Other']"));
     await openImpactReview(container);
     await click(buttonByText(container, "Edit settings"));
-    const settingsDialog = Array.from(container.querySelectorAll("[role='dialog']"))
+    const settingsDialog = Array.from(document.querySelectorAll("[role='dialog']"))
       .find(dialog => dialog.textContent?.includes("Save"));
     const modeLabel = Array.from(settingsDialog?.querySelectorAll("label") ?? [])
       .find(label => label.textContent?.includes("Mode"));
@@ -1383,7 +1383,7 @@ describe("feature impact review", () => {
 
     const openSettingsDialog = async () => {
       await click(buttonByText(container, "Edit settings"));
-      const dialog = container.querySelector(".feature-management-settings-dialog");
+      const dialog = document.querySelector(".feature-management-settings-dialog");
       if (!dialog) throw new Error("The feature settings dialog should open.");
       return dialog;
     };
@@ -1522,9 +1522,9 @@ describe("feature impact review", () => {
     await flushPromises();
 
     expect(postCount).toBe(1);
-    expect(buttonByText(review, "Close").hasAttribute("disabled")).toBe(true);
+    expect(review.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')!.hasAttribute("disabled")).toBe(true);
     expect(buttonByText(review, "Cancel").hasAttribute("disabled")).toBe(true);
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(impactReviewRegion(container)).not.toBeNull();
 
     finishPost?.({
@@ -1788,7 +1788,7 @@ describe("feature impact review", () => {
     register(createApi());
     let page = await renderFeatureManagementPage();
     await applyStudioFeature(page.container);
-    expect(buttonByText(impactReviewRegion(page.container)!, "Applying").hasAttribute("disabled")).toBe(true);
+    expect(buttonByText(impactReviewRegion(page.container)!, "Applying…").hasAttribute("disabled")).toBe(true);
 
     // A pending dialog does not prevent ordinary route navigation. The old route is gone when Apply completes.
     await page.unmount();
@@ -2190,8 +2190,8 @@ async function openImpactReview(container: Element) {
   return review;
 }
 
-function impactReviewRegion(container: Element) {
-  return container.querySelector("[aria-label='Feature impact review']");
+function impactReviewRegion(_container: Element) {
+  return document.querySelector(".feature-management-impact-dialog[role='dialog']");
 }
 
 function impactRow(review: Element, featureId: string) {
@@ -2226,7 +2226,7 @@ async function editSettingValue(container: Element, featureId: string, settingLa
   await click(card ?? null);
   await click(buttonByText(container, "Edit settings"));
 
-  const dialog = Array.from(container.querySelectorAll("[role='dialog']"))
+  const dialog = Array.from(document.querySelectorAll("[role='dialog']"))
     .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save")) ?? null;
   const settingField = Array.from(dialog?.querySelectorAll("label") ?? [])
     .find(label => label.textContent?.includes(settingLabel));
@@ -2460,7 +2460,7 @@ describe("feature capability browsing", () => {
     try {
       await click(page.container.querySelector("[aria-label='View APIs & integrations features']"));
       await click(buttonByText(page.container, "Edit settings"));
-      const dialog = page.container.querySelector(".feature-management-settings-dialog");
+      const dialog = document.querySelector(".feature-management-settings-dialog");
       await changeInput(dialog?.querySelector<HTMLInputElement>("input[type='number']") ?? null, "12");
       await click(buttonByText(dialog!, "Save"));
 

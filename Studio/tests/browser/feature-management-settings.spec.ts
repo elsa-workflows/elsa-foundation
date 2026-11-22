@@ -85,10 +85,10 @@ test("Feature Management settings fit narrow light and dark viewports", async ({
       documentScrollWidth: document.documentElement.scrollWidth,
       footerFits: (() => {
         const dialogRect = element.getBoundingClientRect();
-        const footerRect = element.querySelector(".feature-management-dialog-actions")!.getBoundingClientRect();
+        const footerRect = element.querySelector(".studio-dialog-footer")!.getBoundingClientRect();
         return footerRect.top >= dialogRect.top && footerRect.bottom <= dialogRect.bottom;
       })(),
-      footerHeight: element.querySelector(".feature-management-dialog-actions")!.clientHeight,
+      footerHeight: element.querySelector(".studio-dialog-footer")!.clientHeight,
       bodyHeight: element.querySelector(".feature-management-dialog-body")!.clientHeight
     }));
     const bodyFits = await body.evaluate(element => element.scrollWidth <= element.clientWidth);

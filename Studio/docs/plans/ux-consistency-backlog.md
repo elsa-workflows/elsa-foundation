@@ -328,16 +328,16 @@ Extensions:
   (`EXT/Connections/styles.css:31` [verified]). **[check]** the footer was not read.
 - [x] **X3.28** (#5064, PR #5327) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
 - [x] **X3.29** (#5065, PR #5327) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
-- [ ] **X3.30** (#5066) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
+- [x] **X3.30** (#5066, PR #5333) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
   and a raw `primary` class. Locate them in `EXT/FeatureManagement/module.tsx`.
-- [ ] **X3.31** (#5067) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
+- [x] **X3.31** (#5067, PR #5333) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
   reassign dialogs were not read.
-- [ ] **X3.32** (#5068) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
+- [x] **X3.32** (#5068, PR #5333) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
   popover → `AnchoredPopover`.
 
 Browser dialogs and busy labels (no kit prerequisite):
 
-- [ ] **X3.33** (#5069) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
+- [x] **X3.33** (#5069, PR #5333) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
   `api.dialogs.confirm`.
 - [x] **X3.34** (#5070, PR #5319) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [x] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
