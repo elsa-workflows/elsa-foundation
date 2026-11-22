@@ -138,6 +138,7 @@ public sealed class BackgroundActivityWorker(
         ActivityActivationLease? activation = null;
         BackgroundActivityWorkTerminalResult? result = null;
         Exception? failure = null;
+        var warnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector(protect: request.InputSnapshot.Values.Values.Any(value => value.Policy.HidesValue()));
         try
         {
             if (executable is null)
@@ -172,13 +173,13 @@ public sealed class BackgroundActivityWorker(
                 new ActivityActivationRequest(
                     WorkflowExecutionId: request.WorkflowExecutionId,
                     ActivityExecutionId: request.ActivityExecutionId,
-                    node.ActivityContract, request.InputSnapshot, request.Attempt, Descriptor: node.Descriptor), cancellationToken);
+                    node.ActivityContract, request.InputSnapshot, request.Attempt, Descriptor: node.Descriptor) { Warnings = warnings }, cancellationToken);
             BackgroundActivityEligibility.EnsureEligible(node, activation.Activity);
             if (activation.Activity.GetType() != pinnedActivityType)
                 throw new InvalidOperationException("BG-ACT-002: Activation returned a different type than the pinned background activity.");
             var transition = await activation.Activity.ExecuteAsync(new ActivityExecutionContext(
                 request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken,
-                triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey));
+                triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey).WithWarnings(warnings));
             // C6 is a fact about the body, so the component sees it only after the body ran.
             var stagedCoordinatorEffects =
                 dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null |
@@ -205,7 +206,7 @@ public sealed class BackgroundActivityWorker(
             failure = failure is null ? disposalFailure : ActivityActivationLeaseDisposer.CombineExecutionFailure(failure, disposalFailure);
         cancellationToken.ThrowIfCancellationRequested();
         if (failure is null)
-            return result ?? throw new InvalidOperationException("The background activity returned no result.");
+            return result is not null ? result with { Warnings = warnings.Warnings } : throw new InvalidOperationException("The background activity returned no result.");
         var safe = masking.Mask(failure);
         var classification = safe as IRuntimeFaultClassification;
         var code = disposalFailure is not null
@@ -216,6 +217,6 @@ public sealed class BackgroundActivityWorker(
         return new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Fault,
             fault: new NormalizedActivityFault(
                 code,
-                safe.GetType().FullName!, safe.Message, safe.StackTrace, isRetryable: classification?.IsRetryable ?? false));
+                safe.GetType().FullName!, safe.Message, safe.StackTrace, isRetryable: classification?.IsRetryable ?? false)) { Warnings = warnings.Warnings };
     }
 }

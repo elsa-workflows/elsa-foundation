@@ -74,6 +74,15 @@ public sealed class SimpleActivityExecutionContext(
     private readonly List<RuntimeParentNotificationRequest> _parentNotificationRequests = [];
     private readonly List<RuntimeAncestorNotificationRequest> _ancestorNotificationRequests = [];
 
+    public Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings { get; private set; }
+
+    /// <summary>Connects orchestration conversion/evaluation warnings to the owning durable checkpoint.</summary>
+    public SimpleActivityExecutionContext WithWarnings(Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
+    {
+        Warnings = warnings;
+        return this;
+    }
+
     public IActivity Activity { get; } = activity;
     public CancellationToken CancellationToken { get; } = cancellationToken;
     public string WorkflowExecutionId { get; } = workflowExecutionId ?? string.Empty;
@@ -217,7 +226,7 @@ public sealed class SimpleActivityExecutionContext(
             ExecutableNodeId,
             CancellationToken,
             TriggerPayload,
-            TriggerNodeId).WithResolvedOperationKeys(activityExecutionState);
+            TriggerNodeId).WithResolvedOperationKeys(activityExecutionState).WithWarnings(Warnings);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

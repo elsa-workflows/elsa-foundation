@@ -40,12 +40,14 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
         return json;
     }
 
-    public ActivityTransition Deserialize(ActivityContract contract, string json, OutcomeSelection selection, int maximumBytes)
+    public ActivityTransition Deserialize(ActivityContract contract, string json, OutcomeSelection selection, int maximumBytes, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         ValidateOutcome(contract, selection);
         ValidateSize(json, maximumBytes);
         var type = ResolveResultType(contract);
-        var result = JsonValueConversion.Deserialize(json, type);
+        using var document = JsonDocument.Parse(json);
+        var result = JsonConversionContract.For(type).Read(document.RootElement, type, diagnostic => warnings?.Report(
+            Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, "result")));
         if (result is null && contract.Result.IsRequired)
             throw new BackgroundActivityValidationException("BG-ACT-005: The background receipt is missing its required result.");
         return new RehydratedCompletion(result, type, selection);

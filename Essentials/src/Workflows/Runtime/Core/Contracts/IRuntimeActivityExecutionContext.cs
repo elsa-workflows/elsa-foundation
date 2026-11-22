@@ -8,6 +8,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
 {
+    /// <summary>The owning checkpoint evaluation records warnings through this sink.</summary>
+    Elsa.Expressions.Core.Contracts.IExecutionWarningSink? Warnings => null;
+
     string WorkflowExecutionId { get; }
     WorkflowExecutableIdentity PinnedExecutable { get; }
     RuntimeSchedulerWorkItem SchedulerWorkItem { get; }

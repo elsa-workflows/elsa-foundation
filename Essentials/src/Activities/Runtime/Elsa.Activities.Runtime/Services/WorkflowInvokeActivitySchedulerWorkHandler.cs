@@ -115,11 +115,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     private static ActivityTransition MaterializeBackgroundTransition(
         IServiceProvider services,
         ActivityContract contract,
-        BackgroundActivityWorkTerminalResult result) => result.Kind switch
+        BackgroundActivityWorkTerminalResult result, Elsa.Expressions.Core.Contracts.IExecutionWarningSink warnings) => result.Kind switch
     {
         BackgroundActivityWorkResultKind.Complete => services.GetRequiredService<BackgroundActivityCompletionCodec>().Deserialize(
             contract, result.ResultJson ?? "null", result.Selection ?? OutcomeSelection.Unspecified,
-            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes),
+            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes, warnings),
         BackgroundActivityWorkResultKind.Fault => ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
             result.Fault!.Code, result.Fault.Message, result.Fault.IsRetryable,
             result.Fault.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
@@ -249,7 +249,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 // The worker already activated and executed the original body. Only its immutable typed
                 // transition enters the usual native projection/fault path; no second activation or effect.
                 valueFlowAttempt = backgroundResult.Request.Attempt;
-                committedTransition = MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result!);
+                foreach (var warning in backgroundResult.Result!.Warnings) stepWarnings.Report(warning);
+                committedTransition = MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result, stepWarnings);
             }
 
             if (activity is not null)
@@ -282,7 +283,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
                     triggerNodeId: projections.TriggerNodeId,
                     triggerMetadata: projections.TriggerMetadata,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithWarnings(stepWarnings);
                 stepSession = await StepVariableSessions.CreateAsync(
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken, warnings: stepWarnings);
             }

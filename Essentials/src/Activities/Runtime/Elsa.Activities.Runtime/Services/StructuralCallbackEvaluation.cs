@@ -122,6 +122,8 @@ internal static class StructuralCallbackEvaluation
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             serviceProvider.GetRequiredService<IDurableValueStateStore>());
 
+        var conversionWarnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector(
+            protect: parentState.InputSnapshot?.Values.Values.Any(value => value.Policy.HidesValue()) == true);
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
         IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
@@ -147,7 +149,7 @@ internal static class StructuralCallbackEvaluation
                 serviceProvider,
                 parentExecutableNode,
                 parentState,
-                cancellationToken);
+                cancellationToken, warnings: conversionWarnings);
             activationLease = constructedParent.ActivationLease;
             valueSnapshots = ActivityExecutionInspection.BuildInputValueSnapshots(
                 payloadCapturePolicy,
@@ -188,7 +190,7 @@ internal static class StructuralCallbackEvaluation
                     parentState,
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithWarnings(conversionWarnings);
 
                 continuation = await definition.InvokeAsync(parentActivity, context);
 
@@ -286,7 +288,7 @@ internal static class StructuralCallbackEvaluation
             var subStatus = disposalException is null ? definition.FaultSubStatus : "ActivityDisposalFailed";
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, parentState, fault, subStatus, valueSnapshots, cancellationToken);
+                workItem, payload, definition, parentState, fault, subStatus, valueSnapshots, cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -296,7 +298,7 @@ internal static class StructuralCallbackEvaluation
         {
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, timeProvider,
-                workItem, payload, definition, parentState, activationDisposalException, "ActivityDisposalFailed", valueSnapshots, cancellationToken);
+                workItem, payload, definition, parentState, activationDisposalException, "ActivityDisposalFailed", valueSnapshots, cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -304,7 +306,7 @@ internal static class StructuralCallbackEvaluation
         {
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                callbackBypassParentState, [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                callbackBypassParentState.WithWarnings(conversionWarnings.Warnings), [], [], [], subtreeCancellationPlans, valueSnapshots, cancellationToken,
                 childControlContribution: definition.ChildControlContribution);
             return;
         }
@@ -325,7 +327,7 @@ internal static class StructuralCallbackEvaluation
                 Fault = fault.ToNormalized()
             };
             var exception = new ActivityTransitionFaultException(fault);
-            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots)
+            var request = definition.NewFaultIncidentRecordRequest(checkpointCommitter, faultedParentState.WithWarnings(conversionWarnings.Warnings), exception, "ActivityReturnedFault", valueSnapshots)
                 with { ChildControlContribution = definition.ChildControlContribution };
             var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
@@ -362,7 +364,7 @@ internal static class StructuralCallbackEvaluation
                 currentParentState, Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend, timeProvider.GetUtcNow());
             await StructuralParentEvaluationSupport.CommitDeferredParentActivityAsync(
                 checkpointCommitter, inspectionAccumulator, idGenerator, timeProvider, definition.NewCommitSource(definition.DeferredCheckpointReason),
-                currentParentState, [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken,
+                currentParentState.WithWarnings(conversionWarnings.Warnings), [], childScheduleRequests, parentNotificationWorkItems, subtreeCancellationPlans, valueSnapshots, cancellationToken,
                 childControlContribution: definition.ChildControlContribution);
             return;
         }
@@ -451,6 +453,7 @@ internal static class StructuralCallbackEvaluation
 
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
+            completedParentState = completedParentState.WithWarnings(conversionWarnings.Warnings);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -467,7 +470,7 @@ internal static class StructuralCallbackEvaluation
                     ? currentParentState.WithVariableWrites([lostUpdate.Record])
                     // A later failure drops the capture write-back, so the records of captures that never applied go too.
                     : captureRecordsAdded ? currentParentState with { VariableWrites = writesBeforeCapture } : currentParentState,
-                exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken);
+                exception, lostUpdate is null ? definition.FaultSubStatus : VariableLostUpdateException.SubStatus, valueSnapshots, cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -492,10 +495,12 @@ internal static class StructuralCallbackEvaluation
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? conversionWarnings = null)
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
+        latestFaultedParentState = latestFaultedParentState.WithWarnings(conversionWarnings ?? []);
         // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
         if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record =>
                 record.Outcome == refusal.Record.Outcome && record.ScopeId == refusal.Record.ScopeId &&

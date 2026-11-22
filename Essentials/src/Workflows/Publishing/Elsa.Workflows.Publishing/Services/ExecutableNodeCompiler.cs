@@ -55,6 +55,9 @@ public sealed class ExecutableNodeCompiler(
 
     private readonly ValueConversionPlanResolver _conversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
+    internal RuntimeInputBindingCompiler ConversionCompilerFor(RuntimeActivityDescriptor descriptor, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings, string nodeId) =>
+        inputBindingCompiler.WithConversionBoundary(ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor), warnings, nodeId);
+
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,

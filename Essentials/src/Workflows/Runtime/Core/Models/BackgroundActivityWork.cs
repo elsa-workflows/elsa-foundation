@@ -176,6 +176,9 @@ public sealed record BackgroundActivityWorkTerminalResult
         CancellationReason = cancellationReason;
     }
 
+    /// <summary>Warnings recorded by worker hydration/execution and committed with this receipt.</summary>
+    public IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning> Warnings { get; init; } = [];
+
     public BackgroundActivityWorkResultKind Kind { get; }
 
     /// <summary>The outcome selection of a completed result (unspecified when the worker chose none); null otherwise.</summary>
@@ -236,7 +239,8 @@ public static class BackgroundActivityWorkReceipt
             result.Selection,
             ResultJson = resultJson,
             result.Fault,
-            result.CancellationReason
+            result.CancellationReason,
+            result.Warnings
         });
         return Elsa.Serialization.Core.JsonHashInput.Hash(canonicalPayload);
     }

@@ -234,7 +234,7 @@ public sealed class GraphActivity(
             }
         }
 
-        var evaluator = NewEvaluator(scope);
+        var evaluator = NewEvaluator(scope, context.Warnings);
         var capturedInputs = isRetry
             ? []
             : await scope.CaptureInputsAsync(
@@ -278,7 +278,7 @@ public sealed class GraphActivity(
             Descriptor.Outputs,
             Descriptor.OutputMappings,
             Descriptor.RequiredOutputReferenceKeys.ToHashSet(StringComparer.Ordinal),
-            NewEvaluator(scope),
+            NewEvaluator(scope, context.Warnings),
             capturedAt,
             cancellationToken);
 
@@ -304,7 +304,7 @@ public sealed class GraphActivity(
             ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(result, selection));
     }
 
-    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope) =>
+    private GraphActivityTypedExpressionEvaluator NewEvaluator(GraphActivityScope scope, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings) =>
         async (expression, expectedType, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -321,7 +321,7 @@ public sealed class GraphActivity(
                     throw new InvalidOperationException($"Graph Input expression references undeclared input '{referenceKey}'.");
 
                 var value = await scope.GetRequiredInputAsync(referenceKey, cancellationToken);
-                return CoerceExpressionResult(value, expectedType);
+                return CoerceExpressionResult(value, expectedType, warnings);
             }
 
             if (!StringComparer.OrdinalIgnoreCase.Equals(expression.Syntax, "JavaScript"))
@@ -380,12 +380,12 @@ public sealed class GraphActivity(
                 definition,
                 parameterValues,
                 ambientVariables.Count == 0 ? null : new GraphVariableReader(ambientVariables),
-                cancellationToken);
+                cancellationToken) { Warnings = warnings };
             var result = await portableEvaluator.EvaluateAsync(request);
-            return CoerceExpressionResult(result, expectedType);
+            return CoerceExpressionResult(result, expectedType, warnings);
         };
 
-    private object? CoerceExpressionResult(object? value, JsonElement expectedType)
+    private object? CoerceExpressionResult(object? value, JsonElement expectedType, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
     {
         var descriptor = ReadType(expectedType);
         var alias = descriptor.Alias;
@@ -407,7 +407,9 @@ public sealed class GraphActivity(
 
         try
         {
-            return JsonValueConversion.Deserialize(json.GetRawText(), targetType);
+            var typed = Elsa.Serialization.Core.JsonConversionContract.For(targetType).Read(json, targetType, diagnostic => warnings?.Report(
+                Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, "graph")));
+            return value is JsonElement ? json.Clone() : typed;
         }
         catch (JsonException exception)
         {

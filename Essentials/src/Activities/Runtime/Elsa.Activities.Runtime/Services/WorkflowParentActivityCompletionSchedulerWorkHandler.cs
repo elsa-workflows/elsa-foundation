@@ -181,6 +181,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
             serviceProvider.GetRequiredService<IDurableValueStateStore>());
 
+        var conversionWarnings = new Elsa.Workflows.Runtime.Services.Values.ExecutionWarningCollector(
+            protect: parentState.InputSnapshot?.Values.Values.Any(value => value.Policy.HidesValue()) == true);
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
         IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
@@ -217,7 +219,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 cancellationToken,
                 inputRematerializer: serviceProvider.GetService<RuntimeActivityInputSnapshotMaterializer>(),
                 executable: executable,
-                materializedAt: TimeProvider.GetUtcNow());
+                materializedAt: TimeProvider.GetUtcNow(), warnings: conversionWarnings);
             activationLease = constructedParent.ActivationLease;
             valueSnapshots = ActivityExecutionInspection.BuildInputValueSnapshots(
                 payloadCapturePolicy,
@@ -309,7 +311,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     parentState,
                     variableScope: null,
                     liveChildActivities: liveChildActivities,
-                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+                    scopedVariableEnvelopes: scopedVariableEnvelopes).WithWarnings(conversionWarnings);
 
                 if (childFaulted && isDescendantFaultEvaluation)
                 {
@@ -520,7 +522,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 fault,
                 subStatus,
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -539,7 +541,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 activationDisposalException,
                 "ActivityDisposalFailed",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -551,7 +553,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 idGenerator,
                 TimeProvider,
                 NewCommitSource(workItem, payload, "ChildActivityScheduling"),
-                callbackBypassParentState,
+                callbackBypassParentState.WithWarnings(conversionWarnings.Warnings),
                 [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 [],
                 callbackBypassContinuationWorkItems,
@@ -643,7 +645,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 idGenerator,
                 TimeProvider,
                 NewCommitSource(workItem, payload, "ChildActivityScheduling"),
-                currentParentState,
+                currentParentState.WithWarnings(conversionWarnings.Warnings),
                 [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 childScheduleRequests,
                 parentNotificationWorkItems,
@@ -778,6 +780,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             // keeps the completion of ordinary containers untouched (#210).
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
+            completedParentState = completedParentState.WithWarnings(conversionWarnings.Warnings);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -806,7 +809,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 exception,
                 exception is VariableLostUpdateException ? VariableLostUpdateException.SubStatus : "ParentCompletionFaulted",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken, conversionWarnings.Warnings);
             return;
         }
 
@@ -1023,13 +1026,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? conversionWarnings = null)
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
                                            workItem.WorkflowExecutionId,
                                            payload.ActivityExecutionId,
                                            cancellationToken)
                                        ?? fallbackState;
+        latestFaultedParentState = latestFaultedParentState.WithWarnings(conversionWarnings ?? []);
         // A refused write (spec 1221 Fault lost update) stays with the faulted parent: the reloaded state never had it.
         if (exception is VariableLostUpdateException refusal && latestFaultedParentState.VariableWrites?.Any(record =>
                 record.Outcome == refusal.Record.Outcome && record.ScopeId == refusal.Record.ScopeId &&

@@ -204,7 +204,7 @@ public sealed class WorkflowExecutableCompiler(
                     projection,
                     state.Variables,
                     activity.NodeId,
-                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler, out var effectiveInputs));
+                    CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, executableNodeCompiler.ConversionCompilerFor(template.Root.Descriptor, request.Warnings, activity.NodeId), out var effectiveInputs));
                 compiledBoundaryInputs.Add(activity.NodeId, effectiveInputs);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
