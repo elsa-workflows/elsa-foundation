@@ -66,6 +66,31 @@ public sealed class DispatchWorkflowHistoryExecutionTests
     }
 
     [Theory]
+    [InlineData("defer")] [InlineData("fault")] [InlineData("cancel")]
+    public async Task Returned_control_decision_records_acceptance_and_application_with_its_committed_cursor(string response)
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(configureServices: services =>
+        {
+            services.AddWorkflowRuntimeHistory(); services.AddWorkflowStimulusRouter();
+            services.Replace(ServiceDescriptor.Singleton<IPersistenceAccessContextAccessor>(new Access()));
+        });
+        var run = await fixture.StartParentAsync("history-control-" + response, "history-control-parent-" + response, "correlation",
+            waitForCompletion: true, controlConsumerVersion: 1, controlResponse: response, parentPartition: new("tenant-42"));
+        await fixture.SweepAsync(); await fixture.SweepAsync();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var events = await EventsAsync(scope.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>(), run.Start.WorkflowExecutionId);
+        var accepted = Assert.Single(events, e => e.Name == "ChildControlAccepted");
+        var applied = Assert.Single(events, e => e.Name == "ChildControlApplied");
+        Assert.Equal(accepted.CheckpointId, applied.CheckpointId);
+        Assert.Equal(accepted.PhysicalCommitId, applied.PhysicalCommitId);
+        Assert.Equal(run.Activity.InvocationId, accepted.ActivityExecutionId);
+        Assert.Equal(run.Activity.InvocationId, applied.Metadata["history.relatedActivityExecutionId"]);
+        var call = (await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId)).Single(state => state.InvocationId == run.Activity.InvocationId);
+        Assert.True(call.ChildControlInbox!.IsTerminalConsumed);
+        Assert.Equal(1, call.ChildControlInbox.NextOrdinal);
+    }
+
+    [Theory]
     [InlineData(false)] [InlineData(true)]
     public async Task Required_history_outage_keeps_the_exact_source_owed_without_spending_delivery_budget(bool afterEffect)
     {

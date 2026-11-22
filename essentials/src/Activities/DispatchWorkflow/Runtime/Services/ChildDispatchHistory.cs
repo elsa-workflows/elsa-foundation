@@ -68,7 +68,7 @@ internal static class ChildDispatchHistory
             var reader = services.GetRequiredService<IRuntimeHistoryStore>();
             var writer = services.GetRequiredService<IRuntimeHistoryObservationWriter>();
             if (!CanRecord(services, clock, writer, reader)) throw new NotSupportedException("The native child source/history pair is unavailable.");
-            var (_, recorded) = await reader.FindEventDetailsAsync(cause.WorkflowExecutionId, cause.HistoryEventId, token);
+            var recorded = await reader.FindEventAsync(cause.WorkflowExecutionId, cause.HistoryEventId, token);
             if (recorded is null || recorded.Authority != RuntimeHistoryAuthority.CommittedTransition ||
                 recorded.Name != (start ? "ChildWorkflowDispatchRequested" : "ChildWorkflowSettled") ||
                 recorded.Metadata.GetValueOrDefault("history.sourceDeliveryId") != current.OutboxItemId ||
