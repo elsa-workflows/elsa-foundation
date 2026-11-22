@@ -255,7 +255,10 @@ internal static class EfTimerHistoryOwner
         // Advancing the native revision also invalidates an older fence cursor/snapshot at its real CAS.
         var id = Id(scope, run);
         var tracked = context.ChangeTracker.Entries<ExecutionLivenessStateEntity>().SingleOrDefault(entry => entry.Entity.Id == id);
-        if (tracked is not null && tracked.State != EntityState.Unchanged)
+        // AutoDetectChanges may be disabled for a legacy caller. Compare the actual immutable
+        // scalar values to their original snapshot as well; State alone can still say Unchanged.
+        if (tracked is not null && (tracked.State != EntityState.Unchanged ||
+            tracked.Properties.Any(property => !Equals(property.OriginalValue, property.CurrentValue))))
             throw new InvalidOperationException("Timer ownership cannot reload or flush pending caller ownership changes.");
         await context.ExecutionLivenessStates.Where(row => row.Id == id)
             .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision + 1), token);
