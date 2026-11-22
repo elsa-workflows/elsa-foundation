@@ -20,7 +20,7 @@ export function register(api: ElsaStudioModuleApi) {
       requiresBackend: [{id:"elsa.api.connections",contractVersion:"1"}],
       title: "Connections",
       path: "/security/connections",
-      iconColor: "#64748b",
+      iconColor: "var(--studio-text-muted)",
       placement: "integrations",
       order: 10
     },
