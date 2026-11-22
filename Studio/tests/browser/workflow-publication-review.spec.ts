@@ -100,8 +100,8 @@ test("shows trigger counts while keeping exact identifiers in an explicit techni
   await page.goto("/?mode=publication-review&theme=dark");
   const dialog = page.getByRole("dialog", { name: "Publish workflow" });
   const technical = dialog.locator(".studio-technical-details");
-  const changes = dialog.locator("details").filter({ has: page.getByText("Review changes", { exact: true }) });
-  await changes.locator("summary").click();
+  const changes = dialog.locator(".studio-advanced-section").filter({ has: page.getByRole("button", { name: "Review changes", exact: true }) });
+  await changes.getByRole("button", { name: "Review changes", exact: true }).click();
   await expect(changes).toContainText("1 added");
   await expect(changes).not.toContainText("sha256:");
   await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
