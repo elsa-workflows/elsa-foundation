@@ -19,34 +19,6 @@
   container-name: feature-management;
 }
 
-.feature-management-inspector-heading button,
-.feature-management-section-heading button,
-.feature-management-dialog-heading button,
-.feature-management-dialog-actions button,
-.feature-management-bulk-actions button,
-.feature-management-feature-button {
-  border: 1px solid var(--border);
-  background: var(--studio-surface, var(--card));
-  color: var(--studio-text, var(--foreground));
-  border-radius: 5px;
-  min-height: 32px;
-  padding: 6px 11px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.feature-management-dialog-actions button.primary {
-  background: var(--studio-accent, var(--primary));
-  border-color: var(--studio-accent, var(--primary));
-  color: white;
-}
-
-.feature-management-inspector-heading button:disabled,
-.feature-management-section-heading button:disabled,
-.feature-management-dialog-heading button:disabled,
-.feature-management-dialog-actions button:disabled,
-.feature-management-bulk-actions button:disabled,
 .feature-management-switch:disabled {
   opacity: .55;
   cursor: not-allowed;
@@ -1146,25 +1118,6 @@
   padding: 8px 12px;
 }
 
-.feature-management-browse-nav button {
-  min-height: 30px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--studio-text-muted, var(--muted-foreground));
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 5px 9px;
-}
-
-.feature-management-browse-nav button[aria-pressed="true"] {
-  border-color: var(--studio-border, var(--border));
-  background: var(--studio-surface, var(--card));
-  color: var(--studio-text, var(--foreground));
-}
-
-.feature-management-browse-nav button:focus-visible,
 .feature-management-capability-card:focus-visible,
 .feature-management-relationship-link:focus-visible {
   outline: 2px solid var(--studio-focus, var(--studio-accent, var(--primary)));
