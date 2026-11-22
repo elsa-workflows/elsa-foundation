@@ -1,24 +1,4 @@
-import type { StudioActivityNodePresentationRecord, StudioActivityDiagnostic, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ReactNode } from "react";
-
-export interface ActivityDefinitionWorkspaceTestHostContext {
-  context: StudioEndpointContext;
-  draftId: string;
-  expectedRevision: number;
-  currentRevision: number;
-  canRun: boolean;
-  onClose(): void;
-}
-
-/** A narrowly scoped presentation extension for a module-owned authoring workspace. */
-export interface ActivityDefinitionWorkspaceContribution {
-  homeLabel: string;
-  homePath: string;
-  testHost?: {
-    label: string;
-    render(context: ActivityDefinitionWorkspaceTestHostContext): ReactNode;
-  };
-}
+import type { StudioActivityNodePresentationRecord, StudioActivityDiagnostic } from "@elsa-workflows/studio-sdk";
 
 export type ActivityContentAuthorityKind = "Design" | "ProviderSource" | string;
 
@@ -231,7 +211,6 @@ export interface ActivityDefinitionCollectionRequest {
   search?: string;
   authority?: "Design" | "ProviderSource" | "";
   providerKey?: string;
-  archivedOnly?: boolean;
 }
 
 export interface ActivityDefinitionChildCollectionRequest {

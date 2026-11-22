@@ -105,29 +105,6 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
     }
 
     [Fact]
-    public async Task Archived_definition_pages_are_filtered_authorized_and_have_a_distinct_cursor_scope()
-    {
-        var store = new ProjectionStore();
-        store.SeedDefinition("active", "tenant-a");
-        store.SeedDefinition("archived-a", "tenant-a", archived: true);
-        store.SeedDefinition("archived-b", "tenant-a", archived: true);
-        var service = Service(store, new("tenant-a", "tenant-a/manage", true));
-
-        var archived = await service.ListDefinitionsAsync(new(1, ArchivedOnly: true), default);
-        var active = await service.ListDefinitionsAsync(new(10), default);
-        var invalidCursor = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            service.ListDefinitionsAsync(new(1, archived.Continuation), default));
-
-        Assert.Equal("definition-archived-a", Assert.Single(archived.Items).Definition.DefinitionId);
-        Assert.Equal("definition-active", Assert.Single(active.Items).Definition.DefinitionId);
-        Assert.Contains(archived.Items[0].Actions, action => action.Action == "restore-definition" && action.Allowed);
-        Assert.DoesNotContain(active.Items[0].Actions, action => action.Action == "restore-definition" && action.Allowed);
-        Assert.Equal("activity.management.cursor-invalid", invalidCursor.ErrorCode);
-        Assert.True(store.DefinitionQueries[0].ArchivedOnly);
-        Assert.False(store.DefinitionQueries[1].ArchivedOnly);
-    }
-
-    [Fact]
     public async Task A_valid_signed_cursor_for_a_pruned_snapshot_returns_safe_expiry()
     {
         var store = new ProjectionStore();
@@ -355,11 +332,10 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             string suffix,
             string? tenantId,
             ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design,
-            bool omitDisplayName = false,
-            bool archived = false)
+            bool omitDisplayName = false)
         {
             var definitionId = $"definition-{suffix}";
-            Current.Definitions.Add(Definition(definitionId, suffix, tenantId, authority, _sequence, omitDisplayName: omitDisplayName, archived: archived));
+            Current.Definitions.Add(Definition(definitionId, suffix, tenantId, authority, _sequence, omitDisplayName: omitDisplayName));
             Current.Drafts.Add(Draft($"draft-{suffix}", definitionId, tenantId, _sequence));
         }
 
@@ -388,8 +364,7 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
                 providerKey: providerKey,
                 providerSchemaVersion: providerSchemaVersion,
                 recommendationLifecycle: lifecycle,
-                recommendationVersion: version,
-                archived: definition.ArchivedAt is not null));
+                recommendationVersion: version));
         }
 
         public void AdvanceWithDefinition(string suffix, string? tenantId)
@@ -413,7 +388,6 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             var (data, snapshot) = Resolve(query.SnapshotSequence);
             var matches = data.Definitions
                 .Where(x => Visible(x.TenantId, query.TenantId))
-                .Where(x => query.ArchivedOnly ? x.ArchivedAt is not null : x.ArchivedAt is null)
                 .Where(x => query.Authority is null || x.ContentAuthority.Kind == query.Authority)
                 .Where(x => query.ProviderKey is null || x.HeadProviderKey == query.ProviderKey || x.RecommendationProviderKey == query.ProviderKey)
                 .Where(x => Matches(x.SearchText, query.Search))
@@ -505,8 +479,7 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             string providerKey = "test.provider",
             string providerSchemaVersion = "1",
             ActivityDefinitionVersionLifecycle recommendationLifecycle = ActivityDefinitionVersionLifecycle.Active,
-            string recommendationVersion = "1.0.0",
-            bool archived = false) => new()
+            string recommendationVersion = "1.0.0") => new()
         {
             Id = $"definition-revision-{definitionId}-{sequence}",
             TenantId = tenantId,
@@ -533,8 +506,7 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             RecommendationProviderKey = recommendedVersionId is null ? null : providerKey,
             DraftCount = 1,
             VersionCount = versionCount,
-            UpdatedAt = Now,
-            ArchivedAt = archived ? Now : null
+            UpdatedAt = Now
         };
 
         private static ActivityDefinitionDraftManagementProjectionRevision Draft(

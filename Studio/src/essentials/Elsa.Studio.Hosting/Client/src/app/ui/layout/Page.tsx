@@ -1,4 +1,6 @@
 import React from "react";
+import { StudioButton } from "../forms/Button";
+import { StudioField } from "../forms/Field";
 import { StudioRefreshControl, type StudioRefreshContribution } from "./RefreshControl";
 
 /** A route's content frame. The host owns the main landmark and outer page gutter. */
@@ -44,9 +46,35 @@ export function StudioCollectionToolbar({ className, ...props }: React.Component
   return <div className={["studio-collection-toolbar", className].filter(Boolean).join(" ")} {...props} />;
 }
 
+export interface StudioCollectionFooterProps extends React.ComponentPropsWithoutRef<"footer"> {
+  summary?: React.ReactNode;
+  pageSize?: {
+    label: string;
+    value: number;
+    sizes: readonly number[];
+    onChange(size: number): void;
+  };
+  loadMore?: {
+    hasMore: boolean;
+    busy?: boolean;
+    onLoadMore(): void;
+  };
+}
+
 /** Keep server totals, loaded counts and cursor semantics in the caller. */
-export function StudioCollectionFooter({ className, ...props }: React.ComponentPropsWithoutRef<"footer">) {
-  return <footer className={["studio-collection-footer", className].filter(Boolean).join(" ")} {...props} />;
+export function StudioCollectionFooter({ className, summary, pageSize, loadMore, children, ...props }: StudioCollectionFooterProps) {
+  return <footer className={["studio-collection-footer", className].filter(Boolean).join(" ")} {...props}>
+    {summary}
+    {pageSize ? <StudioField className="studio-collection-page-size" label={pageSize.label}>
+      <select value={pageSize.value} onChange={event => pageSize.onChange(Number(event.currentTarget.value))}>
+        {pageSize.sizes.map(size => <option key={size} value={size}>{size}</option>)}
+      </select>
+    </StudioField> : null}
+    {children}
+    {loadMore ? <StudioButton disabled={loadMore.busy || !loadMore.hasMore} aria-busy={loadMore.busy || undefined} onClick={() => loadMore.onLoadMore()}>
+      {loadMore.busy ? "Loading…" : "Load more"}
+    </StudioButton> : null}
+  </footer>;
 }
 
 /** Scroll boundary for a native table or an existing accessible ARIA table. */

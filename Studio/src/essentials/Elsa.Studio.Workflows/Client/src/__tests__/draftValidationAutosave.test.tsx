@@ -36,13 +36,7 @@ function Probe() {
   useEffect(() => { markSaved(initial); loadDraft(initial); }, [loadDraft, markSaved]);
   const validations = useDraftValidations({ context, draft: document.state.draft, persistedDraft: persistence.persistedDraft });
   const draft = document.state.draft;
-  return draft ? <ValidationPanel
-    draft={draft}
-    errors={combineValidationErrors({ draftErrors: draft.validationErrors, serverErrors: validations.errors })}
-    onRepair={noop}
-    pending={validations.status === "loading"}
-    unavailable={validations.status === "unavailable" || validations.status === "error"}
-  /> : null;
+  return draft ? <ValidationPanel draft={draft} errors={combineValidationErrors({ draftErrors: draft.validationErrors, serverErrors: validations.errors })} onRepair={noop} /> : null;
 }
 
 async function settle() { await vi.advanceTimersByTimeAsync(0); flushSync(() => root.render(<Probe />)); }
@@ -62,8 +56,6 @@ beforeEach(async () => {
   api.save.mockImplementation(async (_context, draft: WorkflowDraft) => (saved = { ...draft, validationErrors: [] }));
   container = window.document.createElement("div"); window.document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); await settle(); await advance(600); await settle();
-  expect(container.querySelector<HTMLButtonElement>(".wf-validation-toggle")?.getAttribute("aria-expanded")).toBe("false");
-  flushSync(() => container.querySelector<HTMLButtonElement>(".wf-validation-toggle")!.click());
   expect(container.textContent).toContain(missingPipeline.message);
   api.validations.mockClear();
 });
@@ -78,7 +70,7 @@ it("revalidates after autosave, never reading the old persisted activity during 
   expect(api.save).toHaveBeenCalledTimes(1);
   expect(api.validations).toHaveBeenCalledTimes(1);
   expect(container.textContent).not.toContain(missingPipeline.message);
-  expect(container.textContent).toContain("No validation issues found");
+  expect(container.textContent).toContain("No validation errors");
 });
 
 it("waits for a slow save to complete before validating the removed activity", async () => {
@@ -102,7 +94,7 @@ it("removes the deleted activity diagnostic once autosave and validation settle"
   await advance(600); await settle();
   expect(api.save).toHaveBeenCalledTimes(1);
   expect(container.textContent).not.toContain(missingPipeline.message);
-  expect(container.textContent).toContain("No validation issues found");
+  expect(container.textContent).toContain("No validation errors");
 });
 
 it("revalidates a manual save when autosave is disabled", async () => {

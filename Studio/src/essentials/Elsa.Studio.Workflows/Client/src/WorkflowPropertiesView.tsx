@@ -403,60 +403,47 @@ function defaultInputError(input: WorkflowInput, editor: string, enabled: boolea
   return parseWorkflowInputDefault(input, readWorkflowInputDefault(input.defaultValue), editor).error;
 }
 
-export function WorkflowPropertySection({ title, headingLevel = 3, description, addLabel, addDisabled, emptyLabel, headers, isEmpty, keepMountedChildren, onAdd, children, afterTable }: {
+function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, children }: {
   title: string;
-  headingLevel?: 2 | 3;
-  description?: ReactNode;
   addLabel: string;
-  addDisabled?: boolean;
   emptyLabel: string;
   headers: string[];
   isEmpty: boolean;
-  keepMountedChildren?: boolean;
   onAdd(): void;
   children: ReactNode;
-  afterTable?: ReactNode;
 }) {
-  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <section className="wf-properties-section">
       <div className="wf-properties-section-head">
-        <div><Heading>{title}</Heading>{description ? <p className="wf-muted">{description}</p> : null}</div>
-        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd} disabled={addDisabled}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
+        <h3>{title}</h3>
+        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
       </div>
-      {isEmpty && !keepMountedChildren ? (
+      {isEmpty ? (
         <p className="wf-muted">{emptyLabel}</p>
       ) : (
         <table className="wf-properties-table">
           <thead>
             <tr>
               {headers.map(header => <th key={header}>{header}</th>)}
-              <th scope="col"><span className="wf-toolbar-sr-only">Actions</span></th>
+              <th aria-label="Actions" />
             </tr>
           </thead>
-          <tbody>
-            {isEmpty ? <tr className="wf-properties-empty-row"><td colSpan={headers.length + 1}><p className="wf-muted">{emptyLabel}</p></td></tr> : null}
-            {children}
-          </tbody>
+          <tbody>{children}</tbody>
         </table>
       )}
-      {afterTable}
     </section>
   );
 }
 
-export function WorkflowPropertyRemoveCell({ label, disabled, onRemove }: { label: string; disabled?: boolean; onRemove(): void }) {
+function RemoveCell({ label, onRemove }: { label: string; onRemove(): void }) {
   return (
     <td>
-      <button type="button" className="wf-properties-remove" aria-label={label} title={label} onClick={onRemove} disabled={disabled}>
+      <button type="button" className="wf-properties-remove" aria-label={label} title={label} onClick={onRemove}>
         <Trash2 size={14} />
       </button>
     </td>
   );
 }
-
-const EditorSection = WorkflowPropertySection;
-const RemoveCell = WorkflowPropertyRemoveCell;
 
 function RequiredCell({ checked, ariaLabel, onChange }: {
   checked: boolean;

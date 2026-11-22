@@ -14,8 +14,7 @@ public sealed record ActivityManagementProjectionPageQuery(
     ActivityContentAuthorityKind? Authority = null,
     string? ProviderKey = null,
     ActivityDefinitionDraftStatus? DraftStatus = null,
-    ActivityDefinitionVersionLifecycle? VersionLifecycle = null,
-    bool ArchivedOnly = false);
+    ActivityDefinitionVersionLifecycle? VersionLifecycle = null);
 
 public sealed record ActivityManagementProjectionPage<T>(
     IReadOnlyList<T> Items,

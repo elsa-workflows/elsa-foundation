@@ -16,7 +16,6 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 public interface IPublicationSlotUnpublisher
 {
     Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken);
-    Task<WorkflowActivationSlot> UnpublishAtRevisionAsync(string workflowDefinitionId, string slotName, long expectedRevision, CancellationToken cancellationToken);
 }
 
 /// <summary>Reactivates a retired publication through the runtime-owned activation lifecycle.</summary>
@@ -41,20 +40,10 @@ public sealed class UnpublishPublicationSlotRequestHandler(
     public Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
         Handle(new UnpublishPublicationSlot(workflowDefinitionId, slotName), cancellationToken);
 
-    public Task<WorkflowActivationSlot> UnpublishAtRevisionAsync(string workflowDefinitionId, string slotName, long expectedRevision, CancellationToken cancellationToken) =>
-        UnpublishAsync(workflowDefinitionId, slotName, expectedRevision, cancellationToken);
-
-    public Task<WorkflowActivationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken) =>
-        UnpublishAsync(request.WorkflowDefinitionId, request.SlotName, expectedRevision: null, cancellationToken);
-
-    private async Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, long? expectedRevision, CancellationToken cancellationToken)
+    public async Task<WorkflowActivationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
     {
-        var slot = await activationAuthority.FindAsync(workflowDefinitionId, slotName, cancellationToken)
-            ?? throw new PublicationSlotNotFoundException($"Publication slot '{slotName}' does not exist.");
-        if (expectedRevision is { } reviewedRevision && slot.Revision != reviewedRevision)
-            throw new PublicationActivationException(new PublicationFailure(
-                PublicationFailureCodes.SlotRevisionConflict,
-                $"Publication slot '{slotName}' changed after it was reviewed. Review the current slot before unpublishing it."));
+        var slot = await activationAuthority.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
+            ?? throw new PublicationSlotNotFoundException($"Publication slot '{request.SlotName}' does not exist.");
         if (slot.ActiveActivationId is not { } publicationId)
             return slot;
 
@@ -85,9 +74,9 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             publication.SourceReferenceId != WorkflowActivationReferenceIdentity.Create(publicationId)))
             throw new PublicationSlotNotFoundException("The material publication does not belong to the selected logical slot and source.");
         var deactivation = usesMaterialLifecycle
-            ? await activationCoordinator.DeactivateMaterialAsync(new(slot.WorkflowDefinitionId, material!, slotName,
+            ? await activationCoordinator.DeactivateMaterialAsync(new(slot.WorkflowDefinitionId, material!, request.SlotName,
                 PublicationActivator.Source, slot.Revision), cancellationToken)
-            : await activationCoordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable!, slotName,
+            : await activationCoordinator.DeactivateAsync(new WorkflowDeactivationCommand(executable!, request.SlotName,
                 PublicationActivator.Source, slot.Revision), cancellationToken);
         if (!deactivation.Succeeded)
         {
@@ -112,7 +101,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
                 sourceReferenceId,
                 publication.WorkflowDefinitionId,
                 publicationId,
-                slotName);
+                request.SlotName);
             await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-unpublished", cancellationToken);
         }
 

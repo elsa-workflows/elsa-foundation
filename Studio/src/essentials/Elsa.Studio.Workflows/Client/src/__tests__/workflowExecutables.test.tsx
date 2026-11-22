@@ -5,22 +5,12 @@ import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflow
 import { StudioHttpError } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
-import { getPublicationSlotLifecycleSupport, listPublicationSlots, unpublishReviewedSlot } from "../api/publishing";
 import type { WorkflowDefinitionSummary, WorkflowExecutableReference, WorkflowExecutableSummary } from "../workflowTypes";
 import { WorkflowExecutables } from "../workflow-editor/WorkflowExecutables";
 import { updateWorkflowDefinitionIdInUrl } from "../workflow-editor/workflowDefinitionUrl";
-import { publishedSlot } from "./fixtures/publicationSlots";
 
 vi.mock("../api/runtime", () => ({ listExecutables: vi.fn() }));
 vi.mock("../api/workflowDesign", () => ({ listDefinitions: vi.fn() }));
-vi.mock("../api/publishing", () => ({
-  describeActivationSource: vi.fn(),
-  getPublicationSlotLifecycleSupport: vi.fn(),
-  listPublicationSlots: vi.fn(),
-  restorePublicationSlot: vi.fn(),
-  unpublishReviewedSlot: vi.fn(),
-  unpublishSlot: vi.fn()
-}));
 vi.mock("../workflow-editor/useExecutableWorkflowRun", () => ({
   createExecutableWorkflowRunFeedback: () => ({}),
   createExecutableWorkflowRunTarget: () => null,
@@ -37,9 +27,6 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  vi.mocked(getPublicationSlotLifecycleSupport).mockResolvedValue({ unpublish: false, unpublishReviewed: true, restore: false });
-  vi.mocked(listPublicationSlots).mockResolvedValue({ available: true, slots: [] });
-  vi.mocked(unpublishReviewedSlot).mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -290,169 +277,6 @@ describe("WorkflowExecutables", () => {
     expect(runtimeRow.querySelector(".studio-overflow-menu")).toBeNull();
   });
 
-  it("unpublishes the sole live slot serving the exact artifact and refreshes the list", async () => {
-    const definitionId = "workflow/live";
-    const executable = executableSummary({
-      artifactId: "artifact-target",
-      definitionId: "legacy-primary-source",
-      references: [
-        executableReference({ sourceReferenceId: "published-first", definitionId }),
-        executableReference({ sourceReferenceId: "published-duplicate", definitionId }),
-        executableReference({ sourceReferenceId: "test-run", scope: "TestRun", definitionId: "test-run-only" })
-      ]
-    });
-    const liveMatch = publicationSlotFor("production", "artifact-target", definitionId, 17);
-    const otherArtifact = publicationSlotFor("old-slot", "artifact-old", definitionId, 18);
-    const foreignSlot = { ...publicationSlotFor("foreign-slot", "artifact-target", definitionId, 19), activeActivationId: "foreign-activation", sourceKind: "artifact-reconciliation", publication: null };
-    vi.mocked(listPublicationSlots).mockResolvedValue({ available: true, slots: [liveMatch, otherArtifact, foreignSlot] });
-
-    const menu = await openExecutableRowActions(executable, { [definitionId]: "Live workflow" });
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Live workflow");
-    expect(dialog.textContent).toContain("Slot production");
-    expect(dialog.textContent).toContain("Existing runs and other publication slots are unaffected.");
-    expect(dialog.querySelectorAll('input[type="radio"]')).toHaveLength(1);
-    expect(dialog.textContent).not.toContain("old-slot");
-    expect(dialog.textContent).not.toContain("foreign-slot");
-    clickDialogConfirm();
-    await flushAsyncUpdates();
-
-    expect(unpublishReviewedSlot).toHaveBeenCalledWith(expect.anything(), definitionId, "production", 17);
-    expect(listPublicationSlots).toHaveBeenCalledTimes(1);
-    expect(listExecutables).toHaveBeenCalledTimes(2);
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it("requires an explicit choice when multiple live slots serve one shared artifact", async () => {
-    const firstDefinitionId = "workflow/one";
-    const secondDefinitionId = "workflow/two";
-    const executable = executableSummary({ artifactId: "shared-artifact", references: [
-      executableReference({ sourceReferenceId: "published-one", definitionId: firstDefinitionId }),
-      executableReference({ sourceReferenceId: "published-one-again", definitionId: firstDefinitionId }),
-      executableReference({ sourceReferenceId: "published-two", definitionId: secondDefinitionId })
-    ] });
-    vi.mocked(listPublicationSlots).mockImplementation(async (_context, definitionId) => ({
-      available: true,
-      slots: [publicationSlotFor(definitionId === firstDefinitionId ? "blue" : "green", "shared-artifact", definitionId, definitionId === firstDefinitionId ? 5 : 8)]
-    }));
-
-    const menu = await openExecutableRowActions(executable, { [firstDefinitionId]: "First workflow", [secondDefinitionId]: "Second workflow" });
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    const choices = Array.from(dialog.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
-    expect(choices).toHaveLength(2);
-    expect(choices.every(choice => !choice.checked)).toBe(true);
-    const confirm = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    expect(confirm.disabled).toBe(true);
-    choices[1].click();
-    expect(confirm.disabled).toBe(false);
-    clickDialogConfirm();
-    await flushAsyncUpdates();
-
-    expect(unpublishReviewedSlot).toHaveBeenCalledWith(expect.anything(), secondDefinitionId, "green", 8);
-    expect(listPublicationSlots).toHaveBeenCalledTimes(2);
-  });
-
-  it("cancels a reviewed unpublish without sending a command or refreshing", async () => {
-    const definitionId = "workflow/cancel";
-    const executable = executableSummary({ artifactId: "artifact-cancel", references: [executableReference({ definitionId })] });
-    vi.mocked(listPublicationSlots).mockResolvedValue({ available: true, slots: [publicationSlotFor("default", "artifact-cancel", definitionId, 2)] });
-
-    const menu = await openExecutableRowActions(executable);
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    flushSync(() => Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Cancel")!.click());
-
-    expect(unpublishReviewedSlot).not.toHaveBeenCalled();
-    expect(listExecutables).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not allow unpublishing when no live slot serves the artifact", async () => {
-    const definitionId = "workflow/no-match";
-    const executable = executableSummary({ artifactId: "artifact-unmatched", references: [executableReference({ definitionId })] });
-    vi.mocked(listPublicationSlots).mockResolvedValue({ available: true, slots: [publicationSlotFor("default", "another-artifact", definitionId, 3)] });
-
-    const menu = await openExecutableRowActions(executable);
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("No live publication slots currently serve this artifact.");
-    expect(dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-    expect(unpublishReviewedSlot).not.toHaveBeenCalled();
-  });
-
-  it("shows slot-read failures and offers a retry without enabling unpublish", async () => {
-    const definitionId = "workflow/read-error";
-    const executable = executableSummary({ artifactId: "artifact-read-error", references: [executableReference({ definitionId })] });
-    vi.mocked(listPublicationSlots)
-      .mockResolvedValueOnce({ available: false, reason: "Runtime activation slot reads are unavailable." })
-      .mockResolvedValueOnce({ available: true, slots: [publicationSlotFor("default", "artifact-read-error", definitionId, 4)] });
-
-    const menu = await openExecutableRowActions(executable);
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-
-    let dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Runtime activation slot reads are unavailable.");
-    expect(dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-    flushSync(() => Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Reload slots"))!.click());
-    await flushAsyncUpdates();
-
-    dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.querySelectorAll('input[type="radio"]')).toHaveLength(1);
-    expect(listPublicationSlots).toHaveBeenCalledTimes(2);
-  });
-
-  it("hides reviewed unpublish when the backend does not advertise that command", async () => {
-    const definitionId = "workflow/legacy";
-    vi.mocked(getPublicationSlotLifecycleSupport).mockResolvedValue({ unpublish: true, unpublishReviewed: false, restore: false });
-    const executable = executableSummary({ references: [executableReference({ definitionId })] });
-
-    const menu = await openExecutableRowActions(executable);
-
-    expect(Array.from(menu.querySelectorAll<HTMLButtonElement>("button"), button => button.textContent?.trim())).toContain("Manage publication");
-    expect(Array.from(menu.querySelectorAll<HTMLButtonElement>("button"), button => button.textContent?.trim())).not.toContain("Unpublish…");
-  });
-
-  it("reloads the reviewed slot after a stale response and requires a fresh confirmation", async () => {
-    const definitionId = "workflow/stale";
-    const executable = executableSummary({ artifactId: "artifact-stale", references: [executableReference({ definitionId })] });
-    vi.mocked(listPublicationSlots)
-      .mockResolvedValueOnce({ available: true, slots: [publicationSlotFor("default", "artifact-stale", definitionId, 6)] })
-      .mockResolvedValueOnce({ available: true, slots: [publicationSlotFor("default", "artifact-stale", definitionId, 7)] });
-    vi.mocked(unpublishReviewedSlot)
-      .mockRejectedValueOnce(new StudioHttpError(409, "The publication slot changed."))
-      .mockResolvedValue({});
-
-    const menu = await openExecutableRowActions(executable);
-    clickMenuAction(menu, "Unpublish…");
-    await flushAsyncUpdates();
-    clickDialogConfirm();
-    await flushAsyncUpdates();
-
-    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("changed after you reviewed it");
-    const freshChoice = dialog.querySelector<HTMLInputElement>('input[type="radio"]')!;
-    expect(freshChoice.checked).toBe(false);
-    expect(dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-    freshChoice.click();
-    clickDialogConfirm();
-    await flushAsyncUpdates();
-
-    expect(unpublishReviewedSlot).toHaveBeenNthCalledWith(1, expect.anything(), definitionId, "default", 6);
-    expect(unpublishReviewedSlot).toHaveBeenNthCalledWith(2, expect.anything(), definitionId, "default", 7);
-    expect(listPublicationSlots).toHaveBeenCalledTimes(2);
-    expect(listExecutables).toHaveBeenCalledTimes(2);
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
-  });
-
   it("shows a primary empty-state action and preserves the backend when opening definitions", async () => {
     window.history.replaceState({}, "", "/workflows/executables?backend=runtime");
     vi.mocked(listExecutables).mockResolvedValue([]);
@@ -564,49 +388,6 @@ function emptyAi() {
     promptActions: { list: () => [] },
     dispatchPrompt: () => {}
   } as unknown as StudioWeaverRegistry;
-}
-
-async function openExecutableRowActions(executable: WorkflowExecutableSummary, names: Record<string, string> = {}) {
-  const definitionIds = Array.from(new Set([executable.definitionId, ...(executable.references ?? []).map(reference => reference.definitionId)]))
-    .filter((id): id is string => Boolean(id?.trim()));
-  vi.mocked(listExecutables).mockResolvedValue([executable]);
-  vi.mocked(listDefinitions).mockResolvedValue({
-    definitions: definitionIds.map(id => definitionSummary(names[id] ?? id, id)),
-    page: 1,
-    pageSize: 100,
-    totalCount: definitionIds.length
-  });
-  flushSync(() => root.render(<WorkflowExecutables
-    context={{ baseUrl: "https://server.example" } as StudioEndpointContext}
-    ai={emptyAi()}
-    runInputEditors={[]}
-    definitionFilter={null}
-    onDefinitionFilterChange={() => {}}
-    canManagePublications
-  />));
-  await flushAsyncUpdates();
-  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label^="Actions for"]')!;
-  flushSync(() => trigger.click());
-  await flushAsyncUpdates();
-  return document.body.querySelector<HTMLElement>('[role="menu"]')!;
-}
-
-function publicationSlotFor(slotName: string, artifactId: string, definitionId: string, revision: number) {
-  const slot = publishedSlot(slotName, { artifactId, definitionId });
-  return { ...slot, definitionId, slotId: `${definitionId}:${slotName}`, revision };
-}
-
-function clickMenuAction(menu: HTMLElement, label: string) {
-  const action = Array.from(menu.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes(label));
-  if (!action) throw new Error(`Menu action '${label}' was not rendered.`);
-  flushSync(() => action.click());
-}
-
-function clickDialogConfirm() {
-  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]');
-  const confirm = dialog?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  if (!confirm) throw new Error("Dialog confirmation button was not rendered.");
-  flushSync(() => confirm.click());
 }
 
 async function flushAsyncUpdates() {

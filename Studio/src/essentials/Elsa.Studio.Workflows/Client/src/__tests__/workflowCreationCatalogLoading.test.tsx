@@ -34,14 +34,14 @@ it("waits for the activity catalog before creating a workflow with its default r
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await fill(inputByLabel(container, "Display name"), "Catalog race");
+  await waitForDialog();
+  await fill(inputByLabel(dialog(), "Display name"), "Catalog race");
 
-  const createButton = buttonByText(dialog(container), "Create");
+  const createButton = buttonByText(dialog(), "Create");
   if (!createButton) throw new Error("Create button not found.");
   expect.soft(createButton.getAttribute("aria-disabled"), "submission should be marked unavailable while the catalog is loading").toBe("true");
   expect.soft(createButton.getAttribute("aria-describedby"), "the blocked action should reference the catalog loading status").toBe("wf-activity-catalog-loading");
-  dialog(container).querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  dialog().dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await new Promise(resolve => setTimeout(resolve, 0));
   expect.soft(createBodies, "creating while the catalog is pending must not send a rootless definition").toHaveLength(0);
   if (createBodies.length > 0) {
@@ -49,10 +49,10 @@ it("waits for the activity catalog before creating a workflow with its default r
   }
 
   resolveCatalog(response({ activities: [flowchart] }));
-  await vi.waitFor(() => expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(false));
-  await vi.waitFor(() => expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-disabled")).toBe("false"));
+  await vi.waitFor(() => expect(inputByLabel(dialog(), "Flowchart")?.disabled).toBe(false));
+  await vi.waitFor(() => expect(buttonByText(dialog(), "Create")?.getAttribute("aria-disabled")).toBe("false"));
   const previousCreateCount = createBodies.length;
-  await click(buttonByText(dialog(container), "Create"));
+  await click(buttonByText(dialog(), "Create"));
   await vi.waitFor(() => expect(createBodies).toHaveLength(previousCreateCount + 1));
 
   const successfulBody = createBodies.at(-1);
@@ -76,14 +76,14 @@ it.each([
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await waitForText(dialog(container), availabilityReason);
-  expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(true);
-  await fill(inputByLabel(dialog(container), "Display name"), "Unavailable starting point");
+  await waitForDialog();
+  await waitForText(dialog(), availabilityReason);
+  expect(inputByLabel(dialog(), "Flowchart")?.disabled).toBe(true);
+  await fill(inputByLabel(dialog(), "Display name"), "Unavailable starting point");
 
-  expect(dialog(container).textContent).toContain(availabilityReason);
-  expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-disabled")).toBe("true");
-  dialog(container).querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  expect(dialog().textContent).toContain(availabilityReason);
+  expect(buttonByText(dialog(), "Create")?.getAttribute("aria-disabled")).toBe("true");
+  dialog().dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await new Promise(resolve => setTimeout(resolve, 0));
 
   expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/design/workflows/definitions") && init?.method === "POST")).toBe(false);
@@ -96,20 +96,20 @@ it("explains missing HTTP starter activities while Blank remains selected", asyn
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await waitForText(dialog(container), "HTTP Endpoint is not present in the activity catalog");
-  expect(dialog(container).querySelector<HTMLOptionElement>('[aria-label="Starting point"] option[value="http"]')?.disabled).toBe(true);
+  await waitForDialog();
+  await waitForText(dialog(), "HTTP Endpoint is not present in the activity catalog");
+  expect(dialog().querySelector<HTMLOptionElement>('[aria-label="Starting point"] option[value="http"]')?.disabled).toBe(true);
 
-  const startingPoint = dialog(container).querySelector<HTMLSelectElement>('[aria-label="Starting point"]');
+  const startingPoint = dialog().querySelector<HTMLSelectElement>('[aria-label="Starting point"]');
   const reasonId = startingPoint?.getAttribute("aria-describedby");
   expect(startingPoint?.value).toBe("blank");
-  await fill(inputByLabel(dialog(container), "Display name"), "Blank with unavailable HTTP starter");
+  await fill(inputByLabel(dialog(), "Display name"), "Blank with unavailable HTTP starter");
   expect(reasonId).toBeTruthy();
-  const reason = reasonId ? container.querySelector<HTMLElement>(`#${reasonId}`)?.textContent : "";
+  const reason = reasonId ? dialog().querySelector<HTMLElement>(`#${reasonId}`)?.textContent : "";
   expect(reason).toContain("HTTP Endpoint is not present in the activity catalog");
   expect(reason).toContain("Write HTTP Response is not present in the activity catalog");
   expect(reason).not.toMatch(/package|permission/i);
-  expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-disabled")).toBe("false");
+  expect(buttonByText(dialog(), "Create")?.getAttribute("aria-disabled")).toBe("false");
 });
 
 it.each([
@@ -124,17 +124,17 @@ it.each([
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await waitForText(dialog(container), expectedReason);
-  await vi.waitFor(() => expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(true));
+  await waitForDialog();
+  await waitForText(dialog(), expectedReason);
+  await vi.waitFor(() => expect(inputByLabel(dialog(), "Flowchart")?.disabled).toBe(true));
 
-  const rootChoice = inputByLabel(dialog(container), "Flowchart");
+  const rootChoice = inputByLabel(dialog(), "Flowchart");
   const reasonId = rootChoice?.getAttribute("aria-describedby");
   expect(reasonId).toBeTruthy();
-  expect(reasonId ? container.querySelector<HTMLElement>(`#${reasonId}`)?.textContent : "").toContain(expectedReason);
-  expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-disabled")).toBe("true");
-  expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-describedby")).toBe("wf-root-create-readiness");
-  dialog(container).querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  expect(reasonId ? dialog().querySelector<HTMLElement>(`#${reasonId}`)?.textContent : "").toContain(expectedReason);
+  expect(buttonByText(dialog(), "Create")?.getAttribute("aria-disabled")).toBe("true");
+  expect(buttonByText(dialog(), "Create")?.getAttribute("aria-describedby")).toBe("wf-root-create-readiness");
+  dialog().dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/design/workflows/definitions") && init?.method === "POST")).toBe(false);
 });
@@ -159,10 +159,10 @@ it("creates with the explicitly selected current root version and opens the crea
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await fill(inputByLabel(dialog(container), "Display name"), "Selected root version");
-  await click(inputByLabel(dialog(container), "Sequence"));
-  await click(buttonByText(dialog(container), "Create"));
+  await waitForDialog();
+  await fill(inputByLabel(dialog(), "Display name"), "Selected root version");
+  await click(inputByLabel(dialog(), "Sequence"));
+  await click(buttonByText(dialog(), "Create"));
 
   await vi.waitFor(() => expect(createdBody).toBeDefined());
   expect(createdBody?.initialState?.rootActivity?.activityVersionId).toBe("sequence-v7");
@@ -190,20 +190,20 @@ it("does not issue duplicate requests from a rapid repeated submit while creatio
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await fill(inputByLabel(dialog(container), "Display name"), "Pending workflow");
-  const createButton = buttonByText(dialog(container), "Create");
+  await waitForDialog();
+  await fill(inputByLabel(dialog(), "Display name"), "Pending workflow");
+  const createButton = buttonByText(dialog(), "Create");
   if (!createButton) throw new Error("Create button not found.");
 
   createButton.click();
   createButton.click();
   await vi.waitFor(() => expect(createRequests).toBeGreaterThan(0));
   expect(createRequests).toBe(1);
-  expect(buttonByText(dialog(container), "Cancel")?.disabled).toBe(true);
-  expect(dialog(container).querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  expect(buttonByText(dialog(), "Cancel")?.disabled).toBe(true);
+  expect(dialog().querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
 
   resolveCreate(response({ definition: definition({ id: "pending-definition" }), draft: null, versions: [] }));
-  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+  await vi.waitFor(() => expect(document.querySelector('form[role="dialog"]')).toBeNull());
 });
 
 it("allows a new create attempt after the previous request fails", async () => {
@@ -227,15 +227,15 @@ it("allows a new create attempt after the previous request fails", async () => {
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
-  await fill(inputByLabel(dialog(container), "Display name"), "Retry create");
-  await click(buttonByText(dialog(container), "Create"));
-  await waitForText(dialog(container), "Temporary create failure.");
-  expect(inputByLabel(dialog(container), "Display name")?.value).toBe("Retry create");
-  await vi.waitFor(() => expect(document.activeElement).toBe(dialog(container).querySelector('[role="alert"]')));
+  await waitForDialog();
+  await fill(inputByLabel(dialog(), "Display name"), "Retry create");
+  await click(buttonByText(dialog(), "Create"));
+  await waitForText(dialog(), "Temporary create failure.");
+  expect(inputByLabel(dialog(), "Display name")?.value).toBe("Retry create");
+  await vi.waitFor(() => expect(document.activeElement).toBe(dialog().querySelector('[role="alert"]')));
   expect(createRequests).toBe(1);
 
-  await click(buttonByText(dialog(container), "Create"));
+  await click(buttonByText(dialog(), "Create"));
   await vi.waitFor(() => expect(createRequests).toBe(2));
   await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("definition")).toBe("retried-definition"));
   expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/design/workflows/definitions") && init?.method === "POST")).toHaveLength(2);
@@ -267,17 +267,17 @@ it("can recover from an activity catalog failure with the dialog retry action", 
 
   await waitForText(container, "Hello World");
   await click(buttonByText(container, "Create workflow"));
-  await waitForDialog(container);
+  await waitForDialog();
   await vi.waitFor(() => expect(catalogRequests).toBe(1));
-  await vi.waitFor(() => expect(dialog(container).querySelector('[role="alert"]')?.textContent).toContain("Activity catalog is temporarily unavailable."));
-  expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-describedby")).toBe("wf-activity-catalog-error");
+  await vi.waitFor(() => expect(dialog().querySelector('[role="alert"]')?.textContent).toContain("Activity catalog is temporarily unavailable."));
+  expect(buttonByText(dialog(), "Create")?.getAttribute("aria-describedby")).toBe("wf-activity-catalog-error");
 
-  await click(buttonByText(dialog(container), "Retry"));
+  await click(buttonByText(dialog(), "Retry"));
   await vi.waitFor(() => expect(catalogRequests).toBe(2));
-  await vi.waitFor(() => expect(inputByLabel(dialog(container), "Flowchart")?.disabled).toBe(false));
-  await fill(inputByLabel(dialog(container), "Display name"), "Recovered workflow");
-  await vi.waitFor(() => expect(buttonByText(dialog(container), "Create")?.getAttribute("aria-disabled")).toBe("false"));
-  await click(buttonByText(dialog(container), "Create"));
+  await vi.waitFor(() => expect(inputByLabel(dialog(), "Flowchart")?.disabled).toBe(false));
+  await fill(inputByLabel(dialog(), "Display name"), "Recovered workflow");
+  await vi.waitFor(() => expect(buttonByText(dialog(), "Create")?.getAttribute("aria-disabled")).toBe("false"));
+  await click(buttonByText(dialog(), "Create"));
   await vi.waitFor(() => expect(createdBody).toBeDefined());
 
   expect(createdBody?.initialState?.rootActivity?.activityVersionId).toBe("flowchart-v1");
@@ -315,14 +315,14 @@ function sequenceActivity(activityVersionId: string, version: string): ActivityC
   };
 }
 
-function dialog(container: HTMLElement) {
-  const result = container.querySelector<HTMLElement>(".wf-dialog");
+function dialog() {
+  const result = document.querySelector<HTMLElement>('form[role="dialog"]');
   if (!result) throw new Error("Create dialog not found.");
   return result;
 }
 
-async function waitForDialog(container: HTMLElement) {
-  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
+async function waitForDialog() {
+  await vi.waitFor(() => expect(document.querySelector('form[role="dialog"]')).not.toBeNull());
 }
 
 async function click(element: Element | null) {

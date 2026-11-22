@@ -40,7 +40,7 @@ for (const mode of ["light", "dark"] as const) test(`unified output declaration,
   }
   const views = () => page.getByRole("tablist", { name: "Activity Definition authoring views", exact: true });
   const source = (name: string) => page.getByRole("region", { name: `Value source for ${name}`, exact: true });
-  const saved = () => expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  const saved = () => expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   async function selectOutput(name: string) {
     await views().getByRole("tab", { name: /^Outputs/ }).click();
     await page.locator('.ad-contract-workbench-list button[data-member-kind="output"]').filter({ has: page.getByText(name, { exact: true }) }).click();
