@@ -184,7 +184,7 @@ public sealed class OutcomeSelectionPublicationTests
     private static ActivityNode Flowchart(IReadOnlyCollection<ActivityNode> activities, IReadOnlyCollection<FlowchartConnection> connections) =>
         new("flowchart", typeof(FlowchartActivity).FullName!, [], [],
             new(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion,
-                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, activities.First().NodeId), Web)));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, activities.First().NodeId))));
 
     private static ActivityNode Switch(string nodeId, string? mode) =>
         new(nodeId, typeof(SwitchActivity).FullName!, [Literal(nameof(SwitchActivity.Value), "a")], [],

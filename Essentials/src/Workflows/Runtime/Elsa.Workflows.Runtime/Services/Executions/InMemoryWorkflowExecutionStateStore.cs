@@ -380,7 +380,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
     }
 
     private static string AlterationCaptureScope(WorkflowExecutionAlterationCaptureQuery query) =>
-        Elsa.Serialization.Core.JsonHashInput.Hash(new
+        Elsa.Serialization.Core.JsonHashInput.Hash(RuntimeJsonHashProjection.Project(new
         {
             query.TenantPartition,
             query.SystemIdentity,
@@ -397,7 +397,7 @@ public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStor
             query.Selector.WorkflowExecutionId,
             query.Selector.ArtifactId,
             query.Selector.MatchAllAuthorized
-        }).ToUpperInvariant();
+        })).ToUpperInvariant();
 
     private string EncodeCursor(
         WorkflowExecutionState state,

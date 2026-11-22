@@ -1,8 +1,11 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>The Runtime owner's converter wire shapes for lossless hash projection; not a second serializer profile.</summary>
-internal static class RuntimeJsonHashProjection
+public static class RuntimeJsonHashProjection
 {
+    /// <summary>Projects Runtime-owned contracts through JsonHashInput, preserving opaque UTF-16 identities and raw JSON leaves.</summary>
+    public static System.Text.Json.JsonElement Project<T>(T value) => Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(value, For);
+
     internal static object? For(object value) => value switch
     {
         StimulusDeliverySnapshot item => StimulusDeliverySnapshotJsonConverter.HashProjection(item),

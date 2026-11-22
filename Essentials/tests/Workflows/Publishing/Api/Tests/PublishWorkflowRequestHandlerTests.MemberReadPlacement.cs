@@ -120,7 +120,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var body = new ActivityNode("body", _sequenceActivity.Id, [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
             Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(
-                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", read)]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", read)]))));
         var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
         var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);
         var manifest = new ActivityProviderManifest(GraphActivityProvider.Key, "1", JsonSerializer.SerializeToElement(new

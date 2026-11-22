@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Workflows.Runtime.Core.Models.RuntimeJsonHashProjection
+static Elsa.Workflows.Runtime.Core.Models.RuntimeJsonHashProjection.Project<T>(T value) -> System.Text.Json.JsonElement
 const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.NativeModelWorkStartRetired = "NativeModelWorkStartRetired" -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer.BindStructureInputs(System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>! inputs) -> void

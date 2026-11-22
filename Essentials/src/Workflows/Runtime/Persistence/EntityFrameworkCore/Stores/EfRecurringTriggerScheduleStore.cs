@@ -887,9 +887,12 @@ public sealed class EfRecurringTriggerScheduleStore(
     private static void EnsureActiveSchedule(ProjectionStateSnapshot state, RecurringTriggerSchedule schedule)
     { if (!schedule.IsActive || schedule.ActivationId != state.ActivationId || state.ArtifactId != Encode(schedule.ArtifactId) || !state.ScheduleFingerprints.TryGetValue(schedule.ScheduleId, out var fp) || fp != ImmutableFingerprint(schedule)) throw new InvalidDataException("Recurring-schedule active projection contains a row with invalid immutable state."); }
     private static bool ProjectionsEqual(IEnumerable<RecurringTriggerScheduleEntity> rows, IEnumerable<RecurringTriggerSchedule> schedules, string scope) => ProjectionFingerprint(rows.Select(x => Read(x, scope))) == ProjectionFingerprint(schedules);
-    private static string ProjectionFingerprint(IEnumerable<RecurringTriggerSchedule> schedules) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(schedules.Select(x => x with { IsActive = false }).OrderBy(x => x.ScheduleId, StringComparer.Ordinal).ToArray()))));
-    private static string ImmutableFingerprint(RecurringTriggerSchedule schedule) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(schedule with { IsActive = false, NextOccurrence = DateTimeOffset.MinValue }))));
-    private static bool SchedulesEqual(RecurringTriggerSchedule left, RecurringTriggerSchedule right) => RuntimeArtifactJson.Serialize(left) == RuntimeArtifactJson.Serialize(right);
+    private static string ProjectionFingerprint(IEnumerable<RecurringTriggerSchedule> schedules) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        RuntimeJsonHashProjection.Project(schedules.Select(x => x with { IsActive = false }).OrderBy(x => x.ScheduleId, StringComparer.Ordinal).ToArray())).ToUpperInvariant();
+    private static string ImmutableFingerprint(RecurringTriggerSchedule schedule) => Elsa.Serialization.Core.JsonHashInput.Hash(
+        RuntimeJsonHashProjection.Project(schedule with { IsActive = false, NextOccurrence = DateTimeOffset.MinValue })).ToUpperInvariant();
+    private static bool SchedulesEqual(RecurringTriggerSchedule left, RecurringTriggerSchedule right) => Elsa.Serialization.Core.JsonCanonicalForm.Equals(
+        RuntimeJsonHashProjection.Project(left), RuntimeJsonHashProjection.Project(right));
 
     private string EncodeCursor(string purpose, string scope, string filter, string scheduleId) => continuationCodec.Encode(purpose, Encoding.UTF8.GetBytes(string.Join('\0', Encode(scope), Encode(filter), Encode(scheduleId))));
     private string? DecodeCursor(string? token, string purpose, string scope, string filter, string parameterName)

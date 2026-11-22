@@ -286,12 +286,11 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task With_member_reads_on_a_reusable_activity_body_admits_a_result_member_read()
     {
-        // A graph manifest is read with web defaults, so the body's structure payload is written with them too.
+        // The graph manifest and body structure use the shared baseline's exact member names.
         var body = new ActivityNode("body", "activity-sequence", [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
             Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(
-                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("consumer", MemberRead("ActivityResultMember"))]),
-                new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+                [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("consumer", MemberRead("ActivityResultMember"))]))));
 
         var compiled = await CompileReusableBodyAsync(body, memberReads: true);
 
