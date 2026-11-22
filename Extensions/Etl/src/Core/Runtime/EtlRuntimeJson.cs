@@ -16,8 +16,12 @@ internal static class EtlRuntimeJson
 
     public static JsonElement WriteElement<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
 
-    public static string ResultEnvelopeHash(string invocationJson, string resultJson) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("etl-result-envelope-v1|" + invocationJson + "|" + resultJson))).ToLowerInvariant();
+    public static string ResultEnvelopeHash(string invocationJson, string resultJson)
+    {
+        using var invocation = JsonDocument.Parse(invocationJson, new JsonDocumentOptions { MaxDepth = 1000 });
+        using var result = JsonDocument.Parse(resultJson, new JsonDocumentOptions { MaxDepth = 1000 });
+        return Elsa.Serialization.Core.JsonHashInput.Hash(new { Purpose = "etl-result-envelope-v1", Invocation = invocation.RootElement, Result = result.RootElement });
+    }
 
     public static T Read<T>(string json, int maximumBytes)
     {

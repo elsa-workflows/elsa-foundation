@@ -7,8 +7,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "3de4d128eb3da8b49b2a6aadae3717c7f643f6d6fb82f9086814c1f523804ae5",
-  "compressedSha256": "71eca594b92eaa969ad50841b44a5282b577536de0393d4d8421bede5a587c87",
+  "databaseSha256": "f49fafe546dcc03261a68df74a015cd762b7bf1f2ddd7b086cb718e074db97f3",
+  "compressedSha256": "05b6d207738bafa975de8ae1efffeea193a3ebf5862d59b1a869a0139904dc6b",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -98,7 +98,7 @@
         "fault": {
           "code": "bpmn.child.faulted",
           "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
-          "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+          "message": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed.",
           "sanitizedStackTrace": null,
           "isRetryable": false,
           "metadata": {}
@@ -154,7 +154,7 @@
         "status": 1,
         "resolutionOutcome": {
           "actionKind": "FaultWorkflow",
-          "appliedAt": "2026-10-28T15:23:27.644631\u002B00:00",
+          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
           "strategy": {
             "alias": "Fault",
             "version": "1"
@@ -163,8 +163,8 @@
           "metadata": {}
         },
         "failureType": "ActivityReturnedFault",
-        "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
-        "createdAt": "2026-10-28T15:23:27.644631\u002B00:00",
+        "message": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed.",
+        "createdAt": "2026-10-28T15:23:27.644631+00:00",
         "resolvedAt": null,
         "metadata": {
           "runtime.parentCompletionReason": "ParentCompletionEvaluation",
@@ -176,7 +176,7 @@
           "runtime.executableNodeId": "node-bpmn",
           "runtime.faultSubStatus": "ActivityReturnedFault",
           "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
-          "runtime.faultMessage": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed."
+          "runtime.faultMessage": "BPMN process faulted because child node 'node-listener' faulted: a faulted child cannot complete, so its token — and any downstream join that requires it — can no longer proceed."
         },
         "isActive": true,
         "isBlocking": true
@@ -190,7 +190,7 @@
         "status": 1,
         "resolutionOutcome": {
           "actionKind": "FaultWorkflow",
-          "appliedAt": "2026-10-28T15:23:27.644631\u002B00:00",
+          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
           "strategy": {
             "alias": "Fault",
             "version": "1"
@@ -200,7 +200,7 @@
         },
         "failureType": "ActivityReturnedFault",
         "message": "Actual legacy outcome wait faulted.",
-        "createdAt": "2026-10-28T15:23:27.644631\u002B00:00",
+        "createdAt": "2026-10-28T15:23:27.644631+00:00",
         "resolvedAt": null,
         "metadata": {
           "runtime.bookmarkId": "legacy-activity-3:attempt:1:trigger:1",
@@ -232,11 +232,13 @@
       "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
       "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
       "activity_execution_state.ContentJson/completion/contractFingerprint",
-      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint"
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint",
+      "activity_execution_state.ContentJson/privateState/value/inlineValue: EventWaitState.EventName→eventName or LegacyCheckpointOutcomeWaitState.Name→name only"
     ],
     "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
     "statePinsRegenerated": true,
     "changedStateContractReferences": 12,
-    "changedBindingFingerprints": 5
+    "changedBindingFingerprints": 5,
+    "changedLeafStateMemberNames": 2
   }
 }

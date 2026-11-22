@@ -190,7 +190,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             : $"{expression.ResultType.Kind}:{expression.ResultType.Id}:{CanonicalJson(expression.ResultType.Schema)}";
         var parameters = string.Join(',', expression.Parameters
             .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => $"{item.Key}={CanonicalJson(JsonSerializer.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
+            .Select(item => $"{item.Key}={CanonicalJson(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(item.Value, typeof(Elsa.Expressions.Core.Models.ExpressionParameterBinding)))}"));
         // The fallback marker changes what the runtime loads and records (spec 1222), so it is behavior; it is appended
         // only when present, so an expression without one hashes as before.
         var fallback = expression.VariableReadFallback is { } marker

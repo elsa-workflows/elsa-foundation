@@ -87,7 +87,7 @@ internal static class EtlRuntimeRecordCodec
         return invocation;
     }
 
-    public static string HashText(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    public static string HashText(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value);
 
     public static bool IsSha256(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
 

@@ -1144,7 +1144,7 @@ internal sealed partial class EfEtlRuntimeStore(
 
     private static long Expiry(long now, TimeSpan duration) => checked(now + duration.Ticks);
     private long NowTicks() => clock.GetUtcNow().UtcDateTime.Ticks;
-    private static string HashAscii(string value) => EtlRuntimeRecordCodec.HashText(value);
+    private static string HashAscii(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     private static string DeliveryId(string resultId) => HashAscii("etl-delivery-v1|" + resultId);
     private static string OutboxHash(string invocationJson, string resultJson) => EtlRuntimeJson.ResultEnvelopeHash(invocationJson, resultJson);
     private static void EnsureSchema(string schemaVersion) => EtlRuntimeRecordCodec.EnsureSchema(schemaVersion);

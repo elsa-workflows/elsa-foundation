@@ -264,7 +264,7 @@ internal static class EtlDefinitionRecordCodec
         return artifact;
     }
 
-    public static string HashText(string value) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    public static string HashText(string value) => Elsa.Serialization.Core.JsonHashInput.HashJson(value);
 
     private static void EnsureScopeIdentity(string scopeKey, string? tenantId, string persistencePartition, EtlScope scope)
     {

@@ -845,8 +845,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private static (long ByteLength, string ContentHash) HashCanonicalBatch(IReadOnlyList<EtlConnectorInputRecord> records,
         EtlPipelineV2 pipeline)
     {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        using var stream = new EtlBoundedHashingStream(hash, pipeline.Limits.MaxBatchBytes);
+        using var stream = new EtlBoundedHashingStream(pipeline.Limits.MaxBatchBytes);
         using (var writer = NewJsonWriter(stream))
         {
             writer.WriteStartObject();
@@ -863,7 +862,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
             writer.WriteEndObject();
             writer.Flush();
         }
-        return (stream.ByteLength, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+        return (stream.ByteLength, stream.ContentHash());
     }
 
     private static IReadOnlyList<(string Name, EtlColumnType Type)> SourceFieldNames(EtlPipelineV2 pipeline) =>

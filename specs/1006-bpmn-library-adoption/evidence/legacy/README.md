@@ -8,6 +8,10 @@ All other database fields, including raw BPMN private state, queue/outbox items,
 identities, are retained exactly. The historical Scheduled probe without an input snapshot keeps its `sha256:test`
 identity. No historical hash verifier or runtime migration was added.
 
+The typed leaf states also use their current scoped member spelling: eight `EventWaitState.EventName` keys become
+`eventName`, and four test `LegacyCheckpointOutcomeWaitState.Name` keys become `name`. These are the only private-state
+member changes; every `Elsa.Bpmn.ExecutionState` document remains byte-identical to the historical capture.
+
 Each receipt's `s9Regeneration` records the original database/compressed digests and the transformation extent;
 its top-level digests identify the current transformed fixture. The capture revisions, old-host controls and
 historical test results below describe the original input bytes, which remain recoverable from the parent Git
