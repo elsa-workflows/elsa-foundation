@@ -810,9 +810,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 None of these has been made. G1 and G2 change domain language; follow `docs/agents/domain.md`.
 
-- [ ] **G1** (#5009) `studio/CONTEXT.md` defines "Artifact Hash" as the identity of an Executable, and D9
+- [x] **G1** (#5009) `studio/CONTEXT.md` defines "Artifact Hash" as the identity of an Executable, and D9
   replaces "Artifact …" with "Executable …" in the UI. Change the glossary, or record that the UI
-  label differs from the domain term, before X14.7.
+  label differs from the domain term, before X14.7. (PR #5276)
 - [ ] **G2** (#5010) `studio/CONTEXT.md` defines "Runtime Evidence" and calls "Runtime Value Evidence Level"
   user-facing, and D9 replaces "evidence" in the UI. Choose the replacement wording with the owner,
   then update the glossary, before X14.6.
