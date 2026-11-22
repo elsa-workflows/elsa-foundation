@@ -277,6 +277,9 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, loseOpenAnswer: true);
+        foreach (var kind in new[] { Contract.Kinds.Delete, Contract.Kinds.Discard })
+            foreach (var phase in Enum.GetValues<RecoveryPhase>())
+                await CheckDeferredParkCommand(kind, phase, check);
         await CheckTerminalCohort(takeover: false, check);
         await CheckTerminalCohort(takeover: true, check);
         await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check);
@@ -293,6 +296,127 @@ internal static class ParkKeptChecks
         await CheckTerminalChildNotice(keptBeforeResume: true, check);
         await CheckTerminalChildNotice(keptBeforeResume: true, check, holdNotices: true);
         await CheckTerminalChildNotice(keptBeforeResume: false, check, ordinaryEnd: true);
+    }
+
+    private enum RecoveryPhase { Open, Reparked, Complete }
+
+    private static async Task CheckDeferredParkCommand(string kind, RecoveryPhase phase, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_028_500;
+        const int attempts = 3;
+        var now = initial;
+        var due = initial + (phase == RecoveryPhase.Open ? 1 : 1_000);
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("deferred-park-command");
+        var requests = new Requests("deferred-park-command");
+        var ingress = new InMemoryIngress(store, requests, "deferred-park-command", (_, name) => name == Contract.Kinds.Recover);
+        var label = $"P-6 {kind} at {phase}";
+        var first = Owner("phase-first");
+        await using var initialOwner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        await Pump(initialOwner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(initialOwner);
+        await ingress.SendAsync(scope, target, "trip", phase == RecoveryPhase.Reparked ? "poison" : "advance");
+        if (phase == RecoveryPhase.Reparked)
+            for (var index = 0; index < InMemoryStore.ParkPageLimit - 1; index++)
+                await ingress.SendAsync(scope, target, $"kept-{index:D3}", "advance");
+        await Pump(initialOwner);
+
+        var parked = Read();
+        var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+        var request = requests.OpenBound("operator", due + 1_000, scope.Tenant, null);
+        var queued = store.AdmitFoundationOperator(scope.Tenant, actor.Id, null, "operator", kind,
+            null, due, null, selection, request.ReplyAddress("deferred-park-command"));
+        var staged = parked is { Park: not null, Terminal: not null } && queued.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+            Delivery("operator").Message.TargetCreation == parked.Row.Creation &&
+            Delivery("trip") is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        check(staged, $"{label}: the original Park mark qualifies the delayed command before Resume");
+        if (!staged) return;
+
+        probe.PausePages = phase == RecoveryPhase.Open;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(first);
+        if (phase == RecoveryPhase.Open)
+            await Step(first);
+        if (phase == RecoveryPhase.Reparked)
+        {
+            for (var pass = 0; pass < 10 && Delivery("trip").ReleasedBy is null; pass++) await Step(first);
+            var released = Read().Row.ParkRecovery is { Cursor: not null } &&
+                Delivery("trip") is { Done: false, ReleasedBy: not null } && Kept().Length != 0;
+            check(released, $"{label}: page one releases the trip input while a kept suffix remains");
+            if (!released) return;
+            Delivery("trip").Attempts = attempts;
+        }
+        var epoch = first.Fences.Single().Epoch;
+        await initialOwner.DisposeAsync();
+        now++;
+        var cold = Owner("phase-cold");
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        for (var pass = 0; phase != RecoveryPhase.Open && pass < 20 &&
+            (Read().Row.ParkRecovery is not null || phase == RecoveryPhase.Complete && probe.RecoveredArrivals == 0); pass++)
+        {
+            if (phase == RecoveryPhase.Complete) now += 11;
+            await Step(cold);
+        }
+
+        var before = Read();
+        var ready = phase switch
+        {
+            RecoveryPhase.Open => before is { Terminal: null, Row: { Status: InstanceStatus.Running, ParkRecovery: { } drain } } &&
+                store.Messages[drain.Control].Message.Due > due,
+            RecoveryPhase.Reparked => before.Row is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+                before.Park == parked.Park && before.Terminal == parked.Terminal && Delivery("trip").KeptBy == ParkKeepReason.Consumed,
+            _ => before is { Park: null, Terminal: null, Row: { Status: InstanceStatus.Running, ParkRecovery: null } } && probe.RecoveredArrivals == 1
+        };
+        ready &= cold.Fences.Single().Epoch > epoch && request.Answer is null && Delivery("operator") is { Done: false, Seen: 0 };
+        check(ready, $"{label}: the successor has the intended lifecycle phase before the command is due " +
+            $"(status {before.Row.Status}; drain {before.Row.ParkRecovery is not null}; applied {probe.RecoveredArrivals})");
+        if (!ready) return;
+
+        var kept = Kept();
+        var journal = store.Journal.Values.ToArray();
+        now = due;
+        for (var pass = 0; pass < 5 && request.Answer is null; pass++) await Step(cold);
+        if (phase == RecoveryPhase.Reparked)
+        {
+            var expectedKind = kind == Contract.Kinds.Delete ? ParkClearKind.Delete : ParkClearKind.Discard;
+            check(request.Answer is "started" && Read().Row.ParkDiscard is { Operation: "operator", Kind: var actual } && actual == expectedKind,
+                $"{label}: the original selection opens the requested resolution after re-park");
+            await Pump(successor);
+            var ended = store.Instances[parked.Row.Id];
+            check(Kept().Length == 0 && ended.ParkDiscard is null &&
+                (expectedKind == ParkClearKind.Delete ? ended.Retired : ended.ParkDiscarded),
+                $"{label}: the resolution completes with all kept rows settled");
+        }
+        else
+        {
+            var reason = phase == RecoveryPhase.Open && kind == Contract.Kinds.Discard ? "ResolutionOpen" : "StaleSelection";
+            check(request.Answer is CreationResult result && result.Result == reason && Read() == before &&
+                Kept().SequenceEqual(kept) && store.Journal.Values.SequenceEqual(journal),
+                $"{label}: owner refuses {reason} and preserves the checkpoint, kept rows and journal (reply {request.Answer})");
+        }
+
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => now - initial, Horizon = TimeSpan.Zero, MaxAttempts = attempts, PassTurnBudget = 1,
+            Transport = new OperatorReplies(requests, _ => { })
+        });
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        InMemoryStore.MessageRow Delivery(string messageId) => store.Messages.Values.Single(row => row.Message.Id == messageId);
+        (InboxKey Key, ParkKeepReason? Reason)[] Kept() => store.Messages.Values.Where(row => row.KeptBy is not null)
+            .OrderBy(row => row.Seq).Select(row => (row.Message.InboxKey, row.KeptBy)).ToArray();
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
