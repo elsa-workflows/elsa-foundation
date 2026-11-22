@@ -11,6 +11,9 @@ export interface OverflowMenuProps extends DisclosureControlProps {
   defaultOpen?: boolean;
   menuLabel?: string;
   triggerIcon?: ReactNode;
+  triggerText?: string;
+  triggerClassName?: string;
+  notes?: ReactNode;
   triggerTitle?: string;
   popoverClassName?: string;
   minWidth?: number;
@@ -53,7 +56,7 @@ function ActionMenu({
   items,
   ariaLabel = "More actions",
   menuLabel = ariaLabel,
-  triggerIcon,
+  triggerIcon, triggerText, triggerClassName, notes,
   triggerTitle = ariaLabel,
   popoverClassName,
   minWidth = 176,
@@ -133,7 +136,7 @@ function ActionMenu({
       <button key={item.id} id={`${menuId}-item-${index}`} type="button"
         role={item.selection ? `menuitem${item.selection.type}` : "menuitem"}
         aria-checked={item.selection?.checked} className="studio-overflow-menu-item"
-        data-destructive={item.destructive || undefined} disabled={item.disabled} title={item.title}
+        aria-describedby={item.describedBy} data-destructive={item.destructive || undefined} disabled={item.disabled} title={item.title}
         tabIndex={index === activeIndex ? 0 : -1} onFocus={() => setActiveIndex(index)}
         onClick={event => activate(item, event.currentTarget)}>
         {item.selection ? <Check size={15} aria-hidden="true" style={{ visibility: item.selection.checked ? "visible" : "hidden" }} /> : item.icon}
@@ -152,7 +155,7 @@ function ActionMenu({
           primaryAction.onSelect();
         }}>{primaryAction.label}</StudioButton>}
       <StudioButton ref={triggerRef} size="sm" variant={primaryAction ? "primary" : "default"}
-        className={primaryAction ? "studio-split-button-trigger" : "studio-overflow-menu-trigger"}
+        className={primaryAction ? "studio-split-button-trigger" : triggerClassName ?? "studio-overflow-menu-trigger"}
         disabled={disabled} aria-label={ariaLabel} title={triggerTitle} aria-haspopup="menu" aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => {
@@ -163,11 +166,12 @@ function ActionMenu({
           }
         }}
         onKeyDown={event => {
+          if (open && event.key === "Escape") { event.preventDefault(); close(); return; }
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           event.preventDefault();
           openAt((event.key === "ArrowUp" ? actionIndexes.at(-1) : actionIndexes[0]) ?? 0);
         }}>
-        {primaryAction ? <ChevronDown size={15} aria-hidden="true" /> : triggerIcon ?? <span aria-hidden="true">⋯</span>}
+        {primaryAction ? <ChevronDown size={15} aria-hidden="true" /> : triggerIcon ?? (triggerText ? null : <span aria-hidden="true">⋯</span>)}{triggerText}
       </StudioButton>
       <AnchoredPopover anchorRef={triggerRef} open={open && !disabled}
         className={["studio-overflow-menu-popover", popoverClassName].filter(Boolean).join(" ")}
@@ -200,6 +204,7 @@ function ActionMenu({
             </div> : <React.Fragment key={groupIndex}>{buttons}</React.Fragment>;
           })}
         </div>
+        {notes}
       </AnchoredPopover>
     </div>
   );

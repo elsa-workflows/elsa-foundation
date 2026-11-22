@@ -66,6 +66,6 @@ it("opens the review dialog for the selected block", async () => {
   render();
   expect(promote()!.disabled).toBe(false);
   flushSync(() => promote()!.click());
-  await vi.waitFor(() => expect(container.querySelector("[role=dialog]")?.getAttribute("aria-label")).toBe("Promote to reusable activity"));
-  expect(container.textContent).toContain("Proposed reusable activity");
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] .studio-dialog-title')?.textContent).toBe("Promote to reusable activity"));
+  expect(document.body.textContent).toContain("Proposed reusable activity");
 });

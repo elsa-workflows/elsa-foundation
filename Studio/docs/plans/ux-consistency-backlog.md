@@ -194,7 +194,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
-- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
+- [x] **A6 graph commands** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 - [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
@@ -390,7 +390,7 @@ Browser dialogs and busy labels (no kit prerequisite):
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
-- [ ] **A6 graph dialogs** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
+- [x] **A6 graph dialogs** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
 
 ### X4. Create flows
 
@@ -466,7 +466,7 @@ in scope.
 - [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu). (PR #5325)
 - [x] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon). (PR #5343)
-- [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
+- [x] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by (PR #5356)
   searching for a `StudioButton` labelled "Refresh" outside `KIT`. Weather, External sign-in, User access and the ETL lists use the header contribution in PR #5348.
 
 ### X7. Status badges
@@ -644,7 +644,7 @@ the designer header is a documented exception.
 
 - [x] **X12.13** (#5266, #5353) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
-- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
+- [x] **A6 graph previews** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
 
 ### X13. CSS texture
 
@@ -776,7 +776,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 
-- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
+- [x] **A6 compensation reorder focus** (PR #5360) [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
 - [x] **W18** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
 - [x] **W19** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
