@@ -150,11 +150,15 @@ internal static class ParkDeleteChecks
         var before = store.Instances[complete.Instance];
         var control = before.ParkDiscard!.Control;
         var position = store.Partitions[batch.Partition].Position;
+        var obligation = complete.Row!.HeldCascade!;
+        var oldChild = obligation.Children[0];
+        var wrongChild = obligation with { Children = obligation.Children.SetItem(0, oldChild with { Creation = oldChild.Creation + 1 }) };
         var changes = new (TurnCommit Turn, string Missing)[]
         {
             (complete with { Consumed = [], Done = [] }, "control"),
             (complete with { Sent = [] }, "notice"),
-            (complete with { Row = complete.Row! with { HeldCascade = null, Parent = null, ParentCreation = 0 } }, "obligation")
+            (complete with { Row = complete.Row! with { HeldCascade = null, Parent = null, ParentCreation = 0 } }, "obligation"),
+            (complete with { Row = complete.Row! with { HeldCascade = wrongChild } }, "exact child creation")
         };
         foreach (var change in changes)
         {

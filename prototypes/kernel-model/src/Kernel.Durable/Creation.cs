@@ -217,10 +217,11 @@ public static class CreationProtocol
         if (held is null) return;
 
         var jobs = JobRegistry.Read(previous.Jobs).ToHashSet();
+        var children = ChildRegistry.Read(previous.Children).ToHashSet();
         if (held.Count == 0 || held.StorageBytes > CascadeRegistry.MaxBytes ||
             held.Jobs.Length != jobs.Count || !held.Jobs.ToHashSet().SetEquals(jobs) ||
             held.Jobs.Any(job => job.Generation < 0 || !FoundationMetadataLimits.FitsName(job.Key, preservesCodeUnits: true)) ||
-            held.Children.Distinct().Count() != held.Children.Length ||
+            held.Children.Length != children.Count || !children.SetEquals(held.Children) ||
             held.Children.Any(child => child.Creation <= 0 || !FoundationMetadataLimits.FitsTarget(child.Id) ||
                 StoreBatchRules.AddressPartition(child.Id) is null) ||
             sizeof(char) * (long)Json.Write(held).Length > CascadeRegistry.MaxBytes)
