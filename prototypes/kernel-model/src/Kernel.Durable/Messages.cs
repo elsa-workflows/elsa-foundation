@@ -59,6 +59,15 @@ public sealed record Message(
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
+    private WeakReference<Message>? _issuedTicket;
+    internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
+
+    internal Message AsKernelTicket()
+    {
+        // Authority belongs to the final emitted envelope. A record copy cannot carry it to another message.
+        _issuedTicket = new(this);
+        return this;
+    }
     internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
@@ -97,9 +106,15 @@ public static class Kinds
 
     public static void RequireApplicationSend(string kind)
     {
-        if (kind is Job or JobDeadline) throw new ArgumentException("The foundation issues job tickets and deadlines.", nameof(kind));
-        if (kind is Meet or Publish) throw new ArgumentException("Event tickets must be created by DurableTurn.Subscribe or Publish.", nameof(kind));
+        if (IsPrivateKernelKind(kind))
+            throw new ArgumentException("The foundation reserves this message kind.", nameof(kind));
     }
+
+    internal static bool IsPrivateKernelKind(string kind) => kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+        !IsControl(kind) && kind is not ("kernel.recover" or "kernel.discard" or "kernel.migrate");
+
+    internal const string UnissuedPrivateKind = "The outcome includes a private kernel kind with no issuer.";
+    internal static bool IsUnissuedPrivate(Message message) => IsPrivateKernelKind(message.Kind) && !message.HasIssuedTicket;
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
     public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"

@@ -30,6 +30,8 @@ public static class StoreBatchRules
                 (turn.Row is null || releases.Distinct().Count() != releases.Count || releases.Any(removed!.Contains) ||
                     releases.Intersect(turn.Held ?? []).Any()))
                 throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
+            if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
+                throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
             if (turn.Delete)
             {
                 if (turn.Expected is not { } expected)

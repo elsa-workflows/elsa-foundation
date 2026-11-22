@@ -10,8 +10,7 @@ that each checkbox is one small task.
   `main` on 2026-11-21 and reverted there the same day because it broke CI. It is kept on branch
   `wip/studio-in-progress-2026-11-21`. Until that work lands, an item may describe code that `main`
   does not have yet; confirm the defect on your own base before changing anything.
-- **Status:** open. Nothing in this file has been implemented. Owner decisions D1–D14 were recorded
-  on 2026-11-21.
+- **Status:** delivery in progress. The section trackers in #4990 show live progress.
 - **Normative rules:** [UX design spec](../ux/design-spec.md), [module UI guide](../module-ui.md),
   [design tokens](../design-tokens.md). This file lists deviations from them; it does not replace them.
 - **Tracking:** every open item has a Foundation issue, shown in brackets after its ID. They hang
@@ -78,15 +77,9 @@ keeps its components under `EXT/ExtensionBuilder/extension-builder/`.
 
 ## Owner decisions
 
-Decided by the owner on 2026-11-21 through a form. Each entry gives the outcome, then what it changes
-and anything it leaves open. Items that depend on a decision say `needs: Dn`. Where an entry lists an
-open point, ask before acting on that point.
+The owner recorded D1–D14 on 21 November and [resolved the remaining product choices](https://github.com/elsa-workflows/elsa-foundation/issues/4990#issuecomment-7071720883) on 22 November.
 
-- [x] **D1. Creation verb: "New …".** Rename "Create workflow", "Create secret", "Create connection",
-  "Create form", "Create tag" and "Create dashboard". "New agent", "New decision", "New template",
-  "New question" and "New definition" already comply. Open: the question covered the buttons that
-  start creation. Dialog titles, the confirm button inside a create dialog, and "Create parallel
-  draft", "Create form version" and "Create next version" were not asked.
+- [x] **D1. Creation labels.** Use “New …” for creation entry points and dialog titles. Use “Create” for confirmation and version actions, including parallel drafts and form versions.
 - [x] **D2. Save label: "Save" everywhere,** including screens with a separate publish step. Retire
   "Save changes", "Save draft" and "Update view".
 - [x] **D3. Kickers removed; sentence case.** Remove the small labels above titles in dialogs and
@@ -98,8 +91,7 @@ open point, ask before acting on that point.
   chip and actions. List pages stay at 20px / 600, so the two differ on purpose.
 - [x] **D5. The shell owns the breadcrumb trail.** Pages hand their trail to the shell and stop
   rendering their own breadcrumb. This needs host work first (K15).
-- [x] **D6. Create flow: dialog first.** A name-and-description dialog, then the editor opens. No
-  inline create forms, no whole-page card, no untitled drafts.
+- [x] **D6. Create flow.** Open a name-and-description dialog, then the editor. This applies to dashboards and questions too.
 - [x] **D7. Verbs.** "Delete" destroys a record; "Remove" detaches an item from a list or parent.
   "Retry" everywhere, not "Try again". The Weaver "Withdraw" / "Deny" pair was dropped from this
   decision because they are different actions (see X5.9).
@@ -111,43 +103,34 @@ open point, ask before acting on that point.
     and says to avoid "Workflow Instance" in navigation and general labels.
   - "Executable" only: "Artifact ID", "Artifact hash" and the "Artifact:" chip all become
     "Executable …". `CONTEXT.md` defines "Artifact Hash", so the glossary has to change first (G1).
-  - "Evidence" is replaced in the UI by plainer wording. Open: the replacement was not chosen ("run
-    data" was only an example). `CONTEXT.md` defines "Runtime Evidence" and calls "Runtime Value
-    Evidence Level" user-facing, so the glossary has to change first (G2).
+  - Use “Run data” and “Run data detail” for user-facing evidence labels. G2 records how these labels relate to the runtime terms.
   - The selector labelled "Provider key", "Implementation provider", "Design-owned provider" and
     "Implementation type" becomes "Provider". **[check]** that all four select the same thing:
     `CONTEXT.md` lists "Implementation provider" as a term to avoid for the Flowchart / Sequence /
     BPMN choice (the "Activity Graph Composition Model").
-- [x] **D10. Workspace tabs.** Transient routes ("Create secret", "New decision") reuse the current
-  tab. The strip has a cap and closes the least recently used tab beyond it. Open: no number was
-  given (12 was the audit's suggestion). Open: what happens when the tab to be closed has unsaved
-  changes.
+- [x] **D10. Workspace tabs.** Transient routes reuse the current tab. Cap the workspace at 12 tabs, evicting the least recently used clean tab. Preserve unsaved tabs even when this takes the workspace over 12.
 - [x] **D11. Collection search is instant.** No "Search" submit button.
 - [x] **D12. Rows open through the whole row** (`studioRowInteraction`). Name buttons and "Details"
   buttons that duplicate it go. **[check]** that keyboard users can still open a row before removing
   a link.
 - [x] **D13. Required fields carry a "(required)" suffix.** Optional fields carry no marker.
-- [x] **D14. Glossary terms keep their capitals in UI labels** (added 2026-11-21). The question named
-  "Test Run" and "Executable Inspector", which `studio/CONTEXT.md` defines with capitals. This is an
-  exception to the sentence-case rule and has to be written into the design spec (G3). Open: which
-  other terms it reaches. "Activity Definition", "Workflow Definition" and "User Task" are not
-  headwords in `studio/CONTEXT.md`; the root `CONTEXT.md` was not checked.
+- [x] **D14. Capitalization.** Keep “Test Run” and “Executable Inspector” capitalized in UI labels. Use sentence case for other labels, including “User tasks”.
 
 ## Phase 0: kit work
 
 Most inconsistencies exist because a shared primitive is missing or unused. Do these first.
 
-- [ ] **K1. Reusable dialog shell.** (#4992) [verified] No `StudioDialog` component is exported. A Radix-based
+- [x] **K1. Reusable dialog shell.** (#4992) [verified] No `StudioDialog` component is exported. A Radix-based
   shell with `.studio-dialog*` classes already exists inside `KIT/dialog/DialogHost.tsx` for
   `api.dialogs.confirm/prompt/alert`. Extract a declarative `StudioDialog` from it (title, optional
   description, X close, focus trap, footer slot taking `StudioDialogFooter`) and export it from
-  `@elsa-workflows/studio-ui`. Migrate one dialog as the reference (suggest Create workflow).
+  `@elsa-workflows/studio-ui`. Migrate one dialog as the reference (suggest Create workflow). (PR #5271)
 - [x] **K2. Destructive button variant.** (#4993) [verified] `KIT/forms/Button.tsx` has
   `StudioButtonVariant = "primary" | "default" | "ghost"`. Add `danger`, styled in `Button.css` with
   tokens. Workarounds to replace afterwards: `wf-delete-action`, `studio-button danger`,
   `backend-remove`, `connections-danger`, `external-auth-danger-action`, `data-tone`. (PR #5268)
-- [ ] **K3. Icon-only button.** (#4994) [source] Add a kit icon button that requires `aria-label`.
-  Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`.
+- [x] **K3. Icon-only button.** (#4994) [source] Add a kit icon button that requires `aria-label`.
+  Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`. (PR #5270)
 - [ ] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use
   `StudioButton className="active"`.
 - [ ] **K5. Richer menu and split button.** (#4996) [source] The designer "More workflow actions" menu
@@ -159,9 +142,9 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
   footers still use `.wf-page-size`, so their "Rows" select now looks different from Definitions.)
-- [ ] **K7. Breadcrumbs for callback navigation.** (#4999) [verified] `StudioBreadcrumbs` takes
+- [x] **K7. Breadcrumbs for callback navigation.** (#4999) [verified] `StudioBreadcrumbs` takes
   `items[{ href, label }]`, `current` and `renderLink`. Try porting `ScopeBreadcrumb`
-  (`.wf-breadcrumb`) with `renderLink` first; change the kit only if href-less items are required.
+  (`.wf-breadcrumb`) with `renderLink` first; change the kit only if href-less items are required. (PR #5281)
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
@@ -277,8 +260,8 @@ at the kit size. All migration items below `needs: K1`.
 
 Workflows:
 
-- [ ] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
-  Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`.
+- [x] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
+  Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`. (PR #5271, PR #5278)
 - [ ] **X3.2** (#5038) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
   "Run workflow" has no primary emphasis.
 - [ ] **X3.3** (#5039) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
@@ -367,15 +350,12 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 - [ ] **X4.4** (#5080) [seen] Decision and form: creation opens the editor directly. Add the dialog step.
   `needs: D6`
 - [ ] **X4.5** (#5081) [check] Dashboard and question: creation is a page with a query builder, which is more
-  than a name and description. D6 was asked about simple named resources; ask whether it applies
-  here.
+  than a name and description. Start both with the D6 dialog, then open the editor.
 
 ### X5. Labels and capitalisation
 
 - [ ] **X5.1** (#5083) [seen] Rename to "New …" (D1): "Create workflow", "Create secret", "Create connection",
-  "Create form", "Create tag", "Create dashboard". Leave dialog titles, dialog confirm buttons and
-  "Create parallel draft" / "Create form version" / "Create next version" alone until the open point
-  in D1 is answered. `needs: D1`
+  "Create form", "Create tag", "Create dashboard". Apply “New …” to dialog titles as well. Keep “Create” for confirmations and version actions. `needs: D1`
 - [ ] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
   draft" (Forms, ETL, Feature management), "Update view". Activity availability, Decisions and Theme
   builder already say "Save". `needs: D2`
@@ -384,12 +364,10 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14).
 - [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
-  (`WF/ActivityDefinitionForkDialog.tsx:194`). Change the case only; the verb in the two dialog titles
-  waits for the open point in D1. Leave "Test Run"
+  (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
 - [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
-  `EXT/UserTasks/module.tsx:22–24`. Blocked on the open point in D14 (whether "User Task" counts as
-  a glossary term). `needs: D14` (PR #5289)
+  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string.
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
@@ -680,8 +658,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
 - [ ] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
   snapshot…" (`WF/workflow-editor/AttachedRunActivityInspector.tsx:25`); "Loading authoritative
-  compatibility evidence…". D9 replaces "evidence" in UI copy, but the replacement wording is still
-  open. `needs: G2`
+  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2`
 - [ ] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
   ("Artifact ID", "Artifact hash", "Artifact: {id}" filter chip). Use "Executable" for all of them
   (D9). `needs: G1`
@@ -793,8 +770,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance.
 - [ ] **H4** (#5255) [seen] Workspace tabs accumulate without limit (23 open after normal navigation),
   including transient ones. D10: transient routes reuse the current tab, and the strip gets a cap that
-  closes the least recently used tab. The cap number and the handling of tabs with unsaved changes
-  are open; ask before implementing the cap. `needs: D10`
+  closes the least recently used clean tab. Use 12 tabs and preserve unsaved tabs even above the cap. `needs: D10`
 - [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
   **[check]** how it behaves at narrow widths.
 - [ ] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
@@ -808,16 +784,14 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ## Documentation changes the decisions require
 
-None of these has been made. G1 and G2 change domain language; follow `docs/agents/domain.md`.
+G1 and G2 change domain language; follow `docs/agents/domain.md`.
 
 - [x] **G1** (#5009) `studio/CONTEXT.md` defines "Artifact Hash" as the identity of an Executable, and D9
   replaces "Artifact …" with "Executable …" in the UI. Change the glossary, or record that the UI
   label differs from the domain term, before X14.7. (PR #5276)
 - [x] **G2** (#5010) `studio/CONTEXT.md` defines "Runtime Evidence" and calls "Runtime Value Evidence Level"
-  user-facing, and D9 replaces "evidence" in the UI. Choose the replacement wording with the owner,
-  then update the glossary, before X14.6. (PR #5282)
-- [x] **G3** (#5011) `studio/docs/ux/design-spec.md`: record the D14 exception to sentence case, with the list
-  of terms it covers once that open point is answered. (PR #5283)
+  user-facing, and D9 replaces "evidence" in the UI. Use the wording in D9 to update the glossary, before X14.6. (PR #5282)
+- [x] **G3** (#5011) `studio/docs/ux/design-spec.md`: record the D14 exception to sentence case, for “Test Run” and “Executable Inspector”. (PR #5283)
 - [x] **G4** (#5012) `studio/docs/ux/design-spec.md` or `studio/docs/module-ui.md`: record D1, D2, D7, D11, D12
   and D13 as label and interaction rules, so they outlive this backlog. (PR #5284)
 

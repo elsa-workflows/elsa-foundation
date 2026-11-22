@@ -115,7 +115,12 @@ sealed class Mx1(string variant, Rules rules)
             // Proposed (R7-M1): the turn's event id is stored and returned with the reserved first code unit. The harness
             // writes it into the sealed ticket's EventRow; the ticket's own id and key are unchanged.
             id = Reserved + built;
-            commit = commit with { Sent = commit.Sent.Select(m => m.Kind == Kinds.Publish ? m with { Payload = Json.Write(m.Read<EventRow>() with { Id = id }) } : m).ToList() };
+            commit = commit with
+            {
+                Sent = commit.Sent.Select(m => m.Kind == Kinds.Publish
+                    ? ModeledTicket.Issue(m with { Payload = Json.Write(m.Read<EventRow>() with { Id = id }) })
+                    : m).ToList()
+            };
         }
         var ticket = commit.Sent.Single(m => m.Kind == Kinds.Publish);
         var (landed, error) = _k.Commit(P, [commit]);
