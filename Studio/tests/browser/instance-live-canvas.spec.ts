@@ -21,9 +21,9 @@ for (const theme of ["light", "dark"]) {
     const route = page.url();
     await page.getByRole("button", { name: "Disconnect fixture reads", exact: true }).click();
     await page.getByRole("button", { name: "Reconnect fixture reads", exact: true }).click();
-    await page.locator(".wf-toolbar").getByRole("button", { name: "Refresh execution", exact: true }).click();
+    await page.getByRole("group", { name: "Run workspace actions", exact: true }).getByRole("button", { name: "Refresh execution", exact: true }).click();
     // #4903 replaced the run instance live-update controls with a single Refresh execution action.
-    await expect(page.locator(".wf-toolbar").getByRole("button", { name: "Refresh execution", exact: true })).toBeEnabled();
+    await expect(page.getByRole("group", { name: "Run workspace actions", exact: true }).getByRole("button", { name: "Refresh execution", exact: true })).toBeEnabled();
     await expect(node).toHaveAccessibleName(/Selected/);
     expect(await viewport.getAttribute("style")).toBe(transform);
     expect(page.url()).toBe(route);

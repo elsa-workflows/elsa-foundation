@@ -29,7 +29,7 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
     expect(result, `Actual native activity ${key}`).toBeTruthy(); return result!;
   };
   const [line, dispatchType, compensationType, faultType] = await Promise.all([
-    version("Elsa.Activities.Primitives.Activities.WriteLine"), version("Elsa.DispatchWorkflow"),
+    version("Elsa.Activities.Primitives.Activities.WriteLine"), version("Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow"),
     version("Elsa.Activities.Compensation.Activities.CompensationScope"), version("Elsa.Activities.Primitives.Activities.Fault")
   ]);
   const node = (id: string, type: string, values: Record<string, unknown> = {}): Node =>
