@@ -831,6 +831,8 @@ internal static class ParkKeptChecks
         await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true, realMonotonic: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, resolveMeetByDiscard: false);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, resolveMeetByDiscard: true);
         await CheckLostCatchUpStep(check, landedBeforeLoss: false);
         await CheckLostCatchUpStep(check, landedBeforeLoss: true);
         await CheckLostCatchUpStep(check, landedBeforeLoss: false, secondPage: true);
@@ -963,7 +965,7 @@ internal static class ParkKeptChecks
     }
 
     private static async Task CheckFailedCatchUp(Action<bool, string> check, bool recoverAfterFailure,
-        bool delayedResponse = false, bool revoked = false, bool realMonotonic = false)
+        bool delayedResponse = false, bool revoked = false, bool realMonotonic = false, bool? resolveMeetByDiscard = null)
     {
         var now = 1_701_400_030_200L;
         var store = new InMemoryStore(1, () => now);
@@ -996,7 +998,7 @@ internal static class ParkKeptChecks
                 ParkCatchUpTimeout = delayedResponse && !realMonotonic ? TimeSpan.FromMilliseconds(30) : null
             });
         var worker = NewOwner("first-catch-up");
-        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Discard);
         var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(started.Actor!.Value);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -1081,6 +1083,24 @@ internal static class ParkKeptChecks
             "the exhausted meet re-parks an open recovery and atomically removes its subscriptions");
         await store.SweepAsync();
         check(store.FoundationEvents.Count == 0, "the exhausted meet releases coverage of its expired publication");
+
+        if (resolveMeetByDiscard is { } discard)
+        {
+            injectRecoveryFailures = false;
+            var selection = (await new ActorList(store, 5).GetAsync(scope, target.Actor))!.Selection!;
+            var resolution = discard ? Contract.Kinds.Discard : Contract.Kinds.Recover;
+            await ingress.SendAsync(scope, target, "resolve-old-meet", resolution, Json.Write(new Contract.OperatorCommand(selection)));
+            for (var pass = 0; pass < 4; pass++)
+            {
+                await Pump(successor);
+                now += 11;
+            }
+            var row = store.Instances[id];
+            check(row.ParkRecovery is null && row.ParkDiscard is null &&
+                store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: null, ParkDeadLetter: false } &&
+                probe.Received.Count == 0 && store.FoundationEvents.Count == 0,
+                $"KP-1 {(discard ? "Discard" : "Resume")} clears the old consumed meet without restoring its ticket or delivering an event");
+        }
 
         static async Task CatchUpOnly(Worker owner)
         {
