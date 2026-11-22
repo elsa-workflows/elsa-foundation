@@ -6,4 +6,4 @@ The immutable source-bound corpus contains54 composed cases across desktop/320/3
 
 [Exact downloadable archive](https://api.github.com/repos/elsa-workflows/elsa-foundation/zipball/5e918524717c90df141ce2cd0a856d8c8e0ee23f). FILE-MANIFEST SHA256 `c0b4f73433ca462d38897558b145779b46a32726cf28837f07a8d4fb4dfa625e`; actual API zipball SHA256 `29dca3376014a08a7378409cd3782b012224c951ebd7ef654ca3f37c42299828`.
 
-CI is intentionally skipped under owner authorization. Exact-head source review, actual downloaded evidence and resulting-main verification remain distinct; task T020 records the final integration action after it occurs.
+CI is intentionally skipped under owner authorization. Exact-head source review, downloaded evidence and resulting-main verification retain distinct receipts. T020 is complete; the [closeout receipt](../1211-run-history-timeline/evidence/2026-11-22-resulting-main.md) records actual main proof and issue reconciliation.

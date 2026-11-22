@@ -1,6 +1,6 @@
 # Timeline and playback qualification
 
-This receipt binds the Timeline workspace (#3849, Spec1211) and recorded playback (#4366, Spec1226) to the coherent implementation PR [#4368](https://github.com/elsa-workflows/elsa-foundation/pull/4368). Runtime delivery is already on main; exact-head feature merge and resulting-main completion are tracked separately by T049/T050 and playback T020.
+This receipt binds the Timeline workspace (#3849, Spec1211) and recorded playback (#4366, Spec1226) to the coherent implementation PR [#4368](https://github.com/elsa-workflows/elsa-foundation/pull/4368). Runtime and Studio delivery are merged. The [resulting-main receipt](2026-11-22-resulting-main.md) closes T049/T050 and playback T020 with actual main verification, immutable downloads and issue reconciliation; original evidence below retains its own source.
 
 ## Runtime, timers and official migrations
 
