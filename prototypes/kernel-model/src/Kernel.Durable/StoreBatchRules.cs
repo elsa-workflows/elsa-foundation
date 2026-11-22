@@ -181,7 +181,7 @@ public static class StoreBatchRules
 
     internal static void ValidateActorSends(TurnCommit turn, InstanceRow? previous)
     {
-        List<CreationAddress>? children = null;
+        IReadOnlyCollection<CreationAddress>? children = null;
         foreach (var message in turn.Sent)
         {
             if (message.CascadeOrigin && (message.Kind != Kinds.Terminate || !message.HasIssuedTicket ||
@@ -191,7 +191,8 @@ public static class StoreBatchRules
             if (!message.ActorControl) continue;
             if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
             {
-                children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
+                children ??= turn.FoundationCascade is { Input: null } opening ? opening.Entries.Children :
+                    ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
                 if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
             }
 

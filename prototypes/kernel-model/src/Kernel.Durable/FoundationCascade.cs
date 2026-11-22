@@ -100,7 +100,7 @@ public sealed partial class InMemoryStore
                 throw InvalidCascade();
             return null;
         }
-        if (turn.Row is not { Jobs: null, Children: null } next ||
+        if (turn.Row is not { } next ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             action.Entries.Count == 0 || turn.Delete || action.Input is null != (before is null))
             throw InvalidCascade();
@@ -128,7 +128,8 @@ public sealed partial class InMemoryStore
                     throw InvalidCascade();
                 tookTerminate |= addressed;
             }
-            if (next.Retired || (birth ? next.Revision <= 0 : next.Revision != checked(previous!.Revision + 1)) ||
+            if (next is not { Retired: false, Jobs: null, Children: null } ||
+                (birth ? next.Revision <= 0 : next.Revision != checked(previous!.Revision + 1)) ||
                 !(cancelled || tookTerminate) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)

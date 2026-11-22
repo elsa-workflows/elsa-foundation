@@ -18,9 +18,34 @@ internal static class CascadePageChecks
         await Run(10_001, check, delete: true, loseAfter: true);
         await Run(2 * CascadeProtocol.PageLimit + 1, check, delete: true, loseAfter: false);
         await Run(CascadeProtocol.PageLimit + 1, check, keepRunning: true);
+        await Run(CascadeProtocol.PageLimit + 1, check, terminalFollowup: true);
+        await RunAuthoredTerminate(check);
         await RefuseLegacyRebinding(check);
         await RunNative(check);
         await RunModelCap(check);
+    }
+
+    private static async Task RunAuthoredTerminate(Action<bool, string> check)
+    {
+        var store = new InMemoryStore(1, () => 1_702_300_030_000);
+        var scope = new Contract.BoundScope("authored-then-end");
+        var probe = new Probe();
+        var ingress = new InMemoryIngress(store, new Requests("authored-then-end"), "authored-then-end");
+        var root = (await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start)).Actor!.Value;
+        var address = store.FoundationTarget(scope.Tenant, root.Id)!.Id;
+        var worker = new Worker("authored-then-end", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Step(worker, address);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(root), "register", "register-child");
+        await Step(worker, address);
+        var child = ChildRegistry.Read(store.Instances[address].Children).Single();
+        await ingress.SendAsync(scope, new Contract.Target.Ref(root), "terminate", "end-after-explicit");
+        await Step(worker, address);
+        var terminates = store.Messages.Values.Select(item => item.Message).Where(message =>
+            message.Kind == Kinds.Terminate && message.Target.Id == child.Id && message.TargetCreation == child.Creation).ToArray();
+        check(store.Instances[address] is { Status: InstanceStatus.Cancelled, Cascade: null } &&
+            terminates.Count(message => message.ActorAuthored) == 1 && terminates.Count(message => message.CascadeOrigin) == 1,
+            "an authored Terminate stays valid when End(Cancelled) moves that child's registration into the cascade");
     }
 
     private static async Task RefuseLegacyRebinding(Action<bool, string> check)
@@ -105,7 +130,7 @@ internal static class CascadePageChecks
     }
 
     private static async Task Run(int count, Action<bool, string> check, bool delete = false, bool jobs = false,
-        bool? loseAfter = null, bool keepRunning = false)
+        bool? loseAfter = null, bool keepRunning = false, bool terminalFollowup = false)
     {
         const long initial = 1_702_300_000_000;
         var now = initial;
@@ -222,6 +247,16 @@ internal static class CascadePageChecks
                 store.Messages[kept] is { Done: true, KeptBy: null },
                 "the page ignores a missing job, settles the present and kept generation, and preserves the older key");
 
+        CreationAddress? laterChild = null;
+        if (terminalFollowup)
+        {
+            await edge.SendAsync(scope, target, "followup", "register-child");
+            var control = ended.Cascade!.Control;
+            store.Messages.Values.Single(item => item.Message.Kind == "register-child").Seq = store.Messages[control].Seq - 1;
+            await Step(worker, address);
+            laterChild = ChildRegistry.Read(store.Instances[address].Children).Single();
+        }
+
         if (delete && ended.Cascade is not null)
         {
             check(markRefused, "a newly minted cascade control cannot be marked seen within its issuing batch");
@@ -282,6 +317,10 @@ internal static class CascadePageChecks
             landedPages.Count == (count + registry.Count + CascadeProtocol.PageLimit - 1) / CascadeProtocol.PageLimit &&
             landedPages.All(page => page.Sent.Count <= CascadeProtocol.PageLimit + 1),
             "every exact child receives one stored terminate and the final page clears its obligation");
+        if (laterChild is not null)
+            check(final.Cascade is null && ChildRegistry.Read(final.Children).SequenceEqual([laterChild]) &&
+                sent.All(message => message.Target.Id != laterChild.Id),
+                "a continuation clears its original obligation and preserves a terminal actor's later child registration");
         if (delete)
         {
             var accepted = await edge.SendAsync(scope, key, "replacement", Contract.Kinds.Start);
@@ -355,6 +394,12 @@ internal static class CascadePageChecks
         public bool CancelOnStart { get; set; }
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Inbox.Any(message => message.Kind == "register-child")) turn.State = turn.Start(new(Type, "leaf")).Id;
+            if (turn.Inbox.Any(message => message.Kind == "end-after-explicit"))
+            {
+                turn.Send(new(turn.State!), Contract.Kinds.Terminate);
+                turn.End(Contract.ActorStatus.Cancelled);
+            }
             if (CancelOnStart && turn.Header.TypeData == "root" && turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
             {
                 turn.Start(new(Type, "leaf"));
