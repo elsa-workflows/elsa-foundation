@@ -1178,6 +1178,7 @@ export function WorkflowEditor({
   const goToRenamedReference = useCallback((nodeId: string, inputKey: string) => {
     setCanvasView("designer");
     repairVariableReference(nodeId);
+    setActiveInspectorTabId("inputs");
     const label = variableRenameLabel(nodeId, inputKey).input;
     let attempts = 0;
     const focusInput = () => {

@@ -43,6 +43,10 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
 
   await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
   await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
+  await page.locator('.wf-sequence-step[data-id="message"]').click();
+  const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
+  await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
+  await expect(inspectorSections.getByRole("tab", { name: "Outputs", exact: true })).toHaveAttribute("aria-selected", "true");
   // At narrow widths the inspector covers the editor view tabs; the activities panel starts collapsed.
   if (info.project.name.startsWith("narrow")) {
     const collapse = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
@@ -64,8 +68,10 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
 
   await notice.getByRole("button", { name: "Write Line · Text, go to input", exact: true }).click();
   await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Copy Node ID", exact: true })).toBeVisible();
   const text = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+  await expect(text).toBeVisible();
   await expect(text).toContainText("variables.purchase.total");
   await expect(text).toContainText("variables['ord' + 'er']");
   // Go to moves focus into the flagged input's editor.
