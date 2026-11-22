@@ -75,6 +75,10 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 | Weaver workflows | Inspected the metadata, workflow-definition and executable prompt registrations and contextual attachments. Confirmed provider-off and menu states separately in PR #5310. |
 | JavaScript and Liquid expression editors | Inspected both inline and expanded registrations, source renderers, read-only state, source insertion and shared code editor bindings. JavaScript also supplies result checks, variable-addition preservation and language tooling. |
 
+### Host audit follow-up
+
+PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -496,7 +500,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `EXT/Agent/HumanReviewPage.tsx` stale and receipt paragraphs (around line 106),
   `H/App.tsx:1895` (`backend-connection-notice`) and `:1911`,
   `H/workspace/WorkspaceTabPanels.tsx:92–93`, `DASH/WidgetFrame.tsx:89, 148`.
-  [check] `.etl-error`, `.external-auth-error`.
+  [check] `.etl-error`, `.external-auth-error`. Host startup, workspace tabs, ETL and Identity completed in PR #5339.
 - [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
 - [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
