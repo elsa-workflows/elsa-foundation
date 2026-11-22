@@ -29,6 +29,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const operationRef = useRef<object | null>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
   const focusAfterCreate = useRef(false);
+  const createOpener = useRef<HTMLElement | null>(null);
   const owner = useMemo(() => ({ context }), [context]);
   const currentOwner = useRef(owner); currentOwner.current = owner;
   currentContextRef.current = context;
@@ -89,10 +90,9 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   useEffect(() => {
     if (!creating && focusAfterCreate.current) {
       focusAfterCreate.current = false;
-      // Dialog cleanup can restore its opener before React removes the empty result.
-      // Restore to the stable search field after that commit, without refocusing on later loads.
+      // Creating an item can remove the empty-state button that opened the dialog.
       if (!document.activeElement || document.activeElement === document.body)
-        searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+        (createOpener.current?.isConnected ? createOpener.current : searchFormRef.current?.querySelector<HTMLInputElement>("input"))?.focus();
     }
   }, [creating]);
 
@@ -141,7 +141,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   return <StudioPage className="connections-shell" aria-label="Connections management">
     <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows."
       refresh={{ id: "connections", label: "Refresh connections", refreshing: loading, autoRefresh: true, onRefresh: () => load(searchRef.current) }}
-      actions={<StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={16} aria-hidden="true" />New connection</StudioButton>} />
+      actions={<StudioButton variant="primary" size="md" onClick={() => { createOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={16} aria-hidden="true" />New connection</StudioButton>} />
     <StudioCollectionToolbar>
       <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => event.preventDefault()}>
         <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => { setSearch(event.target.value); void load(event.target.value, visibleDescriptors); }} />
@@ -149,7 +149,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
     </StudioCollectionToolbar>
     {!selected ? notification : null}
     {loadError && contextIsLoaded ? <p className="connections-load-error">{loadError}</p> : null}
-    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
+    <ConnectionList items={visibleItems} descriptors={visibleDescriptors} loading={loading || !contextIsLoaded} error={!!loadError && contextIsLoaded} searched={!!appliedSearch} onRetry={() => void load(search)} onClear={() => { setSearch(""); void load(""); }} onCreate={visibleDescriptors ? () => { createOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setNotice(null); setCreating(true); } : undefined} onOpen={name => { setNotice(null); setSelectedName(name); }} />
     {!loading && contextIsLoaded && !loadError ? <StudioCollectionFooter><span>{visibleItems.length} {visibleItems.length === 1 ? "connection" : "connections"}</span></StudioCollectionFooter> : null}
     {visibleItems.length === 100 && !loading ? <p className="connections-limit">Showing the first 100 matches. Search by name to narrow the list.</p> : null}
     {selected ? <ConnectionDetailDialog key={selected.name} connection={selected} descriptors={visibleDescriptors} busy={busy} notification={notification} onClose={() => setSelectedName(null)} onAction={action => void runAction(action, selected)} restoreFocus={() => searchFormRef.current?.querySelector<HTMLInputElement>("input")?.focus()} /> : null}

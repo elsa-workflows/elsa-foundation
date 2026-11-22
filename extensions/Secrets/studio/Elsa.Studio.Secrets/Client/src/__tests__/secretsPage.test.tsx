@@ -949,7 +949,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount, listRequests, metadataRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
+  return { container: document.body, unmount, listRequests, metadataRequests, setVisible: (next: boolean) => { visible = next; renderPage(); }, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function getSearchTerm(url: string) {

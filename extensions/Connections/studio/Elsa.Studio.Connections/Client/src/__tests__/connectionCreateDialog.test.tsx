@@ -573,7 +573,7 @@ describe("connection credential creation", () => {
     expect(document.activeElement).toBe(button(container, "Cancel"));
     document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     expect(document.activeElement).toBe(close);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -804,9 +804,10 @@ describe("connection credential creation", () => {
 
     const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
     const content = dialog.querySelector<HTMLElement>(".connections-create-content")!;
-    const actions = dialog.querySelector<HTMLElement>(".connections-create-actions")!;
+    const actions = dialog.querySelector<HTMLElement>(".studio-dialog-footer")!;
     expect(content.contains(actions)).toBe(false);
-    expect(actions.parentElement).toBe(dialog.querySelector("form"));
+    expect(actions.parentElement).toBe(dialog);
+    expect(actions.querySelector<HTMLButtonElement>('button[type="submit"]')?.form).toBe(dialog.querySelector("form"));
 
     changeText(container, "Name", "preserved.connection");
     chooseSecret(container, "Access token", "payments.api");
@@ -946,7 +947,7 @@ function renderConnectionsPage(initialContext: StudioEndpointContext, dialogs = 
     flushSync(() => root.unmount());
     host.remove();
   });
-  return { container: host, rerender: render, dialogs };
+  return { container: document.body, rerender: render, dialogs };
 }
 
 function installConnectionList(context: StudioEndpointContext, connection: ConnectionMetadata) {
@@ -987,7 +988,7 @@ function renderDialog(options: {
     host.remove();
   };
   cleanups.push(cleanup);
-  return { container: host, rerender: render, cleanup };
+  return { container: document.body, rerender: render, cleanup };
 }
 
 function renderApiKeyDialog(descriptors = apiKeyDescriptors) {

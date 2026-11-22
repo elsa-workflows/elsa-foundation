@@ -44,7 +44,7 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
       onClose={onCancel} initialFocusRef={firstInput} dismissDisabled={busy} dismissOnOutsideClick={false}
       noValidate onSubmit={submit}
       footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={busy} confirmDisabled={busy}
-        confirmLabel={busy ? "Starting..." : "Run workflow"} />}>
+        confirmLabel={busy ? "Starting…" : "Run workflow"} />}>
       <div className="wf-run-input-list" ref={element => {
         firstInput.current = element?.querySelector<HTMLElement>("input, select, textarea, button") ?? null;
       }}>
