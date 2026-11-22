@@ -102,8 +102,58 @@ internal static class ParkKeptChecks
             Retained(twin, "ordinary payload", ParkKeepReason.Consumed) && Retained(late, "late payload", ParkKeepReason.Arrived),
             "takeover does not offer done kept rows to the parked actor");
 
+        foreach (var timed in new[] { false, true })
+            await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
+
         bool Retained(Message message, string payload, ParkKeepReason reason) => store.Messages.GetValueOrDefault(message.InboxKey) is
             { Done: true, Held: false, Trial: 0, KeptBy: var actualReason, Message.Payload: var actual } && actual == payload && actualReason == reason;
+    }
+
+    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
+    {
+        const long now = 1_701_400_010_000;
+        const string jobKey = "background";
+        const int payloadLimit = 16 * 1024 * 1024 - 2 * 24 * 1024;
+        var overhead = System.Text.Encoding.UTF8.GetByteCount(Json.Write(new JobFinished(jobKey, Json.Write(""), null)));
+        var store = new InMemoryStore(1, () => now);
+        var actor = new ParkedJobProbe(new string('x', payloadLimit - overhead + 1), timed);
+        var scope = new Contract.BoundScope("parked-job");
+        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var worker = MakeOwner("parked-job-first");
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        var start = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(start.Actor!.Value);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var task = worker.JobCompletion(row.Id, jobKey, row.Creation)!;
+        var ticket = InboxKey.Ticket(row.Id, jobKey, row.Creation);
+        var resultKey = InboxKey.JobResult(row.Id, jobKey, row.Creation);
+        await edge.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var parked = store.Instances[row.Id];
+        check(parked is { Status: InstanceStatus.Faulted, Jobs: not null } && store.Messages.ContainsKey(ticket) && actor.Entries == 1,
+            "the fault parks the actor while the entered job and its counted ticket are outstanding");
+        check(store.Messages.Values.Count(message => !message.Done && message.Message.Kind == Kinds.JobDeadline) == (timed ? 1 : 0),
+            "the parked job still has its pending deadline if armed");
+
+        actor.Complete.SetResult();
+        await task.WaitAsync(TimeSpan.FromSeconds(5));
+        worker.RunTurn(row.Id);
+        await worker.FlushAsync();
+        var result = store.Messages.GetValueOrDefault(resultKey);
+        check(store.Instances[row.Id] == parked && !store.Messages.ContainsKey(ticket) &&
+            result is { Done: false, Message.FoundationJobResult: true } &&
+            result.Message.Read<JobFinished>() is { Result: null, Error: "result too large" } &&
+            !store.Messages.Values.Any(message => !message.Done && message.Message.Kind == Kinds.JobDeadline),
+            "a fenced standalone conversion stores the bounded authenticated fault without rewriting the actor checkpoint");
+
+        await owner.DisposeAsync();
+        await using var successor = (await new DurableHost([MakeOwner("parked-job-next")]).ActivateAsync(0))!;
+        await Pump(successor);
+        check(actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
+            store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived },
+            "a successor keeps the bounded result as an arrival and does not rerun the job");
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -135,6 +185,38 @@ internal static class ParkKeptChecks
         }
 
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
+    private sealed class ParkedJobProbe(string value, bool timed) : Contract.IActorType
+    {
+        public string Type => "parked-job-check";
+        public TaskCompletionSource Complete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Entries { get; private set; }
+        public int Completions { get; private set; }
+        public bool Withholds(Contract.ActorHeader header) => false;
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+                switch (message.Kind)
+                {
+                    case Contract.Kinds.Start: turn.StartJob("background", timeout: timed ? TimeSpan.FromSeconds(1) : null); break;
+                    case "fault": throw new InvalidOperationException("park with a running job");
+                    case Contract.Kinds.JobFinished: Completions++; break;
+                }
+            return default;
+        }
+
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            Entries++;
+            await Complete.Task.WaitAsync(cancellationToken);
+            return value;
+        }
+
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
