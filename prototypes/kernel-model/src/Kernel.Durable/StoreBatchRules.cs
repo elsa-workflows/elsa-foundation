@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -17,6 +17,10 @@ public static class StoreBatchRules
             batch.ClearJobTrials.Count != 0))
             throw new StoreException(Failure.Definite, "A publication reservation requires its own fenced commit.");
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
+        if (batch.DueBacklog is { Count: > 0 } backlog &&
+            (!supportsDueBacklog || backlog.Any(estimate => estimate.Value < 0 ||
+                (batch.Fences?.Any(fence => fence.Partition == estimate.Key) ?? (batch.Partition == estimate.Key)) == false)))
+            throw new StoreException(Failure.Definite, "A due-backlog estimate requires its partition's fence and a supported store.");
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
         HashSet<InboxKey>? consumedControls = null;
@@ -47,6 +51,10 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
+            if (turn.FoundationValues is { Count: > 0 } &&
+                (!supportsFoundationValues || turn.Delete || turn.Row is not { Retired: false, Creation: > 0 } valueOwner ||
+                    valueOwner.Id != turn.Instance))
+                throw new StoreException(Failure.Definite, "Values require a supported store and a checkpoint of the same creation.");
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||

@@ -155,9 +155,10 @@ internal static partial class GenerationSamplingChecks
             w.Apply(new("resume-request", 0, M: new(key + ".1", id, "resume", TargetCreation: 99, ReplyTo: "q1", KeepUntil: w.Time + 3600000)));
             await Pump(owner.Worker); var before = w.Check(); var end = w.Settle(); var row = w.Store.Instances[id.Id];
             check(before is null && end is null && row.Status == InstanceStatus.Finished && row.Revision == 3 &&
-                w.Store.Messages[key].Message == first && w.Store.Messages[key + ".1"].Message.TargetCreation == 99 &&
+                w.Store.Messages[key] is { Done: true } original && original.Message == (first with { Start = null }) &&
+                w.Store.Messages[key + ".1"].Message.TargetCreation == 99 &&
                 w.Store.Messages[key + ".2"] is { Done: true } applied && applied.Message.Kind == "resume" && applied.Message.TargetCreation == address,
-                $"a real settlement resume survives two occupied ordinary keys without replacing their envelopes, generation={generation}");
+                $"a real settlement resume preserves both occupied identities and strips the completed Start, generation={generation}");
         }
 
         foreach (var atMarker in new[] { true, false })

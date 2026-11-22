@@ -79,7 +79,7 @@ public sealed partial class InMemoryStore
                 throw new StoreException(Failure.Definite, "The publication ticket cannot be inserted.");
             publication = publication with { FoundationPublishTicket = ticket.InboxKey };
             RecordFoundationPublication(publication);
-            Messages.Add(ticket.InboxKey, new MessageRow(ticket, ++_seq, 0));
+            Messages.Add(ticket.InboxKey, StoreMessage(ticket, ++_seq, 0));
             return new(false, publication, FoundationPublicationStatus.Pending);
         }
     }
@@ -229,6 +229,6 @@ public sealed partial class InMemoryStore
         if (page.Insert is { } publicationToInsert) RecordFoundationPublication(publicationToInsert);
         foreach (var write in page.Writes) ApplyEventWrite(write);
         _eventSerial = page.Serial;
-        if (page.Next is { } next) Messages[key] = new(next, ++_seq, 0);
+        if (page.Next is { } next) Messages[key] = StoreMessage(next, ++_seq, 0);
     }
 }

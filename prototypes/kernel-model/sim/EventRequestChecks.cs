@@ -93,7 +93,7 @@ internal static class EventRequestChecks
         var laterDuplicate = store.PublishRequest(fanout, "duplicate-after-registration");
         await Pump();
         check(laterDuplicate is { Count: 0 } && Json.Read<List<string>>(store.Instances[lateWaiter.Id].State).Count == 0 &&
-              store.Messages.Values.All(row => row.Message.Target != lateWaiter || Events.Delivered(row.Message)?.Event != fanout.Id),
+              store.Messages.Values.All(row => row.Done || row.Message.Target != lateWaiter || Events.Delivered(row.Message)?.Event != fanout.Id),
             "repeating the event id cannot deliver the old publication to a new non-keeping wait");
 
         var bound = new EventIngress(store, requests, "caller");
@@ -130,7 +130,7 @@ internal static class EventRequestChecks
         try { await cancelled.WaitAsync(TimeSpan.FromSeconds(2)); }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { cancelledWait = true; }
         check(cancelledWait && requests.All.Count == 0 &&
-              store.Messages.Values.Any(row => Events.Delivered(row.Message) is { Event: "cancelled-caller" }),
+              store.Messages.Values.Any(row => !row.Done && Events.Delivered(row.Message) is { Event: "cancelled-caller" }),
             "cancelling the caller closes its registration and keeps the admitted delivery");
 
         await store.SweepAsync();

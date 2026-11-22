@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -21,11 +22,19 @@ internal static class ParkKeptChecks
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         await Pump(owner);
 
-        await edge.SendAsync(scope, target, "older", "update", options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await edge.SendAsync(scope, target, "older", "update", "ordinary input to remove",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
         await Pump(owner);
         var row = store.Instances.Values.Single();
         var ordinary = store.Messages.Values.Single(message => message.Message.Id == "older");
-        check(ordinary is { Done: true, KeptBy: null } && row.State == "saved", "ordinary done input has no Park disposition");
+        check(ordinary is { Done: true, KeptBy: null, Message.Payload: null } && row.State == "saved",
+            "ordinary done input retains its receipt without its payload");
+        var offers = actor.Offers;
+        var sameId = await edge.SendAsync(scope, target, "older", "update", "different payload",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await Pump(owner);
+        check(sameId.Outcome == Contract.AdmissionOutcome.Duplicate && sameId.Actor == target.Actor && actor.Offers == offers,
+            "a payload-free outside marker preserves duplicate admission without another actor turn");
 
         var poison = new Message("twin", new(row.Id), "poison", "private payload", TargetCreation: row.Creation).AsIssued();
         var twin = new Message("twin", new(row.Id), "update", "ordinary payload", TargetCreation: row.Creation, KeepUntil: now + 2);
@@ -267,12 +276,20 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, loseOpenAnswer: true);
+        foreach (var kind in new[] { Contract.Kinds.Delete, Contract.Kinds.Discard })
+            foreach (var phase in Enum.GetValues<RecoveryPhase>())
+                await CheckDeferredParkCommand(kind, phase, check);
         await CheckTerminalCohort(takeover: false, check);
         await CheckTerminalCohort(takeover: true, check);
-        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check);
-        await CheckDeleteAfterRecoveryEnd(protectAtComplete: true, check);
-        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true);
-        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true, competes: true);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: true, check);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true, competes: true);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, endedTerminate: EndedTerminate.Selected);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, endedTerminate: EndedTerminate.Stale);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, endedTerminate: EndedTerminate.Unselected);
+        await CheckCommandAfterRecoveryEnd(protectAtComplete: false, check, endedTerminate: EndedTerminate.Empty);
         await CheckTerminalCohort(takeover: false, check, cutAfter: false);
         await CheckTerminalCohort(takeover: false, check, cutAfter: true);
         await CheckTerminalChildNotice(keptBeforeResume: false, check);
@@ -281,16 +298,144 @@ internal static class ParkKeptChecks
         await CheckTerminalChildNotice(keptBeforeResume: false, check, ordinaryEnd: true);
     }
 
+    private enum RecoveryPhase { Open, Reparked, Complete }
+
+    private static async Task CheckDeferredParkCommand(string kind, RecoveryPhase phase, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_028_500;
+        const int attempts = 3;
+        var now = initial;
+        var due = initial + (phase == RecoveryPhase.Open ? 1 : 1_000);
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("deferred-park-command");
+        var requests = new Requests("deferred-park-command");
+        var ingress = new InMemoryIngress(store, requests, "deferred-park-command", (_, name) => name == Contract.Kinds.Recover);
+        var label = $"P-6 {kind} at {phase}";
+        var first = Owner("phase-first");
+        await using var initialOwner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        await Pump(initialOwner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(initialOwner);
+        await ingress.SendAsync(scope, target, "trip", phase == RecoveryPhase.Reparked ? "poison" : "advance");
+        if (phase == RecoveryPhase.Reparked)
+            for (var index = 0; index < InMemoryStore.ParkPageLimit - 1; index++)
+                await ingress.SendAsync(scope, target, $"kept-{index:D3}", "advance");
+        await Pump(initialOwner);
+
+        var parked = Read();
+        var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+        var request = requests.OpenBound("operator", due + 1_000, scope.Tenant, null);
+        var queued = store.AdmitFoundationOperator(scope.Tenant, actor.Id, null, "operator", kind,
+            null, due, null, selection, request.ReplyAddress("deferred-park-command"));
+        var staged = parked is { Park: not null, Terminal: not null } && queued.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+            Delivery("operator").Message.TargetCreation == parked.Row.Creation &&
+            Delivery("trip") is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        check(staged, $"{label}: the original Park mark qualifies the delayed command before Resume");
+        if (!staged) return;
+
+        probe.PausePages = phase == RecoveryPhase.Open;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(first);
+        if (phase == RecoveryPhase.Open)
+            await Step(first);
+        if (phase == RecoveryPhase.Reparked)
+        {
+            for (var pass = 0; pass < 10 && Delivery("trip").ReleasedBy is null; pass++) await Step(first);
+            var released = Read().Row.ParkRecovery is { Cursor: not null } &&
+                Delivery("trip") is { Done: false, ReleasedBy: not null } && Kept().Length != 0;
+            check(released, $"{label}: page one releases the trip input while a kept suffix remains");
+            if (!released) return;
+            Delivery("trip").Attempts = attempts;
+        }
+        var epoch = first.Fences.Single().Epoch;
+        await initialOwner.DisposeAsync();
+        now++;
+        var cold = Owner("phase-cold");
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        for (var pass = 0; phase != RecoveryPhase.Open && pass < 20 &&
+            (Read().Row.ParkRecovery is not null || phase == RecoveryPhase.Complete && probe.RecoveredArrivals == 0); pass++)
+        {
+            if (phase == RecoveryPhase.Complete) now += 11;
+            await Step(cold);
+        }
+
+        var before = Read();
+        var ready = phase switch
+        {
+            RecoveryPhase.Open => before is { Terminal: null, Row: { Status: InstanceStatus.Running, ParkRecovery: { } drain } } &&
+                store.Messages[drain.Control].Message.Due > due,
+            RecoveryPhase.Reparked => before.Row is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+                before.Park == parked.Park && before.Terminal == parked.Terminal && Delivery("trip").KeptBy == ParkKeepReason.Consumed,
+            _ => before is { Park: null, Terminal: null, Row: { Status: InstanceStatus.Running, ParkRecovery: null } } && probe.RecoveredArrivals == 1
+        };
+        ready &= cold.Fences.Single().Epoch > epoch && request.Answer is null && Delivery("operator") is { Done: false, Seen: 0 };
+        check(ready, $"{label}: the successor has the intended lifecycle phase before the command is due " +
+            $"(status {before.Row.Status}; drain {before.Row.ParkRecovery is not null}; applied {probe.RecoveredArrivals})");
+        if (!ready) return;
+
+        var kept = Kept();
+        var journal = store.Journal.Values.ToArray();
+        now = due;
+        for (var pass = 0; pass < 5 && request.Answer is null; pass++) await Step(cold);
+        if (phase == RecoveryPhase.Reparked)
+        {
+            var expectedKind = kind == Contract.Kinds.Delete ? ParkClearKind.Delete : ParkClearKind.Discard;
+            check(request.Answer is "started" && Read().Row.ParkDiscard is { Operation: "operator", Kind: var actual } && actual == expectedKind,
+                $"{label}: the original selection opens the requested resolution after re-park");
+            await Pump(successor);
+            var ended = store.Instances[parked.Row.Id];
+            check(Kept().Length == 0 && ended.ParkDiscard is null &&
+                (expectedKind == ParkClearKind.Delete ? ended.Retired : ended.ParkDiscarded),
+                $"{label}: the resolution completes with all kept rows settled");
+        }
+        else
+        {
+            var reason = phase == RecoveryPhase.Open && kind == Contract.Kinds.Discard ? "ResolutionOpen" : "StaleSelection";
+            check(request.Answer is CreationResult result && result.Result == reason && Read() == before &&
+                Kept().SequenceEqual(kept) && store.Journal.Values.SequenceEqual(journal),
+                $"{label}: owner refuses {reason} and preserves the checkpoint, kept rows and journal (reply {request.Answer})");
+        }
+
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => now - initial, Horizon = TimeSpan.Zero, MaxAttempts = attempts, PassTurnBudget = 1,
+            Transport = new OperatorReplies(requests, _ => { })
+        });
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        InMemoryStore.MessageRow Delivery(string messageId) => store.Messages.Values.Single(row => row.Message.Id == messageId);
+        (InboxKey Key, ParkKeepReason? Reason)[] Kept() => store.Messages.Values.Where(row => row.KeptBy is not null)
+            .OrderBy(row => row.Seq).Select(row => (row.Message.InboxKey, row.KeptBy)).ToArray();
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+        }
+    }
+
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
-        bool holdAdvance = false, bool holdControl = false)
+        bool holdAdvance = false, bool holdControl = false, bool loseOpenAnswer = false)
     {
         const long initial = 1_701_400_028_000L;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = faultOnAdvance, HoldAdvance = holdAdvance, HoldSuspend = holdControl };
         var scope = new Contract.BoundScope("recover-arrivals");
-        var worker = new Worker("recover-arrivals", 0, store, new ActorAdapter(store, probe),
+        var opens = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed && loseOpenAnswer && batch.Turns.Any(turn => turn.FoundationRecoveryTimers is not null) && ++opens == 1)
+                throw new StoreException(Failure.Unknown, "The first recovery Open landed without its answer.");
+        });
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
+        var worker = Owner("recover-arrivals");
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
             (_, kind) => kind == Contract.Kinds.Recover || holdControl && kind == Contract.Kinds.Suspend);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -333,6 +478,46 @@ internal static class ParkKeptChecks
         }
         probe.PausePages = holdControl;
         var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+        if (loseOpenAnswer)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            var originalEpoch = worker.Fences.Single().Epoch;
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+            var opened = store.Instances[parked.Row.Id];
+            var unacknowledged = opens == 1 && opened.ParkRecovery is { Cursor: null, Operation: "resume" } &&
+                opened.ParkResolutionGeneration == parked.Row.ParkResolutionGeneration + 1 && probe.RecoveredArrivals == 0;
+            check(unacknowledged, "M1-3 the first Open is durable before its owner loses the answer");
+            if (!unacknowledged) return;
+            var retry = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+            await owner.DisposeAsync();
+            now += (long)Defaults.Lease.TotalMilliseconds + 1;
+            var next = Owner("recover-after-lost-open");
+            await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+            for (var pass = 0; pass < 5; pass++)
+            {
+                await Pump(successor);
+                now += 11;
+            }
+            var ended = store.Instances[parked.Row.Id];
+            var again = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+            var history = await new ActorList(store, 20).TailAsync(scope, target.Actor);
+            var outcomes = history.Items.Select(entry => Json.Read<JsonElement>(entry.Entry))
+                .Where(entry => entry.ValueKind == JsonValueKind.Object &&
+                    entry.TryGetProperty("Outcome", out var outcome) && outcome.GetString() == "recovered").ToArray();
+            var oneOutcome = outcomes is [var recovery] && recovery.GetProperty("Operation").GetString() == "resume" &&
+                recovery.GetProperty("Restored").GetInt32() == 1 && recovery.GetProperty("Cleared").GetInt32() == 1;
+            check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+                retry is { Outcome: Contract.AdmissionOutcome.Duplicate } && retry.Actor == started.Actor &&
+                again is { Outcome: Contract.AdmissionOutcome.Duplicate } && again.Actor == started.Actor &&
+                next.Fences.Single().Epoch > originalEpoch && opens == 1 &&
+                ended.ParkRecovery is null && ended.ParkResolutionGeneration == opened.ParkResolutionGeneration &&
+                oneOutcome && probe.RecoveredArrivals == 1,
+                "M1-3 both retries return the original receipt and one recovery outcome survives the cold take");
+            return;
+        }
         if (holdControl)
         {
             await Pump(owner);
@@ -499,15 +684,23 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckDeleteAfterRecoveryEnd(bool protectAtComplete, Action<bool, string> check,
-        bool thenDelete = false, bool competes = false)
+    private enum EndedTerminate { Selected, Stale, Unselected, Empty }
+
+    private static async Task CheckCommandAfterRecoveryEnd(bool protectAtComplete, Action<bool, string> check,
+        bool thenDelete = false, bool competes = false, EndedTerminate? endedTerminate = null)
     {
         const long initial = 1_701_400_029_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var probe = new Probe { FaultOnAdvance = true, HoldTerminalInput = true, HonourTerminate = thenDelete };
+        var withRegistry = endedTerminate is EndedTerminate.Selected or EndedTerminate.Stale or EndedTerminate.Unselected;
+        var probe = new Probe
+        {
+            FaultOnAdvance = endedTerminate is null, FinishOnAdvance = endedTerminate is not null,
+            HoldTerminalInput = true, HonourTerminate = thenDelete || withRegistry, ArmJobOnEnd = withRegistry
+        };
         var scope = new Contract.BoundScope("terminal-recovery-delete");
         var replies = new Requests("terminal-recovery-delete");
+        var scheduler = new HeldScheduler();
         var ingress = new InMemoryIngress(store, replies, "terminal-recovery-delete",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete or Contract.Kinds.Terminate);
         var landed = new List<TurnCommit>();
@@ -540,21 +733,47 @@ internal static class ParkKeptChecks
         var target = new Contract.Target.Ref(probe.Child!.Value);
         var id = Checkpoint().Row.Id;
         string? descendant = null;
-        if (thenDelete)
+        if (thenDelete || withRegistry)
         {
             await ingress.SendAsync(scope, target, "spawn-descendant", "spawn");
             await Pump(active);
             descendant = store.FoundationTarget(scope.Tenant, probe.Child!.Value.Id)!.Id;
         }
+        var due = now + 1;
+        var terminate = endedTerminate is null ? null : replies.OpenBound("ended-terminate", now + 1_000, scope.Tenant, null);
+        if (endedTerminate is EndedTerminate.Unselected or EndedTerminate.Empty)
+            QueueTerminate(selection: null);
         await ingress.SendAsync(scope, target, "fault", "poison");
         await Pump(active);
+        var reads = new ActorList(store, 5);
+        if (endedTerminate == EndedTerminate.Stale)
+        {
+            var original = Checkpoint();
+            var previousPark = (await reads.GetAsync(scope, target.Actor))!.Selection!;
+            QueueTerminate(previousPark);
+            await ingress.SendAsync(scope, target, "earlier-recovery", Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(previousPark, Contract.RecoverMode.Resume)));
+            await Pump(active);
+            if (Checkpoint() is not { Park: null, Row.Status: InstanceStatus.Running })
+            {
+                check(false, "P-8 Stale: the earlier recovery must complete while its Terminate is still delayed");
+                return;
+            }
+            await ingress.SendAsync(scope, target, "fault-again", "poison");
+            await Pump(active);
+            var later = Checkpoint();
+            var changedPark = later.Park is not null && later.Park != original.Park &&
+                later.Row.Creation == original.Row.Creation;
+            check(changedPark, "P-8 Stale: the selected Terminate names a different Park of the same creation");
+            if (!changedPark) return;
+        }
         await ingress.SendAsync(scope, target, "advance", "advance");
         for (var index = 0; index < 2 * InMemoryStore.ParkPageLimit; index++)
             await ingress.SendAsync(scope, target, $"kept-{index:D4}", "terminal-pending");
         await Pump(active);
 
-        var reads = new ActorList(store, 5);
         var park = (await reads.GetAsync(scope, target.Actor))!.Selection!;
+        if (endedTerminate == EndedTerminate.Selected) QueueTerminate(park);
         await ingress.SendAsync(scope, target, "resume-ended-delete", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(park, Contract.RecoverMode.Resume)));
         await Step(first);
@@ -563,10 +782,63 @@ internal static class ParkKeptChecks
         var ended = Checkpoint();
         var drain = ended.Row.ParkRecovery;
         var waitingControl = drain is not null && store.Messages.GetValueOrDefault(drain.Control)?.Message.Due > now;
-        var endedWithSuffix = ended.Row.Status == InstanceStatus.Faulted && drain?.Cursor is not null && waitingControl &&
+        var expectedEnd = endedTerminate is null ? InstanceStatus.Faulted : InstanceStatus.Finished;
+        var endedWithSuffix = ended.Row.Status == expectedEnd && drain?.Cursor is not null && waitingControl &&
             ended.Terminal is not null && Kept() > 0;
         check(endedWithSuffix, "the model ends with its own mark while the delayed recovery page still has a kept suffix");
         if (!endedWithSuffix) return;
+        if (endedTerminate is { } variant)
+        {
+            var job = withRegistry ? InboxKey.Ticket(id, "cleanup", ended.Row.Creation,
+                JobRegistry.Generation(ended.Row, "cleanup")!.Value) : (InboxKey?)null;
+            var current = store.Messages.Values.Single(row => row.Message.Id == "ended-terminate");
+            check(current is { Done: false } && terminate!.Answer is null &&
+                  (job is null || store.Messages.ContainsKey(job.Value)) &&
+                  (descendant is null || store.Instances[descendant].Status == InstanceStatus.Running),
+                $"P-8 {variant}: the queued Terminate reaches the ended model with its initial registry and drain");
+            now = due;
+            if (variant == EndedTerminate.Stale)
+            {
+                var next = ended.Row with { Revision = ended.Row.Revision + 1, Jobs = null, Children = null };
+                var registry = CascadeRegistry.From(ended.Row);
+                var page = CascadeProtocol.Page(next, registry, cursor: 0, serial: next.Revision);
+                var forged = new TurnCommit(id, next with { Cascade = page.Next }, ended.Row.Revision,
+                    [current.Message.InboxKey], [], page.Sent, [], [], null) { FoundationCascade = new(registry) };
+                var fence = first.Fences.Single();
+                var rejected = await DefiniteRejection(() => store.CommitAsync(new(
+                    fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [forged], [], [])));
+                var intact = rejected && Checkpoint() == ended && store.Messages.ContainsKey(current.Message.InboxKey) &&
+                    store.Partitions[fence.Partition].Position == fence.Position;
+                check(intact, "P-8 Stale: the store rejects an unauthorized composed cascade before any write");
+                if (!intact) return;
+            }
+            await Step(first);
+            var settled = Checkpoint();
+            var actualReply = terminate!.Answer;
+            var discharges = withRegistry && variant != EndedTerminate.Stale;
+            var expectedRow = discharges
+                ? ended.Row with { Revision = ended.Row.Revision + 1, Children = null, Jobs = null }
+                : ended.Row;
+            check(settled.Row == expectedRow && settled.Terminal == ended.Terminal &&
+                (variant is EndedTerminate.Selected or EndedTerminate.Stale
+                    ? actualReply is CreationResult { Result: "ResolutionOpen" } : actualReply is null) &&
+                (job is null || store.Messages.ContainsKey(job.Value) != discharges),
+                $"P-8 {variant}: the command preserves the model end and applies only authorized cleanup");
+            for (var pass = 0; pass < 16 && Checkpoint().Row.ParkRecovery is not null; pass++)
+            {
+                now += 11;
+                await Step(first);
+            }
+            await Pump(active);
+            var notices = landed.SelectMany(turn => turn.Sent).Count(message =>
+                message.Kind == Kinds.ChildFinished && message.Sender == id && message.Read<FoundationChildNotice>().Final);
+            check(Checkpoint() is { Park: null, Row: { Status: InstanceStatus.Finished, ParkRecovery: null } } &&
+                Checkpoint().Terminal == ended.Terminal && notices == 1 &&
+                (descendant is null || store.Instances[descendant].Status ==
+                    (discharges ? InstanceStatus.Cancelled : InstanceStatus.Running)),
+                $"P-8 {variant}: the drain completes and the parent gets only the model's original final notice");
+            return;
+        }
 
         var selection = (await reads.GetAsync(scope, target.Actor))!.Selection!;
         var invalid = await ingress.SendAsync(scope, target, "old-park-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(park)));
@@ -631,8 +903,16 @@ internal static class ParkKeptChecks
             new WorkerOptions
             {
                 Monotonic = () => now - initial, PollLimit = 1_024,
-                Transport = new OperatorReplies(replies, _ => { })
+                Transport = new OperatorReplies(replies, _ => { }),
+                JobScheduler = endedTerminate is null ? null : scheduler
             });
+        void QueueTerminate(string? selection)
+        {
+            var accepted = store.AdmitFoundationOperator(scope.Tenant, target.Actor.Id, null, "ended-terminate",
+                Kinds.Terminate, null, due, null, selection, terminate!.ReplyAddress("terminal-recovery-delete"));
+            if (accepted.Outcome != InMemoryStore.OperatorAdmission.Accepted)
+                throw new InvalidOperationException($"The fixture could not queue Terminate: {accepted.Outcome}.");
+        }
         InMemoryStore.ActorCheckpoint Checkpoint() => store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
         int Kept() => store.Messages.Values.Count(message => message.Message.Target.Id == id && message.KeptBy is not null);
         async Task Step(Worker worker)
@@ -1901,6 +2181,7 @@ internal static class ParkKeptChecks
         await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
+        await CheckRestartedJob(timed: true, check, sweepDuringOpen: true);
         await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
@@ -1925,15 +2206,28 @@ internal static class ParkKeptChecks
             alterTicket: (ticket, _) => ticket with { Key = "earlier-job" });
     }
 
-    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
+    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check, bool sweepDuringOpen = false)
     {
         var now = 1_701_400_012_000L;
         const string key = "background";
         const string recipe = "captured arguments and effect key";
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = sweepDuringOpen ? TimeSpan.FromMilliseconds(100) : null
+        };
         var actor = new ParkedJobProbe("result", timed, arguments: recipe);
         var scope = new Contract.BoundScope("job-restart");
-        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        InboxKey? ticketToSweep = null;
+        var survivedOpenSweep = false;
+        var wire = new CountingStore(store, () => { }, beforeCommit: async batch =>
+        {
+            if (ticketToSweep is not { } selected || !batch.Turns.Any(turn => turn.FoundationRecoveryJobs is not null))
+                return;
+            ticketToSweep = null;
+            await store.SweepAsync();
+            survivedOpenSweep = store.Messages.GetValueOrDefault(selected) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        });
+        Worker MakeOwner(string node) => new(node, 0, wire, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
         var first = MakeOwner("before-restart");
         var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
         var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -1960,6 +2254,12 @@ internal static class ParkKeptChecks
 
         // Restart takes the model's recipe, even if the old ticket contains different arguments.
         old!.Message = old.Message with { Payload = Json.Write(old.Message.Read<JobTicket>() with { Arguments = "stale" }) };
+        if (sweepDuringOpen)
+        {
+            // Give the retained ticket a past ordinary sweep deadline while the Park window is still open.
+            old.Message = old.Message with { KeepUntil = now - 1 };
+            ticketToSweep = oldKey;
+        }
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var admitted = await edge.SendAsync(scope, target, "restart-operation", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(selection)));
@@ -1976,6 +2276,15 @@ internal static class ParkKeptChecks
             store.Messages.GetValueOrDefault(currentKey) is { Done: false, Seen: 0, ReleasedBy: null } job &&
             job.Message.Read<JobTicket>().Arguments == recipe && actor.Entries == 1;
         check(restarted, "the fenced Open writes a new job generation from the captured recipe while the older ticket stays inert");
+        if (sweepDuringOpen)
+        {
+            await store.SweepAsync();
+            check(survivedOpenSweep && restarted && store.FoundationExpiry(open)?.Armed is null &&
+                store.Messages.GetValueOrDefault(currentKey) is { Done: false } &&
+                store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.Job }) == 1 &&
+                store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.JobDeadline }) == 1,
+                "M1-2 a sweep after planning and after Open preserves the kept ticket and its single timed replacement");
+        }
         if (!restarted) return;
         if (timed)
         {
@@ -2442,6 +2751,8 @@ internal static class ParkKeptChecks
         public int Offers { get; private set; }
         public int RecoveredArrivals { get; private set; }
         public bool FaultOnAdvance { get; init; }
+        public bool FinishOnAdvance { get; init; }
+        public bool ArmJobOnEnd { get; init; }
         public bool HoldTerminalInput { get; init; }
         public bool HonourTerminate { get; init; }
         public bool HoldTerminalNotices { get; init; }
@@ -2502,12 +2813,13 @@ internal static class ParkKeptChecks
                 if (HoldAdvance) LateOffer = turn.Inbox.Select(message => message.Kind).ToArray();
                 RecoveredArrivals++;
                 turn.State = "advanced";
-                if (FaultOnAdvance)
+                if (FaultOnAdvance || FinishOnAdvance)
                 {
                     if (HoldTerminalInput)
                         foreach (var pending in turn.Inbox.Where(message => message.Kind == "terminal-pending"))
                             turn.Hold(pending);
-                    turn.End(Contract.ActorStatus.Faulted);
+                    if (ArmJobOnEnd) turn.StartJob("cleanup");
+                    turn.End(FinishOnAdvance ? Contract.ActorStatus.Finished : Contract.ActorStatus.Faulted);
                 }
             }
             else turn.State = "saved";

@@ -20,6 +20,7 @@ internal static class ParkDrainCascadeChecks
         await TerminateRunningRecovery(selected: true, check);
         await TerminateRunningRecovery(selected: false, check);
         await TerminateRunningRecovery(selected: false, check, thenDelete: true);
+        await TerminateAfterRecoveryComplete(check);
         await ColdRecoveryJobSuffix(check);
         foreach (var cut in Enum.GetValues<OpenCut>()) await RecoverJobAtOpen(cut, check);
     }
@@ -608,6 +609,94 @@ internal static class ParkDrainCascadeChecks
         }
     }
 
+    private static async Task TerminateAfterRecoveryComplete(Action<bool, string> check)
+    {
+        const long initial = 1_702_310_061_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(restoreTrial: true, restoreSubscription: true);
+        var scope = new Contract.BoundScope("terminate-after-recover");
+        var scheduler = new HeldScheduler();
+        var requests = new Requests("terminate-after-recover");
+        var edge = new InMemoryIngress(store, requests, "terminate-after-recover",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
+        var worker = new Worker("terminate-after-recover", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, Transport = new JobOpenReplies(requests) });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var parent = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "parent")), "parent", Contract.Kinds.Start)).Actor!.Value;
+        await Step(parent);
+        var child = await Spawn(parent);
+        var descendant = await Spawn(child);
+        await Send(child, "arm", "arm-job");
+        await Step(child);
+        await Send(child, "park", "park");
+        await Step(child);
+        var parked = Checkpoint(child);
+        var read = (await new ActorList(store, 8).GetAsync(scope, child))!;
+        var due = now + 1_000;
+        var request = requests.OpenBound("deferred-terminate", due + 1_000, scope.Tenant, null);
+        var queued = store.AdmitFoundationOperator(scope.Tenant, child.Id, null, "deferred-terminate", Kinds.Terminate,
+            null, due, null, read.Selection, request.ReplyAddress("terminate-after-recover"));
+        await Send(child, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(read.Selection)));
+        for (var pass = 0; pass < 12 && Checkpoint(child).Park is not null; pass++)
+        {
+            now += 11;
+            await Step(child);
+        }
+        await Step(parent);
+        var recovered = Checkpoint(child);
+        var parentRow = Checkpoint(parent).Row;
+        var descendantRow = Checkpoint(descendant).Row;
+        var wait = store.Subscriptions.SingleOrDefault(row => row.Instance == recovered.Row.Id);
+        var generation = JobRegistry.Generation(recovered.Row, "trial");
+        var job = generation is { } current
+            ? InboxKey.Ticket(recovered.Row.Id, "trial", recovered.Row.Creation, current) : default;
+        var staged = queued.Outcome == InMemoryStore.OperatorAdmission.Accepted && parked.Park is not null &&
+            recovered is { Park: null, Terminal: null, Row: { Status: InstanceStatus.Running, ParkRecovery: null, Children: not null } } &&
+            wait is not null && generation is not null && store.Messages.GetValueOrDefault(job) is { Done: false } &&
+            descendantRow.Status == InstanceStatus.Running && request.Answer is null;
+        check(staged, "P-8 the delayed selected Terminate still waits after Complete restores the running actor's registry");
+        if (!staged) return;
+
+        var journal = store.Journal.Values.ToArray();
+        now = due;
+        await Step(child);
+        await Step(parent);
+        check(request.Answer is CreationResult { Result: "StaleSelection" } && Checkpoint(child) == recovered &&
+            Checkpoint(parent).Row == parentRow && Checkpoint(descendant).Row == descendantRow &&
+            store.Messages.ContainsKey(job) && store.Subscriptions.Contains(wait!) && store.Journal.Values.SequenceEqual(journal),
+            $"P-8 the old Park selection leaves the recovered actor, job, subscription and subtree unchanged " +
+            $"(reply {request.Answer}; actor {Checkpoint(child) == recovered}; parent {Checkpoint(parent).Row == parentRow})");
+
+        var ordinary = await Send(child, "plain-terminate", Contract.Kinds.Terminate);
+        await Step(child);
+        await Step(descendant);
+        await Step(parent);
+        check(ordinary.Outcome == Contract.AdmissionOutcome.Accepted && Checkpoint(child).Row.Status == InstanceStatus.Cancelled &&
+            Checkpoint(descendant).Row.Status == InstanceStatus.Cancelled && Checkpoint(parent).Row.Children is null &&
+            !store.Messages.ContainsKey(job) && !store.Subscriptions.Contains(wait!),
+            "P-8 an unselected Terminate still cancels the recovered run and its subtree");
+
+        InMemoryStore.ActorCheckpoint Checkpoint(Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string id, string kind, string? body = null) =>
+            edge.SendAsync(scope, new Contract.Target.Ref(actor), id, kind, body);
+        async Task<Contract.ActorRef> Spawn(Contract.ActorRef actor)
+        {
+            await Send(actor, "spawn-" + actor.Id, "spawn");
+            await Step(actor);
+            var childActor = new Contract.ActorRef(Checkpoint(actor).Row.State);
+            await Step(childActor);
+            return childActor;
+        }
+
+        async Task Step(Contract.ActorRef actor)
+        {
+            await Prime(worker);
+            worker.RunTurn(store.FoundationTarget(scope.Tenant, actor.Id)!.Id);
+            await worker.FlushAsync();
+        }
+    }
+
     private static async Task ColdRecoveryJobSuffix(Action<bool, string> check)
     {
         const long initial = 1_702_310_073_000;
@@ -877,7 +966,8 @@ internal static class ParkDrainCascadeChecks
         public void Send(string node, Reply reply) => requests.Receive(reply);
     }
 
-    private sealed class Probe(bool retainOnTerminate = false, bool restoreTrial = false, bool restoreMany = false) : Contract.IActorType
+    private sealed class Probe(bool retainOnTerminate = false, bool restoreTrial = false, bool restoreMany = false,
+        bool restoreSubscription = false) : Contract.IActorType
     {
         public string Type => "park-cascade";
         public int UnexpectedOffers { get; private set; }
@@ -892,7 +982,10 @@ internal static class ParkDrainCascadeChecks
                         for (var child = 0; child < 2_001; child++) turn.Start(new(Type, "leaf"));
                         break;
                     case "publish": turn.Publish("cascade-topic", "witness", TimeSpan.FromMinutes(1)); break;
-                    case "arm-job": turn.StartJob("trial"); break;
+                    case "arm-job":
+                        turn.StartJob("trial");
+                        if (restoreSubscription) turn.Subscribe("ready", "waiting");
+                        break;
                     case "arm-many":
                         foreach (var job in ManyJobs()) turn.StartJob(job.Key);
                         break;
@@ -917,7 +1010,8 @@ internal static class ParkDrainCascadeChecks
         internal bool Protect { get; set; }
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => Protect;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
-            new([], restoreMany ? ManyJobs() : restoreTrial ? [new("trial", null)] : [], []);
+            new([], restoreMany ? ManyJobs() : restoreTrial ? [new("trial", null)] : [],
+                restoreSubscription ? [new("ready", "waiting", false)] : []);
 
         private static Contract.JobSpec[] ManyJobs() => Enumerable.Range(0, CascadeProtocol.PageLimit + 1)
             .Select(index => new Contract.JobSpec($"trial-{index:D4}", null)).ToArray();

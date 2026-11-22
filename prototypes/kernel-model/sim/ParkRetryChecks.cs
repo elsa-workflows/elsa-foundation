@@ -12,7 +12,8 @@ internal static class ParkRetryChecks
         await CheckTargetSelection(Contract.RecoverMode.RetryAll, check);
         await CheckBoundsAndInterruption(check);
         await CheckLegacyTimerSelection(check);
-        await CheckLegacyEventSelection(check);
+        await CheckLegacyEventSelection(check, selected: 0);
+        await CheckLegacyEventSelection(check, selected: 1);
     }
 
     private static async Task CheckTargetSelection(Contract.RecoverMode mode, Action<bool, string> check)
@@ -62,39 +63,52 @@ internal static class ParkRetryChecks
             $"PS-1 {mode}: the same read selection resolves its own actor and restores the arrival once");
     }
 
-    private static async Task CheckLegacyEventSelection(Action<bool, string> check)
+    private static async Task CheckLegacyEventSelection(Action<bool, string> check, int selected)
     {
-        const string correlation = "live-event";
-        var fixture = new Fixture { EventWait = correlation };
+        var correlations = new[] { "live-event-a", "live-event-b" };
+        var fixture = new Fixture { EventWaits = correlations };
         var (store, worker, owner) = await fixture.ActivateAsync();
         await using var activation = owner;
         var scope = new Contract.BoundScope("retry-legacy");
         var target = await fixture.StartRunningAsync(owner, scope, "wait");
-        var publication = new EventRow(scope.Tenant + "_" + correlation, "legacy-id", "legacy value", fixture.Now + 60_000)
-            { FoundationTenant = scope.Tenant };
-        store.RecordFoundationPublication(publication);
-        var delivery = (await store.PublishedMatchesAsync(publication)).Single().Delivery();
-        var key = delivery.Message.InboxKey;
-        await store.AddEventAsync(delivery);
+        var keys = new List<InboxKey>();
+        foreach (var correlation in correlations)
+        {
+            var publication = new EventRow(scope.Tenant + "_" + correlation, "legacy-id", correlation, fixture.Now + 60_000)
+                { FoundationTenant = scope.Tenant };
+            store.RecordFoundationPublication(publication);
+            var delivery = (await store.PublishedMatchesAsync(publication)).Single().Delivery();
+            keys.Add(delivery.Message.InboxKey);
+            await store.AddEventAsync(delivery);
+        }
         await fixture.Finish(owner);
 
         var read = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var authenticTwins = keys[0].Id == keys[1].Id && keys[0].Scope == keys[1].Scope &&
+            keys[0].Match != keys[1].Match && read.Park is not null &&
+            keys.All(key => key.Match is { Length: > 64 } &&
+                store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: ParkKeepReason.Consumed });
+        check(authenticTwins, "B2-3 two historical event deliveries share a wire id and scope and are kept by distinct full keys");
+        if (!authenticTwins) return;
+
+        var key = keys[selected];
+        var twin = keys[1 - selected];
+        store.Messages[twin].Seq = store.Messages[key].Seq;
         var parked = new Parked(scope, target, read.Row, read.Park!, store.SealFoundationSelection(scope.Tenant, read)!);
         var handle = fixture.Handle(parked, key);
-        check(key.Match is { Length: > 64 } && store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
-            handle is { Length: < 128 }, "a retained historical event with a long match gets a bounded Retry handle");
-        if (handle is null) return;
+        var twinHandle = fixture.Handle(parked, twin);
+        var exactHandles = handle is { Length: < 128 } && twinHandle is { Length: < 128 } && handle != twinHandle;
+        check(exactHandles, "B2-3 the two historical matches retain distinct bounded handles at an equal sequence");
+        if (!exactHandles) return;
 
-        var twin = fixture.Seed(parked, key with { Match = key.Match + "another match" }, "unselected twin");
-        store.Messages[twin].Seq = store.Messages[key].Seq;
-        await fixture.Retry(parked, "legacy-exact", [handle]);
+        await fixture.Retry(parked, "legacy-exact", [handle!]);
         await fixture.Step(worker, parked);
         check(store.Messages[key].KeptBy == ParkKeepReason.Selected && store.Messages[twin].KeptBy == ParkKeepReason.Consumed,
             "a compact Retry handle resolves the exact full key even when a different match has the same sequence");
         await fixture.Finish(owner);
-        check(store.Instances[parked.Row.Id].ParkRecovery is null && fixture.Delivered.SequenceEqual(["legacy value"]) &&
-            store.Messages[twin].KeptBy is null,
-            "the Worker replays the selected historical event once and clears its unselected twin");
+        check(store.Instances[parked.Row.Id].ParkRecovery is null && fixture.Delivered.SequenceEqual([correlations[selected]]) &&
+            store.Messages[twin] is { Done: true, KeptBy: null, ReleasedBy: null },
+            $"B2-3 the Worker replays only the selected historical match ({correlations[selected]}) and clears its twin");
     }
 
     private static async Task CheckScopeAndAtomicity(Action<bool, string> check)
@@ -303,7 +317,7 @@ internal static class ParkRetryChecks
         internal bool AllowRecoveredFault { get; set; }
         internal int RecoveredFaults { get; private set; }
         internal Contract.TimerSpec? Timer { get; set; }
-        internal string? EventWait { get; init; }
+        internal IReadOnlyList<string> EventWaits { get; init; } = [];
         private int _eventOffers;
 
         internal Fixture()
@@ -399,8 +413,8 @@ internal static class ParkRetryChecks
         public bool Withholds(Contract.ActorHeader header) => false;
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
-            if (EventWait is { } correlation && turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
-                turn.Subscribe(correlation, "wait");
+            if (turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
+                foreach (var correlation in EventWaits) turn.Subscribe(correlation, "wait");
             foreach (var input in turn.Inbox.Where(message => message.Kind == Contract.Kinds.Event))
             {
                 if (++_eventOffers == 1) throw new InvalidOperationException("Park before applying the event");

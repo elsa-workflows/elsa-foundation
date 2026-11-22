@@ -199,6 +199,6 @@ public sealed partial class InMemoryStore
     {
         if (jobs is null) return;
         ApplyFoundationRearms(jobs.DeadlineRearms);
-        foreach (var message in jobs.Writes) Messages.Add(message.InboxKey, new(message, ++_seq, 0));
+        foreach (var message in jobs.Writes) Messages.Add(message.InboxKey, StoreMessage(message, ++_seq, 0));
     }
 }
