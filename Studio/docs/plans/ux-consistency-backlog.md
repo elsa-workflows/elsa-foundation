@@ -552,7 +552,7 @@ the designer header is a documented exception.
   "Fork recommended version", "Create parallel draft" shown twice).
 - [x] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard (PR #5316)
   recovery".
-- [ ] **X11.12** (#5161) [source] `WF/ActivityUpgradeWorkbenchPage.tsx` (5), `WF/ActivityAvailabilityPage.tsx`
+- [x] **X11.12** (#5161) [source] `WF/ActivityUpgradeWorkbenchPage.tsx` (5), `WF/ActivityAvailabilityPage.tsx` (PR #5346)
   (6), `WF/ActivityDefinitionsPage.tsx` (8), `WF/ActivityDataChooser.tsx` (10),
   `WF/ActivityDataMemberBrowser.tsx` (7), `WF/CollectionValueEditor.tsx` (4),
   `WF/DictionaryValueEditor.tsx` (3), `WF/WorkflowLazyBoundary.tsx` (2).
