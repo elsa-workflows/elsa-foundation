@@ -47,6 +47,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
             return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
+        if (row.Status != Durable.InstanceStatus.Running && row.ParkResolutionGeneration > 0 && checkpoint.Park is null)
+            return false;
         return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
@@ -85,8 +87,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return OpenDiscard(input);
         if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
             return OpenRecover(input);
-        if (input.Row is { ParkRecovery: not null, Status: not Durable.InstanceStatus.Running } endedDuringRecovery && !message.IsControl)
-            return Durable.CreationProtocol.Refuse(input.Actor, endedDuringRecovery, input.Taken, "Ended");
+        if (input.Row is { Status: not Durable.InstanceStatus.Running, ParkResolutionGeneration: > 0 } endedAfterRecovery &&
+            !message.IsControl && (endedAfterRecovery.ParkRecovery is not null || store.FoundationTurnHeader(endedAfterRecovery).Park is null))
+            return Durable.CreationProtocol.Refuse(input.Actor, endedAfterRecovery, input.Taken, "Ended");
         if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)
             return Durable.CreationProtocol.Refuse(input.Actor, discarded, input.Taken, "Ended");
         var parked = IsParked(input.Row);

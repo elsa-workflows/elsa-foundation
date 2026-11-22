@@ -66,12 +66,24 @@ internal sealed partial class ActorAdapter
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);
 
         var release = new Durable.ParkRelease(row.Creation, row.ParkResolutionGeneration);
-        var page = store.ReadFoundationRecoveryPage(new(row.Id, row.Creation), park, release.Generation, drain.Cursor);
+        var address = new Durable.CreationAddress(row.Id, row.Creation);
+        var page = store.ReadFoundationRecoveryPage(address, park, release.Generation, drain.Cursor);
         if (page is not { Count: > 0 })
         {
             if (page is null) return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
-            var remaining = store.FirstUnheldRecoveryInput(row, release, _ => false);
-            var completed = ParkCheckpoint(input, row, row with { ParkRecovery = null, ParkCohort = remaining is null ? null : release });
+            if (row.Status != Durable.InstanceStatus.Running)
+            {
+                var terminal = store.ReadEndedFoundationRecoveryPage(address, park, release.Generation);
+                if (terminal is null) return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
+                if (terminal.Count != 0)
+                    return NextPage(envelope.Issue(row, serial), drain with
+                    {
+                        Gate = null, Cleared = checked(drain.Cleared + terminal.Count)
+                    }, new(park, terminal, TerminalInputs: true));
+            }
+            var cohort = row.Status == Durable.InstanceStatus.Running && store.FirstUnheldRecoveryInput(row, release, _ => false) is not null
+                ? release : (Durable.ParkRelease?)null;
+            var completed = ParkCheckpoint(input, row, row with { ParkRecovery = null, ParkCohort = cohort });
             completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
             return completed;
         }

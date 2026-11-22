@@ -267,6 +267,8 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
+        await CheckTerminalCohort(takeover: false, check);
+        await CheckTerminalCohort(takeover: true, check);
     }
 
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
@@ -385,6 +387,78 @@ internal static class ParkKeptChecks
             probe.PoisonOffers == 1 && probe.RecoveredArrivals == 1 &&
             !store.Messages.Values.Any(row => row.KeptBy is not null || row.Message.Kind == Kinds.ParkExpiry),
             "Resume clears the consumed fault, applies the kept arrival once and recalls the expiry");
+    }
+
+    private static async Task CheckTerminalCohort(bool takeover, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_028_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
+        var scope = new Contract.BoundScope("terminal-recovery");
+        var cleared = 0;
+        Worker MakeWorker(string node, int limit) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial, PollLimit = limit,
+                OnPreparedCheckpoint = (turn, _, _) =>
+                {
+                    if (turn.FoundationRecoveryPage is { TerminalInputs: true } page) cleared += page.Rows.Count;
+                }
+            });
+        var first = MakeWorker("terminal-first", 1024);
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(birth.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "first", "advance");
+        for (var index = 0; index < (takeover ? 174 : 1); index++)
+            await ingress.SendAsync(scope, target, $"held-{index:D3}", "terminal-pending");
+        await Pump(owner);
+
+        var parked = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(parked.Selection!, Contract.RecoverMode.Resume)));
+        if (takeover)
+        {
+            var id = store.Instances.Values.Single().Id;
+            for (var step = 0; step < 2; step++)
+            {
+                await first.PollAsync();
+                await first.LoadAsync();
+                await first.FlushAsync();
+                first.RunTurn(id);
+                await first.FlushAsync();
+            }
+            check(store.Messages.Values.Count(row => !row.Done && row.ReleasedBy is not null) == 169,
+                "the old owner releases a bounded cohort before takeover");
+            var epoch = first.Fences.Single().Epoch;
+            await owner.DisposeAsync();
+            var successor = MakeWorker("terminal-successor", 1);
+            await using var active = (await new DurableHost([successor]).ActivateAsync(0))!;
+            check(successor.Fences.Single().Epoch > epoch, "the terminal recovery fixture moves to a fresh one-row poll owner");
+            await Verify(active);
+        }
+        else await Verify(owner);
+
+        async Task Verify(IScopeActivation active)
+        {
+            for (var pass = 0; pass < 24; pass++) { now += 11; await Pump(active); }
+            var resolved = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+            check(resolved is { Park: null, Row: { Status: InstanceStatus.Faulted, ParkCohort: null, ParkRecovery: null } } &&
+                store.Messages.Values.All(row => row.KeptBy is null && (row.ReleasedBy is null || row.Done)) &&
+                probe.RecoveredArrivals == 1 && cleared > 0,
+                takeover ? "a successor settles all released terminal inputs before Complete" :
+                    "terminal recovery settles a model-held released input without another stimulus");
+            var offers = probe.Offers;
+            await ingress.SendAsync(scope, target, "after-end", "terminal-pending");
+            await Pump(active);
+            check(probe.Offers == offers && store.Messages.Values.Any(row => row.Message.Id == "after-end" && row.Done),
+                "an ordinary arrival after terminal Complete settles without entering the ended model");
+        }
     }
 
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
@@ -990,6 +1064,7 @@ internal static class ParkKeptChecks
         public int Offers { get; private set; }
         public int RecoveredArrivals { get; private set; }
         public bool FaultOnAdvance { get; init; }
+        public bool HoldTerminalInput { get; init; }
         public bool ThrowOnRunningWithholds { get; set; }
         public bool HoldAdvance { get; init; }
         public string[] LateOffer { get; private set; } = [];
@@ -1030,7 +1105,13 @@ internal static class ParkKeptChecks
                 if (HoldAdvance) LateOffer = turn.Inbox.Select(message => message.Kind).ToArray();
                 RecoveredArrivals++;
                 turn.State = "advanced";
-                if (FaultOnAdvance) turn.End(Contract.ActorStatus.Faulted);
+                if (FaultOnAdvance)
+                {
+                    if (HoldTerminalInput)
+                        foreach (var pending in turn.Inbox.Where(message => message.Kind == "terminal-pending"))
+                            turn.Hold(pending);
+                    turn.End(Contract.ActorStatus.Faulted);
+                }
             }
             else turn.State = "saved";
             return default;

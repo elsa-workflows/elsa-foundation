@@ -37,7 +37,7 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
                 Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
 }
 
-internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
+internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false);
 
 public sealed partial class InMemoryStore
 {
@@ -53,8 +53,12 @@ public sealed partial class InMemoryStore
         long generation, ParkPageCursor? after, int limit = ParkPageLimit) =>
         ReadFoundationParkPage(address, park, after, limit, generation);
 
+    internal IReadOnlyList<ParkPageRow>? ReadEndedFoundationRecoveryPage(CreationAddress address, FoundationParkMark park,
+        long generation, int limit = ParkPageLimit) =>
+        ReadFoundationParkPage(address, park, after: null, limit, generation, terminalInputs: true);
+
     private IReadOnlyList<ParkPageRow>? ReadFoundationParkPage(CreationAddress address, FoundationParkMark park,
-        ParkPageCursor? after, int limit, long? recoveryGeneration)
+        ParkPageCursor? after, int limit, long? recoveryGeneration, bool terminalInputs = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(limit, ParkPageLimit);
@@ -63,7 +67,8 @@ public sealed partial class InMemoryStore
             if (Instances.GetValueOrDefault(address.Id) is not { Retired: false } current ||
                 current.Creation != address.Creation || _foundationParks.GetValueOrDefault(address) != park ||
                 recoveryGeneration is { } generation && (current.ParkRecovery is null ||
-                    generation <= 0 || current.ParkResolutionGeneration != generation))
+                    generation <= 0 || current.ParkResolutionGeneration != generation) ||
+                terminalInputs && current.Status == InstanceStatus.Running)
                 return null;
 
             var page = new PriorityQueue<MessageRow, ParkPageCursor>(limit,
@@ -74,7 +79,9 @@ public sealed partial class InMemoryStore
                 var kept = row.Done && row.KeptBy is not null;
                 var stale = !row.Done && current.Status == InstanceStatus.Running && recoveryGeneration is { } active &&
                     row.ReleasedBy is { } release && release.Creation == address.Creation && release.Generation < active;
-                if (!kept && !stale) continue;
+                var settling = terminalInputs && !row.Done && row.ReleasedBy is { } tag && tag.Creation == address.Creation &&
+                    tag.Generation <= recoveryGeneration && !ParkRecoveryCredit.IsTicket(row.Message.Kind) && !row.Message.IsControl;
+                if (terminalInputs ? !settling : !kept && !stale) continue;
 
                 var cursor = new ParkPageCursor(row.Seq, key);
                 if (after is { } previous && cursor.CompareTo(previous) <= 0) continue;
@@ -124,6 +131,12 @@ public sealed partial class InMemoryStore
             var stored = Messages[row.Cursor.Key];
             stored.Message = stored.Message with { KeepUntil = until };
             stored.KeptBy = null;
+            if (page.TerminalInputs)
+            {
+                // The new Done marker removes this input from the next terminal page.
+                (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
+                continue;
+            }
             if (!drain.Restores(row, checkpoint.Status)) continue;
             (stored.Done, stored.Held, stored.ParkDeadLetter) = (false, false, false);
             (stored.Seen, stored.Trial, stored.Attempts) = (0, 0, 0);

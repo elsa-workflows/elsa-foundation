@@ -143,14 +143,16 @@ public sealed partial class InMemoryStore
             throw InvalidDrain();
         var envelope = ParkDrainEnvelope.For(previous, park);
         if (!envelope.Matches(input.Message, previous, before.Control)) throw InvalidDrain();
-        var suspended = previous.Status == InstanceStatus.Running && previous.Suspended;
+        var running = previous.Status == InstanceStatus.Running;
+        var suspended = running && previous.Suspended;
 
         if (next.ParkRecovery is not { } after)
         {
-            ParkRelease? remaining = FirstUnheldRecoveryInput(previous, release, _ => false) is null ? null : release;
+            ParkRelease? remaining = running && FirstUnheldRecoveryInput(previous, release, _ => false) is not null ? release : null;
             if (page is not null || turn.Sent.Count != 0 || suspended ||
                 next != (previous with { Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining }) ||
-                ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 })
+                ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
+                !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();
             return;
         }
@@ -167,11 +169,19 @@ public sealed partial class InMemoryStore
         }
         if (suspended || page.Park != park || control.Due is not null) throw InvalidDrain();
 
-        var current = ReadFoundationRecoveryPage(address, park, release.Generation, before.Cursor, page.Rows.Count);
+        var current = page.TerminalInputs
+            ? ReadEndedFoundationRecoveryPage(address, park, release.Generation, page.Rows.Count)
+            : ReadFoundationRecoveryPage(address, park, release.Generation, before.Cursor, page.Rows.Count);
         if (current is null) throw InvalidDrain();
         if (!current.SequenceEqual(page.Rows))
             throw new StoreException(Failure.Unknown, "The Park recovery inputs changed before the page committed.");
 
+        if (page.TerminalInputs)
+        {
+            if (after != (rescheduled with { Gate = null, Cleared = checked(before.Cleared + current.Count) }))
+                throw InvalidDrain();
+            return;
+        }
         var restored = current.Where(row => before.Restores(row, previous.Status)).ToArray();
         var gate = restored.LastOrDefault()?.Cursor.Key;
         if (after != (rescheduled with
