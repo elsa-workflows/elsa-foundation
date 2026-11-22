@@ -11,6 +11,26 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed class JintStackSettingsTests
 {
+    [Fact]
+    public void Flow_suppressed_evaluations_cannot_leave_context_on_a_reused_worker()
+    {
+        var local = new AsyncLocal<string> { Value = "caller" };
+        var options = new FeatureOptions { EvaluationThreadStackBytes = 48 * 1024 * 1024 };
+        using (ExecutionContext.SuppressFlow())
+        {
+            var first = JintEvaluationThreads.Run(() =>
+            {
+                Assert.Null(local.Value);
+                local.Value = "from the previous evaluation";
+                return Environment.CurrentManagedThreadId;
+            }, options);
+            var next = JintEvaluationThreads.Run(() => (Environment.CurrentManagedThreadId, local.Value), options);
+            Assert.Equal(first, next.Item1);
+            Assert.Null(next.Item2);
+        }
+        Assert.Equal("caller", local.Value);
+    }
+
     [Theory]
     [InlineData("script")]
     [InlineData("binding")]

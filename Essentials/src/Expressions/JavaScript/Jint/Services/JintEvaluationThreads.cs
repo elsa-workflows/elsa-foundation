@@ -234,10 +234,9 @@ internal static class JintEvaluationThreads
         {
             try
             {
-                if (_context is null)
-                    _result = _work!();
-                else
-                    ExecutionContext.Run(_context, static state => ((WorkItem<T>)state!).RunWork(), this);
+                // Even a caller that suppressed context flow needs a restoration boundary: its host functions may
+                // set AsyncLocals, culture or Activity.Current, which must not remain on a pooled worker.
+                ExecutionContext.Run(_context ?? _current!.CleanContext, static state => ((WorkItem<T>)state!).RunWork(), this);
             }
             catch (Exception exception)
             {
@@ -282,6 +281,7 @@ internal static class JintEvaluationThreads
         public long Origin { get; private set; }
         public int StackSize { get; }
         public long Budget { get; set; }
+        public ExecutionContext CleanContext { get; private set; } = null!;
 
         public void Execute(WorkItem item)
         {
@@ -292,6 +292,8 @@ internal static class JintEvaluationThreads
         private void Loop()
         {
             _current = this;
+            // UnsafeStart does not flow the creating caller's context. Capture the untouched worker context once.
+            CleanContext = ExecutionContext.Capture()!;
             while (true)
             {
                 if (!_signal.Wait(IdleTimeout))
