@@ -52,6 +52,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         public int Attempts;
         public bool Done, Held;
 
+        internal void DropDonePayload()
+        {
+            if (!Done || KeptBy is not null || ParkDeadLetter || Message is { Payload: null, Start: null, StoredEnvelope: null }) return;
+            var stripped = Message with { Payload = null, Start = null, StoredEnvelope = null };
+            Message = Message.HasIssuedTicket ? stripped.AsKernelTicket() : stripped;
+        }
+
         private static int PayloadBytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
 
         private static (string?, string?, long?) ReadJobTiming(Message envelope)
@@ -507,7 +514,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
                     if (Has(Flaw.DeleteOutsideCommands)) Messages.Remove(id);
-                    else if (Messages.GetValueOrDefault(id) is { } done) done.Done = true;
+                    else if (Messages.GetValueOrDefault(id) is { } done)
+                    {
+                        done.Done = true;
+                        if (publicationPage is null) done.DropDonePayload();
+                    }
                 }
                 foreach (var message in turn.Sent)
                 {
@@ -533,7 +544,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         RemoveRegisteredSubscription(subscription);
                 if (turn.FoundationCatchUpStep is { } step && catchUpSteps?.GetValueOrDefault(step) is { } prepared)
                     ApplyParkCatchUp(prepared);
-                if (publicationPage is not null) ApplyPublicationPage(publicationPage);
+                if (publicationPage is not null)
+                {
+                    ApplyPublicationPage(publicationPage);
+                    publicationPage.Source.DropDonePayload();
+                }
                 if (turn.Journal is not null)
                 {
                     var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;

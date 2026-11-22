@@ -259,6 +259,7 @@ public sealed partial class InMemoryStore
             var stored = Messages[key];
             stored.KeptBy = null;
             stored.Message = stored.Message with { KeepUntil = until };
+            stored.DropDonePayload();
         }
     }
 

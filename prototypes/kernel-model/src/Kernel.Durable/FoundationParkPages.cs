@@ -243,11 +243,13 @@ public sealed partial class InMemoryStore
             {
                 // The new Done marker removes this input from the next terminal page.
                 (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
+                stored.DropDonePayload();
                 continue;
             }
             if (!restores)
             {
                 (stored.Done, stored.Held, stored.Trial) = (true, false, 0);
+                stored.DropDonePayload();
                 continue;
             }
             (stored.Done, stored.Held, stored.ParkDeadLetter) = (false, false, false);
@@ -266,6 +268,7 @@ public sealed partial class InMemoryStore
             stored.KeptBy = null;
             stored.ParkDeadLetter = stored.Message.Kind == Kinds.Publish;
             stored.Message = stored.Message with { KeepUntil = until };
+            stored.DropDonePayload();
         }
     }
 }

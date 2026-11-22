@@ -67,6 +67,7 @@ internal static class ParkCohortTupleChecks
         // Model independent allocators producing a tie and one input having already exhausted its trials.
         var poison = cohort[poisonFirst ? 0 : 1];
         var suspect = cohort[poisonFirst ? 1 : 0];
+        var expectedInput = suspect.Message.Payload;
         poison.Seq = suspect.Seq = 42;
         poison.Attempts = maxAttempts;
         probe.HoldHere = false;
@@ -85,7 +86,7 @@ internal static class ParkCohortTupleChecks
         }
         else
         {
-            check(Row().Status == InstanceStatus.Faulted && order is [var tried] && tried == suspect.Message.Payload &&
+            check(Row().Status == InstanceStatus.Faulted && order is [var tried] && tried == expectedInput &&
                   flightsBeforePark == 1 && flights.Count == 1 && flights[0].SequenceEqual([suspect.Message.InboxKey]) &&
                   suspect is { Done: true, KeptBy: null } && poison.KeptBy == ParkKeepReason.Consumed,
                 "TT-1 the earlier full tuple takes the sole trial before the equal-sequence poison parks the actor" + (narrow ? " with a one-row poll" : ""));

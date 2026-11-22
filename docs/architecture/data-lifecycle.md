@@ -245,6 +245,11 @@ These cost little now and require rewriting stored history later:
 6. **Done markers keep only the id and window.** The consuming commit already updates the row to mark it done (`UPDATE "Messages" SET "Done"` in the owned commit). Clearing `Payload` and `Start` in the same update leaves no copy of a handled command's input, and duplicate detection needs only the id. This changes the commit's consume step (step 4), so it is kernel behaviour.
    - **Park's kept deliveries are excepted.** Park keeps its consumed deliveries and its arrivals as done rows marked `KeptBy`, which the sweep skips, so a retry can deliver them again ([observability](observability.md#what-park-keeps), decision 2a). The rows a Park keeps retain their payloads until the drain that resolves the Park clears them: recover, discard, the delete of the parked instance, or the expiry of a finite `Parked` window. After an expiry, recover is refused in both modes. The clearing applies to ordinary consumption only. A drain's page that clears a kept timer leaves an ordinary done marker, which may be payload-free; a later re-arm of that timer writes its kind, payload and original due from the model's restore plan, never from the marker ([observability](observability.md#recover)).
 
+   - **In-memory qualification.** Ordinary completion and a cleared kept row remove the body and start
+     envelope. Recoverable kept rows and publication dead letters retain their replay data. The event-start
+     and outside-command duplicates still identify the same outcome, and Native timer re-arm reconstructs
+     its envelope from the restore plan. Provider updates remain at K4.
+
 ## What release 1 ships
 
 "Retention and delete" in a basic form ([release 1 scope](../reports/clean-slate-kernel/design-sketch-draft-5.md#release-1-scope-owner-decision-amended-15-november)):
