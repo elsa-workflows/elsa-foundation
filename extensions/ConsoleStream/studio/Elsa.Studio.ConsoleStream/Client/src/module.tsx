@@ -200,13 +200,13 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   const [lineCount, setLineCount] = useState(0);
   const [connected, setConnected] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [pausedLines, setPausedLines] = useState<ConsoleEntry[] | null>(null);
+  const [pausedLines, setPausedLines] = useState<ConsoleEntry[]>([]);
   const [pausedLineCount, setPausedLineCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(getInitialAutoScroll);
   const seenLineIds = useRef(new Set<string>());
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  const visibleLines = paused ? pausedLines ?? lines : lines;
+  const visibleLines = paused ? pausedLines : lines;
   const queuedLineCount = paused ? Math.max(0, lineCount - pausedLineCount) : 0;
   const target = useMemo(() => createConsoleTarget(hostId), [hostId]);
   const selectedSource = useMemo(
@@ -296,7 +296,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
     seenLineIds.current.clear();
     setLines([]);
     setLineCount(0);
-    setPausedLines(null);
+    setPausedLines([]);
     setPausedLineCount(0);
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(resolveTargetUrl(target, `${target.endpointPrefix}/hub`), createConsoleConnectionOptions(target.context))
@@ -393,7 +393,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   function togglePaused() {
     if (paused) {
       setPaused(false);
-      setPausedLines(null);
+      setPausedLines([]);
       return;
     }
 
@@ -405,7 +405,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   function clear() {
     setLines([]);
     setLineCount(0);
-    setPausedLines(paused ? [] : null);
+    setPausedLines([]);
     setPausedLineCount(0);
     seenLineIds.current.clear();
   }
