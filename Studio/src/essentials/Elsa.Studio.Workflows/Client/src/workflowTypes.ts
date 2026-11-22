@@ -976,6 +976,7 @@ export interface ActivityStateView {
 
 export interface ActivityExecutionInspection {
   workflowStateEffects?: string[];
+  workflowStateEffectReceipts?: { attemptId: string | null; acceptedAt: string; transition: "Completion" | "Suspension"; kinds: string[] }[];
   activityExecutionId: string;
   workflowExecutionId: string;
   executableNodeId: string;
@@ -1385,6 +1386,7 @@ export interface RuntimeValueTypeDescriptor {
 
 export interface ActivityExecutionStateSummary {
   workflowStateEffects?: string[];
+  workflowStateEffectReceipts?: { attemptId: string | null; acceptedAt: string; transition: "Completion" | "Suspension"; kinds: string[] }[];
   executionSequence?: number;
   activityExecutionId: string;
   workflowExecutionId: string;

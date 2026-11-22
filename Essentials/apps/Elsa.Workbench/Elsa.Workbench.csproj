@@ -10,6 +10,18 @@
 		<Compile Include="../../../e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs" Link="RecoveryProbe/BpmnRecoveryProbeFeature.cs" />
 	</ItemGroup>
 
+  <!-- Native state acceptance activities exist only in explicitly built local QA hosts. -->
+  <ItemGroup Condition="'$(ElsaStepStateAcceptanceProbe)' == 'true'">
+    <Compile Include="../../../tools/ux-acceptance/StepStateAcceptanceActivities.cs" Link="Acceptance/StepStateAcceptanceActivities.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Optional migration composition for owned source-host import/author/run acceptance. -->
+    <ProjectReference Include="../../../Extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj" />
+    <ProjectReference Include="../../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="../../../Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
+  </ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="CShells.Nuplane" />

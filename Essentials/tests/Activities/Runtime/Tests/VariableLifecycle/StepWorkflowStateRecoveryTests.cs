@@ -27,6 +27,11 @@ public sealed class StepWorkflowStateRecoveryTests
         var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId);
         Assert.Equal(failed ? "suspended" : "resumed", Assert.Single(values, value => value.ValueId == "output:phase").InlineValue!.Value.GetString());
         Assert.Equal(failed ? 1 : 10, VariableLifecycleTestGraph.ReadCount(run));
+        var receipts = StepWorkflowStateEffects.ReadReceipts(run.State("node-left").Metadata);
+        Assert.Equal(failed ? 1 : 2, receipts.Count);
+        Assert.Equal("Suspension", receipts.First().Transition);
+        Assert.Contains("outputs", receipts.First().Kinds);
+        if (!failed) Assert.Equal("Completion", receipts.Last().Transition);
     }
 
     [Fact]
@@ -45,6 +50,20 @@ public sealed class StepWorkflowStateRecoveryTests
         Assert.Null(run.WorkflowState!.CorrelationId);
         var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId);
         Assert.DoesNotContain(values, value => value.ValueId == "output:state-only");
+    }
+
+    [Fact]
+    public async Task State_only_resume_capture_conflict_cannot_accept_captures_without_state_effects()
+    {
+        await using var harness = VariableLifecycleTestGraph.NewHarness("actexec-parallel", "actexec-left", "actexec-right");
+        var run = await StepVariableLostUpdateTests.RunAndResumeAsync(harness, typeof(StateOnlyResumeWriter), StateResumeWriter.ResumeTargetKey,
+            LostUpdateMode.Fault, captureInto: VariableLifecycleTestGraph.CountKey);
+        var failed = run.State("node-left");
+        Assert.Equal(ActivityExecutionStatus.Faulted, failed.Status);
+        Assert.Null(failed.RecordedCompletion);
+        Assert.Equal("before", run.WorkflowState!.CorrelationId);
+        var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId);
+        Assert.Equal("suspended", Assert.Single(values, value => value.ValueId == "output:phase").InlineValue!.Value.GetString());
     }
 }
 
@@ -83,6 +102,16 @@ public sealed class FaultingStateResumeWriter : StateResumeWriter
     {
         _ = await base.ResumeAsync(context);
         return Fault(new ActivityFault("test", "resume failed"));
+    }
+}
+
+public sealed class StateOnlyResumeWriter : StateResumeWriter
+{
+    protected override ValueTask<ActivityTransition<Incremented, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context)
+    {
+        context.WorkflowState.SetOutput("phase", JsonSerializer.SerializeToElement("should-rollback"));
+        context.WorkflowState.CorrelationId = "should-rollback";
+        return ValueTask.FromResult(Complete(new Incremented(Seen + 10)));
     }
 }
 

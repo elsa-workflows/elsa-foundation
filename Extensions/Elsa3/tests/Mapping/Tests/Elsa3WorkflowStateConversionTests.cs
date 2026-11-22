@@ -15,6 +15,8 @@ public sealed class Elsa3WorkflowStateConversionTests
     [InlineData("const key = 'Answer'; setOutput(key, 42); return 1;", "const key = 'Answer'; workflowState.setOutput(key, 42); return 1;")]
     [InlineData("function setOutput(x, y) { return x + y; } return setOutput(1, 2);", "function setOutput(x, y) { return x + y; } return setOutput(1, 2);")]
     [InlineData("false && setCorrelationId('new'); return getCorrelationId();", "false && workflowState.setCorrelationId(workflowState.requireExactIdentity(('new'))); return workflowState.getCorrelationId();")]
+    [InlineData("setCorrelationId(getCorrelationId()); return 1;", "workflowState.setCorrelationId(workflowState.requireExactIdentity((workflowState.getCorrelationId()))); return 1;")]
+    [InlineData("setWorkflowInstanceName(getWorkflowInstanceName()); return 1;", "workflowState.setInstanceName(workflowState.requireExactIdentity((workflowState.getInstanceName()))); return 1;")]
     public async Task Direct_body_calls_lower_without_reordering_or_changing_local_helpers(string source, string expected)
     {
         var converted = await ConvertAsync(source);

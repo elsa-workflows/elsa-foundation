@@ -1,6 +1,10 @@
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
@@ -59,6 +63,34 @@ public sealed class ScriptWorkflowStateTests
     {
         var result = await Evaluate("return typeof workflowState;", null);
         Assert.Equal("undefined", result!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Allowed_lossy_output_writes_are_not_reported_as_read_only_losses()
+    {
+        var services = new ServiceCollection();
+        new JintFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Singleton<IJavaScriptPrecisionPolicy>(new AllowLoss()));
+        await using var provider = services.BuildServiceProvider();
+        var state = new State();
+        state.SetOutput("Big", JsonDocument.Parse("9007199254740993").RootElement);
+        var warnings = new Warnings();
+        await provider.GetRequiredService<IJavaScriptScriptEvaluator>().EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+            "workflowState.setOutput('Copy', workflowState.getOutput('Big')); return 0;", JsonSerializer.SerializeToElement(new { }), CancellationToken.None)
+            { WorkflowState = state, Warnings = warnings });
+        Assert.True(state.TryGetOutput("Copy", out var copy));
+        Assert.Equal("9007199254740992", copy.GetRawText());
+        Assert.DoesNotContain(warnings.Items, warning => warning.Message.Contains("Nothing was written", StringComparison.Ordinal));
+    }
+
+    private sealed class AllowLoss : IJavaScriptPrecisionPolicy
+    {
+        public JavaScriptPrecisionDecision Decide(JavaScriptPrecisionContext context) => JavaScriptPrecisionDecision.Allow();
+    }
+    private sealed class Warnings : IExecutionWarningSink
+    {
+        public List<ExecutionWarning> Items { get; } = [];
+        public void Report(ExecutionWarning warning) => Items.Add(warning);
     }
 
     private static async Task<JsonElement?> Evaluate(string source, State? state)

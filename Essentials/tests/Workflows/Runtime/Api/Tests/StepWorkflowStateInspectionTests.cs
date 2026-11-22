@@ -36,6 +36,30 @@ public sealed class StepWorkflowStateInspectionTests
         Assert.Empty(detail.ValueSnapshots);
     }
 
+    [Fact]
+    public void Accepted_suspension_and_completion_receipts_identify_their_evaluations_after_a_later_fault()
+    {
+        var receipts = new[]
+        {
+            new StepWorkflowStateEffectReceipt("suspend-attempt", DateTimeOffset.UnixEpoch, "Suspension", ["outputs"]),
+            new StepWorkflowStateEffectReceipt("resume-attempt", DateTimeOffset.UnixEpoch.AddMinutes(1), "Completion", ["correlationId"])
+        };
+        var state = Activity(new Dictionary<string, string>
+        {
+            [StepWorkflowStateEffects.MetadataKey] = "[\"outputs\",\"correlationId\"]",
+            [StepWorkflowStateEffects.ReceiptsMetadataKey] = JsonSerializer.Serialize(receipts)
+        }) with { Status = ActivityExecutionStatus.Faulted };
+        var projection = ActivityExecutionInspectionProjection.FromState(state, "later-fault", DateTimeOffset.UnixEpoch.AddMinutes(2));
+        var detail = ActivityExecutionInspectionView.From(projection, canInspectSensitiveValues: false).WithVariableLifecycle(state, false);
+        var summary = ActivityExecutionInspectionSummaryView.From(ActivityExecutionInspectionSummaryProjection.FromProjection(projection));
+        Assert.Equal(2, detail.WorkflowStateEffectReceipts.Count);
+        Assert.Equal("Suspension", detail.WorkflowStateEffectReceipts.First().Transition);
+        Assert.Equal("resume-attempt", detail.WorkflowStateEffectReceipts.Last().AttemptId);
+        Assert.Equal(detail.WorkflowStateEffectReceipts.Select(receipt => receipt.AcceptedAt), summary.WorkflowStateEffectReceipts.Select(receipt => receipt.AcceptedAt));
+        Assert.Equal(["outputs", "correlationId"], detail.WorkflowStateEffects);
+        Assert.Empty(detail.ValueSnapshots);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("not json")]

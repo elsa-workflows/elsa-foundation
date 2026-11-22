@@ -629,7 +629,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
     private static string ApplyEdits(string source, IEnumerable<SourceEdit> edits)
     {
         var result = source;
-        foreach (var edit in edits.OrderByDescending(x => x.Start))
+        // Replace the original token before inserting a wrapper at the same source offset.
+        foreach (var edit in edits.OrderByDescending(x => x.Start).ThenByDescending(x => x.End))
             result = string.Concat(result.AsSpan(0, edit.Start), edit.Replacement, result.AsSpan(edit.End));
         return result;
     }
@@ -1671,7 +1672,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// </summary>
         private void ConvertWorkflowState(CallExpression call, Identifier callee)
         {
-            const string guidance = "Use a direct setOutput(name, value), setCorrelationId(value) or setWorkflowInstanceName(value) call in a Run JavaScript body. Inputs only read; closed reusable graph bodies cannot change running-workflow state (#3023, #4805).";
+            const string guidance = "Use a direct setOutput(name, value), setCorrelationId(value) or setWorkflowInstanceName(value) call in a Run JavaScript body. Inputs only read; move identity writes to a Correlate activity or Set Name activity. Closed reusable graph bodies cannot change running-workflow state (#3023, #4805).";
             if (!ConvertsVariableWrites)
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability,

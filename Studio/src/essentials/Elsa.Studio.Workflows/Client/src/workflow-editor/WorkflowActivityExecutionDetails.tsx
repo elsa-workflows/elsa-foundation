@@ -288,7 +288,10 @@ export function WorkflowActivityExecutionDetails({
           <section className="wf-instance-section" aria-label="Committed workflow changes">
             <h4>Committed workflow changes</h4>
             <p>{workflowStateEffectLabels(currentInspectionState.inspection?.workflowStateEffects).join(", ")}</p>
-            <small>Accepted at a successful completion or suspension. Later failed or cancelled work adds no committed changes.</small>
+            <small>Later failed or cancelled work adds no committed changes.</small>
+            <ul>{currentInspectionState.inspection?.workflowStateEffectReceipts?.map((receipt, index) => (
+              <li key={index}>{receipt.transition === "Suspension" ? "Suspension" : "Completion"} accepted <time dateTime={receipt.acceptedAt}>{new Date(receipt.acceptedAt).toLocaleString()}</time>: {workflowStateEffectLabels(receipt.kinds).join(", ")}{receipt.attemptId ? <small> · Attempt {receipt.attemptId}</small> : null}</li>
+            ))}</ul>
           </section>
         ) : null}
         {currentInspectionState.status === "ready" ? <ExecutionWarningsSection warnings={currentInspectionState.inspection?.warnings} /> : null}

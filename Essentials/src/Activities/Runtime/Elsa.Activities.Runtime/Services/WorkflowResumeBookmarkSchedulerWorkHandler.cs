@@ -379,7 +379,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                 executionState, await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken),
                 stepSession, cancellationToken);
-            faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
+            faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput);
+            stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
@@ -538,7 +539,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 _timeProvider,
                 workItem,
                 WithSessionReads(executionState, stepSession, stepWarnings),
-                returnedCancellationReason,
+                faultMasking.MaskCancellationReason(returnedCancellationReason),
                 valueSnapshots,
                 cancellationToken: cancellationToken);
             return;
@@ -702,6 +703,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             captureCommit.Records, captureCommit.RecordedWrites, _timeProvider.GetUtcNow()));
         var workflowVariableWriteBack = captureCommit.Change
             ?? StepWorkflowChange(stepWrites, workItem, RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
+        completedState = StepStateCommit.DiscloseCaptureOverlap(completedState, stepWrites.StateValues, captureProjection.DurableValues);
         await bookmarkConsumptionCheckpointService.CommitAsync(
             BookmarkConsumptionCheckpointRequest.ForCompletion(
                 workItem,

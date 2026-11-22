@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -24,6 +25,27 @@ public sealed class StepWorkflowStateTests
         Assert.Equal("new", run.WorkflowState!.CorrelationId);
         var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId);
         Assert.Equal(33, Assert.Single(values, value => value.ValueId == "output:count").InlineValue!.Value.GetInt32());
+        Assert.DoesNotContain(run.State("node-root").Warnings ?? [], warning => warning.Code == "VF-STATE-004");
+    }
+
+    [Fact]
+    public async Task Actual_same_output_capture_wins_and_discloses_value_free_overlap()
+    {
+        await using var harness = VariableLifecycleTestGraph.NewHarness("actexec-root");
+        var original = Node("complete");
+        var projection = original.ActivityContract!.Result.Projections.Keys.Single(key => key.EndsWith(nameof(Incremented.Value), StringComparison.Ordinal));
+        var node = new ExecutableNode(original.ExecutableNodeId, original.AuthoredActivityId, original.ActivityType, original.ActivityTypeVersion,
+            original.DescriptorType, original.DescriptorPayload, inputBindings: original.InputBindings, metadata: original.Metadata,
+            activityContract: original.ActivityContract, outputCaptures: new Dictionary<string, RuntimeOutputCapture>
+            {
+                [projection] = new(projection, "output:count", new RuntimeValueTypeDescriptor("Int32", WellKnownRuntimeDurableValueStorageDrivers.Json, null),
+                    DurableValueLifecycle.Instance, DurableValueStorage.Custom, true, new Dictionary<string, string> { [RuntimeMetadataKeys.OutputName] = "count" })
+            });
+        var run = await harness.RunAsync(StepVariableTestGraph.Single(node));
+        run.AssertWorkflowCompleted();
+        var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId);
+        Assert.Equal(7, Assert.Single(values, value => value.ValueId == "output:count").InlineValue!.Value.GetInt32());
+        Assert.Contains(run.State("node-root").Warnings!, warning => warning.Code == "VF-STATE-004");
     }
 
     [Theory]

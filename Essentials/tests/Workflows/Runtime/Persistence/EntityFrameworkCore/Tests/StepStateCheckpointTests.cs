@@ -57,6 +57,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
 
     private static RuntimeCheckpointCommit StepStateCommit(string id)
     {
+        var commit = WithPendingIntent(id, "successor");
         var type = new ValueTypeDescriptor("Int32");
         var workflow = C.Execution("workflow-a") with
         {
@@ -67,11 +68,11 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         };
         var values = RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges("workflow-a", new Dictionary<string, object?> { ["Count"] = 10 }, OccurredAt)
             .Concat(RuntimeWorkflowStateSeed.BuildIdentityChanges("workflow-a", true, "new", true, "Ready", OccurredAt)).ToArray();
-        return Commit(id) with
+        return commit with
         {
             StateChanges = new RuntimeCheckpointStateChangeSet(C.Change("workflow-a", workflow), null,
-                [C.Change("body", C.Activity("body"))], [], values, [], []),
-            PostCommitIntents = [C.Intent("successor")]
+                [C.Change("body", C.Activity("body"))], [], values, [], [])
+                .WithPostCommitOutbox(commit.StateChanges.PostCommitOutbox)
         };
     }
 

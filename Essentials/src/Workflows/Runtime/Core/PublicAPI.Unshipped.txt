@@ -10865,3 +10865,24 @@ Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStateChangePreparer.PrepareOutput
 Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffects
 const Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffects.MetadataKey = "workflowStateEffects" -> string!
 static Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffects.Read(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata) -> System.Collections.Generic.IReadOnlyCollection<string!>!
+
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt!
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.AcceptedAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.AttemptId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.AttemptId.init -> void
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Deconstruct(out string? AttemptId, out System.DateTimeOffset AcceptedAt, out string! Transition, out System.Collections.Generic.IReadOnlyCollection<string!>! Kinds) -> void
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Equals(Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Kinds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Kinds.init -> void
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.StepWorkflowStateEffectReceipt(string? AttemptId, System.DateTimeOffset AcceptedAt, string! Transition, System.Collections.Generic.IReadOnlyCollection<string!>! Kinds) -> void
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Transition.get -> string!
+Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Transition.init -> void
+const Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffects.ReceiptsMetadataKey = "workflowStateEffectReceipts" -> string!
+override Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.operator !=(Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt? left, Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt.operator ==(Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt? left, Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffects.ReadReceipts(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! metadata) -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.StepWorkflowStateEffectReceipt!>!

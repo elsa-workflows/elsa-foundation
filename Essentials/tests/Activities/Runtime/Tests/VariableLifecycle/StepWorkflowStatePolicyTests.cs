@@ -74,14 +74,14 @@ public sealed class StepWorkflowStatePolicyTests
     }
 
     [Fact]
-    public async Task Protected_reads_strengthen_a_known_public_output_even_when_read_after_its_assignment()
+    public async Task Protected_reads_cannot_be_declassified_by_a_constant_looking_output_name()
     {
         await using var harness = WorkflowExecutionHarness.Create().Build("unused");
         var session = ProtectedSession();
         session.SetOutput("Safe", JsonSerializer.SerializeToElement(42));
         session.TryGetOutput("Protected", out _);
-        var prepared = await Prepare(harness, session);
-        Assert.Equal("True", Assert.Single(prepared.StateValues).State.Metadata["runtime.isSensitive"]);
+        var failure = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => Prepare(harness, session));
+        Assert.Contains("VF-STATE-003", failure.Message, StringComparison.Ordinal);
     }
 
     private static StepWorkflowState ProtectedSession()
@@ -90,7 +90,7 @@ public sealed class StepWorkflowStatePolicyTests
         return new StepWorkflowState(true, null, null,
             new Dictionary<string, ValueEnvelope> { ["Protected"] = ValueEnvelope.Inline(new ValueTypeDescriptor("String"), json,
                 new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true)) },
-            new Dictionary<string, JsonElement> { ["Protected"] = json }, publicOutputNames: new HashSet<string> { "Safe" });
+            new Dictionary<string, JsonElement> { ["Protected"] = json });
     }
 
     private static StepWorkflowState Session(Dictionary<string, ValueEnvelope> outputs) => new(true, null, null, outputs, new Dictionary<string, JsonElement>());

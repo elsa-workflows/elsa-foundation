@@ -32,6 +32,9 @@ public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activit
     private static readonly ActivityActivationFailureHandler ActivationFailures = new();
     private Func<bool>? _protectedStateReads;
     internal void ProtectWorkflowStateReads(Func<bool> reads) => _protectedStateReads = reads;
+    internal string MaskCancellationReason(string reason) => _protectedStateReads?.Invoke() == true
+        ? "Cancellation details are withheld because the body read protected workflow state."
+        : mask.HasRegistrations(activityExecutionId) ? mask.Mask(activityExecutionId, reason) : reason;
     private const string WithheldStateFailure = "Failure details are withheld because the body read protected workflow state.";
     private static string ValueFree(string text)
     {

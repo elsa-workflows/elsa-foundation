@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Tests.VariableLifecycle;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -20,6 +22,52 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class EventCorrelationRoutingTests
 {
     private const string EventName = "order-shipped";
+
+    [Theory]
+    [InlineData("independent")]
+    [InlineData(null)]
+    public async Task Changing_workflow_identity_keeps_old_wait_keys_and_later_waits_use_their_own_input(string? laterCorrelation)
+    {
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new Elsa.Activities.ControlFlow.ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+            .Build(Enumerable.Range(0, 10).Select(index => $"actexec-{index}").ToArray());
+        var writer = new ExecutableNode("state", "state", typeof(CorrelationStateWriter).FullName!, "1", "test",
+            JsonSerializer.SerializeToElement(new { }), inputBindings: new Dictionary<string, RuntimeInputBinding>(), metadata: new Dictionary<string, string>());
+        var children = new[] { writer, EventNode(laterCorrelation, "later") };
+        var sequence = new ExecutableNode("sequence", "sequence", typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!, "1", "test",
+            JsonSerializer.SerializeToElement(new { }), inputBindings: new Dictionary<string, RuntimeInputBinding>(), metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(Elsa.Activities.Sequence.Activities.Sequence.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure(Elsa.Activities.Sequence.Activities.Sequence.StructureKind,
+                Elsa.Activities.Sequence.Activities.Sequence.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+        var root = VariableLifecycleTestGraph.Parallel(EventNode("old", "earlier"), sequence);
+        var targets = new[] { "earlier", "later" }.ToDictionary(node => WorkflowExecutableResumeTarget.ComposeScopedId(node, Event.ResumeTargetId),
+            node => new WorkflowExecutableResumeTarget(WorkflowExecutableResumeTarget.ComposeScopedId(node, Event.ResumeTargetId), node, "ResumeAsync", new Dictionary<string, string>(), Event.ResumeTargetId));
+        var executable = new WorkflowExecutable(WorkflowExecutionHarness.Identity, root, targets, WorkflowExecutionHarness.Timestamp,
+            new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+        var run = await harness.RunAsync(executable);
+        Assert.Equal("new", run.WorkflowState!.CorrelationId);
+        var bookmarks = await BookmarksAsync(harness);
+        var earlier = Assert.Single(bookmarks, bookmark => bookmark.ExecutableNodeId == "earlier");
+        var later = Assert.Single(bookmarks, bookmark => bookmark.ExecutableNodeId == "later");
+        Assert.Equal("old", earlier.Metadata[RuntimeMetadataKeys.CorrelationId]);
+        Assert.Equal(laterCorrelation, later.Metadata.GetValueOrDefault(RuntimeMetadataKeys.CorrelationId));
+        if (laterCorrelation is null) return;
+        var sharedBookmarks = new InMemoryBookmarkStateStore();
+        foreach (var bookmark in bookmarks) await sharedBookmarks.SaveAsync(bookmark);
+        var router = new StimulusRouter(new InMemoryWorkflowTriggerBindingStore(),
+            new GlobalBookmarkStimulusLookup(sharedBookmarks),
+            new UnexpectedStartDispatcher(), harness.Services.GetRequiredService<IBookmarkResumeDispatcher>());
+        async Task<int> Route(string key) => (await router.RouteAsync(new StimulusDispatchRequest(EventStimulus.StimulusType,
+            EventStimulus.Hash(EventName), input: JsonSerializer.SerializeToElement(new { eventName = EventName }), mode: StimulusRoutingMode.ResumeOnly, correlationId: key,
+            payloadType: new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventReceived)), schemaVersion: 1), providerId: PublishEvent.ActivityType) { ResumeAllMatchingBookmarks = true })).ResumedCount;
+        Assert.Equal(0, await Route("new"));
+        Assert.Equal(1, await Route("old"));
+        Assert.Equal(ActivityExecutionStatus.Suspended, (await harness.ReadRunAsync(harness.ExecutionId)).State("later").Status);
+        Assert.Equal(1, await Route("independent"));
+        Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness));
+    }
 
     [Fact]
     public async Task Route_ResumesOnlyTheWaitingEventWithTheMatchingCorrelation()
@@ -183,7 +231,7 @@ public sealed class EventCorrelationRoutingTests
     private static async Task<WorkflowExecutionStatus?> WorkflowStatusAsync(WorkflowExecutionHarness harness) =>
         (await harness.Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(harness.ExecutionId))?.Status;
 
-    private static ExecutableNode EventNode(string? correlationId)
+    private static ExecutableNode EventNode(string? correlationId, string nodeId = "node-event")
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
@@ -195,8 +243,8 @@ public sealed class EventCorrelationRoutingTests
             inputBindings[nameof(Event.CorrelationId)] = Literal(nameof(Event.CorrelationId), correlationId);
 
         return new ExecutableNode(
-            executableNodeId: "node-event",
-            authoredActivityId: "authored-node-event",
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
             activityType: Event.ActivityType,
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
@@ -241,5 +289,18 @@ public sealed class EventCorrelationRoutingTests
             WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("A resume-only correlation routing test must not start a workflow.");
+    }
+}
+
+[AccessesWorkflowState]
+public sealed class CorrelationStateWriter : Activity<ActivityUnit>
+{
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        context.WorkflowState.CorrelationId = "new";
+        context.WorkflowState.InstanceName = "Changed";
+        Assert.Equal("new", context.WorkflowState.CorrelationId);
+        Assert.Equal("Changed", context.WorkflowState.InstanceName);
+        return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
     }
 }

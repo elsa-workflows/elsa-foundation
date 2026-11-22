@@ -193,7 +193,7 @@ public sealed record ActivityExecutionInspectionView(
             ActivityExecutionAttemptView.From(attemptNavigation, projection.Attempt ?? projection.Provenance.Attempt),
             ActivityExecutionBoundaryView.From(boundary),
             ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues))
-        { WorkflowStateEffects = StepWorkflowStateEffects.Read(projection.Metadata) };
+        { WorkflowStateEffects = StepWorkflowStateEffects.Read(projection.Metadata), WorkflowStateEffectReceipts = StepWorkflowStateEffects.ReadReceipts(projection.Metadata) };
 
     /// <summary>
     /// The write-history records of this execution (spec 1221 FR-024): applied writes, lost-update warnings and
@@ -216,6 +216,9 @@ public sealed record ActivityExecutionInspectionView(
     /// <summary>Accepted workflow-state effects, with no attempted values or output names.</summary>
     public IReadOnlyCollection<string> WorkflowStateEffects { get; init; } = [];
 
+    /// <summary>Value-free accepted evaluation attribution, preserved across later failures.</summary>
+    public IReadOnlyCollection<StepWorkflowStateEffectReceipt> WorkflowStateEffectReceipts { get; init; } = [];
+
 
     /// <summary>
     /// Adds the variable-lifecycle records the execution's durable state keeps (spec 1221) to this view. Record i is
@@ -235,7 +238,8 @@ public sealed record ActivityExecutionInspectionView(
                     ? refreshes.Select(ActivityInputRefreshView.From).ToArray()
                     : null,
                 Warnings = ExecutionWarningView.From(state),
-                WorkflowStateEffects = StepWorkflowStateEffects.Read(state.Metadata)
+                WorkflowStateEffects = StepWorkflowStateEffects.Read(state.Metadata),
+                WorkflowStateEffectReceipts = StepWorkflowStateEffects.ReadReceipts(state.Metadata)
             };
 }
 
@@ -534,6 +538,9 @@ public sealed record ActivityExecutionInspectionSummaryView(
     /// <summary>Accepted workflow-state kinds available without payload access.</summary>
     public IReadOnlyCollection<string> WorkflowStateEffects { get; init; } = [];
 
+    /// <summary>Value-free accepted evaluation attribution, preserved across later failures.</summary>
+    public IReadOnlyCollection<StepWorkflowStateEffectReceipt> WorkflowStateEffectReceipts { get; init; } = [];
+
     public static ActivityExecutionInspectionSummaryView From(ActivityExecutionInspectionSummaryProjection projection) =>
         new(
             projection.ActivityExecutionId,
@@ -557,7 +564,7 @@ public sealed record ActivityExecutionInspectionSummaryView(
             projection.IncidentCount,
             projection.ValueSnapshotCount,
             ActivityExecutionInspectionDisclosure.EmptyMetadata)
-        { WorkflowStateEffects = StepWorkflowStateEffects.Read(projection.Metadata) };
+        { WorkflowStateEffects = StepWorkflowStateEffects.Read(projection.Metadata), WorkflowStateEffectReceipts = StepWorkflowStateEffects.ReadReceipts(projection.Metadata) };
 }
 
 public sealed record ActivityExecutionStateView(

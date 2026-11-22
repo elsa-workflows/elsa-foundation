@@ -11,6 +11,7 @@ import { chooseDataJourney } from "./chooseDataJourney";
 import { variableRenameJourney } from "./variableRenameJourney";
 import { variableLifecycleJourney } from "./variableLifecycleJourney";
 import { scriptVariableWritesJourney } from "./scriptVariableWritesJourney";
+import { stepWorkflowStateJourney } from "./stepWorkflowStateJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -550,4 +551,8 @@ test("variable lifecycle warnings and refusals", async ({ page }, info) => {
 
 test("script variable may-write analysis survives editing and reopening", async ({ page }, info) => {
   await scriptVariableWritesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("workflow state native and imported authoring and inspection", async ({ page }, info) => {
+  await stepWorkflowStateJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

@@ -289,7 +289,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                     executionContextState, persistedDurableValues, stepSession, cancellationToken);
-                faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
+                faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput);
+                stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
             }
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
@@ -680,7 +681,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 TimeProvider,
                 workItem,
                 WithSessionReads(state, stepSession, stepWarnings),
-                returnedCancellationReason,
+                faultMasking.MaskCancellationReason(returnedCancellationReason),
                 valueSnapshots,
                 cancellationToken: cancellationToken);
             return;
@@ -812,8 +813,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 invokePayload,
                 WithSessionReads(state, stepSession, stepWarnings).WithVariableWrites(captureCommit.Records) with
                 {
-                    // A completion whose step also wrote variables in its session is not recorded: accepting it would replay
-                    // its captures without those writes.
+                    // Accepting captures alone cannot replay the evaluation's variable, output or identity effects.
                     RecordedCompletion = stepWrites.Records.Count > 0 || stepWrites.HasStateEffects
                         ? null
                         : RecordCompletion(completedState, captureCommit, durableValueChanges, stagedWorkflowDispatch, stagedPublishIntents,
@@ -825,6 +825,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
 
         completedState = completedState.WithVariableWrites(captureCommit.Records);
+        completedState = StepStateCommit.DiscloseCaptureOverlap(completedState, stepWrites.StateValues, durableValueChanges);
         // FR-025: each value written joins the write history as an inspection value, under the capture policy: the step's
         // session writes (spec 1231) and its captures, once nothing refused the completion.
         valueSnapshots.AddRange(Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(

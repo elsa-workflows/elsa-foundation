@@ -57,8 +57,9 @@ internal sealed class JintJavaScriptScriptEvaluator(
             ? IsolatedJintEngine.SetVariables(engine, values, NoPinnedValues, session, options)
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
+        var stateWriteLosses = new List<JavaScriptPrecisionLoss>();
         if (request.WorkflowState is { } workflowState)
-            ScriptWorkflowState.Install(engine, values, workflowState, precisionPolicy);
+            ScriptWorkflowState.Install(engine, values, workflowState, precisionPolicy, stateWriteLosses);
 
         // Parsed before the count starts, on the caller's thread: a parse (on a cache miss) is not the script's work.
         EvaluationLimits.Start(engine);
@@ -82,6 +83,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>(functions.Warnings);
         if (variables is not null)
             losses = [.. losses, .. JavaScriptValueWrites.WriteVariables(variables, request.Variables!, precisionPolicy, warnings)];
+        losses = [.. losses, .. stateWriteLosses];
 
         request.WorkflowState?.ThrowIfRefused();
 

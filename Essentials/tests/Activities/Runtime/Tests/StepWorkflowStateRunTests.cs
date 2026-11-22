@@ -84,9 +84,19 @@ public sealed class StepWorkflowStateRunTests
         Assert.Null(run.WorkflowState!.CorrelationId);
     }
 
+    [Fact]
+    public async Task Dead_literal_names_cannot_authorize_protected_computed_names()
+    {
+        var (run, values) = await RunAsync("if(false) workflowState.setOutput('Safe',0); variables.total = 99; workflowState.setOutput(workflowState.getOutput('Protected'),42); return 1;", protectedOutput: true);
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-js").Status);
+        Assert.Equal("10", run.WorkflowState!.RootVariableFrame!.Values["var-total"].InlineValue!.Value.GetRawText());
+        Assert.DoesNotContain(values, value => value.ValueId == "output:Safe");
+        Assert.DoesNotContain("Safe", JsonSerializer.Serialize(run.State("node-js").Fault), StringComparison.Ordinal);
+    }
+
     private static JsonElement Result(WorkflowExecutionRun run) => run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value");
 
-    private static async Task<(WorkflowExecutionRun, IReadOnlyCollection<DurableValueState>)> RunAsync(string script)
+    private static async Task<(WorkflowExecutionRun, IReadOnlyCollection<DurableValueState>)> RunAsync(string script, bool protectedOutput = false)
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesScriptingFeature().ConfigureServices(services))
@@ -110,17 +120,23 @@ public sealed class StepWorkflowStateRunTests
             {
                 ["script"] = Literal("script", "String", JsonSerializer.SerializeToElement(script)),
                 ["arguments"] = Literal("arguments", "JsonElement", JsonSerializer.SerializeToElement(new { }))
-            }, metadata: new Dictionary<string, string>());
+            }, metadata: new Dictionary<string, string> { ["workflowStateEffects"] = "{\"outputNames\":[\"Safe\"],\"conservative\":true}" });
+        if (protectedOutput)
+            await harness.Services.GetRequiredService<IDurableValueStateStore>().SaveAsync(new DurableValueState(
+                "durable-output:Protected", harness.ExecutionId, "output:Protected", new RuntimeValueTypeDescriptor("Any", "Single", null),
+                DurableValueLifecycle.Instance, DurableValueStorage.Inline, JsonSerializer.SerializeToElement("Safe"), null, null,
+                DateTimeOffset.UnixEpoch, new Dictionary<string, string> { [RuntimeMetadataKeys.IsSensitive] = "true" }));
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node, declaration),
             allowPendingWorkOnTerminalCompletion: true, allowAcceptedButFaulted: true);
         var values = await harness.Services.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(harness.ExecutionId, CancellationToken.None);
         return (run, values);
     }
 
-    private static RuntimeInputBinding Literal(string key, string alias, JsonElement value)
+    private static RuntimeInputBinding Literal(string key, string alias, JsonElement value, bool sensitive = false)
     {
         var type = new ValueTypeDescriptor(alias);
-        return new RuntimeInputBinding(key, type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: sensitive);
+        return new RuntimeInputBinding(key, type, policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, value, policy));
     }
 }

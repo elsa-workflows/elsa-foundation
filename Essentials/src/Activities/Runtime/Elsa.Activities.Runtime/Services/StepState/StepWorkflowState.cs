@@ -22,13 +22,12 @@ internal sealed class StepWorkflowState : IStepWorkflowState
     private readonly StepVariableSession? _variables;
     private readonly IReadOnlyList<ValueProtectionPolicy> _inputs;
     private readonly List<ValueProtectionPolicy> _reads = [];
-    private readonly IReadOnlySet<string> _publicOutputNames;
     private string? _correlationId;
     private string? _instanceName;
 
     internal StepWorkflowState(bool allowed, string? correlationId, string? instanceName,
         IReadOnlyDictionary<string, ValueEnvelope> outputs, IReadOnlyDictionary<string, JsonElement> payloads,
-        StepVariableSession? variables = null, IReadOnlyList<ValueProtectionPolicy>? inputs = null, IReadOnlySet<string>? publicOutputNames = null, IExternalPayloadStore? externalStore = null, CancellationToken cancellationToken = default)
+        StepVariableSession? variables = null, IReadOnlyList<ValueProtectionPolicy>? inputs = null, IExternalPayloadStore? externalStore = null, CancellationToken cancellationToken = default)
     {
         _allowed = allowed;
         _correlationId = correlationId;
@@ -39,7 +38,6 @@ internal sealed class StepWorkflowState : IStepWorkflowState
         _cancellationToken = cancellationToken;
         _variables = variables;
         _inputs = inputs ?? [];
-        _publicOutputNames = publicOutputNames ?? new HashSet<string>(StringComparer.Ordinal);
     }
 
     internal Exception? PendingFault { get; private set; }
@@ -53,6 +51,7 @@ internal sealed class StepWorkflowState : IStepWorkflowState
     internal string? AssignedName => _instanceName;
     internal IReadOnlyDictionary<string, ValueEnvelope> Outputs => _outputs;
     public bool HasReadProtectedValue => _reads.Any(Protected) || _variables?.HasReadProtectedValue == true;
+    internal bool HasReadProtectedOutput => _reads.Any(Protected);
 
     public string? CorrelationId
     {
@@ -129,8 +128,7 @@ internal sealed class StepWorkflowState : IStepWorkflowState
     internal void ValidateCompletion()
     {
         if (PendingFault is { } fault) throw fault;
-        if (HasEffects && Protected(SourcePolicy()) &&
-            (HasCorrelationAssignment || HasNameAssignment || Assignments.Keys.Any(name => !_publicOutputNames.Contains(name))))
+        if (HasEffects && Protected(SourcePolicy()))
             throw Refuse("VF-STATE-003: Protected sources cannot flow into public identity fields or output names.");
     }
 
@@ -193,13 +191,7 @@ internal sealed class StepWorkflowState : IStepWorkflowState
             }
         }
         var identity = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var publicNames = new HashSet<string>(StringComparer.Ordinal);
-        if (activity is IStepWorkflowStateConsumer && node.Metadata.TryGetValue("workflowStateEffects", out var effectsJson))
-        {
-            var effects = JsonSerializer.Deserialize<Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects>(effectsJson, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            foreach (var name in effects?.OutputNames ?? []) publicNames.Add(name);
-        }
         return new StepWorkflowState(allowed, identity.CorrelationId, identity.InstanceName, outputs, payloads, variables,
-            invocation.InputSnapshot?.Values.Values.Select(value => value.Policy).ToArray(), publicNames, services.GetService<IExternalPayloadStore>(), cancellationToken);
+            invocation.InputSnapshot?.Values.Values.Select(value => value.Policy).ToArray(), services.GetService<IExternalPayloadStore>(), cancellationToken);
     }
 }

@@ -52,6 +52,7 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
                 <small title={typeName}>{typeName}</small>
                 {workflowStateEffectLabels(activity.workflowStateEffects).length > 0
                   ? <small>Committed changes: {workflowStateEffectLabels(activity.workflowStateEffects).join(", ")}</small> : null}
+                {activity.workflowStateEffectReceipts?.map((receipt, index) => <small key={index}>{receipt.transition === "Suspension" ? "Suspension" : "Completion"} accepted {formatClockTime(receipt.acceptedAt)}: {workflowStateEffectLabels(receipt.kinds).join(", ")}</small>)}
                 {compensation ? <small className="wf-timeline-tag"><Undo2 size={11} aria-hidden="true" /> Compensation</small> : null}
               </span>
               <span className="wf-timeline-meta">

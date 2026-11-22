@@ -1,5 +1,6 @@
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
+using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Jint;
 using Jint.Native;
@@ -12,7 +13,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 internal static class ScriptWorkflowState
 {
     internal static void Install(Engine engine, IScriptValueEvaluation values, IScriptWorkflowState state,
-        IJavaScriptPrecisionPolicy precision)
+        IJavaScriptPrecisionPolicy precision, ICollection<JavaScriptPrecisionLoss> writtenLosses)
     {
         var root = engine.Intrinsics.Object.Construct([]);
         var readNumber = 0;
@@ -58,6 +59,7 @@ internal static class ScriptWorkflowState
             {
                 // The bridge runs toJSON/getters once, under the same evaluation limits and precision policy.
                 var written = JavaScriptValueWrites.Apply(values.Write(args[1], "workflow output"), "workflow output", precision);
+                foreach (var loss in written.Losses) writtenLosses.Add(loss);
                 if (written.Value is not { } json)
                     Refuse("An output requires an explicit serializable JSON value.");
                 else state.SetOutput(name, json);

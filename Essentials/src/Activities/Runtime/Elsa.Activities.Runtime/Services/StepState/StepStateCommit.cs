@@ -58,10 +58,22 @@ internal static class StepStateCommit
         if (session.HasNameAssignment) kinds.Add("instanceName");
         var accepted = writes.Apply(invocation);
         var attribution = accepted.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        attribution["workflowStateEffects"] = JsonSerializer.Serialize(kinds);
-        attribution["workflowStateEffectsAttemptId"] = invocation.Attempts?.LastOrDefault()?.AttemptId ?? string.Empty;
-        attribution["workflowStateEffectsAt"] = occurredAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        attribution[StepWorkflowStateEffects.MetadataKey] = JsonSerializer.Serialize(StepWorkflowStateEffects.Read(attribution).Concat(kinds).Distinct(StringComparer.Ordinal));
+        attribution[StepWorkflowStateEffects.ReceiptsMetadataKey] = JsonSerializer.Serialize(
+            StepWorkflowStateEffects.ReadReceipts(attribution).Append(new StepWorkflowStateEffectReceipt(
+                invocation.Attempts?.LastOrDefault()?.AttemptId, occurredAt,
+                invocation.Status == ActivityExecutionStatus.Suspended ? "Suspension" : "Completion", kinds.ToArray())));
         return writes with { Workflow = workflow, StateValues = changes, HasStateEffects = true,
             Invocation = accepted with { Metadata = RuntimeModelMetadata.Snapshot(attribution) } };
+    }
+
+    internal static ActivityExecutionState DiscloseCaptureOverlap(ActivityExecutionState state,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> writes,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> captures)
+    {
+        if (!writes.Select(change => change.StateId).Intersect(captures.Select(change => change.StateId), StringComparer.Ordinal).Any())
+            return state;
+        return state.WithWarnings([new Elsa.Expressions.Core.Models.ExecutionWarning("VF-STATE-004",
+            "A completion capture replaced a body assignment at the same workflow-state address. The capture was accepted last.")]);
     }
 }
