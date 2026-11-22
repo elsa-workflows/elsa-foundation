@@ -216,6 +216,35 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("Array.from([0], function () { this.Status = 'Paid'; return 1; }, getVariable('Order')); return 1;")]
     [InlineData("const h = { get x() { this.Status = 'Paid'; return 1; } }; Reflect.get(h, 'x', getVariable('Order')); return 1;")]
     [InlineData("function* gen() { yield getVariable('Order'); } const o = gen().next().value; o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'x'; } }; new String(h); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 1; } }; new Number(h); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'x'; } }; new RegExp(h); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'g'; } }; new RegExp('x', h); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'x'; } }; return `${h}`;")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; return ({})[k];")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; return { [k]: 1 };")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; const { [k]: x } = {}; return x;")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; const h = {}; h[k] = 1; return 1;")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; const h = { x: 1 }; delete h[k]; return 1;")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { o.Status = 'Paid'; return 'x'; } }; class C { [k]() {} } return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 10; } }; return Number.parseInt('1', h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 10; }, toString() { return '10'; } }; return parseInt('1', h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 0; } }; return 'x'.charAt(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 0; } }; return [].slice(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'x'; } }; return [h].join(',');")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return ','; } }; return [1].join(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 0; } }; return [2, 1].sort(() => h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 0; } }; return [2, 1].toSorted(() => h);")]
+    [InlineData("let o = getVariable('Order'); o.Status ||= (o = {}, 'Paid'); return 1;")]
+    [InlineData("let o = getVariable('Order'); o.Status &&= (o = {}, 'Paid'); return 1;")]
+    [InlineData("let o = getVariable('Order'); o.Status ??= (o = {}, 'Paid'); return 1;")]
+    [InlineData("const o = getVariable('Order'); JSON.stringify({ o }, function (key, value) { if (key === 'o') this.o.Status = 'Paid'; return value; }); return 1;")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { o.Status = 'Paid'; yield 1; } }; for (const x of xs) {} return 1;")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { o.Status = 'Paid'; yield 1; } }; return [...xs];")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { o.Status = 'Paid'; yield 1; } }; function take(x) { return x; } return take(...xs);")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { o.Status = 'Paid'; yield 1; } }; const [x] = xs; return x;")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { o.Status = 'Paid'; yield 1; } }; return Array.from(xs);")]
+    [InlineData("const o = getVariable('Order'); const xs = { [Symbol.iterator]() { return { next() { o.Status = 'Paid'; return { value: 1, done: false }; } }; } }; for (const x of xs) {} return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -300,7 +329,43 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const h = { get x() { return this.Status; } }; return Reflect.get(h, 'x', getVariable('Order'));")]
     [InlineData("function* gen() { yield { Status: 'Draft' }; } const o = gen().next().value; o.Status = 'Paid'; return 1;")]
     [InlineData("function* unused() { yield getVariable('Order'); } return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { return o.Status; } }; return new String(h);")]
+    [InlineData("const h = { valueOf() { return 1; } }; return new Number(h);")]
+    [InlineData("const h = { toString() { return 'x'; } }; return new RegExp(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 1; }, toString() { o.Status = 'Paid'; return 'x'; } }; return new Boolean(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { return o.Status; } }; return `${h}`;")]
+    [InlineData("const o = getVariable('Order'); const k = { toString() { return o.Status; } }; return ({})[k];")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 1; } }; return [h].includes(h);")]
+    [InlineData("const h = { valueOf() { return 10; } }; return Number.parseInt('1', h);")]
+    [InlineData("const h = { valueOf() { return 0; } }; return 'x'.charAt(h);")]
+    [InlineData("const h = { valueOf() { return 0; } }; return [].slice(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { return o.Status; } }; return [h].join(',');")]
+    [InlineData("const h = { valueOf() { return 0; } }; return [2, 1].sort(() => h);")]
+    [InlineData("let o = {}; o.Status ||= (o = getVariable('Order'), 'Paid'); return 1;")]
+    [InlineData("let o = {}; o.Status &&= (o = getVariable('Order'), 'Paid'); return 1;")]
+    [InlineData("let o = {}; o.Status ??= (o = getVariable('Order'), 'Paid'); return 1;")]
+    [InlineData("const o = getVariable('Order'); return JSON.stringify({ o }, function (key, value) { return this.o ? this.o.Status : value; });")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { const status = o.Status; yield 1; } }; for (const x of xs) {} return 1;")]
+    [InlineData("const xs = { *[Symbol.iterator]() { const o = {}; o.Status = 'Paid'; yield o; } }; return [...xs];")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { const status = o.Status; yield 1; } }; const [x] = xs; return x;")]
+    [InlineData("const o = getVariable('Order'); const xs = { *[Symbol.iterator]() { const status = o.Status; yield 1; } }; return Array.from(xs);")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("return toJson(getVariable('Order'));")]
+    [InlineData("return stringToBase64(getVariable('Order').Status);")]
+    [InlineData("return stringFromBase64(getVariable('Order').Status);")]
+    [InlineData("return parseGuid(getVariable('Order').Status);")]
+    [InlineData("const o = getVariable('Order'); return toJson({ toJSON() { return o.Status; } });")]
+    [InlineData("const o = getVariable('Order'); const h = { toString() { o.Status = 'Paid'; return 'x'; } }; return String(1, h);")]
+    [InlineData("const o = getVariable('Order'); const h = { valueOf() { o.Status = 'Paid'; return 1; } }; return Math.random(h);")]
+    public async Task Known_read_only_helpers_keep_reusable_variable_reads_convertible(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Total, Order]), isReusable: true);
