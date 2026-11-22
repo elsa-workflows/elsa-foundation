@@ -85,15 +85,16 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return ExpirePark(input);
         if (message.Kind == Durable.Kinds.Drain)
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
+        if (message is { Kind: Contract.Kinds.Delete, Operator: { } deletion } && input.Row is { } deletionTarget)
+        {
+            var identity = store.FoundationIdentity(deletionTarget.Id, deletionTarget.Creation);
+            if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection, requireTerminal: true))
+                return Durable.CreationProtocol.Refuse(input.Actor, deletionTarget, input.Taken, "StaleSelection");
+        }
         if (input.Row is { ParkDiscard: not null } draining)
         {
-            if (message is { Kind: Contract.Kinds.Delete, Operator: { } deletion } && draining.ParkDiscard.Kind == Durable.ParkClearKind.Delete)
-            {
-                var identity = store.FoundationIdentity(draining.Id, draining.Creation);
-                if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection))
-                    return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "StaleSelection");
+            if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && draining.ParkDiscard.Kind == Durable.ParkClearKind.Delete)
                 return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
-            }
             return RefuseDuringDiscard(input, draining);
         }
         if (message.Kind == Contract.Kinds.Terminate &&
@@ -147,7 +148,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || parked) && input.Row is { } completedRow &&
             delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
             return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), message.JobGeneration, ticket.Timer, cancel: false, keepCheckpoint: parked);
-        if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
+        if (message.Kind != Contract.Kinds.Delete && message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
             if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection))

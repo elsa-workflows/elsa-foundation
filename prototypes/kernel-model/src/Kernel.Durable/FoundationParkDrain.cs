@@ -193,7 +193,7 @@ public sealed partial class InMemoryStore
                 input.Kind != (after.Kind == ParkClearKind.Delete ? Kinds.Delete : "kernel.discard") ||
                 input.Operator?.Selection is not { } selection ||
                 !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
-                !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
+                !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection, requireTerminal: after.Kind == ParkClearKind.Delete))
                 throw InvalidDrain();
             if (after.Kind == ParkClearKind.Delete && (turn.Sent.Count != 1 || turn.Journal is not null || turn.Unsubscribe ||
                 next != (previous with { Revision = next.Revision, ParkDiscard = after, ParkResolutionGeneration = next.ParkResolutionGeneration })))

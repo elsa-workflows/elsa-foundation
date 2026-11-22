@@ -15,7 +15,7 @@ public sealed partial class InMemoryStore
             : null;
     }
 
-    internal bool MatchesFoundationSelection(string tenant, string? reference, string? token)
+    internal bool MatchesFoundationSelection(string tenant, string? reference, string? token, bool requireTerminal = false)
     {
         lock (_gate)
         {
@@ -23,7 +23,9 @@ public sealed partial class InMemoryStore
             Span<byte> presented = stackalloc byte[SelectionBytes];
             if (!TryOpenReadCursor(SelectionContext(tenant, actor.Binding.Reference), token, presented)) return false;
             Span<byte> committed = stackalloc byte[SelectionBytes];
-            return TryEncodeSelectionMark(Checkpoint(actor.Row, actor.Binding), committed) && presented.SequenceEqual(committed);
+            var checkpoint = Checkpoint(actor.Row, actor.Binding);
+            return (!requireTerminal || checkpoint.Terminal is not null) &&
+                TryEncodeSelectionMark(checkpoint, committed) && presented.SequenceEqual(committed);
         }
     }
 
