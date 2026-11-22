@@ -526,6 +526,7 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   await page.goto(`/workflows/instances/${run.id}?${new URLSearchParams({ historyEvent: sequence.items[1].historyEventId,
     historyActivity: root.activityExecutionId, historyDescendants: "1" })}`);
   await h.position(1, 9, sequence.items[1].activityExecutionId);
+  await page.getByRole("region", { name: "Run timeline", exact: true }).getByText("Filter events", { exact: true }).click();
   await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("checkbox", { name: "Include descendants", exact: true }).uncheck();
   await h.position(0, 1, root.activityExecutionId);
   await expect(page.getByRole("region", { name: "History event details", exact: true })).toContainText(root.activityExecutionId);
