@@ -175,7 +175,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", placement: "build", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
-      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined })
     ]);
     expect(api.routes.list()).toEqual([
@@ -193,7 +193,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
       expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
-      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics" })
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
     ]);
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
@@ -1428,7 +1428,7 @@ describe("workflows module", () => {
       expect(unavailableRun.disabled).toBe(true);
       expect(unavailableRun.title).toContain("No live published reference");
 
-      await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
+      await click(buttonByLabel(container, "Copy executable ID artifact-current"));
       expect(writeText).toHaveBeenCalledWith("artifact-current");
       expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied artifact ID" }));
       expect(container.textContent).not.toContain("Copied artifact ID");
@@ -2612,7 +2612,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
     await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
-    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Copy Executable ID"]')).toBeTruthy();
     expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Hello World · 2.0.0");
     expect(container.querySelector(".wf-executable-canvas > header")).toBeNull();
     await waitForText(container, "Hello World");
@@ -2622,10 +2622,10 @@ describe("workflows module", () => {
     expect(inspector?.textContent).not.toContain("Elsa.Activities.Sequence.Activities.Sequence");
     const identityTerms = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].map(dt => dt.textContent);
     expect(identityTerms).toEqual(expect.arrayContaining([
-      "Artifact ID", "Artifact hash", "Root activity", "Nodes", "Resume targets", "Created", "Kind", "Scope",
+      "Executable ID", "Executable hash", "Root activity", "Nodes", "Resume targets", "Created", "Kind", "Scope",
       "Layout source", "Definition ID", "Definition version ID"
     ]));
-    for (const label of ["Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"]) {
+    for (const label of ["Executable ID", "Executable hash", "Definition ID", "Definition version ID"]) {
       const term = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].find(dt => dt.textContent === label);
       const value = term?.nextElementSibling as HTMLElement | null;
       const identifier = value?.querySelector(".studio-copyable-identifier");
@@ -2778,11 +2778,11 @@ describe("workflows module", () => {
       "artifact-1", "sha256:abc", "definition-1", "version-2"
     ]);
     expect(copyableValues.map(row => row.querySelector("button")?.getAttribute("aria-label"))).toEqual([
-      "Copy Artifact ID", "Copy Artifact hash", "Copy Definition ID", "Copy Definition version ID"
+      "Copy Executable ID", "Copy Executable hash", "Copy Definition ID", "Copy Definition version ID"
     ]);
     expect(copyableValues.every(row => row.querySelector(".studio-copyable-identifier__label") === null)).toBe(true);
     expect([...inspector.querySelectorAll(".wf-instance-meta dt")].map(dt => dt.textContent)).toEqual(expect.arrayContaining([
-      "Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"
+      "Executable ID", "Executable hash", "Definition ID", "Definition version ID"
     ]));
 
     await click(buttonByText(container, "References (2)"));
@@ -3261,10 +3261,10 @@ describe("workflows module", () => {
 
     try {
       await waitForText(container, "artifact-1");
-      await click(buttonByLabel(container, "Copy Artifact ID"));
+      await click(buttonByLabel(container, "Copy Executable ID"));
 
       expect(writeText).toHaveBeenCalledWith("artifact-1");
-      expect(container.textContent).toMatch(/Artifact ID copied/i);
+      expect(container.textContent).toMatch(/Executable ID copied/i);
     } finally {
       await unmount();
       if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
@@ -4082,7 +4082,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("copies incidents and hides normal root runtime evidence from the issues tab", async () => {
+  it("copies incidents and hides normal root run data from the issues tab", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -4151,7 +4151,7 @@ describe("workflows module", () => {
 
       expect(container.textContent).toContain("InputMaterializationFailed");
       expect(container.textContent).toContain("Input 'Collection' failed to evaluate");
-      expect(container.textContent).not.toContain("Unmatched runtime evidence");
+      expect(container.textContent).not.toContain("Unmatched run data");
 
       await click(buttonByLabel(container, "Copy incident InputMaterializationFailed"));
 

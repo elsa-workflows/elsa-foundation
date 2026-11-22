@@ -159,7 +159,7 @@ afterEach(() => {
 });
 
 describe("workflow run workbench incident navigation", () => {
-  it("keeps failed ancestry blocked instead of falling back to wider run evidence", async () => {
+  it("keeps failed ancestry blocked instead of falling back to wider run data", async () => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });
     api.getActivityExecutionInspection.mockImplementation(async (_context, _run, id: string) => {
@@ -465,7 +465,7 @@ describe("workflow run workbench incident navigation", () => {
     }
   });
 
-  it("restores the nested canvas from a maximized Issues view and keeps input evidence navigation in Activity", async () => {
+  it("restores the nested canvas from a maximized Issues view and keeps input data navigation in Activity", async () => {
     renderWorkbench();
 
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.inspector-maximized")).toBeTruthy());
@@ -478,7 +478,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
   });
@@ -556,7 +556,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.inspector-drawer-open")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='details']"));
     click(container.querySelector<HTMLButtonElement>("[aria-label='Close run details panel']"));
@@ -585,7 +585,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeTruthy();
 
@@ -595,7 +595,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-incident-summary")).toBeTruthy());
     expect(container.querySelector(".wf-instance-incident[data-selected='true']")).toBeNull();
 
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.supportsActivityExecutionInspection).toHaveBeenCalledTimes(4));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));
     click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
@@ -610,7 +610,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector("[data-tab-id='issues']")?.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("keeps denied and mismatched activity evidence unavailable while retrying only transient failures", async () => {
+  it("keeps denied and mismatched activity data unavailable while retrying only transient failures", async () => {
     const incidents = [
       incident({ incidentId: "denied-incident", activityExecutionId: "denied-execution" }),
       incident({ incidentId: "mismatch-incident", activityExecutionId: "mismatch-execution" }),
@@ -719,7 +719,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-input-inspection-info")?.getAttribute("aria-expanded")).toBe("true"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
@@ -756,7 +756,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect this activity execution"));
 
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='timeline']"));
@@ -796,7 +796,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
 
     click(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh execution"]')!);
@@ -908,7 +908,7 @@ describe("workflow run workbench incident navigation", () => {
 
     renderWorkbench();
     await vi.waitFor(() => expect(buttonByText(container, "Load more affected activities (1)")).toBeTruthy());
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
@@ -934,7 +934,7 @@ describe("workflow run workbench incident navigation", () => {
     renderWorkbench();
     await vi.waitFor(() => expect(container.textContent).toContain("You do not have permission to inspect 1 exact activity execution"));
     expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
-    click(buttonByText(container, "View input evidence"));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
@@ -952,13 +952,13 @@ describe("workflow run workbench incident navigation", () => {
       Promise.resolve(activityInspection({ workflowExecutionId, activityExecutionId })));
 
     renderWorkbench();
-    await vi.waitFor(() => expect(container.textContent).toContain("Exact affected activity evidence is unavailable from this server."));
-    click(buttonByText(container, "View input evidence"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Exact affected activity data is unavailable from this server."));
+    click(buttonByText(container, "View input data"));
     await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
     click(container.querySelector<HTMLButtonElement>("[data-tab-id='issues']"));
 
     await vi.waitFor(() => expect(buttonByText(container, "Load more affected activities (1)")).toBeTruthy());
-    expect(container.textContent).not.toContain("Exact affected activity evidence is unavailable from this server.");
+    expect(container.textContent).not.toContain("Exact affected activity data is unavailable from this server.");
     expect(container.textContent).toContain("Some affected activities are not shown yet (1 remaining)");
   });
 
@@ -1001,7 +1001,7 @@ describe("workflow run workbench incident navigation", () => {
     for (let index = 50; index <= lastIndex; index++) {
       const row = [...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
         .find(candidate => candidate.textContent?.includes(`Failure-${index}`));
-      click(buttonByText(row!, "View input evidence"));
+      click(buttonByText(row!, "View input data"));
       await vi.waitFor(() => expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
       await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
       if (index < lastIndex) {
@@ -1028,7 +1028,7 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.textContent).not.toContain("Some affected activities are not shown yet");
     expect(container.textContent).not.toContain("You do not have permission to inspect 1 exact activity execution");
     click(buttonByText([...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
-      .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input evidence"));
+      .find(candidate => candidate.textContent?.includes(`Failure-${lastIndex}`))!, "View input data"));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
     const incidentCount = [...container.querySelectorAll(".wf-activity-summary-grid dt")]
       .find(label => label.textContent === "Incidents")?.nextElementSibling?.textContent;
@@ -1098,11 +1098,11 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelectorAll(".wf-instance-incident")).toHaveLength(2));
     const incidentRow = (message: string) => [...container.querySelectorAll<HTMLElement>(".wf-instance-incident")]
       .find(row => row.textContent?.includes(message));
-    const olderAction = buttonByText(incidentRow("The earlier attempt failed.")!, "View input evidence");
+    const olderAction = buttonByText(incidentRow("The earlier attempt failed.")!, "View input data");
     expect(olderAction).toBeTruthy();
     click(olderAction);
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(1));
-    const newerAction = buttonByText(incidentRow("The current attempt failed.")!, "View input evidence");
+    const newerAction = buttonByText(incidentRow("The current attempt failed.")!, "View input data");
     expect(newerAction).toBeTruthy();
     click(newerAction);
     await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledTimes(2));

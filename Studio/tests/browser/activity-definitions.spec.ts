@@ -1171,7 +1171,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   const artifactId = `wrapper-artifact-${"a".repeat(48)}-1`;
   const sourceReferenceId = `source-reference-${"b".repeat(48)}-1`;
   const testRunId = `activity-test-run-${"9".repeat(48)}-1`;
-  const evidence = dialog.getByRole("region", { name: "Recorded activity evidence" });
+  const evidence = dialog.getByRole("region", { name: "Recorded activity data" });
   await evidence.getByRole("tab", { name: "Outputs" }).click();
   await expect(evidence.getByText("recorded output")).toBeVisible();
   await dialog.getByText("Technical details", { exact: true }).click();
@@ -1201,7 +1201,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await expect(page).toHaveURL(draftUrl);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
-  await dialog.getByRole("button", { name: "Open focused Runtime Evidence" }).click();
+  await dialog.getByRole("button", { name: "Open focused run data" }).click();
   await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}\\?activityExecutionId=${encodeURIComponent(activityExecutionId)}`));
 });
 
@@ -1242,7 +1242,7 @@ test("Activity Definition Test Run separates Runtime rejection and reconciles am
 
   state.testRunMode = "ambiguous";
   state.testRunReceiptMisses = 1;
-  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
+  await dialog.getByRole("button", { name: "Rerun as new run data" }).click();
   await expect(dialog.getByText(/dispatch response was ambiguous/i)).toBeVisible();
   await expect(dialog.getByText("Dispatch accepted")).toBeVisible({ timeout: 5_000 });
   await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
@@ -1267,9 +1267,9 @@ test("Activity Definition Test Run cancels active evidence and distinguishes ful
 
   state.testRunExpired = true;
   state.testRunStatuses = ["Completed"];
-  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
-  await expect(dialog.getByText("Test Run evidence expired")).toBeVisible({ timeout: 5_000 });
-  await expect(dialog.getByText("Neither its Source Reference nor Runtime Evidence remains available.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Rerun as new run data" }).click();
+  await expect(dialog.getByText("Test Run data expired")).toBeVisible({ timeout: 5_000 });
+  await expect(dialog.getByText("Neither its Source Reference nor run data remains available.")).toBeVisible();
   await expect(dialog.getByRole("link")).toHaveCount(0);
   await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
   expect(state.testRunWrites).toBe(2);
@@ -1355,7 +1355,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await expect(dialog.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(dialog.getByText("DerivedProjection")).toBeVisible();
   await expect(dialog).toContainText("7/18/2026");
-  await expect(dialog).toContainText("Runtime Evidence are preserved");
+  await expect(dialog).toContainText("Run data are preserved");
   await dialog.getByRole("textbox", { name: /Type semantic version/ }).fill("1.0.0");
   await dialog.getByRole("textbox", { name: /Reason/ }).fill("Security response");
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();

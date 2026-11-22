@@ -105,7 +105,7 @@ describe("workflow run history", () => {
 
     click(disclosure);
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-    expect(document.body.textContent).toContain("Artifact ID");
+    expect(document.body.textContent).toContain("Executable ID");
     expect(document.body.textContent).toContain(exactRun.artifactId);
     expect(document.body.textContent).toContain(exactRun.definitionId);
     expect(document.body.textContent).toContain(exactRun.definitionVersionId);
@@ -267,7 +267,7 @@ describe("workflow run history", () => {
 
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
     expect(container.querySelector(".wf-run-filter-chip")).toBeTruthy();
-    const removeArtifact = button(container, "Remove Artifact filter");
+    const removeArtifact = button(container, "Remove Executable filter");
     click(removeArtifact);
 
     await waitFor(() => expect(navigate).toHaveBeenLastCalledWith("/workflows/instances?incidentHealth=active&pageSize=10"));
@@ -313,7 +313,7 @@ describe("workflow run history", () => {
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
     const expectedValues = [
       ["Copy Execution ID", "execution-1"],
-      ["Copy Artifact ID", "artifact-1"],
+      ["Copy Executable ID", "artifact-1"],
       ["Copy Definition ID", "definition-1"],
       ["Copy Definition version ID", "version-1"]
     ] as const;

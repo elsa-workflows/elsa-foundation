@@ -137,7 +137,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
     return (
       <div className="wf-runtime-panel">
         {executionControls}
-        <div className="wf-empty">Run the draft to see Runtime Evidence.</div>
+        <div className="wf-empty">Run the draft to see Run data.</div>
       </div>
     );
   }
@@ -240,14 +240,14 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
           <div className="wf-runtime-identifiers">
             <CopyableIdentifier label="Test run ID" value={view.testRunId} />
             {workflowExecutionId ? <CopyableIdentifier label="Run ID" value={workflowExecutionId} /> : null}
-            {view.artifactId ? <CopyableIdentifier label="Artifact ID" value={view.artifactId} /> : null}
+            {view.artifactId ? <CopyableIdentifier label="Executable ID" value={view.artifactId} /> : null}
           </div>
           <dl className="wf-runtime-meta">
             <div><dt>Dispatch</dt><dd>{view.commandDispatchStatus ?? view.status}</dd></div>
             {execution?.subStatus ? <div><dt>Execution detail</dt><dd>{execution.subStatus}</dd></div> : null}
             <div><dt>Started by</dt><dd>{runState.startLabel ?? "Direct start"}</dd></div>
             {runState.workflowInputNames?.length ? <div><dt>Inputs</dt><dd>{runState.workflowInputNames.join(", ")}</dd></div> : null}
-            <div><dt>Evidence expires</dt><dd>{view.expiresAt ? formatDate(view.expiresAt) : "Not provided"}</dd></div>
+            <div><dt>Run data expires</dt><dd>{view.expiresAt ? formatDate(view.expiresAt) : "Not provided"}</dd></div>
           </dl>
         </TechnicalDetails>
       </section>
@@ -265,7 +265,7 @@ function formatEvidenceCount(count: number, label: string) {
 
 function runtimeSummary(view: WorkflowTestRunView, observation: TestRunObservation | undefined, prepared: boolean, runtimeIssue: boolean) {
   if (isRejectedTestRun(view)) return { status: "Rejected", description: "The server rejected this test run." };
-  if (view.status === "Expired" || observation?.status === "expired") return { status: "Expired", description: "Test run evidence has expired." };
+  if (view.status === "Expired" || observation?.status === "expired") return { status: "Expired", description: "Test Run data has expired." };
   const execution = observation?.details?.instance;
   const terminal = ["Completed", "Faulted", "Cancelled"].includes(execution?.status ?? "");
   if (!terminal && (view.status === "StopRequested" || view.status === "Stopped" && execution))

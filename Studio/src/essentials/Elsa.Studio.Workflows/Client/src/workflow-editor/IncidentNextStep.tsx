@@ -98,7 +98,7 @@ export function IncidentNextStep({
 
   let nextStep: string;
   if (!summary) {
-    nextStep = "The current run context is unavailable here. Inspect this incident's recorded evidence or reopen its run for guidance.";
+    nextStep = "The current run context is unavailable here. Inspect this incident's recorded data or reopen its run for guidance.";
   } else if (!sameRun) {
     nextStep = "This incident does not match the run currently open. Its run guidance is unavailable here.";
   } else if (!isActiveIncident(incident)) {
@@ -106,7 +106,7 @@ export function IncidentNextStep({
   } else if (runHasEnded && summary) {
     nextStep = `This run has ended (${summary.status}). Review its recorded outcome; do not start another action from this incident.`;
   } else if (guidance.requesterCancelled) {
-    nextStep = "The requesting activity was canceled. This incident cannot start its handler or accept a decision; inspect the run evidence or share the incident with an operator.";
+    nextStep = "The requesting activity was canceled. This incident cannot start its handler or accept a decision; inspect the run data or share the incident with an operator.";
   } else if (guidance.pendingIncidentId) {
     nextStep = guidance.pendingIncidentId === incident.incidentId
       ? "An action for this incident is being followed. Wait for the run to update; a second action is paused."
@@ -116,35 +116,35 @@ export function IncidentNextStep({
       ? `An automatic retry is due${formatDate(guidance.retryNotBefore) ? ` (${formatDate(guidance.retryNotBefore)})` : ""} and will run at the next scheduling pass. Do not submit another retry.`
       : `An automatic retry is scheduled${formatDate(guidance.retryNotBefore) ? ` for ${formatDate(guidance.retryNotBefore)}` : ""}. Wait for it; do not submit another retry.`;
   } else if (!incident.isBlocking) {
-    nextStep = "This incident is active but does not block the run. Review its exact activity or input evidence before changing the workflow.";
+    nextStep = "This incident is active but does not block the run. Review its exact activity data or recorded inputs before changing the workflow.";
   } else if (guidance.retryReviewEligibility.reason === "source-not-faulted") {
-    nextStep = `The source activity is ${guidance.retryReviewEligibility.observedStatus}; Retry applies only after it is Faulted. Inspect the exact activity or input evidence before changing the workflow.`;
+    nextStep = `The source activity is ${guidance.retryReviewEligibility.observedStatus}; Retry applies only after it is Faulted. Inspect the exact activity data or recorded inputs before changing the workflow.`;
   } else if (guidance.retryReviewEligibility.reason === "parent-not-running") {
-    nextStep = "The recorded parent is not running, so Retry is not available for this scope. Review the activity evidence or share the incident with an operator.";
+    nextStep = "The recorded parent is not running, so Retry is not available for this scope. Review the activity data or share the incident with an operator.";
   } else if (guidance.retryReviewEligibility.reason === "blocking-descendant-incident") {
     nextStep = "Another blocking incident is recorded on a descendant activity. Review that incident before retrying this activity.";
   } else if (guidance.retryReviewEligibility.reason === "descendant-ancestry-not-loaded") {
-    nextStep = "A blocking incident is recorded, but its activity ancestry is incomplete. Inspect the run evidence or share this incident before retrying.";
+    nextStep = "A blocking incident is recorded, but its activity ancestry is incomplete. Inspect the run data or share this incident before retrying.";
   } else if (guidance.retryReviewEligibility.reason === "same-source-blocking-incident-not-waiting") {
-    nextStep = "Another blocking incident on this activity is not ready for Retry. Inspect its evidence or share the incident with an operator.";
+    nextStep = "Another blocking incident on this activity is not ready for Retry. Inspect its run data or share the incident with an operator.";
   } else if (guidance.canAct && guidance.retryReviewEligibility.status === "eligible" && guidance.retryJournalAvailability === "checking") {
     nextStep = "Checking whether a retry is already scheduled. Wait for this read before choosing Retry.";
   } else if (guidance.canAct && guidance.retryReviewEligibility.status === "eligible" && guidance.retryJournalAvailability === "unknown") {
     nextStep = "The run has not confirmed whether a retry is already scheduled. Check Retry availability before retrying.";
   } else if (guidance.retryReviewEligibility.status === "unknown") {
-    nextStep = "The exact activity state needed to confirm Retry is unavailable here. Inspect the selected run evidence or share the incident with an operator.";
+    nextStep = "The exact activity state needed to confirm Retry is unavailable here. Inspect the selected run data or share the incident with an operator.";
   } else if (guidance.actionAvailability === "checking") {
     nextStep = "Checking whether a run action is available. You can inspect or copy the incident while this check completes.";
   } else if (guidance.actionAvailability === "unknown") {
-    nextStep = "A run action could not be confirmed. Inspect the available run evidence or share the incident with an operator.";
+    nextStep = "A run action could not be confirmed. Inspect the available run data or share the incident with an operator.";
   } else if (guidance.actionAvailability === "unavailable") {
-    nextStep = "No run action is available in this view for this incident. Inspect the run evidence or share the incident with an operator.";
+    nextStep = "No run action is available in this view for this incident. Inspect the run data or share the incident with an operator.";
   } else if (!guidance.canAct) {
-    nextStep = "This view does not confirm permission to change the run. Inspect the evidence or share the incident with an operator.";
+    nextStep = "This view does not confirm permission to change the run. Inspect the run data or share the incident with an operator.";
   } else if (incident.isBlocking && !isWaitingForIntervention(incident)) {
-    nextStep = "This blocking incident is not waiting for an operator action. Inspect its evidence or share it with an operator.";
+    nextStep = "This blocking incident is not waiting for an operator action. Inspect its run data or share it with an operator.";
   } else {
-    nextStep = "Review the run evidence and any available actions below; choose one only if it matches the situation.";
+    nextStep = "Review the run data and any available actions below; choose one only if it matches the situation.";
   }
 
   return (
@@ -167,7 +167,7 @@ export function IncidentNextStep({
           ) : checkingDefinition ? (
             <p role="status">Checking whether this definition is available to review.</p>
           ) : (
-            <p>Definition access could not be confirmed here. Inspect the current run evidence or copy and share this incident.</p>
+            <p>Definition access could not be confirmed here. Inspect the current run data or copy and share this incident.</p>
           )}
         </div>
       ) : null}

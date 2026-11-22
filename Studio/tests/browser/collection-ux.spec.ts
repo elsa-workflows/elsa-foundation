@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"]) {
     await identifiers.hover();
     expect(await background()).toBe(hovered);
     await page.screenshot({ path: info.outputPath("identifiers-hover.png"), fullPage: true });
-    await row.getByRole("button", { name: "Copy Artifact ID", exact: true }).click();
+    await row.getByRole("button", { name: "Copy Executable ID", exact: true }).click();
     await expect(page).toHaveURL(/collection-ux\.html/);
     await row.getByRole("button", { name: "Identifiers for Hello World", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Workflow executable identifiers for Hello World", exact: true })).toBeVisible();

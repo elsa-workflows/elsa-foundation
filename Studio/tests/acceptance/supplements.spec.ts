@@ -94,7 +94,7 @@ async function keyboardTo(page: Page, target: Locator, limit = 150) {
 
 // Settings uses links on desktop and a native section selector on compact layouts.
 // Keyboard journeys reach the real control with Tab; no direct route or scripted focus substitutes for it.
-async function activateSettingsSection(page: Page, label: "Appearance" | "Runtime evidence settings", touch?: (target: Locator, label: string, changed?: boolean) => Promise<void>) {
+async function activateSettingsSection(page: Page, label: "Appearance" | "Runtime diagnostics", touch?: (target: Locator, label: string, changed?: boolean) => Promise<void>) {
   const select = page.getByRole("combobox", { name: "Settings section", exact: true });
   if ((page.viewportSize()?.width ?? 0) <= 800) {
     await expect(select).toBeVisible();
@@ -226,8 +226,8 @@ test("coarse pointer grouped navigation", async ({ page }, info) => {
 
   await tap(link("Settings"), "Settings entry");
   // Settings controls are tapped and recorded, outside the changed shell targets' 44px rule.
-  await activateSettingsSection(page, "Runtime evidence settings", tap);
-  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await activateSettingsSection(page, "Runtime diagnostics", tap);
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
   await expect(link("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "touch-settings-runtime");
 
@@ -400,8 +400,8 @@ test("restricted principal settings access", async ({ page }, info) => {
     await activateSettingsSection(page, "Appearance");
     await expect(pane.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
   }
-  await activateSettingsSection(page, "Runtime evidence settings");
-  await expect(pane.getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await activateSettingsSection(page, "Runtime diagnostics");
+  await expect(pane.getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
   // Loaded from the real runtime settings response (not the pre-load disabled state), then read-only for this reader.
   await expect(pane.getByText(/^Maximum allowed by Host Policy: /)).toBeVisible();
   await expect(pane.getByText("Current user can view settings but cannot change them.", { exact: true })).toBeVisible();
@@ -541,7 +541,7 @@ async function subsetJourney(page: Page, browser: Browser, info: TestInfo, plane
     ? { path: "/workflows/definitions", view: "Definitions", heading: page.getByRole("heading", { name: "Workflow definitions", exact: true }) }
     : { path: "/workflows/executables", view: "Executables", heading: page.getByRole("main").getByRole("heading", { name: "Executables", level: 2, exact: true }) };
   const absent = design
-    ? { path: "/workflows/executables", view: "Executables", capability: "elsa.api.runtime", settings: "/settings/workflows-runtime-diagnostics", section: "Runtime evidence settings", settingsCapability: "elsa.api.runtime" }
+    ? { path: "/workflows/executables", view: "Executables", capability: "elsa.api.runtime", settings: "/settings/workflows-runtime-diagnostics", section: "Runtime diagnostics", settingsCapability: "elsa.api.runtime" }
     : { path: "/workflows/definitions", view: "Definitions", capability: "elsa.api.workflow-design", settings: "/settings/workflows-activity-availability", section: "Activity availability", settingsCapability: "elsa.api.activity-design" };
   await signIn(page, available.path, admin.username, admin.password, available.heading);
   const discovered = await capabilities(page, backend);

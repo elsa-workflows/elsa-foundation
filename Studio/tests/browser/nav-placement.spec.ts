@@ -9,7 +9,7 @@ test("opens purpose groups and routes through nested destinations", async ({ pag
   await expect(page.getByRole("button", { name: "More tools" })).toHaveCount(0);
   const sidebar = page.locator(".sidebar");
   for (const name of ["Activity definitions", "Templates", "Definitions", "Executables"]) await expect(sidebar.getByRole("link", { name, exact: true })).toBeVisible();
-  for (const name of ["Console", "Runtime evidence settings", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
+  for (const name of ["Console", "Runtime diagnostics", "Activity availability"]) await expect(sidebar.getByRole("link", { name, exact: true })).toHaveCount(0);
   // #4903 keeps Library as a sidebar parent with child links instead of local "Library views".
   await sidebar.getByRole("link", { name: "Templates", exact: true }).click();
   await expect(sidebar.getByRole("link", { name: "Templates", exact: true })).toHaveAttribute("aria-current", "page");
@@ -32,8 +32,8 @@ test("remembers collapse choices and reveals matching destinations through searc
   const search = page.getByRole("searchbox", { name: "Search Studio", exact: true });
   await search.fill("Templates");
   await expect(page.locator(".sidebar").getByRole("link", { name: "Templates", exact: true })).toBeVisible();
-  await search.fill("runtime evidence");
-  await expect(page.locator(".sidebar").getByRole("link", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+  await search.fill("run data");
+  await expect(page.locator(".sidebar").getByRole("link", { name: "Runtime diagnostics", exact: true })).toBeVisible();
   await search.fill("no-such-destination");
   await expect(page.getByRole("status")).toContainText("No destinations match");
   await search.press("Escape");

@@ -138,7 +138,7 @@ export function WorkflowActivityExecutionDetails({
             if (controller.signal.aborted) return;
             if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== activityExecutionId) {
               setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity,
-                status: "failed", inspection: null, error: "Execution evidence identity did not match the selected occurrence." });
+                status: "failed", inspection: null, error: "Run identity did not match the selected occurrence." });
             } else setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection, error: "" });
           } catch (error) {
             if (controller.signal.aborted) return;
@@ -336,8 +336,8 @@ export function WorkflowActivityExecutionDetails({
             state={currentInspectionState}
             subject="ActivityOutput"
             title="Outputs"
-            loadingText="Loading runtime output evidence..."
-            failureText="Runtime output evidence is unavailable."
+            loadingText="Loading recorded outputs..."
+            failureText="Recorded outputs are unavailable."
             emptyText="No runtime output snapshots were recorded for this execution."
           />
         </StudioTabPanel>
@@ -470,14 +470,14 @@ function WorkflowActivityInputEvidence({
         </h4>
         <span className="wf-input-inspection-caption">Runtime values</span>
       </header>
-      {state.status === "loading" ? <p>Loading runtime input evidence...</p> : null}
+      {state.status === "loading" ? <p>Loading recorded inputs...</p> : null}
       {state.status === "failed" ? (
         <>
-          <p>Runtime input evidence is unavailable. Authored source remains independently inspectable where permitted.</p>
+          <p>Recorded inputs are unavailable. Authored source remains independently inspectable where permitted.</p>
           {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
         </>
       ) : null}
-      {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or runtime input evidence are available for this execution.</p> : null}
+      {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or recorded inputs are available for this execution.</p> : null}
       {rows.length > 0 ? (
         <div className="wf-runtime-input-list wf-input-inspection-list" role="list">
           {rows.map(row => (
@@ -575,10 +575,10 @@ function InputInspectionRowCard({
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
             inspectionStatus === "loading" ? <p className="wf-input-inspection-unavailable">Loading captured value…</p>
-              : inspectionStatus === "failed" ? <p className="wf-input-inspection-unavailable">Runtime evidence unavailable</p>
+              : inspectionStatus === "failed" ? <p className="wf-input-inspection-unavailable">Run data unavailable</p>
               : sourceValueFallback(row, shownSource, sourceProtected)
                 ? <AuthoredSourceValueFallback source={shownSource} />
-                : <p className="wf-input-inspection-unavailable">No evaluation evidence recorded</p>
+                : <p className="wf-input-inspection-unavailable">No evaluation data recorded</p>
           )}
         </div>
         <StudioButton
@@ -614,7 +614,7 @@ function InputInspectionRowCard({
             expressionEditors={expressionEditors}
           />
         </section>
-        <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
+        <section className="wf-input-inspection-detail" aria-label={`${row.name} run data`}>
           <h5>Capture details</h5>
           <dl className="wf-input-inspection-metadata">
             {[
@@ -777,8 +777,8 @@ function formatInputInspectionState(state: InputInspectionState) {
     missingDeclaration: "Declaration unavailable",
     missingAuthoredSource: "Authored source unavailable",
     missingCompiledBinding: "Compiled binding unavailable",
-    noEvaluation: "Evaluation evidence not recorded",
-    orphanEvidence: "Orphan runtime evidence",
+    noEvaluation: "No evaluation data recorded",
+    orphanEvidence: "Unmatched run data",
     compiledOnly: "Compiled source only",
     sourceUnavailable: "Source unavailable",
     duplicateKey: "Duplicate input key",
@@ -843,7 +843,7 @@ function WorkflowActivityValueEvidence({
   const captureModeByKey = new Map(snapshots.map(snapshot => [formatCaptureMode(snapshot.captureMode).toLowerCase(), snapshot.captureMode]));
   const captureModes = [...captureModeByKey.values()];
   const homogeneousCaptureMode = captureModes.length === 1;
-  const captureModeLabel = homogeneousCaptureMode ? formatCaptureMode(captureModes[0] ?? "Evidence") : "Mixed evidence";
+  const captureModeLabel = homogeneousCaptureMode ? formatCaptureMode(captureModes[0] ?? "Run data") : "Mixed capture modes";
 
   return (
     <section className="wf-instance-section">

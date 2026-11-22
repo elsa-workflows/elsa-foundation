@@ -220,7 +220,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
       .toBe("Pinned occurrence");
   });
 
-  it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {
+  it("focuses only an outer activity execution that exists in the loaded Run data", () => {
     const activities = [
       { activityExecutionId: "outer-activity" },
       { activityExecutionId: "child-activity" }
@@ -390,7 +390,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
 
     const onViewInput = vi.fn();
     renderIncidentList([targetIncident], associationActivities, vi.fn(), onViewInput);
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onViewInput).toHaveBeenCalledWith(targetIncident);
   });
 
@@ -507,7 +507,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
 
     const onViewInput = vi.fn();
     renderIncidentList([targetIncident], activities, vi.fn(), onViewInput);
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onViewInput).toHaveBeenCalledWith(targetIncident);
   });
 
@@ -698,7 +698,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
     expect(summary?.textContent).not.toContain("Start");
     expect(mounted?.container.querySelector(".wf-incident-technical-details")?.textContent).toContain("ExpressionEvaluationFailed");
     click(buttonByText(mounted!.container, "Show affected activity"));
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onShowAffectedActivity).toHaveBeenCalledWith(affectedIncident);
     expect(onViewInput).toHaveBeenCalledWith(affectedIncident);
 

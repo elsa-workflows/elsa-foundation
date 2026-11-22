@@ -403,7 +403,7 @@ export function WorkflowInstances({ context, navigate }: {
 
   return (
     <>
-      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and execution evidence." refresh={{
+      <StudioPageHeader title="Runs" headingLevel={2} description="Inspect workflow runs, their progress, and run data." refresh={{
         id: `workflow-runs:${context.baseUrl}`,
         label: "Refresh workflow runs",
         onRefresh: () => load(true),
@@ -563,7 +563,7 @@ export function WorkflowInstances({ context, navigate }: {
           {instances.map(instance => {
             const workflowName = definitionNames.get(instance.definitionId) ?? instance.definitionId;
             const secondaryIdentifiers = [
-              { label: "Artifact ID", value: instance.artifactId },
+              { label: "Executable ID", value: instance.artifactId },
               { label: "Definition ID", value: instance.definitionId },
               { label: "Definition version ID", value: instance.definitionVersionId }
             ].filter(identifier => identifier.value);
@@ -700,7 +700,7 @@ function buildRunFilterChips(filters: RunHistoryFilters, definitionNames: Map<st
     removeLabel: "Workflow"
   });
   if (filters.workflowExecutionId) chips.push({ name: "workflowExecutionId", label: `Execution ID: ${filters.workflowExecutionId}`, removeLabel: "Execution ID" });
-  if (filters.artifactId) chips.push({ name: "artifactId", label: `Artifact: ${filters.artifactId}`, removeLabel: "Artifact" });
+  if (filters.artifactId) chips.push({ name: "artifactId", label: `Executable: ${filters.artifactId}`, removeLabel: "Executable" });
   if (filters.correlationId) chips.push({ name: "correlationId", label: `Correlation: ${filters.correlationId}`, removeLabel: "Correlation" });
   if (filters.from) chips.push({ name: "from", label: `From: ${filters.from}`, removeLabel: "From" });
   if (filters.to) chips.push({ name: "to", label: `To: ${filters.to}`, removeLabel: "To" });
@@ -1575,7 +1575,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       const denied = status === 401 || status === 403 || status === 404;
       if (denied) setPreparedScope(null);
       setScopeNavigation({ context: browserContext, loading: false,
-        error: denied ? "This execution scope is unavailable in the current context." : "This occurrence's activity evidence could not be loaded. Retry the scope.",
+        error: denied ? "This execution scope is unavailable in the current context." : "This occurrence's activity data could not be loaded. Retry the scope.",
         retaining: retainPrevious && !denied });
     } finally {
       if (!committed) controller.abort();
@@ -1748,7 +1748,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
               <span>
               {currentData.incidentActivityLookupSupported
                 ? `Some affected activities are not shown yet (${currentData.pendingIncidentActivityExecutionIds.length} remaining). Open Issues and load more.`
-                : "Exact affected activity evidence is unavailable from this server."}
+                : "Exact affected activity data is unavailable from this server."}
               </span>
             </div>
           ) : null}
@@ -2164,7 +2164,7 @@ function WorkflowInstanceCanvas({
           {executionBreadcrumb}
         </div>
       ) : null}
-      {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible execution evidence…" : scoped.failed ? "Some visible execution evidence could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence to inspect."}</p> : null}
+      {(scoped.loading || scoped.failed || scoped.repeated) ? <p className="wf-instance-note" role="status">{scoped.loading ? "Loading visible run data…" : scoped.failed ? "Some visible run data could not be loaded. Refresh to retry." : "Some activities ran more than once. Choose an occurrence to inspect."}</p> : null}
       <div className="wf-instance-canvas" onKeyDownCapture={event => activateWorkflowCanvasNode(event, nodeId => {
         const node = canvas.nodes.find(candidate => candidate.id === nodeId);
         if (node) onSelectActivity(nodeRuntimeId(node));
@@ -2638,7 +2638,7 @@ function WorkflowInstanceInspector({
                     <dd><CopyableIdentifier label="Workflow Instance ID" value={summary.workflowExecutionId} /></dd>
                     <dt>Run Kind</dt>
                     <dd>{formatRunKind(summary.runKind)}</dd>
-                    <dt>Artifact</dt>
+                    <dt>Executable</dt>
                     <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
                     <dt>Definition</dt>
                     <dd>
@@ -2904,12 +2904,12 @@ export function WorkflowIncidentList({
   return (
     <section className="wf-instance-section">
       <h4>Incidents</h4>
-      {!incidentEvidenceAvailable ? <p>Incident evidence is unavailable from this Runtime host.</p> : null}
+      {!incidentEvidenceAvailable ? <p>Incident data is unavailable from this Runtime host.</p> : null}
       {associationLookupIncomplete ? (
         <div className="wf-run-association-status" role="status">
           <p className="wf-instance-note">{associationLookupSupported
             ? `Some affected activities are not shown yet (${pendingIncidentActivityCount} remaining).`
-            : "This server cannot provide exact activity evidence."}</p>
+            : "This server cannot provide exact activity data."}</p>
           {associationLookupSupported && onLoadMoreIncidentAssociations ? (
             <button
               type="button"
@@ -2974,7 +2974,7 @@ export function WorkflowIncidentList({
                   <button type="button" onClick={() => onShowAffectedActivity?.(incident)}>Show affected activity</button>
                 ) : <span className="wf-instance-note">Run-level issue · no activity association was recorded.</span>}
                 {inputKey && (association?.activityExecution || hasIncidentActivityExecutionId(incident)) ? (
-                  <button type="button" onClick={() => onViewInput?.(incident)}>View input evidence</button>
+                  <button type="button" onClick={() => onViewInput?.(incident)}>View input data</button>
                 ) : inputKey ? (
                   <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
                 ) : null}
