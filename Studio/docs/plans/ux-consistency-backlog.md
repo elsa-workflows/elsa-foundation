@@ -277,8 +277,8 @@ at the kit size. All migration items below `needs: K1`.
 
 Workflows:
 
-- [ ] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
-  Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`.
+- [x] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
+  Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`. (PR #5271, PR #5278)
 - [ ] **X3.2** (#5038) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
   "Run workflow" has no primary emphasis.
 - [ ] **X3.3** (#5039) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
