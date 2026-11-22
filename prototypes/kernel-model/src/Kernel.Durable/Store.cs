@@ -162,6 +162,7 @@ public sealed record TurnCommit(
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
+    internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

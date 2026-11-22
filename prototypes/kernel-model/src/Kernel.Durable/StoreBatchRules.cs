@@ -19,6 +19,15 @@ public static class StoreBatchRules
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
         ValidateParkPages(batch);
+        if (batch.Turns.Any(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 }))
+        {
+            var restoring = batch.Turns.Where(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 })
+                .Select(turn => turn.Instance).ToHashSet(StringComparer.Ordinal);
+            if (batch.Turns.Any(turn => (turn.FoundationRecoverySubscriptions is null &&
+                    turn.Subscribed.Concat(turn.Unsubscribed).Any(row => restoring.Contains(row.Instance))) ||
+                    turn.Unsubscribe && restoring.Contains(turn.Instance)))
+                throw new StoreException(Failure.Definite, "Other writes in a batch cannot change subscriptions recovery restores.");
+        }
         if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
         {
             var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
@@ -29,6 +38,7 @@ public static class StoreBatchRules
         foreach (var turn in batch.Turns)
         {
             if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
+                turn.FoundationRecoverySubscriptions is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
