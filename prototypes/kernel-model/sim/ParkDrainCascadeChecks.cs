@@ -13,7 +13,8 @@ internal static class ParkDrainCascadeChecks
         await TerminatePark(parentTerminate: false, check);
         await TerminatePark(parentTerminate: true, check);
         await ExistingCascade(check);
-        await StaleSelectionDoesNotWithdrawDuringRecovery(check);
+        await RefusedTerminateDoesNotWithdraw(check, drainAlreadyOpen: false);
+        await RefusedTerminateDoesNotWithdraw(check, drainAlreadyOpen: true);
         await TerminateRunningRecovery(selected: true, check);
         await TerminateRunningRecovery(selected: false, check);
     }
@@ -334,7 +335,7 @@ internal static class ParkDrainCascadeChecks
         string RowId() => store.FoundationTarget(scope.Tenant, actor.Id)!.Id;
     }
 
-    private static async Task StaleSelectionDoesNotWithdrawDuringRecovery(Action<bool, string> check)
+    private static async Task RefusedTerminateDoesNotWithdraw(Action<bool, string> check, bool drainAlreadyOpen)
     {
         const long initial = 1_702_310_050_000;
         var now = initial;
@@ -357,16 +358,27 @@ internal static class ParkDrainCascadeChecks
         for (var pass = 0; pass < 10 && probe.JobTokens.Count == 0; pass++) await TurnLess();
         if (probe.JobTokens.Count != 1) throw new InvalidOperationException("The original driver failed to start.");
 
-        var running = (await new ActorList(store, 10).GetAsync(scope, subject))!.Selection!;
-        var stale = await edge.SendAsync(scope, new Contract.Target.Ref(subject), "stale-terminate", Contract.Kinds.Terminate,
-            Json.Write(new Contract.OperatorCommand(running)), new(DueAt: initial + 1));
-        check(stale.Outcome == Contract.AdmissionOutcome.Accepted, "the stale-selection witness queues Terminate before the Park");
+        if (!drainAlreadyOpen)
+        {
+            var running = (await new ActorList(store, 10).GetAsync(scope, subject))!.Selection!;
+            var stale = await edge.SendAsync(scope, new Contract.Target.Ref(subject), "stale-terminate", Contract.Kinds.Terminate,
+                Json.Write(new Contract.OperatorCommand(running)), new(DueAt: initial + 1));
+            check(stale.Outcome == Contract.AdmissionOutcome.Accepted, "the stale-selection witness queues Terminate before the Park");
+        }
         await Send(subject, "park", "park");
         await Step(subject);
         await Operate(subject, "open", Contract.Kinds.Recover);
         await Step(subject);
         check(Checkpoint(subject) is { Park: not null, Row.ParkRecovery: not null },
             "recovery trial: real Recover opens before takeover");
+
+        if (drainAlreadyOpen)
+        {
+            await Operate(subject, "first-terminate", Contract.Kinds.Terminate);
+            for (var pass = 0; pass < 5 && Checkpoint(subject).Row.ParkDiscard is null; pass++) await Step(subject);
+            check(Checkpoint(subject).Row is { Status: InstanceStatus.Running, ParkDiscard.Kind: ParkClearKind.Terminate, Jobs: null, Children: null },
+                "a real already-open Running Terminate has transferred all work before the recovery owner changes");
+        }
 
         await oldOwner.DisposeAsync();
         worker = NewWorker();
@@ -376,13 +388,20 @@ internal static class ParkDrainCascadeChecks
         var active = probe.JobTokens[1];
         if (active.IsCancellationRequested) throw new InvalidOperationException("The isolated job started canceled.");
         now++;
+        if (drainAlreadyOpen) await Operate(subject, "further-terminate", Contract.Kinds.Terminate);
         for (var pass = 0; pass < 6; pass++)
         {
             await owner.WokenAsync(null);
             await owner.RunAsync();
         }
-        check(!active.IsCancellationRequested && Checkpoint(subject).Row.ParkRecovery is not null && probe.JobTokens.Count == 2,
-            "a stale Terminate during open Recover leaves the unrelated trial driver alone");
+        if (drainAlreadyOpen)
+        {
+            check(!active.IsCancellationRequested && probe.JobTokens.Count == 2,
+                "a further selected Terminate during an existing Terminate drain leaves an unrelated trial intact");
+        }
+        else
+            check(!active.IsCancellationRequested && Checkpoint(subject).Row.ParkRecovery is not null && probe.JobTokens.Count == 2,
+                "a stale Terminate during open Recover leaves the unrelated trial driver alone");
 
         InMemoryStore.ActorCheckpoint Checkpoint(Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
         ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string operation, string kind, string? body = null) =>

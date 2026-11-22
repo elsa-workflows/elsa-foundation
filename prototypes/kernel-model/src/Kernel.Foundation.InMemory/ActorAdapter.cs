@@ -27,7 +27,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 start.Model == actor.Type && creator.Target == message.Target && creator.TargetCreation == creation &&
                 message.TargetCreation == creation && message.Operator is null && message.InboxKey.HasIssuedOrigin &&
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
-        if (!SupportsFoundationOperator(row)) return false;
+        if (!SupportsFoundationOperator(row) || row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
             return (row.ParkRecovery is null || row.Status == Durable.InstanceStatus.Running) &&
                 store.AuthorizesDrainingTerminate(row, message);
