@@ -136,6 +136,21 @@ public sealed class JsonConversionContractTests
     }
 
     [Fact]
+    public void API_refusal_messages_retain_owned_paths_while_runtime_owners_choose_path_protection()
+    {
+        const string json = "{\"privateDate\":\"2026-01-15T09:15:00\"}";
+        var runtime = Assert.Throws<JsonConversionException>(() => JsonConversionContract.For(typeof(DateInput)).Read(Element(json), typeof(DateInput)));
+        Assert.Equal("$[\"privateDate\"]", runtime.Path);
+        Assert.DoesNotContain("privateDate", runtime.Message);
+        var options = JsonBaseline.CreateCopy(); StrictDateTimeConverters.Configure(options, apiMode: true);
+        var api = Assert.ThrowsAny<JsonException>(() => JsonSerializer.Deserialize<DateInput>(json, options));
+        Assert.Contains("json-datetime-offset-missing", api.Message);
+        Assert.Contains("$.privateDate", api.Message);
+    }
+
+    private sealed record DateInput(DateTimeOffset PrivateDate);
+
+    [Fact]
     public void Date_only_and_time_only_keep_the_agreed_wall_clock_rules()
     {
         Assert.Equal(new DateOnly(2026, 10, 27), JsonConversionContract.For(typeof(DateOnly)).Read(Element("\"2026-10-28T00:15:00+02:00\""), typeof(DateOnly)));

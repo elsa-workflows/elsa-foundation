@@ -22,6 +22,7 @@ internal static class ElsaJsonTemporalQueryBoundary
             type = Nullable.GetUnderlyingType(type) ?? type;
             if (type != typeof(DateTime) && type != typeof(DateTimeOffset)) continue;
             if (!context.Request.Query.TryGetValue(parameter.Name, out var values)) continue;
+            var suppliedName = context.Request.Query.Keys.First(name => name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase));
             foreach (var value in values)
             {
                 try
@@ -39,7 +40,7 @@ internal static class ElsaJsonTemporalQueryBoundary
                     {
                         writer.WriteStartObject();
                         writer.WriteString("code", code);
-                        writer.WriteString("path", $"$.{parameter.Name}");
+                        writer.WriteString("path", $"$.{suppliedName}");
                         writer.WriteString("targetType", type.FullName);
                         writer.WriteString("message", $"Query parameter '{parameter.Name}' requires an ISO 8601 {type.Name} with Z or an explicit offset.");
                         writer.WriteEndObject();

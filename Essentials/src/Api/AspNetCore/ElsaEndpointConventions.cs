@@ -101,6 +101,7 @@ public static class ElsaEndpointConventions
     /// </list>
     /// </remarks>
     public static readonly EndpointOperationConvention ElsaModuleOperation = (builder, context) =>
+    {
         builder
             // The package attaches this itself only from its own default convention, and the lifetime
             // validator names the group from it when it reports a violation.
@@ -115,6 +116,9 @@ public static class ElsaEndpointConventions
                 context.Tag,
                 context.DocumentAuthResponses ?? true,
                 context.SuccessContentType);
+        foreach (var parameter in EndpointParameterDescriber.Describe(context.ContractType, context.Pattern, context.ReadsBody, context.BodyKind))
+            builder.AddEndpointMetadata(parameter);
+    };
 
     /// <summary>
     /// Applies the endpoint metadata every module REST operation carries: its name and tag, its

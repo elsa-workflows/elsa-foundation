@@ -14,7 +14,7 @@ public static class StrictDateTimeConverters
         ArgumentNullException.ThrowIfNull(options);
         options.Converters.Add(new InstantConverter(apiMode));
         options.Converters.Add(new OffsetConverter(apiMode));
-        options.Converters.Add(new DateConverter());
+        options.Converters.Add(new DateConverter(apiMode));
         options.Converters.Add(new TimeConverter());
         options.Converters.Add(new DurationConverter());
     }
@@ -25,11 +25,11 @@ public static class StrictDateTimeConverters
         return time >= 0 && (text.EndsWith('Z') || text.AsSpan(time).IndexOfAny('+', '-') >= 0);
     }
 
-    private static DateTimeOffset ReadInstant(ref Utf8JsonReader reader, Type target)
+    private static DateTimeOffset ReadInstant(ref Utf8JsonReader reader, Type target, bool apiMode = false)
     {
         var text = ReadText(ref reader, target);
         if (text is null || !HasOffset(text))
-            throw new JsonConversionException("json-datetime-offset-missing", $"{target.Name} requires Z or an explicit offset.");
+            throw new JsonConversionException("json-datetime-offset-missing", $"{target.Name} requires Z or an explicit offset.") { AppendPathToMessage = apiMode };
         if (!reader.TryGetDateTimeOffset(out var value))
             throw new JsonException($"Invalid ISO 8601 {target.Name}.");
         return value;
@@ -41,7 +41,7 @@ public static class StrictDateTimeConverters
 
     private sealed class InstantConverter(bool apiMode) : JsonConverter<DateTime>
     {
-        public override DateTime Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => ReadInstant(ref reader, type).UtcDateTime;
+        public override DateTime Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => ReadInstant(ref reader, type, apiMode).UtcDateTime;
         public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
         {
             if (value.Kind == DateTimeKind.Unspecified && !apiMode)
@@ -52,12 +52,12 @@ public static class StrictDateTimeConverters
 
     private sealed class OffsetConverter(bool apiMode) : JsonConverter<DateTimeOffset>
     {
-        public override DateTimeOffset Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => ReadInstant(ref reader, type);
+        public override DateTimeOffset Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => ReadInstant(ref reader, type, apiMode);
         public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options) =>
             writer.WriteStringValue(apiMode ? value.ToUniversalTime() : value);
     }
 
-    private sealed class DateConverter : JsonConverter<DateOnly>
+    private sealed class DateConverter(bool apiMode) : JsonConverter<DateOnly>
     {
         public override DateOnly Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
         {
@@ -65,7 +65,7 @@ public static class StrictDateTimeConverters
             if (DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
                 return date;
             if (!HasOffset(text) && reader.TryGetDateTime(out var localDate)) return DateOnly.FromDateTime(localDate);
-            return DateOnly.FromDateTime(ReadInstant(ref reader, type).UtcDateTime);
+            return DateOnly.FromDateTime(ReadInstant(ref reader, type, apiMode).UtcDateTime);
         }
         public override void Write(Utf8JsonWriter writer, DateOnly value, JsonSerializerOptions options) => writer.WriteStringValue(value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
     }

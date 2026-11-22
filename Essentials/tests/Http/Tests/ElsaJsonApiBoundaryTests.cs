@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -64,6 +65,7 @@ public sealed class ElsaJsonApiBoundaryTests
     public async Task A_supplied_offsetless_query_names_the_code_path_and_target_without_echoing_the_value()
     {
         await using var host = await Host.Start();
+        Assert.Contains(host.QueryParameters, parameter => parameter.Source == EndpointBindingSource.Query && parameter.Name == "At" && parameter.Type == typeof(DateTimeOffset?));
         using var response = await host.Client.GetAsync("/api/query?at=2026-01-15T09%3A15%3A00");
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -86,6 +88,7 @@ public sealed class ElsaJsonApiBoundaryTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("json-datetime-offset-missing", text);
         Assert.Contains(path, text);
+        Assert.DoesNotContain("2026-01-15", text);
         Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
     }
@@ -117,6 +120,8 @@ public sealed class ElsaJsonApiBoundaryTests
     private sealed class Host(WebApplication app) : IAsyncDisposable
     {
         internal HttpClient Client { get; } = app.GetTestClient();
+        internal IReadOnlyList<EndpointParameterMetadata> QueryParameters => ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>().Single(endpoint => endpoint.RoutePattern.RawText == "/api/query").Metadata.GetOrderedMetadata<EndpointParameterMetadata>();
         internal static async Task<Host> Start()
         {
             var builder = WebApplication.CreateSlimBuilder();
