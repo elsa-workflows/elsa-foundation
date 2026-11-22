@@ -168,6 +168,19 @@ public sealed class EfUserTaskStoreTests
     }
 
     [Fact]
+    public async Task Blank_group_assignment_is_visible_in_mine_and_not_in_queue()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync(); await Executions(context).SaveAsync(Execution("run"));
+        var store = new EfUserTaskStore(context, new Accessor("tenant"));
+        Assert.True(await store.TryWriteAsync(Task("run", "task") with { AssigneeId = "alice", GroupId = "" }, null));
+
+        Assert.Equal("task", Assert.Single((await store.QueryAsync(new("tenant", "alice", new HashSet<string>(), "mine"))).Items).Id);
+        Assert.Empty((await store.QueryAsync(new("tenant", "alice", new HashSet<string> { "" }, "queue"))).Items);
+    }
+
+    [Fact]
     public async Task Journal_refuses_to_flush_unrelated_changes_or_attach_to_a_deleted_execution()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

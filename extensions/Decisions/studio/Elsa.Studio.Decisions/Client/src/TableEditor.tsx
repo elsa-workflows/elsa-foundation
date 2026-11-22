@@ -2,6 +2,7 @@ import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } f
 import { StudioAlert, AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { editTable, parseTable, type Clause, type Table, type TableEdit } from "./decisionXml";
 import type { Diagnostic } from "./decisionsApi";
+import { decisionDiagnosticMessage } from "./decisionDiagnosticMessage";
 
 interface EditorProps { xml: string; readOnly: boolean; onChange(xml: string): void; onError(message: string): void; diagnostics?: Diagnostic[] }
 interface Position { row: number; column: number }
@@ -211,7 +212,7 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
                   if (next) { event.preventDefault(); event.stopPropagation(); commit(next); }
                 }
               }} onBlur={() => commit(undefined, false)} /> : <span>{text}</span>}
-              {diagnostic ? <span id={diagnosticId} className="decision-cell-diagnostic" role="note">{diagnostic.message}</span> : null}
+              {diagnostic ? <span id={diagnosticId} className="decision-cell-diagnostic" role="note">{decisionDiagnosticMessage(diagnostic, table)}</span> : null}
             </td>;
           })}
           {showAnnotations ? <td><input aria-label={`Rule ${row + 1} annotation`} value={rule.annotation} disabled={readOnly} onChange={event => change({ kind: "annotation", ruleId: rule.id, text: event.target.value })} /></td> : null}

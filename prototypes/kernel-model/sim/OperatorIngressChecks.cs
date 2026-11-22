@@ -168,7 +168,7 @@ internal static class OperatorIngressChecks
         var deleted = edge.RequestAsync(scope, target, "running-delete", Contract.Kinds.Delete,
             Json.Write(new Contract.OperatorCommand(running!.Selection!)), null, new(null, now + 100)).AsTask();
         await Pump(owner);
-        check(await deleted.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "operator unavailable" } &&
+        check(await deleted.WaitAsync(TimeSpan.FromSeconds(2)) is { Error: "stale selection" } &&
             store.ReadFoundationActor(scope.Tenant, reference.Id).Actor is { Row: { Status: InstanceStatus.Finished, Children: not null } },
             "a mixed router fails closed before a legacy fallback can retire a live child with a stale selection");
 

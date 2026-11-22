@@ -303,8 +303,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (!row.Retired) CommitClockFacts.Validate(row, Instances.GetValueOrDefault(row.Id));
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
-                    CreationProtocol.Validate(turn, previous);
-                    if ((PrepareCascade(turn, previous, epochs, earlier, competing) ??
+                    var thenDelete = IsThenDeleteRetirement(turn, previous, now);
+                    CreationProtocol.Validate(turn, previous, thenDelete);
+                    if ((PrepareCascade(turn, previous, epochs, earlier, competing, thenDelete) ??
                         PrepareTerminalJobDeadlines(turn, previous, epochs, batch)) is { } cascade)
                     {
                         if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);

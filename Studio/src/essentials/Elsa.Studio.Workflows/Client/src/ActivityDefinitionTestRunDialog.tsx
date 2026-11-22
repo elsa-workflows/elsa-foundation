@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   AlertCircle,
-  CheckCircle2,
   CircleStop,
   ExternalLink,
 } from "lucide-react";
@@ -25,13 +24,16 @@ import {
 } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityDefinitionDraftView,
+  ActivityDefinitionVersionView,
   ActivityDraftValidationView
 } from "./activityDefinitionTypes";
 import {
   cancelActivityDraftTestRun,
   getActivityDraftTestRun,
   getActivityDraftTestRunByIdempotencyKey,
+  getActivityVersionTestRunByIdempotencyKey,
   startActivityDraftTestRun,
+  startActivityVersionTestRun,
   type ActivityDraftTestRunView
 } from "./api/publishing";
 import {
@@ -48,12 +50,13 @@ import {
 } from "./activityDefinitionTestRuns";
 import { ActivityDiagnosticList } from "./ActivityDefinitionDiagnosticsPanel";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
-import { browseActivityExecutions } from "./api/runtime";
-import type { ActivityExecutionStateSummary } from "./workflowTypes";
-import { WorkflowActivityExecutionDetails } from "./workflow-editor/WorkflowActivityExecutionDetails";
+import { getActivityExecutionInspection } from "./api/runtime";
+import type { ActivityExecutionInspection } from "./workflowTypes";
+import { runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceResolutionProvider } from "./workflow-editor/RuntimeValueEvidence";
 import { WorkflowRunInputField } from "./workflow-editor/WorkflowRunInputDialog";
 import { CopyValueButton } from "./workflow-editor/executableShared";
 import { StudioLink } from "./StudioLink";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
 
 type PreparationPhase = "saving" | "validating" | "ready" | "failed";
 type DispatchPhase = "idle" | "dispatching" | "reconciling" | "tracking" | "cancelling";
@@ -66,9 +69,10 @@ export interface PreparedActivityTestRunRevision {
 export function ActivityDefinitionTestRunDialog({
   context,
   draft,
+  sourceVersion = null,
+  publishedRunAvailability = null,
   definitionLabel,
   inputEditors,
-  expressionEditors,
   prepareExactRevision,
   onFocusDiagnostic,
   onClose,
@@ -77,6 +81,8 @@ export function ActivityDefinitionTestRunDialog({
 }: {
   context: StudioEndpointContext;
   draft: ActivityDefinitionDraftView;
+  sourceVersion?: ActivityDefinitionVersionView | null;
+  publishedRunAvailability?: "unavailable" | "unverified" | null;
   definitionLabel: string;
   inputEditors: StudioWorkflowRunInputEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -113,6 +119,23 @@ export function ActivityDefinitionTestRunDialog({
     [draft.contract.inputs]);
 
   useEffect(() => {
+    if (sourceVersion) {
+      const result = {
+        revision: 0,
+        validation: {
+          draftId: sourceVersion.versionId,
+          revision: 0,
+          isValid: true,
+          validatedAt: sourceVersion.publishedAt,
+          diagnostics: []
+        }
+      } satisfies PreparedActivityTestRunRevision;
+      preparationTaskRef.current = Promise.resolve(result);
+      preparationPhaseRef.current = "ready";
+      setPrepared(result);
+      setPreparation("ready");
+      return;
+    }
     let active = true;
     const listener = (phase: "saving" | "validating") => {
       if (active) setPreparation(phase);
@@ -138,7 +161,7 @@ export function ActivityDefinitionTestRunDialog({
       active = false;
       if (preparationListenerRef.current === listener) preparationListenerRef.current = null;
     };
-  }, []);
+  }, [sourceVersion]);
 
   useEffect(() => () => {
     if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current);
@@ -163,10 +186,9 @@ export function ActivityDefinitionTestRunDialog({
     let active = true;
     const reconcile = async () => {
       try {
-        const view = await getActivityDraftTestRunByIdempotencyKey(
-          context,
-          draft.draftId,
-          reconcileKey);
+        const view = sourceVersion
+          ? await getActivityVersionTestRunByIdempotencyKey(context, sourceVersion.versionId, reconcileKey)
+          : await getActivityDraftTestRunByIdempotencyKey(context, draft.draftId, reconcileKey);
         if (!active) return;
         setReconcileKey(null);
         setOperationError("");
@@ -184,7 +206,7 @@ export function ActivityDefinitionTestRunDialog({
       active = false;
       if (pollTimerRef.current !== null) window.clearTimeout(pollTimerRef.current);
     };
-  }, [context, draft.draftId, reconcileKey, recordRun]);
+  }, [context, draft.draftId, reconcileKey, recordRun, sourceVersion]);
 
   const stage = currentRun
     ? classifyActivityTestRun(currentRun, reconciledAfterAcceptance)
@@ -244,13 +266,23 @@ export function ActivityDefinitionTestRunDialog({
     setReconciledAfterAcceptance(false);
     observeActivityDefinitions({ event: "test-run", surface: "editor", outcome: "dispatching" });
     try {
-      const view = await startActivityDraftTestRun(context, draft.draftId, {
-        expectedRevision: prepared.revision,
-        idempotencyKey,
-        inputs: parsed.inputs
-      });
+      const view = sourceVersion
+        ? await startActivityVersionTestRun(context, sourceVersion.versionId, {
+            idempotencyKey,
+            inputs: parsed.inputs
+          })
+        : await startActivityDraftTestRun(context, draft.draftId, {
+            expectedRevision: prepared.revision,
+            idempotencyKey,
+            inputs: parsed.inputs
+          });
       recordRun(view);
     } catch (error) {
+      if (sourceVersion && (error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError)) {
+        setDispatchPhase("idle");
+        setOperationError("Published-version Test Run is no longer available on this server. Restart Workbench with the current Foundation build and reload Studio. No Runtime execution was started.");
+        return;
+      }
       if (error instanceof StudioHttpError && error.status < 500) {
         setDispatchPhase("idle");
         setOperationError(dispatchRejectionDescription(error.status));
@@ -276,127 +308,131 @@ export function ActivityDefinitionTestRunDialog({
     }
   };
 
-  const validation = prepared?.validation;
+  const validation = publishedRunAvailability ? undefined : prepared?.validation;
   const busy = blocksClose;
   const canRerun = Boolean(stage && isTerminalActivityTestRun(stage));
-  const activityUrl = currentRun ? activityTestRunActivityUrl(currentRun) : null;
 
   return (
-    <StudioDialog open className="ad-test-run-dialog" title={definitionLabel} onClose={onClose}
+    <StudioDialog open className="ad-test-run-dialog" title={`Test run: ${definitionLabel}`} onClose={onClose}
       closeLabel="Close Test Run" dismissDisabled={busy}
       onCloseAutoFocus={restoreFocus ? event => { event.preventDefault(); restoreFocus(); } : undefined}
-      description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable run data without publishing this Activity Definition.</>}>
+      description={sourceVersion ? `Runs published version ${sourceVersion.version} without publishing.` : `Runs draft revision ${prepared?.revision ?? draft.revision} without publishing.`}>
 
-        {preparation !== "ready" ? (
-          <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
-            <strong>{preparationLabel(preparation)}</strong>
-            <p>{preparationDescription(preparation)}</p>
-          </section>
-        ) : null}
+        <div className="ad-test-run-body">
+          {publishedRunAvailability ? (
+            <section className="ad-historical-contract ad-test-run-rejection" role="alert">
+              <p>{publishedRunAvailability === "unavailable"
+                ? "This server does not advertise published Test Run dispatch and receipt lookup. Restart Workbench with the current Foundation build, then reload Studio. No inputs were entered and no Runtime execution was started."
+                : "Studio could not verify published Test Run support. Check that the Workbench server is reachable, then reload Studio. No inputs were entered and no Runtime execution was started."}</p>
+            </section>
+          ) : null}
+          {preparation !== "ready" ? (
+            <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
+              <strong>{preparationLabel(preparation)}</strong>
+              {preparation === "failed" ? <p>{preparationDescription(preparation)}</p> : null}
+            </section>
+          ) : null}
 
-        {validation && !validation.isValid ? (
-          <section className="ad-historical-contract ad-test-run-rejection" aria-labelledby={`${titleId}-validation`}>
-            <h3 id={`${titleId}-validation`}><AlertCircle size={17} aria-hidden /> Draft validation rejected revision {validation.revision}</h3>
-            <p>Correct the shared structured Diagnostics before dispatch. No Runtime request was sent.</p>
-            <ActivityDiagnosticList
-              diagnostics={validation.diagnostics}
-              label="Test Run validation diagnostics"
-              onFocus={async (diagnostic, trigger) => {
-                onClose();
-                await nextFrame();
-                return onFocusDiagnostic(diagnostic, trigger);
-              }}
-            />
-          </section>
-        ) : null}
+          {validation && !validation.isValid ? (
+            <section className="ad-historical-contract ad-test-run-rejection" aria-labelledby={`${titleId}-validation`}>
+              <h3 id={`${titleId}-validation`}><AlertCircle size={17} aria-hidden /> Draft validation rejected revision {validation.revision}</h3>
+              <p>Correct the shared structured Diagnostics before dispatch. No Runtime request was sent.</p>
+              <ActivityDiagnosticList
+                diagnostics={validation.diagnostics}
+                label="Test Run validation diagnostics"
+                onFocus={async (diagnostic, trigger) => {
+                  onClose();
+                  await nextFrame();
+                  return onFocusDiagnostic(diagnostic, trigger);
+                }}
+              />
+            </section>
+          ) : null}
 
-        {validation?.isValid && !currentRun ? (
-          <section className="ad-historical-contract ad-test-run-inputs" aria-labelledby={`${titleId}-inputs`}>
-            <div className="ad-section-heading-row ad-test-run-section-heading">
-              <div>
-                <h3 id={`${titleId}-inputs`}>Contract inputs</h3>
-                <p>Absent applies the contract default. Present null and Present value are sent explicitly and never collapse into Absent.</p>
+          {validation?.isValid && !currentRun ? (
+            <section className="ad-historical-contract ad-test-run-inputs" aria-labelledby={`${titleId}-inputs`}>
+              <div className="ad-section-heading-row ad-test-run-section-heading">
+                <h3 id={`${titleId}-inputs`}>Inputs</h3>
               </div>
-              <span><CheckCircle2 size={16} aria-hidden /> Revision {validation.revision} validated</span>
-            </div>
-            {contractInputs.length === 0 ? (
-              <p className="ad-dialog-note">This Activity Definition declares no public inputs.</p>
-            ) : contractInputs.map(contractInput => {
-              const input = toWorkflowRunInput(contractInput);
-              const value = inputDrafts[input.referenceKey] ?? { presence: "Absent", draft: "" };
-              return (
-                <div className="ad-form-grid ad-test-run-input" key={input.referenceKey}>
-                  <StudioField className="ad-dialog-field" label={<><span>{input.displayName || input.name} presence</span></>}><select
-                      aria-label={`${input.displayName || input.name} presence`}
-                      value={value.presence}
-                      disabled={busy}
-                      onChange={event => {
-                        const presence = event.currentTarget.value as ActivityTestRunInputDraft["presence"];
-                        setInputDrafts(current => ({
-                          ...current,
-                          [input.referenceKey]: { ...value, presence }
-                        }));
-                        clearError(setErrors, input.referenceKey);
-                      }}
-                    >
-                      <option value="Absent">Absent{contractInput.default ? " · apply default" : ""}</option>
-                      <option value="Null" disabled={!contractInput.isNullable}>Present null</option>
-                      <option value="Value">Present value</option>
-                    </select><small>{presenceDescription(contractInput, value.presence)}</small></StudioField>
-                  {value.presence === "Value" ? (
-                    <WorkflowRunInputField
-                      input={input}
-                      editors={failedEditorKeys.has(input.referenceKey) ? [] : inputEditors}
-                      value={value.draft}
-                      error={errors[input.referenceKey]}
-                      disabled={busy}
-                      onEditorFailure={() => {
-                        setFailedEditorKeys(current => new Set(current).add(input.referenceKey));
-                        setErrors(current => ({
-                          ...current,
-                          [input.referenceKey]: `The ${input.displayName || input.name} editor failed. Use the standard input control.`
-                        }));
-                      }}
-                      onChange={next => {
-                        setInputDrafts(current => ({
-                          ...current,
-                          [input.referenceKey]: { presence: "Value", draft: next }
-                        }));
-                        clearError(setErrors, input.referenceKey);
-                      }}
-                    />
-                  ) : errors[input.referenceKey] ? <small className="ad-test-run-input-error" role="alert">{errors[input.referenceKey]}</small> : null}
-                </div>
-              );
-            })}
-          </section>
-        ) : null}
+              {contractInputs.length === 0 ? (
+                <p className="ad-dialog-note">This Activity Definition declares no public inputs.</p>
+              ) : contractInputs.map(contractInput => {
+                const input = toWorkflowRunInput(contractInput);
+                const value = inputDrafts[input.referenceKey] ?? { presence: "Absent", draft: "" };
+                return (
+                  <div className="ad-form-grid ad-test-run-input" key={input.referenceKey}>
+                    <StudioField className="ad-dialog-field" label={input.displayName || input.name}>
+                      <select
+                        aria-label={input.displayName || input.name}
+                        value={value.presence}
+                        disabled={busy}
+                        onChange={event => {
+                          const presence = event.currentTarget.value as ActivityTestRunInputDraft["presence"];
+                          setInputDrafts(current => ({
+                            ...current,
+                            [input.referenceKey]: { ...value, presence }
+                          }));
+                          clearError(setErrors, input.referenceKey);
+                        }}
+                      >
+                        <option value="Absent">{contractInput.default ? "Use default" : "Omit"}</option>
+                        <option value="Null" disabled={!contractInput.isNullable}>Send null</option>
+                        <option value="Value">Enter a value</option>
+                      </select>
+                    </StudioField>
+                    {value.presence === "Value" ? (
+                      <WorkflowRunInputField
+                        input={input}
+                        editors={failedEditorKeys.has(input.referenceKey) ? [] : inputEditors}
+                        value={value.draft}
+                        error={errors[input.referenceKey]}
+                        disabled={busy}
+                        onEditorFailure={() => {
+                          setFailedEditorKeys(current => new Set(current).add(input.referenceKey));
+                          setErrors(current => ({
+                            ...current,
+                            [input.referenceKey]: `The ${input.displayName || input.name} editor failed. Use the standard input control.`
+                          }));
+                        }}
+                        onChange={next => {
+                          setInputDrafts(current => ({
+                            ...current,
+                            [input.referenceKey]: { presence: "Value", draft: next }
+                          }));
+                          clearError(setErrors, input.referenceKey);
+                        }}
+                      />
+                    ) : errors[input.referenceKey] ? <small className="ad-test-run-input-error" role="alert">{errors[input.referenceKey]}</small> : null}
+                  </div>
+                );
+              })}
+            </section>
+          ) : null}
 
-        {currentRun && stage ? (
-          <ActivityTestRunEvidence
-            context={context}
-            definitionLabel={definitionLabel}
-            view={currentRun}
-            stage={stage}
-            dispatchPhase={dispatchPhase}
-            history={evidenceHistory}
-            expressionEditors={expressionEditors}
-            onOpenRun={onOpenRun}
-          />
-        ) : null}
+          {currentRun && stage ? (
+            <ActivityTestRunEvidence
+              key={currentRun.testRunId}
+              context={context}
+              definitionLabel={definitionLabel}
+              sourceVersion={sourceVersion}
+              view={currentRun}
+              stage={stage}
+              dispatchPhase={dispatchPhase}
+              history={evidenceHistory}
+              onOpenRun={onOpenRun}
+            />
+          ) : null}
 
-        {operationError ? <p className="ad-inline-error ad-test-run-operation-error" role="alert">{operationError}</p> : null}
+          {operationError ? <p className="ad-inline-error ad-test-run-operation-error" role="alert">{operationError}</p> : null}
+        </div>
 
         <StudioDialogFooter
           confirmType="button"
-          leading={<>
-            {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
-              <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}
-            {activityUrl ? <StudioButton onClick={() => onOpenRun(activityUrl)}><ExternalLink size={16} aria-hidden /> Open focused run data</StudioButton> : null}
-          </>}
-          onCancel={onClose} cancelDisabled={busy} cancelLabel={currentRun ? "Close" : "Cancel"}
-          confirmLabel={canRerun ? "Rerun as new run data" : !currentRun && validation?.isValid ?
-            (dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run") : undefined}
+          leading={currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
+            <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}
+          onCancel={onClose} cancelDisabled={busy} cancelLabel="Close"
+          confirmLabel={canRerun ? "Run again" : !currentRun && validation?.isValid ?
+            (dispatchPhase === "dispatching" ? "Starting…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Run test") : undefined}
           confirmDisabled={busy} onConfirm={() => void dispatch()}
         />
     </StudioDialog>
@@ -406,95 +442,190 @@ export function ActivityDefinitionTestRunDialog({
 function ActivityTestRunEvidence({
   context,
   definitionLabel,
+  sourceVersion,
   view,
   stage,
   dispatchPhase,
   history,
-  expressionEditors,
   onOpenRun
 }: {
   context: StudioEndpointContext;
   definitionLabel: string;
+  sourceVersion: ActivityDefinitionVersionView | null;
   view: ActivityDraftTestRunView;
   stage: ActivityTestRunStage;
   dispatchPhase: DispatchPhase;
   history: ActivityDraftTestRunView[];
-  expressionEditors: StudioExpressionEditorContribution[];
   onOpenRun(path: string): void;
 }) {
   const copy = stageCopy(stage);
+  const resultTitleId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
   const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
   const executableUrl = activityTestRunExecutableUrl(view);
-  const canInspectActivity = Boolean(view.outerActivityExecutionId && activityTestRunActivityUrl(view));
+  const activityExecutionId = view.outerActivityExecutionId ?? null;
+  const workflowExecutionId = view.workflowExecutionId;
+  const inspectionIdentity = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, activityExecutionId, view.status, view.updatedAt]);
+  const [inspectionState, setInspectionState] = useState<{
+    identity: string;
+    status: "loading" | "ready" | "failed" | "unavailable";
+    inspection?: ActivityExecutionInspection;
+  } | null>(null);
+  const currentInspection = inspectionState?.identity === inspectionIdentity ? inspectionState : null;
+  const inspectionStatus = currentInspection?.status ?? (activityExecutionId && stage !== "expired" ? "loading" : "unavailable");
+  const inspection = currentInspection?.inspection;
+  const activityUrl = activityTestRunActivityUrl(view);
+  const resolutionScope = activityExecutionId ? { context, workflowExecutionId, activityExecutionId } : null;
+
+  useEffect(() => {
+    if (!activityExecutionId || stage === "expired") {
+      setInspectionState({ identity: inspectionIdentity, status: "unavailable" });
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setInspectionState({ identity: inspectionIdentity, status: "loading" });
+    getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId, controller.signal).then(result => {
+      if (!active) return;
+      if (result.workflowExecutionId !== workflowExecutionId || result.activityExecutionId !== activityExecutionId) {
+        setInspectionState({ identity: inspectionIdentity, status: "failed" });
+      } else {
+        setInspectionState({ identity: inspectionIdentity, status: "ready", inspection: result });
+      }
+    }, () => {
+      if (active) setInspectionState({ identity: inspectionIdentity, status: "failed" });
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [activityExecutionId, context, inspectionIdentity, stage, workflowExecutionId]);
+
+  const outputSnapshots = inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityOutput") ?? [];
+  const inputSnapshots = inspection?.valueSnapshots.filter(snapshot => snapshot.subject === "ActivityInput") ?? [];
+  const firstIncident = inspection?.incidents.find(incident => incident.message.trim());
+
   return (
-    <section className={`ad-historical-contract ad-test-run-evidence is-${stage}`} aria-labelledby="activity-test-run-evidence-title">
-      <div className="ad-section-heading-row ad-test-run-section-heading">
-        <div>
-          <span className="ad-kicker">Run data</span>
-          <h3 id="activity-test-run-evidence-title">{copy.title}</h3>
-          <p>{copy.description}</p>
+    <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
+      <section className={`ad-historical-contract ad-test-run-evidence is-${stage}`} aria-label="Test run result">
+        <div className="ad-test-run-result-heading">
+          <span className="ad-test-run-stage" role="status" aria-live="polite"><StatusChip>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
+          {stage !== "completed" && stage !== "faulted" && !view.failure ? <p>{copy.description}</p> : null}
         </div>
-        <span role="status" aria-live="polite"><StatusChip>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
-      </div>
-      <p className="ad-selected-record ad-test-run-subject"><strong>{definitionLabel}</strong> · exact draft revision {view.draftRevision}</p>
-      {view.failure ? (
-        <div className={`ad-inline-error ad-test-run-failure is-${view.failure.kind === "Validation" ? "validation" : "runtime"}`} role="alert">
-          <strong>{view.failure.kind === "Validation" ? "Draft Diagnostics" : "Runtime dispatch rejection"}</strong>
-          <code>{safeCode(view.failure.code)}</code>
-          <p>{view.failure.message}</p>
-        </div>
-      ) : null}
-      {view.failure?.diagnostics.length ? (
-        <ActivityDiagnosticList
-          diagnostics={view.failure.diagnostics}
-          label="Test Run rejection diagnostics"
-          onFocus={async () => ({
-            kind: "unsupported",
-            announcement: "This Runtime diagnostic does not map to an editable draft control."
-          })}
-        />
-      ) : null}
-      <ExpirationEvidence view={view} />
-      <details>
-        <summary>Technical details</summary>
-        <dl className="ad-review-facts ad-test-run-technical">
-          <ActivityTestRunTechnicalIdentity label="Test Run" value={view.testRunId} copiedLabel="Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityTestRunTechnicalIdentity label="Workflow execution" value={view.workflowExecutionId} href={activityTestRunWorkflowUrl(view)} onOpenRun={onOpenRun} copiedLabel="workflow execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          {view.outerActivityExecutionId ? <ActivityTestRunTechnicalIdentity label="Outer activity execution" value={view.outerActivityExecutionId} href={activityTestRunActivityUrl(view)} onOpenRun={onOpenRun} copiedLabel="outer activity execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
-          {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper executable" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
-          {view.sourceReferenceId ? <ActivityTestRunTechnicalIdentity label="Source Reference" value={view.sourceReferenceId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="Source Reference ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
-          {view.commandDispatchStatus ? <div><dt>Command dispatch</dt><dd>{view.commandDispatchStatus}</dd></div> : null}
-        </dl>
-        {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
-      </details>
-      {canInspectActivity && view.outerActivityExecutionId ? (
-        <section className="ad-historical-contract ad-test-run-recorded-evidence" aria-label="Recorded activity data">
-          <h4>Recorded activity data</h4>
-          <ActivityTestRunRecordedActivity
-            context={context}
-            workflowExecutionId={view.workflowExecutionId}
-            activityExecutionId={view.outerActivityExecutionId}
-            updatedAt={view.updatedAt}
-            status={view.status}
-            expressionEditors={expressionEditors}
+
+        {stage === "faulted" ? (
+          <div className="ad-inline-error ad-test-run-failure is-runtime" role="alert">
+            <strong>Activity Definition failed</strong>
+            <p>{view.failure?.message ?? firstIncident?.message ?? (inspectionStatus === "loading" ? "Loading failure details…" : "Failure details are unavailable. View run details or open the full run data.")}</p>
+          </div>
+        ) : view.failure ? (
+          <div className={`ad-inline-error ad-test-run-failure is-${view.failure.kind === "Validation" ? "validation" : "runtime"}`} role="alert">
+            <strong>{view.failure.code === "activity.test-run.required-input" ? "Test Run not started" : view.failure.kind === "Validation" ? "Test Run preparation failed" : "Dispatch rejected"}</strong>
+            <p>{view.failure.message}</p>
+            {stage === "validation-rejected" ? <p>{view.failure.code === "activity.test-run.required-input"
+              ? "No Runtime execution was started."
+              : "No Runtime execution was started. Review the draft, then try again."}</p> : null}
+          </div>
+        ) : null}
+        {view.failure?.diagnostics.length ? (
+          <ActivityDiagnosticList
+            diagnostics={view.failure.diagnostics}
+            label="Test Run rejection diagnostics"
+            onFocus={async () => ({
+              kind: "unsupported",
+              announcement: "This Runtime diagnostic does not map to an editable draft control."
+            })}
           />
-        </section>
-      ) : null}
-      {history.length > 1 ? (
-        <details>
-          <summary>Immutable rerun history ({history.length})</summary>
-          <ol className="ad-test-run-history">
-            {history.map(item => <li key={item.testRunId}>
-              <code title={item.testRunId}>{shortenActivityTestRunIdentifier(item.testRunId)}</code>
-              <CopyValueButton scope={`activity-test-run-history:${item.testRunId}`} value={item.testRunId} ariaLabel="Copy historical Test Run ID" copiedLabel="historical Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-              <span>revision {item.draftRevision} · {item.status}</span>
-            </li>)}
-          </ol>
+        ) : null}
+
+        {stage === "completed" ? (
+          <section className="ad-test-run-result" aria-labelledby={`${resultTitleId}-summary`}>
+            <h3 id={`${resultTitleId}-summary`}>Result</h3>
+            <section className="ad-test-run-outputs" aria-label="Outputs">
+              <h4>Outputs</h4>
+              {inspectionStatus === "loading" ? <p role="status">Loading output evidence…</p>
+                : inspectionStatus !== "ready" ? <p>Output evidence is unavailable.</p>
+                  : outputSnapshots.length === 0 ? <p>No output snapshots were recorded for this execution.</p>
+                    : <div className="ad-test-run-output-list" role="list">
+                      {outputSnapshots.map((snapshot, index) => <RuntimeValueEvidenceCard
+                        key={`${snapshot.name}:${index}`}
+                        snapshot={snapshot}
+                        compactObjects
+                        showCaptureMode={false}
+                      />)}
+                    </div>}
+            </section>
+            <section className="ad-test-run-outcome" aria-label="Outcome">
+              <h4>Outcome</h4>
+              {inspectionStatus === "loading" ? <p role="status">Loading outcome…</p>
+                : inspectionStatus !== "ready" ? <p>Outcome is unavailable.</p>
+                  : inspection?.outcomeNames.length ? <p>{inspection.outcomeNames.join(", ")}</p>
+                    : <p>No outcome was recorded.</p>}
+            </section>
+          </section>
+        ) : null}
+
+        <details className="ad-test-run-details" onToggle={event => setDetailsOpen(event.currentTarget.open)}>
+          <summary>View run details</summary>
+          {detailsOpen ? (
+            <div className="ad-test-run-details-content">
+              <p className="ad-selected-record"><strong>{definitionLabel}</strong> · {sourceVersion ? `published version ${sourceVersion.version}` : `draft revision ${view.draftRevision}`}</p>
+              {stage !== "validation-rejected" && stage !== "dispatch-rejected" ? (
+                <section className="ad-test-run-recorded-inputs" aria-label="Recorded inputs">
+                  <h4>Recorded inputs</h4>
+                  {inspectionStatus === "loading" ? <p role="status">Loading recorded inputs…</p>
+                    : inspectionStatus !== "ready" ? <p>Recorded inputs are unavailable.</p>
+                      : inputSnapshots.length === 0 ? <p>No input snapshots were recorded for this execution.</p>
+                        : <div className="ad-test-run-input-list" role="list">
+                          {inputSnapshots.map((snapshot, index) => <RuntimeValueEvidenceCard
+                            key={`${snapshot.name}:${index}`}
+                            snapshot={snapshot}
+                            compactObjects
+                            showCaptureMode={false}
+                          />)}
+                        </div>}
+                </section>
+              ) : null}
+              <dl className="ad-review-facts ad-test-run-technical">
+                {sourceVersion ? <div><dt>Published version</dt><dd>{sourceVersion.version}</dd></div> : <div><dt>Draft revision</dt><dd>{view.draftRevision}</dd></div>}
+                <div><dt>Requested</dt><dd>{formatTime(view.requestedAt)}</dd></div>
+                <div><dt>Updated</dt><dd>{formatTime(view.updatedAt)}</dd></div>
+                {inspection?.startedAt ? <div><dt>Started</dt><dd>{formatTime(inspection.startedAt)}</dd></div> : null}
+                {inspection?.completedAt ? <div><dt>Completed</dt><dd>{formatTime(inspection.completedAt)}</dd></div> : null}
+                <ActivityTestRunTechnicalIdentity label="Test Run" value={view.testRunId} copiedLabel="Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                <ActivityTestRunTechnicalIdentity label={activityExecutionId ? "Workflow execution" : "Reserved workflow execution"} value={view.workflowExecutionId} href={activityExecutionId ? activityTestRunWorkflowUrl(view) : null} onOpenRun={onOpenRun} copiedLabel="workflow execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                {view.failure?.code ? <div><dt>Failure code</dt><dd><code>{safeCode(view.failure.code)}</code></dd></div> : null}
+                {view.outerActivityExecutionId ? <ActivityTestRunTechnicalIdentity label="Outer activity execution" value={view.outerActivityExecutionId} href={activityTestRunActivityUrl(view)} onOpenRun={onOpenRun} copiedLabel="outer activity execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
+                {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper executable" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
+                {view.sourceReferenceId ? <ActivityTestRunTechnicalIdentity label="Source Reference" value={view.sourceReferenceId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="Source Reference ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
+                {view.commandDispatchStatus ? <div><dt>Command dispatch</dt><dd>{view.commandDispatchStatus}</dd></div> : null}
+              </dl>
+              {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
+              {activityUrl ? <StudioButton className="ad-test-run-open-evidence" onClick={() => onOpenRun(activityUrl)}>
+                <ExternalLink size={16} aria-hidden /> Open focused run data
+              </StudioButton> : null}
+              {view.sourceReferenceId ? <ExpirationEvidence view={view} /> : null}
+              {history.length > 1 ? (
+                <section className="ad-test-run-history-section" aria-label="Test Run rerun history">
+                  <h4>Rerun history ({history.length})</h4>
+                  <ol className="ad-test-run-history">
+                    {history.map(item => <li key={item.testRunId}>
+                      <code title={item.testRunId}>{shortenActivityTestRunIdentifier(item.testRunId)}</code>
+                      <CopyValueButton scope={`activity-test-run-history:${item.testRunId}`} value={item.testRunId} ariaLabel="Copy historical Test Run ID" copiedLabel="historical Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                      <span>revision {item.draftRevision} · {item.status}</span>
+                    </li>)}
+                  </ol>
+                </section>
+              ) : null}
+            </div>
+          ) : null}
         </details>
-      ) : null}
-    </section>
+      </section>
+    </RuntimeValueEvidenceResolutionProvider>
   );
 }
 
@@ -538,53 +669,6 @@ function ActivityTestRunTechnicalIdentity({
   );
 }
 
-function ActivityTestRunRecordedActivity({ context, workflowExecutionId, activityExecutionId, updatedAt, status, expressionEditors }: {
-  context: StudioEndpointContext;
-  workflowExecutionId: string;
-  activityExecutionId: string;
-  updatedAt: string;
-  status: string;
-  expressionEditors: StudioExpressionEditorContribution[];
-}) {
-  const identity = JSON.stringify([workflowExecutionId, activityExecutionId, updatedAt, status]);
-  const [state, setState] = useState<{ identity: string; execution: ActivityExecutionStateSummary | null; failed: boolean } | null>(null);
-  const current = state?.identity === identity ? state : null;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    setState({ identity, execution: null, failed: false });
-    browseActivityExecutions(context, workflowExecutionId, { anchorActivityExecutionId: activityExecutionId, limit: 1 }, controller.signal).then(page => {
-      if (!active) return;
-      const execution = page.items.find(item =>
-        item.execution.workflowExecutionId === workflowExecutionId &&
-        item.execution.activityExecutionId === activityExecutionId)?.execution ?? null;
-      setState({ identity, execution, failed: !execution });
-    }, () => {
-      if (active) setState({ identity, execution: null, failed: true });
-    });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [activityExecutionId, context, identity, status, updatedAt, workflowExecutionId]);
-
-  if (!current) return <p role="status">Loading recorded activity data…</p>;
-  if (current.failed || !current.execution) return <p role="status">Recorded activity data is unavailable.</p>;
-  return <WorkflowActivityExecutionDetails
-    context={context}
-    activity={current.execution}
-    activityCatalog={[]}
-    expressionEditors={expressionEditors}
-    refreshKey={activityTestRunInspectionRefreshKey(updatedAt, status)}
-  />;
-}
-
-function activityTestRunInspectionRefreshKey(updatedAt: string, status: string) {
-  const statusHash = [...status].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0);
-  return (Date.parse(updatedAt) || 0) + statusHash;
-}
-
 function ExpirationEvidence({ view }: { view: ActivityDraftTestRunView }) {
   const expiration = view.expiration;
   if (!expiration.sourceReferenceExpired) {
@@ -601,17 +685,17 @@ function ExpirationEvidence({ view }: { view: ActivityDraftTestRunView }) {
 
 function stageCopy(stage: ActivityTestRunStage) {
   switch (stage) {
-    case "accepted": return { label: "Accepted", title: "Dispatch accepted", description: "Runtime accepted the command. Acceptance is not execution success; Studio is waiting for scheduling details." };
-    case "waiting": return { label: "Waiting for scheduling", title: "Waiting for scheduling", description: "The durable receipt exists, but the outer activity execution boundary is not available yet." };
-    case "running": return { label: "Running", title: "Activity Definition is running", description: "Runtime has scheduled the outer activity execution boundary." };
-    case "suspended": return { label: "Suspended", title: "Activity Definition is suspended", description: "Run data is retained while the execution waits for a resume condition." };
-    case "completed": return { label: "Completed", title: "Activity Definition completed", description: "Runtime reports terminal completion for this exact Test Run." };
-    case "faulted": return { label: "Faulted", title: "Activity Definition faulted", description: "Runtime reports a terminal fault for this exact Test Run." };
-    case "cancelled": return { label: "Cancelled", title: "Activity Definition was cancelled", description: "Runtime reports terminal cancellation run data." };
-    case "validation-rejected": return { label: "Validation rejected", title: "Draft validation rejected dispatch", description: "The server rejected the exact draft revision before Runtime dispatch." };
-    case "dispatch-rejected": return { label: "Runtime rejected", title: "Runtime rejected dispatch", description: "Draft validation and Runtime dispatch are separate. Runtime did not accept this command." };
-    case "dispatch-ambiguous": return { label: "Reconciling", title: "Dispatch outcome is ambiguous", description: "Studio is reconciling the durable receipt and will not issue a second dispatch." };
-    case "expired": return { label: "Expired", title: "Test Run data expired", description: "The transient Source Reference and run data are no longer retained." };
+    case "accepted": return { label: "Dispatch accepted", description: "Waiting for scheduling details." };
+    case "waiting": return { label: "Waiting for scheduling", description: "Waiting for the Activity Definition to start." };
+    case "running": return { label: "Activity Definition is running", description: "Waiting for the result." };
+    case "suspended": return { label: "Activity Definition is suspended", description: "Waiting for the Activity Definition to resume." };
+    case "completed": return { label: "Completed", description: "" };
+    case "faulted": return { label: "Activity Definition faulted", description: "" };
+    case "cancelled": return { label: "Cancelled", description: "The Activity Definition was cancelled." };
+    case "validation-rejected": return { label: "Draft validation rejected", description: "The saved revision was rejected before dispatch." };
+    case "dispatch-rejected": return { label: "Runtime rejected dispatch", description: "" };
+    case "dispatch-ambiguous": return { label: "Reconciling", description: "Checking the dispatch receipt; no duplicate run will be started." };
+    case "expired": return { label: "Test Run data expired", description: "" };
   }
 }
 
@@ -638,19 +722,6 @@ function dispatchRejectionDescription(status: number) {
     return "The exact draft revision changed before dispatch. Reopen Test Run to validate the latest saved revision.";
   }
   return "Runtime rejected the Test Run request before a durable receipt was accepted.";
-}
-
-function presenceDescription(
-  input: ActivityDefinitionDraftView["contract"]["inputs"][number],
-  presence: ActivityTestRunInputDraft["presence"]
-) {
-  if (presence === "Absent") {
-    return input.default
-      ? `The ${input.default.syntax || "contract"} default applies only while this input is Absent.`
-      : "No value is supplied; the backend evaluates required-input rules.";
-  }
-  if (presence === "Null") return "A literal JSON null is supplied. The contract default does not apply.";
-  return "The contributed or standard editor supplies an explicit value. The contract default does not apply.";
 }
 
 function observationOutcome(stage: ActivityTestRunStage) {

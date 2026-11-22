@@ -8,9 +8,58 @@ internal static class ParkRetryChecks
     internal static async Task Run(Action<bool, string> check)
     {
         await CheckScopeAndAtomicity(check);
+        await CheckTargetSelection(Contract.RecoverMode.Resume, check);
+        await CheckTargetSelection(Contract.RecoverMode.RetryAll, check);
         await CheckBoundsAndInterruption(check);
         await CheckLegacyTimerSelection(check);
         await CheckLegacyEventSelection(check);
+    }
+
+    private static async Task CheckTargetSelection(Contract.RecoverMode mode, Action<bool, string> check)
+    {
+        var fixture = new Fixture();
+        var (store, _, owner) = await fixture.ActivateAsync();
+        await using var activation = owner;
+        var scope = new Contract.BoundScope("retry-park-selection");
+        var a = await fixture.StartRunningAsync(owner, scope, "first", keyed: true);
+        var b = await fixture.StartRunningAsync(owner, scope, "second", keyed: true);
+        await fixture.Submit(scope, a, "park-first", "fault");
+        await fixture.Submit(scope, b, "park-second", "fault");
+        await fixture.Finish(owner);
+
+        var parkedA = store.ReadFoundationActor(scope.Tenant, a.Actor.Id).Actor!;
+        var parkedB = store.ReadFoundationActor(scope.Tenant, b.Actor.Id).Actor!;
+        var equalMark = parkedA.Park is not null && parkedA.Park == parkedB.Park &&
+            parkedA.Row.Creation == parkedB.Row.Creation && parkedA.Row.Id != parkedB.Row.Id;
+        check(equalMark, $"PS-1 {mode}: two distinct callers have equal Park marks and creation");
+        if (!equalMark) return;
+
+        var reads = new ActorList(store, 5);
+        var selection = (await reads.GetAsync(scope, a.Actor))!.Selection!;
+        var sameSelection = Json.Write(new Contract.OperatorCommand(selection, mode));
+        var kept = store.Messages.Values.Single(row => row.Message.Id == "park-second" && row.KeptBy == ParkKeepReason.Consumed);
+        var journal = store.Journal.Values.Where(row => row.Instance == parkedB.Row.Id).ToArray();
+        var refused = await fixture.Submit(scope, b, "wrong-target", Contract.Kinds.Recover, sameSelection);
+        await fixture.Finish(owner);
+        check(refused is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection, Actor: null } &&
+            store.Instances[parkedB.Row.Id] == parkedB.Row && kept.KeptBy == ParkKeepReason.Consumed &&
+            store.Journal.Values.Where(row => row.Instance == parkedB.Row.Id).SequenceEqual(journal),
+            $"PS-1 {mode}: the other actor's selection cannot change this actor or its retained input");
+
+        await fixture.Submit(scope, a, "recovered-arrival", "observation", "expected");
+        await fixture.Finish(owner);
+        check(store.Messages.Values.Single(row => row.Message.Id == "recovered-arrival").KeptBy == ParkKeepReason.Arrived,
+            $"PS-1 {mode}: the intended actor keeps the arrival before Recover");
+        // RetryAll also delivers the original fault input. Let this fixture observe its retry without throwing again.
+        fixture.AllowRecoveredFault = true;
+        var accepted = await fixture.Submit(scope, a, "right-target", Contract.Kinds.Recover, sameSelection);
+        await fixture.Finish(owner);
+        check(accepted is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: var actual } && actual == a.Actor &&
+            store.Instances[parkedA.Row.Id] is { Status: InstanceStatus.Running, ParkRecovery: null } &&
+            store.Messages.Values.Where(row => row.Message.Target.Id == parkedA.Row.Id && !row.Message.IsControl)
+                .All(row => row is { Done: true, KeptBy: null }) && fixture.Delivered.SequenceEqual(["expected"]) &&
+            fixture.RecoveredFaults == (mode == Contract.RecoverMode.RetryAll ? 1 : 0),
+            $"PS-1 {mode}: the same read selection resolves its own actor and restores the arrival once");
     }
 
     private static async Task CheckLegacyEventSelection(Action<bool, string> check)
@@ -251,6 +300,8 @@ internal static class ParkRetryChecks
         internal long Now { get; private set; } = Initial;
         internal List<string> Delivered { get; } = [];
         internal bool FaultNextTrip { get; set; }
+        internal bool AllowRecoveredFault { get; set; }
+        internal int RecoveredFaults { get; private set; }
         internal Contract.TimerSpec? Timer { get; set; }
         internal string? EventWait { get; init; }
         private int _eventOffers;
@@ -276,9 +327,11 @@ internal static class ParkRetryChecks
             return await ParkAsync(owner, scope, target, "park-" + name);
         }
 
-        internal async Task<Contract.Target.Ref> StartRunningAsync(IScopeActivation owner, Contract.BoundScope scope, string name)
+        internal async Task<Contract.Target.Ref> StartRunningAsync(IScopeActivation owner, Contract.BoundScope scope, string name, bool keyed = false)
         {
-            var admission = await _ingress.SendAsync(scope, new Contract.Target.Start(new(Type, "ready", null)), name, Contract.Kinds.Start);
+            var spec = new Contract.StartSpec(Type, "ready", null);
+            Contract.Target start = keyed ? new Contract.Target.Key(name, spec) : new Contract.Target.Start(spec);
+            var admission = await _ingress.SendAsync(scope, start, name, Contract.Kinds.Start);
             var target = new Contract.Target.Ref(admission.Actor!.Value);
             await Finish(owner);
             return target;
@@ -306,6 +359,9 @@ internal static class ParkRetryChecks
 
         internal string Handle(Parked parked, InboxKey key) =>
             Store.SealFoundationKeptHandle(parked.Scope.Tenant, parked.Target.Actor.Id, key)!;
+
+        internal ValueTask<Contract.Admission> Submit(Contract.BoundScope scope, Contract.Target.Ref target,
+            string operation, string kind, string? payload = null) => _ingress.SendAsync(scope, target, operation, kind, payload);
 
         internal ValueTask<Contract.Admission> Retry(Parked parked, string operation, IReadOnlyList<string> handles) =>
             _ingress.SendAsync(parked.Scope, parked.Target, operation, Contract.Kinds.Recover,
@@ -351,7 +407,10 @@ internal static class ParkRetryChecks
                 Delivered.Add(input.Payload!);
             }
             if (turn.Inbox.Any(message => message.Kind == "fault"))
-                throw new InvalidOperationException("original Park");
+            {
+                if (!AllowRecoveredFault) throw new InvalidOperationException("original Park");
+                RecoveredFaults++;
+            }
             if (FaultNextTrip && turn.Inbox.Any(message => message.Kind == "trip"))
             {
                 FaultNextTrip = false;

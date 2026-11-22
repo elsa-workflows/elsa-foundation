@@ -19,6 +19,7 @@ public static class PublishingApiCapabilities
             new("activity-publication-receipt", "design/activities/publications/{idempotencyKey}", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
             new("publication-slot-unpublish", "publishing/workflows/{definitionId}/slots/{slotName}", templated: true),
+            new("publication-slot-unpublish-reviewed", "publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", templated: true),
             new("publication-slot-restore", "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true),
             new("publication-record", "publishing/publications/{publicationId}", templated: true),
             new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
@@ -31,8 +32,10 @@ public static class PublishingApiCapabilities
             new("workflow-test-run-events", "publishing/workflow-test-runs/{testRunId}/events", templated: true),
             new("workflow-test-run-stop", "publishing/workflow-test-runs/{testRunId}/stop", templated: true),
             new("activity-draft-test-run-dispatch", "publishing/activity-drafts/{draftId}/test-runs", templated: true),
+            new("activity-version-test-run-dispatch", "publishing/activity-versions/{versionId}/test-runs", templated: true),
             new("activity-draft-test-run-status", "publishing/activity-test-runs/{testRunId}", templated: true),
             new("activity-draft-test-run-idempotency-status", "publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", templated: true),
+            new("activity-version-test-run-idempotency-status", "publishing/activity-versions/{versionId}/test-runs/idempotency/{idempotencyKey}", templated: true),
             new("activity-draft-test-run-cancel", "publishing/activity-test-runs/{testRunId}/cancel", templated: true)
         ],
         SourceFeatureId);

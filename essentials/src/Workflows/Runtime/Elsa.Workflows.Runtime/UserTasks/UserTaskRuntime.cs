@@ -27,6 +27,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
 
     private async ValueTask<UserTaskRecord> StageCoreAsync(UserTaskCreation request, CancellationToken ct)
     {
+        request = request with { AssigneeId = UserTaskRules.NormalizeAssignment(request.AssigneeId), GroupId = UserTaskRules.NormalizeAssignment(request.GroupId) };
         EnsureExactProvider();
         var execution = await executions.FindAsync(request.WorkflowExecutionId, ct) ?? throw Refuse("The owning execution is unavailable.");
         if (execution.Status.IsTerminal() || string.IsNullOrWhiteSpace(execution.TenantId)) throw Refuse("A task requires an active tenant execution.");
