@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { resolveScope } from "../workflowAdapter";
 import { exportBpmnDocument, importBpmnDocument, withDiagramFromLayout, type BpmnImportResult } from "../api/bpmnInterchange";
 import { NativeBlockDialog, type NativeBlockCommandProps } from "./NativeBlockCommands";
@@ -114,14 +114,14 @@ export default function BpmnInterchangeCommands(props: Props) {
   };
   const stale = review && snapshot(props.context) !== snapshot(review.original.context);
   return <>
-    <button type="button" disabled={busy || !props.context.canEdit} onClick={() => input.current?.click()}>Import BPMN body…</button>
-    <button type="button" disabled={busy} onClick={() => void exportBody()}>Export BPMN body</button>
+    <StudioButton type="button" disabled={busy || !props.context.canEdit} onClick={() => input.current?.click()}>Import BPMN body…</StudioButton>
+    <StudioButton type="button" disabled={busy} onClick={() => void exportBody()}>Export BPMN body</StudioButton>
     <input ref={input} type="file" accept=".bpmn,.xml" hidden aria-label="Import native BPMN body file" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void load(file); }} />
     {!review && messages.length ? <span role="alert">{messages.join(" ")}</span> : null}
     {review ? <NativeBlockDialog title="Review BPMN body import" onClose={close}>
       <h2>Review BPMN body import</h2>
       <p>Replace the current body with {review.file.name}. The owning activity keeps its version, inputs, outputs and runtime settings. Apply records one edit that can be undone.</p>
-      <button type="button" onClick={() => download(review.file, review.file.name)}>Download original file</button>
+      <StudioButton type="button" onClick={() => download(review.file, review.file.name)}>Download original file</StudioButton>
       {review.result.analysis.processIds.length > 1 ? <StudioField label="Process"><select value={processId} disabled={busy} onChange={event => void analyze(event.target.value)}><option value="">Default process</option>{review.result.analysis.processIds.map(id => <option key={id} value={id}>{id}</option>)}</select></StudioField> : null}
       {review.result.analysis.issues.length ? <ul>{review.result.analysis.issues.map((issue, index) => <li key={index}>{issue.elementId ? `${issue.elementId}: ` : ""}{issue.message}</li>)}</ul> : null}
       <h3>Bindings retained in this file</h3>
@@ -133,7 +133,7 @@ export default function BpmnInterchangeCommands(props: Props) {
       {stale ? <p role="alert">The resource changed. Cancel and choose the file again.</p> : null}
       {messages.length ? <ul role="alert">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
       {plan ? <><p>The complete proposed resource passed validation. Review its body, bindings and layout before applying.</p><details><summary>Current resource</summary><pre>{JSON.stringify(review.original.context.document, null, 2)}</pre></details><details open><summary>Proposed resource</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></> : null}
-      <div className="wf-block-dialog-actions"><button type="button" disabled={committing.current} onClick={close}>Cancel</button><button type="button" disabled={busy || !!stale || !review.xml || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview imported body"}</button><button type="button" disabled={busy || !!stale || !plan || !props.context.canEdit} onClick={() => void apply()}>Apply imported body</button></div>
+      <div className="wf-block-dialog-actions"><StudioButton type="button" disabled={committing.current} onClick={close}>Cancel</StudioButton><StudioButton type="button" disabled={busy || !!stale || !review.xml || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview imported body"}</StudioButton><StudioButton type="button" disabled={busy || !!stale || !plan || !props.context.canEdit} onClick={() => void apply()}>Apply imported body</StudioButton></div>
     </NativeBlockDialog> : null}
   </>;
 }

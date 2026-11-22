@@ -1865,7 +1865,7 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || classicVariant || scalarInputsFixture || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || searchParams.get("mode") === "decision-grid" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "compensation-scope" || scalarInputsFixture || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || searchParams.get("mode") === "decision-grid" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1893,7 +1893,7 @@ const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
   // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
-  if (reusableBoundaryFixture || moveDefinitionsFixture || dictionaryFixture || folderRestructureFixture || versionChangeFixture || searchParams.get("mode") === "incident-diagnostics") await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+  if (searchParams.get("mode") === "compensation-scope" || reusableBoundaryFixture || moveDefinitionsFixture || dictionaryFixture || folderRestructureFixture || versionChangeFixture || searchParams.get("mode") === "incident-diagnostics") await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
   if (searchParams.get("mode") === "intrinsic-labels") {
     const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
     root.render(<IntrinsicLabelsFixture />);
