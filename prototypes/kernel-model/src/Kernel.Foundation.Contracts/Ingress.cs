@@ -50,11 +50,17 @@ public enum AdmissionOutcome { Accepted, Duplicate, Refused }
 
 public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection }
 
+public enum PublicationStatus { Pending, Matched, DeadLettered }
+public sealed record PublicationReceipt(string CorrelationKey, string EventId, Guid Incarnation, PublicationStatus Status);
+
 public sealed record Admission(
     AdmissionOutcome Outcome,
     ActorRef? Actor = null,
     RefusalReason? Reason = null,
-    TimeSpan? RetryAfter = null);
+    TimeSpan? RetryAfter = null)
+{
+    public PublicationReceipt? Publication { get; init; }
+}
 
 public sealed record Reply(string? Channel, object? Item, ActorStatus? Status = null, string? Error = null);
 

@@ -22,6 +22,9 @@ public static class StoreBatchRules
         if (batch.Turns.Any(turn => turn.FoundationCatchUpFailed is not null) &&
             (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
             throw new StoreException(Failure.Definite, "A catch-up failure is recorded in its own fenced commit.");
+        if (batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null) &&
+            (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
+            throw new StoreException(Failure.Definite, "A publication page requires its own fenced commit.");
         if (batch.Turns.Any(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 }))
         {
             var restoring = batch.Turns.Where(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 })
@@ -43,7 +46,7 @@ public static class StoreBatchRules
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
-                turn.FoundationCatchUpExpected is not null ||
+                turn.FoundationCatchUpExpected is not null || turn.FoundationPublicationSequence is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&

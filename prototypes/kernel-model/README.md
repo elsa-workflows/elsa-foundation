@@ -128,6 +128,10 @@ events versus live delivery, event expiry, duplicate publication and registratio
 The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
 Actor-managed start-on-match stays outside this replay.
 
+`--paged-publication-check` exercises typed outside sends on the in-memory store and Worker. It checks folded
+receipts, a 171-wait broadcast, the byte cut, lost outcomes, takeover accounting, rejection of an old page under
+a new reservation, and the dead-letter receipt. The fault driver activates the actual publisher's partition.
+
 The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport

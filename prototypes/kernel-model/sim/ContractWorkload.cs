@@ -390,6 +390,10 @@ internal static class ContractWorkload
 
         public async Task Pass(int count)
         {
+            var publishers = _store.Messages.Values.Where(row => !row.Done && row.Message.FoundationPublish is not null)
+                .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
+            foreach (var partition in publishers)
+                if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
             // Renewal is a separate node heartbeat. A quiet scope can own a future timer without writing a turn.
             foreach (var owner in _owners)
                 await owner.Host.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));

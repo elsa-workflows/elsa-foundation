@@ -271,7 +271,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         !Loaded(s) && s.Inbox.Exists(i => !i.Taken && (i.Message.Due is not { } due || due <= Now)));
     public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0 || Outgrown().Any();
     public IEnumerable<string> Trial => TrialItems.Select(i => i.Message.Id);
-    public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.ParkCatchUp is not null || !Awaits(i)));
+    public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.HasFencedEventStep || !Awaits(i)));
     public IEnumerable<string> Ready => ReadyForTurns(default);
 
     private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
@@ -1470,7 +1470,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private bool Unmarked(Delivery item) => item.Message.ParkCatchUp is null && item.Durable && !item.AwaitPoll &&
+    private bool Unmarked(Delivery item) => !item.Message.HasFencedEventStep && item.Durable && !item.AwaitPoll &&
         !item.Marked && !item.Taken && (!item.Suspect || (!item.Shelved && Shelf(item)));
 
     /// <summary>
@@ -2372,20 +2372,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (_meeting || _flushing || !LeaseUsable()) return;
         var generation = _generation;
-        var catchUp = _meets.FirstOrDefault(i => i.Message.ParkCatchUp is not null && !i.Taken);
-        if (catchUp is not null)
+        var eventStep = _meets.FirstOrDefault(i => i.Message.HasFencedEventStep && !i.Taken);
+        if (eventStep is not null)
         {
-            _meets.Remove(catchUp);
-            _meets.Add(catchUp);
+            _meets.Remove(eventStep);
+            _meets.Add(eventStep);
             _meeting = _flushing = true;
-            try { await RunParkCatchUpAsync(catchUp, generation, cancellationToken); }
+            try { await RunFencedEventStepAsync(eventStep, generation, cancellationToken); }
             finally
             {
                 if (generation == _generation) _meeting = _flushing = false;
             }
             if (generation != _generation || cancellationToken.IsCancellationRequested) return;
         }
-        var tickets = _meets.Where(i => i.Message.ParkCatchUp is null && !Awaits(i) && !i.Taken).ToList();
+        var tickets = _meets.Where(i => !i.Message.HasFencedEventStep && !Awaits(i) && !i.Taken).ToList();
         if (tickets.Count == 0) return;
         _meeting = true;
         try
@@ -2414,27 +2414,31 @@ public sealed class Worker : IScopeActivation, ITurnServices
         Enqueue(new TurnOutcome("") { Consumed = tickets }, cancellationToken);
     }
 
-    private async Task RunParkCatchUpAsync(Delivery ticket, long generation, CancellationToken cancellationToken)
+    private async Task RunFencedEventStepAsync(Delivery ticket, long generation, CancellationToken cancellationToken)
     {
         if (_releasing || cancellationToken.IsCancellationRequested || !Holds(ticket.Message.Target.Partition)) return;
         var instance = ticket.Message.Target.Id;
         var failure = new ParkCatchUpFailure(ticket.Message.InboxKey, ticket.Attempts, _options.MaxAttempts);
-        var step = new TurnOutcome(instance) { Consumed = [ticket] };
+        long? publicationSequence = ticket.Message.FoundationPublish is null ? null : ticket.Seq;
+        var step = new TurnOutcome(instance) { Consumed = [ticket], FoundationPublicationSequence = publicationSequence };
         if (ticket.Attempts >= _options.MaxAttempts)
         {
-            if (!_slots.TryGetValue(instance, out var slot))
+            if (publicationSequence is null)
             {
-                _slots.Add(instance, new Slot());
-                _woken = true;
-                return;
-            }
-            if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
-            if (slot.CurrentRow is { Status: InstanceStatus.Running, Retired: false } row &&
-                _type.OwnsParkCatchUp(row, ticket.Message))
-            {
-                slot.Busy = true;
-                step = Bound(MarkPark(_type.Park(row, instance, [ticket], null,
-                    "the kept-event catch-up reached its failed step limit"), row), slot);
+                if (!_slots.TryGetValue(instance, out var slot))
+                {
+                    _slots.Add(instance, new Slot());
+                    _woken = true;
+                    return;
+                }
+                if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
+                if (slot.CurrentRow is { Status: InstanceStatus.Running, Retired: false } row &&
+                    _type.OwnsParkCatchUp(row, ticket.Message))
+                {
+                    slot.Busy = true;
+                    step = Bound(MarkPark(_type.Park(row, instance, [ticket], null,
+                        "the kept-event catch-up reached its failed step limit"), row), slot);
+                }
             }
             step.FoundationCatchUpFailed = failure;
         }
@@ -2452,20 +2456,26 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         ticket.Taken = true;
         var outcome = await CommitAsync([step], [], [], generation, cancellationToken);
+        if (outcome == Outcome.Landed && publicationSequence is not null)
+        {
+            _caughtUp = false;
+            _woken = true;
+        }
         if (outcome != Outcome.Refused || generation != _generation) return;
         if (step.FoundationCatchUpStep is null)
         {
             Reset();
             return;
         }
-        var record = new TurnOutcome(instance) { FoundationCatchUpFailed = failure };
+        var record = new TurnOutcome(instance)
+            { FoundationCatchUpFailed = failure, FoundationPublicationSequence = publicationSequence };
         outcome = await CommitAsync([record], [], [], generation, cancellationToken);
         if (generation != _generation) return;
         if (outcome == Outcome.Refused) Reset();
         else if (outcome == Outcome.Landed)
         {
             ticket.Attempts++;
-            if (ticket.Attempts >= _options.MaxAttempts) _exhaustedCatchUps.Add(ticket);
+            if (publicationSequence is null && ticket.Attempts >= _options.MaxAttempts) _exhaustedCatchUps.Add(ticket);
             ticket.Taken = false;
             _woken = true;
         }
@@ -2879,7 +2889,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationCatchUpStep = unit.FoundationCatchUpStep,
             FoundationCatchUpBefore = unit.FoundationCatchUpBefore,
             FoundationCatchUpExpected = unit.FoundationCatchUpExpected,
-            FoundationCatchUpFailed = unit.FoundationCatchUpFailed
+            FoundationCatchUpFailed = unit.FoundationCatchUpFailed,
+            FoundationPublicationSequence = unit.FoundationPublicationSequence
         };
     }
 

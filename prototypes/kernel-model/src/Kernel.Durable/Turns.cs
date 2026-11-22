@@ -251,6 +251,7 @@ public sealed class TurnOutcome(string instance)
     internal TimeSpan? FoundationCatchUpBudget;
     internal int? FoundationCatchUpExpected;
     internal ParkCatchUpFailure? FoundationCatchUpFailed;
+    internal long? FoundationPublicationSequence;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;

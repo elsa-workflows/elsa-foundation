@@ -75,6 +75,8 @@ public sealed record EventRow(
     internal Guid? FoundationIncarnation { get; init; }
 
     internal InboxKey? FoundationPublishTicket { get; init; }
+    internal long? FoundationAcceptedAt { get; init; }
+    internal bool FoundationPublishFailed { get; init; }
 }
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
@@ -171,6 +173,7 @@ public sealed record TurnCommit(
     internal long? FoundationCatchUpBefore { get; init; }
     internal int? FoundationCatchUpExpected { get; init; }
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
+    internal long? FoundationPublicationSequence { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

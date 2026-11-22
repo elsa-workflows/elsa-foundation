@@ -1950,6 +1950,14 @@ calls one new model hook.
         answers the existing incarnation; an admission after the sweep answers a new one, so a caller can tell a
         new publication from the old one, and every waiting subscription, a continuing keeping wait included,
         receives the new publication once, whatever is left of the old one's deliveries (case EI-1).
+      - **In-memory qualification.** The typed outside send inserts the event and its payload-free ticket under one
+        store lock. On each page the owner reserves the ticket, compares its sequence and attempt under the fence,
+        and commits the delivery rows, any start creators and references, and the cursor together. A continuing
+        ticket keeps its key and receives a new sequence, so a delayed request for the previous page cannot use
+        a reservation on the next one. At exhaustion the bound receipt reports `DeadLettered`. The focused
+        `--paged-publication-check` runs the real Worker. Provider locks and sizes remain at K4, step and fairness
+        costs at K12, and the alert, dead-letter listing and replay at K11. The turn publisher and the request/reply
+        route have separate cases.
       - **Cost.** One small ticket row per outside publish, inserted and consumed and kept `Done` for the window; the
         payload is written once, in the event row, which moves from after the match to the publish's own
         transaction. The delivery waits for the owner's next poll. The deliveries move from the caller to the owner

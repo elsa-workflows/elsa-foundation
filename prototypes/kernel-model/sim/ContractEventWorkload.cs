@@ -115,6 +115,7 @@ internal static class ContractEventWorkload
         {
             trace.Add("publish first and compare a keeping waiter with a live-only waiter");
             await PublishEvent("historic", "earlier", "original", keep: 1_000);
+            await _driver.Pass(4);
             var keys = new[] { "historic", "pulse" };
             var keeping = await Begin("wait-kept", new("waiter", "w", Json.Write(new WaitInput(keys, Keep: true))));
             var liveOnly = await Begin("wait-live", new("waiter", "w", Json.Write(new WaitInput(keys, Keep: false))));
@@ -125,8 +126,9 @@ internal static class ContractEventWorkload
 
             await _driver.TakeOver();
             await PublishEvent("pulse", "first", "chosen");
-            if (_random.Next(2) == 0) await _driver.Pass(8);
+            if (_random.Next(2) == 0) await _driver.Pass(4);
             await PublishEvent("pulse", "first", "changed", duplicate: true);
+            await _driver.Pass(8);
             await PublishEvent("pulse", "second", "too late");
             await _driver.Pass(20);
             await Seen(liveOnly, new("pulse", "first", WaitName, "chosen"), "the live waiter lost the first input's order or identity");
@@ -181,6 +183,7 @@ internal static class ContractEventWorkload
             await Register("live-birth");
             await PublishEvent("live-birth", "first", "trigger", keep: 1_000);
             await PublishEvent("live-birth", "first", "changed", keep: 1_000, duplicate: true);
+            await _driver.Pass(4);
             await _driver.StartPendingEventCreators();
             await _driver.LoseTurnCommit(landed: true, stopAfterLoss: true);
             await _driver.TakeOver();
@@ -189,6 +192,8 @@ internal static class ContractEventWorkload
 
             await PublishEvent("late-birth", "kept", "earlier", keep: 1_000);
             await PublishEvent("absent-birth", "unkept", "unavailable");
+            await _driver.Pass(4);
+            _driver.Advance(1);
             await Register("late-birth");
             await Register("late-birth");
             await Register("absent-birth");

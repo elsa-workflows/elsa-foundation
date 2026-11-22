@@ -42,6 +42,7 @@ internal static class EventIdentityChecks
             new(KeepFor: TimeSpan.FromMinutes(1)));
         var acceptedOther = await edge.SendAsync(scope, new Contract.Target.Event(secondKey), name, Contract.Kinds.Event, "",
             new(KeepFor: TimeSpan.FromMinutes(1)));
+        await MatchPending(worker);
         var deliveries = store.Messages.Values.Where(row => row.Message.Kind == Kinds.Event).Select(row => row.Message).ToArray();
         var first = deliveries.Where(message => Events.MatchFor(message)?.Key == scope.Tenant + "_" + name).ToArray();
         var label = $"U+{(int)fill:x4}";
@@ -72,7 +73,8 @@ internal static class EventIdentityChecks
         var now = 1_701_400_050_000L;
         var folds = equality == StringComparer.OrdinalIgnoreCase;
         var label = slowConsumer ? "slow consumer" : folds ? "folded" : "ordinal";
-        var store = new InMemoryStore(1, () => now, Flaw.None, equality);
+        var store = new InMemoryStore(1, () => now, Flaw.None, equality)
+            { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(20) };
         var scope = new Contract.BoundScope("events");
         var probe = new Probe(folds ? [("Order-7", "wait"), ("ORDER-7", "WAIT")] : [("Order-7", "wait")]);
         var worker = Owner("first", store, probe);
@@ -86,6 +88,7 @@ internal static class EventIdentityChecks
         if (!folds)
         {
             await edge.SendAsync(scope, new Contract.Target.Event("order-7"), "E", Contract.Kinds.Event, "unmatched", options);
+            await MatchPending(worker);
             check(!store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
                 $"{label}: equivalent-looking correlation spellings remain distinct");
         }
@@ -93,6 +96,7 @@ internal static class EventIdentityChecks
         var firstKey = folds ? "order-7" : "Order-7";
         var first = await edge.SendAsync(scope, new Contract.Target.Event(firstKey), "E", Contract.Kinds.Event, null, options);
         var retry = await edge.SendAsync(scope, new Contract.Target.Event("Order-7"), folds ? "e" : "E", Contract.Kinds.Event, "retry", options);
+        await MatchPending(worker);
         var original = store.FoundationEvents[("events_" + firstKey, "E")];
         var rows = store.Messages.Values.Where(row => row.Message.Kind == Kinds.Event).ToArray();
         check(first.Outcome == Contract.AdmissionOutcome.Accepted && retry.Outcome == Contract.AdmissionOutcome.Duplicate &&
@@ -127,6 +131,7 @@ internal static class EventIdentityChecks
 
         var nextKey = folds ? "Order-7" : firstKey;
         var next = await edge.SendAsync(scope, new Contract.Target.Event(nextKey), "E", Contract.Kinds.Event, "", options);
+        await MatchPending(worker);
         var renewed = store.FoundationEvents[("events_" + nextKey, "E")];
         var pending = store.Messages.Values.Where(row => row.Message.Kind == Kinds.Event && !row.Done && row.Message.InboxKey != oldKey).ToArray();
         check(next.Outcome == Contract.AdmissionOutcome.Accepted && renewed.FoundationIncarnation != original.FoundationIncarnation &&
@@ -156,7 +161,7 @@ internal static class EventIdentityChecks
 
     private static async Task FoldedRegistration(Action<bool, string> check)
     {
-        const long now = 1_701_400_070_000;
+        var now = 1_701_400_070_000L;
         var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
         var scope = new Contract.BoundScope("events");
         var probe = new Probe([]);
@@ -177,6 +182,7 @@ internal static class EventIdentityChecks
         check(store.Subscriptions.Count == 0 && store.ReadFoundationActors(scope.Tenant).Actors.Count == 1,
             "folded start removal takes effect for subsequent publications with an equivalent spelling");
 
+        now++;
         await edge.SetStartAsync(scope, "Order-7", "wait", new(probe.Type, "before shadow"));
         var raw = new SubscriptionRow("events_ORDER-7", "", "wait", new(probe.Type, "raw"));
         await store.SubscribeAsync(raw);
@@ -190,6 +196,15 @@ internal static class EventIdentityChecks
         check(store.Subscriptions.ToArray() is [var remaining] && remaining == raw &&
             store.ReadFoundationActors(scope.Tenant).Actors.Count == 1,
             "a raw exact alias survives removal of the equivalent scoped wait without starting a second Foundation actor");
+    }
+
+    private static async Task MatchPending(Worker worker)
+    {
+        for (var step = 0; step < 6; step++)
+        {
+            await worker.PollAsync();
+            await worker.MeetAsync();
+        }
     }
 
     private static async Task LegacyTicket(bool doneDelivery, Action<bool, string> check)

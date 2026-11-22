@@ -64,7 +64,7 @@ public sealed partial class InMemoryStore
         if (turn.FoundationCatchUpStep is not { } key)
         {
             if (turn.FoundationCatchUpBefore is not null || turn.FoundationCatchUpExpected is not null) throw InvalidCatchUpFailure();
-            if (turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
+            if (turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(key => Messages.GetValueOrDefault(key)?.Message.HasFencedEventStep == true))
                 throw new StoreException(Failure.Definite, "A recovery catch-up ticket requires its own fenced step.");
             return null;
         }
@@ -160,10 +160,10 @@ public sealed partial class InMemoryStore
 
     private void ValidateParkCatchUpMarks(CommitBatch batch, IReadOnlyDictionary<int, long> epochs)
     {
-        if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
+        if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.HasFencedEventStep == true))
             throw new StoreException(Failure.Definite, "A catch-up ticket is marked only when its step begins.");
         foreach (var key in batch.Trial)
-            if (Messages.GetValueOrDefault(key) is { Message.ParkCatchUp: not null } ticket &&
+            if (Messages.GetValueOrDefault(key) is { Message.HasFencedEventStep: true } ticket &&
                 (ticket.Done || !epochs.ContainsKey(ticket.Message.Target.Partition) || batch.Trial.Count != 1 ||
                     batch.Turns.Count != 0 || batch.Seen.Count != 0))
                 throw new StoreException(Failure.Definite, "A catch-up reservation requires its own pending ticket and partition fence.");

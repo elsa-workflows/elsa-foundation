@@ -130,6 +130,12 @@ if (args.Contains("--event-identity-check"))
     await EventIdentityChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--paged-publication-check"))
+{
+    var failed = false;
+    await FoundationEventSendChecks.CheckPagedPublication((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),

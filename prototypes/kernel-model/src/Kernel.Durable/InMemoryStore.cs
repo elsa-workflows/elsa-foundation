@@ -176,7 +176,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (died && !expired.Contains(p.Owner!)) continue;
             if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
                 foreach (var row in Messages.Values)
-                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition && row.Message.ParkCatchUp is null)
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition && !row.Message.HasFencedEventStep)
                         row.Attempts++;
             CountAbandonedParkCatchUpTrials(partition, p.Epoch);
             (p.Owner, p.Epoch) = (node, p.Epoch + 1);
@@ -263,6 +263,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<string, Message>? initialExpiries = null;
             Dictionary<string, Message>? catchUpOpens = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
+            PublicationPage? publicationPage = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -295,7 +296,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (expiryWindow.Due) expiryFrom = Math.Max(expiryFrom ?? long.MinValue, expiryWindow.At);
                         else expiryUntil = Math.Min(expiryUntil ?? long.MaxValue, expiryWindow.At);
                     }
-                    if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
+                    if (turn.FoundationPublicationSequence is not null)
+                        publicationPage = PreparePublicationPage(turn, epochs);
+                    else if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
                         !(catchUpSteps ??= []).TryAdd(turn.FoundationCatchUpStep!.Value, catchUp))
                         throw new StoreException(Failure.Definite, "A catch-up ticket can advance only once per batch.");
                     if (PrepareParkCatchUpOpen(turn, now) is { } firstCatchUp)
@@ -413,8 +416,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         Deleted[key.Partition]++;
                     }
                 }
-                ApplyParkCatchUpFailure(turn);
-                if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
+                if (turn.FoundationPublicationSequence is null)
+                {
+                    ApplyParkCatchUpFailure(turn);
+                    if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
+                }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
@@ -458,6 +464,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         RemoveRegisteredSubscription(subscription);
                 if (turn.FoundationCatchUpStep is { } step && catchUpSteps?.GetValueOrDefault(step) is { } prepared)
                     ApplyParkCatchUp(prepared);
+                if (publicationPage is not null) ApplyPublicationPage(publicationPage);
                 if (turn.Journal is not null)
                 {
                     var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
@@ -477,7 +484,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (Messages.GetValueOrDefault(id) is { } tried)
                 {
                     (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
-                    if (tried.Message.ParkCatchUp is not null) MarkParkCatchUpTrial(id, tried);
+                    if (tried.Message.HasFencedEventStep) MarkParkCatchUpTrial(id, tried);
                 }
             foreach (var id in batch.ClearJobTrials) Messages[id].Trial = 0;
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
@@ -557,7 +564,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
             if (countDeaths)
                 foreach (var message in Messages.Values)
-                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition && message.Message.ParkCatchUp is null)
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition && !message.Message.HasFencedEventStep)
                         message.Attempts++;
             CountAbandonedParkCatchUpTrials(partition, row.Epoch);
             row.Epoch++;
@@ -620,7 +627,18 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         ValidateEventIdentity(delivery);
         if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
             return new(false, existing.Message.Target);
-        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        var serial = _eventSerial;
+        var write = PrepareEventWrite(delivery, ref serial);
+        ApplyEventWrite(write);
+        _eventSerial = serial;
+        return new(true, write.Delivery.Target);
+    }
+
+    private sealed record EventWrite(Message Delivery, Message? Creator = null, ReferenceBinding? Birth = null);
+
+    private EventWrite PrepareEventWrite(EventDelivery delivery, ref long serial)
+    {
+        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++serial));
         if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
         {
             var address = new CreationAddress(message.Target.Id, 1);
@@ -642,12 +660,22 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var reference = ReferenceFor(tenant, address);
             var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey,
                 CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)!);
-            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
-            InsertReference(binding);
+            if (Messages.ContainsKey(creator.InboxKey) || Instances.ContainsKey(address.Id) ||
+                _referenceBindings.ContainsKey(reference) || _referenceBirths.ContainsKey(address))
+                throw new StoreException(Failure.Definite, "The event start address already has a creator.");
+            return new(message, creator, binding);
         }
+        return new(message);
+    }
 
-        Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
-        return new(true, message.Target);
+    private void ApplyEventWrite(EventWrite write)
+    {
+        if (write.Creator is { } creator)
+        {
+            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
+            InsertReference(write.Birth!);
+        }
+        Messages.Add(write.Delivery.InboxKey, new MessageRow(write.Delivery, ++_seq, 0));
     }
 
     /// <summary>
@@ -943,12 +971,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             bool UnsettledPublication(EventRow publication)
             {
                 if (publication.FoundationPublishTicket is { } ticket)
-                    return Messages.GetValueOrDefault(ticket) is { } work && Active(work);
+                    return Messages.GetValueOrDefault(ticket) is { } work &&
+                        (work.Message.FoundationPublish is not null || Active(work));
                 if (publication.FoundationIncarnation is not null || !publication.Id.StartsWith('~')) return false;
 
                 // A pre-upgrade turn publication may still be paired with a live legacy ticket.
                 // The next publish retry records that link and keeps the existing event identity.
-                unlinkedTickets ??= Messages.Values.Where(row => row.Message.Kind == Kinds.Publish && Active(row))
+                unlinkedTickets ??= Messages.Values.Where(row => row.Message.Kind == Kinds.Publish && row.Message.FoundationPublish is null && Active(row))
                     .Select(row => FoundationEventTicket.ReadScopedIdentity(row.Message)).OfType<(string Key, string Id)>()
                     .ToHashSet(_foundationEvents.Comparer);
                 return unlinkedTickets.Contains((publication.Key, publication.Id));
