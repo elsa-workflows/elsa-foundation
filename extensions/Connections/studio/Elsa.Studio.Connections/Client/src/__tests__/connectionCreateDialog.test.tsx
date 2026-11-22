@@ -609,7 +609,7 @@ describe("connection credential creation", () => {
     expect(button(container, "Create").disabled).toBe(false);
   });
 
-  it("restores focus to the Create connection opener while the post-create refresh is pending", async () => {
+  it("restores focus to the New connection opener while the post-create refresh is pending", async () => {
     const refresh = deferred<{ items: ConnectionMetadata[] }>();
     let listCalls = 0;
     const getJson = vi.fn((url: string) => {
