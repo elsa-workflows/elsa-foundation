@@ -15,6 +15,7 @@ public sealed record WorkerOptions
     internal Action? AfterTimedJobCutoff { get; init; }
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
+    public int PassTurnBudget { get; init; } = 500;
 
     /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
     public int MaxInstances { get; init; } = int.MaxValue;
@@ -118,6 +119,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly IActorType _type;
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
+    private readonly Queue<string> _passTurns = new();
     private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
     private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
     private readonly HashSet<Delivery> _timedJobs = [];
@@ -200,6 +202,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _lifecycle = options?.Lifecycle ?? (store as InMemoryStore)?.Lifecycle;
         _type = type;
         _options = options ?? new WorkerOptions();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.PassTurnBudget, nameof(WorkerOptions.PassTurnBudget));
         _gate = Has(Flaw.TrialPerPartition) ? new TrialGate() : _options.Gate ?? new TrialGate();
     }
 
@@ -273,14 +276,48 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool NeedsFlush => _queue.Count > 0 || _items.Values.Any(Unmarked) || NextTrial().Count > 0 || Outgrown().Any();
     public IEnumerable<string> Trial => TrialItems.Select(i => i.Message.Id);
     public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.HasFencedEventStep || !Awaits(i)));
-    public IEnumerable<string> Ready => ReadyForTurns(default);
+    public IEnumerable<string> Ready => ReadyForTurns(default).Select(turn => turn.Id);
 
-    private IEnumerable<string> ReadyForTurns(CancellationToken cancellationToken)
+    private IEnumerable<(string Id, long Observed)> ReadyForTurns(CancellationToken cancellationToken)
     {
         var now = ReceiveJobPublications(cancellationToken);
-        return _slots.Where(s => Loaded(s.Value) && !s.Value.Busy && !s.Value.DetachedAuthoredTurn &&
-            !Blocked && (TrialItems.Count == 0 || OnTrial(s.Key) || Spared(s.Key)) &&
-            Deliverable(s.Key, s.Value, now).Count > 0).Select(s => s.Key);
+        foreach (var (id, slot) in _slots)
+        {
+            if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn || Blocked ||
+                TrialItems.Count > 0 && !OnTrial(id) && !Spared(id)) continue;
+            var deliverable = Deliverable(id, slot, now);
+            if (deliverable.Count > 0)
+                yield return (id, deliverable.Min(item => item.ObservedOrder));
+        }
+    }
+
+    private int RefreshPassTurns(CancellationToken cancellationToken)
+    {
+        var generation = Volatile.Read(ref _generation);
+        var ready = ReadyForTurns(cancellationToken).ToDictionary(turn => turn.Id, turn => turn.Observed, StringComparer.Ordinal);
+        lock (_turnSync)
+        {
+            if (generation != _generation) return 0;
+            var count = _passTurns.Count;
+            for (var i = 0; i < count; i++)
+            {
+                var id = _passTurns.Dequeue();
+                if (ready.Remove(id)) _passTurns.Enqueue(id);
+            }
+            foreach (var turn in ready.OrderBy(turn => turn.Value))
+                _passTurns.Enqueue(turn.Key);
+            return Math.Min(_options.PassTurnBudget, _passTurns.Count);
+        }
+    }
+
+    private string? RotatePassTurn()
+    {
+        lock (_turnSync)
+        {
+            if (!_passTurns.TryDequeue(out var id)) return null;
+            _passTurns.Enqueue(id);
+            return id;
+        }
     }
 
     // What is in memory, for tests of invariant 9.
@@ -403,9 +440,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     /// <summary>
-    /// One pass, as the hosts drive a worker: read the inbox if woken, load, read kept events, run every turn that is
-    /// ready (in id order), and flush. Zero when the pass found work or received a job result. Otherwise, return the
-    /// next delay, capped at a third of the lease so the host can observe completed passes. Null means the scope is
+    /// One pass, as the hosts drive a worker: read the inbox if woken, load, read kept events, run a budget of
+    /// ready turns in rotating order, and flush. Zero when the pass found work or received a job result. Otherwise,
+    /// return the next delay, capped at a third of the lease so the host can observe completed passes. Null means the scope is
     /// no longer held. A cancelled token stops before the next turn or flush and leaves pending work for a later pass.
     /// </summary>
     public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default)
@@ -454,15 +491,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (cancellationToken.IsCancellationRequested) return Owns ? TimeSpan.Zero : null;
         await MeetAsync(cancellationToken);
         if (cancellationToken.IsCancellationRequested) return Owns ? TimeSpan.Zero : null;
-        foreach (var id in ReadyForTurns(cancellationToken).Order(StringComparer.Ordinal).ToList())
+        var turns = RefreshPassTurns(cancellationToken);
+        for (var i = 0; i < turns && !cancellationToken.IsCancellationRequested; i++)
         {
-            if (cancellationToken.IsCancellationRequested) break;
+            if (RotatePassTurn() is not { } id) break;
             RunTurn(id, cancellationToken);
         }
         if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
         if (!Owns) return null;
         Evict();
-        if (busy || cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        if (busy || turns > 0 || cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now)
             .Concat(_slots.Values.Where(s => s.Unwritten && s.Until > now).Select(s => s.Until - now)).DefaultIfEmpty(long.MaxValue).Min();
@@ -1209,6 +1247,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var to in _slots.Values.SelectMany(s => s.Replies).Concat(_items.Values.Where(i => !i.Message.SuppliedCreator || _slots.TryGetValue(Canonical(i.Message.Target.Id), out var slot) && slot.CurrentRow is not null).Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
                 Send(to, "lost", null, null, error: "lost");
             _slots.Clear();
+            _passTurns.Clear();
             _aliases.Clear();
             _items.Clear();
             _timedJobs.Clear();
