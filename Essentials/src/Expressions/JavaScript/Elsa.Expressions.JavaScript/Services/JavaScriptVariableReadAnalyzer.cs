@@ -16,7 +16,7 @@ namespace Elsa.Expressions.JavaScript.Services;
 /// <c>delete</c> rooted at a literally named variable, <c>setVariable('X', v)</c>, the literal names whose value escapes
 /// (into a local, an argument, a closure, or a method call on it), and whether the script writes variables it does not
 /// name (a computed write, an escaping computed read, or <c>variables</c>, <c>getVariable</c> or <c>setVariable</c> used
-/// as a value).
+/// as a value). Dynamic code and exposure of the engine global object are opaque body access too.
 /// </para>
 /// </summary>
 internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null) : IScriptVariableReadAnalyzer
@@ -456,6 +456,13 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                 case Identifier { Name: SetVariable } when scriptBody:
                     // Any other appearance is a value use, or the script's own declaration of the name: reads and
                     // writes through it cannot be named (FR-020a).
+                    HasComputedRead = true;
+                    HasComputedWrite = true;
+                    return;
+                case Identifier { Name: "eval" or "Function" or "globalThis" } when scriptBody:
+                    // Dynamic code and an aliased engine global can reach the body setter without a syntactic
+                    // variable root. Keep the runtime lookup available and pin the conservative may-write set.
+                    // As with declared/escaped roots, locally shadowing one of these names is conservative too.
                     HasComputedRead = true;
                     HasComputedWrite = true;
                     return;

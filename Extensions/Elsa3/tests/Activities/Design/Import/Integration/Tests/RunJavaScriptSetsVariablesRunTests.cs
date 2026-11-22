@@ -1,6 +1,9 @@
 using System.Net;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -21,6 +24,15 @@ public sealed class RunJavaScriptSetsVariablesRunTests(ITestOutputHelper output)
         Assert.True(import.Apply.StatusCode == HttpStatusCode.Created, import.Apply.Body.ToJsonString());
         var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("script-sets-variable-v1"), "workflowVersionId"));
 
+        await using (var scope = await host.Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+                         .CreateAsync(new PersistenceScope(Elsa3ImportHost.TenantId)))
+        {
+            var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(workflow.ArtifactId);
+            Assert.NotNull(executable);
+            var seed = Assert.Single(executable.NodesById.Values, node => node.AuthoredActivityId == "seed");
+            Assert.Equal("true", seed.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
+        }
+
         var run = await host.RunAsync(workflow);
         output.WriteLine(run.Describe());
 
@@ -29,6 +41,7 @@ public sealed class RunJavaScriptSetsVariablesRunTests(ITestOutputHelper output)
         Assert.All(run.Activities, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
         Assert.Equal("11", Variable(run, "total"));
         Assert.Equal("5", Variable(run, "count"));
+        Assert.Equal("7", Variable(run, "dynamic"));
         // The second step changed one member of the value the first step set; the other member keeps its data.
         Assert.Equal("""{"Status":"Paid","Lines":2}""", Variable(run, "order"));
     }

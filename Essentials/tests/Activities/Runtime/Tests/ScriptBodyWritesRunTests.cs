@@ -126,6 +126,11 @@ public sealed class ScriptBodyWritesRunTests
     [InlineData("const k = 'to' + 'tal'; setVariable(k, 7); return 1;")]
     [InlineData("const v = variables; v.total = 7; return 1;")]
     [InlineData("const s = setVariable; s('total', 7); return 1;")]
+    [InlineData("eval(\"setVariable('total', 7)\"); return 1;")]
+    [InlineData("const run = eval; run(\"setVariable('total', 7)\"); return 1;")]
+    [InlineData("new Function(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("const engine = globalThis; engine.setVariable('total', 7); return 1;")]
+    [InlineData("const engine = globalThis; engine.variables.total = 7; return 1;")]
     public async Task A_computed_or_opaque_write_resolves_at_run_time_and_commits_with_the_step(string script)
     {
         // FR-020a (T029a).

@@ -122,6 +122,21 @@ public sealed class ScriptVariableWriteAnalyzerTests
     }
 
     [Theory]
+    [InlineData("eval(\"setVariable('x', 1)\"); return 1;")]
+    [InlineData("const run = eval; run(\"setVariable('x', 1)\"); return 1;")]
+    [InlineData("new Function(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const build = Function; build(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const engine = globalThis; engine.setVariable('x', 1); return 1;")]
+    [InlineData("const engine = globalThis; engine.variables.x = 1; return 1;")]
+    public void Dynamic_code_and_engine_global_exposure_are_opaque_body_writes(string source)
+    {
+        var analysis = _analyzer.Analyze(source, scriptBody: true)!;
+
+        Assert.True(analysis.HasComputedRead);
+        Assert.True(analysis.HasComputedWrite);
+    }
+
+    [Theory]
     [InlineData("(variables.order || {}).total = 5;", "order")]
     [InlineData("(flag ? variables.order : variables.order).count++;", "order")]
     [InlineData("delete (variables.order ?? {}).note;", "order")]

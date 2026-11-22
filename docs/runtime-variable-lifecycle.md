@@ -214,6 +214,7 @@ session ([spec 1231](../specs/1231-step-variable-writes/spec.md) User Story 1, A
 | `variables.total += v`, `variables.count++` | A read and a whole assignment. |
 | `variables.order.status = 'Paid'`, `getVariable('order').lines.push(l)` | A member change of `order`: written as the stored value with that change, so the members the script did not touch keep their stored text (ADR 0090 C3). A change made without assigning the variable is still written, with the warning `VF-WRITE-001` (C2). |
 | `variables[k] = v`, `setVariable(k, v)`, or `variables`, `getVariable`, `setVariable` used as a value (`const v = variables; v.total = 1`) | A computed or opaque write: the name resolves when the script runs, nearest scope first. |
+| Dynamic code (`eval`, `Function`) or exposing the engine global object (`globalThis`) | Opaque body access: analysis conservatively keeps the runtime lookup and counts every visible variable as possibly written, including through aliases. |
 | `setTotal(v)` | Not provided: there are no generated setters. |
 
 To change a copy only, copy the value explicitly: `const draft = { ...variables.order }` (a shallow copy; nested objects

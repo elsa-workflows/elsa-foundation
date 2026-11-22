@@ -9,7 +9,8 @@
   "variables": [
     { "id": "total", "name": "total", "typeName": "Int32", "value": "10" },
     { "id": "count", "name": "Count", "typeName": "Int32", "value": "0" },
-    { "id": "order", "name": "Order", "typeName": "Object" }
+    { "id": "order", "name": "Order", "typeName": "Object" },
+    { "id": "dynamic", "name": "DynamicCount", "typeName": "Int32", "value": "0" }
   ],
   "inputs": [],
   "outputs": [],
@@ -27,7 +28,7 @@
       {
         "id": "seed", "nodeId": "seed", "name": "seed", "type": "Elsa.RunJavaScript", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
         "metadata": { "designer": { "position": { "x": 0, "y": 0 }, "size": { "width": 100, "height": 50 } } },
-        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "setVariable('total', getVariable('total') + 1);\nsetCount(getCount() + 5);\nsetVariable('Order', { Status: 'New', Lines: 2 });" } }
+        "script": { "typeName": "String", "expression": { "type": "Literal", "value": "setVariable('total', getVariable('total') + 1);\nsetCount(getCount() + 5);\nsetVariable('Order', { Status: 'New', Lines: 2 });\nconst write = setVariable;\nwrite('DynamicCount', 7);\nreturn 1;" } }
       },
       {
         "id": "change", "nodeId": "change", "name": "change", "type": "Elsa.RunJavaScript", "version": 1, "customProperties": { "canStartWorkflow": false, "runAsynchronously": false },
