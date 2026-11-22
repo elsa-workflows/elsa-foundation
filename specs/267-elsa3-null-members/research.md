@@ -244,7 +244,7 @@ separate from named legacy effective values. Its supported type-default policy d
 defaults; zero Delay is explicit authored conversion data. This proposal changes no policy fields, variable
 initialization, computed-name rule or S-2-owned null-intrinsic behavior.
 
-The established local/Linux validation path and authorized read-only corpus are available. Their availability does
-not establish #3281 runtime acceptance. New production/native/import/runtime/corpus checks remain NOT RUN until the
-approved, merged requirements receive a separate implementation. CI waits are deferred, with no disabled checks or
-inferred CI success.
+At proposal preparation, the established local/Linux path and authorized read-only corpus were available but new
+production/native/import/runtime/corpus checks were NOT RUN. The separate implementation's fresh receipt is now
+recorded in spec.md; it does not relabel these historical source reads as runtime execution. S-2 policy integration
+remains NOT RUN, and CI waits remain deferred with no disabled checks or inferred CI success.

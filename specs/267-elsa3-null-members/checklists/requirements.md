@@ -47,6 +47,7 @@
 - [x] Existing proposal/separate implementation stages and current local/CI workflow are concrete.
 - [x] Requirements, plan, tasks, model, diagnostic contract and verification route share one scope.
 - [x] Coordinator agreement on the final pushed proposal head and initiative proposal gate/merge.
-- [ ] Separate implementation with actual runtime/corpus/local review evidence.
+- [x] Separate implementation with actual runtime/corpus/local review evidence.
 
-These are proposal-quality and pending-delivery checks, not #3281 completion.
+The separate implementation receipt is in spec.md. Conditional S-2 policy integration is NOT RUN; formal review
+and coordinator acceptance/merge remain external gates.

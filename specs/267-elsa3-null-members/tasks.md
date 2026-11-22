@@ -114,8 +114,8 @@ this PR.
 
 ## #3281 follow-up — requirements amendment and separate implementation
 
-Completed T001–T022 remain the original JSON-null delivery. The unchecked tasks below are #3281; no production
-implementation or runtime qualification is implied by this proposal.
+Completed T001–T022 remain the original JSON-null delivery. T023–T031 deliver #3281 separately in #5440; the
+conditional S-2 integration task remains explicitly NOT RUN. The fresh receipt is in spec.md.
 
 - [x] T023 Obtain coordinator-only final-text agreement for `specs/267-elsa3-null-members/spec.md` under the initiative's
   recorded approval plan; satisfy the proposal gate and merge existing #3945 before D-18 implementation. Keep the
@@ -123,35 +123,39 @@ implementation or runtime qualification is implied by this proposal.
 - [x] T024 Recheck exact 3.6.3/3.5.3 sources in `specs/267-elsa3-null-members/research.md`: wrapper loading/default
   evaluation, ContentType non-null guard, cleared-list Done routing, Timer nonpositive/invalid values, raw HTTP
   response statuses, For defaults and Cron/RunJavaScript differences. Distinguish source inspection from runtime proof.
-- [ ] T025 [US4] Add real converter/catalog controls in
+- [x] T025 [US4] Add real converter/catalog controls in
   `Extensions/Elsa3/tests/Mapping/Tests/Elsa3MemberDefaultParityTests.cs`, retaining `Elsa3NullMemberTests.cs`, for the full shape/member
   matrix, including supported empty wrappers versus Literal-without-value, explicit empty collections, literal
   `"null"`, nonempty values, 0/negative/invalid literals, unproven computed status values, original paths, duplicate
   bindings, case-insensitive keys, unchanged caller JSON and unchanged bare-null/custom-map behavior.
-- [ ] T026 [US4] Add only the optional source-shape actions and focused built-in contracts in
+- [x] T026 [US4] Add only the optional source-shape actions and focused built-in contracts in
   `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3MemberRule.cs` and built-in map entries. Keep the constructor and
   generic custom-map contracts. Apply actions in `Conversion/Elsa3ActivityNormalizer.cs` before source distinctions
   disappear; never default an explicit empty status list or invalid interval/status.
-- [ ] T027 [US4] Add truthful per-use refusals through existing diagnostic families in
+- [x] T027 [US4] Add truthful per-use refusals through existing diagnostic families in
   `Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs`; avoid a duplicate required-input refusal on
   an already refused node, without suppressing distinct member errors. Update
   `Extensions/Elsa3/src/Mapping/README.md`, the owning extension description and
   `specs/236-elsa3-activity-map/member-map.md` with the named conversions/refusals.
-- [ ] T028 [US4] Add actual import/publication/execution and no-write refusal controls in
+- [x] T028 [US4] Add actual import/publication/execution and no-write refusal controls in
   `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/MemberDefaultParityTests.cs`, using owned disposable stores/local HTTP.
   Prove For/Delay/GET/body behavior, default `[200]` paths for 200/404/500, and cleared-list refusal without HTTP calls.
-- [ ] T029 Freeze exact source and commands in the implementation PR evidence; run three independent source lenses
+- [x] T029 Freeze exact source and commands in the implementation PR evidence; run three independent source lenses
   against the initiative base, verify every finding and commit all surviving fixes. Continue fresh rounds until no
   verified findings remain. Keep unexecuted `specs/267-elsa3-null-members` acceptance rows visibly NOT RUN.
-- [ ] T030 Run meaningful causal red/green controls, both whole touched projects, discovery/execution reconciliation,
+- [x] T030 Run meaningful causal red/green controls, both whole touched projects, discovery/execution reconciliation,
   architecture Release/Debug restores, whole Architecture/maps and fresh read-only corpus checks. Retain failed and
   repaired attempts and exact-source artifacts in the implementation PR; never copy old totals as a new measurement.
-- [ ] T031 Recheck existing issue/claim/PR ownership, then open one separate draft implementation PR fixing #3281 from
+- [x] T031 Recheck existing issue/claim/PR ownership, then open one separate draft implementation PR fixing #3281 from
   the approved initiative branch. Post local evidence, mark ready after local convergence and request Code Review.
   CI waits are deferred to initiative integration; no CI success/automatic merge is claimed. Coordinator merges.
 - [ ] T032 Recheck `specs/267-elsa3-null-members` corrected-member controls with spec1232's policy option on/off when
   its implementation is available. Preserve its required-before-default, nullable-null and pins/hash contracts;
   unavailable S-2 integration remains explicitly NOT RUN and separately owned.
+
+T032 availability receipt: spec1232 remains the separately owned draft #3726 at `15799ee0ae`; no S-2 implementation
+was available for this check. It is not counted as a passed test or moved into S-0's scope. T031's formal review was
+requested after local convergence; coordinator acceptance/merge remains external to implementation.
 
 Dependencies: T023 gates production T025–T031. T024 is completed as proposal research and rechecked before coding.
 T025 precedes T026/T027; T028 follows the conversion path; T029/T030 repeat after surviving fixes; T031 delivers the

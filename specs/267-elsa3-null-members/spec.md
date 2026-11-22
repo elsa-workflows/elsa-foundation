@@ -6,8 +6,8 @@
 
 **Status**: Implemented
 
-**Status scope:** the original bare-JSON-null delivery is implemented. The #3281 requirements amendment below is
-proposed and unimplemented; its agreement and separate implementation remain required.
+**Status scope:** the original bare-JSON-null delivery and the separate #3281 follow-up are implemented. The
+follow-up's local evidence and remaining external integration/formal merge gates are recorded below.
 
 **Issue**: [#3200](https://github.com/elsa-workflows/elsa-foundation/issues/3200), part of epic
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
@@ -334,8 +334,8 @@ to set, or that the activity can be removed.
 
 ## Converter default follow-up — #3281
 
-**Follow-up status:** Implementation in progress on a separate implementation branch after proposal agreement/merge. The document-level Implemented
-status describes the original bare-JSON-null delivery only.
+**Follow-up status:** Implemented separately after the requirements proposal merged. The implementation does not
+claim S-2 policy integration or completion of formal review/coordinator merge.
 
 The selected legacy baseline is 3.6.3, checked against 3.5.3. This follow-up applies the existing faithful-or-refuse
 rule to absent, blank and deliberately null members. The source evidence and current-target constraints are in
@@ -447,3 +447,43 @@ and missing computed-name rules remain owned by ADR0089/S-2/S-4.
   values with its converter policy option on/off; unavailable S-2 integration is explicitly qualified.
 
 Final follow-up acceptance is recorded by the separate implementation PR; pending checks remain explicitly qualified. Historical spec267 receipts and #3201's distinct receipts do not prove this follow-up.
+
+### Follow-up local validation receipt
+
+Implementation PR [#5440](https://github.com/elsa-workflows/elsa-foundation/pull/5440) targets the initiative. Exact
+code/test source `c6a2fc021fa978aa3e083256364b494fd0a6ce57` was checked against baseline
+`694debeb44176f3fd61f9059b94f6a6931c162e8`, containing merged #3930 and #3945.
+
+| Gate | Fresh result |
+|---|---|
+| Complete Mapping project | 1,763 listed/executed/passed; zero failures/skips |
+| Complete HTTP/SQLite import integration project | 164 listed/executed/passed; zero failures/skips |
+| Architecture | 606 discovered definitions, 621 executed/passed cases; two deferred theories expand to 6 and 11 cases; zero failures/skips |
+| Evaluated Release/isolated Debug graphs and generated filters | Both restores and the canonical maps check pass; no solution-filter change |
+| Causal controls | Original baseline matrix 50 failures/23 passes; expanded correction removal 52/30; verified review regressions 10/81 and 2/1; restored whole projects pass |
+| Independent local review | Correctness, standards/constitution and issue acceptance converge with zero remaining verified findings; all five surviving findings fixed in normal commits |
+
+Owned real hosts prove For counts, explicit zero Delay due time, default GET/no-body behavior, and `[200]` response
+paths on 200/404/500. Refused variants leave design/publication rows unchanged and make no HTTP request. The selected
+3.6 JSON writer's no-charset header cannot be retained by emitting application/json alone, so a blank ContentType
+with potentially non-null Content is refused. Unproven computed/referenced String bodies are refused because they
+may be empty and lose body headers on the target.
+
+The fresh, clean, read-only 36-definition corpus at `9c01aa4b53ccbd47e09922d7cc49a694e5f3d2b0` measures **16 imports,
+15 publications and 5 observed completions before and after**. All 36 import/publication/completion flags match.
+Twenty import refusals, one publication HTTP400 and ten non-completions with incidents remain visible. One original
+first-incident observation differs (Running/1 incident versus Faulted/2); a focused repeat on each source remains
+Running/1 after a one-second reread. Original observations are retained. These stage counts are not general corpus
+execution/value parity. Private payloads and definition IDs are not committed or uploaded.
+
+The initial scratch compile/fixture and dual-diagnostic expectation attempts are retained. The first architecture
+run had 619 passes/two checkout setup failures; its maps check reported two filter differences. Reconstructing the
+owned native checkout with Linux line endings and the complete tracked inventory, including ignored-but-tracked
+files, makes both gates pass without changing repository snapshots or filters. The
+[local gate](https://github.com/elsa-workflows/elsa-foundation/pull/5440#issuecomment-7086113646) and
+[corpus receipt](https://github.com/elsa-workflows/elsa-foundation/pull/5440#issuecomment-7086123495) retain the exact
+commands, results and source boundaries.
+
+T032/spec1232 policy-on/off integration is **NOT RUN**: that implementation is unavailable and separately owned.
+Historical Elsa 3 evidence remains exact-tag source inspection, not historical runtime execution. CI is deferred to
+initiative integration and no CI pass is claimed. Formal Code Review and coordinator acceptance/merge remain.
