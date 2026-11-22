@@ -64,6 +64,7 @@ public sealed class RuntimeHistoryCheckpointMySqlTests(RuntimeBookmarksMySqlFixt
     [InlineData("timer-due-pages")]
     [InlineData("timer-captured-roundtrip")]
     [InlineData("timer-native-pending")]
+    [InlineData("timer-deleted-caller-snapshot")]
     [InlineData("timer-caller-snapshot")] [InlineData("timer-probe-snapshot")] [InlineData("timer-native-snapshot")]
     [InlineData("timer-native-affected-empty")] [InlineData("timer-native-affected-existing")]
     [InlineData("authored-durable")] [InlineData("authored-balanced")]
@@ -140,6 +141,9 @@ internal static partial class RuntimeHistoryCheckpointProviderContract
                     break;
                 case "timer-probe-snapshot":
                     await TimerCallerSnapshot(database, probe: true);
+                    break;
+                case "timer-deleted-caller-snapshot":
+                    await TimerDeletedCallerSnapshot(database);
                     break;
                 case "timer-caller-snapshot":
                     await TimerCallerSnapshot(database);

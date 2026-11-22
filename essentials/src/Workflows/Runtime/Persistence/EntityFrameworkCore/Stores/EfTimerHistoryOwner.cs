@@ -254,11 +254,12 @@ internal static class EfTimerHistoryOwner
         // A current write precedes the first consistent SELECT, including InnoDB repeatable-read waiters.
         // Advancing the native revision also invalidates an older fence cursor/snapshot at its real CAS.
         var id = Id(scope, run);
+        var tracked = context.ChangeTracker.Entries<ExecutionLivenessStateEntity>().SingleOrDefault(entry => entry.Entity.Id == id);
+        if (tracked is not null && tracked.State != EntityState.Unchanged)
+            throw new InvalidOperationException("Timer ownership cannot reload or flush pending caller ownership changes.");
         await context.ExecutionLivenessStates.Where(row => row.Id == id)
             .ExecuteUpdateAsync(update => update.SetProperty(row => row.Revision, row => row.Revision + 1), token);
-        // An unchanged native ownership row may already be tracked by the caller. Refresh that
-        // actual row after the lock so identity resolution cannot restore its pre-lock revision.
-        var tracked = context.ChangeTracker.Entries<ExecutionLivenessStateEntity>().SingleOrDefault(entry => entry.Entity.Id == id);
+        // Only an unchanged tracked owner can be refreshed safely after the revision lock.
         if (tracked is not null) await tracked.ReloadAsync(token);
     }
 
