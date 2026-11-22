@@ -30,7 +30,7 @@ for (const appearance of ["light", "dark"] as const) {
       await palette.getByRole("button", { name: "Choice", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
       await properties.getByRole("textbox", { name: "Label", exact: true }).fill("Channel");
-      await properties.getByText("Choices", { exact: true }).click();
+      if (!await properties.getByLabel("Display", { exact: true }).isVisible()) await properties.getByText("Choices", { exact: true }).click();
       await properties.getByLabel("Display", { exact: true }).selectOption("radio");
       await properties.getByRole("textbox", { name: "Choices, one per line", exact: true }).fill("Email\nPhone");
 

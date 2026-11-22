@@ -187,14 +187,14 @@ for (const width of [360, 1440]) {
 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
-    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
     await expect(page.getByText("1 form shown", { exact: true })).toBeVisible();
     await expect(row.getByRole("button", { name: "Unsaved designer copy", exact: true })).toBeFocused();
     await openFormAction(page, row, "Edit");
     await versionsTab.click();
     await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
-    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true })).toBeVisible();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
     await expect(row).toContainText("Published · Draft");
     await expect(page.getByRole("table", { name: "Task forms" }).locator("tbody tr")).toHaveCount(1);
   });
@@ -244,7 +244,7 @@ test("legacy form pages add history without adding duplicate collection rows", a
   await expect(history).not.toContainText("Travel details");
   await history.getByRole("button", { name: "Select version 1", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeVisible();
-  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByText("2 forms shown", { exact: true })).toBeVisible();
   await expect(newsletter.getByRole("button", { name: "Open form newsletter-signup", exact: true })).toBeFocused();
@@ -268,7 +268,7 @@ test("read-only form readers can inspect published versions", async ({ page }) =
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 });
 
