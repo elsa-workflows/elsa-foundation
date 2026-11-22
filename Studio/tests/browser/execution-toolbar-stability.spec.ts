@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     // Wait for an automatic poll to begin a deliberately slow evidence read.
     await expect(refresh).toBeDisabled({ timeout: 10000 });
     expect(await geometry(elements)).toEqual(settled);
-    await expect(toolbar.getByText("Loading execution evidence…", { exact: true })).toBeHidden();
+    await expect(toolbar.getByText("Loading run data…", { exact: true })).toBeHidden();
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 

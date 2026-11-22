@@ -80,7 +80,7 @@ describe("Activity Definition Test Runs", () => {
     expect(classifyActivityTestRun(accepted, true)).toBe("waiting");
   });
 
-  it("distinguishes expired evidence from an expired Source Reference with retained or active Runtime Evidence", () => {
+  it("distinguishes expired evidence from an expired Source Reference with retained or active Run data", () => {
     const retained = view("Completed", {
       sourceReferenceExpired: true,
       sourceReferenceRetained: false,

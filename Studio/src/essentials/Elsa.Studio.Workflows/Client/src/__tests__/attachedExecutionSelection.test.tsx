@@ -278,7 +278,7 @@ it.each(["password", "declaration", "authored", "compiled"])("does not prefetch 
   expect(current.prepared?.values.size).toBe(0);
 });
 
-it("commits valid execution evidence when an individual captured value is unavailable", async () => {
+it("commits valid run data when an individual captured value is unavailable", async () => {
   const next = summary("write-5");
   tree.set(next.activityExecutionId, { ...inspection(next), outcomeNames: ["Done"], valueSnapshots: [{ name: "Value", inputKey: "Value", evidenceId: "unavailable",
     subject: "ActivityInput", captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,

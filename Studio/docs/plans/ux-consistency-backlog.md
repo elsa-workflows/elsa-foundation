@@ -222,14 +222,14 @@ Every item in this section `needs: K15`.
   [source] `StudioBreadcrumbs` in `EXT/Decisions/DecisionsPage.tsx:215`,
   `WF/ActivityDefinitionWorkbench.tsx:256` and `WF/ActivityDefinitionDraftEditor.tsx:959`.
   `needs: D5`
-- [ ] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says
+- [x] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says (PR #5303)
   "Definitions › …". Make them agree.
-- [ ] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button →
+- [x] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button → (PR #5303)
   shell trail.
-- [ ] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost
+- [x] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost (PR #5303)
   "Back to task list"; `:34` [source] an `<a className="studio-button">` "Task inbox" →
   shell trail.
-- [ ] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon →
+- [x] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon → (PR #5303)
   shell trail.
 - [ ] **X2.6** (#5030) [verified] `EXT/FeatureManagement/module.tsx:1048` raw "Back" button.
 - [ ] **X2.7** (#5031) [source] `WF/ActivityDefinitionWorkbench.tsx:263` `StudioLink className="ad-back-to-designer"`
@@ -239,7 +239,7 @@ Every item in this section `needs: K15`.
   and the Agent create form (`AgentsPage.tsx:293–306`, Cancel or Escape only).
 - [ ] **X2.9** (#5033) [source] No breadcrumb on `WF/ActivityUpgradeWorkbenchPage.tsx:296` and
   `WF/Elsa3ReusableImportPage.tsx:479`, which are reachable only from Activity definitions.
-- [ ] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to
+- [x] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to (PR #5303)
   `StudioBreadcrumbs`. It navigates scopes inside one workflow, so D5 may not apply to it; ask before
   moving it into the shell. `needs: K7`
 - [ ] **X2.11** (#5035) [source] `WF/ActivityDataMemberBrowser.tsx:140` raw "Back" button.
@@ -484,7 +484,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   [check] `.etl-error`, `.external-auth-error`.
 - [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
-- [ ] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task
+- [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
 - [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
@@ -657,12 +657,12 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable
   apply receipt", "Outcome unknown"; `WF/Elsa3ReusableImportPage.tsx`: "Side-effect-free analysis",
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
-- [ ] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
+- [x] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
   snapshot…" (`WF/workflow-editor/AttachedRunActivityInspector.tsx:25`); "Loading authoritative
-  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2`
-- [ ] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
+  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2` (PR #5300)
+- [x] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
   ("Artifact ID", "Artifact hash", "Artifact: {id}" filter chip). Use "Executable" for all of them
-  (D9). `needs: G1`
+  (D9). `needs: G1` (PR #5300)
 - [ ] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
   `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`).
 - [ ] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected".
@@ -769,9 +769,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`H/modules/ThemeBuilderPage.tsx:375–379` [source]). Make Save the primary and move the rest into an
   `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`.
 - [ ] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance.
-- [ ] **H4** (#5255) [seen] Workspace tabs accumulate without limit (23 open after normal navigation),
-  including transient ones. D10: transient routes reuse the current tab, and the strip gets a cap that
-  closes the least recently used clean tab. Use 12 tabs and preserve unsaved tabs even above the cap. `needs: D10`
+- [x] **H4** (#5255) Workspace tabs reuse transient create routes and evict the least recently visited clean background tab beyond 12. Unsaved and pinned tabs are protected. (PR #5302)
 - [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
   **[check]** how it behaves at narrow widths.
 - [ ] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,

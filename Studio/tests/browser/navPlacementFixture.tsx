@@ -25,7 +25,7 @@ const moduleNavigation: StudioNavigationContribution[] = [
   { id: "console", label: "Console", path: "/diagnostics/console", parentId: "diagnostics", order: 10 },
   { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics", order: 20 },
   { id: "open-telemetry", label: "OpenTelemetry", path: "/diagnostics/open-telemetry", parentId: "diagnostics", order: 30 },
-  { id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", placement: "runtime" },
+  { id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime" },
   { id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring" },
   { id: "feature-management", label: "Features", path: "/features", placement: "admin" }
 ];

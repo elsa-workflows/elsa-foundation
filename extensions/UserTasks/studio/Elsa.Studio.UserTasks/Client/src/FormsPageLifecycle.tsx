@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
@@ -470,11 +470,11 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   </>;
 
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
+    {editing ? <StudioShellBreadcrumbs items={[{ label: "Task forms", onClick: backToForms, disabled: busy }]} current={title} /> : null}
     <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : undefined} title={title}
       description={editing ? undefined : "Manage each form once. Drafts remain editable until you publish an immutable version."}
       actions={<>
         {!editing && identity?.canManageForms ? <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={createForm}>New form</StudioButton> : null}
-        {editing ? <StudioButton disabled={busy} onClick={backToForms}>Back to forms</StudioButton> : null}
         <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>
       </>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}

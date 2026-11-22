@@ -69,7 +69,7 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
-  await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
   await expect(page.getByRole("region", { name: receipt.title, exact: true })).toHaveCount(0);
   await expect(row).toHaveCount(0);
 });

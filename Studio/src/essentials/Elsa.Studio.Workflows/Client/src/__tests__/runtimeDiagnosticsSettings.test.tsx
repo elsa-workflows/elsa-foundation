@@ -23,19 +23,19 @@ afterEach(() => {
 });
 
 describe("RuntimeDiagnosticsSettingsPage", () => {
-  it("registers Runtime evidence settings at the existing sidebar and route address", () => {
+  it("registers Runtime diagnostics at the existing sidebar and route address", () => {
     const api = testApi();
 
     register(api);
 
     expect(api.navigation.list()).toContainEqual(expect.objectContaining({
       id: "workflows-runtime-diagnostics",
-      label: "Runtime evidence settings",
+      label: "Runtime diagnostics",
       path: "/workflows/runtime-diagnostics"
     }));
     expect(api.routes.list()).toContainEqual(expect.objectContaining({
       id: "workflows-runtime-diagnostics",
-      label: "Runtime evidence settings",
+      label: "Runtime diagnostics",
       path: "/workflows/runtime-diagnostics"
     }));
   });
@@ -45,7 +45,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const container = render(<RuntimeDiagnosticsSettingsPage context={context} />);
 
     await waitFor(() => {
-      expect(container.textContent).toContain("Runtime evidence settings");
+      expect(container.textContent).toContain("Runtime diagnostics");
       expect(container.textContent).not.toContain("New capture events use");
       expect(container.textContent).toContain("Diagnostic snapshots");
       expect(container.textContent).toContain("Choose the level Studio should request.");

@@ -8,7 +8,7 @@ export interface StudioBreadcrumbLink {
 }
 
 export interface StudioBreadcrumbsProps extends Omit<React.ComponentPropsWithoutRef<"nav">, "children"> {
-  items: readonly (StudioBreadcrumbLink | { label: React.ReactNode; onClick: () => void })[];
+  items: readonly (StudioBreadcrumbLink | { label: React.ReactNode; onClick: () => void; disabled?: boolean })[];
   current: React.ReactNode;
   renderLink?: (item: StudioBreadcrumbLink) => React.ReactNode;
 }
@@ -19,7 +19,7 @@ export function StudioBreadcrumbs({ items, current, renderLink, className, ...pr
       {items.map((item, index) => <li key={`${"href" in item ? item.href : "action"}:${index}`}>
         {index > 0 ? <span className="studio-breadcrumb-separator" aria-hidden="true">›</span> : null}
         {"onClick" in item
-          ? <button className="studio-breadcrumb-action" type="button" onClick={item.onClick}>{item.label}</button>
+          ? <button className="studio-breadcrumb-action" type="button" disabled={item.disabled} onClick={item.onClick}>{item.label}</button>
           : renderLink ? renderLink(item) : <a href={item.href}>{item.label}</a>}
       </li>)}
       <li className="studio-breadcrumb-current-item">
