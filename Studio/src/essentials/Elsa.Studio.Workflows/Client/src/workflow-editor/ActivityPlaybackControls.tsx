@@ -46,7 +46,7 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
     </div>
     <div className="wf-playback-position" role="status" aria-live="polite" aria-atomic="true">
       <strong>{positionText}</strong>
-      {pendingStatus ? <span className="wf-playback-observation" title={pendingStatus}>{pendingStatus}</span> : null}
+      <span className="wf-playback-observation" title={pendingStatus || undefined}>{pendingStatus}</span>
     </div>
     {range && cursor ? <div className="wf-playback-scrubber"><label htmlFor={id}>Activity position</label>
       <input id={id} type="range" min={range.min} max={range.max} step={1} value={value}
@@ -60,6 +60,7 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
     {playback.error ? <p className="wf-playback-error" role="status">{playback.error}{playback.phase === "failed" ? <StudioButton type="button" onClick={() => { void playback.retry(); }}>Retry requested activity</StudioButton> : null}</p> : null}
     {cursor && page?.coverage.sourceHistoryPending === true ? <p className="wf-playback-note" role="status">{page.coverage.limitation || "Some history observations are still pending. Playback shows the recorded prefix."}</p> : null}
     {page && !cursor ? <p className="wf-playback-note" role="status">{Object.hasOwn(coverageLabels, page.coverage.state) ? coverageLabels[page.coverage.state] : "Recording status is unavailable."}</p> : null}
+    {cursor && page && (page.state === "partial" || page.coverage.state === "partial") ? <p className="wf-playback-note" role="status">Partial playback range. {page.coverage.limitation || "Playback covers only the recorded segment."}{page.reason ? ` ${playbackBoundaryReason(page.reason)}` : ""}</p> : null}
     <details className="wf-playback-options"><summary>Playback options</summary>
       <StudioField label="Presentation pace"><select aria-label="Playback speed" value={playback.speed} onChange={event => playback.setSpeed(event.currentTarget.value as PlaybackSpeed)}>
         <option value="0.5">0.5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ListTree, RefreshCw } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioCollectionToolbar, StudioField, StudioSearchInput } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioCollectionToolbar, StudioField, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import type { RuntimeHistoryEvent } from "../../runtimeHistoryTypes";
 import { HistoryCoverage, HistoryEventList, historyClock, historyEventLabel, historyZone, isHistoryHighlight } from "./historyPresentation";
 import { useRunHistory } from "./useRunHistory";
@@ -103,6 +103,7 @@ export function ActivityHistoryJournal({ context, workflowExecutionId, activityE
   const value = history.value;
   return <section className="wf-activity-history" aria-label="Activity journal">
     <p className="wf-history-note">This execution{includeDescendants ? " and its descendants" : " only, including directly related delivery observations"}.</p>
+    <details className="wf-history-technical"><summary>Execution identity</summary><CopyableIdentifier label="Activity execution" value={activityExecutionId} scope={context} /></details>
     <label className="wf-history-checkbox"><input type="checkbox" checked={includeDescendants} onChange={event => setIncludeDescendants(event.target.checked)} />Include descendants</label>
     {history.error ? <p role="status">{history.error} <StudioButton type="button" onClick={history.refresh}>Retry journal</StudioButton></p> : null}
     {value ? <><HistoryCoverage coverage={value.page.coverage} readAt={value.page.readAt} scopeComplete={value.page.scopeComplete} scopeLimitation={value.page.scopeLimitation} />

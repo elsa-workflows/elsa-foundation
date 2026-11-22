@@ -648,6 +648,6 @@
 }
 
 .wf-history-filters > summary:focus-visible {
-  outline: 2px solid var(--studio-selection-mark);
+  outline: 2px solid var(--studio-focus);
   outline-offset: 3px;
 }

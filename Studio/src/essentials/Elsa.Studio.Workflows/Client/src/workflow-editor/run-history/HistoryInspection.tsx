@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, BookmarkCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
@@ -26,20 +26,31 @@ export function HistoryInspection({ context, workflowExecutionId, selection, onS
   refreshKey?: string | number; onFocusTimeline?(activityExecutionId: string): void; onIncident?(incidentId: string): void; navigate?(path: string): void;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (focusOnSelection) container.current?.querySelector<HTMLElement>("[data-history-heading]")?.focus(); }, [focusOnSelection, selection.id, selection.kind, workflowExecutionId]);
+  const focusedSelection = useRef<string | null>(null);
+  const focusKey = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, selection.kind, selection.id]);
+  const focusReady = useCallback(() => {
+    if (!focusOnSelection || focusedSelection.current === focusKey) return;
+    const heading = container.current?.querySelector<HTMLElement>("[data-history-heading]");
+    if (!heading) return;
+    focusedSelection.current = focusKey;
+    // Navigate only once the exact recorded target has rendered. Bring its inspection
+    // context to the start of the usable pane, including stacked narrow layouts.
+    heading.focus({ preventScroll: true });
+    heading.closest<HTMLElement>(".wf-history-inspection")?.scrollIntoView?.({ block: "start", inline: "nearest" });
+  }, [focusKey, focusOnSelection]);
   const prepared = preparedEvent?.contextIdentity === runtimeValueContextId(context) && preparedEvent.workflowExecutionId === workflowExecutionId
     && preparedEvent.historyEventId === selection.id && preparedEvent.value.event.workflowExecutionId === workflowExecutionId
     && preparedEvent.value.event.historyEventId === selection.id ? preparedEvent : undefined;
   return <div ref={container}>{selection.kind === "event" ? <HistoryEventInspection key={`${runtimeValueContextId(context)}:${workflowExecutionId}:${selection.id}`} context={context} workflowExecutionId={workflowExecutionId}
-    historyEventId={selection.id} preparedEvent={prepared} onEventUnavailable={onEventUnavailable} refreshKey={refreshKey} onSelect={onSelect} onBack={onBack} onActivity={onActivity} onFocusTimeline={onFocusTimeline} onIncident={onIncident} navigate={navigate} />
+    historyEventId={selection.id} preparedEvent={prepared} onEventUnavailable={onEventUnavailable} refreshKey={refreshKey} onSelect={onSelect} onBack={onBack} onActivity={onActivity} onFocusTimeline={onFocusTimeline} onIncident={onIncident} navigate={navigate} onReady={focusReady} />
     : <HistoryBookmarkInspection key={`${runtimeValueContextId(context)}:${workflowExecutionId}:${selection.id}`} context={context} workflowExecutionId={workflowExecutionId}
-      bookmarkId={selection.id} refreshKey={refreshKey} onSelect={onSelect} onBack={onBack} onActivity={onActivity} />}</div>;
+      bookmarkId={selection.id} refreshKey={refreshKey} onSelect={onSelect} onBack={onBack} onActivity={onActivity} onReady={focusReady} />}</div>;
 }
 
-function HistoryFact({ label, value }: { label: string; value?: string | number | null }) {
+function HistoryFact({ label, value, copyValue }: { label: string; value?: string | number | null; copyValue?: string }) {
   const [message, setMessage] = useState("");
-  return <><dt>{label}</dt><dd>{value === undefined || value === null || value === "" ? "Not recorded" : <><span>{value}</span>
-    {typeof value === "string" ? <CopyValueButton value={value} ariaLabel={`Copy ${label.toLowerCase()}`} copiedLabel={label} onCopied={() => setMessage("Copied")}
+  return <><dt>{label}</dt><dd>{value === undefined || value === null || value === "" ? "Not recorded" : <><span title={copyValue}>{value}</span>
+    {typeof value === "string" ? <CopyValueButton value={copyValue ?? value} ariaLabel={`Copy ${label.toLowerCase()}`} copiedLabel={label} onCopied={() => setMessage("Copied")}
       onCopyFailed={() => setMessage("Copy failed")} /> : null}<span className="wf-history-copy-state" role="status">{message}</span></>}</dd></>;
 }
 
@@ -55,11 +66,11 @@ const metadataLabels: Record<string, string> = {
   "history.storage": "State storage policy", "history.sourceCapturedAt": "Source captured instant"
 };
 
-function HistoryEventInspection({ context, workflowExecutionId, historyEventId, onSelect, onBack, onActivity, onFocusTimeline, onIncident, navigate, preparedEvent, onEventUnavailable, refreshKey }: {
+function HistoryEventInspection({ context, workflowExecutionId, historyEventId, onSelect, onBack, onActivity, onFocusTimeline, onIncident, navigate, preparedEvent, onEventUnavailable, refreshKey, onReady }: {
   context: StudioEndpointContext; workflowExecutionId: string; historyEventId: string; onSelect(selection: RunHistorySelection): void;
   onBack(): void; onActivity?(id: string): void; onFocusTimeline?(id: string): void; onIncident?(id: string): void; navigate?(path: string): void;
   preparedEvent?: PreparedHistoryEvent;
-  refreshKey: string | number;
+  refreshKey: string | number; onReady(): void;
   onEventUnavailable?(target: Pick<PreparedHistoryEvent, "contextIdentity" | "workflowExecutionId" | "historyEventId">): void;
 }) {
   const identity = JSON.stringify([workflowExecutionId, "event", historyEventId]);
@@ -70,6 +81,7 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
     if (resource.status === "unavailable") unavailable.current?.({ contextIdentity: runtimeValueContextId(context), workflowExecutionId, historyEventId });
   }, [context, historyEventId, resource.status, workflowExecutionId]);
   const event = resource.value?.event;
+  useEffect(() => { if (event) onReady(); }, [event, onReady]);
   const valueTriggers = useRef(new Map<string, HTMLButtonElement>());
   const [valueTarget, setValueTarget] = useState<string | null>(null);
   const [showSuccessors, setShowSuccessors] = useState(false);
@@ -173,13 +185,21 @@ function BookmarkRecord({ item, onSelect }: { item: RuntimeHistoryBookmark; onSe
   </article>;
 }
 
-function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, onSelect, onBack, onActivity, refreshKey }: {
-  context: StudioEndpointContext; workflowExecutionId: string; bookmarkId: string; onSelect(selection: RunHistorySelection): void; refreshKey: string | number;
+function bookmarkMoment(value: string) {
+  const time = new Date(value);
+  return Number.isFinite(time.getTime()) ? new Intl.DateTimeFormat(undefined, {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short"
+  }).format(time) : "Invalid recorded time";
+}
+
+function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, onSelect, onBack, onActivity, refreshKey, onReady }: {
+  context: StudioEndpointContext; workflowExecutionId: string; bookmarkId: string; onSelect(selection: RunHistorySelection): void; refreshKey: string | number; onReady(): void;
   onBack(): void; onActivity?(id: string): void;
 }) {
   const resource = useHistoryResource(context, JSON.stringify([workflowExecutionId, "bookmark", bookmarkId]), signal => getWorkflowHistoryBookmark(context, workflowExecutionId, bookmarkId, signal), true, true, refreshKey);
   const item = resource.value?.bookmark;
   const bookmark = item?.bookmark;
+  useEffect(() => { if (bookmark) onReady(); }, [bookmark, onReady]);
   const openAtObservation = item && (item.status === "Active" || item.status === "Unknown")
     && ["eligible", "expired", "ineligible"].includes(item.eligibility);
   const endAt = item?.endedAt ?? (openAtObservation ? item?.eligibilityObservedAt : null);
@@ -193,8 +213,8 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
     {item && bookmark && resource.value ? <>
       <p><span className="wf-history-badge" data-status={item.status}>{item.status}</span> · current eligibility: {bookmarkEligibilityLabel(item.eligibility)}</p>
       <dl className="wf-history-facts">
-        <HistoryFact label="Created" value={item.priorState === "Unknown" ? "Not recorded" : historyInstant(bookmark.createdAt)} />
-        <HistoryFact label="Ended" value={item.endedAt ? historyInstant(item.endedAt) : item.endedHistoryEventId || ["Consumed", "Removed", "Superseded"].includes(item.status) ? "End time not recorded" : "No end transition recorded"} />
+        <HistoryFact label="Created" value={item.priorState === "Unknown" ? null : bookmarkMoment(bookmark.createdAt)} copyValue={item.priorState === "Unknown" ? undefined : bookmark.createdAt} />
+        <HistoryFact label="Ended" copyValue={item.endedAt ?? undefined} value={item.endedAt ? bookmarkMoment(item.endedAt) : item.endedHistoryEventId || ["Consumed", "Removed", "Superseded"].includes(item.status) ? "End time not recorded" : "No end transition recorded"} />
         <HistoryFact label="Recorded reason" value={item.reason} /><HistoryFact label="Handle lifetime" value={age || "Unknown"} />
       </dl>
       {item.eligibility === "expired" ? <p className="wf-history-note">Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.</p> : item.eligibility === "unavailable" || item.eligibility === "unknown" ? <p className="wf-history-note">Current eligibility cannot be established. A missing handle does not prove consumption.</p> : null}
@@ -204,7 +224,10 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
         {item.selectedBookmarkId && item.selectedBookmarkId !== bookmarkId ? <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: item.selectedBookmarkId! })}>Inspect winning bookmark →</StudioButton> : null}
         <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.lastHistoryEventId })}>Inspect last recorded transition →</StudioButton>
       </div>
-      <details className="wf-history-technical"><summary>Technical details</summary><dl className="wf-history-facts"><HistoryFact label="Bookmark ID" value={bookmark.identity.bookmarkId} />
+      <details className="wf-history-technical"><summary>Technical details</summary><dl className="wf-history-facts">
+        <HistoryFact label="Created (exact)" value={item.priorState === "Unknown" ? null : historyInstant(bookmark.createdAt)} />
+        <HistoryFact label="Ended (exact)" value={item.endedAt ? historyInstant(item.endedAt) : null} />
+        <HistoryFact label="Bookmark ID" value={bookmark.identity.bookmarkId} />
         <dt>Owning execution</dt><dd>{onActivity ? <StudioButton type="button" onClick={() => onActivity(bookmark.identity.activityExecutionId)}>{bookmark.identity.activityExecutionId} →</StudioButton> : bookmark.identity.activityExecutionId}</dd>
         <HistoryFact label="Stimulus type" value={bookmark.stimulusType} /><HistoryFact label="Stimulus hash" value={bookmark.stimulusHash} />
         <HistoryFact label="Resume target" value={bookmark.identity.resumeTargetId} />

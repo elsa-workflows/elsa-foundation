@@ -239,8 +239,8 @@ it.each([
   api.getWorkflowHistoryEvent.mockResolvedValue({ coverage: historyCoverage, event: historyEvent(1, { name: "ChildWorkflowSettled", metadata }), readAt: "now" });
   const navigate = vi.fn();
   render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "event", id: "event-1" }} onSelect={vi.fn()} onBack={vi.fn()} navigate={navigate} />);
-  await vi.waitFor(() => expect(container.textContent).toContain(`Open related run ${target}`));
-  expect(navigate).not.toHaveBeenCalled(); click(`Open related run ${target}`);
+  await vi.waitFor(() => expect(container.textContent).toContain("Open related run →"));
+  expect(navigate).not.toHaveBeenCalled(); click("Open related run →");
   expect(navigate).toHaveBeenCalledWith(`/workflows/instances/${encodeURIComponent(target)}?view=timeline`);
   expect(container.querySelector('[aria-label="Copy related run"]')).toBeTruthy();
   expect(api.getWorkflowHistoryEvent).toHaveBeenCalledTimes(1);

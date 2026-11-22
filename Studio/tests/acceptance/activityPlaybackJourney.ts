@@ -100,7 +100,7 @@ async function harness(page: Page, info: TestInfo, capture: Capture, register: C
     await expect(controls).toHaveAttribute("aria-busy", "false");
     await expect(controls).not.toContainText("Loading step");
     if (executionId) {
-      await expect(controls.locator("details")).toContainText(executionId);
+      await expect(controls.locator(".wf-playback-details")).toContainText(executionId);
     }
   }
   async function seek(index: number, total: number) {
@@ -316,7 +316,7 @@ export async function playbackCoverageJourney(page: Page, info: TestInfo, captur
     expect(changed.revision).not.toBe(authority.revision); authorityRevision = changed.revision;
     await gate.release(); const response = await deniedRead;
     const body = await response.text(); expect(body).not.toContain(first.activityExecutionId); expect(body).not.toContain(original.sequenceToken!);
-    await expect(h.controls).toContainText("unavailable"); await expect(h.controls.locator("details")).toHaveCount(0);
+    await expect(h.controls).toContainText("unavailable"); await expect(h.controls.locator(".wf-playback-details")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "History event details", exact: true })).toHaveCount(0);
     await h.snap("playback-access-revoked");
   } finally { await gate.release(); }
@@ -334,13 +334,14 @@ export async function playbackCoverageJourney(page: Page, info: TestInfo, captur
   await expect(h.controls).toContainText("No confirmed activity position");
   await expect(h.controls.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await expect(h.controls.getByRole("slider", { name: "Activity position", exact: true })).toHaveCount(0);
-  await expect(h.controls.locator("details")).toHaveCount(0);
+  await expect(h.controls.locator(".wf-playback-details")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "History event details", exact: true })).toHaveCount(0);
   await h.snap("playback-coverage-invalidated");
   const partial = await h.occurrences(run.id); expect(partial.state).toBe("partial"); expect(BigInt(partial.totalCount!)).toBeGreaterThan(0n);
   expect(BigInt(partial.totalCount!)).toBeLessThan(4n);
   await h.controls.getByRole("button", { name: "Refresh playback", exact: true }).click(); await h.position(0, Number(partial.totalCount));
-  await expect(h.controls).toContainText("Partial playback range"); await h.snap("playback-coverage-retained");
+  await expect(h.controls.locator(".wf-playback-options")).toHaveJSProperty("open", false);
+  await expect(h.controls.getByRole("status").filter({ hasText: "Partial playback range" })).toBeVisible(); await h.snap("playback-coverage-retained");
   const nonce = crypto.randomUUID().replaceAll("-", ""), faultPath = `/__qualification/activity-playback/${run.id}/pin-read-fault/${nonce}`;
   await h.api(faultPath, "POST");
   const pinMatch = `**/runtime/workflows/executables/${run.artifactId}*`;
