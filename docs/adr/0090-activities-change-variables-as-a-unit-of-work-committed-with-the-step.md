@@ -429,8 +429,8 @@ This answers A-3's question: writing from scripts is a general capability, not c
   266's ADR 0048 §4 amendment does not conflict with it.
 - **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
   mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused. A
-  computed `setVariable` name stays refused by the converter: Elsa 3 created a missing variable on write, where
-  Elsa 4 faults (decision 5), so the conversion would not be faithful.
+  computed `setVariable` name converts to `variables[k] = v`, a computed write (decision 3): a declared name is
+  written, and an undeclared name faults the step.
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
   history and the winning write) needs.
 - **Cost.** One serialization per tracked variable per commit, and one more comparison per conflict-checked variable.
