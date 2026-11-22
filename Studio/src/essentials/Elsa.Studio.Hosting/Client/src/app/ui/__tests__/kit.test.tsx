@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { StudioButton } from "../forms/Button";
+import { StudioIconButton } from "@elsa-workflows/studio-ui";
 import { StudioDialogFooter } from "../layout/DialogFooter";
 import { StudioCollectionFooter } from "../layout/Page";
 import { StudioSearchInput } from "../forms/SearchInput";
@@ -144,6 +145,45 @@ describe("StudioCollectionFooter", () => {
     expect(button.disabled).toBe(true);
     button.click();
     expect(load).toHaveBeenCalledOnce();
+  });
+});
+
+describe("StudioIconButton", () => {
+  it("requires an aria-label and renders only the icon with a matching default title", () => {
+    expectTypeOf<React.ComponentProps<typeof StudioIconButton>>().toMatchTypeOf<{ "aria-label": string }>();
+    const host = mount(<StudioIconButton aria-label="Edit feed"><svg aria-hidden="true" /></StudioIconButton>);
+    const button = host.querySelector("button")!;
+
+    expect(button.className).toBe("studio-icon-button");
+    expect(button.dataset.variant).toBe("default");
+    expect(button.type).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("Edit feed");
+    expect(button.title).toBe("Edit feed");
+    expect(button.childNodes).toHaveLength(1);
+    expect(button.firstElementChild?.localName).toBe("svg");
+  });
+
+  it("forwards a ref and native props while supporting an explicit title and danger variant", () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    const onClick = vi.fn();
+    const host = mount(<>
+      <StudioIconButton ref={ref} aria-label="Delete feed" title="Delete from Studio" variant="danger"
+        type="submit" form="feed-form" className="row-action" onClick={onClick}><svg /></StudioIconButton>
+      <StudioIconButton aria-label="Delete another feed" onClick={onClick} disabled><svg /></StudioIconButton>
+    </>);
+    const [enabled, disabled] = host.querySelectorAll("button");
+
+    expect(ref.current).toBe(enabled);
+    expect(enabled.className).toBe("studio-icon-button row-action");
+    expect(enabled.dataset.variant).toBe("danger");
+    expect(enabled.title).toBe("Delete from Studio");
+    expect(enabled.type).toBe("submit");
+    expect(enabled.getAttribute("form")).toBe("feed-form");
+    expect(disabled.disabled).toBe(true);
+    disabled.click();
+    expect(onClick).not.toHaveBeenCalled();
+    enabled.click();
+    expect(onClick).toHaveBeenCalledOnce();
   });
 });
 

@@ -32,3 +32,33 @@ export function StudioButton({
     />
   );
 }
+
+type StudioIconButtonProps = Omit<React.ComponentPropsWithoutRef<"button">, "aria-label" | "children"> & {
+  "aria-label": string;
+  children: React.ReactElement;
+  variant?: Extract<StudioButtonVariant, "default" | "danger">;
+};
+
+export const StudioIconButton = React.forwardRef<HTMLButtonElement, StudioIconButtonProps>(function StudioIconButton({
+  "aria-label": label,
+  children,
+  variant = "default",
+  className,
+  type = "button",
+  title = label,
+  ...rest
+}, ref) {
+  return (
+    <button
+      {...rest}
+      ref={ref}
+      type={type}
+      className={className ? `studio-icon-button ${className}` : "studio-icon-button"}
+      data-variant={variant}
+      aria-label={label}
+      title={title}
+    >
+      {children}
+    </button>
+  );
+});

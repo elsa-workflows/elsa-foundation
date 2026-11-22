@@ -3166,12 +3166,6 @@
   box-sizing: border-box;
 }
 
-.wf-create-dialog {
-  max-height: calc(100dvh - 40px);
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-
 .wf-dialog form {
   display: grid;
   gap: 18px;

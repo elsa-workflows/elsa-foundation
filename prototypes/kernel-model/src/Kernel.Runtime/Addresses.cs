@@ -111,4 +111,6 @@ public enum Flaw : long
     ReleaseDuringTake = 1L << 59,    // the answer's release side ignores takes in flight and the generation, and frees rows a take brought back
     RenewRegardlessOfPasses = 1L << 60, // the pass gate counts every Worker live, so a wedged host keeps renewing
     TakeRenewsWedgedHost = 1L << 61, // a host whose gate is closed still takes, and its take renews its node record
+    UnboundedJobResult = 1L << 62, // the driver publishes an oversized result instead of a bounded job fault
+    HoldRetainsJobTicket = long.MinValue, // a held completion remains a runnable job ticket
 }

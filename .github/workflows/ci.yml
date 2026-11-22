@@ -1790,6 +1790,8 @@ jobs:
           $SIM --contract-http --seeds 100
           $SIM --contract-jobs --seeds 100
           $SIM --job-trial-check
+          $SIM --job-result-size-check
+          $SIM --held-job-result-check
           $SIM --contract-jobs --seed 1 --tree-stall
           expect_contract_failure() {
             local expected="$1"
@@ -1814,6 +1816,8 @@ jobs:
           expect_contract_failure "Runner's job did not survive takeover with a distinct successor attempt" --contract-jobs --seed 1 --flaw VolatileJobTicket
           expect_contract_failure "Fragile failed to park with on trial when 3 owners were lost" --contract-jobs --seed 1 --flaw JobPoisonAsError
           expect_contract_failure "the job did not retry with a fresh physical attempt" --job-trial-check --flaw NoResetAfterFailedCommit
+          expect_contract_failure "FAIL one byte over, suspended: a bounded authenticated result is stored" --job-result-size-check --flaw UnboundedJobResult
+          expect_contract_failure "the successor applies the original payload under the same handle once without running the job" --held-job-result-check --flaw HoldRetainsJobTicket
           expect_contract_failure "the stale actor turn cannot replace the successor" --public-owner-check --flaw IgnoreLeaseDeadline,CommitDespiteFence
 
       # Both checks break the model on purpose, one flaw at a time. The kernel check runs at the README's and the

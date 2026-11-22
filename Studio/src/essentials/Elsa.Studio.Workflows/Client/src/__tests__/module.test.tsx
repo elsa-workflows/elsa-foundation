@@ -2116,14 +2116,14 @@ describe("workflows module", () => {
 
     await waitForText(container, "Hello World");
     await click(buttonByText(container, "Create workflow"));
-    await waitForText(container, "Create Workflow");
+    await waitForText(document.body, "Create Workflow");
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
     expect(rootCards).toHaveLength(3);
     expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence", "BPMN"]);
 
-    await fill(inputByLabel(container, "Display name"), "Customer onboarding");
-    await fill(textareaByLabel(container, "Description"), "Creates the first customer workflow.");
-    await click(inputByLabel(container, "Sequence"));
+    await fill(inputByLabel(dialog(container), "Display name"), "Customer onboarding");
+    await fill(textareaByLabel(dialog(container), "Description"), "Creates the first customer workflow.");
+    await click(inputByLabel(dialog(container), "Sequence"));
     await click(buttonByText(dialog(container), "Create"));
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -2186,8 +2186,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Hello World");
     await click(buttonByText(container, "Create workflow"));
-    await waitForText(container, "Create Workflow");
-    await fill(inputByLabel(container, "Display name"), "Customer onboarding");
+    await waitForText(document.body, "Create Workflow");
+    await fill(inputByLabel(dialog(container), "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
 
     await waitForText(container, "Review & publish");
@@ -2198,7 +2198,7 @@ describe("workflows module", () => {
 
   it("reveals an intent box, requests a metadata suggestion, and applies it to the form", async () => {
     const { container, unmount, publishSuggestion } = await openCreateDialogWithSuggest();
-    await fill(textareaByLabel(container, "Workflow intent"), "Approve large orders");
+    await fill(textareaByLabel(dialog(container), "Workflow intent"), "Approve large orders");
     await click(buttonByText(dialog(container), "Generate"));
 
     await publishSuggestion({ text: "Sure!\n```json\n{\"name\": \"Order Approval\", \"description\": \"Routes large orders to approvers.\"}\n```" });
@@ -2206,8 +2206,8 @@ describe("workflows module", () => {
     // Non-autopilot result surfaces an Apply button rather than auto-filling.
     await click(buttonByText(dialog(container), "Apply"));
 
-    expect(inputByLabel(container, "Display name")?.value).toBe("Order Approval");
-    expect(textareaByLabel(container, "Description")?.value).toBe("Routes large orders to approvers.");
+    expect(inputByLabel(dialog(container), "Display name")?.value).toBe("Order Approval");
+    expect(textareaByLabel(dialog(container), "Description")?.value).toBe("Routes large orders to approvers.");
 
     await unmount();
   });
@@ -2218,7 +2218,7 @@ describe("workflows module", () => {
 
     await publishSuggestion({ autoApply: true, text: "{\"name\": \"Auto Workflow\", \"description\": \"Created by Autopilot.\"}" });
 
-    expect(inputByLabel(container, "Display name")?.value).toBe("Auto Workflow");
+    expect(inputByLabel(dialog(container), "Display name")?.value).toBe("Auto Workflow");
     expect(buttonByText(dialog(container), "Apply")).toBeNull();
 
     await unmount();
@@ -5001,8 +5001,8 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
     await click(buttonByText(container, "Create workflow"));
-    await waitForText(container, "Create Workflow");
-    await fill(inputByLabel(container, "Display name"), "Placed workflow");
+    await waitForText(document.body, "Create Workflow");
+    await fill(inputByLabel(dialog(container), "Display name"), "Placed workflow");
     await click(buttonByText(dialog(container), "Create"));
     await vi.waitFor(() => expect(definitionPost).toMatchObject({ name: "Placed workflow", folderId: "folder-root" }));
     expect(api.dialogs.prompt).toHaveBeenCalled();
@@ -5851,7 +5851,7 @@ async function openCreateDialogWithSuggest() {
 
   await waitForText(rendered.container, "Hello World");
   await click(buttonByText(rendered.container, "Create workflow"));
-  await waitForText(rendered.container, "Create Workflow");
+  await waitForText(document.body, "Create Workflow");
   // The button reveals the intent field rather than firing a context-free prompt.
   await click(buttonByText(dialog(rendered.container), "Suggest name and description"));
 
@@ -6513,7 +6513,7 @@ function selectByLabel(container: HTMLElement, label: string) {
 }
 
 function dialog(container: HTMLElement) {
-  const element = container.querySelector<HTMLElement>(".wf-dialog");
+  const element = container.querySelector<HTMLElement>(".wf-dialog") ?? document.querySelector<HTMLElement>('form[role="dialog"]');
   if (!element) throw new Error("Dialog not found");
   return element;
 }

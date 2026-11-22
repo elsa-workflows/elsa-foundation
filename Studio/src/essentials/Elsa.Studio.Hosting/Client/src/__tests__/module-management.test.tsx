@@ -468,6 +468,11 @@ describe("module management page", () => {
     expect(retentionPanel?.textContent).toContain("Save retention");
     expect(container.querySelector("[aria-label='Feed name']")).toBeNull();
 
+    const refresh = container.querySelector<HTMLButtonElement>("button[aria-label='Refresh package feeds']");
+    expect(refresh?.title).toBe("Refresh package feeds");
+    const deleteFeedButton = container.querySelector<HTMLButtonElement>("button[aria-label='Delete studio-local-packages']");
+    expect(deleteFeedButton?.dataset.variant).toBe("danger");
+
     const editFeedButton = container.querySelector("[aria-label='Edit studio-local-packages']");
     expect(editFeedButton).toBeTruthy();
 
@@ -481,8 +486,8 @@ describe("module management page", () => {
     expect(container.querySelector<HTMLInputElement>("[aria-label='Directory path']")?.value).toBe("packages");
     expect(container.textContent).toContain("Save feed");
 
-    const closeEditFeedButton = container.querySelector("[aria-label='Close edit feed']");
-    expect(closeEditFeedButton).toBeTruthy();
+    const closeEditFeedButton = container.querySelector<HTMLButtonElement>("button[aria-label='Close edit feed']");
+    expect(closeEditFeedButton?.title).toBe("Close edit feed");
 
     flushSync(() => {
       closeEditFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
