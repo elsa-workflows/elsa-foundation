@@ -214,6 +214,12 @@ if (args.Contains("--metadata-envelope-check"))
     await MetadataEnvelopeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--event-byte-budget-check"))
+{
+    var failed = false;
+    await EventByteBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--event-identity-check"))
 {
     var failed = false;
