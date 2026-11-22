@@ -49,6 +49,7 @@ internal static class Elsa3SwitchSafety
         // This is invalid before a parent can consume it, including beneath Parallel. Keep the check
         // scoped to newly enabled case bodies; existing standalone outcome-only modes are unchanged.
         if (HasInvalidDoneSelection(node)) return node;
+        if (node.EffectiveScriptNativeCompletionAccess) return node;
 
         // Lowering records effective literal/computed selections separately from declared ports. Script-selected Break
         // is not a source BreakSignal, even inside a loop; merely consuming it would change that loop's behavior.
@@ -97,8 +98,13 @@ internal static class Elsa3SwitchSafety
         return null;
     }
 
-    private static bool HasInvalidDoneSelection(Elsa3NodePlan node) =>
-        node.EffectiveScriptInvalidDoneSelection || node.Resolved?.ActivityTypeKey == Switch && node.StructureFields.GetValueOrDefault("mode") is "MatchAny"
-        && node.Slots.Count(slot => slot.SlotName == CaseSlot) > 1
-        && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Label == "Done");
+    private static bool HasInvalidDoneSelection(Elsa3NodePlan node)
+    {
+        if (node.EffectiveScriptInvalidDoneSelection) return true;
+        if (node.Resolved?.ActivityTypeKey != Switch || node.StructureFields.GetValueOrDefault("mode") is not "MatchAny") return false;
+        var possible = node.Slots.Where(slot => slot.SlotName == CaseSlot && !(slot.ConditionProperty is { } key
+            && node.Node.AdditionalProperties.TryGetValue(key, out var value)
+            && Elsa3TypedValues.TryGetLiteral(value, out var literal) && literal == "false")).ToArray();
+        return possible.Any(slot => slot.Label == "Done") && possible.Any(slot => slot.Label != "Done");
+    }
 }

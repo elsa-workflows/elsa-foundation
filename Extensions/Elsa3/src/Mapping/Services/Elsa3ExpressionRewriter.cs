@@ -133,7 +133,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 "Rewrite the expression in the Elsa 3 workflow with JavaScript or an Elsa 4 built-in function, before import.")));
         }
 
-        return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation);
+        return result.WithConversionNotes(analyzer.Warnings, analyzer.AppliedDateInterpretation, analyzer.MayAccessNativeCompletion);
     }
 
     private Elsa3ExpressionRewriteResult RewriteJavaScript(
@@ -858,6 +858,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         public bool HasInvalidLiteralOutcomeSelection { get; private set; }
         public List<string> OutcomeLiterals { get; } = [];
         public bool DeclaresComplete { get; private set; }
+        public bool MayAccessNativeCompletion { get; private set; }
 
         private void RecordOutcomeSetter(CallExpression call, string name)
         {
@@ -1025,6 +1026,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 _functions.Add(function);
             try
             {
+                // A bare native helper reference can be aliased without being a direct host-function call.
+                // The global object also allows computed access to that helper. Record this separately so
+                // newly enabled Switch bodies cannot claim proven outcome safety from setter names alone.
+                if (node is Identifier { Name: "complete" or "globalThis" } identifier && !IsDeclared(identifier.Name))
+                    MayAccessNativeCompletion = true;
                 VisitNode(node);
             }
             finally
@@ -2685,7 +2691,9 @@ public sealed class Elsa3ExpressionRewriteResult
     /// <summary>Whether the converter's date interpretation decided how the expression converted (spec 1223 FR-034).</summary>
     public bool AppliedDateInterpretation { get; private init; }
 
-    internal Elsa3ExpressionRewriteResult WithConversionNotes(IReadOnlyList<Elsa3ExpressionRewriteIssue> warnings, bool appliedDateInterpretation) =>
+    internal bool MayAccessNativeCompletion { get; private init; }
+
+    internal Elsa3ExpressionRewriteResult WithConversionNotes(IReadOnlyList<Elsa3ExpressionRewriteIssue> warnings, bool appliedDateInterpretation, bool mayAccessNativeCompletion) =>
         new(Definition, Issues)
         {
             CompletionValueLost = CompletionValueLost,
@@ -2693,6 +2701,7 @@ public sealed class Elsa3ExpressionRewriteResult
             HasComputedVariableRead = HasComputedVariableRead,
             Warnings = warnings.ToArray(),
             AppliedDateInterpretation = appliedDateInterpretation,
+            MayAccessNativeCompletion = mayAccessNativeCompletion,
         };
 
     public static Elsa3ExpressionRewriteResult SuccessReading(

@@ -381,6 +381,19 @@ public sealed class Elsa3NodeRewriteTests
         else Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    [Fact]
+    public async Task A_proven_false_nested_case_cannot_create_a_Done_co_selection()
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new[]
+        {
+            new { label = "Done", condition = new { expression = new { type = "Literal", value = "true" } } },
+            new { label = "Other", condition = new { expression = new { type = "Literal", value = "false" } } }
+        });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
     [Theory]
     [InlineData("setOutcomes(['Done','Other']);", false)]
     [InlineData("const names=['Done','Other']; setOutcomes(names);", false)]
@@ -394,6 +407,21 @@ public sealed class Elsa3NodeRewriteTests
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
         Assert.Equal(safe, result.Succeeded);
         if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Message.Contains("Done", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("const emit = typeof complete === 'function' ? complete : (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const root = globalThis; const key = 'complete'; const emit = typeof root[key] === 'function' ? root[key] : (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const local = { complete: 42 }; return local.complete;", true)]
+    [InlineData("const globalThis = { complete: 42 }; return globalThis.complete;", true)]
+    [InlineData("return Math.max(1, 2);", true)]
+    public async Task Script_native_completion_aliases_cannot_hide_an_unproven_case_boundary(string script, bool safe)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)), ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", MatchAnyCase(body))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
         else Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 

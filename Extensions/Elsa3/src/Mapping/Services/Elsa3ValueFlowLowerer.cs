@@ -31,7 +31,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             containerVariableIds, memoryAliases, isReusable, inputTypeOf, ancestorScopeNames);
 
     internal IReadOnlyList<Elsa3MigrationDiagnostic> Lower(
-        Action<Elsa3Activity, IReadOnlyList<string>?, bool>? observeScriptOutcomes,
+        Action<Elsa3Activity, IReadOnlyList<string>?, bool, bool>? observeScriptOutcomes,
         Elsa3WorkflowDefinition definition,
         Elsa3MemoryReferenceInventory inventory,
         IReadOnlyDictionary<string, string> diagnosticMetadata,
@@ -619,7 +619,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             : Array.Empty<string>();
         var invalidDone = rewrite.ScriptOutcomes is { } selection && (selection.HasInvalidLiteralSelection
             || selection.HasComputedSelectionSet && effectiveOutcomes.Contains("Done", StringComparer.Ordinal));
-        accessors.ObserveScriptOutcomes?.Invoke(property.Activity, effectiveOutcomes, invalidDone);
+        accessors.ObserveScriptOutcomes?.Invoke(property.Activity, effectiveOutcomes, invalidDone, rewrite.MayAccessNativeCompletion);
         if (rewrite.ScriptOutcomes is { } scriptOutcomes)
             DeclareScriptOutcomes(input, property, possibleOutcomes, scriptOutcomes, diagnostics);
         // The body's variable reads are not arguments: it reads them itself.
@@ -1504,7 +1504,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         /// resolves a script's variable name nearest scope first, so such a name shadows a workflow variable.
         /// </summary>
         public Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>> AncestorScopeNames { get; init; } = _ => [];
-        public Action<Elsa3Activity, IReadOnlyList<string>?, bool>? ObserveScriptOutcomes { get; init; }
+        public Action<Elsa3Activity, IReadOnlyList<string>?, bool, bool>? ObserveScriptOutcomes { get; init; }
     }
 
 }

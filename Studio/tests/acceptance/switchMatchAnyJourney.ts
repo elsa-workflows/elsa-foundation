@@ -78,7 +78,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     const editor = row.getByRole("textbox").first();
     await editor.fill(text); await editor.press("Tab");
   }
-  async function publishAndRun(expected: string[]) {
+  async function publishAndRun(expected: string[], selected: string[]) {
     const response = page.waitForResponse(item => item.request().method() === "POST" && item.url().endsWith("/publish"));
     await page.getByRole("button", { name: "Review & publish", exact: true }).click();
     const review = page.getByRole("dialog", { name: "Publish workflow", exact: true });
@@ -89,10 +89,15 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     const run = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${published.artifactId}/execute`, "POST", { sourceReferenceId: published.sourceReferenceId });
     const instance = `/runtime/workflows/instances/${run.workflowExecutionId}`;
     await expect.poll(async () => (await api<{ instance: { status: string } }>(instance)).instance.status, { timeout: 30_000 }).toBe("Completed");
-    const executions = await api<{ items: { execution: { authoredActivityId: string }; status: string }[] }>(`${instance}/activity-executions`);
-    expect(executions.items.map(item => item.execution.authoredActivityId).sort()).toEqual(["root", "switch", "after", ...expected].sort());
-    expect(executions.items.every(item => item.status === "Completed")).toBe(true);
+    const executions = await api<{ items: { execution: { authoredActivityId: string; status: string; startedAt: string; completedAt: string; outcomeNames: string[] } }[] }>(`${instance}/activity-executions`);
     await info.attach(`run-${expected.length}.json`, { body: JSON.stringify({ published, run, executions }, null, 2), contentType: "application/json" });
+    expect(executions.items.map(item => item.execution.authoredActivityId).sort()).toEqual(["root", "switch", "after", ...expected].sort());
+    expect(executions.items.every(item => item.execution.status === "Completed")).toBe(true);
+    const owner = executions.items.find(item => item.execution.authoredActivityId === "switch")!.execution;
+    const successor = executions.items.find(item => item.execution.authoredActivityId === "after")!.execution;
+    expect(owner.outcomeNames).toEqual(selected);
+    expect(Date.parse(successor.startedAt)).toBeGreaterThanOrEqual(Date.parse(owner.completedAt));
+    for (const id of expected) expect(Date.parse(owner.completedAt)).toBeGreaterThanOrEqual(Date.parse(executions.items.find(item => item.execution.authoredActivityId === id)!.execution.completedAt));
     return published;
   }
   await open();
@@ -130,24 +135,24 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toHaveValue("MatchAny");
   expect(await stored()).toEqual(authored);
   await capture(page, info, "match-any-reopened");
-  await publishAndRun(bodies);
+  await publishAndRun(bodies, ["Approved", "Notify"]);
   await cases().getByRole("combobox", { name: "Match mode", exact: true }).selectOption("MatchFirst");
   const first = await save();
   expect(first.structure!.payload.cases).toEqual(authored.structure!.payload.cases);
   await capture(page, info, "match-first");
-  await publishAndRun([bodies[0]]);
+  await publishAndRun([bodies[0]], ["Approved"]);
   await cases().getByRole("combobox", { name: "Match mode", exact: true }).selectOption("MatchAny");
   await condition(0, false); await condition(1, false);
   await save();
   await capture(page, info, "no-match");
-  await publishAndRun([]);
+  await publishAndRun([], ["Default"]);
   await page.getByRole("button", { name: "Choose Default activity", exact: true }).click();
   await page.getByRole("option", { name: "Write Line Primitives", exact: true }).click();
   await configureBody("fallback");
   await returnToOwner();
   const fallback = (await save()).structure!.payload.default!.nodeId;
   await capture(page, info, "default");
-  const published = await publishAndRun([fallback]);
+  const published = await publishAndRun([fallback], ["Default"]);
   await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&version=${published.definitionVersionId}&backend=legacy`);
   await selectOwner();
   await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeDisabled();
