@@ -117,6 +117,8 @@ describe("native form designer", () => {
 
     const changed = { ...form, name: "Contact updated", description: "For returning suppliers.", fields: [{ ...form.fields[0], label: "Email address" }] };
     expect(parseTaskFormSource(JSON.stringify(changed), form)).toEqual(changed);
+    const optionalNulls = { ...form, fields: [{ ...form.fields[1], controlId: null, configuration: null, help: null, minimum: null, presentation: { display: "radio", trueLabel: "Agree", falseLabel: null, unansweredLabel: null } }] };
+    expect(parseTaskFormSource(JSON.stringify(optionalNulls), form).fields[0].presentation).toEqual({ display: "radio", trueLabel: "Agree" });
     expect(() => parseTaskFormSource(JSON.stringify({ ...form, id: "other" }), form)).toThrow("identifier cannot be changed");
     expect(() => parseTaskFormSource(JSON.stringify({ ...form, version: "5" }), form)).toThrow("system-managed");
     expect(() => parseTaskFormSource(JSON.stringify({ ...form, provider: "other" }), form)).toThrow("system-managed");
