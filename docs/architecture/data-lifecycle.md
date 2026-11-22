@@ -61,6 +61,12 @@ public sealed record RetentionPolicy(
 - **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
 - **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
 
+The in-memory Foundation uses a host-issued Retention Delete with a reserved id derived from the
+tenant, actor reference and terminal selection. The owner reads the configured window at execution.
+`--retention-delete-check` covers a policy extension, a queued delete across caller-key reuse, an
+unresolved re-park and the new Faulted window after expiry. The policy configuration surface,
+retention worker and its rate control retain their K11 cases.
+
 ### Proposed: the qualified delete
 
 > **Counterexample and answer** ([Astra High gate 2 review, B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)). The trace: the projection reports an expired finished run A under caller key K. A is removed. Run B reuses K and finishes, with its retention period still ahead. A delayed retention worker then submits the selected delete by K. The built handler checks only that the row has ended and is not protected, and deletes at the revision it has just loaded (`Control` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)), so it deletes B and its history. A message id derived from A's end revision only deduplicates submissions, and B can end at the same revision. The same creation can also change eligibility: a parked run recovered and ended again, or a policy extended after the selection.

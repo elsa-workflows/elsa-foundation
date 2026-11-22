@@ -32,6 +32,7 @@ internal static class RequestReplies
                 "ResolutionOpen" => "resolution open",
                 "InProgress" => "in progress",
                 "ResolutionUnavailable" => "resolution unavailable",
+                "NotEligible" => "not eligible",
                 "Protected" => "protected",
                 "ProtectionUnavailable" => "protection unavailable",
                 "OperatorUnavailable" => "operator unavailable",

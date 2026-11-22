@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace Kernel.Durable;
 
 public sealed partial class InMemoryStore
@@ -29,9 +31,17 @@ public sealed partial class InMemoryStore
 
     private static string FoundationOperatorKey(string tenant, string id) => tenant + "_" + id;
 
+    internal (OperatorAdmission Outcome, string? Reference) AdmitRetentionDelete(string tenant, string reference, string selection,
+        long? due = null, string? replyTo = null)
+    {
+        var identity = Json.Write(new { tenant, reference, selection });
+        var id = "~retention-" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(identity)));
+        return AdmitFoundationOperator(tenant, reference, null, id, Kinds.Delete, null, due, null, selection, replyTo, retentionDelete: true);
+    }
+
     internal (OperatorAdmission Outcome, string? Reference) AdmitFoundationOperator(string tenant, string? reference, string? callerKey,
         string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo, ParkRecoveryMode? recoverMode = null,
-        IReadOnlyList<string>? recoverHandles = null, string? deleteTarget = null)
+        IReadOnlyList<string>? recoverHandles = null, string? deleteTarget = null, bool retentionDelete = false)
     {
         lock (_gate)
         {
@@ -61,8 +71,11 @@ public sealed partial class InMemoryStore
             if (resolvesPark && !MatchesFoundationSelection(tenant, reference, selection))
                 return (OperatorAdmission.StaleSelection, null);
 
-            var command = new FoundationOperatorCommand(selection) { RecoverMode = recoverMode, RecoverHandles = recoverHandles, DeleteTarget = deleteTarget };
-            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: command) switch
+            var command = new FoundationOperatorCommand(selection)
+            {
+                RecoverMode = recoverMode, RecoverHandles = recoverHandles, DeleteTarget = deleteTarget, RetentionDelete = retentionDelete
+            };
+            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, keyed: retentionDelete, replyTo: replyTo, @operator: command) switch
             {
                 true => (OperatorAdmission.Accepted, reference),
                 false => (OperatorAdmission.Duplicate, reference),

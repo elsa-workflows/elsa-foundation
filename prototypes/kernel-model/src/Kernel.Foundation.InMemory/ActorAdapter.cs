@@ -7,7 +7,7 @@ namespace Kernel.Foundation.InMemory;
 
 /// <summary>Runs a contract actor in the owner's turn. The adapter only stages effects.</summary>
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
-    (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
+    (Durable.Requests Requests, string Node)? local = null, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) : Durable.IActorType
 {
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -90,6 +90,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             var identity = store.FoundationIdentity(deletionTarget.Id, deletionTarget.Creation);
             if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection, requireTerminal: true))
                 return Durable.CreationProtocol.Refuse(input.Actor, deletionTarget, input.Taken, "StaleSelection");
+            if (deletion.RetentionDelete && RetentionRefusal(input, deletionTarget) is { } refusal) return refusal;
         }
         if (message.Operator?.DeleteTarget is not null &&
             (input.Row is not { } intended || !store.MatchesThenDeleteTarget(intended, message)))
@@ -215,6 +216,20 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (!IsChildNotice(input.Row, message))
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidChildCompletion");
         return null;
+    }
+
+    private Durable.TurnOutcome? RetentionRefusal(Durable.TurnInput input, Durable.InstanceRow row)
+    {
+        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.Operation : row.ParkRecovery?.Deletion?.Operation;
+        if (operation is not null)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InProgress", operation);
+
+        var checkpoint = store.FoundationTurnHeader(row);
+        if (checkpoint.Park is null && checkpoint.Terminal is { } mark &&
+            retentionWindow?.Invoke(Header(checkpoint)) is { Ticks: >= 0 } window &&
+            (decimal)input.Services.Now - mark.At >= (long)window.TotalMilliseconds)
+            return null;
+        return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
     }
 
     private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
