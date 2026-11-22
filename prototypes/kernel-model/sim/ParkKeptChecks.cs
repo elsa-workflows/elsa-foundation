@@ -118,6 +118,7 @@ internal static class ParkKeptChecks
         await CheckUnarmedParkExpiry(check);
         await CheckFiniteParkExpiry(manual: false, check);
         await CheckFiniteParkExpiry(manual: true, check);
+        await CheckDrainAfterInterruptedOpen(check);
         await CheckRecalledExpiryDuringRecovery(ended: false, check);
         await CheckRecalledExpiryDuringRecovery(ended: true, check);
         await CheckDelayedExpiry(interrupt: true, check);
@@ -1787,6 +1788,90 @@ internal static class ParkKeptChecks
         check(probe.Notices is [{ Final: false, Status: Contract.ActorStatus.Faulted }, { Final: true, Status: Contract.ActorStatus.Faulted }],
             $"{label}: the parent receives its provisional Park notice and one final Faulted notice");
 
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task CheckDrainAfterInterruptedOpen(Action<bool, string> check)
+    {
+        const long initial = 1_701_400_042_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("interrupted-drain");
+        var ingress = new InMemoryIngress(store, new Requests("interrupted-drain"), "interrupted-drain",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
+        var first = Owner("interrupted-first", 32);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(owner);
+        var parked = Read();
+        var id = parked.Row.Id;
+        await ingress.SendAsync(scope, target, "suffix", "advance");
+        await Pump(owner);
+        var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+        var command = Json.Write(new Contract.OperatorCommand(selection));
+        probe.PausePages = true;
+        await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, command);
+        await Step(first);
+        await Step(first);
+        var recovering = Read();
+        if (recovering.Row.ParkRecovery is not { Cursor: null } recovery ||
+            store.Messages.GetValueOrDefault(recovery.Control) is not { Message.Due: { } due } old || due <= now)
+        {
+            check(false, "P-4(1) recovery issues an authentic delayed drain before its first page");
+            return;
+        }
+        await ingress.SendAsync(scope, target, "terminate", Contract.Kinds.Terminate, command);
+        await Step(first);
+        var terminated = Read();
+        var interrupted = terminated.Row.ParkDiscard is { Kind: ParkClearKind.Terminate, Cursor: null } termination &&
+            terminated.Row.ParkRecovery is null && terminated.Park == parked.Park &&
+            terminated.Row.Creation == parked.Row.Creation && !store.Messages.ContainsKey(recovery.Control) &&
+            terminated.Row.ParkResolutionGeneration > recovering.Row.ParkResolutionGeneration &&
+            recovery.Control != termination.Control && store.Messages.ContainsKey(termination.Control) &&
+            store.Messages.Values.Any(row => row.KeptBy is not null && row.Message.Id == "suffix");
+        check(interrupted, "P-4(1) Terminate opens a new generation of the same Park and recalls the previous key");
+        if (!interrupted) return;
+
+        var epoch = first.Fences.Single().Epoch;
+        await owner.DisposeAsync();
+        probe.PausePages = false;
+        now = due;
+        var delivered = new List<InboxKey>();
+        var cold = Owner("interrupted-next", 1, row => delivered.Add(row.Message.InboxKey));
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        // Replay the recalled control at its due time without replacing its key, mark or generation.
+        store.Messages.Add(recovery.Control, new(old.Message, old.Seq, 0) { Scoped = true, Tenant = scope.Tenant });
+        var currentKey = terminated.Row.ParkDiscard!.Control;
+        await Step(cold);
+        var refused = cold.Fences.SingleOrDefault()?.Epoch > epoch && delivered.SequenceEqual([recovery.Control]) &&
+            !store.Messages.ContainsKey(recovery.Control) && Read() == terminated && store.Messages.ContainsKey(currentKey) &&
+            store.Messages.Values.Any(row => row.KeptBy is not null && row.Message.Id == "suffix");
+        check(refused, "P-4(1) a successor drops the prior generation without advancing the termination cursor " +
+            $"(cleared {Read().Row.ParkDiscard?.Cleared})");
+        if (!refused) return;
+
+        await Pump(successor);
+        check(Read() is { Park: null, Row: { Status: InstanceStatus.Cancelled, ParkDiscard: null } } &&
+            store.Messages.Values.All(row => row.KeptBy is null && row.Message.Kind != Kinds.Drain) &&
+            probe.RecoveredArrivals == 0 &&
+            store.Journal.Values.Count(row => row.Entries.Contains("\"terminated\"", StringComparison.Ordinal)) == 1,
+            "P-4(1) the current generation completes once without offering the retained input");
+
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        Worker Owner(string node, int pollLimit, Action<Stored>? observe = null) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, PollLimit = pollLimit, Horizon = TimeSpan.Zero, OnObservedDelivery = observe });
         async Task Step(Worker worker)
         {
             await worker.PollAsync();
