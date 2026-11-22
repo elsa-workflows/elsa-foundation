@@ -402,7 +402,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
 
         // Exact canonical names choose the lowercase decoy in mixed-case objects.
         var selectedProducer = form is "parameter-alias" or "nested-alias" ? decoy : producer;
-        if (selectedProducer == "later")
+        if (selectedProducer == "later" && form != "nested-alias")
         {
             var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
                 handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));

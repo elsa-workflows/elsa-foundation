@@ -46,7 +46,7 @@ public sealed partial class ActivityDraftTestRunServiceTests
                      Json("null"), null
                  })
         {
-            var refusal = await Assert.ThrowsAsync<Elsa.Activities.Design.Api.Models.ActivityAuthoringException>(() => fixture.Service.StartAsync(Request(changed)));
+            var refusal = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => fixture.Service.StartAsync(Request(changed)));
             Assert.Equal("activity.test-run.idempotency-mismatch", refusal.ErrorCode);
         }
     }
