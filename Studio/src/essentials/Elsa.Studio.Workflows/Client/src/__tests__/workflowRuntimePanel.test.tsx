@@ -69,7 +69,7 @@ describe("Runtime panel information hierarchy", () => {
     expect(body.hidden).toBe(true);
     flushSync(() => disclosure.click());
     expect(body.hidden).toBe(false);
-    const copy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy Artifact ID"]')!;
+    const copy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy Executable ID"]')!;
     flushSync(() => copy.click());
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(receipt.artifactId));
   });

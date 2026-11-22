@@ -657,12 +657,12 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable
   apply receipt", "Outcome unknown"; `WF/Elsa3ReusableImportPage.tsx`: "Side-effect-free analysis",
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
-- [ ] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
+- [x] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
   snapshot…" (`WF/workflow-editor/AttachedRunActivityInspector.tsx:25`); "Loading authoritative
-  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2`
-- [ ] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
+  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2` (PR #5300)
+- [x] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
   ("Artifact ID", "Artifact hash", "Artifact: {id}" filter chip). Use "Executable" for all of them
-  (D9). `needs: G1`
+  (D9). `needs: G1` (PR #5300)
 - [ ] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
   `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`).
 - [ ] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected".

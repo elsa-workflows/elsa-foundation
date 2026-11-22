@@ -1518,7 +1518,7 @@ describe("Activity Definitions experience", () => {
     click(buttonByText(rendered.container, "Revoke"));
     await waitForText(rendered.container, "Visible inbound uses");
     expect(rendered.container.textContent).toContain("7/18/2026");
-    expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and Runtime Evidence are preserved");
+    expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and run data are preserved");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Type semantic version"), "1.0.0");
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Security response");
     click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));

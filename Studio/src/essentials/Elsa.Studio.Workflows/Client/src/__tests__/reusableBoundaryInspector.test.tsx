@@ -441,7 +441,7 @@ describe("ReusableBoundaryInspector", () => {
     );
   });
 
-  it("shows attempt-specific canonical incidents, bookmarks, causal links, and distinct value evidence states", async () => {
+  it("shows attempt-specific canonical incidents, bookmarks, causal links, and distinct value data states", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(4, [
       hierarchyItem("attempt-2", 4, {

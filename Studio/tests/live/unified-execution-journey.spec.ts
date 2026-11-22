@@ -3,7 +3,7 @@ import { signIn, startTestRun } from "./support/journey";
 
 // Opt in with an owned, saved Sequence containing Event -> Fault. The event must expose the ordinary
 // Test Run delivery editor. This starts two harmless Test Runs through the UI; it never publishes,
-// intercepts a response, changes capture policy, or invents execution evidence.
+// intercepts a response, changes capture policy, or invents run data.
 const definitionId = process.env.ELSA_UNIFIED_EXECUTION_DEFINITION_ID;
 test.use({ contextOptions: { reducedMotion: "reduce" } });
 test.skip(!process.env.ELSA_STUDIO_URL || !definitionId,

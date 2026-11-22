@@ -14,7 +14,7 @@ import type { WorkflowDraft } from "../workflowTypes";
 import { vi } from "vitest";
 
 // This syntax fixture isolates host glue. Its engine/history are real; installed adapter/evaluator and
-// actual adapter→publish→run evidence have their own owning tests and permanent composed journeys.
+// actual adapter→publish→run data have their own owning tests and permanent composed journeys.
 function Surface(props: StudioExpressionEditorProps) {
   return <StudioCodeEditor ariaLabel="Insertion expression" profile={props.context.surface === "expanded" ? "expanded" : "compact"}
     document={{ uri: props.context.document!.uri, language: "javascript", value: String(props.value), version: props.context.document!.sourceVersion }}
