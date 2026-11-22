@@ -171,6 +171,7 @@ describe("Activity Definitions experience", () => {
     const search = rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!;
     change(search, "invoice");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice"))).toBe(true));
+    await waitForText(rendered.container, "Invoice evaluator");
 
     const row = rendered.container.querySelector<HTMLElement>(".ad-collection-row")!;
     expect(rendered.container.querySelector("[role='columnheader']:last-child")?.textContent).toBe("Actions");
