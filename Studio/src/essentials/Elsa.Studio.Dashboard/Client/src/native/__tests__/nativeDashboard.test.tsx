@@ -18,7 +18,7 @@ const mounted: (() => void)[] = [];
 function render(content: React.ReactNode) { const container = document.createElement("div"); document.body.append(container); const root = createRoot(container); flushSync(() => root.render(content)); mounted.push(() => { flushSync(() => root.unmount()); container.remove(); }); return container; }
 function click(container: HTMLElement, text: string) { const button = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(button).toBeDefined(); flushSync(() => button!.click()); }
 function changeLimit(container: HTMLElement, value: string) {
-  const input = [...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.querySelector("input")!;
+  const input = ([...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.control as HTMLInputElement);
   const disclosure = input.closest("details");
   if (disclosure && !disclosure.open) flushSync(() => disclosure.querySelector("summary")!.click());
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
@@ -64,7 +64,7 @@ describe("question query authoring hierarchy", () => {
     definition.query.time = { field: "createdAt", from: "", to: "", timeZone: "UTC", weekStart: "monday" };
     const view = render(<QueryControls definition={definition} datasets={[timedDataset]} disabled={false} onChange={vi.fn()} problems={[{ code: "required", path: "query.time.from", message: "Choose a start time." }]} validationAttempt={1} />);
     const timeSection = [...view.querySelectorAll<HTMLDetailsElement>("details")].find(item => item.dataset.queryPath === "query.time");
-    const start = [...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.querySelector("input");
+    const start = ([...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.control as HTMLInputElement | null);
 
     await waitUntil(() => timeSection?.open === true && document.activeElement === start);
     expect(timeSection?.open).toBe(true);
@@ -123,7 +123,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     api.backend.http.putJson = put as typeof api.backend.http.putJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
     await waitUntil(() => view.textContent?.includes("Metadata-only save preserves its query") === true);
-    const name = [...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    const name = ([...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Safe metadata update");
     flushSync(() => name.dispatchEvent(new Event("input", { bubbles: true })));
     click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
@@ -223,7 +223,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="create" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
     await beginNamedDraft("Source preview");
     await waitUntil(() => Boolean(view.querySelector(".named-query-controls option[value='acme.processing']")));
-    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { selected.value = dataset.id; selected.dispatchEvent(new Event("change", { bubbles: true })); });
     click(view, "Preview question"); await waitUntil(() => view.textContent?.includes("retail") === true);
     expect(view.querySelector("tbody td:nth-child(2)")?.textContent).toBe("41");

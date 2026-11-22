@@ -18,7 +18,7 @@ function button(container: HTMLElement, text: string) {
   expect(target).toBeDefined(); flushSync(() => target!.click());
 }
 function value(container: HTMLElement, label: string) {
-  return [...container.querySelectorAll("label")].find(item => item.textContent === label)!.querySelector("input")!;
+  return ([...container.querySelectorAll("label")].find(item => item.textContent === label)!.control as HTMLInputElement);
 }
 function edit(input: HTMLInputElement | HTMLTextAreaElement, text: string) {
   const disclosure = input.closest("details");
@@ -194,7 +194,7 @@ describe("native editor host navigation guards", () => {
     expect(container.textContent).not.toContain("Query form");
     expect([...container.querySelectorAll("summary")].find(item => item.textContent?.includes("Description"))?.parentElement?.hasAttribute("open")).toBe(false);
     edit(value(container, "Name"), "An independent native question");
-    const datasetSelect = container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const datasetSelect = container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { datasetSelect.value = "acme"; datasetSelect.dispatchEvent(new Event("change", { bubbles: true })); });
     expect(container.querySelector(".named-preview")).not.toBeNull();
     button(container, "Save question"); await waitUntil(() => typeof fail === "function");
@@ -237,7 +237,7 @@ describe("retained native editor Activity lifecycle", () => {
     await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Keep this new local question");
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     edit(value(editor.container, "Maximum result rows/groups"), "7");
     button(editor.container, "Preview question"); await waitUntil(() => editor.container.textContent?.includes("PREVIOUS-PROTECTED-ROW") === true);
@@ -302,7 +302,7 @@ describe("retained native editor Activity lifecycle", () => {
     await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Created while this tab is parked");
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     button(editor.container, "Save question"); await waitUntil(() => typeof finish === "function");
     expect(navigation("probe", "/questions/new")).toBe(false); expect(confirm).not.toHaveBeenCalled();
@@ -414,7 +414,7 @@ describe("current native disclosure and reuse review", () => {
     const editor = mount(api, controller, "edit", vi.fn(), "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Working dashboard") === true);
     edit(value(editor.container, "Name"), "Keep my local dashboard name");
-    const size = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+    const size = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
     flushSync(() => { size.value = "wide"; size.dispatchEvent(new Event("change", { bubbles: true })); });
     editor.hide(); revoked = true; editor.reveal();
     await waitUntil(() => editor.container.textContent?.includes("Its reference is preserved during layout saves") === true);
@@ -484,12 +484,12 @@ describe("current native disclosure and reuse review", () => {
     const editor = mount(api, controller, "edit", vi.fn(), "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Its reference is preserved during layout saves") === true);
     if (dirty) {
-      const select = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+      const select = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
       flushSync(() => { select.value = "wide"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     }
     editor.hide(); disclosed = true; editor.reveal();
     await waitUntil(() => editor.container.textContent?.includes("Settings for question 1") === true);
-    const select = [...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.querySelector("select")!;
+    const select = ([...editor.container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Size for question 1"))!.control as HTMLSelectElement);
     expect(select.value).toBe(dirty ? "wide" : "medium");
     expect(reviewStudioNavigation("/dashboards/d1/edit", "/dashboards/d1/edit", "probe")).toBe(!dirty);
   });
@@ -501,7 +501,7 @@ describe("current native disclosure and reuse review", () => {
     }) as typeof api.backend.http.getJson;
     const editor = mount(api, controller); await waitUntil(() => editor.container.textContent?.includes("Parts of this definition are withheld") === true);
     button(editor.container, "Replace unavailable query"); await waitUntil(() => editor.container.querySelector(".named-query-controls") !== null);
-    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { select.value = "acme"; select.dispatchEvent(new Event("change", { bubbles: true })); });
     edit(value(editor.container, "Maximum result rows/groups"), "9");
     editor.hide(); disclosed = true; editor.reveal(); await waitUntil(() => controller.snapshots.size === 1);

@@ -163,8 +163,8 @@ Candidates reported by source readers. Confirm the need before building any of t
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
-- [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
-  `DASH/native/NamedDashboards.tsx:524`).
+- [x] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
+  `DASH/native/NamedDashboards.tsx:524`). (PR #5313)
 
 ## Phase 1: cross-cutting items
 
@@ -547,7 +547,7 @@ the designer header is a documented exception.
 - [x] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
   `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
-- [ ] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`.
+- [x] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`. (PR #5313)
 - [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
@@ -719,9 +719,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
 - [ ] **E4** (#5234) [seen] Forms: the editor is wrapped in a page card; "Publish" and "Cancel" sit inside the
   card while "Back to forms" sits above it; the page title is 12px.
-- [ ] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
+- [x] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
-  reads "1 loaded questions".
+  reads "1 loaded questions". (PR #5313)
 - [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
   secondary ones into an overflow menu. (PR #5292)
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
@@ -736,10 +736,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`FormsPage.tsx:161`).
 - [x] **E12** (#5242) [source] Collection footers word counts differently: "N shown" (PR #5299)
   (`ConnectionsPage.tsx:157`) against "N agents".
-- [ ] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
+- [x] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
-  `NamedDashboards.tsx:522–524`.
-- [ ] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval.
+  `NamedDashboards.tsx:522–524`. (PR #5313)
+- [x] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval. (PR #5313)
 - [ ] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
   `WorkflowRunHealthWidget.tsx:147`.
