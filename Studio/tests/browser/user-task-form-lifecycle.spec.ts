@@ -5,7 +5,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
 
-  const rows = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr");
+  const rows = page.getByRole("table", { name: "Task forms" }).locator("tbody tr");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Contact form");
   await expect(rows.first()).toContainText("Published · v1");
@@ -35,7 +35,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await expect(page.locator("output.user-task-version-value")).toHaveText("Published · version 2");
   await expect(page.getByText("No draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Reusable task forms" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Task forms" })).toBeVisible();
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Published · v2");
 
@@ -62,7 +62,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
 test("opens a reusable form when a non-control table cell is clicked", async ({ page }) => {
   await page.goto("/form-designer.html");
 
-  const row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("cell", { name: "contact", exact: true }).click();
 
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeVisible();
@@ -70,7 +70,7 @@ test("opens a reusable form when a non-control table cell is clicked", async ({ 
 
 test("supports keyboard row navigation and keeps the action menu isolated from the row", async ({ page }) => {
   await page.goto("/form-designer.html");
-  const row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   const actions = row.getByRole("button", { name: /^Actions for / });
 
   await actions.click();
@@ -87,7 +87,7 @@ test("supports keyboard row navigation and keeps the action menu isolated from t
 
 test("cancelling form deletion leaves the row and sends no request", async ({ page }) => {
   await page.goto("/form-designer.html");
-  const rows = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr");
+  const rows = page.getByRole("table", { name: "Task forms" }).locator("tbody tr");
 
   page.once("dialog", dialog => dialog.dismiss());
   await rows.first().getByRole("button", { name: /^Actions for / }).click();
@@ -101,7 +101,7 @@ test("cancelling form deletion leaves the row and sends no request", async ({ pa
 
 test("confirmed deletion uses the current revision and removes the row only after success", async ({ page }) => {
   await page.goto("/form-designer.html");
-  const rows = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr");
+  const rows = page.getByRole("table", { name: "Task forms" }).locator("tbody tr");
 
   page.once("dialog", dialog => dialog.accept());
   await rows.first().getByRole("button", { name: /^Actions for / }).click();
@@ -115,13 +115,13 @@ test("confirmed deletion uses the current revision and removes the row only afte
 
 test("omits deletion for older backends and read-only users while preserving view access", async ({ page }) => {
   await page.goto("/form-designer.html?delete-unavailable");
-  let row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  let row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("button", { name: /^Actions for / }).click();
   await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
 
   await page.goto("/form-designer.html?read-only");
-  row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("button", { name: /^Actions for / }).click();
   await expect(page.getByRole("menuitem", { name: "View", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
@@ -131,7 +131,7 @@ test("omits deletion for older backends and read-only users while preserving vie
 
 test("retains the row and reports a failed deletion", async ({ page }) => {
   await page.goto("/form-designer.html?delete-fails");
-  const rows = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr");
+  const rows = page.getByRole("table", { name: "Task forms" }).locator("tbody tr");
 
   page.once("dialog", dialog => dialog.accept());
   await rows.first().getByRole("button", { name: /^Actions for / }).click();
@@ -143,7 +143,7 @@ test("retains the row and reports a failed deletion", async ({ page }) => {
 
 test("uses the advertised legacy forms contract for published form access and direct publication", async ({ page }) => {
   await page.goto("/form-designer.html?legacy");
-  const rows = page.getByRole("region", { name: "Reusable forms" }).getByRole("table", { name: "Reusable task forms" }).locator("tbody tr");
+  const rows = page.getByRole("region", { name: "Reusable forms" }).getByRole("table", { name: "Task forms" }).locator("tbody tr");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Contact form");
 

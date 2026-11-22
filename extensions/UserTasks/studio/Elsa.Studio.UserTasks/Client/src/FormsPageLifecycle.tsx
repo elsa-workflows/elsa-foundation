@@ -273,7 +273,8 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
         currentIdRef.current = id; persistedIdRef.current = id;
         baseFormRef.current = saved; savedFormRef.current = saved;
         setCurrentId(id); setIsNew(false); setCurrentDefinition(definition); setBaseForm(saved); setSavedForm(saved);
-        setForm(current => current.id === id ? current : { ...current, id });
+        // Adopt the server representation only while the submitted edits are still current.
+        setForm(current => formSignature(current) === formSignature(snapshot) ? saved : { ...current, id });
         setAutosaveStatus("saved");
         upsertDefinition(definition);
         if (source === "manual" && notificationGeneration === visibilityGeneration.current) api.notifications?.notify({ level: "success", title: "Draft saved", message: "You can reopen and continue editing this draft." });
@@ -334,13 +335,6 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
 
   const backToForms = () => { void leaveEditor(true); };
   useEffect(() => {
-    // Replace the collection-only working copy with its shareable address after the first stable save.
-    if (navigate && !formId && currentId && editing && !isNew && !busy && !savingDraft && !hasDirtyContent && !hasUnappliedSource)
-      navigate(formsPath(currentId));
-  }, [navigate, formId, currentId, editing, isNew, busy, savingDraft, hasDirtyContent, hasUnappliedSource]);
-
-
-  useEffect(() => {
     if (!editing || editorLoading || !autosaveEnabled || autosavePaused || busy || readOnly || hasUnappliedSource || !form.id.trim() || !hasDirtyContent || formSignature(form) === lastRequestedSignature.current) {
       if (autosaveStatus === "pending") setAutosaveStatus(savedForm ? "saved" : "idle");
       return;
@@ -372,6 +366,12 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
       window.removeEventListener("beforeunload", preventNavigation);
     };
   }, [editing, hasDirtyContent, hasUnappliedSource, savingDraft]);
+
+  useEffect(() => {
+    if (!navigate || formId || !currentId || !editing || isNew || busy || savingDraft || hasDirtyContent || hasUnappliedSource) return;
+    setEditing(false);
+    navigate(formsPath(currentId));
+  }, [navigate, formId, currentId, editing, isNew, busy, savingDraft, hasDirtyContent, hasUnappliedSource]);
 
   const publish = async () => {
     if (busy || readOnly || unappliedSourceRef.current) return;

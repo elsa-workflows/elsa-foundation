@@ -196,7 +196,7 @@ for (const width of [360, 1440]) {
     await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(row).toContainText("Published · Draft");
-    await expect(page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByRole("table", { name: "Task forms" }).locator("tbody tr")).toHaveCount(1);
   });
 }
 
@@ -223,7 +223,7 @@ test("unapplied form source stays put when Versions is selected", async ({ page 
 
 test("legacy form pages add history without adding duplicate collection rows", async ({ page }, info) => {
   await page.goto("/user-tasks-ux.html?forms&backend=legacy&legacy-forms");
-  const table = page.getByRole("table", { name: "Reusable task forms" });
+  const table = page.getByRole("table", { name: "Task forms" });
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByText("2 forms shown", { exact: true })).toBeVisible();
   const newsletter = table.getByRole("row").filter({ hasText: "newsletter-signup" });

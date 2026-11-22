@@ -19,18 +19,18 @@ for (const appearance of ["light", "dark"] as const) {
       await palette.getByRole("button", { name: "Yes / no", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
       await properties.getByRole("textbox", { name: "Label", exact: true }).fill("Accept terms");
+      await properties.getByText("Validation", { exact: true }).click();
       await properties.getByLabel("Display", { exact: true }).selectOption("radio");
-      await properties.getByText("Answer labels", { exact: true }).click();
       await properties.getByRole("textbox", { name: "Yes label", exact: true }).fill("I agree");
       await properties.getByRole("textbox", { name: "No label", exact: true }).fill("I decline");
       await properties.getByRole("textbox", { name: "Unanswered label", exact: true }).fill("No response");
-      await properties.getByText("Validation", { exact: true }).click();
       await properties.getByRole("checkbox", { name: "Must be checked", exact: true }).check();
 
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand controls panel", exact: true }).click();
       await palette.getByRole("button", { name: "Choice", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
       await properties.getByRole("textbox", { name: "Label", exact: true }).fill("Channel");
+      await properties.getByText("Choices", { exact: true }).click();
       await properties.getByLabel("Display", { exact: true }).selectOption("radio");
       await properties.getByRole("textbox", { name: "Choices, one per line", exact: true }).fill("Email\nPhone");
 

@@ -81,7 +81,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   const who = await (await page.request.get(`${base}/runtime/user-task-identity`)).json();
   const suffix = String(Date.now()); const formId = `studio-form-${suffix}`; const title = `Studio authored approval ${suffix}`;
   await page.goto("/user-tasks/forms?backend=legacy");
-  await expect(page.getByRole("table", { name: "Reusable task forms", exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Task forms", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("forms-list.png") });
   await page.getByRole("button", { name: "New form", exact: true }).first().click();
   await confirmNewResource(page, "form", "New form");

@@ -116,9 +116,9 @@ test("primary Forms editor previews, publishes immutably, and starts the next dr
   await page.goto("/form-designer.html");
   await page.getByRole("button", { name: "New form", exact: true }).click();
   await confirmNewResource(page, "form", "New form");
-  await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Form ID is required.", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Form ID is required.", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Form ID" }).fill("new-contact");
   await page.getByRole("textbox", { name: "Name" }).fill("New contact");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
@@ -134,7 +134,7 @@ test("primary Forms editor previews, publishes immutably, and starts the next dr
   expect(JSON.stringify(requests[0].body)).toContain('"key":"text1"');
   expect(JSON.stringify(requests[0].body)).not.toContain("recipient@example.test");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("table", { name: "Reusable task forms" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Task forms" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "new-contact" });
   await expect(row).toContainText("Published · v1");
   await row.getByRole("button", { name: "New contact", exact: true }).click();

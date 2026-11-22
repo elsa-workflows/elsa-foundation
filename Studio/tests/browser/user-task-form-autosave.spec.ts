@@ -9,7 +9,7 @@ const draftRequests = async (page: import("@playwright/test").Page) => page.eval
 
 test("enables autosave by default without writing when opening an unchanged publication", async ({ page }) => {
   await page.goto("/form-designer.html");
-  const row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
 
@@ -47,7 +47,7 @@ test("debounces draft saves, serializes revisions, and keeps editing during a sl
 
 test("pauses autosave after an error and allows an explicit retry", async ({ page }) => {
   await page.goto("/form-designer.html?save-fails");
-  const row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   const name = page.getByRole("textbox", { name: "Name", exact: true });
@@ -88,7 +88,7 @@ test("Cancel flushes pending autosave changes before leaving the editor", async 
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Saved on cancel");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Reusable task forms" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Task forms" })).toBeVisible();
   expect(await draftRequests(page)).toHaveLength(1);
   await expect(page.getByRole("row").filter({ hasText: "flush-on-leave" })).toContainText("Draft");
 });
@@ -109,7 +109,7 @@ test("unapplied JSON source edits are not autosaved", async ({ page }) => {
 
 test("guards host and browser navigation while there are unsaved local edits", async ({ page }) => {
   await page.goto("/form-designer.html");
-  const row = page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr").first();
+  const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
   await row.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Pending change");
