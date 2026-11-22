@@ -1699,6 +1699,8 @@ internal static class ParkKeptChecks
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, restartAtOpen: true);
         await CheckRetryConsumedTicket(check, mode: Contract.RecoverMode.Retry);
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry);
+        await CheckRetryConsumedTicket(check, timed: true, missingDeadline: true);
+        await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1911,13 +1913,15 @@ internal static class ParkKeptChecks
     }
 
     private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
-        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false, Contract.RecoverMode mode = Contract.RecoverMode.RetryAll)
+        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false,
+        Contract.RecoverMode mode = Contract.RecoverMode.RetryAll, bool missingDeadline = false)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
         var probe = new ParkedJobProbe("continued", timed)
         {
-            BeforeDeadline = endBeforeTicket ? (releaseTicketBeforeEnd ? 0 : 1) : timed ? InMemoryStore.ParkPageLimit - 1 : 0,
+            BeforeDeadline = endBeforeTicket ? (releaseTicketBeforeEnd ? 0 : 1) :
+                timed && !missingDeadline ? InMemoryStore.ParkPageLimit - 1 : 0,
             EndBeforeTicket = endBeforeTicket
         };
         var scheduler = new HeldScheduler();
@@ -1933,12 +1937,15 @@ internal static class ParkKeptChecks
         var row = store.Instances.Values.Single();
         var key = InboxKey.Ticket(row.Id, "background", row.Creation);
         store.Messages[key].Attempts = 3;
+        var originalDeadline = store.Messages.Values.SingleOrDefault(item => item.Message.Kind == Kinds.JobDeadline);
+        if (missingDeadline) originalDeadline!.Attempts = 3;
         await owner.DisposeAsync();
         scheduler.RunAll();
 
         var pairedPages = 0;
         var largestPage = 0;
         var releasedTicket = false;
+        var rearmedDeadline = false;
         var pendingCallbacks = endBeforeTicket ? new HeldScheduler() : null;
         var successor = new Worker("retry-poison-ticket", 0, store, new ActorAdapter(store, probe), new WorkerOptions
         {
@@ -1946,6 +1953,9 @@ internal static class ParkKeptChecks
             JobScheduler = pendingCallbacks,
             OnPreparedCheckpoint = (turn, _, _) =>
             {
+                if (turn.FoundationRecoveryJobs?.DeadlineRearms is [var deadline])
+                    rearmedDeadline = deadline.Envelope.InboxKey == originalDeadline?.Message.InboxKey &&
+                        deadline.Envelope.Due == originalDeadline?.Message.Due && deadline.DoneSequence is null;
                 if (turn.FoundationRecoveryPage is not { } page) return;
                 largestPage = Math.Max(largestPage, page.Writes().Count());
                 if (page.Rows.Any(item => item.PairedJobInput?.Cursor.Key == key)) pairedPages++;
@@ -1963,15 +1973,17 @@ internal static class ParkKeptChecks
         {
             now += endBeforeTicket ? 500 : 1500;
             for (var pass = 0; pass < 24; pass++) await Pump(next);
-            var deadline = store.Messages.Values.Single(message => message.Message.Kind == Kinds.JobDeadline);
-            if (endBeforeTicket)
-                check(deadline is { Done: false } && deadline.Message.Due > now &&
+            if (missingDeadline)
+                check(!store.Messages.ContainsKey(originalDeadline!.Message.InboxKey),
+                    "the real parked worker consumed the exhausted deadline before the timed ticket could be retried");
+            else if (endBeforeTicket)
+                check(originalDeadline is { Done: false } && originalDeadline.Message.Due > now &&
                     store.Messages.Values.Any(item => item is { Message.Kind: "end-before-job", KeptBy: ParkKeepReason.Arrived } &&
                         item.Seq < store.Messages[key].Seq),
                     "a large earlier arrival is kept while the timed ticket is poisoned and its absolute deadline is still ahead");
             else
-                check(deadline.KeptBy == ParkKeepReason.Arrived && deadline.Seq < store.Messages[key].Seq &&
-                    store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < deadline.Seq) ==
+                check(originalDeadline is { KeptBy: ParkKeepReason.Arrived } && originalDeadline.Seq < store.Messages[key].Seq &&
+                    store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < originalDeadline.Seq) ==
                         InMemoryStore.ParkPageLimit - 1,
                     "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
         }
@@ -2009,8 +2021,12 @@ internal static class ParkKeptChecks
             check(probe is { Entries: 0, Completions: 1, JobError: "timeout" } &&
                 store.Instances[row.Id] is { ParkRecovery: null, Jobs: null } && !store.Messages.ContainsKey(key),
                 "the split-page deadline settles the same job generation once without entering the expired driver");
-            check(pairedPages == 1 && largestPage == InMemoryStore.ParkPageLimit - 1,
-                "the deadline and its later ticket share one fenced page within the row limit");
+            if (missingDeadline)
+                check(rearmedDeadline && pairedPages == 0,
+                    $"{mode} re-arms the absent deadline at its original absolute time and exact key");
+            else
+                check(pairedPages == 1 && largestPage == InMemoryStore.ParkPageLimit - 1,
+                    "the deadline and its later ticket share one fenced page within the row limit");
             return;
         }
         var open = store.Instances[row.Id];

@@ -26,9 +26,10 @@ public sealed partial class InMemoryStore
                 actor.Row.ParkDiscard is not null || !_foundationParks.TryGetValue(actor.Binding.Address, out var park))
                 return null;
             var row = FoundationParkDelivery(actor.Row, key);
-            var timer = IsFoundationTimerKey(actor.Row, key);
+            var disposition = ReadTimerDispositions(actor.Row.ParkTimerDispositions).GetValueOrDefault(FoundationTimerDigest(key));
+            var timer = IsFoundationTimerKey(actor.Row, key, row, disposition);
             if (row is not { Done: true, KeptBy: not null } &&
-                !(timer && ReadTimerDispositions(actor.Row.ParkTimerDispositions).ContainsKey(FoundationTimerDigest(key))))
+                !(timer && disposition != 0))
                 return null;
 
             var (id, scope, match) = key;
@@ -90,8 +91,8 @@ public sealed partial class InMemoryStore
                 var row = FoundationParkDelivery(actor, cursor.Key);
                 if (cursor.Seq == 0)
                 {
-                    if (!IsFoundationTimerKey(actor, cursor.Key)) return null;
                     var disposition = dispositions.GetValueOrDefault(FoundationTimerDigest(cursor.Key));
+                    if (!IsFoundationTimerKey(actor, cursor.Key, row, disposition)) return null;
                     if (disposition != 0 && !timers.Contains(cursor.Key)) return null;
                     if (disposition == SuppressedTimer)
                     {
@@ -151,14 +152,20 @@ public sealed partial class InMemoryStore
         return true;
     }
 
-    private bool IsFoundationTimerKey(InstanceRow row, InboxKey key)
+    private bool IsFoundationTimerKey(InstanceRow row, InboxKey key, MessageRow? stored, byte disposition)
     {
         var origin = CreationProtocol.Origin(row.Id, row.Creation);
         if (key.Scope != InboxKey.Issued("").Scope || key.Match is not null ||
             key.Id.Length != origin.Length + 66 || key.Id[origin.Length] != '#' ||
             !key.Id.StartsWith(origin, StringComparison.Ordinal)) return false;
         var id = key.Id[(origin.Length + 1)..];
-        return IsTimerHandleShape(id) && TimerHandleMatches(origin, id);
+        if (!IsTimerHandleShape(id)) return false;
+        if (TimerHandleMatches(origin, id) || disposition != 0) return true;
+        // Pre-tag handles still have the stored issued timer as creation evidence before sweep.
+        return stored?.Message is { ActorAuthored: true, Due: not null, Start: null, ReplyTo: null } message &&
+            message.Id == id && message.Sender == row.Id && message.SenderCreation == row.Creation &&
+            !message.Kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+            message.Kind is not (Kinds.Start or Kinds.Event or Kinds.JobFinished or Kinds.ChildFinished);
     }
 
     private static bool IsTimerHandleShape(string? id) => id is { Length: 65 } && id[0] == '~' &&

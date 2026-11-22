@@ -132,8 +132,12 @@ public sealed partial class InMemoryStore
 
     private void ApplyFoundationTimerOpen(ParkTimerOpen? timers)
     {
-        if (timers is null) return;
-        foreach (var rearm in timers.Rearms)
+        if (timers is not null) ApplyFoundationRearms(timers.Rearms);
+    }
+
+    private void ApplyFoundationRearms(IReadOnlyList<ParkTimerRearm> rearms)
+    {
+        foreach (var rearm in rearms)
         {
             var key = rearm.Envelope.InboxKey;
             if (rearm.DoneSequence.HasValue) Messages.Remove(key);

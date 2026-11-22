@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 internal sealed record ParkJobRecipe(string Key, string? Arguments, long? Deadline);
 internal sealed record ParkJobOpen(IReadOnlyList<ParkJobRecipe> Recipes, string? Registry, long? NextGeneration,
     string? Restarts, IReadOnlyList<InboxKey> Pending, IReadOnlyList<InboxKey> Retained,
-    IReadOnlyList<InboxKey> RecalledDeadlines, IReadOnlyList<Message> Writes, long Bytes);
+    IReadOnlyList<InboxKey> RecalledDeadlines, IReadOnlyList<ParkTimerRearm> DeadlineRearms, IReadOnlyList<Message> Writes, long Bytes);
 
 public sealed partial class InMemoryStore
 {
@@ -42,12 +42,13 @@ public sealed partial class InMemoryStore
                 return null;
             if (!registeredKeys.Contains(recipe.Key) && !Charge(EncodeRecipe(recipe, nextGeneration, out _))) return null;
         }
-        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], bytes);
+        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], [], bytes);
         var markedSelection = retry?.Marked.Select(row => row.Key).ToHashSet();
         var discardedResults = new HashSet<string>(StringComparer.Ordinal);
         var pending = new List<InboxKey>();
         var retained = new List<InboxKey>();
         var recalls = new List<InboxKey>();
+        var deadlineRearms = new List<ParkTimerRearm>();
         var writes = new List<Message>();
         var previousRestarts = ReadJobRestarts(row.ParkRestartedJobs);
         var restarts = new SortedDictionary<string, long>(StringComparer.Ordinal);
@@ -68,7 +69,8 @@ public sealed partial class InMemoryStore
                 if (ticket is { Done: false }) pending.Add(ticketKey);
                 else retained.Add(ticketKey);
                 retained.Add(resultKey);
-                var oldTimer = ticket?.Message.Payload is not null ? ticket.Message.Read<JobTicket>().Timer : null;
+                var existingTicket = ticket?.Message.Payload is not null ? ticket.Message.Read<JobTicket>() : null;
+                var oldTimer = existingTicket?.Timer;
                 oldTimer ??= DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
                 var oldDeadline = InboxKey.Issued(oldTimer);
 
@@ -88,7 +90,27 @@ public sealed partial class InMemoryStore
                 var restart = ticket is not { Done: false } && !keepsResult && !retriesTicket;
                 if (!restart)
                 {
-                    retained.Add(oldDeadline);
+                    if (retriesTicket && existingTicket?.Deadline is { } deadline)
+                    {
+                        if (existingTicket.Timer is null) return null;
+                        var stored = Messages.GetValueOrDefault(oldDeadline);
+                        if (stored is not null && (stored.Message.Kind != Kinds.JobDeadline || stored.Message.Due != deadline ||
+                            stored.Message.Target.Id != row.Id || stored.Message.TargetCreation != row.Creation ||
+                            stored.Message.Sender != row.Id || stored.Message.SenderCreation != row.Creation ||
+                            stored.Message.Read<JobDeadline>().Key != key)) return null;
+                        if (stored is { Done: false } or { KeptBy: ParkKeepReason.Arrived } ||
+                            stored is { KeptBy: ParkKeepReason.Consumed } &&
+                            (mode == ParkRecoveryMode.RetryAll || markedSelection?.Contains(oldDeadline) == true))
+                            retained.Add(oldDeadline);
+                        else
+                        {
+                            var reissued = new Message(oldTimer, new(row.Id), Kinds.JobDeadline, Json.Write(new JobDeadline(key)), row.Id,
+                                Due: deadline, TargetCreation: row.Creation, SenderCreation: row.Creation).AsIssued().AsKernelTicket();
+                            if (!Charge(reissued.Payload!) || !FoundationMetadataLimits.FitsComposed(reissued)) return null;
+                            deadlineRearms.Add(new(reissued, stored?.Seq));
+                        }
+                    }
+                    else retained.Add(oldDeadline);
                     if (previousRestarts.TryGetValue(digest, out var restarted) && restarted == generation)
                         restarts.Add(digest, generation);
                     continue;
@@ -117,7 +139,7 @@ public sealed partial class InMemoryStore
         }
         registered.RemoveAll(job => discardedResults.Contains(job.Key));
         return writes.Any(message => !FoundationMetadataLimits.FitsComposed(message)) ? null :
-            new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, retained, recalls, writes, bytes);
+            new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, retained, recalls, deadlineRearms, writes, bytes);
 
         string EncodeRecipe(ParkJobRecipe recipe, long generation, out string? timerId)
         {
@@ -165,6 +187,7 @@ public sealed partial class InMemoryStore
     private void ApplyFoundationJobOpen(ParkJobOpen? jobs)
     {
         if (jobs is null) return;
+        ApplyFoundationRearms(jobs.DeadlineRearms);
         foreach (var message in jobs.Writes) Messages.Add(message.InboxKey, new(message, ++_seq, 0));
     }
 }

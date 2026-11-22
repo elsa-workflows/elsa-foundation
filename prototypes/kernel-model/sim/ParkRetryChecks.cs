@@ -9,6 +9,7 @@ internal static class ParkRetryChecks
     {
         await CheckScopeAndAtomicity(check);
         await CheckBoundsAndInterruption(check);
+        await CheckLegacyTimerSelection(check);
     }
 
     private static async Task CheckScopeAndAtomicity(Action<bool, string> check)
@@ -163,6 +164,44 @@ internal static class ParkRetryChecks
             "a later explicit retry uses its own selection after the rollback of the prior one");
     }
 
+    private static async Task CheckLegacyTimerSelection(Action<bool, string> check)
+    {
+        var fixture = new Fixture();
+        var (store, _, first) = await fixture.ActivateAsync();
+        await using var owner = first;
+        var parked = (await fixture.StartParkedAsync(owner, "legacy-retry", "timer"))!;
+        var origin = CreationProtocol.Origin(parked.Row.Id, parked.Row.Creation);
+        var legacy = store.MessageHandle("legacy-timer");
+        var key = InboxKey.Issued(origin + "#" + legacy);
+        var envelope = new Message(legacy, new(parked.Row.Id), "observation", "legacy timer", parked.Row.Id,
+            Due: fixture.Now, TargetCreation: parked.Row.Creation, SenderCreation: parked.Row.Creation)
+        { ActorAuthored = true, StorageId = key.Id }.AsIssued();
+        store.Messages[key] = new(envelope, 901, 0) { Done = true, KeptBy = ParkKeepReason.Consumed };
+        fixture.Timer = new(legacy, envelope.Kind, envelope.Payload, envelope.Due!.Value);
+        var originalHandle = fixture.Handle(parked, key);
+        fixture.Seed(parked, new("interrupt-suppression", 0), "trip", ParkKeepReason.Arrived, "trip");
+        fixture.FaultNextTrip = true;
+        await fixture.Resume(parked, "suppress-legacy");
+        await fixture.Finish(owner);
+        var interrupted = store.Instances[parked.Row.Id];
+        var suppressed = interrupted is { Status: InstanceStatus.Faulted, ParkRecovery: null, ParkTimerDispositions: not null } &&
+            store.Messages[key] is { Done: true, KeptBy: null, Message.KeepUntil: not null };
+        check(suppressed, "the legacy timer has a retained suppression after the real recovery is interrupted");
+        if (!suppressed) return;
+
+        var afterSweep = store.Messages[key].Message.KeepUntil!.Value + 1;
+        await owner.DisposeAsync();
+        fixture.AdvanceTo(afterSweep);
+        await store.SweepAsync();
+        var (_, _, next) = await fixture.ActivateAsync();
+        await using var replacement = next;
+        var admitted = await fixture.Retry(parked, "select-swept-legacy", [originalHandle]);
+        await fixture.Finish(replacement);
+        check(admitted.Outcome == Contract.AdmissionOutcome.Accepted && fixture.Delivered.SequenceEqual(["legacy timer"]) &&
+            store.Instances[parked.Row.Id] is { Status: InstanceStatus.Running, ParkRecovery: null },
+            "the original handle retries the swept legacy timer once using retained creation evidence");
+    }
+
     private sealed record Parked(Contract.BoundScope Scope, Contract.Target.Ref Target, InstanceRow Row,
         InMemoryStore.FoundationParkMark Park, string Selection);
 
@@ -176,6 +215,7 @@ internal static class ParkRetryChecks
         internal long Now { get; private set; } = Initial;
         internal List<string> Delivered { get; } = [];
         internal bool FaultNextTrip { get; set; }
+        internal Contract.TimerSpec? Timer { get; set; }
 
         internal Fixture()
         {
@@ -227,6 +267,12 @@ internal static class ParkRetryChecks
             _ingress.SendAsync(parked.Scope, parked.Target, operation, Contract.Kinds.Recover,
                 Json.Write(new Contract.OperatorCommand(parked.Selection, Contract.RecoverMode.Retry, handles)));
 
+        internal ValueTask<Contract.Admission> Resume(Parked parked, string operation) =>
+            _ingress.SendAsync(parked.Scope, parked.Target, operation, Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(parked.Selection)));
+
+        internal void AdvanceTo(long now) => Now = now;
+
         internal async Task Step(Worker worker, Parked parked)
         {
             await worker.PollAsync();
@@ -265,7 +311,8 @@ internal static class ParkRetryChecks
         }
 
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            new(Timer is { } timer ? [timer] : [], [], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

@@ -113,6 +113,12 @@ public static class StoreBatchRules
                 if (jobs.Writes.Any(job => !changed.Add(job.InboxKey)))
                     throw new StoreException(Failure.Definite, "Each restarted job write must have a distinct full key.");
             }
+            if (turn.FoundationRecoveryJobs is { DeadlineRearms.Count: > 0 } jobDeadlines)
+            {
+                changed ??= [];
+                if (jobDeadlines.DeadlineRearms.Any(deadline => !changed.Add(deadline.Envelope.InboxKey)))
+                    throw new StoreException(Failure.Definite, "Each re-armed job deadline must have a distinct full key.");
+            }
             var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Writes().ToArray();
             if (rows is null) continue;
             changed ??= [];

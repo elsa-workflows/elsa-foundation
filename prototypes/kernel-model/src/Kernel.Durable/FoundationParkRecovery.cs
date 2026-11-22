@@ -113,6 +113,7 @@ public sealed partial class InMemoryStore
         if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
             checkedJobs.Restarts != jobs.Restarts || !checkedJobs.Pending.SequenceEqual(jobs.Pending) ||
             !checkedJobs.Retained.SequenceEqual(jobs.Retained) || !checkedJobs.RecalledDeadlines.SequenceEqual(jobs.RecalledDeadlines) ||
+            !checkedJobs.DeadlineRearms.Select(WithoutAuthority).SequenceEqual(jobs.DeadlineRearms.Select(WithoutAuthority)) ||
             !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
             throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
         var subscriptions = PlanFoundationSubscriptions(previous, binding.Tenant, subscriptionRecipes, checkedJobs.Bytes);
@@ -122,10 +123,13 @@ public sealed partial class InMemoryStore
         if (!turn.Consumed.SequenceEqual(recalls)) throw InvalidDrain();
         foreach (var message in jobs.Writes)
             if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
+        if (jobs.DeadlineRearms.Any(rearm => !rearm.Envelope.HasIssuedTicket)) throw InvalidDrain();
         if (expiry is null) return null;
         if (now >= expiry.At)
             throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
         return (expiry.At, false);
+
+        static ParkTimerRearm WithoutAuthority(ParkTimerRearm row) => row with { Envelope = row.Envelope.WithoutTicketAuthority() };
     }
 
     private void ValidateRecoveryInterruption(TurnCommit turn, InstanceRow previous, IReadOnlyDictionary<int, long> epochs)
