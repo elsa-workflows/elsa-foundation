@@ -16,6 +16,45 @@ public sealed class EtlHttpPageCacheTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "elsa-etl-http-page-cache-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public async Task Equivalent_pages_share_a_value_hash_and_keep_each_pages_original_bytes()
+    {
+        var admission = Admission("raw-pages", new("tenant-a", "raw-pages"));
+        var firstBytes = ValidBody();
+        var secondBytes = Encoding.UTF8.GetBytes("""{ "next":"cursor-1", "records":[{ "name":"\u0041da", "id":1 }] }""");
+        var cache = Cache(admission);
+        var first = await cache.PublishAsync(0, Request(), FirstAttempt, 1, ReceivedAt, firstBytes);
+        var secondRequest = new EtlHttpRequest("shard-a", "cursor-1");
+        var second = await cache.PublishAsync(1, secondRequest, SecondAttempt, 2, ReceivedAt.AddMinutes(1), secondBytes);
+        Assert.Equal(first.Descriptor.Body.ContentHash, second.Descriptor.Body.ContentHash);
+        Assert.NotEqual(first.Descriptor.Body.Key, second.Descriptor.Body.Key);
+        Assert.Equal(firstBytes, (await cache.ReadAsync(0, Request()))!.RawBody.ToArray());
+        Assert.Equal(secondBytes, (await cache.ReadAsync(1, secondRequest))!.RawBody.ToArray());
+        Assert.Equal(firstBytes.Length, first.Descriptor.Body.ByteLength);
+        Assert.Equal(secondBytes.Length, second.Descriptor.Body.ByteLength);
+    }
+
+    [Fact]
+    public async Task Concurrent_equivalent_captures_return_the_winning_bytes_and_provenance()
+    {
+        var admission = Admission("raw-race", new("tenant-a", "raw-race"));
+        var firstBytes = ValidBody();
+        var secondBytes = Encoding.UTF8.GetBytes("""{ "next":"cursor-1", "records":[{ "name":"\u0041da", "id":1 }] }""");
+        var cache = Cache(admission);
+        var results = await Task.WhenAll(
+            cache.PublishAsync(0, Request(), FirstAttempt, 1, ReceivedAt, firstBytes).AsTask(),
+            cache.PublishAsync(0, Request(), SecondAttempt, 2, ReceivedAt.AddMinutes(1), secondBytes).AsTask());
+        var winner = (await cache.ReadAsync(0, Request()))!;
+        Assert.All(results, result =>
+        {
+            Assert.Equal(winner.Descriptor, result.Descriptor);
+            Assert.Equal(winner.Provenance, result.Provenance);
+            Assert.Equal(winner.RawBody.ToArray(), result.RawBody.ToArray());
+            Assert.Equal(result.RawBody.Length, result.Descriptor.Body.ByteLength);
+        });
+        Assert.Equal(winner.Provenance.AttemptId == FirstAttempt.ToString("N") ? firstBytes : secondBytes, winner.RawBody.ToArray());
+    }
+
+    [Fact]
     public async Task Reopens_verified_raw_page_and_keeps_body_descriptor_distinct_from_manifest()
     {
         var admission = Admission("cache-reopen", new EtlScope("tenant-a", "partition-a"));
@@ -27,7 +66,7 @@ public sealed class EtlHttpPageCacheTests : IDisposable
 
         Assert.NotNull(reopened);
         Assert.Equal(body.Length, first.Descriptor.Body.ByteLength);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant(), first.Descriptor.Body.ContentHash);
+        Assert.Equal(Elsa.Serialization.Core.JsonHashInput.HashUtf8(body), first.Descriptor.Body.ContentHash);
         Assert.Equal(body, await File.ReadAllBytesAsync(Path.Combine(_root, first.Descriptor.Body.Key)));
         Assert.Equal(1, first.Descriptor.RecordCount);
         Assert.Equal("cursor-1", first.Descriptor.NextContinuation);
@@ -118,8 +157,9 @@ public sealed class EtlHttpPageCacheTests : IDisposable
     {
         var admission = Admission("cache-body-only", new EtlScope("tenant-a", "body-only"));
         var body = ValidBody();
-        var bodyHash = Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant();
-        var bodyIdentity = "etl-http-page-body-v1:" + bodyHash;
+        var bodyHash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(body);
+        var pageIdentity = EtlRuntimeIdentity.ConnectorHttpPageId(admission, 0, PageSequence, Request());
+        var bodyIdentity = "etl-http-page-body-v2:" + pageIdentity + ":" + FirstAttempt.ToString("N") + ":1:" + bodyHash;
         var bodyStore = new FileChunkStore(".json");
         var chunk = await bodyStore.PublishAsync(_root, bodyIdentity, body.Length,
             (stream, ct) => stream.WriteAsync(body, ct));
@@ -253,10 +293,12 @@ public sealed class EtlHttpPageCacheTests : IDisposable
 
         Assert.NotEqual(ManifestPath(scopeA, Request()), ManifestPath(scopeB, Request()));
         Assert.NotEqual(ManifestPath(scopeA, Request()), ManifestPath(sourcePinB, Request()));
-        Assert.Equal(first.Descriptor.Body, second.Descriptor.Body);
-        Assert.Equal(first.Descriptor.Body, third.Descriptor.Body);
+        Assert.Equal(first.Descriptor.Body.ContentHash, second.Descriptor.Body.ContentHash);
+        Assert.Equal(first.Descriptor.Body.ContentHash, third.Descriptor.Body.ContentHash);
+        Assert.NotEqual(first.Descriptor.Body.Key, second.Descriptor.Body.Key);
+        Assert.NotEqual(first.Descriptor.Body.Key, third.Descriptor.Body.Key);
         Assert.Equal(3, Directory.GetFiles(_root, "*.page").Length);
-        Assert.Single(Directory.GetFiles(_root, "*.json"));
+        Assert.Equal(3, Directory.GetFiles(_root, "*.json").Length);
     }
 
     [Fact]

@@ -42,8 +42,8 @@ internal static class RulesNativeBoundary
     }
 
     public static string RunId(RuleScope scope, string workflowId, string activityId) =>
-        "rules-" + RuleRecordCodec.Hash(JsonSerializer.SerializeToUtf8Bytes(
-            new { Format = "rules-native-run-v1", Scope = scope, WorkflowId = workflowId, ActivityId = activityId }, Options));
+        "rules-" + Elsa.Serialization.Core.JsonHashInput.Hash(
+            new { Format = "rules-native-run-v1", Scope = scope, WorkflowId = workflowId, ActivityId = activityId });
 
     public static string StimulusHash(RunRulesRequest request) =>
         RuleRecordCodec.Hash(RuleRecordCodec.ScopeBytes(new(request.Scope, request.RunId)));
@@ -145,14 +145,14 @@ internal static class RulesNativeBoundary
     public static bool HasInvalidRoundLimit(RunRulesRequest request) => request.MaxRounds is <= 0 or > RuleLimits.MaxRounds;
 
     public static string InvalidDeliveryId(RunRulesRequest request, RuleNativeResultAddress address) =>
-        "rules-invalid-" + RuleRecordCodec.Hash(JsonSerializer.SerializeToUtf8Bytes(
-            new { Request = request, Destination = address, Code = InvalidRoundLimit }, Options));
+        "rules-invalid-" + Elsa.Serialization.Core.JsonHashInput.Hash(
+            new { Request = request, Destination = address, Code = InvalidRoundLimit });
 
     public static string DeliveryDeduplicationKey(RuleNativeResultAddress address, string deliveryId) =>
         $"{address.WorkflowExecutionId}:bookmark-resume:{address.BookmarkId}:{address.StimulusType}:{address.StimulusHash}:{deliveryId}";
 
     public static string TerminalMarker(RunRulesCompletion completion, RuleTerminalResult result) =>
-        "rules.terminal.v1:" + RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(completion.DeliveryId, completion.Destination, result));
+        "rules.terminal.v1:" + RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(completion.DeliveryId, completion.Destination, result));
 
     public static InvalidDataException Invalid() => new("The frozen Rules native invocation or completion is invalid or unsupported.");
 }

@@ -308,7 +308,7 @@ internal static class RulesCompiledPublicationFixture
             new ActivityNodeStructure(
                 Sequence.StructureKind,
                 Sequence.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure([rules, afterRules]))));
+                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure([rules, afterRules]), Elsa.Serialization.Core.JsonBaseline.Options)));
         return new WorkflowDefinitionState([], sequence, [], [], null);
     }
 

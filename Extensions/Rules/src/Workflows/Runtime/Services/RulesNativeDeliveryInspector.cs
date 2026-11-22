@@ -196,7 +196,7 @@ internal sealed class RulesNativeDeliveryInspector(
                 return false;
 
             var delivery = RuleRecordCodec.DeliveryBytes(envelope.DeliveryId, address, envelope.Result);
-            return RuleRecordCodec.Hash(delivery) == envelope.CanonicalPayloadSha256 &&
+            return RuleRecordCodec.JsonHash(delivery) == envelope.CanonicalPayloadSha256 &&
                    expectedFingerprint.Sha256.Length == 64;
         }
         catch (Exception exception) when (IsMalformed(exception))
@@ -414,7 +414,7 @@ internal sealed class RulesNativeDeliveryInspector(
 
     private static string ParentTerminalIdentity(WorkflowExecutionState parent, string partition, DateTimeOffset completedAt)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new
+        return "rules-parent-terminal-v1:" + Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             Version = 1,
             parent.WorkflowExecutionId,
@@ -428,7 +428,6 @@ internal sealed class RulesNativeDeliveryInspector(
             Status = parent.Status.ToString(),
             CompletedAtUtcTicks = completedAt.UtcDateTime.Ticks
         });
-        return "rules-parent-terminal-v1:" + RuleRecordCodec.Hash(bytes);
     }
 
     private static bool IsMalformed(Exception exception) =>

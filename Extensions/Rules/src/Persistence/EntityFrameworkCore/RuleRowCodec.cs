@@ -52,7 +52,7 @@ internal static class RuleRowCodec
             var deliveryId = DeliveryId(terminalId);
             row.DeliveryId64 = deliveryId;
             row.DeliveryPayloadJson = Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(deliveryId, destination, result));
-            row.DeliveryPayloadSha25664 = RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(deliveryId, destination, result));
+            row.DeliveryPayloadSha25664 = RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(deliveryId, destination, result));
         }
     }
 

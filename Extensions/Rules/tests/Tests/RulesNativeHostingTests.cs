@@ -46,7 +46,7 @@ public sealed class RulesNativeHostingTests : IAsyncLifetime
             .CreateAsync(new(RulesNativeDeliveryTestFixture.Partition)))
         {
             var found = await probe.ServiceProvider.GetRequiredService<RulesNativeDeliveryInspector>()
-                .InspectAsync(native.Invocation.Identity, new(RuleRecordCodec.Hash(RuleRecordCodec.InvocationBytes(native.Invocation))),
+                .InspectAsync(native.Invocation.Identity, new(RuleRecordCodec.JsonHash(RuleRecordCodec.InvocationBytes(native.Invocation))),
                     native.Envelope, CancellationToken.None);
             Assert.NotNull(found.Bookmark);
         }

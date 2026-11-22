@@ -50,7 +50,7 @@ public sealed class RuleDeliveryStoreTests : IAsyncLifetime
         Assert.Equal(lease.DeliveryId, envelope.DeliveryId);
         Assert.Equal(invocation.NativeDestination, envelope.Destination);
         Assert.Equal(RuleTerminalKind.Cancelled, envelope.Result.Kind);
-        Assert.Equal(RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes(envelope.DeliveryId,
+        Assert.Equal(RuleRecordCodec.JsonHash(RuleRecordCodec.DeliveryBytes(envelope.DeliveryId,
             envelope.Destination, envelope.Result)), envelope.CanonicalPayloadSha256);
         await using var db = fixture.Contexts.CreateDbContext();
         var row = await db.Runs.AsNoTracking().SingleAsync();

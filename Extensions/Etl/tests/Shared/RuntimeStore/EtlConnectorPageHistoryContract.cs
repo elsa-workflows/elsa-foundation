@@ -90,8 +90,12 @@ public abstract partial class EtlRuntimeStoreContract
         var position = Assert.IsType<EtlConnectorHttpPosition>(recovered.Position);
         Assert.Equal(first, position.Request.Continuation);
         Assert.Equal(second, position.Page!.NextContinuation);
-        if (escapedBase64)
-            Assert.True(System.Text.Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write<EtlConnectorPosition>(position)) > 512 * 1024);
+        var written = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(position);
+        var empty = position with { Request = position.Request with { Continuation = "" }, Page = position.Page with { NextContinuation = "" } };
+        var actualBytes = System.Text.Encoding.UTF8.GetByteCount(written);
+        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(first) + System.Text.Encoding.UTF8.GetByteCount(second),
+            actualBytes - System.Text.Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write<EtlConnectorPosition>(empty)));
+        Assert.InRange(actualBytes, 1, 512 * 1024);
     }
 
     [SkippableTheory]

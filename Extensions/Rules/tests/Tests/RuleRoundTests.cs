@@ -100,7 +100,7 @@ public class RuleRoundTests
     {
         var artifact = RulesCodec.CreateArtifact(Witness());
         var padded = Encoding.UTF8.GetBytes(" " + Encoding.UTF8.GetString(artifact.CanonicalBytes.Span));
-        var hash = RuleRecordCodec.Hash(padded);
+        var hash = RuleRecordCodec.JsonHash(padded);
         Assert.Throws<InvalidDataException>(() => RulesCodec.ReadArtifact(new(1, "rules:" + hash, hash, padded)));
     }
 
@@ -181,7 +181,7 @@ public class RuleRoundTests
     {
         var input = Input(Witness(), Facts("seed"));
         var bytes = Encoding.UTF8.GetBytes(json);
-        var hash = RuleRecordCodec.Hash(bytes);
+        var hash = RuleRecordCodec.JsonHash(bytes);
         var malformed = new RuleArtifactSnapshot(1, "rules:" + hash, hash, bytes);
         var next = new RuleRoundInput(input.Identity, malformed, input.Implementation, input.Facts, input.MaxRounds, input.ModelRevision);
         Assert.Equal(RuleValidationDisposition.Invalid,
@@ -212,7 +212,7 @@ public class RuleRoundTests
         var unsigned = new RuleRoundReceipt(identity ?? source.Identity, source.ImplementationPinHash,
             additions ?? source.AddedFacts, firings ?? source.FiringEvidence, new string('0', 64));
         return new(unsigned.Identity, unsigned.ImplementationPinHash, unsigned.AddedFacts, unsigned.FiringEvidence,
-            RuleRecordCodec.Hash(RuleRecordCodec.ReceiptBytes(unsigned)));
+            RuleRecordCodec.JsonHash(RuleRecordCodec.ReceiptBytes(unsigned)));
     }
 
 }

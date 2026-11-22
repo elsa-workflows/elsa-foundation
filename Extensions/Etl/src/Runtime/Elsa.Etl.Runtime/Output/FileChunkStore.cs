@@ -153,8 +153,11 @@ internal sealed class FileChunkStore : IFileChunkPublisher
                 // A competing attempt may have published the same effect. Never overwrite it,
                 // and compare real bytes, not a stale sidecar or the filename alone.
                 var existing = await ReadDescriptorAsync(finalPath, key, maxBytes, cancellationToken);
-                if (existing != candidate)
+                if (existing != candidate ||
+                    await ReadDescriptorAsync(finalPath, key, maxBytes, cancellationToken, hashJson: false) !=
+                    await ReadDescriptorAsync(stagingPath, key, maxBytes, cancellationToken, hashJson: false))
                     throw new EtlEffectException("etl.effect-conflict", "A published ETL effect has conflicting content.");
+                return existing;
             }
 
             return candidate;
@@ -194,7 +197,7 @@ internal sealed class FileChunkStore : IFileChunkPublisher
     [DllImport("libc", EntryPoint = "link", SetLastError = true)]
     private static extern int Link([MarshalAs(UnmanagedType.LPUTF8Str)] string existingPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath);
 
-    private static async ValueTask<EtlChunk> ReadDescriptorAsync(string path, string key, long maxBytes, CancellationToken ct)
+    private async ValueTask<EtlChunk> ReadDescriptorAsync(string path, string key, long maxBytes, CancellationToken ct, bool hashJson = true)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
@@ -202,6 +205,9 @@ internal sealed class FileChunkStore : IFileChunkPublisher
             throw new EtlEffectException("etl.effect-conflict", "A published ETL effect exceeds its permitted size.");
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        // Only the feature-owned single-document format is JSON. Source JSONL may deliberately retain
+        // malformed records, and CSV, index and page-manifest files have byte-oriented protocols.
+        using var json = hashJson && _extension == ".json" ? new MemoryStream() : null;
         var buffer = new byte[4096];
         long length = 0;
         while (true)
@@ -212,9 +218,20 @@ internal sealed class FileChunkStore : IFileChunkPublisher
             if (count > maxBytes - length)
                 throw new EtlEffectException("etl.effect-conflict", "A published ETL effect exceeds its permitted size.");
             hash.AppendData(buffer.AsSpan(0, count));
+            if (json is not null) await json.WriteAsync(buffer.AsMemory(0, count), ct);
             length += count;
         }
 
-        return new EtlChunk(key, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(), length);
+        try
+        {
+            var contentHash = json is null
+                ? Convert.ToHexStringLower(hash.GetHashAndReset())
+                : Elsa.Serialization.Core.JsonHashInput.HashUtf8(json.GetBuffer().AsMemory(0, checked((int)json.Length)));
+            return new EtlChunk(key, contentHash, length);
+        }
+        catch (System.Text.Json.JsonException exception)
+        {
+            throw new EtlEffectException("etl.effect-conflict", "A published ETL JSON object is invalid.", exception);
+        }
     }
 }

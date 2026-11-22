@@ -30,7 +30,7 @@ public sealed record RuleWorkflowProgramPin
             throw new ArgumentOutOfRangeException(nameof(vocabularyCount));
         _ = new RuleInvocationFingerprint(sourceSha256);
         if (artifact.ArtifactId != "rules:" + artifact.Sha256 ||
-            RuleRecordCodec.Hash(artifact.CanonicalBytes.Span) != artifact.Sha256)
+            RuleRecordCodec.JsonHash(artifact.CanonicalBytes.Span) != artifact.Sha256)
             throw new InvalidDataException("The published Rules artifact does not match its identity.");
         _ = RuleRecordCodec.PinHash(implementation);
         FormatVersion = formatVersion;

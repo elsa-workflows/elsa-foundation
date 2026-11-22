@@ -211,7 +211,7 @@ internal sealed class EtlFilePreparer
         long maxBytes,
         CancellationToken cancellationToken)
     {
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 1,
             SnapshotFormatVersion,
@@ -367,7 +367,7 @@ internal sealed class EtlFilePreparer
     }
 
     private static string SourceIndexIdentity(EtlInputSnapshots snapshots, string pipelineHash) =>
-        JsonSerializer.Serialize(new
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 1,
             SourceIndexFormatVersion,

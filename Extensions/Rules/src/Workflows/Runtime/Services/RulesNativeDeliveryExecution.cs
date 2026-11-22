@@ -39,7 +39,7 @@ internal sealed class RulesNativeDeliveryExecution(
         if (found.Disposition != RuleRunReadDisposition.Found || found.View is not { } view ||
             view.Identity != lease.Identity || view.TerminalId != envelope.Result.TerminalId ||
             view.TerminalKind != envelope.Result.Kind || view.Status != StatusFor(envelope.Result.Kind) ||
-            envelope.CanonicalPayloadSha256 != RuleRecordCodec.Hash(
+            envelope.CanonicalPayloadSha256 != RuleRecordCodec.JsonHash(
                 RuleRecordCodec.DeliveryBytes(envelope.DeliveryId, envelope.Destination, envelope.Result)))
             throw RulesNativeBoundary.Invalid();
 

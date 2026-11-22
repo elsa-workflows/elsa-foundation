@@ -208,7 +208,7 @@ internal sealed class EtlConnectorPreparer
         EtlRabbitMqSource queue, long lookupBytes, Action<IEtlRabbitMqReceipt> received, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-input-snapshot",
@@ -282,7 +282,7 @@ internal sealed class EtlConnectorPreparer
     private async ValueTask<EtlChunk> PublishInputSnapshotAsync(EtlConnectorRunAdmission admission,
         PinnedFileBinding pin, long maxBytes, IFileChunkPublisher publisher, CancellationToken cancellationToken)
     {
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-input-snapshot",
@@ -324,7 +324,7 @@ internal sealed class EtlConnectorPreparer
         EtlSqlSource sql, long? watermarkFloor, CancellationToken cancellationToken)
     {
         var revision = admission.Bindings.Source.Revision;
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-input-snapshot",
@@ -356,7 +356,7 @@ internal sealed class EtlConnectorPreparer
         if (source.ByteLength == 0)
             throw new EtlConnectorPreparationFailure(new EtlPreparationDiagnostic("etl.source-header-missing"));
 
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-csv-source-index",
@@ -406,7 +406,7 @@ internal sealed class EtlConnectorPreparer
         string sourcePinHandle, string expectedSourceHash, EtlChunk source, CancellationToken cancellationToken)
     {
         // Unlike CSV there is no header, so an empty snapshot is a valid zero-record input.
-        var identity = JsonSerializer.Serialize(new
+        var identity = Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 2,
             Kind = "connector-jsonl-source-index",

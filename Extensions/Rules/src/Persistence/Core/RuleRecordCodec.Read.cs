@@ -44,7 +44,7 @@ public static partial class RuleRecordCodec
                 .Take(RuleLimits.MaxRules + 1).Select(firing => new RuleFiringEvidence(String(firing, "ruleId"),
                     new(String(firing, "conclusion")))).ToArray(), String(root, "semanticReceiptSha256"));
         RequireCanonical(bytes, ReceiptRecordBytes(receipt));
-        Require(Hash(ReceiptBytes(receipt)) == receipt.SemanticReceiptSha256, "rules.receipt-integrity");
+        Require(JsonHash(ReceiptBytes(receipt)) == receipt.SemanticReceiptSha256, "rules.receipt-integrity");
         return receipt;
     }
 

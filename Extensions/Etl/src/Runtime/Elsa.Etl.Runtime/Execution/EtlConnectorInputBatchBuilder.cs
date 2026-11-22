@@ -466,7 +466,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                     page.RawBody.Length != page.Descriptor.Body.ByteLength ||
                     page.RawBody.Length > _pipeline.Http.MaxPageBytes ||
                     !EtlConnectorCsvSupport.IsHash(page.Descriptor.Body.ContentHash) ||
-                    Convert.ToHexString(SHA256.HashData(page.RawBody.Span)).ToLowerInvariant() != page.Descriptor.Body.ContentHash ||
+                    !HasJsonHash(page.RawBody, page.Descriptor.Body.ContentHash) ||
                     page.Descriptor.RequestHash != EtlRuntimeIdentity.HttpRequestHash(http.Request) ||
                     !StringComparer.Ordinal.Equals(page.Descriptor.NextContinuation, page.DecodedPage.Continuation))
                     diagnostic = new EtlPreparationDiagnostic("etl.http.page-cache-corrupt");
@@ -476,6 +476,12 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
                 break;
         }
         return diagnostic is null;
+    }
+
+    private static bool HasJsonHash(ReadOnlyMemory<byte> json, string expected)
+    {
+        try { return Elsa.Serialization.Core.JsonHashInput.HashUtf8(json) == expected; }
+        catch (JsonException) { return false; }
     }
 
     private long ResolveFilePartitionStart() => new EtlPartitionPlan(_sourceRecordCount,

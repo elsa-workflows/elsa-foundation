@@ -11,6 +11,24 @@ public sealed class FileChunkStoreTests : IDisposable
     private readonly FileChunkStore _store = new();
 
     [Fact]
+    public async Task Json_hashes_values_but_immutable_publication_still_refuses_different_physical_bytes()
+    {
+        var store = new FileChunkStore(".json");
+        var firstBytes = "{\"a\":1,\"b\":2}"u8.ToArray();
+        var secondBytes = "{\"b\":2,\"a\":1}"u8.ToArray();
+        var first = await store.PublishAsync(_root, "first", 1024, (stream, ct) => stream.WriteAsync(firstBytes, ct));
+        var second = await store.PublishAsync(_root, "second", 1024, (stream, ct) => stream.WriteAsync(secondBytes, ct));
+        Assert.Equal(first.ContentHash, second.ContentHash);
+        Assert.Equal(first.ByteLength, second.ByteLength);
+        Assert.Equal(firstBytes, await File.ReadAllBytesAsync(Path.Combine(_root, first.Key)));
+        Assert.Equal(secondBytes, await File.ReadAllBytesAsync(Path.Combine(_root, second.Key)));
+        var error = await Assert.ThrowsAsync<EtlEffectException>(() => store.PublishAsync(_root, "first", 1024,
+            (stream, ct) => stream.WriteAsync(secondBytes, ct)).AsTask());
+        Assert.Equal("etl.effect-conflict", error.Code);
+        Assert.Equal(firstBytes, await File.ReadAllBytesAsync(Path.Combine(_root, first.Key)));
+    }
+
+    [Fact]
     public async Task Connector_publication_key_matches_real_immutable_file_publication()
     {
         var effectId = Convert.ToHexStringLower(SHA256.HashData("connector-effect"u8));
