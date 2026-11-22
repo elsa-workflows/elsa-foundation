@@ -27,6 +27,12 @@ public sealed partial class InMemoryStore
         }
     }
 
+    private bool NamesFoundationPark(string tenant, string reference, string token)
+    {
+        Span<byte> mark = stackalloc byte[SelectionBytes];
+        return TryOpenReadCursor(SelectionContext(tenant, reference), token, mark) && mark[0] == 1;
+    }
+
     private static byte[] SelectionContext(string tenant, string reference) =>
         JsonSerializer.SerializeToUtf8Bytes(new { Read = "operator-selection", Tenant = tenant, Actor = reference });
 

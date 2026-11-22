@@ -1,6 +1,6 @@
 namespace Kernel.Durable;
 
-internal sealed record ParkDiscardDrain(ParkPageCursor? Cursor, long Cleared, long Serial, InboxKey Control);
+internal sealed record ParkDiscardDrain(string Operation, ParkPageCursor? Cursor, long Cleared, long Serial, InboxKey Control);
 
 internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long ParkAt, long Generation)
 {
@@ -75,7 +75,9 @@ public sealed partial class InMemoryStore
         {
             if (after is not { Cursor: null, Cleared: 0, Serial: 1 } || next.ParkDiscarded ||
                 next.ParkResolutionGeneration != previous.ParkResolutionGeneration + 1 || turn.FoundationParkClear is not null ||
-                input is not { Kind: "kernel.discard", Operator.Selection: not null })
+                input is not { Kind: "kernel.discard", Operator.Selection: { } selection } || after.Operation != input.Id ||
+                !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
+                !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
                 throw InvalidDrain();
         }
         else if (next.ParkResolutionGeneration != previous.ParkResolutionGeneration || !envelope.Matches(input, previous, before.Control))
@@ -88,7 +90,7 @@ public sealed partial class InMemoryStore
             return;
         }
         else if (turn.FoundationParkClear is not { } page || page.Park != park || next.ParkDiscarded ||
-            after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
+            after.Operation != before.Operation || after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
             after.Serial != before.Serial + 1 ||
             !page.Rows.Select(row => row.Cursor).SequenceEqual(
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, before.Cursor)!.Select(row => row.Cursor)))

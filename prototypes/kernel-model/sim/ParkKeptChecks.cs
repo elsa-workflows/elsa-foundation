@@ -105,6 +105,7 @@ internal static class ParkKeptChecks
 
         await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
         await CheckDiscardDrain(check);
+        await CheckParkSelectionTarget(check);
 
         foreach (var timed in new[] { false, true })
             await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
@@ -120,8 +121,18 @@ internal static class ParkKeptChecks
         var store = new InMemoryStore(1, () => now);
         var actor = new Probe(withholdFaulted: true);
         var scope = new Contract.BoundScope("discard");
+        var replies = new Requests("discard-operator");
+        bool landedAtReply = false;
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
-            new WorkerOptions { Monotonic = () => now - openedAt });
+            new WorkerOptions
+            {
+                Monotonic = () => now - openedAt,
+                Transport = new OperatorReplies(replies, reply =>
+                {
+                    if (reply.Item is "started")
+                        landedAtReply = store.Instances.Values.Any(row => row.ParkDiscard?.Operation == "op");
+                })
+            });
         var first = Owner("discard-first");
         var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node);
         var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -154,13 +165,25 @@ internal static class ParkKeptChecks
         var drainer = Owner("discard-open");
         await using var drainingActivation = (await new DurableHost([drainer]).ActivateAsync(0))!;
         await Pump(drainingActivation);
-        var selection = store.SealFoundationSelection(scope.Tenant, parked);
-        var admission = store.AdmitFoundationOperator(scope.Tenant, target.Actor.Id, null, "op", Contract.Kinds.Discard,
-            Json.Write(new Contract.OperatorCommand(selection)), null, null, selection, null);
+        var operators = new InMemoryIngress(store, replies, drainer.Node, (_, kind) => kind == Contract.Kinds.Discard);
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var denied = await ingress.SendAsync(scope, target, "ordinary-discard", Contract.Kinds.Discard, payload);
+        var foreign = await operators.SendAsync(new Contract.BoundScope("foreign"), target, "cross-tenant",
+            Contract.Kinds.Discard, payload);
+        var missing = await operators.SendAsync(scope, target, "no-selection", Contract.Kinds.Discard);
+        check(denied.Outcome == Contract.AdmissionOutcome.Refused && foreign.Outcome == Contract.AdmissionOutcome.Refused &&
+            missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+            "only a bound operator with a qualified Park selection can submit discard");
+
+        var request = operators.RequestAsync(scope, target, "op", Contract.Kinds.Discard, payload, null,
+            new(null, now + 100, ReleaseBeforeCommit: true)).AsTask();
         await Step(drainer);
         var open = store.Instances[id];
-        var opened = admission.Outcome == InMemoryStore.OperatorAdmission.Accepted && open.ParkResolutionGeneration == 1 &&
-            open.ParkDiscard is { Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
+        var reply = await request.WaitAsync(TimeSpan.FromSeconds(2));
+        var opened = reply is { Item: "started", Error: null } && landedAtReply &&
+            open.ParkResolutionGeneration == 1 &&
+            open.ParkDiscard is { Operation: "op", Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
             store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount;
         check(opened, "discard Open commits its first private control without clearing any input");
         if (!opened) return;
@@ -193,8 +216,17 @@ internal static class ParkKeptChecks
             "a successor completes from the committed cursor and writes the terminal mark without changing the saved state");
         check(store.Messages.Values.All(item => item.KeptBy is null && item.Message.Kind != Kinds.Drain) &&
             store.Messages.Values.Count(item => item.Message.Id == "after-open" && item.Done) == 1 && actor.PoisonOffers == 1 &&
-            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal)) == 1,
+            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal) &&
+                item.Entries.Contains("\"Operation\":\"op\"", StringComparison.Ordinal)) == 1,
             "Complete removes the outstanding control and journals once, and the late input is dropped without replay");
+        var repeated = await operators.SendAsync(scope, target, "op", Contract.Kinds.Discard, payload);
+        var stale = await operators.SendAsync(scope, target, "another-op", Contract.Kinds.Discard, payload);
+        var repeatedRequest = await operators.RequestAsync(scope, target, "op", Contract.Kinds.Discard, payload, null,
+            new(null, now + 100));
+        check(repeated.Outcome == Contract.AdmissionOutcome.Duplicate && repeatedRequest.Error == "repeat" &&
+            stale is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            store.Instances[id].ParkResolutionGeneration == 1,
+            "after Complete the same operation is a duplicate and a new operation using the old selection is refused");
         await ingress.SendAsync(scope, target, "after-complete", "update");
         await Pump(successor);
         check(store.Messages.Values.Count(item => item.Message.Id == "after-complete" && item.Done) == 1,
@@ -222,6 +254,80 @@ internal static class ParkKeptChecks
         }
     }
 
+    private static async Task CheckParkSelectionTarget(Action<bool, string> check)
+    {
+        const long now = 1_701_400_025_000;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("park-selection");
+        var worker = new Worker("park-selection", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind is Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var created = new Contract.Target.Start(new(probe.Type, "ready", null));
+        var a = (await edge.SendAsync(scope, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
+        var b = (await edge.SendAsync(scope, created, "start-b", Contract.Kinds.Start)).Actor!.Value;
+        var foreign = new Contract.BoundScope("another-tenant");
+        var c = (await edge.SendAsync(foreign, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
+        var targetA = new Contract.Target.Ref(a);
+        var targetB = new Contract.Target.Ref(b);
+        var targetC = new Contract.Target.Ref(c);
+        await Pump(owner);
+        await edge.SendAsync(scope, targetA, "selected", "poison");
+        await edge.SendAsync(scope, targetB, "fault-b", "poison");
+        await edge.SendAsync(foreign, targetC, "fault-c", "poison");
+        await Pump(owner);
+
+        var parkedA = store.ReadFoundationActor(scope.Tenant, a.Id).Actor!;
+        var parkedB = store.ReadFoundationActor(scope.Tenant, b.Id).Actor!;
+        var pinned = parkedA.Park is not null && parkedA.Park == parkedB.Park &&
+            parkedA.Row.Creation == parkedB.Row.Creation && parkedA.Row.Id != parkedB.Row.Id;
+        check(pinned, "the two targets have exactly the same Park time, revision and creation");
+        if (!pinned) return;
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, a))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var other = await edge.SendAsync(scope, targetB, "swapped", Contract.Kinds.Discard, payload);
+        var own = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Discard, payload);
+        var swappedDelete = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Delete, payload);
+        var swappedTerminate = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Terminate, payload);
+        check(swappedDelete is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection, Actor: null } &&
+            swappedTerminate is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection, Actor: null },
+            "the tenant receipt cannot turn an invalid delete or terminate selection into a duplicate");
+        var list = new ActorList(store, 10);
+        var selectionB = (await list.GetAsync(scope, b))!.Selection!;
+        var selectionC = (await list.GetAsync(foreign, c))!.Selection!;
+        var retargeted = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selectionB)));
+        var independent = await edge.SendAsync(foreign, targetC, "selected", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selectionC)));
+        await Pump(owner);
+        var expiredDelete = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Delete, payload);
+        var expiredTerminate = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Terminate, payload);
+        check(expiredDelete is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            expiredTerminate is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+            "a discard receipt does not make a resolved Park selection current for delete or terminate");
+        check(retargeted is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var first } && first == a &&
+            independent.Outcome == Contract.AdmissionOutcome.Accepted &&
+            store.ReadFoundationActor(foreign.Tenant, c.Id).Actor is { Row.ParkDiscarded: true },
+            "an operator id pins the first target in its tenant independently of ordinary sends and other tenants");
+        check(other is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            own.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[parkedA.Row.Id].ParkDiscarded &&
+            store.Instances[parkedB.Row.Id] == parkedB.Row &&
+            store.Messages.Values.Any(row => row.Message.Target.Id == parkedB.Row.Id && row.KeptBy == ParkKeepReason.Consumed),
+            "a same-tenant Park selection can discard only the actor that issued it");
+    }
+
+    private sealed class OperatorReplies(Requests requests, Action<Reply> observe) : IReplyTransport
+    {
+        public void Send(string node, Reply reply)
+        {
+            observe(reply);
+            requests.Receive(reply);
+        }
+    }
+
     private static async Task<bool> CheckDiscardPageAuthority(InMemoryStore store, PartitionFence fence, InstanceRow open,
         InMemoryStore.FoundationParkMark park, Action<bool, string> check)
     {
@@ -230,7 +336,7 @@ internal static class ParkKeptChecks
         var envelope = ParkDrainEnvelope.For(open, park);
         var nextControl = envelope.Issue(open, drain.Serial + 1);
         var next = open with { Revision = open.Revision + 1,
-            ParkDiscard = new(page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
+            ParkDiscard = new(drain.Operation, page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
         var clear = new TurnCommit(open.Id, next, open.Revision, [drain.Control], [], [nextControl], [], [], null)
         { FoundationParkClear = new(park, page) };
         var rowless = new TurnCommit(open.Id, null, null, [drain.Control], [], [], [], [], null);
