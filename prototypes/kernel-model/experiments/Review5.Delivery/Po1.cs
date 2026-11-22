@@ -259,7 +259,8 @@ sealed class Po1(string variant, PoRules rules)
             var takenUp = gate is null || gate.Done || gate.Seen == _lease.Epoch && !_suspects.Contains(_r);
             if (!takenUp)
             {
-                var retryMessage = new Message(item.Message.Id + "'", Self, Fr2.DrainKind, item.Message.Payload, Self.Id, Due: _now + 3, TargetCreation: 1, SenderCreation: 1).AsIssued();
+                var retryMessage = ModeledTicket.Issue(new Message(item.Message.Id + "'", Self, Fr2.DrainKind, item.Message.Payload,
+                    Self.Id, Due: _now + 3, TargetCreation: 1, SenderCreation: 1).AsIssued());
                 await Commit([new TurnCommit(Self.Id, null, null, [key], [], [retryMessage], [], [], null)]);
                 Once($"C: gate row R not taken up (an untried suspect); C sends a retry due 3 ms later");
                 return;
