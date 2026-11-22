@@ -34,5 +34,6 @@ export * from "./layout/ResizeHandle";
 export * from "./layout/SidePanelLayout";
 export * from "./list/ListRow";
 export * from "./overlay/AnchoredPopover";
+export * from "./overlay/StudioDialog";
 export * from "./stat/StatTile";
 export * from "./disclosure";
