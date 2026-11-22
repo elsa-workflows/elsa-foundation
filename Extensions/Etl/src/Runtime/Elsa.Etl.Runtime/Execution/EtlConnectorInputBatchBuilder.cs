@@ -481,7 +481,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private static bool HasJsonHash(ReadOnlyMemory<byte> json, string expected)
     {
         try { return Elsa.Serialization.Core.JsonHashInput.HashUtf8(json) == expected; }
-        catch (JsonException) { return false; }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { return false; }
     }
 
     private long ResolveFilePartitionStart() => new EtlPartitionPlan(_sourceRecordCount,

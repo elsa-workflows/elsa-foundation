@@ -490,7 +490,7 @@ internal sealed class EtlConnectorOutputProcessor
         var bytes = await store.ReadAsync(_snapshotRoot, identity, maxBytes, route.Body.ByteLength, cancellationToken);
         bool matches;
         try { matches = bytes is not null && RouteHash(route.Kind, bytes) == route.Body.ContentHash; }
-        catch (System.Text.Json.JsonException) { matches = false; }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException) { matches = false; }
         if (!matches)
             throw new EtlEffectException("etl.output-read-conflict", "The retained ETL route body failed integrity verification.");
         return bytes!;

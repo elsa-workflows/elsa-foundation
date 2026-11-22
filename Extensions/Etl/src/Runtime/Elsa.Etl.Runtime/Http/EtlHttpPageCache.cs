@@ -454,7 +454,7 @@ internal sealed class EtlHttpPageCache
             var actual = Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(bytes));
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
-        catch (System.Text.Json.JsonException) { return false; }
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException) { return false; }
     }
 
     private static string PageBodyIdentity(string pageIdentity, EtlHttpPageProvenance provenance, string hash) =>

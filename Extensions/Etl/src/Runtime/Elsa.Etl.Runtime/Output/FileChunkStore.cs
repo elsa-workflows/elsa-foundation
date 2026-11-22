@@ -229,7 +229,7 @@ internal sealed class FileChunkStore : IFileChunkPublisher
                 : Elsa.Serialization.Core.JsonHashInput.HashUtf8(json.GetBuffer().AsMemory(0, checked((int)json.Length)));
             return new EtlChunk(key, contentHash, length);
         }
-        catch (System.Text.Json.JsonException exception)
+        catch (Exception exception) when (exception is System.Text.Json.JsonException or InvalidOperationException)
         {
             throw new EtlEffectException("etl.effect-conflict", "A published ETL JSON object is invalid.", exception);
         }
