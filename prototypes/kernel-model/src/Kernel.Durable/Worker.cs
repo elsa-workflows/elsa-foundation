@@ -367,7 +367,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     {
                         // Deadline/stand-down invalidation retains the foundation's fresh-driver retry contract.
                         item.Taken = true;
-                        item.Cancel?.Cancel();
+                        CancelJobDriver(item);
                         var replacement = new Delivery(item.Message, item.Seq) { Key = item.Key, Ticket = true,
                             Durable = item.Durable, Marked = item.Marked, ObservedOrder = item.ObservedOrder, ObservedAt = item.ObservedAt,
                             DeferredJobTrial = item.DeferredJobTrial, DeferredTrialObserved = item.DeferredTrialObserved };
@@ -1204,7 +1204,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Volatile.Write(ref _jobsDeferredByCancellation, 0);
             _held.Clear();
             _polling = _loading = _flushing = _meeting = _releasing = _aliasesChangedDuringLoad = _retryAliases = false;
-            foreach (var item in _items.Values.ToList()) item.Cancel?.Cancel();
+            foreach (var item in _items.Values.ToList()) CancelJobDriver(item);
             // Every caller this memory knows of is told at once; a new owner answers only what is still in the rows.
             foreach (var to in _slots.Values.SelectMany(s => s.Replies).Concat(_items.Values.Where(i => !i.Message.SuppliedCreator || _slots.TryGetValue(Canonical(i.Message.Target.Id), out var slot) && slot.CurrentRow is not null).Select(i => i.Message.ReplyTo).OfType<string>()).Distinct().ToList())
                 Send(to, "lost", null, null, error: "lost");
@@ -1951,7 +1951,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (creationError is not null)
         {
-            Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, creationError), slot), cancellationToken);
+            var refusal = creationError == "RetiredCreation" && slot.Row is { } marker && due is [var terminate] &&
+                CascadeProtocol.MatchesRetiredTerminate(marker, request)
+                    ? CascadeProtocol.OpenRetired(marker, terminate)
+                    : CreationProtocol.Refuse(instance, slot.Row, due, creationError);
+            Enqueue(Bound(refusal, slot), cancellationToken);
             return;
         }
         if (request.Kind == Kinds.Cascade)
@@ -2096,7 +2100,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (!_slots.TryGetValue(Canonical(ticket.Message.Target.Id), out var loadedSlot) || !Loaded(loadedSlot) || loadedSlot.Busy) return;
         if (ObsoleteJobAt(ticket, loadedSlot.Row))
         {
-            ticket.Cancel?.Cancel();
+            CancelJobDriver(ticket);
             ticket.Ticket = false;
             ticket.Key = null;
             return; // the next fenced dispatch drops the obsolete ticket
@@ -2108,7 +2112,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             // Queued callbacks and earlier occurrences still cannot enter or borrow the current row.
             if (Volatile.Read(ref ticket.JobEntered) && loadedSlot.Row is { Retired: false, Status: not InstanceStatus.Running } current &&
                 current.Creation == (ticket.Message.TargetCreation ?? 0)) return;
-            ticket.Cancel?.Cancel();
+            CancelJobDriver(ticket);
             ticket.Ticket = false; ticket.Key = null;
             return; // the normal fenced dispatch consumes/refuses this stale target
         }
@@ -2632,7 +2636,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var unit = units[i];
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
-                if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null && unit.Slot is { } slot)
+                if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null &&
+                    (unit.FoundationCascade is null || unit.Row?.Retired != true) && unit.Slot is { } slot)
                 {
                     slot.RollbackTurn?.Invoke();
                     var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
@@ -2839,7 +2844,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var unit in units)
             {
                 if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
-                if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed && unit.FoundationCascade is not null)
+                if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed)
                 {
                     unit.Cancelled.AddRange(removed);
                     _woken = true;
@@ -3084,11 +3089,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (unit.Row is { } ending && unit.FoundationCascade is { Input: null } cascade)
             foreach (var job in cascade.Entries.Jobs)
-                if (_items.GetValueOrDefault(InboxKey.Ticket(ending.Id, job.Key, ending.Creation, job.Generation))?.Cancel is { } cancel)
-                {
-                    try { cancel.Cancel(); }
-                    catch (AggregateException) { } // A callback's cancellation handler cannot undo the landed end.
-                }
+                if (_items.GetValueOrDefault(InboxKey.Ticket(ending.Id, job.Key, ending.Creation, job.Generation)) is { } ticket)
+                    CancelJobDriver(ticket);
         if (unit.CreationRefused && release is ReplyRelease.WriteFree or ReplyRelease.EphemeralWriteFree)
             _lifecycle?.WriteFreeRefusal(unit.Consumed);
         // A command can mature while the last recovery checkpoint awaits acknowledgement. Capture
@@ -3348,7 +3350,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (HasPhysicalTrial(item) && item.JobDriver?.IsCompleted == false) item.RetainsTrialGate = true;
         else _gate.Finished(this, item);
         if (item.Durable && _polling && !Has(Flaw.PollRace)) _consumed.Add(item.Message.InboxKey);
-        if (item.Key is not null) item.Cancel?.Cancel();
+        if (item.Key is not null) CancelJobDriver(item);
         if (_slots.TryGetValue(Canonical(item.Message.Target.Id), out var slot))
         {
             lock (slot)
@@ -3360,6 +3362,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         _meets.Remove(item);
         _exhaustedCatchUps.Remove(item);
+    }
+
+    private static void CancelJobDriver(Delivery ticket)
+    {
+        try { ticket.Cancel?.Cancel(); }
+        catch (AggregateException) { } // Activity cleanup cannot interrupt ownership or checkpoint bookkeeping.
     }
 }
 

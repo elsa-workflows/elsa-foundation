@@ -26,6 +26,8 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
     internal CascadeDischarge? Cascade { get; init; }
+    internal CascadeRegistry? HeldCascade { get; init; }
+    internal bool HasCascadeObligation => Cascade is not null || HeldCascade is not null;
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
         ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };

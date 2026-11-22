@@ -124,6 +124,12 @@ if (args.Contains("--cascade-pages-check"))
     await CascadePageChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--retirement-cascade-check"))
+{
+    var failed = false;
+    await RetirementCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--metadata-envelope-check"))
 {
     var failed = false;

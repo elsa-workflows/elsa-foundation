@@ -136,6 +136,11 @@ a new reservation, and the dead-letter receipt. The fault driver activates the a
 loss before and after a commit, a retirement marker continuing the original discharge, keyed reuse, and a
 Native Parallel with 1,001 parent-bound children. It also checks the application send cap independently.
 
+`--retirement-cascade-check` runs qualified Delete on an ended child, an operator terminate that leaves its
+obligation held, and the recorded parent's terminate which starts the cascade. It checks one-page and
+two-page cascades across takeover, an exact registry hand-off, and root retirement. Park drains, ThenDelete,
+and physical-provider qualification have separate cases.
+
 The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport
