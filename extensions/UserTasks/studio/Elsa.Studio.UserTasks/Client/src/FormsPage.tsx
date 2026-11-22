@@ -186,7 +186,7 @@ export function LegacyFormsPage({ api, formId, navigate }: { api: ElsaStudioModu
       actions={<StudioButton onClick={() => navigate?.(formsPath())}>Back to forms</StudioButton>} /> : <SkeletonRows label="Loading form" />}
   </StudioPage>;
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
-    {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
+    {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Task forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
     {creating ? <StudioNewResourceDialog title="New form" nameMaxLength={256} descriptionMaxLength={2000} onCancel={() => setCreating(false)} onCreate={beginForm} /> : null}
     <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? form.name || "New form" : opened ? opened.form.name : "Task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
       {editing ? editorActions : null}
