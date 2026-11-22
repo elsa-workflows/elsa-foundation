@@ -10,8 +10,10 @@ internal static class HeldJobResultChecks
     public static async Task Run(Action<bool, string> check, Flaw flaws)
     {
         foreach (var inline in new[] { false, true })
-            foreach (var shape in new[] { "outside-release", "self-release", "poll-one", "send-cap" })
+            foreach (var shape in new[] { "outside-release", "self-release", "poll-one", "singleton", "send-cap" })
                 await Schedule(inline, shape, flaws, (ok, name) => check(ok, $"{(inline ? "inline first write" : "durable")}, {shape}: {name}"));
+        foreach (var shape in new[] { "cut-same-owner", "cut-takeover" })
+            await Schedule(false, shape, flaws, (ok, name) => check(ok, $"{shape}: {name}"));
     }
 
     private static async Task Schedule(bool inline, string shape, Flaw flaws, Action<bool, string> check)
@@ -25,7 +27,7 @@ internal static class HeldJobResultChecks
         Worker WorkerFor(string node) => new(node, 0, store, new ActorAdapter(store, actor),
             new WorkerOptions { Monotonic = () => now - initial, PollLimit = shape == "poll-one" ? 1 : 500, Flaws = flaws });
         var worker = WorkerFor("first-owner");
-        Contract.IIngress edge = new InMemoryIngress(store, requests, "first-owner", inlineOwner: worker);
+        Contract.IIngress edge = new InMemoryIngress(store, requests, "first-owner", (selected, _) => selected == scope, inlineOwner: worker);
         var start = new Contract.Target.Start(new(actor.Type, "ready", null, Ephemeral: inline));
         using var http = new CancellationTokenSource();
         var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -45,6 +47,20 @@ internal static class HeldJobResultChecks
             actor.Release.SetResult();
             await driver.WaitAsync(TimeSpan.FromSeconds(5));
             worker.RunTurn(local.Id);
+            var withCut = shape.StartsWith("cut-", StringComparison.Ordinal);
+            if (withCut)
+            {
+                await actor.EnteredHold.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                now++;
+                var release = await edge.SendAsync(scope, target, "release", "release");
+                var view = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+                now++;
+                var terminate = await edge.SendAsync(scope, target, "terminate", Contract.Kinds.Terminate,
+                    Json.Write(new Contract.OperatorCommand(view!.Selection!)));
+                check(release.Outcome == Contract.AdmissionOutcome.Accepted && terminate.Outcome == Contract.AdmissionOutcome.Accepted,
+                    "release and terminate are admitted during the paused Hold turn");
+                actor.FinishHold.SetResult();
+            }
             await worker.FlushAsync();
 
             var row = store.Instances.Values.Single();
@@ -61,6 +77,36 @@ internal static class HeldJobResultChecks
                 !store.Messages.ContainsKey(ticket) && store.Messages.GetValueOrDefault(result) is { Held: true, Message.FoundationJobResult: true },
                 "the landed Hold keeps the original completion and removes its runnable ticket");
 
+            if (shape == "singleton")
+            {
+                var child = store.Messages.Values.Single(delivery => delivery.Message.Kind == Kinds.Start).Message.Target.Id;
+                await worker.PollAsync();
+                await worker.LoadAsync();
+                worker.RunTurn(child);
+                await worker.FlushAsync();
+                await worker.PollAsync();
+                await worker.LoadAsync();
+                worker.RunTurn(row.Id);
+                await worker.FlushAsync();
+                check(store.Instances[row.Id].State == "released" && !store.Messages[result].Held,
+                    "the singleton child notice durably releases the completion in its own commit");
+            }
+
+            if (withCut)
+            {
+                if (shape == "cut-same-owner") await Pump(owner);
+                else
+                {
+                    await owner.DisposeAsync();
+                    await using var takeover = (await new DurableHost([WorkerFor("successor")]).ActivateAsync(0))!;
+                    await Pump(takeover);
+                }
+                check(actor.Offers.TakeLast(2).SequenceEqual(["job-finished,release", "kernel.terminate"]) &&
+                    actor.Applied == 1 && actor.Entries == 1 && store.Instances[row.Id] is { State: "original", Status: InstanceStatus.Cancelled },
+                    "the completion and its release precede the later terminate");
+                return;
+            }
+
             // Stand-down changes the epoch without relying on real time or a test delay.
             await owner.DisposeAsync();
             await using var successor = (await new DurableHost([WorkerFor("successor")]).ActivateAsync(0))!;
@@ -72,9 +118,9 @@ internal static class HeldJobResultChecks
                 await edge.SendAsync(scope, target, "release", "release");
             }
             await Pump(successor);
-            check(actor.Offers.Skip(offered).SequenceEqual(["job-finished,release"]),
+            check(actor.Offers.Skip(offered).SequenceEqual([shape == "singleton" ? "job-finished" : "job-finished,release"]),
                 "the first successor turn offers the held completion before its release");
-            check(store.Instances.Values.Single() is { State: "original", Jobs: null } &&
+            check(store.Instances[row.Id] is { State: "original", Jobs: null } &&
                 actor.Entries == 1 && actor.Applied == 1 && actor.Handle == actor.AppliedHandle &&
                 !store.Messages.ContainsKey(ticket) && !store.Messages.ContainsKey(result),
                 "the successor applies the original payload under the same handle once without running the job");
@@ -105,14 +151,21 @@ internal static class HeldJobResultChecks
     {
         public string Type => "hold-job-result";
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource EnteredHold { get; } = new();
+        public TaskCompletionSource FinishHold { get; } = new();
         public int Entries { get; private set; }
         public int Applied { get; private set; }
         public string? Handle { get; private set; }
         public string? AppliedHandle { get; private set; }
         public List<string> Offers { get; } = [];
 
-        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        public async ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (turn.Header.TypeData == "child")
+            {
+                turn.End(Contract.ActorStatus.Finished);
+                return;
+            }
             Offers.Add(string.Join(',', turn.Inbox.Select(item => item.Kind)));
             foreach (var message in turn.Inbox)
                 switch (message.Kind)
@@ -120,15 +173,27 @@ internal static class HeldJobResultChecks
                     case Contract.Kinds.Start:
                         turn.StartJob(JobKey);
                         break;
+                    case Contract.Kinds.ChildFinished:
+                        turn.State = "released";
+                        break;
+                    case Contract.Kinds.Terminate:
+                        turn.End(Contract.ActorStatus.Cancelled);
+                        break;
                     case Contract.Kinds.JobFinished:
-                        if (!turn.Inbox.Any(input => input.Kind == "release"))
+                        if (turn.State != "released" && !turn.Inbox.Any(input => input.Kind == "release"))
                         {
                             if (Handle is null && shape is "self-release" or "poll-one") turn.Send(turn.Header.Ref, "release");
+                            if (Handle is null && shape == "singleton") turn.Start(new(Type, "child", null));
                             if (shape == "send-cap")
                                 for (var i = 0; i < 10_000; i++) turn.Send(turn.Header.Ref, "overflow");
                             Handle ??= message.Id;
                             turn.State = "held";
                             turn.Hold(message);
+                            if (shape.StartsWith("cut-", StringComparison.Ordinal))
+                            {
+                                EnteredHold.TrySetResult();
+                                await FinishHold.Task;
+                            }
                         }
                         else
                         {
@@ -139,7 +204,6 @@ internal static class HeldJobResultChecks
                         }
                         break;
                 }
-            return default;
         }
 
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)

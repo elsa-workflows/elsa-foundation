@@ -227,6 +227,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
+                    foreach (var id in turn.FoundationReleasedHolds ?? [])
+                        if (turn.Row is not { } releasing || Messages.GetValueOrDefault(id) is not { Done: false, Held: true } released ||
+                            released.Message.Target.Id != releasing.Id || released.Message.TargetCreation != releasing.Creation)
+                            Diverged($"released message {id} is not there for {turn.Instance}");
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
@@ -291,6 +295,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                 }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
+                foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 foreach (var id in turn.Done)
                 {
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.

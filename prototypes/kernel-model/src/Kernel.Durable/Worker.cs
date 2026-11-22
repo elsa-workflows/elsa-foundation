@@ -1555,6 +1555,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private static bool BeforeCut(Delivery item, Delivery control)
     {
+        // This completion already reached a turn. Its replacement's insertion sequence cannot move it behind
+        // the cut. A held completion still needs an eligible stimulus, so a command can pass a lone Hold.
+        if (item.Message.FoundationHeldJobResult) return true;
         var at = control.Message.Due ?? control.ObservedAt;
         // A driver's result becomes input when it is ready. Its persisted row is the ticket for
         // running the job; that row cannot prove the result existed before a command.
@@ -2610,6 +2613,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
             promotions ??= [];
             promotions.UnionWith(unit.Held.Where(i => !i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey));
         }
+        var releases = unit.Row is { } row && _type.SupportsFoundationOperator(row) && unit.Consumed is [var stimulus] &&
+            _type.RevisitsHeld(row.Model, row, stimulus)
+            ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
+            : null;
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
             Has(Flaw.KeepConsumedMessages) ? [] : unit.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
@@ -2618,6 +2625,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             FoundationHeader = unit.FoundationHeader,
             FoundationHeldPromotions = promotions,
+            FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark
         };
     }

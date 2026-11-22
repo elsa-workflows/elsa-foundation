@@ -137,6 +137,7 @@ public sealed record TurnCommit(
 {
     internal FoundationHeaderChange? FoundationHeader { get; init; }
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
+    internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }
 }
 
