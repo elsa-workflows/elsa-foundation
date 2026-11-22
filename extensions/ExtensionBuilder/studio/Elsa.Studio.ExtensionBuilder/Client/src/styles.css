@@ -1006,6 +1006,30 @@
   padding: 12px 14px;
 }
 
+@media (max-width: 640px) {
+  .extension-builder-shell {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .extension-builder-commandbar,
+  .extension-builder-commandbar-right,
+  .extension-builder-dock-tabs {
+    flex-wrap: wrap;
+  }
+
+  .extension-builder-ide {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(8rem, 1fr) minmax(12rem, 2fr);
+    overflow: auto;
+  }
+
+  .extension-builder-explorer {
+    border-right: 0;
+    border-bottom: 1px solid var(--studio-border);
+  }
+}
+
 .extension-builder-autosave-toggle {
   display: inline-flex;
   align-items: center;
