@@ -208,13 +208,13 @@ public sealed partial class InMemoryStore
             return;
         }
         var restored = current.Where(row => before.Restores(row, previous.Status)).ToArray();
-        var prerequisites = current.Count(row => row.JobTicketPrerequisite is not null);
+        var paired = current.Count(row => row.PairedJobInput is not null);
         var gate = restored.LastOrDefault()?.Cursor.Key;
         if (after != (rescheduled with
             {
                 Cursor = current[^1].Cursor,
-                Restored = checked(before.Restored + restored.Length + prerequisites),
-                Cleared = checked(before.Cleared + current.Count - restored.Length), Gate = gate
+                Restored = checked(before.Restored + restored.Length + (running ? paired : 0)),
+                Cleared = checked(before.Cleared + current.Count - restored.Length + (running ? 0 : paired)), Gate = gate
             }))
             throw InvalidDrain();
     }

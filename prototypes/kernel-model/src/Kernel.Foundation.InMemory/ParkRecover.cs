@@ -126,9 +126,9 @@ internal sealed partial class ActorAdapter
             }
             admitted.Add(item);
             written++;
-            if (item.JobTicketPrerequisite is null) continue;
+            if (item.PairedJobInput is null) continue;
             written++;
-            restored++;
+            if (running) restored++;
         }
         if (admitted.Count == 0)
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);

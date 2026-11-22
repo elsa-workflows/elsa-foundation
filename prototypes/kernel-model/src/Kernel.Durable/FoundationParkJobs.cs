@@ -16,13 +16,13 @@ public sealed partial class InMemoryStore
     internal static string? JobsAfterRecoveryPage(InstanceRow actor, ParkRecoveryPage? page)
     {
         if (actor.Status == InstanceStatus.Running || actor.Jobs is null || page is null) return actor.Jobs;
-        var results = page.Rows.Where(row => row.JobResultGeneration.HasValue)
-            .ToDictionary(row => row.Cursor.Key, row => row.JobResultGeneration!.Value);
-        if (results.Count == 0) return actor.Jobs;
+        var settled = page.Rows.Where(row => row.JobGeneration.HasValue)
+            .ToDictionary(row => row.Cursor.Key, row => (row.Kind, row.JobGeneration!.Value));
+        if (settled.Count == 0) return actor.Jobs;
         var jobs = JobRegistry.Read(actor.Jobs);
         var removed = jobs.RemoveAll(job =>
-            results.TryGetValue(InboxKey.JobResult(actor.Id, job.Key, actor.Creation, job.Generation), out var generation) &&
-            generation == job.Generation);
+            settled.GetValueOrDefault(InboxKey.JobResult(actor.Id, job.Key, actor.Creation, job.Generation)) == (Kinds.JobFinished, job.Generation) ||
+            settled.GetValueOrDefault(InboxKey.Ticket(actor.Id, job.Key, actor.Creation, job.Generation)) == (Kinds.Job, job.Generation));
         return removed == 0 ? actor.Jobs : JobRegistry.Write(jobs);
     }
 

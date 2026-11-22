@@ -58,7 +58,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             try
             {
                 if (envelope.Kind == Kinds.Job && envelope.Read<JobTicket>() is { Timer: not null } ticket)
-                    return (null, ticket.Timer, ticket.Deadline);
+                    return (ticket.Key, ticket.Timer, ticket.Deadline);
                 if (envelope.Kind == Kinds.JobDeadline && envelope.Read<JobDeadline>() is { } deadline)
                     return (deadline.Key, null, null);
             }

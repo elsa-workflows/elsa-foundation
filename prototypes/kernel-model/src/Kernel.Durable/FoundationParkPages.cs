@@ -19,8 +19,8 @@ internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? S
 {
     internal ParkRelease? ReleasedBy { get; init; }
     internal bool ObsoleteJob { get; init; }
-    internal long? JobResultGeneration { get; init; }
-    internal ParkPageRow? JobTicketPrerequisite { get; init; }
+    internal long? JobGeneration { get; init; }
+    internal ParkPageRow? PairedJobInput { get; init; }
 }
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
@@ -47,7 +47,7 @@ internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, I
     {
         foreach (var row in Rows)
         {
-            if (row.JobTicketPrerequisite is { } ticket) yield return ticket;
+            if (row.PairedJobInput is { } paired) yield return paired;
             yield return row;
         }
     }
@@ -94,7 +94,7 @@ public sealed partial class InMemoryStore
                 var stale = !row.Done && current.Status == InstanceStatus.Running && recoveryGeneration is { } active &&
                     row.ReleasedBy is { } release && release.Creation == address.Creation && release.Generation < active;
                 var settling = terminalInputs && !row.Done && row.ReleasedBy is { } tag && tag.Creation == address.Creation &&
-                    tag.Generation <= recoveryGeneration && !ParkRecoveryCredit.IsTicket(row.Message.Kind) &&
+                    tag.Generation <= recoveryGeneration && (row.Message.Kind == Kinds.Job || !ParkRecoveryCredit.IsTicket(row.Message.Kind)) &&
                     row.Message.Kind != Kinds.ChildFinished && !row.Message.IsControl;
                 if (terminalInputs ? !settling : !kept && !stale) continue;
 
@@ -115,22 +115,42 @@ public sealed partial class InMemoryStore
             var result = new List<ParkPageRow>(page.Count);
             foreach (var (row, cursor) in page.UnorderedItems.OrderBy(item => item.Priority))
             {
-                var prerequisite = deadlineJobs is null ? null : ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs);
-                if (prerequisite is not null && result.Count + 2 > ParkPageLimit) break;
+                var paired = deadlineJobs is not null ? ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs)
+                    : recoveryGeneration is not null && current.Status != InstanceStatus.Running &&
+                        row.Message.Kind == Kinds.Job && currentJobs?.Contains(cursor.Key) == true
+                        ? ReadTerminalJobDeadline(current, row, cursor, terminalInputs ? recoveryGeneration : null) : null;
+                if (paired is not null && result.Count + 2 > ParkPageLimit) break;
+                var isJob = row.Message.Kind == Kinds.Job || row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true };
                 result.Add(new(cursor, row.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
                 {
                     ReleasedBy = row.ReleasedBy,
-                    ObsoleteJob = recoveryGeneration is not null && (row.Message.Kind == Kinds.Job || row.Message.FoundationJobResult) &&
-                        currentJobs?.Contains(cursor.Key) != true,
-                    JobResultGeneration = recoveryGeneration is not null && row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true }
-                        ? row.Message.JobGeneration : null,
-                    JobTicketPrerequisite = prerequisite
+                    ObsoleteJob = recoveryGeneration is not null && isJob && currentJobs?.Contains(cursor.Key) != true,
+                    JobGeneration = recoveryGeneration is not null && isJob ? row.Message.JobGeneration : null,
+                    PairedJobInput = paired
                 });
-                // The cursor names the deadline. Its later ticket cannot occupy a second position in this page.
-                if (prerequisite is not null) break;
+                if (paired is not null) break;
             }
             return result;
         }
+    }
+
+    private ParkPageRow? ReadTerminalJobDeadline(InstanceRow actor, MessageRow ticket, ParkPageCursor ticketCursor,
+        long? terminalGeneration)
+    {
+        if (ticket.JobTiming.Timer is not { } timer) return null;
+        var key = InboxKey.Issued(timer);
+        if (Messages.GetValueOrDefault(key) is not { Done: false, Message: { Kind: Kinds.JobDeadline } message } deadline ||
+            message.Target.Id != actor.Id || message.TargetCreation != actor.Creation || message.Sender != actor.Id ||
+            message.SenderCreation != actor.Creation || message.Due != ticket.JobTiming.At ||
+            !StringComparer.Ordinal.Equals(deadline.JobTiming.JobKey, ticket.JobTiming.JobKey))
+            return null;
+        var cursor = new ParkPageCursor(deadline.Seq, key);
+        // An earlier released deadline is already in this terminal scan's ordered prefix.
+        if (terminalGeneration is not null && cursor.CompareTo(ticketCursor) < 0 &&
+            deadline.ReleasedBy is { } release && release.Creation == actor.Creation && release.Generation <= terminalGeneration)
+            return null;
+        return new(cursor, Kinds.JobDeadline, message.Sender, deadline.KeptBy, deadline.PayloadLength)
+            { ReleasedBy = deadline.ReleasedBy };
     }
 
     private ParkPageRow? ReadDeadlinePrerequisite(InstanceRow actor, MessageRow deadline, ParkPageCursor cursor,

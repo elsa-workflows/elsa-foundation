@@ -927,7 +927,10 @@ Park decision.
   `Stale` arm. A kept publish ticket it reaches is restored with its committed cursor, as before the end, and its
   remaining steps run as an ended publisher's ticket's steps do (SB-7 run 6); a kept meet ticket is cleared ("A kept
   publish ticket is kernel work" above, sixth review R6-M7). Rows released before the end
-  stay eligible and meet the ordinary rule for a finished instance (consumed and dropped). At Complete the withholding
+  stay eligible and meet the ordinary rule for a finished instance (consumed and dropped). When a terminal page
+  settles a kept or released job ticket, or an authenticated result, it also removes that exact generation's
+  registry entry. A ticket's still-pending issued deadline is settled in the same page unless an earlier terminal
+  page has already settled it. The metadata and row limit count both writes. At Complete the withholding
   ends, so the unreleased rows meet the same rule, and
   `ParkRecord.Resolution` is cleared, so the Park is resolved and no row keeps `KeptBy`. The end itself is the built
   one: its own turn writes the end status and terminal mark and sends the parent its one notice, so Complete sends

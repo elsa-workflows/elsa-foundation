@@ -1214,6 +1214,8 @@ internal static class ParkKeptChecks
         await CheckPendingJobAfterPark(check);
         await CheckRetryConsumedTicket(check);
         await CheckRetryConsumedTicket(check, timed: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, releaseTicketBeforeEnd: true);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1422,16 +1424,22 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false)
+    private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
+        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
-        var probe = new ParkedJobProbe("continued", timed) { BeforeDeadline = timed ? InMemoryStore.ParkPageLimit - 1 : 0 };
+        var probe = new ParkedJobProbe("continued", timed)
+        {
+            BeforeDeadline = endBeforeTicket ? (releaseTicketBeforeEnd ? 0 : 1) : timed ? InMemoryStore.ParkPageLimit - 1 : 0,
+            EndBeforeTicket = endBeforeTicket
+        };
         var scheduler = new HeldScheduler();
         var first = new Worker("before-poison-ticket", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
         var scope = new Contract.BoundScope("retry-consumed-ticket");
-        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node,
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
         await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
         var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(started.Actor!.Value);
@@ -1444,14 +1452,18 @@ internal static class ParkKeptChecks
 
         var pairedPages = 0;
         var largestPage = 0;
+        var releasedTicket = false;
+        var pendingCallbacks = endBeforeTicket ? new HeldScheduler() : null;
         var successor = new Worker("retry-poison-ticket", 0, store, new ActorAdapter(store, probe), new WorkerOptions
         {
             Monotonic = () => 0,
+            JobScheduler = pendingCallbacks ?? TaskScheduler.Default,
             OnPreparedCheckpoint = (turn, _, _) =>
             {
                 if (turn.FoundationRecoveryPage is not { } page) return;
                 largestPage = Math.Max(largestPage, page.Writes().Count());
-                if (page.Rows.Any(item => item.JobTicketPrerequisite?.Cursor.Key == key)) pairedPages++;
+                if (page.Rows.Any(item => item.PairedJobInput?.Cursor.Key == key)) pairedPages++;
+                if (turn.Row?.Status == InstanceStatus.Running && page.Writes().Any(item => item.Cursor.Key == key)) releasedTicket = true;
             }
         });
         await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
@@ -1463,13 +1475,19 @@ internal static class ParkKeptChecks
         if (!retained) return;
         if (timed)
         {
-            now += 1500;
+            now += endBeforeTicket ? 500 : 1500;
             for (var pass = 0; pass < 24; pass++) await Pump(next);
             var deadline = store.Messages.Values.Single(message => message.Message.Kind == Kinds.JobDeadline);
-            check(deadline.KeptBy == ParkKeepReason.Arrived && deadline.Seq < store.Messages[key].Seq &&
-                store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < deadline.Seq) ==
-                    InMemoryStore.ParkPageLimit - 1,
-                "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
+            if (endBeforeTicket)
+                check(deadline is { Done: false } && deadline.Message.Due > now &&
+                    store.Messages.Values.Any(item => item is { Message.Kind: "end-before-job", KeptBy: ParkKeepReason.Arrived } &&
+                        item.Seq < store.Messages[key].Seq),
+                    "a large earlier arrival is kept while the timed ticket is poisoned and its absolute deadline is still ahead");
+            else
+                check(deadline.KeptBy == ParkKeepReason.Arrived && deadline.Seq < store.Messages[key].Seq &&
+                    store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < deadline.Seq) ==
+                        InMemoryStore.ParkPageLimit - 1,
+                    "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
         }
         await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(view!.Selection!, Contract.RecoverMode.RetryAll)));
@@ -1480,6 +1498,21 @@ internal static class ParkKeptChecks
             {
                 now += 11;
                 await Pump(next);
+            }
+            if (endBeforeTicket)
+            {
+                pendingCallbacks!.RunAll();
+                check(releasedTicket == releaseTicketBeforeEnd && probe is { Entries: 0, Completions: 0 } &&
+                    store.Instances[row.Id] is { Status: InstanceStatus.Finished, ParkRecovery: null, Jobs: null } &&
+                    store.Messages[key] is { Done: true, KeptBy: null } &&
+                    store.Messages.Values.All(item => item.Message.Kind != Kinds.JobDeadline || item.Done),
+                    $"the terminal page clears the {(releaseTicketBeforeEnd ? "released" : "kept")} ticket, its pending deadline and job registration together");
+                var terminal = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+                await ingress.SendAsync(scope, target, "delete-after-kept-ticket", Contract.Kinds.Delete,
+                    Json.Write(new Contract.OperatorCommand(terminal!.Selection!)));
+                await Pump(next);
+                check(store.Instances[row.Id].Retired, "qualified Delete can retire the model that ended before its timed ticket was restored");
+                return;
             }
             check(probe is { Entries: 0, Completions: 1, JobError: "timeout" } &&
                 store.Instances[row.Id] is { ParkRecovery: null, Jobs: null } && !store.Messages.ContainsKey(key),
@@ -1768,6 +1801,7 @@ internal static class ParkKeptChecks
         public bool FaultOnResult { get; init; }
         public bool EndHoldingResult { get; init; }
         public int BeforeDeadline { get; init; }
+        public bool EndBeforeTicket { get; init; }
         private bool _faulted;
         private long? _deadline;
         public string? Result { get; private set; }
@@ -1781,6 +1815,8 @@ internal static class ParkKeptChecks
                 switch (message.Kind)
                 {
                     case Contract.Kinds.Start:
+                        if (EndBeforeTicket)
+                            turn.Send(turn.Header.Ref, "end-before-job", new string('x', ParkRecoveryCredit.LimitBytes), turn.Now + 300);
                         for (var index = 0; index < BeforeDeadline; index++)
                             turn.Send(turn.Header.Ref, "before-job-deadline", null, turn.Now + 400);
                         _deadline = timed ? turn.Now + 1000 : null;
