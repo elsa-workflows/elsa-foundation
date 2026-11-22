@@ -82,7 +82,8 @@ public sealed partial class WorkflowExecutableCompilerTests
     }
 
     private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null,
-        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null)
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null,
+        Elsa.Workflows.Design.Core.Models.ActivityNodeStructure? structure = null)
     {
         probeType ??= typeof(ScriptProbe);
         var registry = TestWellKnownTypeRegistry.Create();
@@ -93,7 +94,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             "script",
             "activity-script-probe",
             [new WorkflowArgumentState("script", new ArgumentValue(script, "Literal"), null, null, null, null)],
-            Outputs: []);
+            Outputs: [], Structure: structure);
         return TestCompiler.Create(
                 new FakeVersionStore(WorkflowVersion(node, variables: [Greeting])),
                 new FakeActivityVersionStore([probe]),

@@ -187,7 +187,8 @@ public sealed class ExecutableNodeCompiler(
         EnsureConnectedOutcomesDeclared(activity, childSlots);
         EnsureOutcomeSelectionGuaranteed(activity, clrActivityType, activityType, activityContract, outcomeProjection);
 
-        if (activityContract?.AccessesWorkflowState == true && structure is not null && (bodyWritePlan?.WorkflowState.AccessesState ?? true))
+        var declaresState = clrActivityType is not null && Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(clrActivityType);
+        if (activityContract?.AccessesWorkflowState == true && structure is not null && (declaresState || (bodyWritePlan?.WorkflowState.AccessesState ?? true)))
             throw new ArgumentException($"VF-STATE-002: Structural node '{activity.NodeId}' cannot access workflow state from its body.");
 
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
@@ -208,7 +209,8 @@ public sealed class ExecutableNodeCompiler(
                     activityContract,
                     workflowVariables,
                     bodyWritePlan,
-                    clrActivityType is not null && VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(clrActivityType)),
+                    clrActivityType is not null && VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(clrActivityType),
+                    declaresState),
                 bodyReadPlan),
             childSlots: childSlots,
             structure: structure,
@@ -354,7 +356,7 @@ public sealed class ExecutableNodeCompiler(
     private static void EnsureBodyWritesAllowed(string nodeId, string inputKey, string script, ScriptVariableReadPlan plan)
     {
         if (plan.WorkflowState.HasInvalidLiteralCall)
-            throw new ArgumentException("VF-STATE-001: A workflow-state call has an invalid literal output name, identity kind or argument count. Use a nonblank string output name, string/null identity and exact method arguments.");
+            throw new ArgumentException("VF-STATE-001: A workflow-state call has an invalid literal output name, identity kind, argument count or undefined payload. Use a nonblank string output name, string/null identity, defined JSON payload and exact method arguments.");
         foreach (var (write, code) in plan.RefusedLiteralWrites(IsTransient))
             throw new ArgumentException(ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, inputKey, nodeId, script, write));
     }

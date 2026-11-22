@@ -12,6 +12,23 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 public sealed class ScriptWorkflowStateTests
 {
     [Fact]
+    public async Task Default_parameter_reads_the_outer_capability_before_body_var_scope()
+    {
+        var state = new State();
+        await Evaluate("function f(x = workflowState.setCorrelationId('new')) { var workflowState; } f(); return 1;", state);
+        Assert.Equal("new", state.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Top_level_var_is_local_to_the_body_wrapper()
+    {
+        var state = new State();
+        var result = await Evaluate("var workflowState; return typeof workflowState;", state);
+        Assert.Equal("undefined", result!.Value.GetString());
+        Assert.Null(state.CorrelationId);
+    }
+
+    [Fact]
     public async Task Calls_preserve_pending_identity_json_copies_and_undefined_setter_results()
     {
         var state = new State();

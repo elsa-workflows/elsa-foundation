@@ -782,11 +782,22 @@ public sealed class ActivityTemplatePlacementTests
         Assert.Equal(new[] { "total" }, facts.VariableDeclarations[placed.Root.ExecutableNodeId]);
     }
 
+    [Fact]
+    public async Task Closed_graph_refuses_an_explicit_native_state_declaration_with_a_read_only_script()
+    {
+        var node = await new WorkflowExecutableCompilerTests().NativeStateScriptNodeAsync();
+        var (placer, request) = ClosedScopeGraph("closed", computeRoot: node);
+        var error = await Assert.ThrowsAsync<Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionRejectedException>(
+            () => placer.PlaceAsync(request).AsTask());
+        Assert.Contains(error.Findings, finding => finding.Type == "VF-STATE-002");
+    }
+
     private static (ActivityTemplatePlacer Placer, ActivityTemplatePlacementRequest Request) ClosedScopeGraph(
         string? scopeModel,
         string? formatInputs = null,
         string? computeOutputs = null,
-        bool includeGraphContract = false)
+        bool includeGraphContract = false,
+        ExecutableNode? computeRoot = null)
     {
         var formatOverlay = new ExecutableActivityTemplateOccurrenceOverlay(
             "1",
@@ -810,7 +821,7 @@ public sealed class ActivityTemplatePlacementTests
             new("definition-compute", "version-compute", "1.0.0", "template-compute", "hash-compute", "compute", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, emptyOverlay),
             new("definition-format", "version-format", "1.0.0", "template-format", "hash-format", "format", ActivityInvocationOrigin.Empty, null, "activity-graph", 1, formatOverlay)
         ]);
-        var computeTemplate = Template("template-compute", "hash-compute", new ExecutableNode(
+        var computeTemplate = Template("template-compute", "hash-compute", computeRoot ?? new ExecutableNode(
             "source-owned-root", "source-owned-root", "type.compute", "1", new("compute", "1", Json("{}")),
             new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
             new Dictionary<string, string>(), activityContract: RuntimeContractWithInputs(["condition"], ["result"])));

@@ -117,7 +117,7 @@ internal static class StepVariableWriteValidation
                 {
                     if (plan.WorkflowState.HasInvalidLiteralCall)
                         errors.Add(new ValidationError(node.NodeId, "VF-STATE-001",
-                            "A workflow-state call has an invalid literal output name, identity kind or argument count. Use a nonblank string output name, string/null identity and the method's exact arguments."));
+                            "A workflow-state call has an invalid literal output name, identity kind, argument count or undefined payload. Use a nonblank string output name, string/null identity, defined JSON payload and the method's exact arguments."));
                     // An engine script activity carries the type-level marker (it can reach any visible variable by name);
                     // its analyzed body says which it may write: every visible variable only for a computed or opaque write.
                     // A type that declares the marker itself may write any visible variable from its C# code too (FR-028).

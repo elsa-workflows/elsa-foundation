@@ -79,8 +79,16 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         var invalid = false;
         void Visit(Node node, Node? parent, bool shadowed)
         {
-            shadowed |= DeclaresStateRootInScope(node);
-            if (!shadowed && node is Identifier { Name: "workflowState" })
+            // Case declarations share one lexical environment, entered after evaluating the discriminant.
+            if (node is SwitchStatement selection)
+            {
+                Visit(selection.Discriminant, node, shadowed);
+                var caseShadowed = shadowed || DeclaresStateRootInScope(node, parent);
+                foreach (var item in selection.Cases) Visit(item, node, caseShadowed);
+                return;
+            }
+            shadowed |= DeclaresStateRootInScope(node, parent);
+            if (!shadowed && node is Identifier { Name: "workflowState" } identifier && IsStateReference(identifier, parent))
             {
                 access = true;
                 if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
@@ -113,6 +121,9 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                             _ => -1
                         };
                         if (expected >= 0 && call.Arguments.Count != expected) invalid = true;
+                        else if (method.Name is "getOutput" or "setOutput" or "setCorrelationId" or "setInstanceName" or "requireExactIdentity" &&
+                                 call.Arguments[0] is UnaryExpression { Operator: Operator.Void }) invalid = true;
+                        else if (method.Name == "setOutput" && call.Arguments[1] is UnaryExpression { Operator: Operator.Void }) invalid = true;
                         else if (method.Name is "getOutput" or "setOutput" && call.Arguments[0] is Literal nameLiteral &&
                                  (nameLiteral.Value is not string literalName || string.IsNullOrWhiteSpace(literalName))) invalid = true;
                         else if (method.Name is "setCorrelationId" or "setInstanceName" or "requireExactIdentity" &&
@@ -139,7 +150,19 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
     }
 
     // Lexical ownership is needed only for the reserved capability root: local lookalikes are ordinary data.
-    private static bool DeclaresStateRootInScope(Node scope)
+    private static bool IsStateReference(Identifier identifier, Node? parent) => parent switch
+    {
+        MemberExpression member when !member.Computed && ReferenceEquals(member.Property, identifier) => false,
+        Property property when !property.Computed && !property.Shorthand && ReferenceEquals(property.Key, identifier) => false,
+        MethodDefinition method when !method.Computed && ReferenceEquals(method.Key, identifier) => false,
+        PropertyDefinition property when !property.Computed && ReferenceEquals(property.Key, identifier) => false,
+        VariableDeclarator declaration when ReferenceEquals(declaration.Id, identifier) => false,
+        LabeledStatement label when ReferenceEquals(label.Label, identifier) => false,
+        BreakStatement or ContinueStatement => false,
+        _ => true
+    };
+
+    private static bool DeclaresStateRootInScope(Node scope, Node? parent)
     {
         bool Binds(Node? binding) => binding switch
         {
@@ -163,8 +186,11 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         return scope switch
         {
             Script script => Lexical(script.Body) || Hoisted(script),
-            IFunction function => Binds(function.Id) || function.Params.Any(Binds) || Hoisted(function.Body),
-            BlockStatement block => Lexical(block.Body),
+            IFunction function => Binds(function.Id) || function.Params.Any(Binds),
+            // Body vars are unavailable to default-parameter expressions.
+            StaticBlock block => Lexical(block.Body) || Hoisted(block),
+            BlockStatement block => Lexical(block.Body) || parent is IFunction && Hoisted(block),
+            SwitchStatement selection => Lexical(selection.Cases.SelectMany(item => item.Consequent)),
             CatchClause caught => Binds(caught.Param),
             ForStatement { Init: VariableDeclaration declaration } => Declaration(declaration),
             ForInStatement { Left: VariableDeclaration declaration } => Declaration(declaration),

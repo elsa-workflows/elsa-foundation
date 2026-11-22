@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -317,14 +318,6 @@ public sealed class ActivityTemplatePlacer(
         var closedScopeId = IsClosedScope(frame.Template.Root.Descriptor)
             ? nodeIds[frame.Template.Root.ExecutableNodeId]
             : null;
-        if (frame.InClosedScope || closedScopeId is not null)
-        {
-            foreach (var node in frame.Template.NodesById.Values)
-                if (node.ActivityContract?.AccessesWorkflowState == true &&
-                    (!node.Metadata.TryGetValue("accessesWorkflowState", out var access) || access != "false"))
-                    throw Rejected(node.AuthoredActivityId, "VF-STATE-002",
-                        "Workflow outputs and identity require an inline leaf outside a closed reusable graph. Known read-only scripts remain supported.");
-        }
         var placedNodes = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
         var pending = new Stack<(ExecutableNode Node, bool Visited)>();
         pending.Push((frame.Template.Root, false));
@@ -390,6 +383,11 @@ public sealed class ActivityTemplatePlacer(
                     frame.Publication.Version,
                     frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
+            PinOccurrenceWorkflowState(current.Node, inputBindings, metadata);
+            if ((frame.InClosedScope || closedScopeId is not null) && activityContract?.AccessesWorkflowState == true &&
+                (!metadata.TryGetValue("accessesWorkflowState", out var access) || access != "false"))
+                throw Rejected(current.Node.AuthoredActivityId, "VF-STATE-002",
+                    "Workflow outputs and identity require an inline leaf outside a closed reusable graph. Known read-only scripts remain supported.");
             var placed = new ExecutableNode(
                 nodeIds[current.Node.ExecutableNodeId],
                 isBoundary && stackIsRoot(frame) ? rootRequest.InvocationOrigin.Segments.LastOrDefault(x => x.Kind == ActivityInvocationOriginSegmentKind.AuthoredNode)?.Id ?? current.Node.AuthoredActivityId : current.Node.AuthoredActivityId,
@@ -554,6 +552,26 @@ public sealed class ActivityTemplatePlacer(
             .ThenBy(x => x.ChildIndex)
             .Select(x => rebuilt[x.OccurrenceId!])
             .ToArray();
+    }
+
+    private void PinOccurrenceWorkflowState(ExecutableNode source, IReadOnlyDictionary<string, RuntimeInputBinding> inputs,
+        Dictionary<string, string> metadata)
+    {
+        if (source.ActivityContract?.AccessesWorkflowState != true || typeRegistry is null)
+            return;
+        var type = BackgroundEligibilitySubject.ForPinnedNode(source, typeRegistry).ActivityType;
+        if (type is null) return;
+        ScriptWorkflowStateEffects? effects = null;
+        if (Elsa.Activities.Runtime.Core.Attributes.AccessesWorkflowStateAttribute.IsDeclaredBy(type))
+            effects = new ScriptWorkflowStateEffects { AccessesState = true, Conservative = true };
+        else if (type.GetCustomAttribute<Elsa.Activities.Runtime.Core.Attributes.ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey is { } key &&
+                 inputs.TryGetValue(key, out var binding) && binding.LiteralValue is { ValueKind: JsonValueKind.String } script)
+            effects = scriptVariableReadResolver?.Analyze("JavaScript", script.GetString()!, scriptBody: true)?.WorkflowState;
+        if (effects is null) return;
+        if (effects.HasInvalidLiteralCall)
+            throw Rejected(source.AuthoredActivityId, "VF-STATE-001", "A workflow-state call has invalid literal arguments or an undefined payload.");
+        metadata["accessesWorkflowState"] = effects.AccessesState ? "true" : "false";
+        metadata["workflowStateEffects"] = JsonSerializer.Serialize(effects, OccurrenceSerializerOptions);
     }
 
     private void EnsureTemplateNodeBackgroundEligible(ExecutableNode node)
