@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
+import { FlaskConical, Play, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioRadioGroup, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
@@ -105,7 +105,7 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
     return () => { abort.abort(); clearTimeout(timer); };
   }, [context, run, pollInterval]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading agent draft…</p></StudioPage>;
+  if (load.kind === "loading") return <StudioPage aria-busy="true"><SkeletonRows label="Loading agent draft" /></StudioPage>;
   if (load.kind === "missing")
     return <StudioPage data-testid="playground-missing"><StudioResultState title="Agent draft not found" description="No visible agent draft matches this link. It may have been published, discarded or belong to another tenant." /></StudioPage>;
   if (load.kind === "denied")
@@ -176,9 +176,9 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         compact
         title={`Draft revision ${draft.revision}`}
         description="Runs the saved revision on the production agent runtime. Unsaved editor changes are not included."
+        refresh={{ id: "agent-draft", label: "Reload draft", disabled: active, onRefresh: loadDraft }}
         actions={<>
           {navigate ? <StudioButton onClick={() => navigate(activityDefinitionPath(draft.definitionId, draft.draftId))}>Edit draft</StudioButton> : null}
-          <StudioButton aria-label="Reload draft" disabled={active} onClick={() => void loadDraft()}><RefreshCw aria-hidden="true" size={14} /> Reload draft</StudioButton>
         </>} />
 
       <form className="agent-playground__form" aria-label="Run" onSubmit={event => { event.preventDefault(); void start(); }}>
@@ -193,13 +193,11 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         {continuity ? (
           <fieldset className="agent-playground__conversation" disabled={active || starting}>
             <legend>Conversation</legend>
-            <label><input type="radio" name="conversation" checked={continuation === null} onChange={() => setSelected(null)} /> Fresh conversation</label>
-            {conversations.items.map(item => (
-              <label key={item.conversationId}>
-                <input type="radio" name="conversation" checked={continuation?.conversationId === item.conversationId}
-                  onChange={() => setSelected(item.conversationId)} /> Continue conversation at revision {item.revision}
-              </label>
-            ))}
+            <StudioRadioGroup label="Conversation" value={continuation?.conversationId ?? ""}
+              onChange={id => setSelected(id || null)} options={[
+                { value: "", label: "Fresh conversation" },
+                ...conversations.items.map(item => ({ value: item.conversationId, label: `Continue conversation at revision ${item.revision}` }))
+              ]} />
             {conversations.items.length === 0 ? <p className="agent-playground__hint">Conversations accepted by runs of this revision can be continued here.</p> : null}
           </fieldset>
         ) : null}

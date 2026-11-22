@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Plus, Trash2, X } from "lucide-react";
-import { AdvancedSection, TechnicalDetails, StudioFactList, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioFactList, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityAuthoringCapabilities,
@@ -299,7 +299,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
     {memberKind !== "output" ? <header className="ad-contract-header"><div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div></header> : null}
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
-    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Published baseline unavailable.</strong> Existing-member changes are conservatively guarded as potentially breaking until the exact immutable baseline can be loaded.</span></div> : null}
+    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Could not load the published version.</strong> Until Studio can compare versions, changes to existing members may affect callers.</span></div> : null}
     <div className={`ad-contract-workbench${activeEntry ? "" : " is-empty"}`}>
       <nav className="ad-contract-workbench-list" aria-label={`${title} members`}>
         <ContractMemberGroup
@@ -606,7 +606,7 @@ function DurabilityFields<T extends ActivityInputContract | ActivityOutputContra
   const drivers = activatedStorageDrivers(type, capabilities);
   const available = drivers.includes(member.storageDriverKey);
   const helpId = useId();
-  return <StudioField label={<><span>Durable storage driver</span></>}><select data-contract-field="storageDriverKey" aria-label="Durable storage driver" aria-describedby={helpId} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
+  return <StudioField label={<><span>Storage provider</span></>}><select data-contract-field="storageDriverKey" aria-label="Storage provider" aria-describedby={helpId} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
     {!available ? <option value={member.storageDriverKey} disabled>{member.storageDriverKey || "No driver"} · unavailable</option> : null}
     {drivers.map(driver => <option key={driver} value={driver}>{driver}</option>)}
   </select><small id={helpId} data-contract-field="durability" tabIndex={-1}>{drivers.length === 0 ? "No compatible storage driver is active." : drivers.length === 1 ? "Only one compatible storage driver is active. Activate another compatible driver on the server to choose it here." : "Choose where this value is stored durably."}</small></StudioField>;
@@ -800,13 +800,11 @@ const memberTabs = ["General", "Presentation", "Advanced"];
 function MemberFieldTabs({ general, presentation, advanced }: { general: ReactNode; presentation: ReactNode; advanced: ReactNode }) {
   const [active, setActive] = useState("General");
   const id = useId();
-  const onKeyDown = useTablistKeyboard(memberTabs, active, setActive);
   const panels = [general, presentation, advanced];
   return <div className="ad-member-settings">
-    <div className="ad-tabs ad-member-tabs" role="tablist" aria-label="Member settings" onKeyDown={onKeyDown}>
-      {memberTabs.map((tab, index) => <button key={tab} type="button" role="tab" id={tabElementIds(id, index).tabId} data-tab-id={tab} aria-controls={tabElementIds(id, index).panelId} aria-selected={active === tab} tabIndex={active === tab ? 0 : -1} onClick={() => setActive(tab)}>{tab}</button>)}
-    </div>
-    {panels.map((panel, index) => <div key={memberTabs[index]} role="tabpanel" id={tabElementIds(id, index).panelId} aria-labelledby={tabElementIds(id, index).tabId} hidden={active !== memberTabs[index]}>{panel}</div>)}
+    <StudioTabs compact className="ad-member-tabs" baseId={id} ariaLabel="Member settings"
+      tabs={memberTabs.map(tab => ({ id: tab, label: tab }))} activeTab={active} onSelect={setActive} />
+    {panels.map((panel, index) => <StudioTabPanel key={memberTabs[index]} baseId={id} index={index} hidden={active !== memberTabs[index]}>{panel}</StudioTabPanel>)}
   </div>;
 }
 

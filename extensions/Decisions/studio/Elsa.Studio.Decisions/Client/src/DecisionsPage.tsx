@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plus, Upload } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { StatusChip, PeerViewSwitch, studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StudioNewResourceDialog, StatusChip, PeerViewSwitch, studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { can, cloneVersion, createDecision, exportDecision, failureMessage, getDecision, isConflict, listDecisions, listRecycleBin, publishDecision, purgeDecision, recycleDecision, restoreDecision, saveDecision, unpublishDecision, validateDecision, version, versions, type DecisionAsset, type DecisionVersion, type Diagnostic } from "./decisionsApi";
 import { decodeDecisionXml, newDecisionXml, parseTable } from "./decisionXml";
 import { TableEditor } from "./TableEditor";
@@ -17,6 +17,7 @@ function diagnosticLocation(item: Diagnostic, table: ReturnType<typeof parseTabl
 }
 export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false, handoff }: DecisionsPageProps) {
   const [assets, setAssets] = useState<DecisionAsset[]>([]), [asset, setAsset] = useState<DecisionAsset | null>(null), [published, setPublished] = useState<DecisionVersion | undefined>(), [availableVersions, setAvailableVersions] = useState<DecisionVersion[]>([]);
+  const [metadataEntered, setMetadataEntered] = useState(false);
   const [name, setName] = useState(""), [description, setDescription] = useState(""), [xml, setXml] = useState(""), [sensitive, setSensitive] = useState(false);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [conflict, setConflict] = useState(false), [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]), [search, setSearch] = useState("");
   const [recycleBin, setRecycleBin] = useState(false), [editorView, setEditorView] = useState<"rules" | "tests" | "settings">(isNew ? "settings" : "rules");
@@ -28,6 +29,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const editor = !!assetId || isNew, readOnly = !!published || !can(api, "decisions:manage") || (!!assetId && asset?.xml === null);
   const diagnosticTable = useMemo(() => { try { return xml ? parseTable(xml) : null; } catch { return null; } }, [xml]);
   const dirty = editor && !published && (isNew ? !!name || !!description || sensitive || xml !== "" && xml !== initialXml.current : !!asset && (name !== asset.name || description !== (asset.description ?? "") || xml !== (asset.xml ?? "") || sensitive !== asset.isSensitive));
+  useLayoutEffect(() => { if (isNew && metadataEntered) titleInput.current?.focus(); }, [isNew, metadataEntered]);
   const dirtyRef = useRef(false); dirtyRef.current = dirty || caseDirty;
   // The tab names only what this route shows: the host keeps its route label while another decision or version is still loading,
   // and "Decision" marks one whose own load finished without it.
@@ -50,7 +52,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
   const load = useCallback(async () => {
     const ticket = ++generation.current; writing.current = false; setBusy(false); setLoading(true); setError(""); setConflict(false); setAsset(null); setPublished(undefined); setAvailableVersions([]); setDiagnostics([]);
     try {
-      if (isNew) { const initial = newDecisionXml(); initialXml.current = initial; setName(""); setDescription(""); setSensitive(false); setXml(initial); }
+      if (isNew) { setMetadataEntered(false); const initial = newDecisionXml(); initialXml.current = initial; setName(""); setDescription(""); setSensitive(false); setXml(initial); }
       else if (assetId) {
         const next = await getDecision(api, assetId);
         const candidate = versionId ? await version(api, assetId, versionId) : undefined;
@@ -172,6 +174,11 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     if (ticket === generation.current) { setAssets(items); api.notifications?.notify({ level: "success", title: `${item.name} was permanently deleted.` }); }
   });
   const filtered = assets.filter(item => `${item.name} ${item.description ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  if (isNew && !metadataEntered) return <StudioPage className="decisions-page" aria-label="New decision">
+    {can(api, "decisions:manage") ? <StudioNewResourceDialog title="New decision" onCancel={() => { focusCollectionOnLoad.current = true; navigate(path()); }}
+      onCreate={metadata => { setName(metadata.name); setDescription(metadata.description); setMetadataEntered(true); }} />
+      : <StudioResultState title="Decision creation unavailable" description="Your account does not have permission to create decisions." />}
+  </StudioPage>;
   return <StudioPage className="decisions-page" aria-labelledby={editor ? "decision-title" : "decisions-title"}>
     {!editor ? <StudioPageHeader title="Decisions" titleId="decisions-title"
       description="Reusable business policies with versioned decision tables, saved cases and explanations."
@@ -229,7 +236,11 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
             <h1 id="decision-title" ref={heading} tabIndex={-1} title={editorTitle}>{editorTitle}</h1>
             {editorStatus ? <StatusChip tone={dirty || isNew ? "warning" : "neutral"}>{editorStatus}</StatusChip> : null}
           </span></>
-          {shown ? <StudioField className="decision-version-picker" label="View"><select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(shown.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField> : null}
+          {shown && availableVersions.length > 0 ? <fieldset className="decision-version-picker" disabled={busy} aria-label="Decision version">
+            <PeerViewSwitch ariaLabel="Decision version" value={published?.id ?? "draft"} views={[
+              { id: "draft", label: "Current draft" }, ...availableVersions.map(item => ({ id: item.id, label: `Version ${item.number}` }))
+            ]} onChange={version => void leave(path(shown.id, version === "draft" ? undefined : version))} />
+          </fieldset> : null}
         </div>
         {!routePending && (isNew || shown) ? <div className="decision-actions">
           {!published ? <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save decision"}</StudioButton>

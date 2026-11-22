@@ -376,7 +376,7 @@ internal sealed class RuntimeHistoryCapture(IWorkflowExecutionStateStore executi
                 activities.TryGetValue(fact.ActivityExecutionId ?? "", out var activity);
                 var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
                 // New admissions pin this outgoing-source shape; retained v3 replay bytes stay unchanged.
-                if (policy is { PolicyId: "runtime-history-v4", Version: 4 } && fact.Kind is
+                if (policy is ({ PolicyId: "runtime-history-v4", Version: 4 } or { PolicyId: "runtime-history-v5", Version: 5 }) && fact.Kind is
                     (RuntimeHistorySourceFactKind.StimulusPublicationCommitted or RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested or RuntimeHistorySourceFactKind.ChildWorkflowSettled))
                 {
                     var eventId = RuntimeHistoryIdentity.CreateId(checkpoint.CheckpointId, RuntimeHistorySourceFacts.EventName(fact.Kind), fact.SubjectId);

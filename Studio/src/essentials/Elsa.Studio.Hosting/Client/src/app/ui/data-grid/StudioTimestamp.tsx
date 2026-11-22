@@ -6,6 +6,12 @@ const preciseTimeFormatter = new Intl.DateTimeFormat(undefined, { timeStyle: "me
 const preciseDateTimeFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
 const timestampTitleFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "long" });
 
+/** Locale-aware inline timestamp for plain-text content such as confirmation messages. */
+export function formatStudioDateTime(value: string | null, fallback: string): string {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? preciseDateTimeFormatter.format(date) : fallback;
+}
+
 export function StudioTimestamp({ value, fallback = null, invalidFallback, format = "stacked" }: {
   value?: string | null;
   /** Inline diagnostic readings retain seconds. The default stacks a date above short time. */

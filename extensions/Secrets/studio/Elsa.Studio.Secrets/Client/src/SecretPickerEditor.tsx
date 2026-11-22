@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
@@ -83,11 +84,11 @@ export function SecretPickerEditor({
         ))}
       </select>
       <p id={statusId} className={`secret-picker-status ${visibleState.status}`} role={visibleState.status === "error" ? "alert" : "status"}>
-        {visibleState.status === "loading" ? "Loading secret metadata..." : null}
+        {visibleState.status === "loading" ? "Loading secret metadata…" : null}
         {visibleState.status === "error" ? (
           <>
             <span>Secret metadata is unavailable.</span>
-            <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</button>
+            <StudioButton onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</StudioButton>
           </>
         ) : null}
         {visibleState.status === "ready" && visibleState.items.length === 0 ? "No active secrets are available." : null}

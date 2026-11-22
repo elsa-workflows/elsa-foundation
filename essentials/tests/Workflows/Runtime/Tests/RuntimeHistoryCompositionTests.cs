@@ -219,8 +219,9 @@ public sealed class RuntimeHistoryCompositionTests
     }
 
     [Theory]
-    [InlineData("default")] [InlineData("foreign")] [InlineData("other-committer")]
-    public void Alteration_vocabulary_requires_the_selected_default_writer_and_same_history_committer(string owner)
+    [InlineData("default", true)] [InlineData("foreign", true)] [InlineData("other-committer", true)]
+    [InlineData("default", false)] [InlineData("foreign", false)] [InlineData("other-committer", false)]
+    public void Retry_and_alteration_vocabulary_require_their_actual_selected_native_owners(string owner, bool nativeRetry)
     {
         var services = Services(new Access());
         RuntimeHistoryRegistration.AddServices(services);
@@ -229,11 +230,33 @@ public sealed class RuntimeHistoryCompositionTests
             new RuntimeWorkflowAlterationCheckpointWriter(new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(),
                 new LegacyWriter(), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
                 provider.GetRequiredService<IWorkflowAlterationStore>(), provider.GetRequiredService<TimeProvider>()));
+        if (!nativeRetry) services.RemoveAll<IWorkflowSchedulerWorkHandler>();
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
         var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "alteration-admission")!;
-        Assert.Equal(owner == "default", policy.SupportedKinds.Contains("ActivityRetryScheduled"));
+        Assert.Equal(owner == "default" || nativeRetry, policy.SupportedKinds.Contains("ActivityRetryScheduled"));
         Assert.Equal(owner == "default", policy.SupportedKinds.Contains("AlterationApplied"));
+    }
+
+    [Fact]
+    public void An_earlier_custom_retry_handler_cannot_qualify_the_unused_default_native_owner()
+    {
+        var services = Services(new Access());
+        RuntimeHistoryRegistration.AddServices(services);
+        services.Insert(0, ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, ShadowRetryHandler>());
+        services.AddScoped<IWorkflowAlterationCheckpointWriter, ForeignAlterationWriter>();
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "shadowed-retry")!;
+        Assert.DoesNotContain("ActivityRetryScheduled", policy.SupportedKinds);
+    }
+
+    private sealed class ShadowRetryHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
+    {
+        public string Name => "custom-native-retry";
+        public bool CanHandle(RuntimeSchedulerWorkItem work) => work.CommandKind == WorkflowExecutionCommandKind.RetryActivityBoundary;
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem work, IRuntimePipelineContext context, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     private sealed class ForeignAlterationWriter : IWorkflowAlterationCheckpointWriter

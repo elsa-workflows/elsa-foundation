@@ -16,8 +16,38 @@ internal sealed partial class ActorAdapter
         if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
 
+        var expiry = store.FoundationExpiry(row);
+        var outcome = BeginDiscard(input, row, park, expiry, expired: false);
+        if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
+        outcome.ReplyTo(input.Taken[input.From], "started");
+        return outcome;
+    }
+
+    private Durable.TurnOutcome ExpirePark(Durable.TurnInput input)
+    {
+        var message = input.Taken[input.From].Message;
+        if (input.Row is not { Status: Durable.InstanceStatus.Faulted, ParkDiscard: null } row ||
+            store.FoundationTurnHeader(row).Park is not { } park ||
+            store.FoundationExpiry(row) is not { } expiry)
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidControl");
+
+        var envelope = Durable.ParkDrainEnvelope.For(row, park);
+        if (!envelope.MatchesExpiry(message, row, expiry))
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
+        if (input.Services.Now >= expiry.At)
+            return BeginDiscard(input, row, park, expiry, expired: true);
+
+        var early = DiscardCheckpoint(input, row, row);
+        early.Sent.Add(envelope.Issue(row, checked(expiry.Serial + 1), expiryAt: expiry.At));
+        return early;
+    }
+
+    private static Durable.TurnOutcome BeginDiscard(Durable.TurnInput input, Durable.InstanceRow row,
+        Durable.InMemoryStore.FoundationParkMark park, Durable.ParkExpiry? expiry, bool expired)
+    {
         var next = row with { ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1) };
-        return AdvanceDiscard(input, row, next, park, null, 0, 1);
+        return AdvanceDiscard(input, row, next, park, input.Taken[input.From].Message.Id, null, 0,
+            checked((expiry?.Serial ?? 0) + 1), expired);
     }
 
     private Durable.TurnOutcome ContinueDiscard(Durable.TurnInput input)
@@ -32,22 +62,25 @@ internal sealed partial class ActorAdapter
         if (page is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         if (page.Count > 0)
-            return AdvanceDiscard(input, row, row, park, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1));
+            return AdvanceDiscard(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Expired);
 
         var completed = row with { ParkDiscard = null, ParkDiscarded = true };
         var outcome = DiscardCheckpoint(input, row, completed);
-        outcome.Journal = Durable.Json.Write(new { Outcome = "discarded", drain.Cleared });
+        outcome.Journal = Durable.Json.Write(new { Outcome = drain.Expired ? "expired" : "discarded", drain.Operation, drain.Cleared });
         if (outcome.Row!.Parent is not null)
             outcome.Sent.Add(Notice(outcome.Row, null, final: true));
         return outcome;
     }
 
     private static Durable.TurnOutcome AdvanceDiscard(Durable.TurnInput input, Durable.InstanceRow row,
-        Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, IReadOnlyList<Durable.ParkPageRow>? page,
-        long cleared, long serial)
+        Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, string operation, IReadOnlyList<Durable.ParkPageRow>? page,
+        long cleared, long serial, bool expired)
     {
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
-        var drain = new Durable.ParkDiscardDrain(page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey);
+        var drain = new Durable.ParkDiscardDrain(operation, page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey)
+        {
+            Expired = expired
+        };
         var outcome = DiscardCheckpoint(input, row, next with { ParkDiscard = drain });
         outcome.Sent.Add(control);
         if (page is not null)

@@ -1,3 +1,4 @@
+import { StatusChip } from "@elsa-workflows/studio-ui";
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { useEffect, useState, type RefObject } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, LocateFixed, Undo2 } from "lucide-react";
@@ -79,10 +80,10 @@ export function ActivityDefinitionDiagnosticsPanel({
             ? validationFailureMessage(failure)
             : "Local authoring diagnostics must be resolved or reset before revision-sensitive actions can continue."}</p>
       </div>
-      {validation ? <span className={`ad-validation-result is-${validation.isValid ? "valid" : "invalid"}`}>
+      {validation ? <StatusChip tone={validation.isValid ? "success" : "danger"}>
         {validation.isValid ? <CheckCircle2 size={16} aria-hidden /> : <AlertCircle size={16} aria-hidden />}
         {validation.isValid ? "Valid draft" : "Draft rejected"}
-      </span> : null}
+      </StatusChip> : null}
       </header>
     {groups.map(group => <section key={group.area} className="ad-diagnostic-group" aria-labelledby={`activity-diagnostics-${group.id}`}>
       <h3 id={`activity-diagnostics-${group.id}`}>{group.area}</h3>

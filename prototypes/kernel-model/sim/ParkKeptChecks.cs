@@ -105,6 +105,13 @@ internal static class ParkKeptChecks
 
         await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
         await CheckDiscardDrain(check);
+        await CheckParkSelectionTarget(check);
+        await CheckUnarmedParkExpiry(check);
+        await CheckFiniteParkExpiry(manual: false, check);
+        await CheckFiniteParkExpiry(manual: true, check);
+        await CheckZeroWindowWithoutWake(check);
+        await CheckParkExpiryClockAtFence(early: false, check);
+        await CheckParkExpiryClockAtFence(early: true, check);
 
         foreach (var timed in new[] { false, true })
             await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
@@ -120,8 +127,18 @@ internal static class ParkKeptChecks
         var store = new InMemoryStore(1, () => now);
         var actor = new Probe(withholdFaulted: true);
         var scope = new Contract.BoundScope("discard");
+        var replies = new Requests("discard-operator");
+        bool landedAtReply = false;
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
-            new WorkerOptions { Monotonic = () => now - openedAt });
+            new WorkerOptions
+            {
+                Monotonic = () => now - openedAt,
+                Transport = new OperatorReplies(replies, reply =>
+                {
+                    if (reply.Item is "started")
+                        landedAtReply = store.Instances.Values.Any(row => row.ParkDiscard?.Operation == "op");
+                })
+            });
         var first = Owner("discard-first");
         var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node);
         var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -154,13 +171,25 @@ internal static class ParkKeptChecks
         var drainer = Owner("discard-open");
         await using var drainingActivation = (await new DurableHost([drainer]).ActivateAsync(0))!;
         await Pump(drainingActivation);
-        var selection = store.SealFoundationSelection(scope.Tenant, parked);
-        var admission = store.AdmitFoundationOperator(scope.Tenant, target.Actor.Id, null, "op", Contract.Kinds.Discard,
-            Json.Write(new Contract.OperatorCommand(selection)), null, null, selection, null);
+        var operators = new InMemoryIngress(store, replies, drainer.Node, (_, kind) => kind == Contract.Kinds.Discard);
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var denied = await ingress.SendAsync(scope, target, "ordinary-discard", Contract.Kinds.Discard, payload);
+        var foreign = await operators.SendAsync(new Contract.BoundScope("foreign"), target, "cross-tenant",
+            Contract.Kinds.Discard, payload);
+        var missing = await operators.SendAsync(scope, target, "no-selection", Contract.Kinds.Discard);
+        check(denied.Outcome == Contract.AdmissionOutcome.Refused && foreign.Outcome == Contract.AdmissionOutcome.Refused &&
+            missing is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+            "only a bound operator with a qualified Park selection can submit discard");
+
+        var request = operators.RequestAsync(scope, target, "op", Contract.Kinds.Discard, payload, null,
+            new(null, now + 100, ReleaseBeforeCommit: true)).AsTask();
         await Step(drainer);
         var open = store.Instances[id];
-        var opened = admission.Outcome == InMemoryStore.OperatorAdmission.Accepted && open.ParkResolutionGeneration == 1 &&
-            open.ParkDiscard is { Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
+        var reply = await request.WaitAsync(TimeSpan.FromSeconds(2));
+        var opened = reply is { Item: "started", Error: null } && landedAtReply &&
+            open.ParkResolutionGeneration == 1 &&
+            open.ParkDiscard is { Operation: "op", Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
             store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount;
         check(opened, "discard Open commits its first private control without clearing any input");
         if (!opened) return;
@@ -193,8 +222,17 @@ internal static class ParkKeptChecks
             "a successor completes from the committed cursor and writes the terminal mark without changing the saved state");
         check(store.Messages.Values.All(item => item.KeptBy is null && item.Message.Kind != Kinds.Drain) &&
             store.Messages.Values.Count(item => item.Message.Id == "after-open" && item.Done) == 1 && actor.PoisonOffers == 1 &&
-            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal)) == 1,
+            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal) &&
+                item.Entries.Contains("\"Operation\":\"op\"", StringComparison.Ordinal)) == 1,
             "Complete removes the outstanding control and journals once, and the late input is dropped without replay");
+        var repeated = await operators.SendAsync(scope, target, "op", Contract.Kinds.Discard, payload);
+        var stale = await operators.SendAsync(scope, target, "another-op", Contract.Kinds.Discard, payload);
+        var repeatedRequest = await operators.RequestAsync(scope, target, "op", Contract.Kinds.Discard, payload, null,
+            new(null, now + 100));
+        check(repeated.Outcome == Contract.AdmissionOutcome.Duplicate && repeatedRequest.Error == "repeat" &&
+            stale is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            store.Instances[id].ParkResolutionGeneration == 1,
+            "after Complete the same operation is a duplicate and a new operation using the old selection is refused");
         await ingress.SendAsync(scope, target, "after-complete", "update");
         await Pump(successor);
         check(store.Messages.Values.Count(item => item.Message.Id == "after-complete" && item.Done) == 1,
@@ -222,6 +260,333 @@ internal static class ParkKeptChecks
         }
     }
 
+    private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
+    {
+        const long now = 1_701_400_029_000;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("no-expiry");
+        var worker = new Worker("no-expiry", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var result = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(result.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(owner);
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(parked.Park is not null, "the null-window fixture is parked before expiry is injected");
+        if (parked.Park is not { } mark) return;
+
+        // A row inserted below producers uses the actor's own identity and matching Park payload, but was never armed.
+        var drain = ParkDrainEnvelope.For(parked.Row, mark).Issue(parked.Row, serial: 1);
+        var unarmed = (drain with { Kind = Kinds.ParkExpiry, Due = now }).AsKernelTicket();
+        store.Messages.Add(unarmed.InboxKey, new(unarmed, long.MaxValue - 1, 0));
+        var retained = store.Messages.Values.Count(row => row.KeptBy is not null);
+        await Pump(owner);
+        check(!store.Messages.ContainsKey(unarmed.InboxKey) && store.Instances[parked.Row.Id] == parked.Row &&
+            store.Messages.Values.Count(row => row.KeptBy is not null) == retained,
+            "a null-window Park drops an unarmed expiry without keeping it or changing the checkpoint");
+    }
+
+    private static async Task CheckFiniteParkExpiry(bool manual, Action<bool, string> check)
+    {
+        const long startAt = 1_701_400_030_000;
+        const long window = 20_000;
+        var now = startAt;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(window) };
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("finite-expiry");
+        Worker Owner(string name) => new(name, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - startAt, Horizon = TimeSpan.Zero });
+        var first = Owner("expiry-first");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node,
+            (_, kind) => kind == Contract.Kinds.Discard);
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        await Pump(active);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(started.Actor!.Value), "spawn-child", "spawn");
+        await Pump(active);
+        var target = new Contract.Target.Ref(probe.Child!.Value);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(active);
+        var firstPark = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var firstExpiry = store.FoundationExpiry(firstPark.Row);
+        now++;
+        for (var i = 0; i < InMemoryStore.ParkPageLimit; i++)
+            await ingress.SendAsync(scope, target, $"input-{i}", "update");
+        var exhausted = store.Messages.Values.Single(row => row.Message.Id == "input-0");
+        exhausted.Attempts = 3;
+        await Pump(active);
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var expiry = store.FoundationExpiry(parked.Row);
+        var label = manual ? "operator first" : "expiry first";
+        var armed = expiry is { Serial: 1, Armed: { } armedKey } && expiry.At == startAt + window &&
+            parked.Park?.At == startAt && store.Messages.GetValueOrDefault(armedKey) is
+                { Done: false, Message: { Kind: Kinds.ParkExpiry, Due: var due } } && due == expiry.At;
+        check(armed, $"{label}: Park commits one timer at the commit-time deadline");
+        if (!armed) return;
+        check(exhausted is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+            parked.Park == firstPark.Park && firstExpiry == expiry &&
+            store.Messages.Values.Count(row => row.Message.Kind == Kinds.ParkExpiry) == 1,
+            $"{label}: re-park keeps the original armed timer and deadline");
+        var original = store.Messages[expiry!.Armed!.Value].Message;
+        var id = parked.Row.Id;
+        var keptCount = InMemoryStore.ParkPageLimit + 1;
+        var oldEpoch = first.Fences.Single().Epoch;
+
+        now = expiry.At - 1;
+        var second = Owner("expiry-take");
+        await using var successor = (await new DurableHost([second]).ActivateAsync(0))!;
+        await store.SweepAsync();
+        await Pump(successor);
+        check(second.Fences.Single().Epoch > oldEpoch && store.Instances[id] == parked.Row &&
+            store.Messages.Values.Count(row => row.KeptBy is not null) == keptCount && store.Messages.ContainsKey(original.InboxKey),
+            $"{label}: takeover and sweep before the deadline preserve the Park and its timer");
+
+        var fence = second.Fences.Single();
+        var rowless = new TurnCommit(id, null, null, [original.InboxKey], [], [], [], [], null);
+        var protectedExpiry = await DefiniteRejection(() => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position,
+            Defaults.Lease, false, [rowless], [], []))) && store.Messages.ContainsKey(original.InboxKey);
+        check(protectedExpiry, $"{label}: even a fenced rowless commit cannot consume the outstanding expiry");
+        if (!protectedExpiry) return;
+
+        var envelope = ParkDrainEnvelope.For(parked.Row, parked.Park!);
+        var wrongSerial = envelope.Issue(parked.Row, serial: 999, expiryAt: now);
+        store.Messages.Add(wrongSerial.InboxKey, new(wrongSerial, long.MaxValue - 2, 0));
+        await Step(second);
+        check(!store.Messages.ContainsKey(wrongSerial.InboxKey) && store.Instances[id] == parked.Row &&
+            store.FoundationExpiry(parked.Row) == expiry,
+            $"{label}: a correctly addressed timer with another key cannot open a drain");
+
+        if (manual)
+        {
+            var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+            await ingress.SendAsync(scope, target, "discard", Contract.Kinds.Discard, Json.Write(new Contract.OperatorCommand(selection)));
+        }
+        else
+        {
+            // Model a due-time fault below the poll. The current authenticated key reaches the owner too soon.
+            var reservation = store.Messages[original.InboxKey];
+            reservation.Message = original with { Due = now };
+            await Step(second);
+            var rearm = store.FoundationExpiry(parked.Row);
+            var replaced = rearm is { Serial: 2, Armed: { } rearmed } && rearm.At == expiry.At &&
+                !store.Messages.ContainsKey(original.InboxKey) &&
+                store.Messages.GetValueOrDefault(rearmed) is { Done: false, Message.Due: var at } && at == expiry.At &&
+                store.Instances[id].ParkDiscard is null;
+            check(replaced, "an early armed timer is consumed and atomically re-armed with the same deadline and a fresh key");
+            if (!replaced) return;
+            now = expiry.At;
+        }
+
+        await Step(second);
+        var opening = store.Instances[id];
+        var began = opening.ParkDiscard is { Cleared: 0, Expired: var expired } && expired != manual &&
+            opening.ParkResolutionGeneration == 1 && store.FoundationExpiry(opening) is { Armed: null } &&
+            !store.Messages.Values.Any(row => row.Message.Kind == Kinds.ParkExpiry);
+        check(began, $"{label}: Open consumes or recalls the expiry and records the matching resolution");
+        if (!began) return;
+        // A recalled or superseded timer can arrive after the Open that invalidated it.
+        store.Messages.Add(original.InboxKey, new(original, long.MaxValue - 1, 0));
+        now = expiry.At;
+        await Step(second);
+        check(store.Instances[id].ParkDiscard is { Cleared: InMemoryStore.ParkPageLimit } &&
+            store.Messages.Values.Count(row => row.KeptBy is not null) == 1,
+            $"{label}: a single committed page leaves a bounded suffix");
+
+        await successor.DisposeAsync();
+        now += 10;
+        var third = Owner("expiry-complete");
+        await using var completing = (await new DurableHost([third]).ActivateAsync(0))!;
+        await Pump(completing);
+        var finished = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var outcome = manual ? "discarded" : "expired";
+        check(finished is { Park: null, Row: { ParkDiscarded: true, Status: InstanceStatus.Faulted, ParkDiscard: null } } &&
+            finished.EndedAt == now && finished.Row.State == parked.Row.State && store.FoundationExpiry(finished.Row) is null &&
+            !store.Messages.Values.Any(row => row.KeptBy is not null || ParkDrainEnvelope.IsInDomain(row.Message)) &&
+            store.Journal.Values.Count(row => row.Instance == id && row.Entries.Contains($"\"{outcome}\"", StringComparison.Ordinal)) == 1,
+            $"{label}: the next owner clears the suffix, drops the stale timer and stamps one Faulted outcome");
+        check(probe.Notices is [{ Final: false, Status: Contract.ActorStatus.Faulted }, { Final: true, Status: Contract.ActorStatus.Faulted }],
+            $"{label}: the parent receives its provisional Park notice and one final Faulted notice");
+
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task CheckZeroWindowWithoutWake(Action<bool, string> check)
+    {
+        const long now = 1_701_400_070_000;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.Zero };
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("zero-window");
+        var worker = new Worker("zero-window", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        await using var active = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        await Pump(active);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(started.Actor!.Value), "fault", "poison");
+        await active.WokenAsync(null);
+        for (var i = 0; i < 12; i++) await active.RunAsync();
+        var finished = store.ReadFoundationActor(scope.Tenant, started.Actor.Value.Id).Actor!;
+        check(finished is { Park: null, Row.ParkDiscarded: true } && finished.EndedAt == now,
+            "a zero-window expiry enters the owner's next pass without another wake");
+    }
+
+    private static async Task CheckParkExpiryClockAtFence(bool early, Action<bool, string> check)
+    {
+        const long startAt = 1_701_400_080_000;
+        const long window = 20_000;
+        long now = startAt, elapsed = 0;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMilliseconds(window) };
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("expiry-clock");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => elapsed, Horizon = TimeSpan.Zero });
+        var first = Owner("expiry-clock-first");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node);
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(active);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(active);
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var timer = store.FoundationExpiry(parked.Row);
+        if (timer is not { Armed: { } key })
+        {
+            check(false, "the expiry clock fixture must have a committed timer");
+            return;
+        }
+
+        now = early ? timer.At - 1 : timer.At;
+        elapsed = now - startAt;
+        if (early)
+        {
+            var source = store.Messages[key];
+            source.Message = source.Message with { Due = now };
+        }
+
+        var next = Owner("expiry-clock-take");
+        await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+        await next.PollAsync();
+        await next.LoadAsync();
+        await next.FlushAsync();
+        next.RunTurn(parked.Row.Id);
+        // Only the database clock moves, after the commit captures its time and during fence acquisition.
+        var sampled = 0;
+        store.Locking = _ =>
+        {
+            sampled++;
+            now = early ? timer.At : timer.At - 1;
+        };
+        try { await next.FlushAsync(); }
+        finally { store.Locking = null; }
+
+        var invalidated = sampled == 1 && store.Instances[parked.Row.Id] == parked.Row &&
+            store.FoundationExpiry(parked.Row) == timer && store.Messages.ContainsKey(key);
+        check(invalidated, early
+            ? "crossing the deadline inside the fence rolls back a premature re-arm"
+            : "a clock step back inside the fence rolls back an expiry Open");
+        if (!invalidated) return;
+
+        await successor.DisposeAsync();
+        now = timer.At + (long)Defaults.Lease.TotalMilliseconds + 1;
+        elapsed = now - startAt;
+        var complete = Owner("expiry-clock-complete");
+        await using var completed = await new DurableHost([complete]).ActivateAsync(0);
+        check(completed is not null, "the next owner takes the partition after the invalidated owner's lease expires");
+        if (completed is null) return;
+        await Pump(completed);
+        check(store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor is { Park: null, Row.ParkDiscarded: true } ended &&
+            ended.EndedAt == now && store.Journal.Values.Count(row => row.Entries.Contains("\"expired\"", StringComparison.Ordinal)) == 1,
+            "the next owner expires the same Park once when the database clock permits it");
+    }
+
+    private static async Task CheckParkSelectionTarget(Action<bool, string> check)
+    {
+        const long now = 1_701_400_025_000;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("park-selection");
+        var worker = new Worker("park-selection", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind is Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var created = new Contract.Target.Start(new(probe.Type, "ready", null));
+        var a = (await edge.SendAsync(scope, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
+        var b = (await edge.SendAsync(scope, created, "start-b", Contract.Kinds.Start)).Actor!.Value;
+        var foreign = new Contract.BoundScope("another-tenant");
+        var c = (await edge.SendAsync(foreign, created, "start-a", Contract.Kinds.Start)).Actor!.Value;
+        var targetA = new Contract.Target.Ref(a);
+        var targetB = new Contract.Target.Ref(b);
+        var targetC = new Contract.Target.Ref(c);
+        await Pump(owner);
+        await edge.SendAsync(scope, targetA, "selected", "poison");
+        await edge.SendAsync(scope, targetB, "fault-b", "poison");
+        await edge.SendAsync(foreign, targetC, "fault-c", "poison");
+        await Pump(owner);
+
+        var parkedA = store.ReadFoundationActor(scope.Tenant, a.Id).Actor!;
+        var parkedB = store.ReadFoundationActor(scope.Tenant, b.Id).Actor!;
+        var pinned = parkedA.Park is not null && parkedA.Park == parkedB.Park &&
+            parkedA.Row.Creation == parkedB.Row.Creation && parkedA.Row.Id != parkedB.Row.Id;
+        check(pinned, "the two targets have exactly the same Park time, revision and creation");
+        if (!pinned) return;
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, a))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var other = await edge.SendAsync(scope, targetB, "swapped", Contract.Kinds.Discard, payload);
+        var own = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Discard, payload);
+        var swappedDelete = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Delete, payload);
+        var swappedTerminate = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Terminate, payload);
+        check(swappedDelete is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection, Actor: null } &&
+            swappedTerminate is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection, Actor: null },
+            "the tenant receipt cannot turn an invalid delete or terminate selection into a duplicate");
+        var list = new ActorList(store, 10);
+        var selectionB = (await list.GetAsync(scope, b))!.Selection!;
+        var selectionC = (await list.GetAsync(foreign, c))!.Selection!;
+        var retargeted = await edge.SendAsync(scope, targetB, "selected", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selectionB)));
+        var independent = await edge.SendAsync(foreign, targetC, "selected", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selectionC)));
+        await Pump(owner);
+        var expiredDelete = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Delete, payload);
+        var expiredTerminate = await edge.SendAsync(scope, targetA, "selected", Contract.Kinds.Terminate, payload);
+        check(expiredDelete is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            expiredTerminate is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection },
+            "a discard receipt does not make a resolved Park selection current for delete or terminate");
+        check(retargeted is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var first } && first == a &&
+            independent.Outcome == Contract.AdmissionOutcome.Accepted &&
+            store.ReadFoundationActor(foreign.Tenant, c.Id).Actor is { Row.ParkDiscarded: true },
+            "an operator id pins the first target in its tenant independently of ordinary sends and other tenants");
+        check(other is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection } &&
+            own.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[parkedA.Row.Id].ParkDiscarded &&
+            store.Instances[parkedB.Row.Id] == parkedB.Row &&
+            store.Messages.Values.Any(row => row.Message.Target.Id == parkedB.Row.Id && row.KeptBy == ParkKeepReason.Consumed),
+            "a same-tenant Park selection can discard only the actor that issued it");
+    }
+
+    private sealed class OperatorReplies(Requests requests, Action<Reply> observe) : IReplyTransport
+    {
+        public void Send(string node, Reply reply)
+        {
+            observe(reply);
+            requests.Receive(reply);
+        }
+    }
+
     private static async Task<bool> CheckDiscardPageAuthority(InMemoryStore store, PartitionFence fence, InstanceRow open,
         InMemoryStore.FoundationParkMark park, Action<bool, string> check)
     {
@@ -230,7 +595,7 @@ internal static class ParkKeptChecks
         var envelope = ParkDrainEnvelope.For(open, park);
         var nextControl = envelope.Issue(open, drain.Serial + 1);
         var next = open with { Revision = open.Revision + 1,
-            ParkDiscard = new(page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
+            ParkDiscard = new(drain.Operation, page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
         var clear = new TurnCommit(open.Id, next, open.Revision, [drain.Control], [], [nextControl], [], [], null)
         { FoundationParkClear = new(park, page) };
         var rowless = new TurnCommit(open.Id, null, null, [drain.Control], [], [], [], [], null);
@@ -379,6 +744,8 @@ internal static class ParkKeptChecks
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
+        public Contract.ActorRef? Child { get; private set; }
+        public List<Contract.ChildFinished> Notices { get; } = [];
         public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -389,6 +756,9 @@ internal static class ParkKeptChecks
                 PoisonOffers++;
                 throw new InvalidOperationException("turn fault");
             }
+            foreach (var message in turn.Inbox)
+                if (message.Kind == "spawn") Child = turn.Start(new(Type, "child", null));
+                else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
             turn.State = "saved";
             return default;
         }

@@ -554,7 +554,7 @@ describe("Activity Definition authoring", () => {
     expect(displayName.getAttribute("placeholder")).toBeTruthy();
     expect(category.getAttribute("aria-label")).toBe("Category");
     expect(category.getAttribute("placeholder")).toBeTruthy();
-    expect(description.getAttribute("aria-label")).toBe("Description");
+    expect(description.labels?.[0]?.textContent?.trim()).toBe("Description");
     expect(description.getAttribute("placeholder")).toBeTruthy();
     const advanced = buttonByText(rendered.container, "Advanced");
     expect(advanced.getAttribute("aria-expanded")).toBe("false");
@@ -821,7 +821,7 @@ describe("Activity Definition authoring", () => {
     expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
     expect(doneOutcome.querySelector('input[data-contract-field="isEmitted"]')).toBeNull();
     const customerNote = selectContractMember(rendered.container, "input", "customer-note");
-    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Storage provider").value).toBe("elsa.json");
     const required = controlByLabel<HTMLInputElement>(rendered.container, "Required");
     const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allow null");
     expect(required.checked).toBe(false);
@@ -1085,7 +1085,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Immutable public contract");
+    await waitForText(rendered.container, "Published inputs, outputs and outcomes");
     expect(rendered.container.textContent).toContain("Removed.Alias");
     expect(rendered.container.textContent).toContain("Stored aliases remain visible");
     expect(rendered.container.textContent).not.toContain("Replace type");
@@ -1326,7 +1326,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Published baseline unavailable.");
+    await waitForText(rendered.container, "Could not load the published version.");
     showContractView(rendered.container);
     click(buttonByText(rendered.container, "Remove input"));
     await waitForText(rendered.container, "Remove published-baseline input");
@@ -2550,7 +2550,7 @@ describe("Activity Definition publication", () => {
       "/design/activities/drafts/activity-draft-1/publication-preflight",
       { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: "version-head" }
     ));
-    await waitForText(rendered.container, "Compared with published head");
+    await waitForText(rendered.container, "Compared with latest published version");
     expect((controlByLabel<HTMLInputElement>(rendered.container, "Publication version")).value).toBe("2.0.0");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Publication version"), "3.2.1");
     click(buttonByText(rendered.container, "Publish 3.2.1"));
@@ -2602,7 +2602,7 @@ describe("Activity Definition publication", () => {
 
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Review & publish"));
-    await waitForText(rendered.container, "No published head");
+    await waitForText(rendered.container, "No latest published version");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
 
     await waitForText(rendered.container, "Version 1.0.0");
@@ -2611,7 +2611,7 @@ describe("Activity Definition publication", () => {
     // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
     const summary = [...rendered.container.querySelectorAll<HTMLElement>(".studio-fact-list")].find(element => element.textContent?.includes("version-published"))!;
     expect(summary.textContent).toContain("version-published");
-    expect(summary.textContent).not.toContain("No published head");
+    expect(summary.textContent).not.toContain("No latest published version");
     // The action affordance no longer invites a repeat publish of the same version.
     expect(buttonByText(rendered.container, "View publication")).toBeTruthy();
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Publish 1.0.0")).toBe(false);

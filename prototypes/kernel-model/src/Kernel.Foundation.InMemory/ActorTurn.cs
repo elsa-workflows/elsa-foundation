@@ -28,7 +28,7 @@ internal sealed partial class ActorAdapter
         {
             _store = store;
             _input = input;
-            _turn = new(input);
+            _turn = new(input, foundation: true);
             Header = header;
             Ambient = ambient;
             _row = input.Row ?? NewRow(input.Actor, input.Spec!, input.Taken[input.From].Message);
@@ -113,10 +113,22 @@ internal sealed partial class ActorAdapter
 
         public void CancelJob(string key)
         {
-            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key).Ticket;
-            if (ticket is null && _input.VolatileMessage(Durable.InboxKey.Ticket(_row.Id, key, _row.Creation)) is { Kind: Durable.Kinds.Job } local)
+            if (_turn.JobGeneration(key) is not { } generation) return;
+            var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation, generation);
+            var ticket = _store.FoundationJob(_row.Id, _row.Creation, key, generation).Ticket;
+            if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
                 ticket = local.Read<Durable.JobTicket>();
-            _turn.CancelJob(key, ticket?.Timer, _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
+
+            var pending = ticket is null ? (Durable.InboxKey?)null : ticketKey;
+            if (_store.HasFoundationJobResult(_row.Id, _row.Creation, key, generation))
+                pending = Durable.InboxKey.JobResult(_row.Id, key, _row.Creation, generation);
+
+            var deadline = ticket?.Timer;
+            if (deadline is not null && !_store.HasStoredJobDeadline(_row.Id, _row.Creation, deadline) &&
+                _input.VolatileMessage(Durable.InboxKey.Issued(deadline)) is not { Kind: Durable.Kinds.JobDeadline })
+                deadline = null;
+
+            _turn.CancelJob(key, pending, deadline);
         }
 
         public void Subscribe(string key, string wait, bool keep = false)
@@ -126,7 +138,7 @@ internal sealed partial class ActorAdapter
             _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         }
 
-        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
+        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
 
         public string Publish(string key, string? payload, TimeSpan keepFor)
         {
@@ -166,8 +178,8 @@ internal sealed partial class ActorAdapter
             if (cascades)
             {
                 foreach (var child in _children) _turn.Send(new(child.Id), Contract.Kinds.Terminate, options: new(TargetCreation: child.Creation));
-                foreach (var job in _turn.Jobs() is { } jobs ? Durable.DurableKeyJson.ReadKeys(jobs) : [])
-                    CancelJob(job);
+                foreach (var job in Durable.JobRegistry.Read(_turn.Jobs()))
+                    CancelJob(job.Key);
             }
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
@@ -233,9 +245,8 @@ internal sealed partial class ActorAdapter
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? _store.MessageHandle("inbox:" + logicalId) : message.Id;
-            if (message.Start is null && message.EventMatch is { } encoded)
+            if (message.Start is null && Durable.Events.MatchFor(message) is { } match)
             {
-                var match = Durable.EventMatch.Decode(encoded);
                 if (!match.Key.StartsWith(Qualify(""), StringComparison.Ordinal))
                     throw new InvalidOperationException("An event from another scope reached this turn.");
                 var key = match.Key[(Header.Tenant.Length + 1)..];

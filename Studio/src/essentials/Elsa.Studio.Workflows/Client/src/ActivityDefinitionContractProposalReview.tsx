@@ -164,7 +164,7 @@ export function ActivityDefinitionContractProposalReview({
     </header>
     <ActivityDefinitionContractProposalStatus phase={phase} failure={failure} />
     {proposal && phase !== "stale" ? <>
-      <TechnicalDetails><StudioFactList aria-label="Exact proposal binding">
+      <TechnicalDetails><StudioFactList aria-label="Draft used for this proposal">
         <div><dt>Draft revision</dt><dd>{proposal.revision}</dd></div>
         <div><dt>Provider</dt><dd>{proposal.providerKey}</dd></div>
         <div><dt>Provider schema</dt><dd>{proposal.providerSchemaVersion}</dd></div>

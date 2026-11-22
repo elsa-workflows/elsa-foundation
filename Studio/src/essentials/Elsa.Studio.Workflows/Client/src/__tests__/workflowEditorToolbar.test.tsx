@@ -54,7 +54,7 @@ describe("compact workflow toolbar", () => {
 
     expect(parentLink.textContent).toBe("Templates");
     expect(parentLink.getAttribute("href")).toContain("/workflows/templates");
-    expect(container.querySelector(".wf-editor-title .wf-chip")?.textContent).toBe("Template");
+    expect(container.querySelector(".wf-editor-title .studio-status-chip")?.textContent).toBe("Template");
     parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     expect(onBack).toHaveBeenCalledOnce();
   });
@@ -62,8 +62,8 @@ describe("compact workflow toolbar", () => {
   it("keeps primary commands directly available with descriptive accessible labels", () => {
     const { container, commands } = render();
     const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;
-    const publish = container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
-    const run = container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    const publish = container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!;
+    const run = container.querySelector<HTMLButtonElement>("[aria-label='Test Run']")!;
     const publishAccessibleName = publish.getAttribute("aria-label") ?? publish.textContent?.trim();
     const runAccessibleName = run.getAttribute("aria-label") ?? run.textContent?.trim();
     expect(save.title).toBe("Save workflow");
@@ -85,15 +85,15 @@ describe("compact workflow toolbar", () => {
     expect(status.closest(".wf-editor-toolbar")).not.toBeNull();
     expect(status.getAttribute("data-pending")).toBe("true");
     expect(status.textContent).toBe("Saving before review...");
-    const buttons = [".wf-save-button", ".wf-publish-primary", ".wf-run-button"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
+    const buttons = [".wf-save-button", ".studio-split-button-primary", "[aria-label='Test Run']"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
     expect(buttons.every(button => button.disabled)).toBe(true);
     buttons.forEach(click);
     Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
   });
   it("explains unsupported publication and test-run operations",() => {
     const {container,commands} = render({publicationUnavailableReason:"Publishing is not supported by this backend.",canRun:false,runTitle:"Test runs are not supported by this backend."});
-    const publish=container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
-    const run=container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    const publish=container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!;
+    const run=container.querySelector<HTMLButtonElement>("[aria-label='Test Run']")!;
     expect(publish.disabled).toBe(true);expect(publish.title).toContain("not supported");
     expect(run.disabled).toBe(true);expect(run.title).toContain("not supported");
     click(publish);click(run);expect(commands.onPublish).not.toHaveBeenCalled();expect(commands.onRun).not.toHaveBeenCalled();

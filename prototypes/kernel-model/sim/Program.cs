@@ -87,6 +87,12 @@ if (args.Contains("--metadata-envelope-check"))
     await MetadataEnvelopeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--event-identity-check"))
+{
+    var failed = false;
+    await EventIdentityChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),

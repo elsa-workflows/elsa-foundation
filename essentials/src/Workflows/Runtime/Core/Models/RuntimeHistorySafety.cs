@@ -18,12 +18,24 @@ public static class RuntimeHistorySafety
             e.Category != (timer ? RuntimeHistoryEventCategory.SchedulerLifecycle : RuntimeHistoryEventCategory.DeliveryObservation) ||
             e.SchemaVersion != 1 || e.Sequence != 0 || e.PhysicalCommitId is not null || e.RecordedAt is not null ||
             e.CheckpointId is not null || e.CheckpointOrdinal is not null ||
-            !(DeliveryObservationKinds.Contains(e.Name) || RuntimeHistorySourceFacts.IsPublicationObservation(e.Name) || timer) ||
+            !(DeliveryObservationKinds.Contains(e.Name) || RuntimeHistorySourceFacts.IsPublicationObservation(e.Name) || IsChildObservation(e.Name) || timer) ||
             !observation.Policy.SupportedKinds.Contains(e.Name, StringComparer.Ordinal))
             throw new InvalidOperationException("A delivery observation must be safe, unpositioned and admitted by its retained policy.");
         if (RuntimeHistorySourceFacts.IsPublicationObservation(e.Name)) RuntimeHistorySourceFacts.ValidatePublicationObservation(observation);
+        if (IsChildObservation(e.Name))
+        {
+            if (observation.Policy is not { PolicyId: "runtime-history-v5", Version: 5 } ||
+                !new[] { "ChildWorkflowDispatchRequested", "ChildStartAttemptObserved", "ChildStartDispositionObserved" }.All(kind => observation.Policy.SupportedKinds.Contains(kind, StringComparer.Ordinal)) ||
+                e.Metadata.Count != 1 || !e.Metadata.TryGetValue("history.reasonCode", out var reason) ||
+                (e.Name == "ChildStartAttemptObserved" ? reason != "handler-invocation-observed" : reason is not ("handler-returned-observed" or "handler-failed-observed")) ||
+                e.Causation is not { } cause || string.IsNullOrWhiteSpace(cause.HistoryEventId) || cause.WorkflowExecutionId != e.WorkflowExecutionId ||
+                string.IsNullOrWhiteSpace(cause.DeliveryId) || string.IsNullOrWhiteSpace(e.AttemptId) || e.BookmarkId is not null)
+                throw new InvalidOperationException("Child observations require their original vocabulary, source and closed disposition.");
+        }
         if (timer) DurableTimerHistoryFacts.ValidateObservation(e);
     }
+
+    private static bool IsChildObservation(string name) => name is "ChildStartAttemptObserved" or "ChildStartDispositionObserved";
 
     public static void Validate(RuntimeHistoryBatch batch, string workflowExecutionId)
     {

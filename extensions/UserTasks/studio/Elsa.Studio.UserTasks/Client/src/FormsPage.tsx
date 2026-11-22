@@ -1,10 +1,11 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbs, studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
+import { StudioTimestamp, StudioNewResourceDialog, type StudioResourceMetadata, StudioShellBreadcrumbs, studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, createForm, forms, formsPageMode, formsPageModeFromSession, message, statusOf, type FormVersion, type FormsPageMode, type TaskActor, type TaskForm } from "./taskApi";
+import { formsPath, type FormNavigation } from "./taskNavigation";
 import { FormLifecyclePage } from "./FormsPageLifecycle";
 import { FormWorkspaceTabs, PublishedFormSnapshot, type FormWorkspaceTab } from "./FormVersionWorkspace";
 const initial = (): TaskForm => ({ id: "", version: "1", name: "", provider: basicProvider, fields: [] });
@@ -29,7 +30,7 @@ function appendUniqueVersions(current: FormVersion[], incoming: FormVersion[]) {
     return true;
   })];
 }
-export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
+export function FormsPage({ api, ...navigation }: { api: ElsaStudioModuleApi } & FormNavigation) {
   const [discovery, setDiscovery] = useState<{ api: ElsaStudioModuleApi; attempt: number; mode: "loading" | FormsPageMode; error: string }>();
   const [attempt, setAttempt] = useState(0);
   const sessionMode = formsPageModeFromSession(api);
@@ -45,18 +46,18 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   const currentDiscovery = discovery?.api === api && discovery.attempt === attempt ? discovery : undefined;
   const mode = sessionMode ?? currentDiscovery?.mode ?? "loading";
   const error = sessionMode === null ? currentDiscovery?.error ?? "" : "";
-  if (mode === "lifecycle") return <FormLifecyclePage api={api} />;
-  if (mode === "legacy") return <LegacyFormsPage api={api} />;
+  if (mode === "lifecycle") return <FormLifecyclePage api={api} {...navigation} />;
+  if (mode === "legacy") return <LegacyFormsPage api={api} {...navigation} />;
   return <StudioPage className="user-tasks" aria-label="Reusable task forms management">
     <StudioPageHeader title="Task forms" description="Manage reusable task forms and their published versions."
       actions={<a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>} />
-    {mode === "loading" ? <div role="status">Loading forms…</div> : <StudioResultState tone="danger" title="Forms unavailable"
+    {mode === "loading" ? <SkeletonRows rows={3} label="Loading forms" /> : <StudioResultState tone="danger" title="Forms unavailable"
       description={error || "This backend does not advertise the required User Task operation."}
       actions={<StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton>} />}
   </StudioPage>;
 }
 
-export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
+export function LegacyFormsPage({ api, formId, navigate }: { api: ElsaStudioModuleApi } & FormNavigation) {
   const fieldControls = api.userTaskFieldControls;
   const owner = useMemo(() => ({ api }), [api]);
   const currentOwner = useRef(owner); currentOwner.current = owner;
@@ -67,11 +68,12 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
   const [formError, setFormError] = useState(""); const [versionConflict, setVersionConflict] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [hasUnappliedSource, setHasUnappliedSource] = useState(false);
-  const returnKey = useRef<string>(""); const returnButtons = useRef(new Map<string, HTMLButtonElement>());
+  const returnKey = useRef<string>(""); const returnButtons = useRef(new Map<string, HTMLTableRowElement>());
   const [opened, setOpened] = useState<FormVersion | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<FormWorkspaceTab>("form");
   const [historyLoading, setHistoryLoading] = useState(false); const [historyError, setHistoryError] = useState("");
   const [editing, setEditing] = useState(false); const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const createButton = useRef<HTMLButtonElement>(null); const editor = useRef<HTMLDivElement>(null);
   useEffect(() => { if (editing) editor.current?.querySelector<HTMLInputElement>("input")?.focus(); }, [editing]);
   const closeEditor = (allowFocus = true) => {
@@ -96,13 +98,28 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
     finally { if (currentOwner.current === owner && request === pageRequest.current) setLoading(false); }
   }, [api, owner]);
   useEffect(() => { void refresh(); }, [refresh]);
-  const availableVersion = async (id: string) => {
+  const allVersions = useCallback(async () => {
     const all: FormVersion[] = []; let cursor: string | null = null; const seen = new Set<string>();
     do {
       const page = await forms(api, cursor); all.push(...page.items); cursor = page.next ?? null;
       if (cursor && seen.has(cursor)) throw new Error("Form paging did not advance. Refresh forms and try again.");
       if (cursor) seen.add(cursor);
     } while (cursor);
+    return all;
+  }, [api]);
+  useEffect(() => {
+    if (!formId || !identity || !identity.canReadForms && !identity.canManageForms) return;
+    let active = true;
+    void allVersions().then(items => {
+      if (!active) return;
+      const selected = [...latestVersions(items).values()].find(item => item.form.id === formId);
+      if (!selected) { setError("This form is unavailable under your current access."); return; }
+      setVersions(items); setNextPage(null); setOpened(selected); setWorkspaceTab("form");
+    }).catch(cause => { if (active) setError(message(cause)); });
+    return () => { active = false; };
+  }, [formId, identity, allVersions]);
+  const availableVersion = async (id: string) => {
+    const all = await allVersions();
     const numbers = all.filter(item => item.form.id === id).map(item => versionNumber(item.form.version)).filter(Number.isSafeInteger);
     return String(Math.max(0, ...numbers) + 1);
   };
@@ -155,13 +172,25 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
   const validation = validateTaskForm(form, fieldControls);
   const valid = validation.length === 0;
   const backToForms = () => {
+    if (formId && navigate) { navigate(formsPath()); return; }
     setOpened(null); setWorkspaceTab("form");
     requestAnimationFrame(() => returnButtons.current.get(returnKey.current)?.focus());
   };
+  const editorActions = <>{hasUnappliedSource ? <span className="user-task-form-source-pending" role="status">Unapplied source edits · Apply or reset before publishing.</span> : null}<StudioButton variant="primary" disabled={busy || hasUnappliedSource} onClick={() => void save()}>Publish form version</StudioButton><StudioButton disabled={busy} onClick={() => closeEditor()}>Cancel</StudioButton></>;
+  const beginForm = ({ name, description }: StudioResourceMetadata) => {
+    returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false);
+    setForm({ ...initial(), name, ...(description ? { description } : {}) }); setEditing(true); setCreating(false);
+  };
+  if (formId && !opened && !editing) return <StudioPage className="user-tasks">
+    {error || !hasFormAccess ? <StudioResultState tone="danger" title="Form unavailable" description={error || "Your account cannot open this form."}
+      actions={<StudioButton onClick={() => navigate?.(formsPath())}>Back to forms</StudioButton>} /> : <SkeletonRows label="Loading form" />}
+  </StudioPage>;
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
-    {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
-    <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? "Design the form" : opened ? opened.form.name : "Task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
-      {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => { returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false); setForm(initial()); setEditing(true); }}>Create form version</StudioButton>}
+    {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Task forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
+    {creating ? <StudioNewResourceDialog title="New form" nameMaxLength={256} descriptionMaxLength={2000} onCancel={() => setCreating(false)} onCreate={beginForm} /> : null}
+    <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? form.name || "New form" : opened ? opened.form.name : "Task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
+      {editing ? editorActions : null}
+      {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => setCreating(true)}>New form</StudioButton>}
       <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a></>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
     {formError && editing ? <StudioAlert tone="danger">{formError}{versionConflict && <StudioButton disabled={busy} onClick={() => void recoverVersion()}>Use next available version</StudioButton>}</StudioAlert> : null}
@@ -172,18 +201,21 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
             const key = formIdentity(version);
             const open = () => {
               returnKey.current = key;
+              if (navigate) { navigate(formsPath(version.form.id)); return; }
               setOpened(version);
               setWorkspaceTab("form");
             };
-            return <tr key={key} {...studioRowInteraction<HTMLTableRowElement>(busy ? undefined : open)}>
-              <td data-label="Form"><button type="button" className="user-task-link studio-row-link" aria-label={`Open form ${version.form.id}`} disabled={busy} ref={node => { if (node) returnButtons.current.set(key, node); else returnButtons.current.delete(key); }} onClick={open}>{version.form.name}</button></td>
+            return <tr key={key} aria-label={`Open form ${version.form.name}`}
+              ref={row => { if (row) returnButtons.current.set(key, row); else returnButtons.current.delete(key); }}
+              {...studioRowInteraction<HTMLTableRowElement>(busy ? undefined : open)}>
+              <th scope="row" data-label="Form">{version.form.name}</th>
               <td data-label="Identifier">{version.form.id}</td>
               <td data-label="Latest version">{version.form.version}</td>
               {identity?.canManageForms && <td data-label="Actions" data-empty={!canVersion(version) || undefined}>{canVersion(version) && <StudioButton disabled={busy} onClick={() => { returnKey.current = key; void nextVersion(version); }}>Create next version</StudioButton>}</td>}
             </tr>;
           })}</tbody>
         </table></StudioTableContainer> : !error && hasFormAccess ? <StudioCollectionEmptyState title="No reusable forms yet" description="Reusable forms define the fields people fill in when responding to a task."
-          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={() => { returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false); setForm(initial()); setEditing(true); }}>Create form version</StudioButton> : undefined} /> : null}
+          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={() => setCreating(true)}>New form</StudioButton> : undefined} /> : null}
       {!loading && !error && hasFormAccess && <StudioCollectionFooter><span>{latest.size} {latest.size === 1 ? "form" : "forms"} shown</span>
         {nextPage && <StudioButton disabled={busy} onClick={() => { const cursor = nextPage; const request = ++pageRequest.current; setBusy(true); void forms(api, cursor).then(page => { if (currentOwner.current === owner && request === pageRequest.current) { setVersions(previous => appendUniqueVersions(previous, page.items)); setNextPage(page.next ?? null); } }, failure => { if (currentOwner.current === owner && request === pageRequest.current) setError(message(failure)); }).finally(() => { if (currentOwner.current === owner && request === pageRequest.current) setBusy(false); }); }}>More forms</StudioButton>}
       </StudioCollectionFooter>}
@@ -201,7 +233,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
               id: version.form.version,
               ariaLabel: `Select version ${version.form.version}`,
               title: `Version ${version.form.version}`,
-              subtitle: <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>,
+              subtitle: <StudioTimestamp value={version.createdAt} />,
               status: isLatest(version) ? <StatusChip tone="success">Latest</StatusChip> : undefined
             }));
           })()}
@@ -222,7 +254,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
     </section>}
     {editing && identity?.canManageForms ? <div ref={editor} className="user-task-form-editor" role="region" aria-label="Design and publish a form version">
       {showValidation && validation.length ? <StudioAlert tone="danger">{validation.join(" ")}</StudioAlert> : null}
-      <FormDesigner
+      <FormDesigner compactHeader
         form={form}
         onFormChange={update => setForm(value => ({ ...value, ...update }))}
         fields={form.fields}
@@ -230,7 +262,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
         fieldControls={fieldControls}
         description="Existing tasks keep this version. Publishing changes makes them available to new tasks."
         onUnappliedSourceChange={setHasUnappliedSource}
-        toolbarActions={<>{hasUnappliedSource ? <span className="user-task-form-source-pending" role="status">Unapplied source edits · Apply or reset before publishing.</span> : null}<StudioButton variant="primary" disabled={busy || hasUnappliedSource} onClick={() => void save()}>Publish form version</StudioButton><StudioButton disabled={busy} onClick={() => closeEditor()}>Cancel</StudioButton></>}
+
         disabled={busy}
       />
     </div> : null}

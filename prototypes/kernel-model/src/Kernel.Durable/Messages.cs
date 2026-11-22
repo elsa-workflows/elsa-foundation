@@ -34,10 +34,19 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);
-    public static InboxKey Ticket(string actor, string key, long creation = 0) => new(Worker.TicketId(actor, key, creation), (long)CreationProtocol.Origin(actor, creation).Length + 1);
-    internal static InboxKey JobResult(string actor, string key, long creation)
+    public static InboxKey Ticket(string actor, string key, long creation = 0) => Ticket(actor, key, creation, 0);
+
+    internal static InboxKey Ticket(string actor, string key, long creation, long generation)
     {
-        var ticket = Ticket(actor, key, creation);
+        if (generation < 0 || generation > 0 && creation <= 0) throw new ArgumentOutOfRangeException(nameof(generation));
+        var id = Worker.TicketId(actor, key, creation);
+        if (generation > 0) id += FormattableString.Invariant($"#g{generation}");
+        return new(id, (long)CreationProtocol.Origin(actor, creation).Length + 1);
+    }
+
+    internal static InboxKey JobResult(string actor, string key, long creation, long generation = 0)
+    {
+        var ticket = Ticket(actor, key, creation, generation);
         return ticket with { Id = ticket.Id + "/result" };
     }
     public static implicit operator InboxKey(string ordinaryId) => new(ordinaryId);
@@ -56,10 +65,13 @@ public sealed record Message(
     internal bool BindFoundationChild { get; init; }
     internal bool StoreStartInputOnce { get; init; }
     internal Message? StoredEnvelope { get; init; }
+    internal EventMatch? ProjectedEvent { get; init; }
+    internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
-    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind == Kinds.Drain;
+    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
+    internal long JobGeneration { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
     private WeakReference<Message>? _issuedTicket;
     internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
@@ -97,6 +109,7 @@ public static class Kinds
     public const string Event = "event";
     internal const string JobDeadline = "kernel.job-deadline";
     internal const string Drain = "kernel.drain";
+    internal const string ParkExpiry = "kernel.park-expiry";
     public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
 

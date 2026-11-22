@@ -8,7 +8,7 @@ for (const appearance of [{ preset: "classic", mode: "light" }, { preset: "class
     await page.setViewportSize({ width, height: 1100 });
     await page.goto(`/runtime-summary.html?theme=${appearance.mode}&preset=${appearance.preset}&backend=test-backend`);
     const panel = page.getByRole("region", { name: "Test run summary", exact: true });
-    await expect(panel.locator(".wf-status-badge")).toHaveText("Completed");
+    await expect(panel.locator(".studio-status-chip")).toHaveText("Completed");
     // #4903 replaced the "Latest test run" heading with a compact status and outcome line.
     await expect(panel.locator(".wf-runtime-status-outcome .wf-runtime-outcome")).toBeVisible();
     await expect(panel.getByText("Waiting triggers", { exact: true })).toBeHidden();
@@ -43,7 +43,7 @@ test("runtime summary preserves waiting, faults and observation warnings", async
   const panel = page.getByRole("region", { name: "Test run summary", exact: true });
   const state = page.getByRole("combobox", { name: "Fixture execution state", exact: true });
   await state.selectOption("Suspended");
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Waiting");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Waiting");
   // #4903 moved waits, incident and observation notices into the collapsible "Run details" fold.
   const runDetails = panel.locator(".wf-runtime-details").getByRole("button", { name: /^Run details/ });
   if (await runDetails.getAttribute("aria-expanded") !== "true") await runDetails.click();
@@ -62,7 +62,7 @@ test("runtime summary preserves waiting, faults and observation warnings", async
   await expect(panel.getByRole("button", { name: "Reconnect execution", exact: true })).toBeVisible();
   await expect(panel.getByText("Execution observation disconnected.", { exact: true })).toBeVisible();
   await state.selectOption("Expired");
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Expired");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Expired");
 });
 
 test("the composed editor Runtime panel follows its real execution observer", async ({ page }) => {
@@ -71,9 +71,9 @@ test("the composed editor Runtime panel follows its real execution observer", as
   await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
   await page.getByRole("tab", { name: "Runtime", exact: true }).click();
   const panel = page.getByRole("region", { name: "Test run summary", exact: true });
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Running");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Running");
   await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Completed", { timeout: 10000 });
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Completed", { timeout: 10000 });
   await expect(panel.getByRole("heading", { name: "Waiting triggers", exact: true })).toBeHidden();
   const artifact = panel.getByRole("link", { name: "View artifact", exact: true });
   await expect(artifact).toHaveAttribute("href", "/workflows/executables/editor-artifact?backend=fixture-backend");

@@ -1,3 +1,6 @@
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
+import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
@@ -301,8 +304,10 @@ function ActivityDuplicateEditorFixtureContent() {
     dispatchPrompt: () => undefined
   } as unknown as StudioAiContributionApi), []);
 
+  setDialogs(dialogs);
   return (
     <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}${executableHost ? " wf-page--executable-inspector" : ""}`} data-testid="activity-duplicate-editor">
+      <DialogHost />
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>

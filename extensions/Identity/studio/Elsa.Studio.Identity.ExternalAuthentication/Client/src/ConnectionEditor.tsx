@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useState } from "react";
-import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioAlert, CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import { type ConnectionCatalog, type ConnectionDocument, type ConnectionView, type ExternalAuthenticationClient, type RoleChoice, type SecretChoice } from "./sdk";
 
 export function ConnectionEditor({ client, catalog, view, seed, busy, onSave, onDirty, onDiscard }: {
@@ -125,7 +125,7 @@ export function ConnectionEditor({ client, catalog, view, seed, busy, onSave, on
     {view?.previewCallback ? <CopyableIdentifier label="Preview callback URL" value={view.previewCallback} /> : null}
     <p className="external-auth-muted">{!view ? "Save this draft to get its callback URLs." : view.signInCallback && view.previewCallback
       ? "Register both callback URLs with the provider using authorization code flow and PKCE." : "Ask your integrator to configure the backend's public URL so it can provide trusted callback addresses."}</p>
-    {localError ? <p role="alert" className="external-auth-error">{localError}</p> : null}
+    {localError ? <StudioAlert tone="danger">{localError}</StudioAlert> : null}
     <div className="external-auth-actions"><StudioButton type="submit" variant="primary" disabled={readOnly || busy || (Boolean(view) && !dirty)}>Save</StudioButton>
       <StudioButton onClick={onDiscard} disabled={busy}>{dirty ? "Discard changes" : "Close editor"}</StudioButton></div>
   </form>;

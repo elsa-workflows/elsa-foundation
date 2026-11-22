@@ -2,6 +2,31 @@ import { describe, expect, it, vi } from "vitest";
 import { definition, renderRegisteredRoute, response } from "./routeRenderingHelpers";
 
 describe("Executable Inspector toolbar", () => {
+  it.each([200, 500])("keeps the refreshed executable when an older response returns %s", async status => {
+    let finishFirst!: (response: Response) => void;
+    const first = new Promise<Response>(resolve => { finishFirst = resolve; });
+    let requests = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/executables/artifact-1")) {
+        requests++;
+        return requests === 1 ? first : response({ ...executableDetail(), artifactHash: "sha256:current" });
+      }
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+    await vi.waitFor(() => expect(requests).toBe(1));
+    toolbarButton(container, "Refresh")!.click();
+    await vi.waitFor(() => expect(container.textContent).toContain("sha256:current"));
+    finishFirst(response(executableDetail(), status));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.textContent).toContain("sha256:current");
+    expect(container.textContent).not.toContain("sha256:abc");
+    expect(container.querySelector("time")?.dateTime).toBe(executableDetail().createdAt);
+    await unmount();
+  });
+
   it("renders Run as the filled primary StudioButton, quiet return navigation and default actions", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

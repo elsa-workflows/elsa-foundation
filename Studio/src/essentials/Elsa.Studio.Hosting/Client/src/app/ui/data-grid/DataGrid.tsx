@@ -20,15 +20,7 @@ export interface StudioDataGridColumn<T> {
  * or Space selects the focused row. When no rows are present, the optional `emptyState` slot renders
  * in place of the body.
  */
-export function StudioDataGrid<T>({
-  columns,
-  items,
-  getKey,
-  selectedKey,
-  onSelect,
-  gridColumns,
-  emptyState
-}: {
+type DataGridProps<T> = {
   columns: StudioDataGridColumn<T>[];
   items: T[];
   getKey(item: T): string;
@@ -36,24 +28,53 @@ export function StudioDataGrid<T>({
   onSelect?(item: T): void;
   gridColumns?: string;
   emptyState?: React.ReactNode;
-}) {
+};
+
+type ComposedGridProps = React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode };
+
+/** A composed grid keeps responsive cell markup and column-specific controls in the caller. */
+export function StudioDataGrid<T>(props: DataGridProps<T>): React.JSX.Element;
+export function StudioDataGrid(props: ComposedGridProps): React.JSX.Element;
+export function StudioDataGrid<T>(props: DataGridProps<T> | ComposedGridProps) {
+  if ("items" in props) return <ColumnDataGrid {...props} />;
+  return <div {...props} role="table" />;
+}
+
+export function StudioDataGridRow({ activate, ...props }: React.HTMLAttributes<HTMLDivElement> & { activate?(): void }) {
+  const interaction = studioRowInteraction<HTMLDivElement>(activate);
+  return <div {...interaction} {...props} role="row" onKeyDown={event => {
+    props.onKeyDown?.(event);
+    if (event.defaultPrevented || event.target !== event.currentTarget) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const row = event.currentTarget;
+      const next = event.key === "ArrowDown" ? row.nextElementSibling : row.previousElementSibling;
+      if (next instanceof HTMLElement && next.hasAttribute("data-studio-row-interactive")) {
+        event.preventDefault();
+        next.focus();
+      }
+    } else {
+      interaction.onKeyDown?.(event);
+    }
+  }} />;
+}
+
+function ColumnDataGrid<T>({ columns, items, getKey, selectedKey, onSelect, gridColumns, emptyState }: DataGridProps<T>) {
   const selectable = Boolean(onSelect);
   const [focusedKey, setFocusedKey] = React.useState<string>();
   const keys = items.map(getKey);
   const tabKey = [focusedKey, selectedKey].find(key => key !== undefined && keys.includes(key)) ?? keys[0];
 
   return (
-    <div
+    <StudioDataGrid
       className="studio-data-grid"
-      role="table"
       style={gridColumns ? { "--studio-grid-columns": gridColumns } as React.CSSProperties : undefined}
       onBlur={event => {
         if (!event.currentTarget.contains(event.relatedTarget)) setFocusedKey(undefined);
       }}
     >
-      <div className="studio-data-grid-header" role="row">
+      <StudioDataGridRow className="studio-data-grid-header">
         {columns.map(column => <span key={column.id} role="columnheader">{column.header}</span>)}
-      </div>
+      </StudioDataGridRow>
       {items.length === 0 && emptyState !== undefined ? (
         <div className="studio-data-grid-empty" role="row">
           <span role="cell" className="studio-data-grid-empty-cell">{emptyState}</span>
@@ -62,35 +83,21 @@ export function StudioDataGrid<T>({
       {items.map(item => {
         const key = getKey(item);
         const selected = key === selectedKey;
-        const interaction = studioRowInteraction<HTMLDivElement>(onSelect ? () => onSelect(item) : undefined);
         return (
-          <div
+          <StudioDataGridRow
             key={key}
             className={selected ? "studio-data-grid-row selected" : "studio-data-grid-row"}
-            role="row"
             aria-selected={selectable ? selected : undefined}
-            {...interaction}
+            activate={onSelect ? () => onSelect(item) : undefined}
             tabIndex={selectable ? (key === tabKey ? 0 : -1) : undefined}
             onFocus={selectable ? event => {
               if (event.target === event.currentTarget) setFocusedKey(key);
             } : undefined}
-            onKeyDown={selectable ? event => {
-              if (event.defaultPrevented || event.target !== event.currentTarget) return;
-              const row = event.currentTarget;
-              const next = event.key === "ArrowDown" ? row.nextElementSibling
-                : event.key === "ArrowUp" ? row.previousElementSibling : null;
-              if (next instanceof HTMLElement && next.hasAttribute("data-studio-row-interactive")) {
-                event.preventDefault();
-                next.focus();
-                return;
-              }
-              interaction.onKeyDown?.(event);
-            } : undefined}
           >
             {columns.map(column => <span key={column.id} role="cell">{column.render(item)}</span>)}
-          </div>
+          </StudioDataGridRow>
         );
       })}
-    </div>
+    </StudioDataGrid>
   );
 }

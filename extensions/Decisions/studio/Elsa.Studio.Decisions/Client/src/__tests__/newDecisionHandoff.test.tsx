@@ -4,7 +4,7 @@ import { studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from
 import { DecisionsPage } from "../DecisionsPage";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { beginNewDecisionHandoff, cancelNewDecisionHandoff, completeNewDecisionHandoff, takeNewDecisionHandoff } from "../newDecisionHandoff";
-import { asset, button, click, render, select, stubApi, type } from "./helpers";
+import { beginDecision, asset, button, click, render, select, stubApi, type } from "./helpers";
 
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
@@ -43,6 +43,7 @@ const picker = (host: HTMLElement) => host.querySelector<HTMLSelectElement>('[da
 const decisionTab = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-tab="decision"]')!;
 
 async function saveNewDecision(host: HTMLElement) {
+  await beginDecision();
   await vi.waitFor(() => expect(decisionTab(host)?.querySelector('[role="grid"]')).not.toBeNull());
   const name = Array.from(decisionTab(host).querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
   type(name, created.name); click(button(decisionTab(host), "Save decision"));

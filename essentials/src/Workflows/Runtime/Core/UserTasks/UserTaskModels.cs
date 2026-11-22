@@ -33,7 +33,10 @@ public sealed record UserTaskField(string Key, string Label, string Kind, bool R
 public sealed record UserTaskFieldPresentation(string Display, string? TrueLabel = null, string? FalseLabel = null,
     string? UnansweredLabel = null);
 
-public sealed record UserTaskForm(string Id, string Version, string Name, string Provider, IReadOnlyList<UserTaskField> Fields);
+public sealed record UserTaskForm(string Id, string Version, string Name, string Provider, IReadOnlyList<UserTaskField> Fields)
+{
+    public string? Description { get; init; }
+}
 public sealed record UserTaskFormPage(IReadOnlyList<UserTaskFormVersion> Items, string? Next);
 public sealed record UserTaskFormVersion(string TenantId, UserTaskForm Form, DateTimeOffset CreatedAt, string CreatedBy);
 public sealed record UserTaskFormDraft(string TenantId, string Id, UserTaskForm? Form, long Revision, DateTimeOffset UpdatedAt, string UpdatedBy)

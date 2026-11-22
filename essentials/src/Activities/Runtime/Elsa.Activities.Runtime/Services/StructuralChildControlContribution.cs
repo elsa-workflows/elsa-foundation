@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -6,8 +7,30 @@ namespace Elsa.Activities.Runtime.Services;
 /// One exact call's inbox acceptance, applied only to the final consumer decision checkpoint. Merges the inbox
 /// into any cancellation projection already in that checkpoint instead of restoring an obsolete call status.
 /// </summary>
-internal sealed class StructuralChildControlContribution(ActivityExecutionState acceptedChild, string? completionWorkItemId = null)
+internal sealed class StructuralChildControlContribution(ActivityExecutionState acceptedChild, string? completionWorkItemId,
+    RuntimeChildControlTransport incoming, IReadOnlyList<RuntimeChildControlTransport> ready, bool newlyAccepted)
 {
+    internal IEnumerable<RuntimeHistorySourceFact> HistoryFacts(RuntimeCheckpointCommit commit)
+    {
+        RuntimeHistorySourceFact Fact(RuntimeHistorySourceFactKind kind, RuntimeChildControlTransport item, string activity, string related) =>
+            new(kind, RuntimeHistoryIdentity.CreateBinding([item.DispatchId, item.Batch.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)]),
+                commit.Checkpoint.OccurredAt, activity, relatedWorkflowExecutionId: item.Batch.ChildWorkflowExecutionId,
+                relatedActivityExecutionId: related, causation: new RuntimeHistoryCausation(WorkflowExecutionId: item.Batch.ChildWorkflowExecutionId,
+                    DeliveryId: item.SourceOutboxItemId), reasonCode: kind == RuntimeHistorySourceFactKind.ChildControlAccepted ? "inbox-accepted" : "consumer-decision-committed");
+        if (newlyAccepted)
+            yield return Fact(RuntimeHistorySourceFactKind.ChildControlAccepted, incoming, acceptedChild.InvocationId, incoming.ConsumerActivityExecutionId);
+        foreach (var item in ready)
+            yield return Fact(RuntimeHistorySourceFactKind.ChildControlApplied, item, item.ConsumerActivityExecutionId, acceptedChild.InvocationId);
+    }
+
+    internal async ValueTask<RuntimeCheckpointCommit> ApplyAsync(RuntimeCheckpointCommit commit,
+        RuntimeCheckpointCommitter committer, CancellationToken cancellationToken)
+    {
+        var applied = Apply(commit);
+        return await committer.AddHistorySourceFactsAsync(applied,
+            policy => policy is { PolicyId: "runtime-history-v5", Version: 5 } ? HistoryFacts(applied) : [], cancellationToken);
+    }
+
     internal RuntimeCheckpointCommit Apply(RuntimeCheckpointCommit commit)
     {
         if (acceptedChild.ChildControlInbox is not { } inbox ||

@@ -180,7 +180,7 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
       const toolbar = page.locator(".wf-editor-toolbar");
       const primary = toolbar.getByRole("button", { name: "Review & publish", exact: true });
-      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
+      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.getByRole("button", { name: "Test Run", exact: true })];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];

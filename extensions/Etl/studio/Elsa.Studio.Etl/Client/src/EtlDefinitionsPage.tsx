@@ -1,6 +1,6 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioPageHeader, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
-import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
+import { useStudioRouteLocation, useStudioWorkspaceTab, studioNavigationRequestedEvent, type StudioNavigationRequest, type StudioDialogApi, type StudioEndpointContext, type StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
 import { isValidEtlDefinitionId, sameEtlPipeline } from "./authoringHelpers";
 import { connectorAuthoringProfile, fileAuthoringProfile, type EtlAuthoringProfile } from "./authoringProfiles";
@@ -22,17 +22,28 @@ type MutationKind = "creating" | "loading-draft" | "saving" | "validating" | "pu
 type RequestFailure = { error: unknown; kind: EtlApiFailureKind };
 
 /** Authoring UI for finite ETL drafts and their immutable published artifacts. */
-type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile?: "file" | "connector" };
+type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; navigate?(path:string):void; profile?: "file" | "connector" };
 
-export function EtlDefinitionsPage({ context, dialogs, notifications, profile = "file" }: EtlDefinitionsPageProps) {
+export function EtlDefinitionsPage({ context, dialogs, notifications, navigate, profile = "file" }: EtlDefinitionsPageProps) {
+  const location = useStudioRouteLocation();
+  const [localDefinition,setLocalDefinition] = useState<string | null>(null);
+  const definition = navigate ? location.searchParams.get("definition") : localDefinition;
+  const showDefinition = (id: string | null) => {
+    if (!navigate) {setLocalDefinition(id); return;}
+    const url = new URL(location);
+    if (id) url.searchParams.set("definition",id);
+    else url.searchParams.delete("definition");
+    navigate(url.pathname + url.search + url.hash);
+  };
+  const view = {definition, showDefinition, routed: Boolean(navigate)};
   return profile === "connector"
-    ? <EtlDefinitionWorkspace key="connector" context={context} dialogs={dialogs} notifications={notifications} profile={connectorAuthoringProfile} />
-    : <EtlDefinitionWorkspace key="file" context={context} dialogs={dialogs} notifications={notifications} profile={fileAuthoringProfile} />;
+    ? <EtlDefinitionWorkspace {...view} key="connector" context={context} dialogs={dialogs} notifications={notifications} profile={connectorAuthoringProfile} />
+    : <EtlDefinitionWorkspace {...view} key="file" context={context} dialogs={dialogs} notifications={notifications} profile={fileAuthoringProfile} />;
 }
 
 function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, TBinding extends EtlBindingSummary>({
-  context, dialogs, notifications, profile
-}: { context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
+  context, dialogs, notifications, profile, definition, showDefinition, routed
+}: { definition:string | null; showDefinition:(id:string | null)=>void; routed:boolean; context: StudioEndpointContext; dialogs: StudioDialogApi; notifications?: StudioNotificationApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
   const { listEtlBindings, listEtlDefinitions, listEtlVersions, getEtlDefinition, createEtlDefinition,
     updateEtlDraft, validateEtlDraft, publishEtlDefinition, getEtlVersion } = profile.api;
   const PipelineEditor = profile.Editor;
@@ -323,6 +334,42 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
     }
   }
 
+  const owner = useStudioWorkspaceTab();
+  useEffect(() => {
+    if (!routed || !definition) return;
+    let valid = true;
+    const active = () => valid && (!owner || owner.isActive());
+    const guard = (event: Event) => {
+      if (!active() || !operation.current && !isDirty) return;
+      const detail = (event as CustomEvent<StudioNavigationRequest>).detail;
+      if (operation.current || detail?.intent === "probe" || !detail?.confirmWith) {event.preventDefault();return;}
+      detail.confirmWith(async () => active() && !operation.current &&
+        await dialogs.confirm({title:"Discard draft edits?",message:`Leave ${definition} and discard unsaved changes?`,confirmLabel:"Discard edits",tone:"danger"}) && active() && !operation.current);
+    };
+    window.addEventListener(studioNavigationRequestedEvent,guard);
+    return () => {valid=false;window.removeEventListener(studioNavigationRequestedEvent,guard);};
+  },[definition,dialogs,isDirty,owner,pipeline,routed]);
+
+  const loadSelection = useRef(selectDefinition);
+  loadSelection.current = selectDefinition;
+  useEffect(() => {
+    if (!contextIsLoaded) return;
+    if (definition) {
+      if (definition !== selectedDefinition.current) void loadSelection.current(definition);
+    } else {
+      selectedDefinition.current = null;
+      setDraft(null);
+      setPipeline(null);
+      setDraftLoadFailure(null);
+      setEditorNotice(null);
+    }
+  },[contextIsLoaded,definition]);
+
+  async function returnToDefinitions() {
+    if (!routed && isDirty && !await dialogs.confirm({title:"Discard draft edits?",message:`Leave ${definition} and discard unsaved changes?`,confirmLabel:"Discard edits",tone:"danger"})) return;
+    showDefinition(null);
+  }
+
   async function selectDefinition(definitionId: string) {
     if (definitionId === selectedDefinition.current || operation.current) return;
     const request = beginMutation("loading-draft");
@@ -332,12 +379,6 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
     const controller = mutationController.current!;
     setDraftLoadFailure(null);
     try {
-      if (isDirty && !(await dialogs.confirm({
-        title: "Discard draft edits?",
-        message: `Discard unsaved edits to ${visibleDraft?.definitionId} and open ${definitionId}?`,
-        confirmLabel: "Discard edits",
-        tone: "danger"
-      }))) return;
       if (!isCurrentMutation(requestContext, generation, request)) return;
       const nextDraft = await getEtlDefinition(requestContext, definitionId, controller.signal);
       if (!isCurrentMutation(requestContext, generation, request)) return;
@@ -447,6 +488,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
       if (!isCurrentMutation(requestContext, generation, request)) return;
       if (created.definitionId !== id) throw new Error("The server returned a different definition ID.");
       selectedDefinition.current = created.definitionId;
+      showDefinition(created.definitionId);
       setDraft(created);
       setPipeline(created.pipeline);
       setValidation(null);
@@ -605,16 +647,15 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
   const selectedVersion = artifactSelection ? versions.find(version => version.selection === artifactSelection) : null;
 
   return <section className="studio-page etl-shell etl-definitions-page" aria-labelledby={`${pageId}-heading`}>
-    <StudioPageHeader headingLevel={1} title={<>{profile.title}</>} titleId={`${pageId}-heading`} description={<>Design</>} actions={<><div className="studio-page-actions">
-        <StudioButton type="button" variant="primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
+    <StudioPageHeader headingLevel={1} title={definition ?? profile.title} titleId={`${pageId}-heading`} description={definition ? "Review, validate and publish this pipeline draft." : profile.description}
+      refresh={definition ? undefined : { id: "etl-definitions", label: "Refresh definitions", onRefresh: refreshDefinitions,
+        refreshing: definitionsLoading, disabled: !contextIsLoaded, autoRefresh: mutation === null }}
+      actions={definition ? <StudioButton disabled={mutation !== null} onClick={() => void returnToDefinitions()}>Back to definitions</StudioButton> :
+        <StudioButton variant="primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
           {mutation === "creating" ? "Creating draft…" : "New definition"}
-        </StudioButton>
-        <StudioButton type="button" disabled={!contextIsLoaded || definitionsLoading} onClick={refreshDefinitions}>
-          {definitionsLoading && visibleDefinitions.length > 0 ? "Refreshing…" : "Refresh definitions"}
-        </StudioButton>
-      </div></>} />
+        </StudioButton>} />
 
-    <section className="etl-editor-section" aria-labelledby={`${pageId}-definitions`}>
+    {!definition ? <section className="etl-editor-section" aria-labelledby={`${pageId}-definitions`}>
       <div className="etl-editor-section-heading">
         <div><h2 id={`${pageId}-definitions`}>Definitions</h2><p>Open a draft to edit it. Published versions remain available as immutable artifacts.</p></div>
         {contextIsLoaded && !definitionsLoading ? <span>{visibleDefinitions.length} loaded</span> : null}
@@ -625,7 +666,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
       {visibleDefinitions.length > 0 ? <ul className="etl-definition-list">
         {visibleDefinitions.map(item => <li key={item.definitionId}>
           <button type="button" aria-pressed={visibleDraft?.definitionId === item.definitionId} disabled={mutation !== null}
-            onClick={() => void selectDefinition(item.definitionId)}>
+            onClick={() => showDefinition(item.definitionId)}>
             <span>{item.definitionId}</span><small>Revision {item.revision} · published through v{item.lastPublishedVersion}</small>
           </button>
         </li>)}
@@ -636,27 +677,29 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
         </button>
       </div> : null}
       {definitionsMoreFailure ? <FailureNotice failure={definitionsMoreFailure} subject="more definitions" onRetry={() => void loadMoreDefinitions()} /> : null}
-    </section>
+    </section> : null}
 
+    {definition && (!contextIsLoaded || mutation === "loading-draft") ? <p role="status">Loading draft…</p> : null}
+    {!contextIsLoaded && definition && definitionsFailure ? <FailureNotice failure={definitionsFailure} subject="ETL definitions" onRetry={refreshDefinitions} /> : null}
     {contextIsLoaded ? <>
       {draftLoadFailure ? <FailureNotice failure={draftLoadFailure.failure} subject={`draft ${draftLoadFailure.definitionId}`} onRetry={() => void selectDefinition(draftLoadFailure.definitionId)} /> : null}
-      {editorFailure ? <div className="etl-error" role="alert">{editorFailure}</div> : null}
+      {editorFailure ? <StudioAlert tone="danger">{editorFailure}</StudioAlert> : null}
       {editorNotice ? <div className="etl-notice" role="status" aria-live="polite">{editorNotice}</div> : null}
 
       {visibleDraft && visiblePipeline ? <section className="etl-editor-section" aria-labelledby={`${pageId}-draft`}>
         <div className="etl-editor-section-heading">
-          <div><h2 id={`${pageId}-draft`}>Draft: {visibleDraft.definitionId}</h2><p>Revision {visibleDraft.revision} · last updated {new Date(visibleDraft.updatedAt).toLocaleString()}</p></div>
+          <div><h2 id={`${pageId}-draft`}>Draft: {visibleDraft.definitionId}</h2><p>Revision {visibleDraft.revision} · last updated <StudioTimestamp value={visibleDraft.updatedAt} format="date-time" /></p></div>
           <div className="etl-actions">
-            <button type="button" disabled={mutation !== null} onClick={() => void reloadSelectedDraft()}>Reload draft</button>
-            <button type="button" disabled={!isDirty || mutation !== null} onClick={() => void saveDraft()}>
+            <StudioButton type="button" disabled={mutation !== null} onClick={() => void reloadSelectedDraft()}>Reload draft</StudioButton>
+            <StudioButton type="button" disabled={!isDirty || mutation !== null} onClick={() => void saveDraft()}>
               {mutation === "saving" ? "Saving…" : "Save"}
-            </button>
-            <button type="button" disabled={!canValidate} onClick={() => void validateDraft()}>
+            </StudioButton>
+            <StudioButton type="button" disabled={!canValidate} onClick={() => void validateDraft()}>
               {mutation === "validating" ? "Validating…" : "Validate saved revision"}
-            </button>
-            <button type="button" className="etl-primary" disabled={!canPublish} onClick={() => void publishDraft()}>
+            </StudioButton>
+            <StudioButton type="button" variant="primary" disabled={!canPublish} onClick={() => void publishDraft()}>
               {mutation === "publishing" ? "Publishing…" : "Publish immutable version"}
-            </button>
+            </StudioButton>
           </div>
         </div>
         {isDirty ? <p className="etl-notice" role="status">Unsaved edits. Save the draft before validation or publication.</p> : null}
@@ -698,7 +741,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
           {versions.map(version => <li key={version.selection}>
             <button type="button" aria-pressed={artifactSelection === version.selection} disabled={mutation !== null}
               onClick={() => void loadPublishedArtifact(version)}>
-              <span>View version {version.definitionVersion}</span><small>{version.contentHash} · {version.publishedAt ? new Date(version.publishedAt).toLocaleString() : "publication time unavailable"}</small>
+              <span>View version {version.definitionVersion}</span><small>{version.contentHash} · <StudioTimestamp value={version.publishedAt} format="date-time" fallback="publication time unavailable" /></small>
             </button>
           </li>)}
         </ul> : null}
@@ -708,9 +751,9 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
           </button>
         </div> : null}
         {versionsMoreFailure ? <FailureNotice failure={versionsMoreFailure} subject="more published versions" onRetry={() => void loadMoreVersions()} /> : null}
-        {artifactFailure ? <div className="etl-error" role="alert"><p>{artifactFailure}</p>
-          {selectedVersion ? <button type="button" disabled={artifactLoading || mutation !== null} onClick={() => retryArtifact(selectedVersion)}>Retry</button> : null}
-        </div> : null}
+        {artifactFailure ? <StudioAlert tone="danger"><p>{artifactFailure}</p>
+          {selectedVersion ? <StudioButton disabled={artifactLoading || mutation !== null} onClick={() => retryArtifact(selectedVersion)}>Retry</StudioButton> : null}
+        </StudioAlert> : null}
         {artifactLoading ? <p role="status" aria-live="polite">Loading selected immutable artifact…</p> : null}
         {artifact && selectedVersion && artifact.version.selection === selectedVersion.selection ? <section className="etl-editor-section" aria-label="Published ETL artifact">
           <h3>Published artifact · version {artifact.version.definitionVersion}</h3>
@@ -730,7 +773,7 @@ function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure;
       : failure.kind === "not-found"
         ? `The requested ${subject} is no longer available.`
         : `Could not load ${subject}.`;
-  return <div className="etl-error" role="alert"><p>{message}</p><button type="button" onClick={onRetry}>Retry</button></div>;
+  return <StudioAlert tone="danger"><p>{message}</p><StudioButton onClick={onRetry}>Retry</StudioButton></StudioAlert>;
 }
 
 function failureOf(error: unknown): RequestFailure {

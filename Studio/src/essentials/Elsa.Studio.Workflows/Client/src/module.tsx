@@ -131,6 +131,8 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "var(--studio-nav-icon-blue)", placement: "operate", order: 30 },
         { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "var(--studio-nav-icon-amber)", placement: "build", parentId: "workflows", order: 20 },
         { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "var(--studio-nav-icon-violet)", placement: "build", parentId: "library", order: 20 },
+        { id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity upgrades", path: "/workflows/activity-definitions/upgrades", placement: "build", parentId: "library", order: 30 },
+        { id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Import from Elsa 3", path: "/workflows/activity-definitions/import-elsa3", placement: "build", parentId: "library", order: 35 },
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "library", order: 25 },
         { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "var(--studio-nav-icon-blue)", placement: "runtime", order: 40 },
         { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 }
@@ -174,13 +176,14 @@ export function register(api: ElsaStudioModuleApi) {
         workspace: workspaceResource("activity-upgrade-plan", "plan"),
         component: ({ navigate }) => deferred("Activity definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
-      {
-        id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
-        path: "/workflows/activity-definitions",
-        label: "Activity definitions",
+      ...[
+        { id: "workflows-activity-definitions", path: "/workflows/activity-definitions", label: "Activity definitions" },
+        { id: "agent-activity-definition", path: "/agents/definitions", label: "Agent" }
+      ].map(({ id, path, label }) => ({
+        id, path, label, requiresBackend: [{ id: "elsa.api.activity-design", contractVersion: "1" }],
         workspace: activityDefinitionWorkspace,
-        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
-      },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred(label, <ActivityDefinitionsPage agentWorkspace={path === "/agents/definitions"} context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
+      })),
       {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",

@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 for (const appearance of ["light", "dark"] as const) {
@@ -7,6 +8,7 @@ for (const appearance of ["light", "dark"] as const) {
       await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), appearance);
       await page.goto("/form-designer.html");
       await page.getByRole("button", { name: "New form", exact: true }).click();
+      await confirmNewResource(page, "form", "New form");
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
 
       const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
@@ -17,18 +19,18 @@ for (const appearance of ["light", "dark"] as const) {
       await palette.getByRole("button", { name: "Yes / no", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
       await properties.getByRole("textbox", { name: "Label", exact: true }).fill("Accept terms");
+      await properties.getByText("Validation", { exact: true }).click();
       await properties.getByLabel("Display", { exact: true }).selectOption("radio");
-      await properties.getByText("Answer labels", { exact: true }).click();
       await properties.getByRole("textbox", { name: "Yes label", exact: true }).fill("I agree");
       await properties.getByRole("textbox", { name: "No label", exact: true }).fill("I decline");
       await properties.getByRole("textbox", { name: "Unanswered label", exact: true }).fill("No response");
-      await properties.getByText("Validation", { exact: true }).click();
       await properties.getByRole("checkbox", { name: "Must be checked", exact: true }).check();
 
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand controls panel", exact: true }).click();
       await palette.getByRole("button", { name: "Choice", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
       await properties.getByRole("textbox", { name: "Label", exact: true }).fill("Channel");
+      if (!await properties.getByLabel("Display", { exact: true }).isVisible()) await properties.getByText("Choices", { exact: true }).click();
       await properties.getByLabel("Display", { exact: true }).selectOption("radio");
       await properties.getByRole("textbox", { name: "Choices, one per line", exact: true }).fill("Email\nPhone");
 
@@ -69,7 +71,7 @@ for (const appearance of ["light", "dark"] as const) {
 
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       const row = page.getByRole("row").filter({ hasText: "presentation-form" });
-      await row.getByRole("button", { name: "Presentation form", exact: true }).click();
+      await row.press("Enter");
       await page.getByRole("tab", { name: "Source", exact: true }).click();
       await expect(source).toContainText('"trueLabel": "I agree"');
       await page.getByRole("button", { name: "Publish", exact: true }).click();

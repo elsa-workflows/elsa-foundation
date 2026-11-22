@@ -6,7 +6,7 @@ import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioResultState, SkeletonRows, studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioResultState, SkeletonRows, StudioDataGrid, StudioDataGridRow, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -812,7 +812,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
           canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
         >
         <div className="wf-library-toolbar">
-        {hasLibrarySupport ? <Suspense fallback={<>{searchControls}{folderManagementFallback}<p role="status">Loading library organization…</p></>}><WorkflowLibraryControls
+        {hasLibrarySupport ? <Suspense fallback={<>{searchControls}{folderManagementFallback}<SkeletonRows rows={2} label="Loading library organization" /></>}><WorkflowLibraryControls
           key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
           location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={reportLibraryPermissions} onViews={setLibraryViews} refreshKey={libraryRefresh} visibleTagIds={visibleTagIds} manageFoldersAction={manageFoldersAction} searchControls={searchControls}
         /></Suspense> : <>{searchControls}{folderManagementFallback}</>}
@@ -863,8 +863,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
           <>
-            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="studio-collection-table wf-grid wf-definition-grid" data-library-columns={showTagColumn && showLocationColumn ? "both" : showTagColumn ? "tags" : showLocationColumn ? "location" : undefined} role="table" aria-label="Workflow definitions" aria-busy={!listSettled}>
-              <div className="wf-grid-head" role="row">
+            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><StudioDataGrid className="studio-collection-table wf-grid wf-definition-grid" data-library-columns={showTagColumn && showLocationColumn ? "both" : showTagColumn ? "tags" : showLocationColumn ? "location" : undefined} aria-label="Workflow definitions" aria-busy={!listSettled}>
+              <StudioDataGridRow className="wf-grid-head">
                 <div className="wf-row-select" role="columnheader">
                   {isCurrentData ? (
                   <input
@@ -886,7 +886,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                 {showTagColumn ? <span role="columnheader">Tags</span> : null}
                 {showLocationColumn ? <span role="columnheader">Location</span> : null}
                 <span className="wf-definition-actions-header" role="columnheader">{isCurrentData ? "Actions" : ""}</span>
-              </div>
+              </StudioDataGridRow>
               {definitions.map(definition => {
                 const isDeleted = Boolean(definition.deletedAt);
                 const secondaryIdentifiers = [
@@ -911,13 +911,12 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                     { id: "delete", label: "Delete", destructive: true, onSelect: () => void softDelete(definition) }
                   ];
                 return (
-                  <div
+                  <StudioDataGridRow
                     className="wf-grid-row"
-                    role="row"
                     {...(isCurrentData ? {
                       "aria-label": `Open workflow definition ${definition.name}`,
                       "aria-selected": selectedIds.has(definition.id),
-                      ...studioRowInteraction<HTMLDivElement>(() => onOpen(definition.id))
+                      activate: () => onOpen(definition.id)
                     } : {})}
                     key={definition.id}
                   >
@@ -969,10 +968,10 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                     <span className="wf-row-actions" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>
                       {isCurrentData ? <OverflowMenu items={menuItems} ariaLabel={`Actions for ${definition.name}`} /> : null}
                     </span>
-                  </div>
+                  </StudioDataGridRow>
                 );
               })}
-            </div></div>
+            </StudioDataGrid></div>
           </>
         ) : null}
         {isCurrentData ? <DefinitionPager
@@ -987,10 +986,10 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         /> : null}
         </WorkflowFolderNavigation>
       </div>
-      {librarySupport?.organization && organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowTagsDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
-      {librarySupport?.bulk && bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
+      {librarySupport?.organization && organizationTarget ? <Suspense fallback={<SkeletonRows rows={2} label="Loading workflow organization" />}><WorkflowTagsDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
+      {librarySupport?.bulk && bulkTagTargets ? <Suspense fallback={<SkeletonRows rows={2} label="Loading bulk tag editor" />}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {createDraft ? (
-        <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
+        <Suspense fallback={<SkeletonRows rows={3} label="Loading create dialog" />}>
           <CreateWorkflowDialog
             context={context}
             draft={createDraft}
@@ -1010,7 +1009,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
         </Suspense>
       ) : null}
       {moveCapabilityAvailable && moveDialogOpen ? (
-        <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading move dialog…</div>}>
+        <Suspense fallback={<SkeletonRows rows={3} label="Loading move dialog" />}>
           <MoveWorkflowDefinitionsDialog
             context={context}
             definitionIds={rowMoveTarget ? [rowMoveTarget] : [...selectedDefinitionIds]}

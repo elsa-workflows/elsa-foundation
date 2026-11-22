@@ -4,6 +4,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -34,6 +35,7 @@ public class ActivitiesCompensationFeature : IShellFeature
         services.AddScoped<IDraftValidator, CompensationHandlerVariableValidator>();
         // Spec 261 FR-014 (OD20 A): a non-blocking warning on a replay-safe step or handler; needs Publishing's profile reader.
         services.AddScoped<IDraftValidator, CompensationReplaySafeValidator>();
+        services.AddSingleton(new RuntimeHistorySourceSupport(CompensationHistory.Kinds));
         // The read-only journal operators read through the runtime's activity state view (spec 260 R-6).
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStateViewProjector, CompensationJournalProjector>());
     }

@@ -47,12 +47,13 @@ describe("Activity Graph Sequence host", () => {
     flushSync(() => step(rendered.container, "three").dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true })));
     expect(rendered.container.querySelectorAll(".wf-sequence-step[aria-pressed=true]")).toHaveLength(3);
     click(button(rendered.container, "Extract block…"));
-    const input = rendered.container.querySelector<HTMLInputElement>("[role=dialog] input")!;
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const input = dialog.querySelector<HTMLInputElement>("input")!;
     flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Prepare shipment"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-    click(button(rendered.container, "Preview change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    click(button(dialog, "Preview change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
     expect(validate).toHaveBeenCalledTimes(1);
     expect(stepIds(rendered.container)).toEqual(["one", "two", "three"]);
-    click(button(rendered.container, "Apply change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
+    click(button(dialog, "Apply change")); await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {});
     expect(validate).toHaveBeenCalledTimes(2);
     const block = stepIds(rendered.container)[0]!;
     expect(stepIds(rendered.container)).toHaveLength(1);

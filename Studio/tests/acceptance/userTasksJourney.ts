@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -149,7 +150,8 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(nameBox!.x).toBeGreaterThanOrEqual(0); expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await capture(page, info, "task-forms");
     await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
-    await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
+    await page.getByRole("button", { name: "New form", exact: true }).first().press("Enter");
+    await confirmNewResource(page, "form", "New form");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Add field", exact: true }).click();
     // #4068: the automatically assigned version is shown as a value, not as an editable-looking box.
@@ -157,7 +159,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-editor");
     await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-actions");
     await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
-    await expect(page.getByRole("button", { name: "Create form version", exact: true }).first()).toBeFocused();
+    await expect(page.getByRole("button", { name: "New form", exact: true }).first()).toBeFocused();
   } finally {
     // This definition belongs to this test's disposable host; keep the reference
     // collection empty for the next project without affecting any developer store.

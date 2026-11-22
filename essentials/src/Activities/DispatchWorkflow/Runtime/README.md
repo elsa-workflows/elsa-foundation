@@ -27,3 +27,7 @@ The runtime feature registers the default allow start policy. Hosts may replace 
 TestRun behavior and distributed two-node delivery remain owned by #682 and #683 respectively.
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the feature specifications under `specs/096-dispatch-workflow-fire-and-forget/` through `specs/101-dispatch-delivery-recovery/`.
+
+## Cross-domain contributions
+
+The [Timeline history contributor and selected child source handlers](EXTENSION_POINTS.md#timeline-history-contribution) supply Runtime history through Core's checkpoint/source/observation contracts. New native facts are pinned to v5 admissions; legacy runs keep their policy and replay bytes. History points across the actual parent/child edge but grants no start, resume or control authority.

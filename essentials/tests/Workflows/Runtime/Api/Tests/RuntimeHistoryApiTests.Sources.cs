@@ -324,6 +324,30 @@ public sealed partial class RuntimeHistoryApiTests
         Assert.Equal(1, lookup.Reads); Assert.Equal(0, host.Authorization.ValueReads);
     }
 
+    [Theory]
+    [InlineData(4, true)] [InlineData(5, true)] [InlineData(5, false)] [InlineData(4, false)]
+    public async Task Detached_settlement_never_hides_an_explicit_source_or_reinterprets_a_retained_profile(int version, bool linked)
+    {
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v" + version, version, true,
+            ["ChildWorkflowSettled", "DeliveryReceived", "DeliveryDispatched"]);
+        var head = new RuntimeHistoryHead("run", 1, 10, "physical", Now, policy, true, false, 0);
+        var metadata = new Dictionary<string, string> { ["history.reasonCode"] = "detached-child-settled", ["history.relatedWorkflowExecutionId"] = "parent" };
+        if (linked) metadata.Add("history.sourceDeliveryId", "outgoing");
+        var projection = new SourceProjection { Head = head, Refreshed = head, Items =
+            [new RuntimeHistoryEvent("origin", "run", 1, RuntimeHistoryEventCategory.SchedulerLifecycle, "ChildWorkflowSettled", Now, metadata: metadata)
+                { Authority = RuntimeHistoryAuthority.CommittedTransition }] };
+        var lookup = new SourceLookup(projection) { Item = SourceItem(RuntimePostCommitOutboxStatus.Pending, target: "parent", kind: WorkflowDispatchLifecycle.ResumeParentIntentKind) };
+        using var provider = await SourceServices(projection, lookup);
+        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        if (linked)
+        {
+            Assert.True(view.Coverage.SourceHistoryPending);
+            Assert.Equal(new[] { "outgoing" }, lookup.Reads);
+        }
+        else if (version == 5) { Assert.False(view.Coverage.SourceHistoryPending); Assert.Empty(lookup.Reads); }
+        else { Assert.Null(view.Coverage.SourceHistoryPending); Assert.NotNull(view.Coverage.SourceHistoryLimitation); }
+    }
+
     private static async Task<ServiceProvider> SourceServices(SourceProjection projection, SourceLookup? lookup = null,
         Authorization? auth = null, Func<IPostCommitOutboxLookupStore>? resolve = null, Func<IDurableTimerHistoryStore>? resolveTimer = null)
     {

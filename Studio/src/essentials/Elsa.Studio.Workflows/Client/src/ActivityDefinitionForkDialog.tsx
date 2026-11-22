@@ -178,7 +178,7 @@ export function ActivityDefinitionForkDialog({
     </> : <ForkReview preview={preview} />}
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
     {preview ? <StudioDialogFooter confirmType="button" leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
-      onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying atomically…" : "Apply reviewed fork"}
+      onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying changes…" : "Apply reviewed fork"}
       confirmDisabled={submitting || !canApply} onConfirm={() => void apply()} />
       : <ActivityDefinitionManagementDialogActions submitting={submitting} submitLabel="Create fork preview" canSubmit={canPreview} onClose={onClose} onSubmit={requestPreview} />}
   </ActivityDefinitionManagementDialogShell>;

@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import React, { Component, Suspense } from "react";
 
 type WorkflowLazyBoundaryProps = {
@@ -35,13 +36,13 @@ export class WorkflowLazyBoundary extends Component<WorkflowLazyBoundaryProps, W
           <span>{chunkFailure
             ? "The Studio module may have been updated while this page was open."
             : "This workflow surface encountered an unexpected error."}</span>
-          <button type="button" className="wf-lazy-reload" onClick={() => window.location.reload()}>
+          <StudioButton type="button" className="wf-lazy-reload" onClick={() => window.location.reload()}>
             Reload page
-          </button>
+          </StudioButton>
           {this.props.recoveryAction ? (
-            <button type="button" className="wf-lazy-reload" onClick={this.props.recoveryAction.onClick}>
+            <StudioButton type="button" className="wf-lazy-reload" onClick={this.props.recoveryAction.onClick}>
               {this.props.recoveryAction.label}
-            </button>
+            </StudioButton>
           ) : null}
         </div>
       );
