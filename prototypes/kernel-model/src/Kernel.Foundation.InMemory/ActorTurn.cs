@@ -113,10 +113,21 @@ internal sealed partial class ActorAdapter
 
         public void CancelJob(string key)
         {
+            var ticketKey = Durable.InboxKey.Ticket(_row.Id, key, _row.Creation);
             var ticket = _store.FoundationJob(_row.Id, _row.Creation, key).Ticket;
-            if (ticket is null && _input.VolatileMessage(Durable.InboxKey.Ticket(_row.Id, key, _row.Creation)) is { Kind: Durable.Kinds.Job } local)
+            if (ticket is null && _input.VolatileMessage(ticketKey) is { Kind: Durable.Kinds.Job } local)
                 ticket = local.Read<Durable.JobTicket>();
-            _turn.CancelJob(key, ticket?.Timer, _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
+
+            var pending = ticket is null ? (Durable.InboxKey?)null : ticketKey;
+            if (_store.HasFoundationJobResult(_row.Id, _row.Creation, key))
+                pending = Durable.InboxKey.JobResult(_row.Id, key, _row.Creation);
+
+            var deadline = ticket?.Timer;
+            if (deadline is not null && !_store.HasStoredJobDeadline(_row.Id, _row.Creation, deadline) &&
+                _input.VolatileMessage(Durable.InboxKey.Issued(deadline)) is not { Kind: Durable.Kinds.JobDeadline })
+                deadline = null;
+
+            _turn.CancelJob(key, pending, deadline);
         }
 
         public void Subscribe(string key, string wait, bool keep = false)

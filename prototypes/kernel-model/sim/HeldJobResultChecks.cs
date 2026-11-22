@@ -14,6 +14,81 @@ internal static class HeldJobResultChecks
                 await Schedule(inline, shape, flaws, (ok, name) => check(ok, $"{(inline ? "inline first write" : "durable")}, {shape}: {name}"));
         foreach (var shape in new[] { "cut-same-owner", "cut-takeover" })
             await Schedule(false, shape, flaws, (ok, name) => check(ok, $"{shape}: {name}"));
+        await CancelSettledTicket(terminate: false, check);
+        await CancelSettledTicket(terminate: true, check);
+        await CancelPendingTicket(check);
+    }
+
+    private static async Task CancelSettledTicket(bool terminate, Action<bool, string> check)
+    {
+        const long now = 1_701_300_100_000;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe("settled");
+        var scope = new Contract.BoundScope("settled-job");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var first = Owner("settled-first");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, _) => true);
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        var start = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(start.Actor!.Value);
+        await Pump(active);
+
+        var row = store.Instances.Values.Single();
+        var ticket = InboxKey.Ticket(row.Id, JobKey, row.Creation);
+        var fence = first.Fences.Single();
+        // The fixture represents an already-settled ticket that a retained registry still names.
+        var settle = new TurnCommit(row.Id, null, null, [ticket], [], [], [], [], null);
+        var settled = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+            false, [settle], [], []));
+        var ready = settled.Landed && !store.Messages.ContainsKey(ticket) && store.Instances[row.Id].Jobs is not null;
+        var label = terminate ? "terminal cancel" : "ordinary cancel";
+        check(ready, $"{label}: the exact registry still names the job after its ticket settles");
+        if (!ready) return;
+
+        await active.DisposeAsync();
+        var next = Owner("settled-take");
+        await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+        var view = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!;
+        var sent = await ingress.SendAsync(scope, target, "cancel", terminate ? Contract.Kinds.Terminate : "cancel",
+            terminate ? Json.Write(new Contract.OperatorCommand(view.Selection!)) : null);
+        await Pump(successor);
+        var updated = store.Instances[row.Id];
+        check(sent.Outcome == Contract.AdmissionOutcome.Accepted && updated.Jobs is null &&
+            updated.Status == (terminate ? InstanceStatus.Cancelled : InstanceStatus.Running) &&
+            (terminate || updated.State == "cancelled job") && probe.Entries == 1 && probe.Applied == 0 &&
+            store.Ghost.Count == 0,
+            $"{label}: the next owner removes the registry entry and commits with no counted delete of a missing ticket");
+    }
+
+    private static async Task CancelPendingTicket(Action<bool, string> check)
+    {
+        const long now = 1_701_300_200_000;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe("pending-cancel");
+        var scope = new Contract.BoundScope("pending-job");
+        var worker = new Worker("pending-owner", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        await using var active = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var start = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(start.Actor!.Value);
+        await Pump(active);
+        var row = store.Instances.Values.Single();
+        var ticket = InboxKey.Ticket(row.Id, JobKey, row.Creation);
+        var stored = store.Messages[ticket].Message.Read<JobTicket>();
+        var armed = stored.Timer is { } timer && store.Messages.ContainsKey(InboxKey.Issued(timer)) && probe.Entries == 1;
+        check(armed, "the pending cancel fixture has a running job and an armed deadline");
+        if (!armed) return;
+
+        await ingress.SendAsync(scope, target, "cancel", "cancel");
+        await Pump(active);
+        probe.Release.TrySetResult();
+        await Pump(active);
+        check(store.Instances[row.Id] is { State: "cancelled job", Jobs: null, Status: InstanceStatus.Running } &&
+            !store.Messages.ContainsKey(ticket) && !store.Messages.ContainsKey(InboxKey.Issued(stored.Timer!)) &&
+            !store.Messages.ContainsKey(InboxKey.JobResult(row.Id, JobKey, row.Creation)) && probe.Entries == 1 && probe.Applied == 0,
+            "cancelling a pending job counts its present ticket and deadline, then drops its late result");
     }
 
     private static async Task Schedule(bool inline, string shape, Flaw flaws, Action<bool, string> check)
@@ -204,7 +279,7 @@ internal static class HeldJobResultChecks
                 switch (message.Kind)
                 {
                     case Contract.Kinds.Start:
-                        turn.StartJob(JobKey);
+                        turn.StartJob(JobKey, timeout: shape == "pending-cancel" ? TimeSpan.FromSeconds(10) : null);
                         break;
                     case Contract.Kinds.ChildFinished:
                         if (shape == "singleton-cancel")
@@ -214,6 +289,10 @@ internal static class HeldJobResultChecks
                             turn.Record("cancelled in child notice");
                         }
                         turn.State = shape == "singleton-cancel" ? "cancelled job" : "released";
+                        break;
+                    case "cancel":
+                        turn.CancelJob(JobKey);
+                        turn.State = "cancelled job";
                         break;
                     case Contract.Kinds.Terminate:
                         turn.End(Contract.ActorStatus.Cancelled);

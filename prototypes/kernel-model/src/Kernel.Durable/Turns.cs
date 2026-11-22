@@ -502,23 +502,25 @@ public sealed class DurableTurn
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
-    public void CancelJob(string key) => CancelJob(key, null, resultReady: false);
+    public void CancelJob(string key) => CancelJob(key, InboxKey.Ticket(Id, key, _input.Creation), null);
 
-    internal void CancelJob(string key, string? deadline, bool resultReady)
+    internal void CancelJob(string key, InboxKey? pending, string? deadline)
     {
         if (!_jobs.Remove(key)) return;     // not in flight: never started, done, or its result is in this turn's inbox
-        var ticket = InboxKey.Ticket(Id, key, _input.Creation);
         if (_started.Remove(key, out var timer))
         {
+            var ticket = InboxKey.Ticket(Id, key, _input.Creation);
             _sent.RemoveAll(m => m.InboxKey == ticket);
             if (timer is not null) Recall(timer);
             return;
         }
 
-        if (resultReady) ticket = InboxKey.JobResult(Id, key, _input.Creation);
-        _cancelled.Add(ticket);
+        if (pending is { } work)
+        {
+            _cancelled.Add(work);
+            Services.Cancelling(work);     // from here on its result is nobody's
+        }
         if (deadline is not null) Recall(deadline);
-        Services.Cancelling(ticket);     // from here on its result is nobody's
     }
 
     internal void ReportFoundationJobResult(JobFinished result)

@@ -83,6 +83,12 @@ PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives de
 
 The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
 
+### Dark appearance review
+
+The dark-mode review covered workflow and activity graph editors, creation and publication dialogs, the Test Run dialog, and every run inspector tab. The review checked the selected and focused controls, text and status contrast, keyboard access, and whether the primary and secondary actions fit the phone viewport. The run tabs used a newly published Write Line workflow. The Activity, Timeline, Issues and Details views are recorded in [the run inspector evidence](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/a0a0e2d0d589881cb4fc57e03013228a60a735dd/Studio/qa-evidence/5337-3f519736.zip).
+
+The [publication review](https://github.com/elsa-workflows/elsa-foundation/pull/5316), [creation and Test Run dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5337), [status contrast checks](https://github.com/elsa-workflows/elsa-foundation/pull/5334), [feature switches and confirmation dialog](https://github.com/elsa-workflows/elsa-foundation/pull/5338), and [secret and connection dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5327) carry the module-level evidence and fixture details.
+
 ### Narrow viewport review
 
 The audit reviewed the following composed Studio states at 360–390px widths. The Executable Inspector maximize defect reproduced during the initial run was repaired and retested in #5305.
@@ -195,7 +201,7 @@ Candidates reported by source readers. Confirm the need before building any of t
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
 - [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).
-- [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
+- [x] **K11.** (#5004, PR #5341) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
@@ -379,7 +385,7 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 
 - [x] **X4.1** (#5077) [source] Agent: `EXT/Agent/AgentsPage.tsx:163, 293–306` inline form that replaces the (PR #5329)
   list; primary "Create and edit" before Cancel. `needs: D6`
-- [ ] **X4.2** (#5078) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
+- [x] **X4.2** (#5078, PR #5341) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
   also exists in `SecretDialogs.tsx:24`; keep one flow, which D6 makes the dialog. **[check]** that the
   secret form (it has tabs) fits a dialog; if not, ask. `needs: D6`
 - [x] **X4.3** (#5079) [seen] New question: "Preview" is the filled primary rather than "Save question". (PR #5311)
@@ -548,7 +554,7 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
 - [x] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`: (PR #5329)
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
-- [ ] **X10.10** (#5148) [source] Identifiers shown as plain text → `CopyableIdentifier`:
+- [x] **X10.10** (#5148, PRs #5340 and #5341) [source] Identifiers shown as plain text → `CopyableIdentifier`:
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
   `EXT/Secrets/CopySecretNameButton.tsx:37` (custom copy button). See also E2.
 
@@ -586,7 +592,7 @@ the designer header is a documented exception.
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
   `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
 - [x] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`. (PR #5313)
-- [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
+- [x] **X11.18** (#5167, PRs #5340 and #5341) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
 - [x] **X11.19** (#5168) [check] ETL draft toolbar. (PR #5326)
@@ -600,7 +606,7 @@ the designer header is a documented exception.
 - [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [x] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on (PR #5329)
   `closest("details")`; keep that focus behaviour working.
-- [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
+- [x] **X12.4** (#5174, PR #5341) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
 - [x] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`), (PR #5320)
   `DecisionInputsEditor.tsx:182` [source].
 - [x] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
@@ -640,7 +646,7 @@ Uppercase labels (`needs: D3`):
 - [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
-- [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
+- [x] **X13.9** (#5192, PR #5341) [verified] `EXT/Connections/styles.css:31`.
 - [x] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`, (PR #5337)
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
 - [x] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules). (PR #5326)
@@ -753,7 +759,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 - [x] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link (PR #5299)
   (`ConnectionList.tsx:39, 46`). Replace both with `studioRowInteraction` on the row. `needs: D12`
-- [ ] **E2** (#5232) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
+- [x] **E2** (#5232, PR #5341) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
   copy button → `CopyableIdentifier`.
 - [x] **E3** (#5233) [seen] Decisions: "Add rule" is a second filled primary beside header Save and is (PR #5320)
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
@@ -785,10 +791,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
 - [x] **E16** (#5246, PR #5336) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
-- [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
+- [x] **E17** (#5247, PR #5341) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
   `requiresBackend` (`EXT/Secrets/module.tsx:40–44`). **[check]** whether the legacy route is still
   needed.
-- [ ] **E18** (#5248) [source] Row opening in the other lists (D12): Secrets uses an
+- [x] **E18** (#5248, PRs #5340 and #5341) [source] Row opening in the other lists (D12): Secrets uses an
   `<a class="secrets-row-link">` plus an "Edit" button (`SecretsPage.tsx:316, 328`), Decisions a raw
   `decision-link` button (`DecisionsPage.tsx:193–199`), Forms a raw `user-task-link` button
   (`FormsPage.tsx:169–179`). Move each to `studioRowInteraction`. **[check]** keyboard access, and
@@ -845,7 +851,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
   workflows, JavaScript and Liquid expression editors. (PR #5326)
 - [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
   [Coverage gaps](#coverage-gaps).
-- [ ] **A3** (#5263) Review dark mode, including dialogs.
+- [x] **A3** (#5263) Review dark mode, including dialogs. (PR #5350)
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
