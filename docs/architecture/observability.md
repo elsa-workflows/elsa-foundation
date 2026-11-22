@@ -332,10 +332,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     a coordinator design choice ([register](decisions.md#the-gate-2-fix-round-17-november)). The terminates a cascade
     sends carry the cascade origin mark, and every recipient checks the parent binding on them in every state, a
     running one included ("Cascade terminates are parent-bound in every state" below, fifth review R5-M5).
-    The K3 [open-discard fixture](../../prototypes/kernel-model/sim/ParkDrainCascadeChecks.cs) runs both
-    a parent's terminate and an operator's current selection through the built-in Worker. The refusal
-    commits a cascade while preserving the open discard. A queued operator command selecting the actor
-    before it parked leaves the subtree alone. The actual discard still completes as Faulted.
+    The K3 [open-drain fixture](../../prototypes/kernel-model/sim/ParkDrainCascadeChecks.cs) runs a parent's
+    terminate during discard and expiry, and an operator's current selection during discard, through the
+    built-in Worker. The refusal commits a cascade while preserving the drain. The fixture rejects cascade
+    authority for an operator command selected before the actor parked. The original drain completes as Faulted.
   - **The retirement marker keeps the obligation after a delete** (proposed, fourth review R4-B2). A parent-bound
     terminate committed while a delete drain is open can be delivered after that drain's Complete has retired the row.
     Existing prototype behaviour: the built delete retires the row and terminates none of its children
