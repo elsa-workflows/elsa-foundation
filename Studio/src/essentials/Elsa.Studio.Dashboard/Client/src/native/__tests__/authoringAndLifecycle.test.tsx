@@ -10,7 +10,7 @@ import { QueryControls } from "../QueryControls";
 import { NativeDialog, QuestionPickerDialog, ShareDialog } from "../ResourceDialogs";
 import { ResultView } from "../ResultView";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult, type QuestionDefinition } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared business data", fields: [{ id: "category", label: "Category", type: "string", filterOperators: ["eq", "isNull"], groupable: true, projectable: true, sortable: false, nullable: true }], metrics: [{ id: "duration", revision: "1", label: "Duration", unit: "s", description: "Elapsed duration" }] };
 const resource = (id = "q1"): DashboardResource => ({ id, kind: "question", revision: "r1", name: `Question ${id}`, description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "2026-11-06T12:00:00Z", updatedAt: "2026-11-06T12:00:00Z" });
@@ -85,10 +85,9 @@ describe("private draft recovery", () => {
     await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
     const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
     inputValue(name, "My unsaved refinement");
-    openDisclosure(container, ".named-question-actions");
-    button(container, "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
+    selectResourceAction(container, "Question actions", "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
-    button(container, "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
+    selectResourceAction(container, "Question actions", "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
     const creates = post.mock.calls.filter(call => call[0].endsWith("/questions"));
     const first = creates[0][1] as { operationKey: string; definition: QuestionDefinition };
     const second = creates[1][1] as { operationKey: string; definition: QuestionDefinition };

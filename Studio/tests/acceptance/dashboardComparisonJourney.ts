@@ -62,6 +62,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await page.goto("/questions");
     await page.getByRole("button", { name: "New question", exact: true }).first().click();
     await page.getByLabel("Name", { exact: true }).fill(`Compared started cohorts ${Date.now()}`);
+    await page.getByRole("dialog", { name: "New question" }).getByRole("button", { name: "Create", exact: true }).click();
     await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption("elsa.workflows.runs");
     await page.getByRole("group", { name: "Group by", exact: true }).getByLabel("Workflow definition", { exact: true }).check();
     await page.getByRole("combobox", { name: "Metric 1", exact: true }).selectOption("workflow.started-count");
@@ -72,8 +73,8 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     await source.getByLabel("Comparison value", { exact: true }).fill(seeded.definitionId);
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
     await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("absolute");
-    await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(periods.from);
-    await page.getByLabel("To (exclusive UTC instant)", { exact: true }).fill(periods.to);
+    await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(periods.from);
+    await page.getByLabel("End time (UTC, exclusive)", { exact: true }).fill(periods.to);
     await page.getByLabel("Time zone", { exact: true }).fill("UTC");
     await page.getByRole("combobox", { name: "Compare with", exact: true }).selectOption("absolute");
     await page.getByLabel("Baseline from", { exact: true }).fill(periods.baselineFrom);
