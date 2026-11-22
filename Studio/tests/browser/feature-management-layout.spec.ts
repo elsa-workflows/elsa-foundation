@@ -68,6 +68,7 @@ test("Feature Management selection counts and actions reflow without clipping", 
       await page.setViewportSize({ width: viewport.viewportWidth, height: 1000 });
       const path = viewport.moduleWidth ? `?moduleWidth=${viewport.moduleWidth}` : "";
       await page.goto(`/feature-management.html${path}`);
+      await page.getByRole("button", { name: "All features" }).click();
       const row = page.locator(".feature-management-bulk-actions");
       await expect(row).toContainText("0/114 visible");
       const empty = await readToolbarGeometry(page);
@@ -111,6 +112,7 @@ test("Feature Management keeps Clear under the native pointer after selection", 
 
     for (const host of ["Server", "Studio"]) {
       await page.getByRole("tablist", { name: "Hosts" }).getByRole("tab", { name: host }).click();
+      await page.getByRole("button", { name: "All features" }).click();
       const visibleCount = host === "Studio" ? 2 : 114;
       const row = page.locator(".feature-management-bulk-actions");
       await expect(row).toContainText(`0/${visibleCount} visible`);
@@ -133,4 +135,20 @@ test("Feature Management keeps Clear under the native pointer after selection", 
       await expect(row).toContainText("0 selected");
     }
   }
+});
+
+test("Feature Management starts with capability cards and supports cross-capability search", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto("/feature-management.html");
+  await expect(page.getByRole("navigation", { name: "Feature views" }).getByRole("button", { name: "Capabilities" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "View BPMN features" })).toContainText("View features");
+  await page.screenshot({ animations: "disabled" }).then(image => testInfo.attach("feature-capability-overview-narrow.png", { body: image, contentType: "image/png" }));
+
+  await page.getByRole("searchbox", { name: "Filter features" }).fill("ServerFeature022");
+  await expect(page.locator(".feature-management-card")).toHaveCount(1);
+  await expect(page.locator(".feature-management-card")).toContainText("Workflow Activities");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.getByRole("button", { name: "Capabilities" }).click();
+  await page.screenshot({ animations: "disabled" }).then(image => testInfo.attach("feature-capability-overview-dark.png", { body: image, contentType: "image/png" }));
 });

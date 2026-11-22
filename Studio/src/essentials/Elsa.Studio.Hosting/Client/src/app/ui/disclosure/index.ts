@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./useDisclosureState";
+export * from "./DisclosureFold";
 export * from "./AddOption";
 export * from "./RevealToggle";
 export * from "./AdvancedSection";

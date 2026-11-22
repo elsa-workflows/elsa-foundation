@@ -125,7 +125,7 @@ An explicit association from an outcome emitted by an Activity Definition Graph 
 _Avoid_: Inferred outcome, Outcome alias
 
 **Boundary Output Mapping**:
-An expression that produces one public output of a Graph Activity Definition from its graph implementation. A required public output has exactly one Boundary Output Mapping; an optional public output has at most one.
+An expression that produces one public output of a Graph Activity Definition from its graph implementation. A public output can receive its value from a Boundary Output Mapping or from Set Output in the designer. Set Output assigns the enclosing reusable activity's output; a workflow-level Set Output assigns a workflow output. A Designer connection and Set Output cannot both assign the same public output; publication review rejects the conflict.
 _Avoid_: Output alias, Inferred output
 
 **Activity Graph Variable**:
@@ -346,6 +346,7 @@ _Avoid_: Workflow Test Run, Published Run
 
 **Runtime Evidence**:
 Execution information produced by a dispatched workflow, such as status, instance identity, activity count, incident count, logs, traces, artifact references, timing, and expiration.
+Use “Run data” in Studio labels.
 _Avoid_: Artifact inventory
 
 **Runtime Payload Capture Policy**:
@@ -365,7 +366,7 @@ A Studio-managed Workflows setting that requests a runtime payload capture level
 _Avoid_: Host Policy, runtime payload capture policy
 
 **Runtime Value Evidence Level**:
-The user-facing level of runtime value evidence requested or allowed for workflow diagnostics: Off, Metadata only, Diagnostic snapshots, or Full payloads.
+The level of runtime value evidence requested or allowed for workflow diagnostics. In Studio, label this setting “Run data detail”. Its levels are Off, Metadata only, Diagnostic snapshots, and Full payloads.
 _Avoid_: Capture mode, log level
 
 **Run Kind**:
@@ -390,6 +391,7 @@ _Avoid_: Run when referring specifically to the persisted record identity
 
 **Executable**:
 A content-addressed, runnable workflow artifact identified by its Artifact Hash and dispatched for Published Runs. An Executable carries its own Execution Material, so it can be executed and inspected without resolving its source Workflow Definition; one or more Source References point at it.
+In Studio, label the identifier “Executable ID” and the identity chip “Executable”.
 _Avoid_: Run, workflow instance, publish record
 
 **Source Reference**:
@@ -406,6 +408,7 @@ _Avoid_: Layout, design metadata, activity descriptors
 
 **Artifact Hash**:
 The content identity of an Executable, computed over Execution Material only. Two Executables with the same Artifact Hash are behaviorally identical regardless of visual layout.
+In Studio, label this value “Executable hash”. The domain term and the `ArtifactHash` field follow [ADR 0038](../docs/adr/0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md).
 _Avoid_: Checksum over layout, version number
 
 **Layout Sidecar**:

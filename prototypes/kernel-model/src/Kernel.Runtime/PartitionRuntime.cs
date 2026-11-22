@@ -3,14 +3,21 @@ namespace Kernel.Runtime;
 /// <summary>The owner's defaults of 12 November. A test or the simulation may choose its own.</summary>
 public static class Defaults
 {
-    /// <summary>A partition's lease.</summary>
+    /// <summary>A node's lease.</summary>
     public static readonly TimeSpan Lease = TimeSpan.FromSeconds(10);
 
-    /// <summary>Partitions of a database that serves several nodes: PostgreSQL, SQL Server, MySQL, MongoDB.</summary>
-    public const int ServerPartitions = 64;
+    /// <summary>
+    /// Virtual partitions of a database that serves several nodes: PostgreSQL, SQL Server, MySQL, MongoDB. K1 slice 7:
+    /// the owner's 1,024, each with its own fence row and journal (it was 64 physical partitions before K1).
+    /// </summary>
+    public const int ServerPartitions = VirtualPartitions.Provisional;
 
-    /// <summary>Partitions of SQLite, which has one writer: more would only add polls and fences.</summary>
-    public const int SqlitePartitions = 1;
+    /// <summary>
+    /// Virtual partitions of SQLite: the same 1,024. It has one writer, so one node owns them all, as one set with one
+    /// poll per pass and a flush that fences the partitions it touches. A store without owned sets (<c>commit=ef</c>)
+    /// gets a worker per partition, so a deployment that chooses it passes a smaller count. Before K1 it was 1.
+    /// </summary>
+    public const int SqlitePartitions = VirtualPartitions.Provisional;
 }
 
 /// <summary>
@@ -26,6 +33,7 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     private readonly bool[] _activating = new bool[partitions], _passing = new bool[partitions];
     private IScopeHost? _host;
     private bool _balancing;
+    private Cluster? _cluster;      // K1b: what the node's last renewing heartbeat saw, for the balancing round
 
     public string Node => node;
     public int Partitions => partitions;
@@ -33,11 +41,11 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     public int ScopeOf(InstanceRef actor) => actor.Partition;
 
-    public ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
+    public async ValueTask StartAsync(IScopeHost host, CancellationToken cancellationToken = default)
     {
+        if (host is IScopeCount counted) await counted.CheckScopesAsync(partitions, cancellationToken);     // refuses a mismatch
         _host = host;
         Wake.Listen(actor => _ = Woken(actor));
-        return ValueTask.CompletedTask;
     }
 
     private async Task Woken(InstanceRef actor)
@@ -92,29 +100,68 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
 
     /// <summary>
     /// A node's fair share of the partitions. A round says "I am alive", counts the nodes heard from, gives up what is
-    /// above the share and asks for free partitions up to it. Leases decide who should write and the fence who can;
-    /// this only decides who asks, so a wrong count costs availability, never correctness.
+    /// above the share and asks for free partitions up to it (<see cref="Balancer.Plan"/>). Leases decide who should write
+    /// and the fence who can; this only decides who asks, so a wrong count costs availability, never correctness. K1b:
+    /// under the node lease the round reads the cluster the node's last renewing heartbeat saw, and none before the first.
     /// </summary>
     public async Task BalanceAsync(CancellationToken cancellationToken = default)
     {
-        if (_balancing) return;
-        _balancing = true;
+        if (_balancing) return;     // a single caller is assumed
         Cluster cluster;
-        try { cluster = await membership.HeartbeatAsync(node, window, cancellationToken); }
-        catch (Exception) { return; }
-        finally { _balancing = false; }
-        var share = (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);    // rounded up, so the shares cover every partition
-        if ((flaws & Flaw.GreedyBalancer) != 0) share = partitions;
+        if (NodeLease is not null)
+        {
+            if (Volatile.Read(ref _cluster) is not { } seen) return;
+            cluster = seen;
+        }
+        else
+        {
+            // A host without a node lease can still refresh membership, as the conformance stubs do.
+            _balancing = true;
+            try { cluster = await membership.HeartbeatAsync(node, window, cancellationToken); }
+            catch (Exception) { return; }
+            finally { _balancing = false; }
+        }
         var scopes = Enumerable.Range(0, partitions).ToList();
-        var held = scopes.Count(s => Owns(s) || Activating(s));
-        foreach (var surplus in scopes.Where(Owns).Reverse().Take(held - share).ToList())
+        var (release, take) = Balancer.Plan(partitions, cluster, scopes.Where(Owns).ToList(), scopes.Where(Activating).ToList(), flaws);
+        foreach (var surplus in release)
         {
             cancellationToken.ThrowIfCancellationRequested();     // a process that goes away mid-round gives nothing more up
             await DeactivateAsync(surplus, cancellationToken);
-            held--;
         }
-        var takes = scopes.Where(s => !Owns(s) && !Activating(s) && cluster.Free.Contains(s)).Take(share - held).Select(s => ActivateAsync(s, cancellationToken)).ToList();
-        await Task.WhenAll(takes);
+        await Task.WhenAll(take.Select(s => ActivateAsync(s, cancellationToken)));
+    }
+
+    /// <summary>K1b: the node's lease, when the host keeps one (<see cref="INodeLeaseHost"/>); null for a host with no node lease.</summary>
+    public TimeSpan? NodeLease => (_host as INodeLeaseHost)?.NodeLease;
+
+    /// <summary>
+    /// K1b: the node's heartbeat, through a host that keeps a node lease. False when it did not renew (the pass gate held
+    /// it back, or it failed) or the host keeps none. Its host calls it on its own cadence, never behind a round's moves.
+    /// The cluster it saw is the next balancing round's: under the node lease the round writes nothing of its own.
+    /// </summary>
+    public async ValueTask<bool> HeartbeatAsync(CancellationToken cancellationToken = default)
+    {
+        if (_host is not INodeLeaseHost { NodeLease: not null } host) return false;
+        if (await host.HeartbeatAsync(window, cancellationToken) is not { } cluster)
+        {
+            Volatile.Write(ref _cluster, null);
+            return false;
+        }
+        // The free list is the store's; this runtime places its own scopes only (a world that places part of the store's).
+        Volatile.Write(ref _cluster, cluster.Free.All(p => p < partitions) ? cluster : cluster with { Free = [.. cluster.Free.Where(p => p < partitions)] });
+        return true;
+    }
+
+    /// <summary>
+    /// K1b: the passes no active scope gives (<see cref="INodeLeaseHost.PassAsync"/>), then the scopes the host's Workers
+    /// brought back by themselves that this runtime does not know are activated, as a scope already held. Its host calls it
+    /// with the scopes' passes.
+    /// </summary>
+    public async Task NodePassAsync(CancellationToken cancellationToken = default)
+    {
+        if (_host is not INodeLeaseHost { NodeLease: not null } host) return;
+        foreach (var scope in await host.PassAsync(cancellationToken))
+            if ((uint)scope < (uint)partitions && !Owns(scope) && !_activating[scope]) await ActivateAsync(scope, cancellationToken);
     }
 
     /// <summary>One pass of a scope this node holds, never two at once. Null when it holds none, or a pass is under way.</summary>
@@ -124,5 +171,30 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
         _passing[scope] = true;
         try { return await activation.RunAsync(cancellationToken); }
         finally { _passing[scope] = false; }
+    }
+}
+
+/// <summary>
+/// The built-in balancer's round as a pure decision (K1: fewest moves). A node's share is the partitions over the nodes
+/// heard from, rounded up so the shares cover every partition. It gives up only what is above its share, the highest
+/// first, and asks for free partitions up to it, the lowest first. A join therefore moves only the surplus above the new
+/// share and a leave only the leaver's partitions, and a node's set may be scattered, which costs nothing with a fence row
+/// per partition (PARTITIONS.md).
+/// </summary>
+public static class Balancer
+{
+    public static (IReadOnlyList<int> Release, IReadOnlyList<int> Take) Plan(int partitions, Cluster cluster, IReadOnlyCollection<int> owned, IReadOnlyCollection<int> activating, Flaw flaws = Flaw.None)
+    {
+        bool Asked(int p) => !owned.Contains(p) && !activating.Contains(p);
+        if ((flaws & Flaw.ContiguousOnlyBalancer) != 0)
+        {
+            // MUTATION: one contiguous range per node, its fair one by rank. Whatever lies outside it moves.
+            var range = VirtualPartitions.FairRanges(partitions, Math.Max(1, cluster.Nodes)).ElementAtOrDefault(cluster.Rank);
+            return ([.. owned.Where(p => !range.Contains(p)).OrderDescending()], [.. cluster.Free.Where(p => range.Contains(p) && Asked(p)).Order()]);
+        }
+        var share = (flaws & Flaw.GreedyBalancer) != 0 ? partitions : (partitions + cluster.Nodes - 1) / Math.Max(1, cluster.Nodes);
+        var release = owned.OrderDescending().Take(Math.Max(0, owned.Count + activating.Count - share)).ToList();
+        var held = owned.Count + activating.Count - release.Count;
+        return (release, [.. cluster.Free.Where(Asked).Order().Take(Math.Max(0, share - held))]);
     }
 }

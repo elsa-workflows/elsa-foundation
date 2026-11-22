@@ -47,7 +47,7 @@ $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $sourceCommit = (& git -C $repository rev-parse HEAD).Trim()
 if (-not $SourceRevision.StartsWith($sourceCommit, [StringComparison]::Ordinal)) { throw 'The candidate revision must name the current full source commit, with an optional explicit worktree suffix.' }
 function Read-SourceManifest {
-    $files = & git -C $repository ls-files --cached --others --exclude-standard -- Essentials/src/Activities/Bpmn Essentials/src/Activities/Primitives Essentials/src/Workflows/Runtime Essentials/apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead e2e-tests/_ElsaCommon.ps1 e2e-tests/_ServerLifecycle.ps1 e2e-tests/runtime-alterations/_AlterationCommon.ps1 e2e-tests/stimuli/_StimuliCommon.ps1
+    $files = & git -C $repository ls-files --cached --others --exclude-standard -- essentials/src/Activities/Bpmn essentials/src/Activities/Primitives essentials/src/Workflows/Runtime apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead e2e-tests/_ElsaCommon.ps1 e2e-tests/_ServerLifecycle.ps1 e2e-tests/runtime-alterations/_AlterationCommon.ps1 e2e-tests/stimuli/_StimuliCommon.ps1
     if ($LASTEXITCODE -ne 0) { throw 'The source manifest could not be enumerated.' }
     return @($files | Sort-Object -Unique | ForEach-Object {
         $path = Join-Path $repository $_

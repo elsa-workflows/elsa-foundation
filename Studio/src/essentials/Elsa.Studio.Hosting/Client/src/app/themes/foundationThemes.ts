@@ -497,6 +497,56 @@ const dusk = definition(
   }
 );
 
+const space = {
+  ...definition(
+    "space",
+    "Space",
+    "Soft blue-teal gradients, a faint grid and sparse point-like stars, with calmer slate tones in Dark and Dim.",
+    geistTypography,
+    { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "16px" },
+    "classic",
+    {
+      light: mode({
+        scheme: "light", hue: 258, chroma: 0.016,
+        background: 0.978, card: 0.998, muted: 0.945, border: 0.88, input: 0.99, sidebar: 0.15, foreground: 0.22, mutedForeground: 0.49,
+        primary: oklch(0.49, 0.16, 258), primaryForeground: white,
+        wash: oklch(0.31, 0.085, 270), activeForeground: oklch(0.94, 0.08, 260),
+        overrides: {
+          sidebarForeground: oklch(0.95, 0.018, 258),
+          sidebarActive: oklch(0.3, 0.085, 270),
+          sidebarActiveForeground: oklch(0.97, 0.035, 255)
+        }
+      }),
+      dark: mode({
+        scheme: "dark", hue: 226, chroma: 0.018,
+        background: 0.18, card: 0.235, muted: 0.285, border: 0.36, input: 0.21, sidebar: 0.2, foreground: 0.95, mutedForeground: 0.76,
+        primary: oklch(0.76, 0.13, 212), primaryForeground: oklch(0.17, 0.025, 220),
+        wash: oklch(0.31, 0.045, 224), activeForeground: oklch(0.94, 0.045, 215),
+        overrides: {
+          sidebar: oklch(0.22, 0.025, 226),
+          sidebarForeground: oklch(0.94, 0.012, 220),
+          sidebarActive: oklch(0.33, 0.055, 215),
+          sidebarActiveForeground: oklch(0.97, 0.025, 215)
+        }
+      }),
+      dim: mode({
+        scheme: "dim", hue: 224, chroma: 0.02,
+        background: 0.285, card: 0.34, muted: 0.395, border: 0.475, input: 0.31, sidebar: 0.245, foreground: 0.96, mutedForeground: 0.82,
+        primary: oklch(0.81, 0.12, 210), primaryForeground: oklch(0.18, 0.025, 220),
+        wash: oklch(0.405, 0.045, 222), activeForeground: oklch(0.96, 0.05, 210),
+        overrides: {
+          sidebar: oklch(0.27, 0.025, 222),
+          sidebarForeground: oklch(0.96, 0.012, 220),
+          sidebarActive: oklch(0.41, 0.05, 212),
+          sidebarActiveForeground: oklch(0.97, 0.025, 215)
+        }
+      }),
+      highContrast: highContrast(oklch(0.9, 0.18, 260), 260)
+    }
+  ),
+  sidebarBackdrop: "starfield" as const
+};
+
 /** Neutral actions and surfaces; the small focus/selection mark carries the accent. */
 function minimalMode(scheme: "light" | "dark" | "dim", id: string): ThemeModeDefinition {
   const light = scheme === "light";
@@ -538,6 +588,6 @@ const minimalThemes = minimalStudioPresets.map(preset => ({
   workspaceStyle: "minimal" as const
 }));
 
-export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+export const foundationThemeIds = ["linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk", "space"] as const;
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [linen, ...minimalThemes, classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk, space];

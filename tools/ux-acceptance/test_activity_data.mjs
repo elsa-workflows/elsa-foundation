@@ -2,6 +2,8 @@
 // Imports the real acceptance predicates; these are semantic controls, not copies of their implementation.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Buffer } from "node:buffer";
+import { createActivityDataResponseCollector } from "../../Studio/tests/acceptance/activityDataResponseCollector.mjs";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +32,22 @@ test("refused, wrong-target, wrong-path and changed-snapshot offers cannot certi
     const changed = clone(answer); mutate(changed);
     assert.equal(findActivityDataAdmission([changed], before, expected), undefined);
   }
+});
+test("cancelled context cannot replace mandatory admission; completed exact offer still can", async () => {
+  const contexts = [], transport = [];
+  const endpoint = "http://localhost:51947/design/workflows/activity-data/context";
+  const collector = createActivityDataResponseCollector(endpoint, contexts, transport);
+  const request = failure => ({ url: () => endpoint, method: () => "POST", postDataJSON: () => before,
+    failure: () => failure ? { errorText: failure } : null });
+  collector.observe({ request: () => request("net::ERR_ABORTED"), finished: async () => new Error("aborted"),
+    body: async () => { throw new Error("Cancelled body must not be read"); } });
+  await collector.settle();
+  assert.equal(findActivityDataAdmission(contexts, before, expected), undefined);
+  assert.equal(transport.length, 1);
+  collector.observe({ request: () => request(null), finished: async () => null,
+    body: async () => Buffer.from(JSON.stringify(answer.response)) });
+  await collector.settle();
+  assert.deepEqual(findActivityDataAdmission(contexts, before, expected), answer);
 });
 const catalog = [
   { id: "WorkflowsPublishingApi", enabled: true, runtimeAvailable: true, dependencies: [{ id: "WorkflowsPublishing", optional: false }] },

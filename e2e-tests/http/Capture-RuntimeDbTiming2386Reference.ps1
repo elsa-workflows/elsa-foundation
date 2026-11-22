@@ -229,7 +229,7 @@ function Get-ExecutableExportEvidence {
     }
 }
 
-$fusionPath = 'Essentials/src/Workflows/Runtime/Core/Models/ExecutableNode.cs'
+$fusionPath = 'essentials/src/Workflows/Runtime/Core/Models/ExecutableNode.cs'
 $fusionSource = (& git -C $RepoRoot show "$($CandidateSha):$fusionPath" 2>$null) -join "`n"
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fusionSource)) {
     throw "Could not read WorkflowIntrinsicFusion from supplied candidate $CandidateSha."

@@ -1,0 +1,13 @@
+2c1f7ecbffda66fbabab253a97f21f1b7e2d4ecb
+=== built-in cost 1024 10 1024, before the set-poll fix
+ 5:26  up 16 days, 15:26, 1 user, load averages: 2.32 2.63 3.74
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 1024 | idle, a second | 1465.6 | 1.5 | 1 | 0 | - | 1025.2 |
+| built-in | 1024 | 1024 tokens | 3072 | 29 | 28 | 27 | 37.9 | 31800 |
+built-in: the burst applied in 1554 ms
+=== built-in cost 4096 10 4096, before the set-poll fix
+ 5:26  up 16 days, 15:26, 1 user, load averages: 2.31 2.62 3.71
+| Runtime | Partitions | Window | Pass calls | Worker passes | Set polls | Commits with turns | Partitions per commit | Store calls |
+| built-in | 4096 | idle, a second | 4700.2 | 1.5 | 1 | 0 | - | 4097.2 |
+| built-in | 4096 | 4096 tokens | 4199 | 105 | 105 | 104 | 39.4 | 442588 |
+built-in: the burst applied in 20965 ms

@@ -32,8 +32,8 @@ describe("WorkflowExecutableCanvasHeader", () => {
     expect(container.querySelector("h3")?.textContent).toContain("Invoice settlement");
     expect(container.querySelector("h3 small")?.textContent).toBe("Version 1.0.0");
     expect(container.textContent).not.toContain("artifact-95bc4f13586a Version");
-    expect(container.querySelector('[aria-label="Artifact ID: artifact-95bc4f13586a"]')).toBeTruthy();
-    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Executable ID: artifact-95bc4f13586a"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Copy Executable ID"]')).toBeTruthy();
     const selection = container.querySelector(".wf-executable-selection");
     expect(selection?.textContent).toBe("Showing requested reference activation-ref:publication-invoice");
     expect(selection?.getAttribute("title")).toBe("Showing requested reference activation-ref:publication-invoice");
@@ -51,6 +51,6 @@ describe("WorkflowExecutableCanvasHeader", () => {
 
     expect(container.querySelector("h3")?.textContent).toBe("Executable artifact-1");
     expect(container.querySelector("h3 small")).toBeNull();
-    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Copy Executable ID"]')).toBeTruthy();
   });
 });

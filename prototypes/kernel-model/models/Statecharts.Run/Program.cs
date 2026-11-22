@@ -49,6 +49,8 @@ if (args is ["--selection"]) { SelectionWitness.Run(); return; }
 if (args is ["--selection-export"]) { SelectionWitness.Export(); return; }
 if (args is ["--phases-list"]) { foreach (var name in PhaseWitness.Names.Concat(PhaseReaders.Names)) Console.WriteLine(name); return; }
 if (args is ["--phases"]) { PhaseWitness.RunAll(); PhaseReaders.Run(); return; }
+if (args is ["--effect-keys"]) { EffectKeyWitness.Run(); return; }
+if (args is ["--effect-keys-list"]) { foreach (var n in EffectKeyWitness.Names) Console.WriteLine(n); return; }
 if (args.Length != 0) throw new ArgumentException("Use --phases-list or --phases, or no argument for the original20 schedules.");
 
 foreach (var mode in new[] { Modes.Balanced, Modes.Durable })
@@ -56,6 +58,7 @@ foreach (var nested in new[] { false, true })
 foreach (var fault in Enum.GetValues<Fault>())
     new Witness(mode, nested, fault).Run();
 Console.WriteLine("20 passed: S1–S4 and kernel checks, root and Flowchart, Balanced and Durable, 5 fault schedules.");
+EffectKeyWitness.Run();     // round 5 C: a re-entered state's outbound activity gets a key per visit, in all three modes
 
 enum Fault { None, LostCommit, UnacknowledgedCommit, CrashedWhileHeld, StaleOwner }
 

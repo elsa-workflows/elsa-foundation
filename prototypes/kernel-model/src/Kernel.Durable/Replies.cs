@@ -50,51 +50,156 @@ public sealed class Request(string id, long deadline)
 {
     public const string Response = "response";      // the channel whose first item answers the request
 
-    public string Id => id;
+    public string Id { get; } = id;
+    /// <summary>The opaque transport key for this one registration. Local display IDs may be reused.</summary>
+    public string Registration { get; internal init; } = id;
+    public string ReplyAddress(string node, bool beforeCommit = false) => ReplyTo.Of(node, Registration, Deadline, beforeCommit);
     public long Deadline => deadline;
     public bool Done { get; private set; }
-    public object? Answer { get; private set; }
+    /// <summary>The actual carrier accepted on the response channel, retained with this registration.</summary>
+    public Reply? AcceptedResponse { get; private set; }
+    public object? Answer => AcceptedResponse?.Item;
     public InstanceStatus? Status { get; private set; }
     public string? Error { get; private set; }
     public int Responses { get; private set; }      // accepted; for tests
     public int Ends { get; private set; }
 
+    internal bool AnyOutput { get; init; }
+    internal string? Tenant { get; init; }
+    internal object? Ambient { get; init; }
+    internal HashSet<InboxKey> AmbientGiven { get; } = [];
+    private TaskCompletionSource<Reply>? _completion;
+
+    internal Task<Reply> Completion() => Done
+        ? Task.FromResult(AcceptedResponse ?? new Reply(Registration, Key: "", Channel: null, Item: null, Status: Status, Error: Error))
+        : (_completion ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+
     internal void Receive(Reply reply, bool again)
     {
         if (Done && !again) return;
-        if (reply.Channel == Response) (Answer, Responses, Done) = (reply.Item, Responses + 1, true);
-        else if (reply.Channel is null) (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        if (reply.Channel == Response || AnyOutput && reply.Channel is not null)
+            (AcceptedResponse, Responses, Done) = (reply, Responses + 1, true);
+        else if (reply.Channel is null)
+            (Status, Error, Ends, Done) = (reply.Status, reply.Error, Ends + 1, true);
+        else return;
+        _completion?.TrySetResult(reply);
     }
 
     internal void End(string error)
     {
         if (Done) return;
         (Error, Ends, Done) = (error, Ends + 1, true);
+        _completion?.TrySetResult(new Reply(Registration, "", null, null, Error: error));
     }
 }
 
 /// <summary>The open requests of one process. The host gives it what the transport brings and calls <see cref="Expire"/> as time passes.</summary>
-public sealed class Requests(Flaw flaws = Flaw.None)
+public sealed class Requests
 {
+    private readonly Lock _gate = new();
     private readonly Dictionary<string, Request> _open = new(StringComparer.Ordinal);
+    private readonly string _incarnation;
+    private readonly Flaw _flaws;
+    private long _next;
 
-    public IReadOnlyCollection<Request> All => _open.Values;
+    public Requests(Flaw flaws = Flaw.None) : this(Guid.NewGuid().ToString("N"), flaws) { }
 
-    public Request Open(string id, long deadline) => _open[id] = new Request(id, deadline);
+    /// <summary>A host with its own unique process incarnation can supply it explicitly, including for deterministic replay.</summary>
+    public Requests(string processIncarnation, Flaw flaws = Flaw.None) => (_incarnation, _flaws) = (processIncarnation, flaws);
 
-    public void Receive(Reply reply)
+    public IReadOnlyCollection<Request> All { get { lock (_gate) return _open.Values.ToArray(); } }
+
+    public Request Open(string id, long deadline) => Open(id, deadline, false);
+
+    internal Request OpenBound(string id, long deadline, string tenant, object? ambient) => Open(id, deadline, true, tenant, ambient);
+
+    private Request Open(string id, long deadline, bool anyOutput, string? tenant = null, object? ambient = null)
     {
-        if (_open.TryGetValue(reply.Request, out var request)) request.Receive(reply, (flaws & Flaw.ReplyTwice) != 0);
+        lock (_gate)
+        {
+            var request = new Request(id, deadline)
+            {
+                Registration = $"r{_incarnation}:{checked(++_next)}",
+                AnyOutput = anyOutput, Tenant = tenant, Ambient = ambient
+            };
+            _open.Add(request.Registration, request);
+            return request;
+        }
+    }
+
+    internal object? TakeLocalAmbient(string address, string node, string tenant, long now, InboxKey delivery)
+    {
+        var route = ReplyTo.Parse(address);
+        if (route.Node != node || route.Deadline <= now) return null;
+        lock (_gate)
+            return _open.GetValueOrDefault(route.Request) is { Done: false, Ambient: { } ambient } request &&
+                request.Tenant == tenant && request.Deadline == route.Deadline && request.AmbientGiven.Add(delivery) ? ambient : null;
+    }
+
+    internal Task<Reply> CompletionOf(Request request)
+    {
+        lock (_gate) return request.Completion();
+    }
+
+    public bool IsOpen(Request request)
+    {
+        lock (_gate) return !request.Done && ReferenceEquals(_open.GetValueOrDefault(request.Registration), request);
+    }
+
+    public void Receive(Reply reply) => TryReceive(reply);
+
+    /// <summary>Whether this delivery completed its addressed open registration.</summary>
+    public bool TryReceive(Reply reply)
+    {
+        lock (_gate)
+        {
+            if (!_open.TryGetValue(reply.Request, out var request)) return false;
+            var wasOpen = !request.Done;
+            var again = (_flaws & Flaw.ReplyTwice) != 0;
+            request.Receive(reply, again);
+            if (request.Done && !again) _open.Remove(request.Registration);
+            return wasOpen && request.Done;
+        }
     }
 
     /// <summary>A caller never waits for ever: past its deadline it gets a timeout, whatever happens to the instance.</summary>
     public void Expire(long now)
     {
-        if ((flaws & Flaw.NoDeadline) != 0) return;
-        foreach (var request in _open.Values)
-            if (now >= request.Deadline) request.End("timeout");
+        if ((_flaws & Flaw.NoDeadline) != 0) return;
+        lock (_gate)
+            foreach (var (key, request) in _open)
+                if (now >= request.Deadline) { request.End("timeout"); _open.Remove(key); }
     }
 
-    /// <summary>The caller went away. The instance is not told; a route that wants a cancel sends one.</summary>
-    public void Disconnect(string id) => _open.GetValueOrDefault(id)?.End("disconnected");
+    /// <summary>Disconnect only the caller holding this registration, even when names overlap.</summary>
+    public void Disconnect(Request request) => End(request, "disconnected");
+
+    /// <summary>This caller stopped waiting for its pump. Other callers still own their deadlines.</summary>
+    public void Timeout(Request request) => End(request, "timeout");
+
+    private void End(Request request, string reason)
+    {
+        lock (_gate)
+            if (ReferenceEquals(_open.GetValueOrDefault(request.Registration), request))
+            {
+                request.End(reason);
+                _open.Remove(request.Registration);
+            }
+    }
+
+    /// <summary>Compatibility for hosts addressing a unique live local name.</summary>
+    public void Disconnect(string id)
+    {
+        lock (_gate)
+        {
+            Request? found = null;
+            foreach (var request in _open.Values)
+                if (!request.Done && request.Id == id)
+                {
+                    if (found is not null) return;
+                    found = request;
+                }
+            if (found is not null) Disconnect(found);
+        }
+    }
 }

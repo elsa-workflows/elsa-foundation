@@ -6,12 +6,16 @@ import type { Node } from "@xyflow/react";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import { SequenceDesigner, sequenceNodeDragDataType } from "../graph-authoring/SequenceDesigner";
+import { sequencePreviewPreferenceStorageKey, setSequenceActivityPreviewEnabled } from "../graph-authoring/sequencePreviewPreference";
+import { buildCanvas, createActivityNode, getChildSlots } from "../workflowAdapter";
 import type { ChildSlot, WorkflowNodeData, WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
+import { ifActivity, ifNode, leafNode, sequenceActivity, sequenceNode, writeLine } from "./fixtures";
 
 let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  setSequenceActivityPreviewEnabled(false);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -72,6 +76,104 @@ describe("SequenceDesigner", () => {
     expect(container.querySelector(".wf-sequence-summary")?.textContent).toBe("Runs first");
     expect(container.querySelector(".wf-sequence-step[data-id='second']")?.getAttribute("data-graph-node-id")).toBe("second");
     expect(ref.current).toBe(container.querySelector(".wf-sequence-designer"));
+  });
+
+  it("renders empty If branches from the catalog as sequence child slots", () => {
+    const activity = createActivityNode(ifActivity, "if");
+    mount([workflowNode("if", "If", { childSlots: getChildSlots(activity, ifActivity) })]);
+
+    expect([...container.querySelectorAll<HTMLButtonElement>(".wf-sequence-slot")].map(slot => slot.getAttribute("aria-label")))
+      .toEqual(["Open Then, Empty", "Open Else, Empty"]);
+  });
+
+  it("previews If children inside their owner without navigating or changing the outer sequence", () => {
+    const owner = sequenceNode("root", [ifNode("if", leafNode("notify")), leafNode("next")]);
+    const { nodes } = buildCanvas({ owner, slot: getChildSlots(owner, sequenceActivity)[0] },
+      [ifActivity, writeLine], [], activity => activity.nodeId === "notify" ? "Welcome back" : undefined,
+      [{ nodeId: "notify", displayName: "Greet customer" }]);
+    const { callbacks } = mount(nodes);
+    const card = stepButton("if").closest("article")!;
+    const toggle = container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")!;
+    const then = card.querySelector<HTMLButtonElement>("button[aria-label='Open Then, 1 activity']")!;
+    const otherwise = card.querySelector<HTMLButtonElement>("button[aria-label='Open Else, Empty']")!;
+
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(then.textContent).not.toContain("Greet customer");
+    click(toggle);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(then.textContent).toContain("Greet customer");
+    expect(then.textContent).toContain("Welcome back");
+    expect(otherwise.textContent).toContain("Empty");
+    expect(cardLabels()).toEqual(["If", "Write Line"]);
+    expect(container.querySelectorAll(".wf-sequence-connector")).toHaveLength(1);
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+    expect(callbacks.onOpenSlot).not.toHaveBeenCalled();
+    click(otherwise);
+    expect(callbacks.onOpenSlot).toHaveBeenCalledWith("if", "If", nodes[0].data.childSlots[1]);
+    click(toggle);
+    expect(then.textContent).not.toContain("Greet customer");
+  });
+
+  it("shares the preview setting across mounted sequence canvases", () => {
+    const owner = sequenceNode("root", [ifNode("if", leafNode("notify"))]);
+    const { nodes } = buildCanvas({ owner, slot: getChildSlots(owner, sequenceActivity)[0] },
+      [ifActivity, writeLine], [], undefined, [{ nodeId: "notify", displayName: "Greet customer" }]);
+    const firstRef = createRef<HTMLDivElement>();
+    const secondRef = createRef<HTMLDivElement>();
+    const designer = (canvasRef: typeof firstRef) => <SequenceDesigner nodes={nodes} selectedNodeId={null} readOnly
+      canvasRef={canvasRef} onSelect={() => {}} onOpenSlot={() => {}} />;
+    flushSync(() => root.render(<>{designer(firstRef)}{designer(secondRef)}</>));
+
+    const toggles = [...container.querySelectorAll<HTMLButtonElement>(".wf-sequence-preview-setting")];
+    expect(toggles.map(toggle => toggle.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
+    click(toggles[0]);
+    expect([...container.querySelectorAll<HTMLButtonElement>(".wf-sequence-preview-setting")].map(toggle => toggle.getAttribute("aria-pressed")))
+      .toEqual(["true", "true"]);
+    expect(container.querySelectorAll(".wf-sequence-child")).toHaveLength(2);
+  });
+
+  it("responds to another tab changing the stored preference", () => {
+    mount([workflowNode("if", "If", { childSlots: [childSlot("then", "Then", [workflowNodeActivity("child")])] })], { readOnly: true });
+
+    flushSync(() => window.dispatchEvent(new StorageEvent("storage", { key: sequencePreviewPreferenceStorageKey, newValue: "true" })));
+
+    expect(container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-sequence-child")).not.toBeNull();
+  });
+
+  it("loads a stored preview preference when a sequence canvas mounts", () => {
+    window.localStorage.setItem(sequencePreviewPreferenceStorageKey, "true");
+    mount([workflowNode("if", "If")], { readOnly: true });
+
+    expect(container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("keeps the preview toggle usable when browser storage is blocked", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Blocked"); });
+    mount([workflowNode("if", "If", { childSlots: [childSlot("then", "Then", [workflowNodeActivity("child")])] })], { readOnly: true });
+
+    click(container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")!);
+
+    expect(container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-sequence-child")).not.toBeNull();
+    setItem.mockRestore();
+  });
+
+  it("previews a non-conditional body in order and offers no preview for outcome ports alone", () => {
+    const body = sequenceNode("body", [leafNode("one"), leafNode("two")]);
+    const owner = sequenceNode("root", [body]);
+    const { nodes } = buildCanvas({ owner, slot: getChildSlots(owner, sequenceActivity)[0] },
+      [sequenceActivity, writeLine], [], undefined, [{ nodeId: "two", displayName: "Notify buyer" }]);
+    const leaf = workflowNode("result", "Decision", { sourcePorts: ["Yes", "No"].map(name => ({ name, displayName: name })) });
+    const { callbacks } = mount([...nodes, leaf], { readOnly: true });
+
+    click(container.querySelector<HTMLButtonElement>(".wf-sequence-preview-setting")!);
+    expect(stepButton("result").closest("article")!.querySelector(".wf-sequence-slot-list")).toBeNull();
+    const open = container.querySelector<HTMLButtonElement>("button[aria-label='Open Activities, 2 steps']")!;
+    expect(open.textContent).toMatch(/Write Line.*Notify buyer/);
+    expect(container.querySelector(".wf-sequence-insert, .wf-sequence-actions")).toBeNull();
+    click(open);
+    expect(callbacks.onOpenSlot).toHaveBeenCalledWith("body", "Sequence", nodes[0].data.childSlots[0]);
   });
 
   it("hides a version-hash type caption and keeps the catalog name as the card title", () => {

@@ -4,6 +4,9 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`separates workflow views and retains edited declarations (${theme}, ${width}px)`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
+    const canvas = page.locator(".wf-canvas-shell");
+    await expect(canvas).toHaveAttribute("aria-label", "Workflow designer canvas");
+    expect(await canvas.evaluate(element => element.tagName)).toBe("SECTION");
     if (width < 600) {
       await expect(page.getByRole("button", { name: "Expand inspector panel", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Expand activities panel", exact: true })).toBeVisible();

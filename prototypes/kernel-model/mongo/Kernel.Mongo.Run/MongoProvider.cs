@@ -73,8 +73,19 @@ public sealed class MongoProvider(string connection, MongoStoreOptions options) 
 
         public override IKernelStore Store => store;
         public override ICostCounter? Counter => counter;
+        public override Func<int, Task>? Reopen => partitions => new MongoStore(provider._admin.Value, database).CreateAsync(partitions);
+        public override Func<int, Task>? CutPartitionRows => async from =>
+        {
+            var db = provider._admin.Value.GetDatabase(database);
+            foreach (var name in new[] { "partitions", "clocks", "projections" })
+                await db.GetCollection<BsonDocument>(name).DeleteManyAsync(new BsonDocument("_id", new BsonDocument("$gte", from)));
+        };
 
         public override IKernelStore NewClient() => new MongoStore(provider._outside.Value[Interlocked.Increment(ref _next) % 2], database);
+
+        /// <summary>K1b: a partition document whose owner has no node document, for the missing-record case.</summary>
+        public override Func<string, Task>? DeleteNodeRecord => node =>
+            provider._admin.Value.GetDatabase(database).GetCollection<BsonDocument>("nodes").DeleteOneAsync(new BsonDocument("_id", node));
 
         // A document over MongoDB's 16 MiB limit.
         public override InstanceRow? Refused(InstanceRow row) => row with { State = new string('x', 17 * 1024 * 1024) };

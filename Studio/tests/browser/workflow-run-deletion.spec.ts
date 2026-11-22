@@ -63,7 +63,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     const trigger = row.getByRole("button", { name: "Identifiers for quote-completed", exact: true });
     await trigger.click();
     const dialog = page.getByRole("dialog", { name: "Workflow run identifiers for quote-completed", exact: true });
-    await dialog.getByRole("button", { name: "Copy Artifact ID", exact: true }).click();
+    await dialog.getByRole("button", { name: "Copy Executable ID", exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("customer-quote");
     expect((await row.boundingBox())!.height).toBe(bounds.height);
     await page.screenshot({ path: `/tmp/clean-runs-${theme}-${width}.png` });

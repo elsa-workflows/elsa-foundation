@@ -32,7 +32,7 @@ describe("activity execution value payload client", () => {
   });
 
   it.each([
-    [{ evidenceId: "another-evidence", captureMode: "Payload", payload: "value" }, "different evidence ID"],
+    [{ evidenceId: "another-evidence", captureMode: "Payload", payload: "value" }, "different capture."],
     [{ evidenceId: "evidence-1", captureMode: "Payload", payload: "value" }, "different capture mode"]
   ])("rejects a payload response that does not match its evidence request", async (response, message) => {
     const runtime = context(async url => url === "/capabilities" ? capabilitiesWithPayload : response);

@@ -6,7 +6,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   const original = page.viewportSize()!;
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/workflows/activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   const activityName = `Phone authoring ${info.project.name} ${Date.now()}`;
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(activityName);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
@@ -15,7 +15,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
     await provider.selectOption((await graph.first().getAttribute("value"))!);
   }
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
-  await page.getByRole("button", { name: "Create definition", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
   await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
   const editorUrl = page.url();
@@ -67,7 +67,8 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   expect((await themeSelect.boundingBox())!.height).toBeLessThanOrEqual((await sectionSelect.boundingBox())!.height + 2);
   await capture(page, info, "phone-theme-assets");
   await theme.getByRole("tab", { name: "Overview", exact: true }).click();
-  await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
   const duplicationNotice = page.locator(".studio-toast").filter({ hasText: "Theme duplicated as an editable custom theme." });
   // Exercise the real notice's existing hover pause, retaining it during the viewport sweep.
   const noticeHold = await holdToastForPlacement(page, duplicationNotice);
@@ -119,7 +120,8 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   await theme.getByRole("tab", { name: "Tokens", exact: true }).click();
   await expect(primary).toHaveValue("oklch(0.5 0.15 250)");
   await capture(page, info, "phone-theme-reopened");
-  await theme.getByRole("button", { name: "Delete", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete theme", exact: true }).click();
   await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect(themeSelect).not.toHaveValue(selectedId);
   await sectionSelect.selectOption({ label: "Features" });

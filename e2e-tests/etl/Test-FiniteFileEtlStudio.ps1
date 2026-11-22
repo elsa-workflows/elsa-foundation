@@ -173,7 +173,7 @@ $fixture = $null
 $journeyFailure = $null
 try {
     $repoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $workbenchDll = Join-Path $repoRoot 'Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
+    $workbenchDll = Join-Path $repoRoot 'apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll'
     $studioProjectDirectory = Join-Path $repoRoot 'Studio/src/apps/Elsa.Studio.Web'
     $studioDll = Join-Path $studioProjectDirectory 'bin/Debug/net10.0/Elsa.Studio.Web.dll'
     if (-not (Test-Path -LiteralPath $workbenchDll -PathType Leaf)) {

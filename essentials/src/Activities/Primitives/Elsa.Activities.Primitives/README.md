@@ -1,0 +1,58 @@
+# Elsa.Activities.Primitives
+
+Primitive hand-written activities and the transient CLR activation implementation. This runtime feature
+references no Design project.
+
+`ActivitiesPrimitivesFeature` registers `ClrActivityActivator` as `IActivityActivator`. For each invocation
+attempt the activator resolves the canonical type alias from `ClrActivityDescriptor`, creates an owned DI
+scope bound to the partition of the scope it activates in, uses `ActivatorUtilities` so activity authors can
+use constructor injection, constructs a fresh CLR instance, and hydrates its plain `[ActivityInput]`
+properties from the committed input snapshot. The activation lease disposes both the activity and its scope.
+
+`WriteLine` is the minimal shipped example: a plain annotated `string Text` property and one atomic
+`ActivityUnit` result. It contains no argument wrapper or activity-owned value address.
+
+## Named-event surface: `Event` and `PublishEvent`
+
+`Event` (`Elsa.Event`) is the named-event **receive** side: as a start trigger it registers a durable
+`EventStimulus` binding at publish time; scheduled mid-flow (`CanStartWorkflow = false`) it suspends on the
+same stimulus identity and completes when the event is raised. `EventStimulus` maps an event name to the
+opaque `(StimulusType = "Event", StimulusHash = SHA-256 of the name)` routing pair — deliberately
+cross-workflow (the collaboration key). A nonblank `Event.CorrelationId` is retained on a mid-flow Event wait;
+a same-name delivery carrying that value resumes only matching opted-in waits. Null, empty, and whitespace-only
+correlation leave the wait unscoped, preserving broadcast delivery.
+
+`PublishEvent` (`Elsa.PublishEvent`, spec 135) is its **send** sibling. Its inputs are `EventName` (required),
+`CorrelationId` (optional; narrows resume fan-in to waits retaining the same nonblank value, while null/blank
+remains broadcast), and `Payload` (optional `JsonElement`). Correlation never filters the published message-start
+fan-out, and BPMN-specific correlation authoring remains a separate concern. Execution is **durable-first**: it
+never calls the stimulus router in-line. It validates the name and stages a typed `PublishStimulusRequest` on the
+activity's own commit through `IPublishStimulusStager`, then completes `Done` immediately (fire-and-continue). The invocation-keyed
+`PublishStimulusStagingBuffer` (registered as both the activity-facing stager and the engine-facing
+`IPublishStimulusStagingAccessor` the invoke handler drains) builds a `PublishStimulusIntentKind` post-commit
+intent carrying the shared `Event` stimulus identity. After the checkpoint commits, `PublishStimulusExecutor`
+routes the verified physical source and its saved recipient cohort via `IStimulusRouter.RouteSourceAsync` — so one send both starts every published
+message-start workflow listening on the name and resumes every parked same-name catch — with the outbox's
+retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's layering exactly but is
+publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
+post-commit intent kind through it.
+
+For Workflow Test Runs, this feature also contributes the scoped `Elsa.Event`
+start driver (`event` mode) and active-wait driver (`event` mode). These
+single-Test-Run paths share the event payload contract but remain distinct from
+`PublishEvent`'s production broadcast behavior. See the [Runtime Test Run
+driver guide](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
+
+Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
+pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
+intent shape, and the `StartAndResume` handler pin).
+
+## Cross-domain contributions
+
+`ActivitiesPrimitivesFeature` contributes its private phase1900 publication-history enricher before Runtime capture and its scoped `PublishStimulusExecutor`. It supplies safe facts and an immutable outgoing event/run/outbox pointer only when the pinned policy supports the full publication vocabulary. Incoming event causation and outgoing source identity remain distinct. Older policies and unstamped work retain their existing identity.
+
+New admission advertises publication history only when the actual selected input/capture/committer, native saved-source router, start/resume transports and observation handler/read-write pair qualify. Merely registering compatible data stores or a source-kind declaration is insufficient. Interface defaults and original constructors remain unqualified. Complete native source/subscription/current-claim/scope checks still precede diagnostic handoff; no history pointer grants admission authority.
+
+The handler reopens the actual physical source and native owner before recording one attempt and a separate closed routing disposition for that invocation. Saved start/resume commands carry the exact cause without enabling target history retrospectively. Uncertain observation writes retry the same event once, never the routing effect; primary and observation failures retain both causes. Current subscription publication retains its existing immediate durable boundary, while prior-protocol coalescing preserves the original logical source inventory.
+
+See the [Runtime extension catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#qualified-publication-and-receiver-history-3849) for shared contracts and Spec1211 research for exact owning-project qualification and remaining delivery gates.

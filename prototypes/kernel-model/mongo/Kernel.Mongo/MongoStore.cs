@@ -15,6 +15,7 @@ public sealed record MongoStoreOptions
     /// fence when this store instance did not take the partition at this epoch itself.
     /// </summary>
     public bool FenceInBatch { get; init; }
+
 }
 
 /// <summary>
@@ -27,8 +28,10 @@ public sealed record MongoStoreOptions
 /// gets a larger key whoever owns the partition and whatever its clock says.
 /// </para>
 /// </summary>
-public sealed class MongoStore : IKernelStore
+public sealed partial class MongoStore : IKernelStore
 {
+    public Func<long>? FoundationClock => null;
+
     private static readonly TransactionOptions Transaction = new(ReadConcern.Snapshot, ReadPreference.Primary, WriteConcern.WMajority);
     private static readonly BsonDocument NowMs = new("$toLong", "$$NOW");
     private static readonly BsonDocument NowUs = new("$multiply", new BsonArray { NowMs, 1000L });
@@ -42,7 +45,7 @@ public sealed class MongoStore : IKernelStore
     {
         _client = client;
         _options = options ?? new MongoStoreOptions();
-        // Every read outside a transaction is majority: it never sees a write that a failover could roll back.
+        // Reads use majority by default. The take reads leases from the primary, where a rolled-back renewal can only delay a take.
         var db = client.GetDatabase(database, new MongoDatabaseSettings { ReadConcern = ReadConcern.Majority, WriteConcern = WriteConcern.WMajority, ReadPreference = ReadPreference.Primary });
         Database = db;
         _partitions = db.GetCollection<BsonDocument>("partitions");
@@ -60,11 +63,25 @@ public sealed class MongoStore : IKernelStore
     public bool PhysicalRetirementAvailable => true;
     public IMongoDatabase Database { get; }
 
+    /// <summary>
+    /// The count the first open recorded, once every partition document of it exists; an open cut short between the record
+    /// and the last document refuses (definite) until <see cref="CreateAsync"/> runs again at that count. A database from
+    /// before the record gives its partition documents.
+    /// </summary>
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        var rows = (int)await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        if (await Database.GetCollection<BsonDocument>("meta").Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync(cancellationToken) is not { } meta) return rows;
+        var count = meta["count"].ToInt32();
+        return rows == count ? count
+            : throw new StoreException(Failure.Definite, $"Initialization incomplete: {rows} of {count} partition documents exist. Re-run CreateAsync at the same count.");
+    }
+
     /// <summary>Collections, indexes and the partition documents. Collections are created here, not inside a transaction.</summary>
     public async Task CreateAsync(int partitions = Defaults.ServerPartitions)
     {
         var existing = await (await Database.ListCollectionNamesAsync()).ToListAsync();
-        foreach (var name in new[] { "partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views" })
+        foreach (var name in new[] { "meta", "partitions", "clocks", "instances", "messages", "subscriptions", "events", "journal", "nodes", "projections", "views" })
             if (!existing.Contains(name)) await Database.CreateCollectionAsync(name);
         await _messages.Indexes.CreateManyAsync([
             new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "done", 1 }, { "seq", 1 }, { "_id", 1 } }, new CreateIndexOptions { Name = "poll" }),
@@ -77,11 +94,23 @@ public sealed class MongoStore : IKernelStore
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "instance", 1 } }));
         await _events.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument("key", 1)));
         await _journal.Indexes.CreateOneAsync(new CreateIndexModel<BsonDocument>(new BsonDocument { { "partition", 1 }, { "position", 1 } }, new CreateIndexOptions { Unique = true }));
+        // The count is fixed when the database is created (K1 slice 7): another count would address partitions with no
+        // document, or leave some unserved. Nothing is migrated: recreate the database. The first open records the count
+        // before it writes a partition document, one at a time and outside a transaction, so an open cut short is
+        // finished by the next open at the same count, and refused at another.
+        var meta = Database.GetCollection<BsonDocument>("meta");
+        var rows = await _partitions.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+        if (await meta.Find(new BsonDocument("_id", "partitions")).FirstOrDefaultAsync() is null && rows > 0 && rows != partitions)
+            throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
+        var recorded = await meta.FindOneAndUpdateAsync(new BsonDocument("_id", "partitions"), new BsonDocument("$setOnInsert", new BsonDocument("count", partitions)),
+            new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After });
+        if (recorded["count"].ToInt32() != partitions)
+            throw new StoreException(Failure.Definite, $"The database has {recorded["count"].ToInt32()} partitions and was opened with {partitions}. The count is fixed at creation: recreate the database.");
         for (var p = 0; p < partitions; p++)
         {
             await _partitions.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument
             {
-                { "owner", BsonNull.Value }, { "epoch", 0L }, { "leaseUntil", 0L }, { "position", 0L }, { "clock", 0L }, { "now", 0L }, { "died", false },
+                { "owner", BsonNull.Value }, { "epoch", 0L }, { "position", 0L }, { "clock", 0L }, { "now", 0L }, { "died", false },
             }), new UpdateOptions { IsUpsert = true });
             await _clocks.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument("clock", 0L)), new UpdateOptions { IsUpsert = true });
             await _projections.UpdateOneAsync(new BsonDocument("_id", p), new BsonDocument("$setOnInsert", new BsonDocument("position", 0L)), new UpdateOptions { IsUpsert = true });
@@ -90,44 +119,21 @@ public sealed class MongoStore : IKernelStore
 
     // ---- ownership ---------------------------------------------------------------------------------------------------
 
-    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    /// <summary>Remember the commit clock read by this take for its partition and epoch.</summary>
+    private void Known(int partition, long epoch, long clock)
     {
-        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
-        session.StartTransaction(Transaction);
-        var filter = new BsonDocument
-        {
-            { "_id", partition },
-            { "$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("owner", node), new BsonDocument("$expr", new BsonDocument("$lt", new BsonArray { "$leaseUntil", NowMs })) } },
-        };
-        BsonDocument[] update =
-        [
-            new("$set", new BsonDocument
-            {
-                // Taken from another owner: only possible because its lease expired. That is a death.
-                { "died", new BsonDocument("$and", new BsonArray { new BsonDocument("$ne", new BsonArray { "$owner", BsonNull.Value }), new BsonDocument("$ne", new BsonArray { "$owner", new BsonDocument("$literal", node) }) }) },
-                { "owner", new BsonDocument("$literal", node) },
-                { "epoch", new BsonDocument("$add", new BsonArray { "$epoch", 1L }) },
-                { "now", NowMs },
-                { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)lease.TotalMilliseconds }) },
-            }),
-        ];
-        var doc = await _partitions.FindOneAndUpdateAsync(session, filter, Builders<BsonDocument>.Update.Pipeline(update), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
-        if (doc is null)
-        {
-            await session.AbortTransactionAsync(cancellationToken);
-            return null;
-        }
-        var epoch = doc["epoch"].AsInt64;
-        // In the same transaction: one more attempt for every message the dead owner had on trial.
-        if (doc["died"].AsBoolean)
-            await _messages.UpdateManyAsync(session, new BsonDocument { { "partition", partition }, { "trial", epoch - 1 }, { "done", false } }, new BsonDocument("$inc", new BsonDocument("attempts", 1)), cancellationToken: cancellationToken);
-        await session.CommitTransactionAsync(cancellationToken);
-        if (_options.FenceInBatch)
-        {
-            foreach (var key in _known.Keys.Where(k => k.Partition == partition && k.Epoch < epoch)) _known.TryRemove(key, out _);
-            _known[(partition, epoch)] = doc["clock"].AsInt64;
-        }
-        return new Lease(epoch, doc["position"].AsInt64, doc["now"].AsInt64);
+        if (!_options.FenceInBatch) return;
+        foreach (var key in _known.Keys.Where(k => k.Partition == partition && k.Epoch < epoch)) _known.TryRemove(key, out _);
+        _known[(partition, epoch)] = clock;
+    }
+
+    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        await NodeTakeAsync([partition], node, lease, cancellationToken) is { Taken: [var one] } set ? new Lease(one.Epoch, one.Position, set.Now) : null;
+
+    public async ValueTask<OwnedLease> TakeAsync(IReadOnlyCollection<int> partitions, string node, TimeSpan lease, CancellationToken cancellationToken = default)
+    {
+        var set = partitions.Distinct().Order().ToList();
+        return set.Count == 0 ? new([], 0) : await NodeTakeAsync(set, node, lease, cancellationToken);
     }
 
     public async ValueTask ReleaseAsync(int partition, long epoch, CancellationToken cancellationToken = default)
@@ -136,97 +142,153 @@ public sealed class MongoStore : IKernelStore
         await _partitions.UpdateOneAsync(new BsonDocument { { "_id", partition }, { "epoch", epoch } }, new BsonDocument("$set", new BsonDocument("owner", BsonNull.Value)), cancellationToken: cancellationToken);
     }
 
+    /// <summary>A release of a set, in one statement: each document still at its epoch is freed, and the rest are not written.</summary>
+    public async ValueTask ReleaseAsync(IReadOnlyCollection<PartitionFence> owned, CancellationToken cancellationToken = default)
+    {
+        if (owned.Count <= 1)
+        {
+            foreach (var fence in owned) await ReleaseAsync(fence.Partition, fence.Epoch, cancellationToken);
+            return;
+        }
+        foreach (var fence in owned) _known.TryRemove((fence.Partition, fence.Epoch), out _);
+        var held = owned.OrderBy(f => f.Partition).Select(f => new BsonDocument { { "_id", f.Partition }, { "epoch", f.Epoch } });
+        await _partitions.UpdateManyAsync(new BsonDocument("$or", new BsonArray(held)), new BsonDocument("$set", new BsonDocument("owner", BsonNull.Value)), cancellationToken: cancellationToken);
+    }
+
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        new(RetakeInTransactionAsync(partition, node, epoch, lease, countDeaths: false, cancellationToken));
+
     // ---- the commit -----------------------------------------------------------------------------------------------------
 
-    private BsonDocument Fence(CommitBatch batch) => _options.BrokenFence
-        ? new BsonDocument("_id", batch.Partition)
-        : new BsonDocument { { "_id", batch.Partition }, { "epoch", batch.Epoch }, { "position", batch.Position } };
+    private BsonDocument Fence(PartitionFence fence) => _options.BrokenFence
+        ? new BsonDocument("_id", fence.Partition)
+        : new BsonDocument { { "_id", fence.Partition }, { "epoch", fence.Epoch }, { "position", fence.Position } };
+
+    /// <summary>
+    /// A commit over a set of virtual partitions fences every one of their documents in the one transaction, in ascending
+    /// partition id; one fence that matches nothing aborts it, so nothing of the batch lands.
+    /// </summary>
+    public bool OwnedSetsAvailable => true;
 
     /// <summary>Remedies of findings M2 and M3 (MONGO.md), switchable so that the stress test can show what they fix.</summary>
     public static bool AbortOnFailure { get; set; } = true;
     public static bool BackOffOnTransient { get; set; } = true;
 
+    /// <summary>
+    /// A count the commit checks. A fence must match. A count must match, or the batch is "not landed". In an owned batch a
+    /// consume or done (Bound) and a mark (Mark) carry the fenced set's bound; when one touches fewer messages than it names,
+    /// the store reads whether a key is outside the set. A mark that is short for any other reason is a message gone, as before.
+    /// </summary>
+    private enum CheckKind { Fence, Count, Bound, Mark }
+    private readonly record struct Check(int Index, bool Delete, long Expected, CheckKind Kind);
+
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch);
+        StoreBatchRules.Validate(batch, ownedSets: true);
         CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         CommitClockFacts.RejectUnsupported(batch);
         if (batch.Window is not null) throw new NotSupportedException("MongoDB cannot enforce the requested commit window.");
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
         try
         {
             session.StartTransaction(Transaction);
-            var sends = batch.Turns.Sum(s => s.Sent.Count);
-            var leaseMs = (long)batch.Lease.TotalMilliseconds;
+            // Every fenced partition, in ascending id, with the sends whose order keys its clock cuts: the sends of the turns
+            // in that partition. The one-partition form is the batch's partition and every send, as before.
+            var (fences, owned) = (batch.Fenced, batch.Fences is not null);
+            var sends = fences.ToDictionary(f => f.Partition, f => batch.Turns.Where(t => batch.PartitionOf(t) == f.Partition).Sum(t => t.Sent.Count));
             var models = new List<BulkWriteModel>();
-            var checks = new List<(int Index, bool Delete, long Expected, bool Fence)>();
-            long now, clock;
+            var checks = new List<Check>();
+            var (clocks, known) = (new Dictionary<int, long>(), new Dictionary<int, long>());
+            long now;
 
-            if (_options.FenceInBatch && _known.TryGetValue((batch.Partition, batch.Epoch), out var known))
+            if (_options.FenceInBatch && fences.All(f => _known.TryGetValue((f.Partition, f.Epoch), out var seen) && known.TryAdd(f.Partition, seen)))
             {
                 // The owner is the only writer of its partition document at this epoch, so the clock is what it last saw.
                 // The order keys are cut from it on this machine; the clock condition makes a wrong belief a refused fence.
-                clock = Math.Max(known, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000) + sends;
                 // A fence that matches nothing must stop the batch before anything else executes: otherwise the writes
                 // behind it meet the rows of the commit that won (a journal position, a message id) and fail as definite
-                // errors. So the fence is an upsert: matching nothing, it tries to insert the partition document again,
-                // which is a duplicate key at index 0, and an ordered bulk write stops at its first error.
-                var filter = Fence(batch);
-                if (!_options.BrokenFence) filter["clock"] = known;
-                models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_partitions.CollectionNamespace, filter, Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
+                // errors. So each fence is an upsert: matching nothing, it tries to insert the partition document again,
+                // which is a duplicate key among the first k models, and an ordered bulk write stops at its first error.
+                var micros = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000;
+                foreach (var fence in fences)
                 {
-                    new("$set", new BsonDocument
+                    var clock = clocks[fence.Partition] = Math.Max(known[fence.Partition], micros) + sends[fence.Partition];
+                    var filter = Fence(fence);
+                    if (!_options.BrokenFence) filter["clock"] = known[fence.Partition];
+                    checks.Add(new(models.Count, false, 1, CheckKind.Fence));
+                    models.Add(new BulkWriteUpdateOneModel<BsonDocument>(_partitions.CollectionNamespace, filter, Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
                     {
-                        { "position", batch.Position + batch.Positions }, { "clock", clock }, { "now", NowMs },
-                        { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
-                    }),
-                }), isUpsert: true));
-                checks.Add((0, false, 1, true));
+                        new("$set", new BsonDocument
+                        {
+                            { "position", fence.Position + batch.PositionsIn(fence.Partition) }, { "clock", clock }, { "now", NowMs },
+                            FenceWrite(),
+                        }),
+                    }), isUpsert: true));
+                }
                 now = 0;
             }
             else
             {
-                // The fence as its own statement, checked before anything else is sent. It also renews the lease from the
-                // database's time and cuts the commit's order keys from the partition's clock.
-                BsonDocument[] update =
-                [
-                    new("$set", new BsonDocument
-                    {
-                        { "position", batch.Position + batch.Positions },
-                        { "now", NowMs },
-                        { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, leaseMs }) },
-                        { "clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { "$clock", NowUs }), (long)sends }) },
-                    }),
-                ];
-                var fence = await _partitions.FindOneAndUpdateAsync(session, Fence(batch), Builders<BsonDocument>.Update.Pipeline(update), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
-                if (fence is null)
+                // Each fence as its own statement, in ascending partition id, checked before anything else is sent. It also
+                // renews the lease from the database's time and cuts the commit's order keys from the partition's clock.
+                now = long.MaxValue;
+                foreach (var fence in fences)
                 {
-                    await session.AbortTransactionAsync(cancellationToken);
-                    return new Committed(false, 0, []);
+                    BsonDocument[] update =
+                    [
+                        new("$set", new BsonDocument
+                        {
+                            { "position", fence.Position + batch.PositionsIn(fence.Partition) },
+                            { "now", NowMs },
+                            FenceWrite(),
+                            { "clock", new BsonDocument("$add", new BsonArray { new BsonDocument("$max", new BsonArray { "$clock", NowUs }), (long)sends[fence.Partition] }) },
+                        }),
+                    ];
+                    var held = await _partitions.FindOneAndUpdateAsync(session, Fence(fence), Builders<BsonDocument>.Update.Pipeline(update), new FindOneAndUpdateOptions<BsonDocument> { ReturnDocument = ReturnDocument.After }, cancellationToken);
+                    if (held is null)
+                    {
+                        await session.AbortTransactionAsync(cancellationToken);
+                        return new Committed(false, 0, []);
+                    }
+                    (now, clocks[fence.Partition]) = (Math.Min(now, held["now"].AsInt64), held["clock"].AsInt64);
                 }
-                (now, clock) = (fence["now"].AsInt64, fence["clock"].AsInt64);
             }
 
-            var (key, position, seqs) = (clock - sends, batch.Position, new List<long>(sends));
+            // Each turn writes in the partition its address embeds (the batch's partition in the one-partition form), at
+            // that partition's next position and with its order keys. An owned batch binds its consumes, dones and marks to
+            // the fenced partitions' messages: an InboxKey does not name its partition.
+            var (key, position, seqs) = (fences.ToDictionary(f => f.Partition, f => clocks[f.Partition] - sends[f.Partition]), fences.ToDictionary(f => f.Partition, f => f.Position), new List<long>());
+            var epochs = fences.ToDictionary(f => f.Partition, f => f.Epoch);
+            var bound = owned ? new BsonDocument("$in", new BsonArray(epochs.Keys)) : null;
+            BsonDocument Keys(IEnumerable<InboxKey> ids, bool notDone, bool bind = true)
+            {
+                var filter = new BsonDocument("_id", new BsonDocument("$in", new BsonArray(ids.Select(InboxId))));
+                if (notDone) filter["done"] = false;
+                if (bind && bound is not null) filter["partition"] = bound;
+                return filter;
+            }
+            var counted = owned ? CheckKind.Bound : CheckKind.Count;
             foreach (var turn in batch.Turns)
             {
+                var home = batch.PartitionOf(turn);
                 if (turn.Delete && turn.Row is not { Retired: true })
                 {
                     // Round 3: an ended instance goes at its revision (a count that must be 1, as for an update), with its
                     // journal documents. All in the one bulk write: with the fence in the batch it stops at the fence first.
-                    checks.Add((models.Count, true, 1, false));
+                    checks.Add(new(models.Count, true, 1, CheckKind.Count));
                     models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_instances.CollectionNamespace, new BsonDocument { { "_id", turn.Instance }, { "revision", turn.Expected!.Value } }));
 
                 }
                 if (turn.Delete)
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", batch.Partition }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument { { "partition", home }, { "instance", turn.Instance }, { "revision", new BsonDocument("$gt", 0L) } }));
                 if (turn.Row is { } row)
                 {
-                    var doc = ToDocument(row, batch.Partition);
+                    var doc = ToDocument(row, home);
                     if (turn.Expected is not { } expected) models.Add(new BulkWriteInsertOneModel<BsonDocument>(_instances.CollectionNamespace, doc));
                     else
                     {
-                        checks.Add((models.Count, false, 1, false));
+                        checks.Add(new(models.Count, false, 1, CheckKind.Count));
                         var match = new BsonDocument { { "_id", row.Id }, { "revision", expected }, { "retired", false } };
                         if (row.Retired) match["status"] = (int)row.Status; // ended status was checked by the marker shape
                         models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_instances.CollectionNamespace, match, doc));
@@ -234,67 +296,94 @@ public sealed class MongoStore : IKernelStore
                 }
                 if (turn.Consumed.Count > 0)
                 {
-                    checks.Add((models.Count, true, turn.Consumed.Count, false));
-                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Consumed.Select(InboxId))) }, { "done", false } }));
+                    checks.Add(new(models.Count, true, turn.Consumed.Count, counted));
+                    models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_messages.CollectionNamespace, Keys(turn.Consumed, notDone: true)));
                 }
                 if (turn.Done.Count > 0)
                 {
-                    checks.Add((models.Count, false, turn.Done.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(turn.Done.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("done", true))));
+                    checks.Add(new(models.Count, false, turn.Done.Count, counted));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, Keys(turn.Done, notDone: true), new BsonDocument("$set", new BsonDocument("done", true))));
                 }
                 foreach (var message in turn.Sent)
                 {
-                    seqs.Add(++key);
-                    var seen = batch.HandOver && message.Target.Partition == batch.Partition ? batch.Epoch : 0;
-                    models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, ToDocument(message, key, seen)));
+                    seqs.Add(++key[home]);
+                    // Messages the owner hands over in memory to a fenced partition are written as seen at that partition's epoch.
+                    var seen = batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0;
+                    models.Add(new BulkWriteInsertOneModel<BsonDocument>(_messages.CollectionNamespace, ToDocument(message, key[home], seen)));
                 }
                 foreach (var s in turn.Subscribed)
-                    models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s)), ToDocument(s, batch.Partition), isUpsert: true));
+                    models.Add(new BulkWriteReplaceOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s)), ToDocument(s, home), isUpsert: true));
                 foreach (var s in turn.Unsubscribed)
                     models.Add(new BulkWriteDeleteOneModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("_id", SubscriptionId(s))));
                 if (turn.Unsubscribe)       // ended by force: every wait of the instance goes
                     models.Add(new BulkWriteDeleteManyModel<BsonDocument>(_subscriptions.CollectionNamespace, new BsonDocument("instance", turn.Instance)));
                 if (turn.Held is { Count: > 0 } held)
                 {
-                    // Its turn ran: still there, not done, and no longer on trial. A count, like a consume.
-                    checks.Add((models.Count, false, held.Count, false));
-                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(held.Select(InboxId))) }, { "done", false } }, new BsonDocument("$set", new BsonDocument("trial", 0L))));
+                    // Its turn ran: still there, not done, and no longer on trial. A count, like a consume; not bound, as in memory.
+                    checks.Add(new(models.Count, false, held.Count, CheckKind.Count));
+                    models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, Keys(held, notDone: true, bind: false), new BsonDocument("$set", new BsonDocument("trial", 0L))));
                 }
                 if (turn.Journal is not null)
                 {
-                    position++;
+                    var at = ++position[home];
                     models.Add(new BulkWriteInsertOneModel<BsonDocument>(_journal.CollectionNamespace, new BsonDocument
                     {
-                        { "_id", new BsonDocument { { "p", batch.Partition }, { "n", position } } }, { "partition", batch.Partition }, { "position", position },
+                        { "_id", new BsonDocument { { "p", home }, { "n", at } } }, { "partition", home }, { "position", at },
                         { "instance", turn.Instance }, { "revision", turn.Delete ? -1L : turn.Row?.Revision ?? 0L }, { "entries", turn.Journal },
                     }));
                 }
             }
-            if (batch.Seen.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Seen.Select(InboxId)))), new BsonDocument("$set", new BsonDocument("seen", batch.Epoch))));
-            if (batch.Trial.Count > 0)
-                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, new BsonDocument("_id", new BsonDocument("$in", new BsonArray(batch.Trial.Select(InboxId)))), new BsonDocument("$set", new BsonDocument { { "seen", batch.Epoch }, { "trial", batch.Epoch } })));
+            // A mark records the epoch of its message's own partition: one value in the one-partition form, else a switch.
+            BsonValue mark = epochs.Count == 1 ? batch.Epoch : new BsonDocument("$switch", new BsonDocument
+            {
+                { "branches", new BsonArray(epochs.Select(e => new BsonDocument { { "case", new BsonDocument("$eq", new BsonArray { "$partition", e.Key }) }, { "then", e.Value } })) },
+            });
+            void Marks(IReadOnlyList<InboxKey> ids, params string[] fields)
+            {
+                if (ids.Count == 0) return;
+                var set = new BsonDocument(fields.Select(f => new BsonElement(f, mark)));
+                if (owned) checks.Add(new(models.Count, false, ids.Distinct().Count(), CheckKind.Mark));
+                models.Add(new BulkWriteUpdateManyModel<BsonDocument>(_messages.CollectionNamespace, Keys(ids, notDone: false),
+                    epochs.Count == 1 ? new BsonDocument("$set", set) : Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", set) })));
+            }
+            Marks(batch.Seen, "seen");
+            Marks(batch.Trial, "seen", "trial");
 
             if (models.Count > 0)
             {
                 ClientBulkWriteResult result;
+                var fenceModels = checks.Count(c => c.Kind == CheckKind.Fence);
                 try { result = await _client.BulkWriteAsync(session, models, new ClientBulkWriteOptions { IsOrdered = true, VerboseResult = true }, cancellationToken); }
-                catch (ClientBulkWriteException e) when (checks is [{ Fence: true }, ..] && e.WriteErrors.TryGetValue(0, out var error) && error.Category == ServerErrorCategory.DuplicateKey)
+                catch (ClientBulkWriteException e) when (e.WriteErrors.Any(w => w.Key < fenceModels && w.Value.Category == ServerErrorCategory.DuplicateKey))
                 {
                     await Quietly(session.AbortTransactionAsync(CancellationToken.None));    // the server aborted it already
                     return new Committed(false, 0, []);
                 }
-                foreach (var check in checks)
+                bool Matches(Check check) => (check.Delete ? result.DeleteResults[check.Index].DeletedCount : result.UpdateResults[check.Index].MatchedCount) == check.Expected;
+                // Only after every fence held: a bound statement that touched fewer messages than it named may name one outside
+                // the fenced set, which is refused as definite, as the in-memory store refuses it.
+                if (checks.All(c => c.Kind != CheckKind.Fence || Matches(c)) && checks.Any(c => c.Kind is CheckKind.Bound or CheckKind.Mark && !Matches(c)) &&
+                    await OutsideAsync(session, batch, epochs.Keys, cancellationToken))
                 {
-                    var count = check.Delete ? result.DeleteResults[check.Index].DeletedCount : result.UpdateResults[check.Index].MatchedCount;
-                    if (count == check.Expected) continue;
+                    await session.AbortTransactionAsync(cancellationToken);
+                    throw new StoreException(Failure.Definite, "a mark, consume or done names a message outside the batch's fenced partitions");
+                }
+                if (checks.Any(c => c.Kind != CheckKind.Mark && !Matches(c)))
+                {
                     // The fence (in the batch) or a count did not match: either way the owner resets.
                     await session.AbortTransactionAsync(cancellationToken);
                     return new Committed(false, 0, []);
                 }
             }
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(sentAt) > batch.Lease)
+            {
+                // The commit-step deadline (the node lease): past the lease since the batch was sent, the owner's guard has
+                // expired too; abort instead of committing.
+                await session.AbortTransactionAsync(cancellationToken);
+                return new Committed(false, 0, []);
+            }
             await session.CommitTransactionAsync(cancellationToken);
-            if (_options.FenceInBatch) _known[(batch.Partition, batch.Epoch)] = clock;
+            if (_options.FenceInBatch) foreach (var fence in fences) _known[(fence.Partition, fence.Epoch)] = clocks[fence.Partition];
             return new Committed(true, now, seqs);
         }
         catch (Exception e)
@@ -311,6 +400,14 @@ public sealed class MongoStore : IKernelStore
             if (BackOffOnTransient && failure.Failure == Failure.Transient) await Task.Delay(Random.Shared.Next(5, 30), CancellationToken.None);
             throw failure;
         }
+    }
+
+    /// <summary>After every fence held, in an owned batch: whether a key of its marks, consumes or dones names a message outside the fenced partitions (a message never changes partition).</summary>
+    private async Task<bool> OutsideAsync(IClientSessionHandle session, CommitBatch batch, IEnumerable<int> fenced, CancellationToken cancellationToken)
+    {
+        var keys = batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(t => t.Consumed.Concat(t.Done))).Distinct().Select(InboxId);
+        var filter = new BsonDocument { { "_id", new BsonDocument("$in", new BsonArray(keys)) }, { "partition", new BsonDocument("$nin", new BsonArray(fenced)) } };
+        return await _messages.CountDocumentsAsync(session, filter, new CountOptions { Limit = 1 }, cancellationToken) > 0;
     }
 
     private static async Task Quietly(Task task)
@@ -358,23 +455,33 @@ public sealed class MongoStore : IKernelStore
 
     // ---- reads and adds -------------------------------------------------------------------------------------------------
 
-    public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
+    public ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default) =>
+        PollAsync(partition, new BsonDocument { { "partition", partition }, { "done", false }, { "seen", new BsonDocument("$lt", epoch) } }, horizon, limit, cancellationToken);
+
+    /// <summary>One query over an owned set: each row is compared with the epoch of its own partition, all in seq order under the limit.</summary>
+    public ValueTask<Polled> PollAsync(IReadOnlyCollection<PartitionFence> owned, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
-        // One round trip: the store's time from the partition document, then the rows. $$NOW is one value for the whole command.
+        StoreBatchRules.RequireDistinct(owned);
+        if (owned.Count == 0) return new(new Polled([], 0));
+        if (owned.Count == 1) return PollAsync(owned.First().Partition, owned.First().Epoch, horizon, limit, cancellationToken);
+        var each = owned.OrderBy(f => f.Partition).Select(f => new BsonDocument { { "partition", f.Partition }, { "seen", new BsonDocument("$lt", f.Epoch) } });
+        return PollAsync(owned.Min(f => f.Partition), new BsonDocument { { "$or", new BsonArray(each) }, { "done", false } }, horizon, limit, cancellationToken);
+    }
+
+    private async ValueTask<Polled> PollAsync(int anchor, BsonDocument rows, TimeSpan horizon, int limit, CancellationToken cancellationToken)
+    {
+        // One round trip: the store's time from a partition document, then the rows. $$NOW is one value for the whole command.
+        rows["$expr"] = new BsonDocument("$lte", new BsonArray { "$due", new BsonDocument("$add", new BsonArray { NowMs, (long)horizon.TotalMilliseconds }) });
         BsonDocument[] pipeline =
         [
-            new("$match", new BsonDocument("_id", partition)),
+            new("$match", new BsonDocument("_id", anchor)),
             new("$project", new BsonDocument { { "_id", 0 }, { "now", NowMs } }),
             new("$unionWith", new BsonDocument
             {
                 { "coll", _messages.CollectionNamespace.CollectionName },
                 { "pipeline", new BsonArray
                 {
-                    new BsonDocument("$match", new BsonDocument
-                    {
-                        { "partition", partition }, { "done", false }, { "seen", new BsonDocument("$lt", epoch) },
-                        { "$expr", new BsonDocument("$lte", new BsonArray { "$due", new BsonDocument("$add", new BsonArray { NowMs, (long)horizon.TotalMilliseconds }) }) },
-                    }),
+                    new BsonDocument("$match", rows),
                     new BsonDocument("$sort", new BsonDocument { { "seq", 1 }, { "_id", 1 } }),
                     new BsonDocument("$limit", limit),
                 } },
@@ -532,11 +639,7 @@ public sealed class MongoStore : IKernelStore
         // against that same time.
         var beat = await _nodes.FindOneAndUpdateAsync(new BsonDocument("_id", node), Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", new BsonDocument("seenAt", NowMs)) }),
             new FindOneAndUpdateOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.After }, cancellationToken);
-        var now = beat["seenAt"].AsInt64;
-        var nodes = await _nodes.CountDocumentsAsync(new BsonDocument("seenAt", new BsonDocument("$gte", now - (long)window.TotalMilliseconds)), cancellationToken: cancellationToken);
-        var free = await _partitions.Find(new BsonDocument("$or", new BsonArray { new BsonDocument("owner", BsonNull.Value), new BsonDocument("leaseUntil", new BsonDocument("$lt", now)) }))
-            .Project(new BsonDocument("_id", 1)).ToListAsync(cancellationToken);
-        return new Cluster((int)nodes, free.Select(d => d["_id"].AsInt32).Order().ToList(), now);
+        return await MembershipAsync(beat["seenAt"].AsInt64, window, cancellationToken);
     }
 
     /// <summary>A subscription of kind start, upserted by its id, so registering it twice keeps one.</summary>

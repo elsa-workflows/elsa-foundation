@@ -14,11 +14,18 @@ import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearanc
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/settings.css";
 import "./workspaceAppearanceFixture.css";
 
+// The retained run owns a normal run URL, so product selection writes use the same route guard as Studio.
+if (new URLSearchParams(window.location.search).get("host") === "instance") {
+  const runUrl = new URL(window.location.href);
+  runUrl.pathname = "/workflows/instances/editor-execution";
+  window.history.replaceState(window.history.state, "", runUrl);
+}
+
 const navigation = getStudioNavigation([
   { id: "home", label: "Home", path: "/dashboard", placement: "main", order: 10 },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main", order: 20 },
   { id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
-  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "more" }
+  { id: "executables", label: "Executables", path: "/workflows/executables", placement: "build" }
 ], { includeThemeBuilder: false });
 
 const panels = new URLSearchParams(location.search).has("bottom-panel")
@@ -27,7 +34,8 @@ const panels = new URLSearchParams(location.search).has("bottom-panel")
 
 function Fixture() {
   const [view, setView] = useState(new URLSearchParams(location.search).get("screen") ?? "editor");
-  const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability" : "/workflows/definitions";
+  const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability"
+    : new URLSearchParams(location.search).get("host") === "instance" ? "/workflows/instances/editor-execution" : "/workflows/definitions";
   return <ThemeProvider>
     <ShellFrame navigation={navigation} panels={panels} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
       backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />}

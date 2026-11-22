@@ -22,7 +22,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
       toolbar.getByText("Activity state is recorded at commit boundaries.", { exact: true }),
       page.getByLabel("Workflow canvas", { exact: true })
     ];
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Running");
     await expect(elements[4]).toBeVisible();
     await expect(refresh).toBeEnabled();
     const settled = await geometry(elements);
@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     // Wait for an automatic poll to begin a deliberately slow evidence read.
     await expect(refresh).toBeDisabled({ timeout: 10000 });
     expect(await geometry(elements)).toEqual(settled);
-    await expect(toolbar.getByText("Loading execution evidence…", { exact: true })).toBeHidden();
+    await expect(toolbar.getByText("Loading run data…", { exact: true })).toBeHidden();
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
@@ -40,22 +40,22 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
-    const statusSlot = runtime.locator(".wf-runtime-heading");
+    const statusSlot = runtime.locator(".wf-runtime-status-outcome");
     const confirmedSlot = await statusSlot.boundingBox();
     await toolbar.getByRole("button", { name: "Pause live updates", exact: true }).click();
     await expect(runtime.locator(".wf-runtime-outcome")).toContainText("observation paused");
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Running");
     await expect(toolbar.getByText(/^Live updates paused/)).toBeVisible();
     expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
     expect(await geometry(elements)).toEqual(settled);
     await toolbar.getByRole("button", { name: "Resume live updates", exact: true }).press("Enter");
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Running");
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Running");
     expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed", { timeout: 10000 });
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Completed", { timeout: 10000 });
     await expect(refresh).toBeEnabled();
     // A changed summary can wrap within the Runtime panel; the authoring canvas stays fixed.
     expect(await elements[5].boundingBox()).toEqual(settled[5]);

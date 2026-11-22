@@ -132,7 +132,7 @@ it("discards a late result when another run replaces the attachment", async () =
   expect(api.instance.mock.calls.some(([endpoint, id]) => endpoint === context && id === "run")).toBe(false);
 });
 
-it("rejects pending same-run evidence when authorization refreshes without logout", async () => {
+it("rejects pending same-run data when authorization refreshes without logout", async () => {
   let release!: (value: WorkflowInstanceDetails) => void;
   api.instance.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
   render(); await settle();

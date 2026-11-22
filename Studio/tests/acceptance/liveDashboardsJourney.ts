@@ -70,8 +70,9 @@ async function idle(page: Page) {
 
 async function createEditor(page: Page, name: string, dataset: string) {
   await page.goto("/questions");
-  await keyboardUi.click(page.getByRole("button", { name: "Create question", exact: true }).first());
+  await keyboardUi.click(page.getByRole("button", { name: "New question", exact: true }).first());
   await keyboardUi.fill(page.getByLabel("Name", { exact: true }), name);
+  await keyboardUi.click(page.getByRole("dialog", { name: "New question" }).getByRole("button", { name: "Create", exact: true }));
   const datasets = page.getByRole("combobox", { name: "Dataset", exact: true });
   await expect(datasets.locator(`option[value="${dataset}"]`)).toHaveCount(1);
   // Start authoring from the canonical empty native draft. Selecting a dataset creates
@@ -310,7 +311,7 @@ export async function liveWorkflowDashboardJourney(page: Page, info: TestInfo, c
     const reader = await readerContext.newPage();
     await monitor.native("native-independent-viewer-refresh", async () => {
       await signInDashboardReader(reader, info); await keyboardUi.startKeyboardEvidence(reader); await reader.goto(`/dashboards/${dashboard!.id}`);
-      await expect(reader.getByRole("button", { name: "Save layout", exact: true })).toHaveCount(0);
+      await expect(reader.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
       await expect(reader.locator(".named-tile .named-result")).toHaveCount(2);
       await capture(reader, info, "live-dashboard-reader");
       await inspectTrendDrill(reader, info, capture, "live-dashboard-reader-drill", afterOracle.expected[0].currentIds, seed!, reader.locator(".named-tile").first());
@@ -351,8 +352,9 @@ async function inspectTrendDrill(page: Page, info: TestInfo, capture: Capture, n
   await capture(page, info, name); await keyboardUi.press(dialog, "Escape");
 }
 async function arrangeTrendDashboard(page: Page, info: TestInfo, capture: Capture, backend: Backend, question: Resource) {
-  await page.goto("/dashboards"); await keyboardUi.click(page.getByRole("button", { name: "Create dashboard", exact: true }).first());
+  await page.goto("/dashboards"); await keyboardUi.click(page.getByRole("button", { name: "New dashboard", exact: true }).first());
   await keyboardUi.fill(page.getByLabel("Name", { exact: true }), `Live arranged weekly rates ${Date.now()}`);
+  await keyboardUi.click(page.getByRole("dialog", { name: "New dashboard" }).getByRole("button", { name: "Create", exact: true }));
   for (let index = 0; index < 2; index++) {
     await keyboardUi.click(page.getByRole("button", { name: "Add saved question", exact: true }));
     const picker = page.getByRole("dialog", { name: "Add saved question", exact: true });
@@ -364,7 +366,7 @@ async function arrangeTrendDashboard(page: Page, info: TestInfo, capture: Captur
   await keyboardUi.press(page.getByRole("button", { name: "Move question 1 later", exact: true }), "Enter");
   await expect(page.getByRole("button", { name: "Move question 2 earlier", exact: true })).toBeFocused();
   const pending = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
-  await keyboardUi.press(page.getByRole("button", { name: "Save layout", exact: true }), "Enter");
+  await keyboardUi.press(page.getByRole("button", { name: "Save", exact: true }), "Enter");
   const response = await pending; expect(response.ok()).toBe(true); const saved = await response.json() as Resource;
   expect(saved.tiles.map(item => item.questionId)).toEqual([question.id, question.id]); expect(saved.tiles.map(item => item.size)).toEqual(["medium", "wide"]);
   expect(new Set(saved.tiles.map(item => item.id)).size).toBe(2);
@@ -395,7 +397,7 @@ export async function restartWorkflowDashboardJourney(page: Page, info: TestInfo
     await captureResultViews(page, info, capture, "restart-question", page.locator(".named-preview > .named-result"));
     await inspectTrendDrill(page, info, capture, "restart-owner-drill", oracle.expected[0].currentIds, manifest.seed);
     await page.context().clearCookies(); await signInDashboardReader(page, info); await page.goto(`/dashboards/${dashboard.id}`);
-    await expect(page.getByRole("button", { name: "Save layout", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await expect(page.locator(".named-tile .named-result")).toHaveCount(2);
     await capture(page, info, "restart-dashboard-reader");
     await inspectTrendDrill(page, info, capture, "restart-reader-drill", oracle.expected[0].currentIds, manifest.seed, page.locator(".named-tile").first());
@@ -423,7 +425,8 @@ async function seedProcessing(backend: Backend) {
 }
 
 async function shareQuestion(page: Page, info: TestInfo, capture: Capture, captureName = "live-share") {
-  await keyboardUi.click(page.getByRole("button", { name: "Share", exact: true }));
+  await keyboardUi.click(page.getByRole("button", { name: "Question actions", exact: true }));
+  await keyboardUi.click(page.getByRole("menuitem", { name: "Share", exact: true }));
   const dialog = page.getByRole("dialog", { name: /^Share / });
   await keyboardUi.fill(dialog.getByLabel("Find authorized users or roles", { exact: true }), "dashboard-reader");
   await keyboardUi.click(dialog.getByRole("button", { name: "Search audience", exact: true }));
@@ -483,7 +486,7 @@ export async function liveAcmeDashboardJourney(page: Page, info: TestInfo, captu
     saved = await backend.api<Resource>(`/_elsa/studio/questions/${saved.id}`);
     const viewer = await monitor.native("native-independent-viewer-refresh", async () => {
       await signInDashboardReader(reader, info); await keyboardUi.startKeyboardEvidence(reader);
-      await keyboardUi.click(reader.getByRole("button", { name: "Shared with me", exact: true }));
+      await keyboardUi.click(reader.getByRole("tab", { name: "Shared with me", exact: true }));
       await keyboardUi.click(reader.getByRole("link", { name: saved!.name, exact: true }));
       await expect(reader.getByRole("button", { name: "Save question", exact: true })).toHaveCount(0);
       await expect(reader.getByRole("button", { name: "Share", exact: true })).toHaveCount(0);

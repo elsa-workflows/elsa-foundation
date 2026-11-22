@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Node, OnMove, ReactFlowInstance, Viewport } from "@xyflow/react";
 
-/** First-visit and auto-layout fit: keep small diagrams at their natural size. */
-export const graphFitViewOptions = { padding: 0.2, maxZoom: 1 } as const;
+/** First-visit and auto-layout fit: keep small diagrams at their natural size and center them on the canvas. */
+export const graphFitViewOptions = { padding: 0.2, maxZoom: 1, alignCenter: true } as const;
 
 /** One initial fit per projected scope; later visits restore the user's viewport. */
 export function useGraphViewport<TNode extends Node = Node>({ nodes, scopeKey, instance }: {

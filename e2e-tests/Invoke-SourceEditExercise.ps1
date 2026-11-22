@@ -12,12 +12,12 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/_SourceEditTrxVerdict.ps1"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$testRelative = 'Essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
-$sourceRelative = 'Essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs'
+$testRelative = 'essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
+$sourceRelative = 'essentials/src/Activities/Primitives/Elsa.Activities.Primitives/Activities/WriteLine.cs'
 $testPath = Join-Path $repoRoot ($testRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
 $sourcePath = Join-Path $repoRoot ($sourceRelative -replace '/', [IO.Path]::DirectorySeparatorChar)
-$testProject = 'Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
-$workbenchProject = 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+$testProject = 'essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
+$workbenchProject = 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
 $testFilter = 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 $diagnosticsParent = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $runId = if ($env:GITHUB_RUN_ID) { $env:GITHUB_RUN_ID } else { 'local' }

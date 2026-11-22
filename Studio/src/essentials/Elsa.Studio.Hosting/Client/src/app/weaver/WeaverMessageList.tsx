@@ -1,3 +1,5 @@
+import { TechnicalDetails } from "../ui/disclosure/TechnicalDetails";
+import { StudioButton, StudioIconButton } from "../ui/forms/Button";
 import React from "react";
 import { Bot, Play, ThumbsDown, ThumbsUp, Undo2, User } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -13,7 +15,7 @@ const COLLAPSE_LINE_THRESHOLD = 12;
 const COLLAPSE_CHAR_THRESHOLD = 600;
 
 // react-markdown renders fenced code as <pre><code>…</code></pre>; overriding <pre> lets us wrap the
-// whole block in a valid <details> (a <details> inside <pre> would be invalid markup).
+// whole block with the shared disclosure.
 const markdownComponents: Components = {
   pre({ children, ...props }) {
     const text = extractCodeText(children);
@@ -21,10 +23,9 @@ const markdownComponents: Components = {
     const block = <pre {...props}>{children}</pre>;
     if (lineCount <= COLLAPSE_LINE_THRESHOLD && text.length <= COLLAPSE_CHAR_THRESHOLD) return block;
     return (
-      <details className="weaver-code-collapse">
-        <summary>{`Show ${lineCount} line${lineCount === 1 ? "" : "s"} of code`}</summary>
+      <TechnicalDetails label={`${lineCount} line${lineCount === 1 ? "" : "s"} of code`}>
         {block}
-      </details>
+      </TechnicalDetails>
     );
   }
 };
@@ -95,12 +96,12 @@ export function WeaverMessageList({
             <WeaverMessageOutcome message={message} streaming={streaming} canStart={canStart} pending={pendingActionIds?.has(`withdraw:${message.id}`) ?? false} onStart={onStart} onWithdraw={onWithdraw} />
             {message.role === "assistant" && message.status === "completed" && onFeedback ? (
               <div className="weaver-feedback" aria-label="Message feedback">
-                <button type="button" aria-label="Helpful response" onClick={() => onFeedback(message.id, "positive")}>
+                <StudioIconButton type="button" aria-label="Helpful response" onClick={() => onFeedback(message.id, "positive")}>
                   <ThumbsUp size={13} />
-                </button>
-                <button type="button" aria-label="Unhelpful response" onClick={() => onFeedback(message.id, "negative")}>
+                </StudioIconButton>
+                <StudioIconButton type="button" aria-label="Unhelpful response" onClick={() => onFeedback(message.id, "negative")}>
                   <ThumbsDown size={13} />
-                </button>
+                </StudioIconButton>
               </div>
             ) : null}
           </div>
@@ -128,8 +129,8 @@ function WeaverMessageOutcome({ message, streaming, canStart, pending, onStart, 
       <small>{label}</small>
       {resumable && onStart ? (
         <div className="weaver-message-actions">
-          <button type="button" disabled={!canStart || pending} onClick={() => onStart(message.id)}><Play size={13} /> {notStarted ? "Start" : "Continue"}</button>
-          {notStarted && onWithdraw ? <button type="button" disabled={!canStart || pending} onClick={() => onWithdraw(message.id)}><Undo2 size={13} /> Withdraw</button> : null}
+          <StudioButton type="button" disabled={!canStart || pending} onClick={() => onStart(message.id)}><Play size={13} /> {notStarted ? "Start" : "Continue"}</StudioButton>
+          {notStarted && onWithdraw ? <StudioButton type="button" disabled={!canStart || pending} onClick={() => onWithdraw(message.id)}><Undo2 size={13} /> Withdraw</StudioButton> : null}
         </div>
       ) : null}
     </div>

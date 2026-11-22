@@ -45,7 +45,7 @@ public static class Stress
         long turns = 0, kills = 0, stalls = 0, releases = 0, takes = 0;
         var options = new WorkerOptions
         {
-            Lease = o.Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000,
+            Lease = o.Lease, Horizon = TimeSpan.FromSeconds(2), PollLimit = 40, MaxBatch = 40, MaxAttempts = 1_000_000, Partitions = o.Partitions,
             OnTurn = (_, _, _) => Interlocked.Increment(ref turns),
         };
 
@@ -54,25 +54,33 @@ public static class Stress
             var random = new Random(node * 31 + partition);
             // The node's name is unique per process start (finding F9): a restart is a new name.
             var generation = 0;
-            Worker Fresh() => new($"node{node}.{generation++}", partition, store, new WorkflowInstance(Models()), options);
+            Worker Fresh() => new($"node{node}.p{partition}.{generation++}", partition, store, new WorkflowInstance(Models()), options);
             var worker = Fresh();
+            NodeHeartbeat Heartbeat() => new(worker.Node, store, [worker], options.Lease, options.Lease);
+            var heartbeat = Heartbeat();
+            long nextHeartbeat = 0;
             while (!stop.IsCancellationRequested)
             {
                 try
                 {
-                    if (!worker.Owns)
+                    if (!worker.Owns && worker.Pending.Count == 0)
                     {
-                        await new DurableHost([worker]).ActivateAsync(partition);
+                        await new DurableHost([worker]).ActivateAsync(worker.Partition);
                         if (worker.Owns) Interlocked.Increment(ref takes);
-                        else await Task.Delay(20);
-                        continue;
+                        if (!worker.Owns)
+                        {
+                            await Task.Delay(20);
+                            continue;
+                        }
                     }
-                    await worker.PollAsync();
-                    await worker.LoadAsync();
-                    await worker.MeetAsync();
-                    foreach (var id in worker.Ready.ToList()) worker.RunTurn(id);
-                    if (worker.NeedsFlush) await worker.FlushAsync();
-                    else await worker.BeatAsync();
+                    // A Worker with only pending partitions still needs a pass to judge its next heartbeat.
+                    await worker.WokenAsync(null);
+                    await worker.RunAsync();
+                    if (Environment.TickCount64 >= nextHeartbeat)
+                    {
+                        nextHeartbeat = Environment.TickCount64 + (long)(options.Lease.TotalMilliseconds / 3);
+                        await heartbeat.BeatAsync();
+                    }
                     if (calm) await Task.Delay(2);
                     else if (random.Next(25) == 0)
                     {
@@ -89,6 +97,7 @@ public static class Stress
                     {
                         // A crash: the process is gone and a new one starts with a new name; nothing is released.
                         worker = Fresh();
+                        heartbeat = Heartbeat();
                         await Task.Delay(random.Next(0, 300));
                     }
                     else await Task.Delay(2);
@@ -97,6 +106,7 @@ public static class Stress
                 {
                     lock (output) output.WriteLine($"worker node{node}/p{partition} threw: {e.GetType().Name}: {e.Message}");
                     worker = Fresh();
+                    heartbeat = Heartbeat();
                 }
             }
         }))).ToList();

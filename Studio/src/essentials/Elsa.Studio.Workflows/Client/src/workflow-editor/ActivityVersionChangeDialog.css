@@ -1,10 +1,9 @@
-.wf-version-change-dialog {
-  width: min(780px, 100%);
+.studio-dialog.wf-version-change-dialog {
+  width: min(48.75rem, calc(100vw - 2rem));
   max-height: min(880px, calc(100vh - 40px));
   overflow-y: auto;
 }
 
-.wf-version-change-dialog form,
 .wf-version-change-facts,
 .wf-version-change-section dl,
 .wf-version-change-section,
@@ -12,9 +11,6 @@
   display: grid;
 }
 
-.wf-version-change-dialog form {
-  gap: 14px;
-}
 
 .wf-version-change-dialog fieldset {
   display: grid;

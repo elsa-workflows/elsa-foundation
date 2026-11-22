@@ -3,32 +3,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowExecutablesPage } from "../workflow-editor/pages";
+import { WorkflowExecutablesPage, WorkflowManagementPage } from "../workflow-editor/pages";
 import { WorkflowExecutableInspectorPage } from "../workflow-editor/executableInspectorPage";
-import type { ExecutableInspectorIdentity } from "../workflow-editor/executableInspectorIdentity";
 
 vi.mock("../workflow-editor/WorkflowExecutableInspector", () => ({
-  WorkflowExecutableInspectorWorkbench: ({
-    onIdentityChange
-  }: {
-    onIdentityChange?(identity: ExecutableInspectorIdentity): void;
-  }) => (
+  WorkflowExecutableInspectorWorkbench: () => (
     <>
-      <div className="wf-toolbar">toolbar</div>
+      <header className="wf-editor-toolbar wf-executable-toolbar"><h2>Executable artifact-1</h2><button>Refresh</button></header>
       <div className="studio-result-state" data-tone="danger" role="alert">The executable could not be run</div>
       <div className="wf-status-line">Started artifact-1</div>
-      <div className="wf-instance-detail-workbench">
+      <div className="graph-authoring-workspace wf-editor-body palette-absent wf-executable-workbench">
         inspector workbench
-        <button
-          type="button"
-          onClick={() => onIdentityChange?.({
-            definitionName: "Invoice settlement",
-            artifactId: "artifact-1",
-            version: "1.0.0"
-          })}
-        >
-          resolve identity
-        </button>
       </div>
     </>
   )
@@ -54,7 +39,7 @@ afterEach(() => {
 });
 
 describe("Executable Inspector page layout", () => {
-  it("reuses the run-detail workbench grid and keeps the toolbar a page-frame child", async () => {
+  it("uses the shared Definition toolbar and inset workbench without a page heading", async () => {
     window.history.replaceState({}, "", "/workflows/executables/artifact-1");
     flushSync(() => root.render(
       <WorkflowExecutableInspectorPage
@@ -64,11 +49,16 @@ describe("Executable Inspector page layout", () => {
       />
     ));
 
+    const loadingPage = container.querySelector(".wf-page.wf-page--run-workbench");
+    expect(loadingPage?.getAttribute("data-studio-workspace-backdrop")).toBe("none");
+    expect(loadingPage?.classList.contains("wf-page--executable-inspector")).toBe(true);
+    expect(loadingPage?.querySelector(".wf-lazy-state")).toBeTruthy();
     await vi.waitFor(() => expect(container.textContent).toContain("inspector workbench"));
     const page = container.querySelector(".wf-page.wf-page--run-workbench");
     expect(page).toBeTruthy();
-    expect(page?.querySelector(":scope > .wf-toolbar")).toBeTruthy();
-    expect(page?.querySelector(":scope > .wf-instance-detail-workbench")).toBeTruthy();
+    expect(page?.querySelector(":scope > .wf-executable-toolbar.wf-editor-toolbar")).toBeTruthy();
+    expect(page?.querySelector(":scope > .studio-page-header")).toBeNull();
+    expect(page?.querySelector(":scope > .wf-executable-workbench.graph-authoring-workspace")).toBeTruthy();
   });
 
   it("keeps the workbench in the last grid track when a run status and run error are present", async () => {
@@ -83,7 +73,7 @@ describe("Executable Inspector page layout", () => {
 
     await vi.waitFor(() => expect(container.textContent).toContain("inspector workbench"));
     const page = container.querySelector(".wf-page.wf-page--run-workbench");
-    const workbench = page?.querySelector(":scope > .wf-instance-detail-workbench");
+    const workbench = page?.querySelector(":scope > .wf-executable-workbench");
     const status = page?.querySelector(":scope > .wf-status-line");
     const runError = page?.querySelector(":scope > .studio-result-state[data-tone='danger']");
     const children = [...(page?.children ?? [])];
@@ -96,7 +86,7 @@ describe("Executable Inspector page layout", () => {
     expect(children.indexOf(runError as Element)).toBeLessThan(children.indexOf(workbench as Element));
   });
 
-  it("uses Executable plus the artifact ID until the source definition name arrives", async () => {
+  it("does not add a page heading around the workbench identity", async () => {
     window.history.replaceState({}, "", "/workflows/executables/artifact-95bc4f13586a");
     flushSync(() => root.render(
       <WorkflowExecutableInspectorPage
@@ -107,16 +97,9 @@ describe("Executable Inspector page layout", () => {
     ));
 
     await vi.waitFor(() => expect(container.textContent).toContain("inspector workbench"));
-    expect(container.querySelector("h2")?.textContent).toBe("Executable artifact-95bc4f13586a");
+    expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Executable artifact-1");
+    expect(container.querySelector(".studio-page-header")).toBeNull();
     expect(container.querySelector(".studio-page-eyebrow")).toBeNull();
-
-    flushSync(() => {
-      const resolve = [...container.querySelectorAll("button")].find(button => button.textContent === "resolve identity");
-      resolve?.click();
-    });
-
-    expect(container.querySelector("h2")?.textContent).toBe("Invoice settlement · 1.0.0");
-    expect(container.querySelector(".studio-page-eyebrow")?.textContent).toBe("Inspector");
   });
 
   it("does not put the executables list on the workbench grid", async () => {
@@ -132,5 +115,22 @@ describe("Executable Inspector page layout", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Executables list"));
     expect(container.querySelector(".wf-page--run-workbench")).toBeNull();
     expect(container.querySelector(".wf-page")).toBeTruthy();
+  });
+
+  it("opts the full-bleed editor fallback out before its lazy designer loads", () => {
+    window.history.replaceState({}, "", "/workflows/definitions?definition=designer-1");
+    flushSync(() => root.render(
+      <WorkflowManagementPage
+        context={{ baseUrl: "workflow-editor-test" } as StudioEndpointContext}
+        ai={{} as StudioWeaverRegistry}
+        propertyEditors={[]}
+        expressionEditors={[]}
+        runInputEditors={[]}
+        workflowDesignerPanels={[]}
+      />
+    ));
+
+    const fallback = container.querySelector(".wf-lazy-state");
+    expect(fallback?.getAttribute("data-studio-workspace-backdrop")).toBe("none");
   });
 });

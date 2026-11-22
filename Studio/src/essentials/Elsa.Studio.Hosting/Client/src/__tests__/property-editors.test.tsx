@@ -71,12 +71,12 @@ describe("built-in boolean activity property editor", () => {
     expect(input.type).toBe("checkbox");
     expect(input.checked).toBe(false);
     expect(input.getAttribute("aria-label")).toBe("Can start workflow");
-    expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("Disabled");
+    expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("False");
   });
 
   it("renders Boolean and persisted string true values as on", () => {
     expect(renderBooleanEditor({ value: true }).checked).toBe(true);
-    expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("Enabled");
+    expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("True");
 
     expect(renderBooleanEditor({ value: "true" }).checked).toBe(true);
     expect(renderBooleanEditor({ value: "false" }).checked).toBe(false);
