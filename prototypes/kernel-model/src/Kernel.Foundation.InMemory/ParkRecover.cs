@@ -24,22 +24,25 @@ internal sealed partial class ActorAdapter
 
         Durable.ParkTimerRecipe[] timerRecipes;
         Durable.ParkJobRecipe[] jobRecipes;
+        Durable.ParkSubscriptionRecipe[] subscriptionRecipes;
         bool withholds;
         try
         {
             var plan = actor.RestoreWaits(header, row.State);
             const int sample = Durable.InMemoryStore.MaxRestoreWaits + 1;
-            if (plan.Subscriptions.Any()) return InvalidPlan();
+            subscriptionRecipes = plan.Subscriptions.Take(sample).Select(wait => new Durable.ParkSubscriptionRecipe(wait.Key, wait.Wait, wait.Keep)).ToArray();
             timerRecipes = plan.Timers.Take(sample).Select(timer => new Durable.ParkTimerRecipe(timer.Id, timer.Kind, timer.Payload, timer.Due)).ToArray();
             jobRecipes = plan.Jobs.Take(sample).Select(job => new Durable.ParkJobRecipe(job.Key, job.Arguments, job.Deadline)).ToArray();
             withholds = actor.Withholds(header with { Status = Contract.ActorStatus.Running, Fault = null, EndedAt = null });
         }
         catch (Exception) { return InvalidPlan(); }
-        if (timerRecipes.Length + jobRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
+        if (timerRecipes.Length + jobRecipes.Length + subscriptionRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
         var timers = store.PlanFoundationTimers(row, mode, timerRecipes);
         if (timers is null) return InvalidPlan();
         var jobs = store.PlanFoundationJobs(row, mode, jobRecipes, timers.Bytes);
         if (jobs is null) return InvalidPlan();
+        var subscriptions = store.PlanFoundationSubscriptions(row, header.Tenant, subscriptionRecipes, jobs.Bytes);
+        if (subscriptions is null) return InvalidPlan();
 
         Durable.TurnOutcome InvalidPlan() => Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
 
@@ -60,6 +63,8 @@ internal sealed partial class ActorAdapter
         var outcome = ParkCheckpoint(input, row, next);
         outcome.FoundationRecoveryTimers = timers;
         outcome.FoundationRecoveryJobs = jobs;
+        if (subscriptionRecipes.Length != 0) outcome.FoundationRecoverySubscriptions = subscriptionRecipes;
+        outcome.Subscribed.AddRange(subscriptions);
         outcome.FoundationWithholds = withholds;
         outcome.Sent.Add(control);
         outcome.Cancelled.AddRange(jobs.RecalledDeadlines);

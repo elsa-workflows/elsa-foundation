@@ -2761,7 +2761,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
             FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
-            FoundationRecoveryJobs = unit.FoundationRecoveryJobs
+            FoundationRecoveryJobs = unit.FoundationRecoveryJobs,
+            FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions
         };
     }
 

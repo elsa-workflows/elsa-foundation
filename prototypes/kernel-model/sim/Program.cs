@@ -88,6 +88,12 @@ if (args.Contains("--park-recovery-native-check"))
     await ParkKeptChecks.CheckInvalidTimerRecoveryPlan((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-recovery-subscription-check"))
+{
+    var failed = false;
+    await ContractNativeChecks.CheckRecoveredSubscription((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-recovery-job-check"))
 {
     var failed = false;

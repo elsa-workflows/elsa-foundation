@@ -391,6 +391,96 @@ internal static class ContractNativeChecks
         }
     }
 
+    internal static async Task CheckRecoveredSubscription(Action<bool, string> check)
+    {
+        const long initial = 1_701_800_035_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("native-wait-recovery");
+        var registry = new WorkflowRegistry().Add(Wf.Workflow("waiting", Wf.Sequence("sequence",
+            Wf.Event("wait", "approval"), Wf.Set("continue", "outcome", "matched"))));
+        var model = new NativeExecutionModel(registry);
+        var siblingRefused = false;
+        var worker = new Worker("recover-subscription", 0, store, new ActorAdapter(store, new PublicWorkflow([model])),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial,
+                OnPreparedCheckpoint = (opening, _, _) =>
+                {
+                    if (opening.FoundationRecoverySubscriptions is not { Count: 1 } || opening.Subscribed is not [var wait]) return;
+                    var row = store.Instances[opening.Instance];
+                    var sibling = new TurnCommit(opening.Instance, null, null, [], [], [], [], [wait], null);
+                    var fence = store.Partitions[0];
+                    try
+                    {
+                        store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [opening, sibling], [], []))
+                            .GetAwaiter().GetResult();
+                    }
+                    catch (StoreException error) when (error.Failure == Failure.Definite)
+                    {
+                        siblingRefused = store.Instances[opening.Instance] == row && store.Subscriptions.Count == 0;
+                    }
+                }
+            });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 10);
+        var runtime = new PublicRuntime(ingress, reads);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("waiting", Modes.Balanced))).Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        var eventTarget = new Contract.Target.Event("event:approval");
+        await Pump(owner);
+        var initialWait = store.Subscriptions.Single();
+        await ingress.SendAsync(scope, target, "fault", NativeKinds.Resume, "{");
+        await Pump(owner);
+        var parked = await reads.GetAsync(scope, reference);
+        await ingress.SendAsync(scope, eventTarget, "while-parked", "event", "before",
+            new Contract.AddOptions(KeepFor: TimeSpan.FromMinutes(1)));
+        await Pump(owner);
+        var removed = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
+            store.Subscriptions.Count == 0 && store.FoundationEvents.Count == 1 &&
+            store.Messages.Values.All(item => item.Message.Kind != Kinds.Event);
+        check(removed, "Park removes the Native subscription and a publication during Park has no matching delivery");
+        if (!removed) return;
+
+        var admitted = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(parked!.Selection!)));
+        for (var pass = 0; pass < 3; pass++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var resumed = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        check(siblingRefused, "the fenced Open refuses a sibling unsubscribe of the Native wait it restores");
+        if (!siblingRefused) return;
+        var maximum = Enumerable.Range(0, 3_511).Select(index => new ParkSubscriptionRecipe("approval-" + index, "wait", false)).ToArray();
+        check(store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, maximum[..^1], bytes: 0) is { Count: 3510 } &&
+            store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, maximum, bytes: 0) is null &&
+            store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, maximum[..^1], bytes: 6145) is null,
+            "the plan charges all restored subscriptions against the byte allowance shared with timers and jobs");
+        var invalidWait = new string((char)0xD800, 1);
+        check(store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, [new("approval", invalidWait, false)], bytes: 0) is null,
+            "restore refuses a wait that ordinary subscription admission cannot round-trip");
+        var folded = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
+        check(folded.PlanFoundationSubscriptions(resumed.Row, scope.Tenant,
+                [new("topic", "wait", false), new("Topic", "WAIT", false)], bytes: 0) is null,
+            "the restore plan refuses waits that collide under the store's ordinary subscription comparison");
+        var restored = admitted.Outcome == Contract.AdmissionOutcome.Accepted && resumed is { Park: null, Row.Status: InstanceStatus.Running } &&
+            store.Subscriptions.SetEquals([initialWait]) &&
+            store.Subscriptions.Single() is { FoundationTenant: var tenant, Creation: var creation } && tenant == scope.Tenant && creation == resumed.Row.Creation &&
+            store.Messages.Values.All(item => item.Message.Kind is not (Kinds.Event or Kinds.Meet));
+        check(restored, "Resume restores the Native event wait and leaves earlier matched publications outside a non-keeping subscription");
+        if (!restored) return;
+
+        await ingress.SendAsync(scope, eventTarget, "after-resume", "event", "after");
+        await Pump(owner);
+        var final = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var state = Json.Read<NativeState>(final.Row.State);
+        check(final.Row.Status == InstanceStatus.Finished && state.Variables.GetValueOrDefault("outcome")?.GetValue<string>() == "matched" &&
+            state.Results.GetValueOrDefault("wait")?["Payload"]?.GetValue<string>() == "after",
+            "a publication after Resume reaches the restored Native wait and completes its frame");
+    }
+
     private static async Task CompletedJobRestore(Action<bool, string> check)
     {
         const long now = 1_701_800_000_000;

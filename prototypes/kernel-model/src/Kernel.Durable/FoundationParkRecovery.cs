@@ -69,7 +69,7 @@ public sealed partial class InMemoryStore
             turn.FoundationKept is not null || turn.FoundationHeader is not null ||
             turn.Held is { Count: > 0 } || turn.FoundationHeldPromotions is { Count: > 0 } ||
             turn.FoundationReleasedHolds is { Count: > 0 } ||
-            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Unsubscribe ||
+            turn.Unsubscribed.Count != 0 || turn.Unsubscribe ||
             turn.Done is not [var request] || turn.Sent is not [var control] ||
             control.Due is not null || control.KeepUntil is not null ||
             Messages.GetValueOrDefault(request) is not { Done: false, Message: { Kind: "kernel.recover" } input } ||
@@ -95,8 +95,9 @@ public sealed partial class InMemoryStore
             !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
             throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
         var jobs = turn.FoundationRecoveryJobs;
+        var subscriptionRecipes = turn.FoundationRecoverySubscriptions ?? [];
         if (jobs is null || jobs.Registry != next.Jobs || jobs.NextGeneration != next.NextJobGeneration || jobs.Restarts != next.ParkRestartedJobs ||
-            (long)timers.Recipes.Count + jobs.Recipes.Count > MaxRestoreWaits)
+            (long)timers.Recipes.Count + jobs.Recipes.Count + subscriptionRecipes.Count > MaxRestoreWaits)
             throw InvalidDrain();
         var checkedJobs = PlanFoundationJobs(previous, mode, jobs.Recipes, checkedTimers.Bytes);
         if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
@@ -104,6 +105,9 @@ public sealed partial class InMemoryStore
             !checkedJobs.Retained.SequenceEqual(jobs.Retained) || !checkedJobs.RecalledDeadlines.SequenceEqual(jobs.RecalledDeadlines) ||
             !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
             throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
+        var subscriptions = PlanFoundationSubscriptions(previous, binding.Tenant, subscriptionRecipes, checkedJobs.Bytes);
+        if (subscriptions is null || !subscriptions.SequenceEqual(turn.Subscribed) || subscriptions.Any(row => RegisteredSubscription(row) is not null))
+            throw InvalidDrain();
         var recalls = expiry?.Armed is { } armed ? jobs.RecalledDeadlines.Append(armed) : jobs.RecalledDeadlines;
         if (!turn.Consumed.SequenceEqual(recalls)) throw InvalidDrain();
         foreach (var message in jobs.Writes)

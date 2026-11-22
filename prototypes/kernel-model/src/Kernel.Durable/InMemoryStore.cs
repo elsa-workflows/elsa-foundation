@@ -420,7 +420,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
                 foreach (var subscription in turn.Subscribed)
-                    if (RegisteredSubscription(subscription) is null) Subscriptions.Add(subscription);
+                    if (turn.FoundationRecoverySubscriptions is not null || RegisteredSubscription(subscription) is null)
+                        Subscriptions.Add(subscription);
                 foreach (var subscription in turn.Unsubscribed)
                     if (RegisteredSubscription(subscription) is { } found &&
                         (subscription.FoundationTenant is null || found.Creation == subscription.Creation))

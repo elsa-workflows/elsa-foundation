@@ -59,7 +59,8 @@ public sealed partial class InMemoryStore
     {
         var next = turn.Row;
         var openingRecovery = previous?.ParkRecovery is null && next is { ParkRecovery: not null };
-        if ((turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null) && !openingRecovery) throw InvalidDrain();
+        if ((turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
+            turn.FoundationRecoverySubscriptions is not null) && !openingRecovery) throw InvalidDrain();
         if (previous is { ParkRecovery: not null } && next is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
             turn.FoundationKept is { Count: > 0 })
         {
