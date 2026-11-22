@@ -862,7 +862,7 @@ for (const width of [1440, 390]) {
 
     const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
     await expect(page.getByRole("link", { name: "Designer", exact: true })).toHaveCount(0);
-    await expect(breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true })).toHaveAttribute("href", "/workflows/activity-definitions");
+    await expect(breadcrumbs.getByRole("link", { name: /^activity definitions$/i })).toHaveAttribute("href", "/workflows/activity-definitions");
     await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Invoice evaluator");
     const versionRow = page.getByRole("button", { name: /1\.0\.0/ });
     await expect(versionRow).toContainText("Active");
@@ -888,7 +888,7 @@ for (const width of [1440, 390]) {
     await page.keyboard.press("Enter");
     await expect(versionRow).toHaveAttribute("aria-expanded", "false");
     await expect(page).not.toHaveURL(/version=version-1/);
-    await breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true }).click();
+    await breadcrumbs.getByRole("link", { name: /^activity definitions$/i }).click();
     await expect(page).toHaveURL(/\/workflows\/activity-definitions(?:\?|$)/);
     await expect(breadcrumbs).toHaveCount(0);
   });
