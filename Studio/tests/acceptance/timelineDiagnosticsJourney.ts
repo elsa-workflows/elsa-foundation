@@ -27,6 +27,16 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const path = (id: string) => `/runtime/workflows/instances/${id}`;
   const details = (id: string) => api<WorkflowInstanceDetails>(path(id));
   const history = (id: string) => api<RuntimeHistoryPage>(`${path(id)}/history?limit=100`);
+  const assertRestartPrefix = (original: RuntimeHistoryPage, current: RuntimeHistoryPage) => {
+    expect(current.items.slice(0, original.items.length)).toEqual(original.items);
+    expect(new Set(current.items.map(item => item.historyEventId)).size).toBe(current.items.length);
+    // A terminal run may still receive its dispatch acknowledgement. A process cut
+    // must never append a second business execution/consumption under fresh IDs.
+    for (const appended of current.items.slice(original.items.length)) {
+      expect(appended.name).toBe("DeliveryDispatched");
+      expect(original.items.some(item => item.name === "DeliveryReceived" && item.historyEventId === appended.causation?.historyEventId)).toBe(true);
+    }
+  };
   const bookmarks = (id: string) => api<RuntimeHistoryBookmarkPage>(`${path(id)}/history/bookmarks?limit=100`);
   const cancel = async (id: string) => {
     if (["Completed", "Cancelled", "Faulted"].includes((await details(id)).instance.status)) return;
@@ -123,7 +133,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const restored = { details: await details(approval.id), history: await history(approval.id), bookmarks: await bookmarks(approval.id),
     task: await api<unknown>(`/runtime/user-tasks/${taskId}`), occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?${new URLSearchParams({ sequenceToken: before.occurrences.sequenceToken, limit: "50" })}`) };
   expect(restored.details.instance.status).toBe(before.details.instance.status);
-  expect(restored.details.activities.find(item => item.activityExecutionId === active.bookmark.identity.activityExecutionId)?.status).toBe("Suspended"); expect(restored.history.items.slice(0, before.history.items.length)).toEqual(before.history.items);
+  expect(restored.details.activities.find(item => item.activityExecutionId === active.bookmark.identity.activityExecutionId)?.status).toBe("Suspended"); assertRestartPrefix(before.history, restored.history);
   expect(restored.bookmarks.items[0].bookmark).toEqual(active.bookmark); expect(restored.task).toEqual(before.task);
   expect(restored.occurrences.items).toEqual(before.occurrences.items);
   await page.goto(`/user-tasks/${taskId}`);
@@ -131,16 +141,17 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await expect(approve).toBeEnabled(); await approve.scrollIntoViewIfNeeded(); await capture(page, info, "diagnostics-approval-restored");
   await approve.press("Enter");
   await expect.poll(async () => (await details(approval.id)).instance.status, { timeout: 30_000 }).toBe("Completed");
-  const completed = { history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
+  await expect.poll(async () => (await api<{ status: string }>(`/runtime/user-tasks/${taskId}`)).status, { timeout: 30_000 }).toBe("Completed");
+  const completed = { occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?limit=50`), history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
   expect(completed.bookmarks.items[0].status).toBe("Consumed");
   expect(completed.history.items.filter(item => item.name === "BookmarkConsumed")).toHaveLength(1);
   let lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true })).toBeVisible();
   await capture(page, info, "diagnostics-approval-consumed");
   await restart();
-  const retained = { history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
-  expect(retained.history.items.slice(0, completed.history.items.length)).toEqual(completed.history.items);
-  expect(new Set(retained.history.items.map(item => item.historyEventId)).size).toBe(retained.history.items.length); expect(retained.bookmarks.items[0].bookmark).toEqual(active.bookmark);
+  const retained = { occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?limit=50`), history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
+  assertRestartPrefix(completed.history, retained.history);
+  expect(retained.occurrences.items).toEqual(completed.occurrences.items); expect(retained.bookmarks.items[0].bookmark).toEqual(active.bookmark);
   expect(retained.bookmarks.items[0].endedHistoryEventId).toBe(completed.bookmarks.items[0].endedHistoryEventId); expect(retained.task).toEqual(completed.task);
   lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1);
