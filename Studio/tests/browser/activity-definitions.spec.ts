@@ -1346,7 +1346,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
   await dialog.getByRole("button", { name: "Restore exact version" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByLabel("Selected exact version")).toContainText("Active");
+  await expect(page.locator('button[aria-controls="activity-version-details-version-2"]')).toContainText("Active");
   expect(state.recommendedVersionId).toBeNull();
 
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");

@@ -559,7 +559,7 @@ the designer header is a documented exception.
 
 - [ ] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567`
   [source]). "Advanced" appears three times with three class names.
-- [ ] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`.
+- [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
   `closest("details")`; keep that focus behaviour working.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.

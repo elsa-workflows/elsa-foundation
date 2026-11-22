@@ -556,9 +556,9 @@ describe("Activity Definition authoring", () => {
     expect(category.getAttribute("placeholder")).toBeTruthy();
     expect(description.getAttribute("aria-label")).toBe("Description");
     expect(description.getAttribute("placeholder")).toBeTruthy();
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    expect(advanced.open).toBe(false);
-    expect(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")?.closest("details")?.open).toBe(false);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")?.closest("[hidden]")).toBeTruthy();
     await rendered.unmount();
   });
 
@@ -592,9 +592,9 @@ describe("Activity Definition authoring", () => {
     expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
     change(provider, "elsa.activity-graph|2");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    expect(advanced.open).toBe(false);
-    openDetails(advanced);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    click(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
     const createDefinition = buttonByText(rendered.container, "Create") as HTMLButtonElement;
     await waitFor(() => expect(createDefinition.disabled).toBe(false));
@@ -651,13 +651,10 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Graph composition");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Generated identity");
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    openDetails(advanced);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    click(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.hidden.override");
-    flushSync(() => {
-      advanced.open = false;
-      advanced.dispatchEvent(new Event("toggle", { bubbles: true }));
-    });
+    click(advanced);
     click(buttonByText(rendered.container, "Create"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
@@ -1613,8 +1610,8 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.querySelector<HTMLInputElement>(".ad-draft-label input")?.disabled).toBe(true);
 
     const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!;
-    expect(advanced.open).toBe(false);
-    openDetails(advanced);
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    click(advanced);
     click(buttonByText(advanced, "Edit code"));
     await waitFor(() => expect(rendered.container.querySelector("[data-tab-id='code']")).not.toBeNull());
     expect(rendered.container.querySelector<HTMLElement>(".studio-code-editor")?.dataset.readonly).toBe("true");

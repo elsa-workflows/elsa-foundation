@@ -120,7 +120,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
           reason: reason.trim(),
           recommendationDecision: recommendationDecision()
         });
-        if (result.versionId !== version.version.versionId || result.lifecycle !== targetLifecycle) {
+        if (result.versionId !== version.version.versionId || !isActivityDefinitionEnumValue(result.lifecycle, targetLifecycle)) {
           throw new Error("The lifecycle response did not match the exact reviewed version transition.");
         }
       }
@@ -213,7 +213,7 @@ async function reconcilesAppliedState(
       return currentDefinition.lifecycle.head?.versionId === definition.lifecycle.head?.versionId &&
         currentDefinition.lifecycle.recommendation?.versionId === version.version.versionId;
     }
-    if (currentVersion.lifecycle !== targetLifecycle) return false;
+    if (!isActivityDefinitionEnumValue(currentVersion.lifecycle, targetLifecycle)) return false;
     if (!decision) return true;
     const expectedRecommendation = decision.disposition === "Clear" ? null : decision.replacementVersionId ?? null;
     return (currentDefinition.lifecycle.recommendation?.versionId ?? null) === expectedRecommendation;
