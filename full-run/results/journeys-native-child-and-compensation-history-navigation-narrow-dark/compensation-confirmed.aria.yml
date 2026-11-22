@@ -1,0 +1,263 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Native history confirm narrow-dark 25752841
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Native history parent narrow-dark 070ef67c · Execution": Run · Native history parent narrow-dark 070ef67c
+  - tab "Child run · fd46f3d7 · Execution": Child run · fd46f3d7
+  - tab "Child run · fd46f3d7 · Execution": Child run · fd46f3d7
+  - tab "Child run · fd46f3d7 · Execution": Child run · fd46f3d7
+  - tab "Run · Native history confirm narrow-dark 25752841 · Execution" [selected]: Run · Native history confirm narrow-dark 25752841
+- button "New tab"
+- button "All tabs (6)"
+- main:
+  - tabpanel "Run · Native history confirm narrow-dark 25752841 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Native history confirm narrow-dark 25752841" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 2 · Compensation Scope
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "Native history confirm narrow-dark 25752841" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 0s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 18 shown · 36 loaded · 36 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "09:41:39 Run started Running":
+            - time: 09:41:39
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "09:41:39 Activity started Compensation Scope Running":
+            - time: 09:41:39
+            - strong: Activity started
+            - text: Compensation Scope Running
+        - listitem:
+          - button "09:41:40 Activity callback started Compensation Scope":
+            - time: 09:41:40
+            - strong: Activity callback started
+            - text: Compensation Scope
+        - listitem:
+          - button "09:41:40 Activity callback returned a result Compensation Scope Defer":
+            - time: 09:41:40
+            - strong: Activity callback returned a result
+            - text: Compensation Scope Defer
+        - listitem:
+          - button "09:41:40 Continuation waiting Compensation Scope":
+            - time: 09:41:40
+            - strong: Continuation waiting
+            - text: Compensation Scope
+        - listitem:
+          - button "09:41:40 Activity started Write Line Running":
+            - time: 09:41:40
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:41:40 Activity callback started Write Line":
+            - time: 09:41:40
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:41:40 Activity callback returned a result Write Line Complete":
+            - time: 09:41:40
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:41:40 Continuation completed Write Line":
+            - time: 09:41:40
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:41:40 Activity completed Write Line Completed":
+            - time: 09:41:40
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:41:40 Activity callback started Compensation Scope":
+            - time: 09:41:40
+            - strong: Activity callback started
+            - text: Compensation Scope
+        - listitem:
+          - button "09:41:40 Activity callback returned a result Compensation Scope Complete":
+            - time: 09:41:40
+            - strong: Activity callback returned a result
+            - text: Compensation Scope Complete
+        - listitem:
+          - button "09:41:40 Compensation registered Compensation Scope forward-completed":
+            - time: 09:41:40
+            - strong: Compensation registered
+            - text: Compensation Scope forward-completed
+        - listitem:
+          - button "09:41:40 Compensation confirmed Compensation Scope" [pressed]:
+            - time: 09:41:40
+            - strong: Compensation confirmed
+            - text: Compensation Scope
+        - listitem:
+          - button "09:41:40 Compensation completed Compensation Scope forward-completed":
+            - time: 09:41:40
+            - strong: Compensation completed
+            - text: Compensation Scope forward-completed
+        - listitem:
+          - button "09:41:40 Continuation completed Compensation Scope":
+            - time: 09:41:40
+            - strong: Continuation completed
+            - text: Compensation Scope
+        - listitem:
+          - button "09:41:40 Activity completed Compensation Scope Completed":
+            - time: 09:41:40
+            - strong: Activity completed
+            - text: Compensation Scope Completed
+        - listitem:
+          - button "09:41:40 Run completed Completed":
+            - time: 09:41:40
+            - strong: Run completed
+            - text: Completed
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Compensation confirmed" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "32"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 9:41:40 AM · 2026-11-22T08:41:40.126826+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: confirm-scope
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

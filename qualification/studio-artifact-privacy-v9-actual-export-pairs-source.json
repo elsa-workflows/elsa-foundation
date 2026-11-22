@@ -1,0 +1,38 @@
+{
+  "status": "clean_actual_three_export_pairs_only",
+  "final_54_case_bundle_approved": false,
+  "publication_approved": false,
+  "exporter_sha256": "29611a1c2029a831e913a1249b93a76e5cd0303950afa3224147190a704b7752",
+  "audit_script_sha256": "9fc062f801a7283ebc66139ceace015ec2b8005b9c28c4bf832c988c816d37a5",
+  "actual_audit_receipt_sha256": "502f272e5a3a31ab43c7e5487d5247b19c817bfab35ffa0921391d498f2c92cd",
+  "html_resource_proof_sha256": "edd01023d34d5116e5e8d8d1a06c845dec8d18787aaadb5a8c1348b3b7b649f3",
+  "exports": {
+    "full-run": {
+      "original": "studio-composed-c332f177-20261122-a6",
+      "shared": "studio-composed-c332f177-share-v9",
+      "metadata_sha256": "6ba97c22e4a418d48cf3cbe3efa6b494f19c8e898b94892ac67566b4a1bbd68b",
+      "source_files": 2649,
+      "changed_files": 231
+    },
+    "transport-retake": {
+      "original": "studio-transport-1086a9dd-20261122-a1",
+      "shared": "studio-transport-1086a9dd-share-v9",
+      "metadata_sha256": "6a3d4f9f703636fcc1b3d576ca01937a942ee2d4f35f75da0c7ba084cad6523c",
+      "source_files": 832,
+      "changed_files": 39
+    },
+    "supplemental-typography": {
+      "original": "studio-supplement-c332-input",
+      "shared": "studio-supplement-c332-share-v9",
+      "metadata_sha256": "b712b50ca793575743995ae700fe68d4391b317bced3a4839d83c42e1a3752da",
+      "source_files": 6,
+      "changed_files": 1
+    }
+  },
+  "remaining": [
+    "new six-case diagnostics source export",
+    "final frozen54case composite and qualification payload scan",
+    "immutable sanitized orphan-branch download verification"
+  ],
+  "credential_values_printed": false
+}

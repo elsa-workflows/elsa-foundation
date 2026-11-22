@@ -1,0 +1,236 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:51579
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · History approval desktop-light 66717cb5 fault
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light" [checked]
+    - radio "Dark"
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · History approval desktop-light 66717cb5 · Execution": Run · History approval desktop-light 66717cb5 Execution
+  - tab "History approval desktop-light 66717cb5 · User task": History approval desktop-light 66717cb5 User task
+  - tab "Run · History approval desktop-light 66717cb5 · Execution": Run · History approval desktop-light 66717cb5 Execution
+  - tab "Run · History approval desktop-light 66717cb5 fault · Execution" [selected]: Run · History approval desktop-light 66717cb5 fault Execution
+- button "New tab"
+- button "All tabs (5)"
+- main:
+  - tabpanel "Run · History approval desktop-light 66717cb5 fault · Execution":
+    - group "Run workspace actions":
+      - heading "Run · History approval desktop-light 66717cb5 fault" [level=2]
+      - text: Faulted
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 1 · Fault
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "History approval desktop-light 66717cb5 fault" [level=2]
+    - text: Faulted
+    - paragraph: Elapsed 0s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - complementary "Selected recorded observation":
+        - paragraph: The selected observation is outside the currently shown events. Filters and loaded history are unchanged.
+        - 'button "Activity scheduled · Fault · #2 · 07:51:21" [pressed]'
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 9 shown · 15 loaded · 15 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "07:51:21 Run started Running Recorded position 1":
+            - time: 07:51:21
+            - strong: Run started
+            - text: "Running #1"
+        - listitem:
+          - button "07:51:21 Activity started Fault Running Recorded position 3":
+            - time: 07:51:21
+            - strong: Activity started
+            - text: "Fault Running #3"
+        - listitem:
+          - button "07:51:21 Activity callback started Fault Recorded position 9":
+            - time: 07:51:21
+            - strong: Activity callback started
+            - text: "Fault #9"
+        - listitem:
+          - button "07:51:21 Activity callback returned a result Fault Fault Recorded position 10":
+            - time: 07:51:21
+            - strong: Activity callback returned a result
+            - text: "Fault Fault #10"
+        - listitem:
+          - button "07:51:21 Continuation faulted Fault Recorded position 11":
+            - time: 07:51:21
+            - strong: Continuation faulted
+            - text: "Fault #11"
+        - listitem:
+          - button "07:51:21 Activity faulted Fault Faulted Recorded position 12":
+            - time: 07:51:21
+            - strong: Activity faulted
+            - text: "Fault Faulted #12"
+        - listitem:
+          - button "07:51:21 Incident recorded Fault Blocking Recorded position 13":
+            - time: 07:51:21
+            - strong: Incident recorded
+            - text: "Fault Blocking #13"
+        - listitem:
+          - button "07:51:21 Incident strategy evaluated Fault Blocking FaultWorkflow Recorded position 14":
+            - time: 07:51:21
+            - strong: Incident strategy evaluated
+            - text: "Fault Blocking FaultWorkflow #14"
+        - listitem:
+          - button "07:51:21 Incident strategy decisions applied Recorded position 15":
+            - time: 07:51:21
+            - strong: Incident strategy decisions applied
+            - text: "#15"
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues (1)"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Activity scheduled" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "2"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 7:51:21 AM · 2026-11-22T06:51:21.733748+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Recorded status
+        - definition:
+          - text: Scheduled
+          - button "Copy recorded status":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: fault
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

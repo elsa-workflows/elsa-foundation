@@ -1,0 +1,206 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:51579
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Playback desktop-light 0c1a81f2
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light" [checked]
+    - radio "Dark"
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Playback desktop-light 0c1a81f2 · Execution" [selected]: Run · Playback desktop-light 0c1a81f2 Execution
+  - tab "Home"
+- button "New tab"
+- button "All tabs (3)"
+- main:
+  - tabpanel "Run · Playback desktop-light 0c1a81f2 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Playback desktop-light 0c1a81f2" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline"
+      - button "Diagram" [pressed]
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 4 of 9 · For Each
+      - text: Activity position
+      - slider "Activity position": "3"
+      - group:
+        - text: Playback options Presentation pace
+        - combobox "Playback speed":
+          - option "0.5×"
+          - option "1×" [selected]
+          - option "2×"
+          - option "4×"
+        - paragraph: Recorded order · 1× = one activity step per second
+        - paragraph: First observed 11/22/26, 6:57:43 AM
+        - group: "Recorded playback range · through #106"
+    - region "Workflow run canvas":
+      - navigation "Execution scope":
+        - button "All executions"
+        - button "Sequence":
+          - img
+          - text: Sequence
+      - paragraph: Diagram shows the latest observed state of this execution context. Selecting a history event does not rewind it.
+      - text: Sequence · runs top to bottom
+      - button "Preview activities"
+      - list "Sequence steps":
+        - listitem:
+          - button "1. If": If Control Flow true
+          - button "Open Then, 1 activity": Then 1 activity
+          - button "Open Else, 1 activity": Else 1 activity
+          - text: Completed
+        - listitem:
+          - button "2. For Each" [pressed]: For Each Control Flow
+          - button "Open Body, 1 activity": Body 1 activity
+          - text: Completed
+        - listitem:
+          - button "3. Parallel": Parallel Control Flow
+          - button "Open left, 1 activity": left 1 activity
+          - button "Open right, 1 activity": right 1 activity
+          - text: Completed
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - button "Collapse run details panel":
+        - img
+      - button "Maximize run details panel":
+        - img
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Activity scheduled" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "33"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 6:57:43 AM · 2026-11-22T05:57:43.887318+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Recorded status
+        - definition:
+          - text: Scheduled
+          - button "Copy recorded status":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: repeat
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

@@ -1,0 +1,137 @@
+{
+  "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+  "cases": [
+    {
+      "project": "desktop-dark",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/timeline-diagnostics-oracle.json",
+      "oracleSha256": "0ea762791f7bf9f235e9cd4b442dc805a54d640252095ca4876e5b4ebf093793",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    },
+    {
+      "project": "desktop-light",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/timeline-diagnostics-oracle.json",
+      "oracleSha256": "23548486522982855a2e5e844f5ce83052fa95bc33c88a2f853444b780b2a4e2",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    },
+    {
+      "project": "narrow-390-dark",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/timeline-diagnostics-oracle.json",
+      "oracleSha256": "be685ccba14e7a00c882125138b58fd655e63f5f0c9bd097850803d4e9271ba8",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    },
+    {
+      "project": "narrow-390-light",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/timeline-diagnostics-oracle.json",
+      "oracleSha256": "e22d84e65a43dfa1d962fca446cd2bd98907b84c0ccb1a8d7ffb453e4ceb5b78",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    },
+    {
+      "project": "narrow-dark",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/timeline-diagnostics-oracle.json",
+      "oracleSha256": "d751c246554b5902c2260fe3ecfc08161af168972467ffd6320723adb90e3480",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    },
+    {
+      "project": "narrow-light",
+      "oraclePath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/timeline-diagnostics-oracle.json",
+      "oracleSha256": "6f3b9ca781da4ec72f273dbf08a63c3b9af39b5e2102be28a6d507208147297c",
+      "checks": {
+        "sourceExact": true,
+        "waitingPrefixTaskAndFrozenOccurrences": true,
+        "completedPrefixTaskAndCurrentOccurrences": true,
+        "taskSingleAcceptedAndCompleted": true,
+        "threeRealOwnedProcessCuts": true,
+        "expiryActiveUnendedNoMutation": true,
+        "clockStraddlesDeadline": true,
+        "expiredOwnerSuspended": true,
+        "restoredHandleDefinitionExact": true,
+        "duplicateActualOutcome": true,
+        "duplicateTwoReceiptsOneDispositionEach": true,
+        "duplicateExactCausation": true,
+        "onePhysicalConsumptionAndOneCompletion": true,
+        "allRendererRowsRetained": true
+      },
+      "allPassed": true
+    }
+  ]
+}

@@ -1,0 +1,375 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:51579
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Native history recover desktop-light 3b460c50
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light" [checked]
+    - radio "Dark"
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Native history parent desktop-light be802fef · Execution": Run · Native history parent desktop-light be802fef Execution
+  - tab "Child run · cf292580 · Execution": Child run · cf292580 Execution
+  - tab "Child run · cf292580 · Execution": Child run · cf292580 Execution
+  - tab "Child run · cf292580 · Execution": Child run · cf292580 Execution
+  - tab "Run · Native history confirm desktop-light 23eb736f · Execution": Run · Native history confirm desktop-light 23eb736f Execution
+  - tab "Run · Native history recover desktop-light 3b460c50 · Execution" [selected]: Run · Native history recover desktop-light 3b460c50 Execution
+- button "New tab"
+- button "All tabs (7)"
+- main:
+  - tabpanel "Run · Native history recover desktop-light 3b460c50 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Native history recover desktop-light 3b460c50" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 4 · Compensation Scope
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "Native history recover desktop-light 3b460c50" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 0s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 38 shown · 79 loaded · 79 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "06:56:49 Run started Running Recorded position 1":
+            - time: 06:56:49
+            - strong: Run started
+            - text: "Running #1"
+        - listitem:
+          - button "06:56:49 Activity started Compensation Scope Running Recorded position 3":
+            - time: 06:56:49
+            - strong: Activity started
+            - text: "Compensation Scope Running #3"
+        - listitem:
+          - button "06:56:49 Activity callback started Compensation Scope Recorded position 11":
+            - time: 06:56:49
+            - strong: Activity callback started
+            - text: "Compensation Scope #11"
+        - listitem:
+          - button "06:56:49 Activity callback returned a result Compensation Scope Defer Recorded position 12":
+            - time: 06:56:49
+            - strong: Activity callback returned a result
+            - text: "Compensation Scope Defer #12"
+        - listitem:
+          - button "06:56:49 Continuation waiting Compensation Scope Recorded position 13":
+            - time: 06:56:49
+            - strong: Continuation waiting
+            - text: "Compensation Scope #13"
+        - listitem:
+          - button "06:56:49 Activity started Write Line Running Recorded position 15":
+            - time: 06:56:49
+            - strong: Activity started
+            - text: "Write Line Running #15"
+        - listitem:
+          - button "06:56:49 Activity callback started Write Line Recorded position 18":
+            - time: 06:56:49
+            - strong: Activity callback started
+            - text: "Write Line #18"
+        - listitem:
+          - button "06:56:49 Activity callback returned a result Write Line Complete Recorded position 19":
+            - time: 06:56:49
+            - strong: Activity callback returned a result
+            - text: "Write Line Complete #19"
+        - listitem:
+          - button "06:56:49 Continuation completed Write Line Recorded position 20":
+            - time: 06:56:49
+            - strong: Continuation completed
+            - text: "Write Line #20"
+        - listitem:
+          - button "06:56:49 Activity completed Write Line Completed Recorded position 21":
+            - time: 06:56:49
+            - strong: Activity completed
+            - text: "Write Line Completed #21"
+        - listitem:
+          - button "06:56:50 Activity callback started Compensation Scope Recorded position 29":
+            - time: 06:56:50
+            - strong: Activity callback started
+            - text: "Compensation Scope #29"
+        - listitem:
+          - button "06:56:50 Activity callback returned a result Compensation Scope Defer Recorded position 30":
+            - time: 06:56:50
+            - strong: Activity callback returned a result
+            - text: "Compensation Scope Defer #30"
+        - listitem:
+          - button "06:56:50 Compensation registered Compensation Scope forward-completed Recorded position 31":
+            - time: 06:56:50
+            - strong: Compensation registered
+            - text: "Compensation Scope forward-completed #31"
+        - listitem:
+          - button "06:56:50 Continuation waiting Compensation Scope Recorded position 32":
+            - time: 06:56:50
+            - strong: Continuation waiting
+            - text: "Compensation Scope #32"
+        - listitem:
+          - button "06:56:50 Activity started Fault Running Recorded position 34":
+            - time: 06:56:50
+            - strong: Activity started
+            - text: "Fault Running #34"
+        - listitem:
+          - button "06:56:50 Activity callback started Fault Recorded position 40":
+            - time: 06:56:50
+            - strong: Activity callback started
+            - text: "Fault #40"
+        - listitem:
+          - button "06:56:50 Activity callback returned a result Fault Fault Recorded position 41":
+            - time: 06:56:50
+            - strong: Activity callback returned a result
+            - text: "Fault Fault #41"
+        - listitem:
+          - button "06:56:50 Continuation faulted Fault Recorded position 42":
+            - time: 06:56:50
+            - strong: Continuation faulted
+            - text: "Fault #42"
+        - listitem:
+          - button "06:56:50 Activity faulted Fault Faulted Recorded position 43":
+            - time: 06:56:50
+            - strong: Activity faulted
+            - text: "Fault Faulted #43"
+        - listitem:
+          - button "06:56:50 Incident recorded Fault Blocking Recorded position 44":
+            - time: 06:56:50
+            - strong: Incident recorded
+            - text: "Fault Blocking #44"
+        - listitem:
+          - button "06:56:50 Activity callback started Compensation Scope Recorded position 52":
+            - time: 06:56:50
+            - strong: Activity callback started
+            - text: "Compensation Scope #52"
+        - listitem:
+          - button "06:56:50 Activity callback returned a result Compensation Scope Defer Recorded position 53":
+            - time: 06:56:50
+            - strong: Activity callback returned a result
+            - text: "Compensation Scope Defer #53"
+        - listitem:
+          - button "06:56:50 Compensation started Compensation Scope fault Recorded position 54":
+            - time: 06:56:50
+            - strong: Compensation started
+            - text: "Compensation Scope fault #54"
+        - listitem:
+          - button "06:56:50 Compensation handler scheduled Compensation Scope scheduled Recorded position 55":
+            - time: 06:56:50
+            - strong: Compensation handler scheduled
+            - text: "Compensation Scope scheduled #55"
+        - listitem:
+          - button "06:56:50 Continuation waiting Compensation Scope Recorded position 56":
+            - time: 06:56:50
+            - strong: Continuation waiting
+            - text: "Compensation Scope #56"
+        - listitem:
+          - button "06:56:50 Incident resolved Fault Resolved Recorded position 57":
+            - time: 06:56:50
+            - strong: Incident resolved
+            - text: "Fault Resolved #57"
+        - listitem:
+          - button "06:56:50 Activity started Write Line Running Recorded position 59":
+            - time: 06:56:50
+            - strong: Activity started
+            - text: "Write Line Running #59"
+        - listitem:
+          - button "06:56:50 Activity callback started Write Line Recorded position 62":
+            - time: 06:56:50
+            - strong: Activity callback started
+            - text: "Write Line #62"
+        - listitem:
+          - button "06:56:50 Activity callback returned a result Write Line Complete Recorded position 63":
+            - time: 06:56:50
+            - strong: Activity callback returned a result
+            - text: "Write Line Complete #63"
+        - listitem:
+          - button "06:56:50 Continuation completed Write Line Recorded position 64":
+            - time: 06:56:50
+            - strong: Continuation completed
+            - text: "Write Line #64"
+        - listitem:
+          - button "06:56:50 Activity completed Write Line Completed Recorded position 65":
+            - time: 06:56:50
+            - strong: Activity completed
+            - text: "Write Line Completed #65"
+        - listitem:
+          - button "06:56:50 Activity callback started Compensation Scope Recorded position 73":
+            - time: 06:56:50
+            - strong: Activity callback started
+            - text: "Compensation Scope #73"
+        - listitem:
+          - button "06:56:50 Activity callback returned a result Compensation Scope Complete Recorded position 74":
+            - time: 06:56:50
+            - strong: Activity callback returned a result
+            - text: "Compensation Scope Complete #74"
+        - listitem:
+          - button "06:56:50 Compensation handler completed Compensation Scope Recorded position 75":
+            - time: 06:56:50
+            - strong: Compensation handler completed
+            - text: "Compensation Scope #75"
+        - listitem:
+          - button "06:56:50 Compensation completed Compensation Scope compensated Recorded position 76" [pressed]:
+            - time: 06:56:50
+            - strong: Compensation completed
+            - text: "Compensation Scope compensated #76"
+        - listitem:
+          - button "06:56:50 Continuation completed Compensation Scope Recorded position 77":
+            - time: 06:56:50
+            - strong: Continuation completed
+            - text: "Compensation Scope #77"
+        - listitem:
+          - button "06:56:50 Activity completed Compensation Scope Completed Recorded position 78":
+            - time: 06:56:50
+            - strong: Activity completed
+            - text: "Compensation Scope Completed #78"
+        - listitem:
+          - button "06:56:50 Run completed Completed Recorded position 79":
+            - time: 06:56:50
+            - strong: Run completed
+            - text: "Completed #79"
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues (1)"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Compensation completed" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "76"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 6:56:50 AM · 2026-11-22T05:56:50.302618+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: recovery-scope
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

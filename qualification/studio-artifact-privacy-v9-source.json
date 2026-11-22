@@ -1,0 +1,57 @@
+{
+  "exporter_path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/acceptance-tools/playback-export-evidence-v9.py",
+  "exporter_sha256": "29611a1c2029a831e913a1249b93a76e5cd0303950afa3224147190a704b7752",
+  "source_unchanged_at_completion": true,
+  "previous_exporter_sha256": "de256d0a7fbc67fc1e0d3d9cc749e8364657dcaebd78333fe9389caf0dcc5387",
+  "modified_existing_symbols": [
+    "expand",
+    "leaves",
+    "render",
+    "safe_tree_names",
+    "export"
+  ],
+  "new_symbols": [
+    "_EmbeddedReport"
+  ],
+  "unchanged_symbols": [
+    "_SecretCandidates",
+    "normalized",
+    "sha",
+    "documents",
+    "validate_file",
+    "credential_strings",
+    "collect_credential",
+    "collect_form",
+    "collect",
+    "scrub",
+    "safe_output_name",
+    "no_credential_residue"
+  ],
+  "independent_control_receipts": {
+    "studio-carrier-independent-v9.json": "0c79819184d2d19a449ee75dc41ae0f5dd28547e2e5633bfe3790748531e972e",
+    "studio-budget-independent-v9.json": "d2d99c272bfb7293cb6a40e1388afad6e5f51f5fe20ad4ade6586b3ca10dce16",
+    "studio-readiness-independent-v9.json": "2e9dc3ab4447acfcf13e4d4281d75c29fd1b408dbf3589e49b73a8d7dc2337c0",
+    "studio-extended-independent-v9.json": "9cbaf8875b4f26579a105ad278a1dc9f32ae826753a21694c28cc1b530fa06fd",
+    "studio-vendor-independent-v9.json": "ab086bcf0510db4c0ccbcfb1dd3ddc33286199f763c7f5aae9c753f88074b074",
+    "studio-carrier-extra-independent-v9.json": "d783ef978ff04e0975d77b75d386f26ce7de320cd1d466306a69d820c79b7711",
+    "studio-differential-independent-v9.json": "7bc2f87fc7cf8768a4bfc2ee7501662a54ad45af7c4b3fea3c636062e0142e0a"
+  },
+  "control_totals": {
+    "carrier": 18,
+    "budget": 3,
+    "base": 3,
+    "extended": 20,
+    "vendor": 15,
+    "extra": 5,
+    "total": 64,
+    "classifier_comparisons": 262,
+    "semantic_differentials": 23024,
+    "semantic_mismatches": 0
+  },
+  "findings": [],
+  "readiness": "clean_for_fresh_private_exports_not_actual_artifact_publication",
+  "actual_new_bundle_audit": "required_not_yet_available",
+  "credential_values_printed": false,
+  "peer_reports_used": false,
+  "production_edits_builds_dotnet_runs": false
+}

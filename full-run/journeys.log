@@ -1,0 +1,76 @@
+
+Running 48 tests using 1 worker
+
+
+(node:50376) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1/48] [desktop-light] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[2/48] [desktop-light] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[3/48] [desktop-light] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[4/48] [desktop-light] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[5/48] [desktop-light] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[6/48] [desktop-light] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[7/48] [desktop-light] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[8/48] [desktop-light] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+
+(node:53591) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[9/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[10/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[11/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[12/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[13/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[14/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[15/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[16/48] [desktop-dark] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+
+(node:56452) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[17/48] [narrow-light] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[18/48] [narrow-light] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[19/48] [narrow-light] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[20/48] [narrow-light] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[21/48] [narrow-light] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[22/48] [narrow-light] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[23/48] [narrow-light] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[24/48] [narrow-light] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+
+(node:60213) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[25/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[26/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[27/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[28/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[29/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[30/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[31/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[32/48] [narrow-dark] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+
+(node:63265) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[33/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[34/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[35/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[36/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[37/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[38/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[39/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[40/48] [narrow-390-light] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+
+(node:66931) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[41/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:85:1 › native child and compensation history navigation
+[42/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:87:1 › durable timer history and bookmark resumption
+[43/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:89:1 › recorded activity playback transport
+[44/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:90:1 › recorded activity playback ordinal seeking
+[45/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:91:1 › recorded activity playback live bounds and waits
+[46/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:92:1 › recorded activity playback coverage and access
+[47/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:1105:1 › timeline selection retains its tab and exact occurrence
+[48/48] [narrow-390-dark] › tests/acceptance/journeys.spec.ts:1109:1 › production history occurrence and approval qualification
+  48 passed (18.3m)

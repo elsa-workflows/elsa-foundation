@@ -1,0 +1,11 @@
+{
+  "dependency": "pyahocorasick",
+  "version": "2.2.0",
+  "wheelFiles": [
+    {
+      "name": "pyahocorasick-2.2.0-cp39-cp39-macosx_11_0_arm64.whl",
+      "sha256": "179fb28f3bd9865ec175ed47283feb68af99d9ca1c63a4f25282d6575f29cdbd"
+    }
+  ],
+  "purpose": "private evidence-tool environment; no repository/product dependency change"
+}

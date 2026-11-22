@@ -1,0 +1,272 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Native history parent narrow-390-light ac7d80eb
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Native history parent narrow-390-light ac7d80eb · Execution" [selected]: Run · Native history parent narrow-390-light ac7d80eb
+- button "New tab"
+- button "All tabs (2)"
+- main:
+  - tabpanel "Run · Native history parent narrow-390-light ac7d80eb · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Native history parent narrow-390-light ac7d80eb" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 1 · DispatchWorkflow
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "Native history parent narrow-390-light ac7d80eb" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 16s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 20 shown · 34 loaded · 34 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "10:36:22 Run started Running":
+            - time: 10:36:22
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "10:36:22 Activity started DispatchWorkflow Running":
+            - time: 10:36:22
+            - strong: Activity started
+            - text: DispatchWorkflow Running
+        - listitem:
+          - button "10:36:22 Activity callback started DispatchWorkflow":
+            - time: 10:36:22
+            - strong: Activity callback started
+            - text: DispatchWorkflow
+        - listitem:
+          - button "10:36:22 Activity callback returned a result DispatchWorkflow Suspend":
+            - time: 10:36:22
+            - strong: Activity callback returned a result
+            - text: DispatchWorkflow Suspend
+        - listitem:
+          - button "10:36:22 Continuation waiting DispatchWorkflow":
+            - time: 10:36:22
+            - strong: Continuation waiting
+            - text: DispatchWorkflow
+        - listitem:
+          - button "10:36:22 Child run dispatch requested DispatchWorkflow child-start-committed" [pressed]:
+            - time: 10:36:22
+            - strong: Child run dispatch requested
+            - text: DispatchWorkflow child-start-committed
+        - listitem:
+          - button "10:36:22 Activity waiting DispatchWorkflow Suspended":
+            - time: 10:36:22
+            - strong: Activity waiting
+            - text: DispatchWorkflow Suspended
+        - listitem:
+          - button "10:36:22 Bookmark created DispatchWorkflow":
+            - time: 10:36:22
+            - strong: Bookmark created
+            - text: DispatchWorkflow
+        - listitem:
+          - button "10:36:22 Workflow dispatch updated Pending":
+            - time: 10:36:22
+            - strong: Workflow dispatch updated
+            - text: Pending
+        - listitem:
+          - button "10:36:28 Child start attempt observed DispatchWorkflow handler-invocation-observed Recorded delivery observation":
+            - time: 10:36:28
+            - strong: Child start attempt observed
+            - text: DispatchWorkflow handler-invocation-observed Recorded delivery observation
+        - listitem:
+          - button "10:36:28 Child start disposition observed DispatchWorkflow handler-returned-observed Recorded delivery observation":
+            - time: 10:36:28
+            - strong: Child start disposition observed
+            - text: DispatchWorkflow handler-returned-observed Recorded delivery observation
+        - listitem:
+          - button "10:36:38 Delivery received Recorded delivery observation":
+            - time: 10:36:38
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "10:36:38 Activity resumption claimed DispatchWorkflow Running":
+            - time: 10:36:38
+            - strong: Activity resumption claimed
+            - text: DispatchWorkflow Running
+        - listitem:
+          - button "10:36:38 Bookmark consumed DispatchWorkflow Handle lifetime 16s":
+            - time: 10:36:38
+            - strong: Bookmark consumed
+            - text: DispatchWorkflow Handle lifetime 16s
+        - listitem:
+          - button "10:36:38 Activity callback started DispatchWorkflow":
+            - time: 10:36:38
+            - strong: Activity callback started
+            - text: DispatchWorkflow
+        - listitem:
+          - button "10:36:38 Activity callback returned a result DispatchWorkflow Complete":
+            - time: 10:36:38
+            - strong: Activity callback returned a result
+            - text: DispatchWorkflow Complete
+        - listitem:
+          - button "10:36:38 Continuation completed DispatchWorkflow":
+            - time: 10:36:38
+            - strong: Continuation completed
+            - text: DispatchWorkflow
+        - listitem:
+          - button "10:36:38 Activity completed DispatchWorkflow Completed":
+            - time: 10:36:38
+            - strong: Activity completed
+            - text: DispatchWorkflow Completed
+        - listitem:
+          - button "10:36:38 Run completed Completed":
+            - time: 10:36:38
+            - strong: Run completed
+            - text: Completed
+        - listitem:
+          - button "10:36:38 Delivery dispatched DispatchWorkflow Dispatched Recorded delivery observation":
+            - time: 10:36:38
+            - strong: Delivery dispatched
+            - text: DispatchWorkflow Dispatched Recorded delivery observation
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Child run dispatch requested" [level=3]
+        - paragraph: Committed runtime transition
+        - paragraph: A child-start responsibility was committed. Child admission, execution and outcome are separate recorded facts.
+        - term: Recorded position
+        - definition:
+          - text: "13"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 10:36:22 AM · 2026-11-22T09:36:22.555676+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: dispatch
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Open related run →"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

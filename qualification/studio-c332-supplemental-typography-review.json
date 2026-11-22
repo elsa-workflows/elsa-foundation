@@ -1,0 +1,70 @@
+{
+  "sourceHead": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+  "scope": "supplemental native Chromium typography/focus fixtures, not composed runtime evidence",
+  "reviewedUtc": "2026-11-22T05:56:18.249632+00:00",
+  "captures": [
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-results/activity-playback-playback-3fb50-lic-typography-scale-320px--chromium/playback-typography.png",
+      "sha256": "b1e755dd80cc5ccb6b6886fef2b08db8c49ae5eefed2475a486da308b122deb3",
+      "width": 320,
+      "height": 1000,
+      "disposition": "reviewed_no_issue_with_fixture_boundary",
+      "notes": "Actual full image opened. Custom public font scale inherited in playback/timeline hierarchy and focus outline visible in timeline fixture; narrow layout wraps and scrolls without horizontal overlay. Isolated fixture controls/capability messages are not composed runtime acceptance."
+    },
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-results/activity-playback-playback-46ee6-ic-typography-scale-1440px--chromium/playback-typography.png",
+      "sha256": "90ea4dddc006911ff4f683d1718cda968663501bcf2afd4d9aba2f9766b96290",
+      "width": 1440,
+      "height": 1000,
+      "disposition": "reviewed_no_issue_with_fixture_boundary",
+      "notes": "Actual full image opened. Custom public font scale inherited in playback/timeline hierarchy and focus outline visible in timeline fixture; narrow layout wraps and scrolls without horizontal overlay. Isolated fixture controls/capability messages are not composed runtime acceptance."
+    },
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-results/timeline-workspace-layout--3b871-ic-typography-scale-1440px--chromium/timeline-typography.png",
+      "sha256": "d36ddc15bb0113803d8b33a977900244bf8a5466d513990ad7693bf4a774b6dc",
+      "width": 1440,
+      "height": 1000,
+      "disposition": "reviewed_no_issue_with_fixture_boundary",
+      "notes": "Actual full image opened. Custom public font scale inherited in playback/timeline hierarchy and focus outline visible in timeline fixture; narrow layout wraps and scrolls without horizontal overlay. Isolated fixture controls/capability messages are not composed runtime acceptance."
+    },
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-results/timeline-workspace-layout--a5715-lic-typography-scale-320px--chromium/timeline-typography.png",
+      "sha256": "2cc910ea4b457ea7086a94370ad5a5357c98e9cc1cf33a3a41cf28cbbf55a4ca",
+      "width": 320,
+      "height": 1000,
+      "disposition": "reviewed_no_issue_with_fixture_boundary",
+      "notes": "Actual full image opened. Custom public font scale inherited in playback/timeline hierarchy and focus outline visible in timeline fixture; narrow layout wraps and scrolls without horizontal overlay. Isolated fixture controls/capability messages are not composed runtime acceptance."
+    }
+  ],
+  "sourceReceipts": [
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-start.json",
+      "sha256": "750629a9237e78d01460dff739873405e903e61f1e806da01a8b0c3fb43a563b",
+      "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+      "status": "",
+      "stats": null
+    },
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9-end.json",
+      "sha256": "d6f1e0071acf950f03e6081c3915222d1f2aad6c0cd28ef31da30806c27eaa9a",
+      "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+      "status": "",
+      "stats": null
+    },
+    {
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9.json",
+      "sha256": "af69bfe821192740b5e7ec4ae7aa77b44208f430dde13b58eb4974bf51a60fd6",
+      "head": null,
+      "status": null,
+      "stats": {
+        "startTime": "2026-11-22T05:44:08.494Z",
+        "duration": 103895.55099999999,
+        "expected": 66,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      }
+    }
+  ],
+  "archiveDownloadVerification": "pending"
+}

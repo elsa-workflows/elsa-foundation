@@ -1,0 +1,284 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Timer history narrow-light d19b6290
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Timer history narrow-light d19b6290 · Execution": Run · Timer history narrow-light d19b6290
+  - tab "Run · Timer history narrow-light d19b6290 · Execution" [selected]: Run · Timer history narrow-light d19b6290
+- button "New tab"
+- button "All tabs (3)"
+- main:
+  - tabpanel "Run · Timer history narrow-light d19b6290 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Timer history narrow-light d19b6290" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 1 · Delay
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "Timer history narrow-light d19b6290" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 45s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 18 shown · 22 loaded · 22 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "08:46:42 Run started Running":
+            - time: 08:46:42
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "08:46:42 Activity started Delay Running":
+            - time: 08:46:42
+            - strong: Activity started
+            - text: Delay Running
+        - listitem:
+          - button "08:46:42 Activity callback started Delay":
+            - time: 08:46:42
+            - strong: Activity callback started
+            - text: Delay
+        - listitem:
+          - button "08:46:42 Activity callback returned a result Delay Suspend":
+            - time: 08:46:42
+            - strong: Activity callback returned a result
+            - text: Delay Suspend
+        - listitem:
+          - button "08:46:42 Continuation waiting Delay":
+            - time: 08:46:42
+            - strong: Continuation waiting
+            - text: Delay
+        - listitem:
+          - button "08:46:42 Activity waiting Delay Suspended":
+            - time: 08:46:42
+            - strong: Activity waiting
+            - text: Delay Suspended
+        - listitem:
+          - button "08:46:42 Bookmark created Delay":
+            - time: 08:46:42
+            - strong: Bookmark created
+            - text: Delay
+        - listitem:
+          - button "08:46:42 Timer scheduled Delay Recorded delivery observation":
+            - time: 08:46:42
+            - strong: Timer scheduled
+            - text: Delay Recorded delivery observation
+        - listitem:
+          - button "08:47:27 Delivery received Recorded delivery observation":
+            - time: 08:47:27
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "08:47:27 Activity resumption claimed Delay Running":
+            - time: 08:47:27
+            - strong: Activity resumption claimed
+            - text: Delay Running
+        - listitem:
+          - button "08:47:27 Bookmark consumed Delay Handle lifetime 45s":
+            - time: 08:47:27
+            - strong: Bookmark consumed
+            - text: Delay Handle lifetime 45s
+        - listitem:
+          - button "08:47:27 Activity callback started Delay":
+            - time: 08:47:27
+            - strong: Activity callback started
+            - text: Delay
+        - listitem:
+          - button "08:47:27 Activity callback returned a result Delay Complete":
+            - time: 08:47:27
+            - strong: Activity callback returned a result
+            - text: Delay Complete
+        - listitem:
+          - button "08:47:27 Continuation completed Delay":
+            - time: 08:47:27
+            - strong: Continuation completed
+            - text: Delay
+        - listitem:
+          - button "08:47:27 Activity completed Delay Completed":
+            - time: 08:47:27
+            - strong: Activity completed
+            - text: Delay Completed
+        - listitem:
+          - button "08:47:27 Run completed Completed":
+            - time: 08:47:27
+            - strong: Run completed
+            - text: Completed
+        - listitem:
+          - button "08:47:27 Delivery dispatched Delay Dispatched Recorded delivery observation":
+            - time: 08:47:27
+            - strong: Delivery dispatched
+            - text: Delay Dispatched Recorded delivery observation
+        - listitem:
+          - button "08:47:27 Timer dispatch reported Delay Dispatched Recorded delivery observation":
+            - time: 08:47:27
+            - strong: Timer dispatch reported
+            - text: Delay Dispatched Recorded delivery observation
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "Bookmark lifecycle":
+        - button "Back to activity inspection"
+        - button "Refresh bookmark observation"
+        - paragraph: Bookmark lifecycle
+        - heading "Durable Timer" [level=3]
+        - paragraph: "Consumed · current eligibility: Not active"
+        - term: Created
+        - definition:
+          - text: Nov 22, 2026, 08:46:42 AM GMT+1
+          - button "Copy created":
+            - img
+          - status
+        - term: Ended
+        - definition:
+          - text: Nov 22, 2026, 08:47:27 AM GMT+1
+          - button "Copy ended":
+            - img
+          - status
+        - term: Recorded reason
+        - definition:
+          - text: selected-resume
+          - button "Copy recorded reason":
+            - img
+          - status
+        - term: Handle lifetime
+        - definition:
+          - text: 45s
+          - button "Copy handle lifetime":
+            - img
+          - status
+        - button "Inspect consumed event →"
+        - button "Inspect creation event →"
+        - button "Inspect last recorded transition →"
+        - group: Technical details
+        - text: Recorded bookmark events.
+        - list "Activity journal events":
+          - listitem:
+            - paragraph: Sun, Nov 22, 2026, GMT+1
+            - button "08:46:42 Bookmark created Execution 01a20238bd9b7eb9bf6debbfc3a1634a":
+              - time: 08:46:42
+              - strong: Bookmark created
+              - text: Execution 01a20238bd9b7eb9bf6debbfc3a1634a
+          - listitem:
+            - button "08:47:27 Bookmark consumed Execution 01a20238bd9b7eb9bf6debbfc3a1634a Handle lifetime 45s":
+              - time: 08:47:27
+              - strong: Bookmark consumed
+              - text: Execution 01a20238bd9b7eb9bf6debbfc3a1634a Handle lifetime 45s
+          - listitem:
+            - button "08:47:27 Delivery dispatched Execution 01a20238bd9b7eb9bf6debbfc3a1634a Dispatched Recorded delivery observation":
+              - time: 08:47:27
+              - strong: Delivery dispatched
+              - text: Execution 01a20238bd9b7eb9bf6debbfc3a1634a Dispatched Recorded delivery observation
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

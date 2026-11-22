@@ -1,0 +1,32 @@
+{
+  "phase": "complete",
+  "elapsed_seconds": 170.836,
+  "pair_metadata_set_sha256": "d086c88479985eab740eaf06e52854a5f284dad0b57a9e12451e2d650fa941e7",
+  "scope": "three actual V9 exports; final 54-case bundle not audited",
+  "counts": {
+    "export_files": 3490,
+    "export_bytes": 1559945056,
+    "provenance_files": 3487,
+    "unique_original_payloads": 41154,
+    "known_credential_values": 61995,
+    "known_credential_variants": 104434,
+    "short_known_credential_values": 0,
+    "all_payload_occurrences": 102286,
+    "unique_shared_payloads": 38176,
+    "unique_image_payloads": 10966,
+    "unique_zip_archives": 112,
+    "trace_jsonl_files": 564,
+    "trace_jsonl_records": 457210,
+    "duplicate_payload_occurrences": 64110,
+    "unique_font_payloads": 3,
+    "trace_resource_references": 127638,
+    "embedded_report_zips": 4,
+    "unique_preservation_pairs": 41208,
+    "image_preservation_pairs": 10966,
+    "structured_identity_pairs": 29574,
+    "duplicate_preservation_pairs": 61075,
+    "font_preservation_pairs": 3
+  },
+  "failures": [],
+  "credential_values_printed": false
+}

@@ -1,0 +1,211 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Child run · 47804f0e
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Native history parent narrow-390-light ac7d80eb · Execution": Run · Native history parent narrow-390-light ac7d80eb
+  - tab "Child run · 47804f0e · Execution": Child run · 47804f0e
+  - tab "Child run · 47804f0e · Execution": Child run · 47804f0e
+  - tab "Child run · 47804f0e · Execution" [selected]: Child run · 47804f0e
+- button "New tab"
+- button "All tabs (5)"
+- main:
+  - tabpanel "Child run · 47804f0e · Execution":
+    - group "Run workspace actions":
+      - heading "Child run · 47804f0e" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 1 · Write Line
+      - text: Activity position
+      - slider "Activity position": "0"
+      - status: The recorded inspection has no activity owner. Playback opens at the first available activity; that inspection is unchanged.
+      - group: Playback options
+    - heading "Child run · 47804f0e" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 6s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 9 shown · 12 loaded · 12 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "10:36:28 Run started Running":
+            - time: 10:36:28
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "10:36:28 Activity started Write Line Running":
+            - time: 10:36:28
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "10:36:28 Activity callback started Write Line":
+            - time: 10:36:28
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "10:36:28 Activity callback returned a result Write Line Complete":
+            - time: 10:36:28
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "10:36:28 Continuation completed Write Line":
+            - time: 10:36:28
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "10:36:28 Activity completed Write Line Completed":
+            - time: 10:36:28
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "10:36:28 Child run settled child-settled" [pressed]:
+            - time: 10:36:28
+            - strong: Child run settled
+            - text: child-settled
+        - listitem:
+          - button "10:36:28 Run completed Completed":
+            - time: 10:36:28
+            - strong: Run completed
+            - text: Completed
+        - listitem:
+          - button "10:36:28 Workflow dispatch updated Completed":
+            - time: 10:36:28
+            - strong: Workflow dispatch updated
+            - text: Completed
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Child run settled" [level=3]
+        - paragraph: Committed runtime transition
+        - paragraph: The child run reached a committed terminal outcome. Parent continuation and its result are recorded separately.
+        - term: Recorded position
+        - definition:
+          - text: "10"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 10:36:28 AM · 2026-11-22T09:36:28.488027+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Open related run →"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

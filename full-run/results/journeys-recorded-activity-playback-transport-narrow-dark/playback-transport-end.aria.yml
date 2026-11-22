@@ -1,0 +1,503 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Playback narrow-dark 4dbe9d20
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Playback narrow-dark 4dbe9d20 · Execution" [selected]: Run · Playback narrow-dark 4dbe9d20
+  - tab "Home"
+- button "New tab"
+- button "All tabs (3)"
+- main:
+  - tabpanel "Run · Playback narrow-dark 4dbe9d20 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Playback narrow-dark 4dbe9d20" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous"
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 9 of 9 · Write Line
+      - text: Activity position
+      - slider "Activity position": "8"
+      - group:
+        - text: Playback options Presentation pace
+        - combobox "Playback speed":
+          - option "0.5×"
+          - option "1×" [selected]
+          - option "2×"
+          - option "4×"
+        - paragraph: Recorded order · 1× = one activity step per second
+        - paragraph: First observed 11/22/26, 9:42:33 AM
+        - group: "Recorded playback range · through #106"
+    - heading "Playback narrow-dark 4dbe9d20" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 1s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - complementary "Selected recorded observation":
+        - paragraph: The selected observation is outside the currently shown events. Filters and loaded history are unchanged.
+        - 'button "Activity scheduled · Write Line · #88 · 09:42:33" [pressed]'
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 63 shown · 100 loaded · 100 snapshot records searched · more history not loaded
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "09:42:32 Run started Running":
+            - time: 09:42:32
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "09:42:32 Activity started Sequence Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: Sequence Running
+        - listitem:
+          - button "09:42:32 Activity callback started Sequence":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: Sequence
+        - listitem:
+          - button "09:42:32 Activity callback returned a result Sequence Defer":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: Sequence Defer
+        - listitem:
+          - button "09:42:32 Continuation waiting Sequence":
+            - time: 09:42:32
+            - strong: Continuation waiting
+            - text: Sequence
+        - listitem:
+          - button "09:42:32 Activity started If Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: If Running
+        - listitem:
+          - button "09:42:32 Activity callback started If":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: If
+        - listitem:
+          - button "09:42:32 Activity callback returned a result If Defer":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: If Defer
+        - listitem:
+          - button "09:42:32 Continuation waiting If":
+            - time: 09:42:32
+            - strong: Continuation waiting
+            - text: If
+        - listitem:
+          - button "09:42:32 Activity started Write Line Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:42:32 Activity callback started Write Line":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:42:32 Activity callback returned a result Write Line Complete":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:42:32 Continuation completed Write Line":
+            - time: 09:42:32
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:42:32 Activity completed Write Line Completed":
+            - time: 09:42:32
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:42:32 Activity callback started If":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: If
+        - listitem:
+          - button "09:42:32 Activity callback returned a result If Complete":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: If Complete
+        - listitem:
+          - button "09:42:32 Continuation completed If":
+            - time: 09:42:32
+            - strong: Continuation completed
+            - text: If
+        - listitem:
+          - button "09:42:32 Activity completed If Completed":
+            - time: 09:42:32
+            - strong: Activity completed
+            - text: If Completed
+        - listitem:
+          - button "09:42:32 Activity callback started Sequence":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: Sequence
+        - listitem:
+          - button "09:42:32 Activity callback returned a result Sequence Defer":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: Sequence Defer
+        - listitem:
+          - button "09:42:32 Continuation waiting Sequence":
+            - time: 09:42:32
+            - strong: Continuation waiting
+            - text: Sequence
+        - listitem:
+          - button "09:42:32 Activity started For Each Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: For Each Running
+        - listitem:
+          - button "09:42:32 Activity callback started For Each":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: For Each
+        - listitem:
+          - button "09:42:32 Activity callback returned a result For Each Defer":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: For Each Defer
+        - listitem:
+          - button "09:42:32 Continuation waiting For Each":
+            - time: 09:42:32
+            - strong: Continuation waiting
+            - text: For Each
+        - listitem:
+          - button "09:42:32 Activity started Write Line Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:42:32 Activity callback started Write Line":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:42:32 Activity callback returned a result Write Line Complete":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:42:32 Continuation completed Write Line":
+            - time: 09:42:32
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:42:32 Activity completed Write Line Completed":
+            - time: 09:42:32
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:42:32 Activity callback started For Each":
+            - time: 09:42:32
+            - strong: Activity callback started
+            - text: For Each
+        - listitem:
+          - button "09:42:32 Activity callback returned a result For Each Defer":
+            - time: 09:42:32
+            - strong: Activity callback returned a result
+            - text: For Each Defer
+        - listitem:
+          - button "09:42:32 Continuation waiting For Each":
+            - time: 09:42:32
+            - strong: Continuation waiting
+            - text: For Each
+        - listitem:
+          - button "09:42:32 Activity started Write Line Running":
+            - time: 09:42:32
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:42:33 Activity callback started Write Line":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Write Line Complete":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:42:33 Continuation completed Write Line":
+            - time: 09:42:33
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity completed Write Line Completed":
+            - time: 09:42:33
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:42:33 Activity callback started For Each":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: For Each
+        - listitem:
+          - button "09:42:33 Activity callback returned a result For Each Complete":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: For Each Complete
+        - listitem:
+          - button "09:42:33 Continuation completed For Each":
+            - time: 09:42:33
+            - strong: Continuation completed
+            - text: For Each
+        - listitem:
+          - button "09:42:33 Activity completed For Each Completed":
+            - time: 09:42:33
+            - strong: Activity completed
+            - text: For Each Completed
+        - listitem:
+          - button "09:42:33 Activity callback started Sequence":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Sequence
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Sequence Defer":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Sequence Defer
+        - listitem:
+          - button "09:42:33 Continuation waiting Sequence":
+            - time: 09:42:33
+            - strong: Continuation waiting
+            - text: Sequence
+        - listitem:
+          - button "09:42:33 Activity started Parallel Running":
+            - time: 09:42:33
+            - strong: Activity started
+            - text: Parallel Running
+        - listitem:
+          - button "09:42:33 Activity callback started Parallel":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Parallel
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Parallel Defer":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Parallel Defer
+        - listitem:
+          - button "09:42:33 Continuation waiting Parallel":
+            - time: 09:42:33
+            - strong: Continuation waiting
+            - text: Parallel
+        - listitem:
+          - button "09:42:33 Activity started Write Line Running":
+            - time: 09:42:33
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:42:33 Activity callback started Write Line":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Write Line Complete":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:42:33 Continuation completed Write Line":
+            - time: 09:42:33
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity completed Write Line Completed":
+            - time: 09:42:33
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:42:33 Activity started Write Line Running":
+            - time: 09:42:33
+            - strong: Activity started
+            - text: Write Line Running
+        - listitem:
+          - button "09:42:33 Activity callback started Write Line":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Write Line Complete":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Write Line Complete
+        - listitem:
+          - button "09:42:33 Continuation completed Write Line":
+            - time: 09:42:33
+            - strong: Continuation completed
+            - text: Write Line
+        - listitem:
+          - button "09:42:33 Activity completed Write Line Completed":
+            - time: 09:42:33
+            - strong: Activity completed
+            - text: Write Line Completed
+        - listitem:
+          - button "09:42:33 Activity callback started Parallel":
+            - time: 09:42:33
+            - strong: Activity callback started
+            - text: Parallel
+        - listitem:
+          - button "09:42:33 Activity callback returned a result Parallel Complete":
+            - time: 09:42:33
+            - strong: Activity callback returned a result
+            - text: Parallel Complete
+        - listitem:
+          - button "09:42:33 Continuation completed Parallel":
+            - time: 09:42:33
+            - strong: Continuation completed
+            - text: Parallel
+        - listitem:
+          - button "09:42:33 Activity completed Parallel Completed":
+            - time: 09:42:33
+            - strong: Activity completed
+            - text: Parallel Completed
+      - button "Load more history"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Activity scheduled" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "88"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 9:42:33 AM · 2026-11-22T08:42:33.226345+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Recorded status
+        - definition:
+          - text: Scheduled
+          - button "Copy recorded status":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: right
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

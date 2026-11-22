@@ -1,0 +1,394 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Native history parent narrow-dark 070ef67c
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Native history parent narrow-dark 070ef67c · Execution" [selected]: Run · Native history parent narrow-dark 070ef67c
+- button "New tab"
+- button "All tabs (2)"
+- main:
+  - tabpanel "Run · Native history parent narrow-dark 070ef67c · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Native history parent narrow-dark 070ef67c" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 1 of 1 · DispatchWorkflow
+      - text: Activity position
+      - slider "Activity position": "0"
+      - group: Playback options
+    - heading "Native history parent narrow-dark 070ef67c" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 11s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 20 shown · 34 loaded · 34 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "09:41:22 Run started Running":
+            - time: 09:41:22
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "09:41:22 Activity started DispatchWorkflow Running":
+            - time: 09:41:22
+            - strong: Activity started
+            - text: DispatchWorkflow Running
+        - listitem:
+          - button "09:41:22 Activity callback started DispatchWorkflow":
+            - time: 09:41:22
+            - strong: Activity callback started
+            - text: DispatchWorkflow
+        - listitem:
+          - button "09:41:22 Activity callback returned a result DispatchWorkflow Suspend":
+            - time: 09:41:22
+            - strong: Activity callback returned a result
+            - text: DispatchWorkflow Suspend
+        - listitem:
+          - button "09:41:22 Continuation waiting DispatchWorkflow":
+            - time: 09:41:22
+            - strong: Continuation waiting
+            - text: DispatchWorkflow
+        - listitem:
+          - button "09:41:22 Child run dispatch requested DispatchWorkflow child-start-committed":
+            - time: 09:41:22
+            - strong: Child run dispatch requested
+            - text: DispatchWorkflow child-start-committed
+        - listitem:
+          - button "09:41:22 Activity waiting DispatchWorkflow Suspended":
+            - time: 09:41:22
+            - strong: Activity waiting
+            - text: DispatchWorkflow Suspended
+        - listitem:
+          - button "09:41:22 Bookmark created DispatchWorkflow":
+            - time: 09:41:22
+            - strong: Bookmark created
+            - text: DispatchWorkflow
+        - listitem:
+          - button "09:41:22 Workflow dispatch updated Pending":
+            - time: 09:41:22
+            - strong: Workflow dispatch updated
+            - text: Pending
+        - listitem:
+          - button "09:41:23 Child start attempt observed DispatchWorkflow handler-invocation-observed Recorded delivery observation":
+            - time: 09:41:23
+            - strong: Child start attempt observed
+            - text: DispatchWorkflow handler-invocation-observed Recorded delivery observation
+        - listitem:
+          - button "09:41:23 Child start disposition observed DispatchWorkflow handler-returned-observed Recorded delivery observation":
+            - time: 09:41:23
+            - strong: Child start disposition observed
+            - text: DispatchWorkflow handler-returned-observed Recorded delivery observation
+        - listitem:
+          - button "09:41:33 Delivery received Recorded delivery observation":
+            - time: 09:41:33
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "09:41:33 Activity resumption claimed DispatchWorkflow Running":
+            - time: 09:41:33
+            - strong: Activity resumption claimed
+            - text: DispatchWorkflow Running
+        - listitem:
+          - button "09:41:33 Bookmark consumed DispatchWorkflow Handle lifetime 11s":
+            - time: 09:41:33
+            - strong: Bookmark consumed
+            - text: DispatchWorkflow Handle lifetime 11s
+        - listitem:
+          - button "09:41:33 Activity callback started DispatchWorkflow":
+            - time: 09:41:33
+            - strong: Activity callback started
+            - text: DispatchWorkflow
+        - listitem:
+          - button "09:41:33 Activity callback returned a result DispatchWorkflow Complete":
+            - time: 09:41:33
+            - strong: Activity callback returned a result
+            - text: DispatchWorkflow Complete
+        - listitem:
+          - button "09:41:33 Continuation completed DispatchWorkflow":
+            - time: 09:41:33
+            - strong: Continuation completed
+            - text: DispatchWorkflow
+        - listitem:
+          - button "09:41:33 Activity completed DispatchWorkflow Completed":
+            - time: 09:41:33
+            - strong: Activity completed
+            - text: DispatchWorkflow Completed
+        - listitem:
+          - button "09:41:33 Run completed Completed":
+            - time: 09:41:33
+            - strong: Run completed
+            - text: Completed
+        - listitem:
+          - button "09:41:33 Delivery dispatched DispatchWorkflow Dispatched Recorded delivery observation":
+            - time: 09:41:33
+            - strong: Delivery dispatched
+            - text: DispatchWorkflow Dispatched Recorded delivery observation
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - text: Selected activity
+      - heading "DispatchWorkflow" [level=4]
+      - button "Copy activity name":
+        - img
+      - text: DispatchWorkflow v1.0.0 Completed
+      - button "Copy activity status":
+        - img
+      - tablist "Activity execution views":
+        - tab "Journal" [selected]
+        - tab "Bookmarks"
+        - tab "Data"
+      - region "Activity journal":
+        - paragraph: This execution only, including directly related delivery observations.
+        - group: Execution identity
+        - checkbox "Include descendants"
+        - text: Include descendants
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+        - list "Activity journal events":
+          - listitem:
+            - paragraph: Sun, Nov 22, 2026, GMT+1
+            - button "09:41:22 Activity scheduled Scheduled":
+              - time: 09:41:22
+              - strong: Activity scheduled
+              - text: Scheduled
+          - listitem:
+            - button "09:41:22 Activity started Running":
+              - time: 09:41:22
+              - strong: Activity started
+              - text: Running
+          - listitem:
+            - button "09:41:22 Activity execution claimed Running":
+              - time: 09:41:22
+              - strong: Activity execution claimed
+              - text: Running
+          - listitem:
+            - button "09:41:22 Value observation recorded":
+              - time: 09:41:22
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:22 Value observation recorded":
+              - time: 09:41:22
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:22 Value observation recorded":
+              - time: 09:41:22
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:22 Value observation recorded":
+              - time: 09:41:22
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:22 Value observation recorded":
+              - time: 09:41:22
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:22 Activity callback started":
+              - time: 09:41:22
+              - strong: Activity callback started
+          - listitem:
+            - button "09:41:22 Activity callback returned a result Suspend":
+              - time: 09:41:22
+              - strong: Activity callback returned a result
+              - text: Suspend
+          - listitem:
+            - button "09:41:22 Continuation waiting":
+              - time: 09:41:22
+              - strong: Continuation waiting
+          - listitem:
+            - button "09:41:22 Child run dispatch requested child-start-committed":
+              - time: 09:41:22
+              - strong: Child run dispatch requested
+              - text: child-start-committed
+          - listitem:
+            - button "09:41:22 Activity waiting Suspended":
+              - time: 09:41:22
+              - strong: Activity waiting
+              - text: Suspended
+          - listitem:
+            - button "09:41:22 Bookmark created":
+              - time: 09:41:22
+              - strong: Bookmark created
+          - listitem:
+            - button "09:41:23 Child start attempt observed handler-invocation-observed Recorded delivery observation":
+              - time: 09:41:23
+              - strong: Child start attempt observed
+              - text: handler-invocation-observed Recorded delivery observation
+          - listitem:
+            - button "09:41:23 Child start disposition observed handler-returned-observed Recorded delivery observation":
+              - time: 09:41:23
+              - strong: Child start disposition observed
+              - text: handler-returned-observed Recorded delivery observation
+          - listitem:
+            - button "09:41:33 Activity resumption claimed Running":
+              - time: 09:41:33
+              - strong: Activity resumption claimed
+              - text: Running
+          - listitem:
+            - button "09:41:33 Bookmark consumed Handle lifetime 11s":
+              - time: 09:41:33
+              - strong: Bookmark consumed
+              - text: Handle lifetime 11s
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Activity callback started":
+              - time: 09:41:33
+              - strong: Activity callback started
+          - listitem:
+            - button "09:41:33 Activity callback returned a result Complete":
+              - time: 09:41:33
+              - strong: Activity callback returned a result
+              - text: Complete
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Value observation recorded":
+              - time: 09:41:33
+              - strong: Value observation recorded
+          - listitem:
+            - button "09:41:33 Continuation completed":
+              - time: 09:41:33
+              - strong: Continuation completed
+          - listitem:
+            - button "09:41:33 Activity completed Completed":
+              - time: 09:41:33
+              - strong: Activity completed
+              - text: Completed
+          - listitem:
+            - button "09:41:33 Delivery dispatched Dispatched Recorded delivery observation":
+              - time: 09:41:33
+              - strong: Delivery dispatched
+              - text: Dispatched Recorded delivery observation
+        - paragraph:
+          - button "Focus this execution in timeline"
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

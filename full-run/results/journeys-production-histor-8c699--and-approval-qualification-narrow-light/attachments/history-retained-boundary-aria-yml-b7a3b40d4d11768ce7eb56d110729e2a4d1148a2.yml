@@ -1,0 +1,155 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · History approval narrow-light ec65b4e7
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · History approval narrow-light ec65b4e7 · Execution": Run · History approval narrow-light ec65b4e7
+  - tab "History approval narrow-light ec65b4e7 · User task": History approval narrow-light ec65b4e7
+  - tab "Run · History approval narrow-light ec65b4e7 · Execution": Run · History approval narrow-light ec65b4e7
+  - tab "Run · History approval narrow-light ec65b4e7 fault · Execution": Run · History approval narrow-light ec65b4e7 fault
+  - tab "Run · History approval narrow-light ec65b4e7 · Execution" [selected]: Run · History approval narrow-light ec65b4e7
+- button "New tab"
+- button "All tabs (6)"
+- main:
+  - tabpanel "Run · History approval narrow-light ec65b4e7 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · History approval narrow-light ec65b4e7" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous" [disabled]
+        - button "Play" [disabled]
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: No confirmed activity position
+      - status: No recorded activity occurrences are available in this segment.
+      - status: Only partial recorded history is available.
+      - group: Playback options
+    - heading "History approval narrow-light ec65b4e7" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 6s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: Partial recorded history.
+        - paragraph: Some run history is unavailable. Inspect the capture and retention boundaries.
+        - paragraph: Unavailable history prevents establishing all source responsibility for this recorded prefix.
+        - group:
+          - text: Recording coverage
+          - term: Inspection observed
+          - definition: 11/22/2026, 9:41:20 AM · 2026-11-22T08:41:20.240706+00:00
+          - term: Current capture chain
+          - definition: Available
+          - term: Source history responsibility
+          - definition: Cannot establish source settlement
+          - term: Available positions
+          - definition: No retained events
+          - term: Settled through
+          - definition: 74 · a settled prefix can receive later events
+          - term: Purged through
+          - definition: "74"
+          - term: Capture profile
+          - definition: runtime-history-v5 v5
+          - term: Supported event kinds
+          - definition: Activity execution claimed, Activity cancelled, Activity completed, Continuation cancelled, Continuation completed, Continuation faulted, Activity callback returned a result, Activity callback started, Continuation waiting, Activity faulted, Activity recovered, Activity resumption claimed, Continuation delivery retried, Activity retry scheduled, Activity scheduled, Activity started, Activity waiting, Run alteration applied, Bookmark consumed, Bookmark created, Bookmark removed, Competing bookmark retired, Stale bookmark removed, Bookmark superseded, Child control accepted, Child control applied, Child start attempt observed, Child start disposition observed, Child run dispatch requested, Child run settled, Compensation abandoned, Compensation completed, Compensation confirmed, Compensation handler completed, Compensation handler faulted, Compensation handler scheduled, Compensation registered, Compensation resolved, Compensation started, Control applied, Delivery deferred, Delivery dispatched, Duplicate delivery observed, Delivery failed, Delivery received, Delivery rejected, No matching recipient, Durable state recorded, Durable state removed, Incident decision applied, Incident projection reconciled, Incident recorded, Incident strategy decisions applied, Incident resolved, Incident strategy evaluated, Incident suppressed, Run alteration recorded, Stimulus publication committed, Stimulus routing attempt observed, Stimulus routing disposition observed, Timer dispatch reported, Timer retired, Timer scheduled, Value observation recorded, Run cancelled, Run completed, Workflow dispatch updated, Run faulted, Run started, Run suspended
+      - paragraph: 0 shown · 0 loaded · 0 snapshot records searched
+      - paragraph: No recorded events in this range.
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

@@ -1,0 +1,15 @@
+# Timeline and recorded playback acceptance
+
+Source-bound local qualification for [Timeline #3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849), [playback #4366](https://github.com/elsa-workflows/elsa-foundation/issues/4366) and [implementation #4368](https://github.com/elsa-workflows/elsa-foundation/pull/4368).
+
+The canonical selection contains **54 cases, 420 actual PNG/ARIA pairs, 48 native oracles and 54 traces**, covering desktop, 320 px and 390 px in both themes. [Browse the case index](CASE-INDEX.md) and [exact source/file selection](ACCEPTANCE-MANIFEST.json). Four supplemental typography images are isolated fixtures, outside the composed count.
+
+The original 42 nontransport cases retain c332f177 source attribution; all six transport retakes retain1086a9dd; all six new diagnostics cases retain3982b1c6. All Studio product source and dependency inputs are unchanged across these heads. New diagnostics additionally exercise the authored native Event deadline and opt-in process/clock/read controls; older native executions are not restamped as this new path. The original full48 report is retained, with its six original transport visual sets explicitly superseded. These three archived campaigns contain60 actual cases/492 capture pairs; the canonical selection replaces the original72 transport captures with the complete corrected72. Separate failed/held prequalification attempts are listed explicitly.
+
+The new diagnostics prove real User Task approval across two relevant physical backend cuts, with a third pre-admission clock reset per case. All18 replacements reopen the same owned stores with unchanged binary/configuration/URL. Every original/replacement host exits zero and its group disappears. Passive expiry leaves its original active handle and owner suspended, with no invented timeout/consumption event. Two native matched lookups yield one Dispatched and one Duplicate outcome, with one winning consumption. A genuine renderer read abort retains51 exact ordered rows and selection before real Retry recovery.
+
+Reports: [original full report](full-run/html/index.html), [transport report](transport-retake/html/index.html), [new diagnostics report](native-diagnostics/html/index.html). Serve this directory locally if the browser restricts file resources. Each complete trace can be opened with the pinned Playwright1.61.1 trace viewer.
+
+Credentials are redacted from all structured/text payloads and recursively decoded HTML report ZIPs with the frozen V9 exporter. PNG/font bytes and diagnostic identities remain unchanged; trace resource names predate disclosed content redaction. Export provenance, independent source/visual/privacy receipts and pinned codec dependency metadata are under qualification/. No stores, store sidecars or application binaries belong in this archive.
+
+CI is intentionally skipped under the owner's instruction. Publication/download verification, the exact-head admin merge audit and resulting-main verification are recorded on PR4368; this immutable local-evidence archive does not preclaim those later gates. FILE-MANIFEST.json lists every other file's size and SHA256.

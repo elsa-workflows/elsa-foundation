@@ -1,0 +1,1857 @@
+{
+  "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+  "campaign": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1",
+  "status": "all66-local-visual-purposes-verified-final-artifact-pending",
+  "entries": [
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.png",
+      "pngSha256": "428127257282e8d561d3a9c00c84db6560b4e2aad56eb7e18148ea8dd3c272a9",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "68fe61bca0d4444335a67d055ce8c4ed0208a10123b5906ebfbe12f84dd48913",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.png",
+      "pngSha256": "d5f3ff090ffa2f0b6cc6b8a066f4c5ab4b62d7d7b52b1276bf94a2a8c8598ff5",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "303c5631746a96e7a479451b632a112bf1bd3f997ddb3e1d33c076061a399a6a",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.png",
+      "pngSha256": "651d8f9f038369f337bfc0b64aeece4007c3f6f89e459eaea62fd7744998afd5",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "84d3ff393911a5731fb4c595eb1cf4a2278a739cf43352fc68d434adfc1f1141",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "af441a9e42e30e6f1f30e2eec4f8cacab826caa8d8be5fef437f34681c0e96f8",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "a55a87d4f6ae2e9d8824207250c9818e1c6e7ef83564ec5745638237da1e0619",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.png",
+      "pngSha256": "10b82610f20cdb22c14cb8784c9acd2d496d2c6d6b38e80940daaf57ab660801",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "0b044a30cbc632f2a488f98d70a3fe2a7ea8d72d29ef9af35dc6058aa7dade80",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.png",
+      "pngSha256": "e34ea3f7f5e63523ecbb9b45d26a1248b1c6d5315a0694c19431932ecb7162b0",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "646305a9ca0a3d6c31714a19aa8a8342ba63b89c13baa034e00c623a71de1478",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.png",
+      "pngSha256": "f768c4c224997b7ffd2288c305bdd5366909ddf26c793535af10547acd83f34c",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "483ddff7d0b0c9a74f1f8d3eb30201b58a6cdc178f6a91f4ecf4e52a27bd1c09",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "a06f88ebcc48e20184dad8d20b117445d7713c6a1c3c1e35e9434bc83120fdaf",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "c9fbed045fa06e973c6d712488bf59d1daa398adc16d74e5e0b996285fb00e04",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.png",
+      "pngSha256": "cd0a5f2d836d3dd6b6d11ac62cce78a63588c718ff4033b13a3b4ac8fc8556b8",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "bb283f5bfd55f6dad00304bd22044821560724f2cba100fd905a7cc5fc33b547",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.png",
+      "pngSha256": "a4bdd6b3c53eae05abd660b8cee0c2ff9ca2be9794580c60e90d40745132ad14",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "6a174f22d94977ba4130123b1fbc0c8f91578f8268eb062a46ee46e60c2ba419",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-dark",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.png",
+      "pngSha256": "9c27449f653dee1255a94f5aa442d7ba0715d606282285d86379f1158a2e8a8e",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/reference.aria.yml",
+      "ariaSha256": "25f9125a5a3b8468f2f72e34fbc8249b26cef5939784b81f065900d9c5eede7a",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.png",
+      "pngSha256": "cf344bf0ce15f8b7cbd2c4730e9a4cb25b7f3e224eaa17b6cfbf8d2d886278d8",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "1993a211737c626b3d4fe8014eb178f1641634ea9cd141c9fc59f778887911d0",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.png",
+      "pngSha256": "69f5c37726d878bb1bfd1971631be4f51d8c37ab855d68f457eccc2c971e61b2",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "758506a6dc0d7b14efe476b3c167da6ca49b08eb5f05cad22040b23658aa061b",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.png",
+      "pngSha256": "56cb597950fec93ac9cfe0ddc228e2f283d6206b9f79b1206eeae8223362f8cf",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "522394b5b61e9a6759012e6632ae1af166ded3a496be885efb28532d2f1b1ba5",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "94d8b351549ca432fc13200b9cd63bd717d66fdf512955733f1cdfb5f87f71ba",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "51149ac14afa8f7e95b8dedaae4cf290e53a8c3c0e265d5d1ece2b01dddf3092",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.png",
+      "pngSha256": "0e0d01fd0c98d7c881cc09b9606c106368722bc5342ce496ddc039710653a911",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "5579cea6afe70901c3c6183838efa8f476c3324931df4ac943f604efead91632",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.png",
+      "pngSha256": "9deff5415bf04e40df6c0c9848409b195afeaec61cef02e39fefc28be381bfdd",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "fce0ecc89d51986a2b5d498eeb5e049093d0362755295cb368d259a2cc0e64a0",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.png",
+      "pngSha256": "c589114ea698e1f3dbaa8c5935eca8df2e6eed18b90307029b068f7e58bb9c23",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "ae7fd47d0693c481238c8fa16883e16a16d9c85f4a68bd49efb1cbd4085a1354",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "9258d257f0bb5b300404108fb15b72c771077b67e3124fd5ad92c346770857c5",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "3e5aa04742dc47b920f0d14119a73c40b71db53438c0ee8cd6bff93676ba16cc",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.png",
+      "pngSha256": "eea4f51477bc4ace04b56848daa51e2f10b11241089a2dca65219a060a5347a0",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "d60311a03881d15be07177a81db28d409a86de47011d062f015447f1882bdee6",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.png",
+      "pngSha256": "21866a0d10e11208d59ccd71633c17c4c252af47b19ab6bf4e28c28a2f332dd5",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "e0b18afa431d2bdef65775773f7ccb77084b5274992fa07eba3fd13e88205882",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "desktop-light",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.png",
+      "pngSha256": "4f93d1fd4fcea1b1946b2477b9e6bc7cc4a37cc1d783d952efaf4a6d9b95925a",
+      "dimensions": [
+        1440,
+        1000
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/reference.aria.yml",
+      "ariaSha256": "8ae59d4c43d8f55249fc331f322c4cbcddbb21cb4077be6a449a06813619ff7b",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.png",
+      "pngSha256": "3fa1944ac5cadccf9c8689e1e0097f0eba5c0efbfa85878601bef2aaba77c8de",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "b15b0c92b8bac9f54b4ffdbe055e6fbe7eed5aa494d05a4566f83e4d24ae43b8",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.png",
+      "pngSha256": "f18d97abcd723401a832803decbebb2e4ac1aca0c47b8546ced763052331e5cb",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "cb0b26a20322541b1507bb7232b680ba71fe6eab33ed10e65f765869b9466ccf",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.png",
+      "pngSha256": "67317786a7084038525995d57f53f0f647252138ffd12e8df93bd4b6308e5984",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "cc9daf3ea3f96b995347097c0c5815f9bf76e33fd0ae968e6133e5f09e6a5af6",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "e5ae65e5ebdccac645498aa174154424e915e48605df4d2732b63550a71bd4bb",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "b05a5426cf5ed147956c3fee841127fa16e51373b1b4df80739702e20be7a66e",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.png",
+      "pngSha256": "67f6004fb0d54f624d5580e5e362ba65b2c2e9b3849e9492d89429b075b201db",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "d3588f3cf6220944031f2f021476ee389f09bea9878eda6413d0db46fa51fa53",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.png",
+      "pngSha256": "2d8309d4b77296a99d1aae1e088e5e40d271d4e12c3a663d27426bfd52941eae",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "1895e38f85a30a7838219b978554f7c95c1d8f71db4e0a5b2bba320fede76fab",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.png",
+      "pngSha256": "c9ef1307cc61983a7b3bb24c3558f8bdfb4a6643a247a53de345868f8c64d521",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "73143d50124cb9e351f11541938908831646bd1c82b332f1e027c2245be5a824",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "4ea0a14178be48f7aa87a3678bb53850d45a6fd8c169c1bfd70b3e5146636477",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "999093351384dc95a7025a095e54b6b08a79d087265b594a444360857df10830",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.png",
+      "pngSha256": "f8e78c3b0b06628269d1384ed4427ad76093ada08470d0f1c6ed602f2e89d81e",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "74bfcfa75c85cb5176e6f1c996f10fc60fecdddb30bfb22d69e2c7892d7a6075",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.png",
+      "pngSha256": "065b804707923f8700809ae6ccafe5b5f1aa89b1bcbbe043ceb43c3aa256a176",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "74d289ea687a9f2e69144a6b073daaccee26ae62a8b0176dd09696cd8afdb0f1",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-dark",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.png",
+      "pngSha256": "72b47d47e3d3d5a50994dba41abe68c19a25b77dba3c146ce7a033779ee77f57",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/reference.aria.yml",
+      "ariaSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.png",
+      "pngSha256": "f90e45ac5b3dd46fc2780a004a329d00081e4a824987f0a9fa83eed9377293f3",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "e1b1783d51b901978b9753c65cb914b9966d251dae76b51efcd01c0ee4c96cf1",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.png",
+      "pngSha256": "55a0cc79edf81a18d8635c7b93218a475049703f577ce8881d26f120551f773e",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "c6b8948fc6042b07a7b7b77eee7eae29ea23f2c78995c33dade956a9ab93827d",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.png",
+      "pngSha256": "1aa5a34bb632b7bb71f6f7a52151947d10a0474a7db91df001f5364edb430cc3",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "fb7b9e39df6f666ff5ebbdf97ec3652b70d98a356fbbf4fa0cd7c994d1c79a06",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "01a7009eaf41850702693068277706d99ff017b6be62c0d633708a3ad799799e",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "721b09ff492ef0f9c6b96e920887eddb767b659705c57c25de227a2012d08003",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.png",
+      "pngSha256": "8304d213356b3b1db3f7d4c18d6f6a342176be80a92f2b14233a4c8870945d21",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "a6bf8a3e780d154c49fccd5db5b0eb4372e5516952de6f6d3153f45ac76389f7",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.png",
+      "pngSha256": "6a22019ddbf9a25a159f5b8be93d875b6ccb2577bd8473e4d5d22abe288f9a75",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "fb42abcbcdf93181037a3a5d8ed7eb63a7dd0f7e292b88964a765f4ab571c337",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.png",
+      "pngSha256": "8a951340f15cc806ccbedab96a75faeddcbefca0ab3dcd1fd1324ff9190e8105",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "b65103e29ed5df0470f6335a1475b8a6a1472e65595f2e2e67eb12dd974a35d9",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "28b5e1fe741cf777d2d4abce787e6a5ed5f3f7f5649670fb62b6e43b644c48c7",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "d7709572dbb511cb9a0f7f5a46d807122de8a46ce947719f9411a84a7c174bad",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.png",
+      "pngSha256": "8af5d9bab9c7dbc55052d92c1be182055e3c9f4cf4ed2e1463a967bb0d1e8259",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "7e8c8dd8638ea215596284e4e38703171a81a0abc9867e27aee5f64d652b4de7",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.png",
+      "pngSha256": "4f816631d77d8155d1de27458582ebea73fcf164eee6c86884903c185482e181",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "8423d2169e3d68a672504c1531a74e41a6836a3e7cd04e4019b8894930996fe0",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-390-light",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.png",
+      "pngSha256": "489b4bb2394a4991d6a0b828db9a1fac0c6a75162f1477fdf3c9ad84ea9c3065",
+      "dimensions": [
+        390,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/reference.aria.yml",
+      "ariaSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.png",
+      "pngSha256": "0edd9270385fa75225c47689f8332f17971931b3ef6bfc1f2e9c41ac9adc3384",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "196d4986cbfb461fe5d28cb695419c268fe903bfde789008eb9533266a3e568b",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.png",
+      "pngSha256": "c71e2f0afe66034963765bd3c7c6cc34442b8fce7a100687eb25457610dca0b2",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "cc179c57bf277c2b1dcf46c516578405c286768fedd5420858f95f6e595ffd83",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.png",
+      "pngSha256": "65738169e10f4fa11b86b2d508dd68c99f33b11c6f5b3f83cb4da2acb1e72610",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "3b8d27ad940d878121f78b2d181a5265cdc4c41c2c9a40a36dfdbdebfe3b06c0",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "708987818034d7c9bed8eb85a17cbd5b722504f2fb4560520743cd903ff5ad1a",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "19ce6f824f1b285b7bcc204b9052d5899f7a94125e6c82991c35f633a1449ce4",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.png",
+      "pngSha256": "09980b477d96de925ae35465dce61c51f1c93fa90412f6d76ac37183e150133d",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "1922b904e8ae5954aea32531b09077255637e71e0f8072646ad03acc098934e0",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.png",
+      "pngSha256": "03c437e702a0ea4778897d2403ee9f272b48d247669aa70d4686faa13839dfb9",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "ccfb925a6d9d22ce7b0355802dfd9b331394013c398e37087c99d95646753424",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.png",
+      "pngSha256": "a9bb7b48d5a77fc507cec3c018aecfcc10ce5b4414dbbaf2376f34be53712b8d",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "f610ab6f56b62d01c1eb1eb7fbcda06d19336a7d0971c086786b37fca9429a83",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "16089dff8e2754108182f12e36972c51c97ffd5d693d5cf7e723f374be10dac1",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "5a552241442dd584b10b56500aeef99189f0b2fe5eec4661eb0406698b6c979a",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.png",
+      "pngSha256": "39be40226987bdf4666876dafd79b1a3363dbac72740004c0e2f5942c857e34c",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "77a292fe998254a7559711f9044eea459205d7eefa9a944077c8720d65b6137d",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.png",
+      "pngSha256": "c57bafebbdeb0bcfa72dc1f0b143c5b066f5af41141cb193e75a4ecc3cdd881a",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "450caaa36e7c5294d3df3b6b192da8c5f8efb88acae63334803e0d6bd2e210b3",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-dark",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.png",
+      "pngSha256": "9e31e8630d488423ded91c7d3f9b820a63f08725c85672ebff567efa8be4bf95",
+      "dimensions": [
+        360,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/reference.aria.yml",
+      "ariaSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-approval-before-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.png",
+      "pngSha256": "8e81f0bb829cff5866aaec10351fc22f3f2a11a4fe02224e7fa89fe4d1e925da",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-before-restart.aria.yml",
+      "ariaSha256": "8ccd2ed02dcb78fe564112a05012248c4e3d24deb04f2e5a031b8841a61cb511",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": true,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-approval-consumed",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.png",
+      "pngSha256": "76c2dcca35b5526f65183ebc0358d42f0c147a9ecbdcab657fe62b6286e1c733",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-consumed.aria.yml",
+      "ariaSha256": "a52a0cb09105816b15e22f1aa150866491658276b727f640c1e4b0aaaf050ea2",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-approval-restored",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.png",
+      "pngSha256": "76438d2b1ad4455f34b36b0d89a87ef1a7df04d6a6b67ac37533b26398b41666",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-restored.aria.yml",
+      "ariaSha256": "9fc69cc532eefd352c21c9ccb6d20fc5d46386a8f4eb19bcf2f62c27c9b56024",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-approval-retained-after-restart",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.png",
+      "pngSha256": "87dab113f68610478d16a9956bdd235f86e3d1ad82d0081fc4cf77405f1eca23",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-approval-retained-after-restart.aria.yml",
+      "ariaSha256": "c3f7df1543936c01db0e9cb3a1073c50355dffdf6f18b275867c623efdd65c79",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-duplicate-delivery",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.png",
+      "pngSha256": "148f1fd62a3eadee7666bc24a9e10ebbf09cbc984dd166c07a33fe8fd0c2e970",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-duplicate-delivery.aria.yml",
+      "ariaSha256": "7245068c44a3439d03154e27c734442f0902643862371b63230e909442ab311b",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-history-recovered",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.png",
+      "pngSha256": "c1c494a7f5445f74190f9d94a3ace657a9fb60759ad71d331607467b90db6100",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-recovered.aria.yml",
+      "ariaSha256": "990f599ffec9dfa05b5a9c2b5242ac31decf06a34656fe03824d0bbe29091349",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-history-stale",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.png",
+      "pngSha256": "63769d4969fbcb529b198548480e4435c86ce538130a887248b898a5e0a89ea5",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-history-stale.aria.yml",
+      "ariaSha256": "2cd6f1f3cd6ee11fd393a0fbd8af2260007790a721b5da6652e2ef094922e91e",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": true,
+        "stale": true,
+        "retry": true,
+        "live": false
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-passive-expiry-journal",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.png",
+      "pngSha256": "76f398cdb0f7535b46c5538dd2a21e556012559f1c58a2332a91277687157e3e",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry-journal.aria.yml",
+      "ariaSha256": "14e9eaa94be2cebc7477d802e4875ea5bf4383aa4342d3ebb6854696b3d54a2e",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-passive-expiry",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.png",
+      "pngSha256": "957cccb7b0f349918b1351018f389012dc5d465e3e1322f2afbb13e99fec6818",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-passive-expiry.aria.yml",
+      "ariaSha256": "887df0f9ef7dcb09a8aeccfe9f3b1695529c8fa8b033bb14f7d2fe9ddada70ce",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": true,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "diagnostics-single-consumption",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.png",
+      "pngSha256": "d109708f6404e28c819adf7c5341072e8e1330a9dec70f20c949465af6dbeb63",
+      "dimensions": [
+        320,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/diagnostics-single-consumption.aria.yml",
+      "ariaSha256": "fd96e8956ec439a4a7a4ab12d0f8b425dee77c2e5d3886b753fe58bbe9ee3383",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": true,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": true
+      }
+    },
+    {
+      "project": "narrow-light",
+      "capture": "reference",
+      "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+      "pngPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.png",
+      "pngSha256": "b5abef35b33817df9679c026ea926044001735e454ed15360203db514d182897",
+      "dimensions": [
+        360,
+        900
+      ],
+      "ariaPath": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/reference.aria.yml",
+      "ariaSha256": "81208a1fd17796ea6f67cacf6a5ffcf945595833c15cf0a2c7e819b8667fa603",
+      "actualPngOpened": true,
+      "ariaRead": true,
+      "visualDisposition": "readable-purpose-verified",
+      "semantics": {
+        "lifecycleLoading": false,
+        "activeEligible": false,
+        "activeExpired": false,
+        "consumed": false,
+        "duplicateHeading": false,
+        "stale": false,
+        "retry": false,
+        "live": false
+      }
+    }
+  ],
+  "traces": [
+    {
+      "project": "desktop-dark",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-dark/trace.zip",
+      "sha256": "f988488d77a2f7e60b1779581e1ab7e349b45c246688ce9623ac21a14aca10c5",
+      "members": 1731,
+      "recordsParsed": 6918,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 840,
+        "after": 840,
+        "event": 1,
+        "frame-snapshot": 323,
+        "log": 1427,
+        "screencast-frame": 878,
+        "input": 27,
+        "console": 74,
+        "resource-snapshot": 2506
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    },
+    {
+      "project": "desktop-light",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-desktop-light/trace.zip",
+      "sha256": "9d84c617323bbde693750957abe94f6f168ed3ca40e5098b65143261676682d7",
+      "members": 1615,
+      "recordsParsed": 6901,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 859,
+        "after": 859,
+        "event": 1,
+        "frame-snapshot": 322,
+        "log": 1484,
+        "screencast-frame": 759,
+        "input": 26,
+        "console": 73,
+        "resource-snapshot": 2516
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    },
+    {
+      "project": "narrow-390-dark",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-dark/trace.zip",
+      "sha256": "8544dc5996c7253be20a1f856a5952be0bdddaa98733c1c23ba3f35b902621ef",
+      "members": 1728,
+      "recordsParsed": 7078,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 890,
+        "after": 890,
+        "event": 1,
+        "frame-snapshot": 343,
+        "log": 1466,
+        "screencast-frame": 870,
+        "input": 26,
+        "console": 74,
+        "resource-snapshot": 2516
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    },
+    {
+      "project": "narrow-390-light",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-390-light/trace.zip",
+      "sha256": "f2ad571fa2c5be3def466b06d118b765e532f665427e1324c3e5a7ec5e208f56",
+      "members": 1597,
+      "recordsParsed": 6934,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 881,
+        "after": 881,
+        "event": 1,
+        "frame-snapshot": 344,
+        "log": 1458,
+        "screencast-frame": 736,
+        "input": 26,
+        "console": 76,
+        "resource-snapshot": 2529
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    },
+    {
+      "project": "narrow-dark",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-dark/trace.zip",
+      "sha256": "72466aca76c63e68d1f785fde5c6cc3d7d6375e7eaf790e5d03a79ab42bdd878",
+      "members": 1750,
+      "recordsParsed": 7129,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 888,
+        "after": 888,
+        "event": 1,
+        "frame-snapshot": 346,
+        "log": 1470,
+        "screencast-frame": 870,
+        "input": 26,
+        "console": 75,
+        "resource-snapshot": 2563
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    },
+    {
+      "project": "narrow-light",
+      "path": "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-diagnostics-3982b1c6-20261122-a1/results/journeys-timeline-durable-diagnostics-and-process-restart-narrow-light/trace.zip",
+      "sha256": "9b35dac7d5b2b6128d85d64ce62830cebba63d3c429628087d6085c9f76f1519",
+      "members": 1573,
+      "recordsParsed": 6882,
+      "recordTypes": {
+        "context-options": 2,
+        "before": 882,
+        "after": 882,
+        "event": 1,
+        "frame-snapshot": 346,
+        "log": 1447,
+        "screencast-frame": 746,
+        "input": 26,
+        "console": 73,
+        "resource-snapshot": 2477
+      },
+      "canonicalPngsByteBound": 11,
+      "expectedPngs": 11,
+      "interactiveSanitizedDownloadReopening": "pending final artifact"
+    }
+  ]
+}

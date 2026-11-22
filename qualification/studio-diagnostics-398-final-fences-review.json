@@ -1,0 +1,77 @@
+{
+  "sourceSha": "3982b1c60a4029985272cf412a959eb20c28bc71",
+  "dirty": false,
+  "cases": 6,
+  "attempts": 6,
+  "statuses": [
+    "passed",
+    "passed",
+    "passed",
+    "passed",
+    "passed",
+    "passed"
+  ],
+  "retries": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "stats": {
+    "startTime": "2026-11-22T08:14:58.687Z",
+    "duration": 306440.452,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "hostExitCodes": {
+    "backend": 0,
+    "studio": 0,
+    "backend-generation-1": 0,
+    "backend-generation-2": 0,
+    "backend-generation-3": 0,
+    "backend-generation-4": 0,
+    "backend-generation-5": 0,
+    "backend-generation-6": 0,
+    "backend-generation-7": 0,
+    "backend-generation-8": 0,
+    "backend-generation-9": 0,
+    "backend-generation-10": 0,
+    "backend-generation-11": 0,
+    "backend-generation-12": 0,
+    "backend-generation-13": 0,
+    "backend-generation-14": 0,
+    "backend-generation-15": 0,
+    "backend-generation-16": 0,
+    "backend-generation-17": 0,
+    "backend-generation-18": 0
+  },
+  "rootRemoved": true,
+  "observer": {
+    "runnerReturned": true,
+    "accepted": true,
+    "sourceFence": true,
+    "driverFence": true,
+    "cleanupFence": true,
+    "inspectionErrors": 0,
+    "errors": []
+  },
+  "sourceBefore": [
+    "3982b1c60a4029985272cf412a959eb20c28bc71",
+    ""
+  ],
+  "sourceAfter": [
+    "3982b1c60a4029985272cf412a959eb20c28bc71",
+    ""
+  ],
+  "all20ObservedReturnCodesZero": true,
+  "all20ObservedGroupsGone": true,
+  "rawHashes": {
+    "report.json": "b430f72c04f614bbaf1f0c0e2c9f51690a5e2512b0097d9dd5a48685a03104bc",
+    "playwright.json": "848d8889630a89640b2817222d1fadbf705baf8d9baebc151e0d771484a53835",
+    "store-observation.json": "37e6bbfca1d5a3c5ba6770050588d2a3fc0c8132bb51b5e6899f968e0617c81a"
+  }
+}

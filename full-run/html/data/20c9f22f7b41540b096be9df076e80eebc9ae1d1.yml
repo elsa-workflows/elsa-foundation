@@ -1,0 +1,329 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · 15NzqeDlWaI
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: history-reader"'
+- tablist "Open screens":
+  - tab "Run 01a20301… · Execution" [selected]: Run 01a20301…
+- button "New tab"
+- button "All tabs (1)"
+- main:
+  - tabpanel "Run 01a20301… · Execution":
+    - group "Run workspace actions":
+      - heading "Run · 15NzqeDlWaI" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 4 · WriteLine
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - status: Activity definitions are not available with your permissions. Activity labels and input descriptions may be limited.
+    - heading "15NzqeDlWaI" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 0s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - complementary "Selected recorded observation":
+        - paragraph: The selected observation is outside the currently shown events. Filters and loaded history are unchanged.
+        - 'button "Activity scheduled · WriteLine · #9 · 12:26:12" [pressed]'
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 32 shown · 46 loaded · 46 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "12:26:12 Run started Running":
+            - time: 12:26:12
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "12:26:12 Durable state recorded":
+            - time: 12:26:12
+            - strong: Durable state recorded
+        - listitem:
+          - button "12:26:12 Activity started Flowchart Running":
+            - time: 12:26:12
+            - strong: Activity started
+            - text: Flowchart Running
+        - listitem:
+          - button "12:26:12 Activity callback started Flowchart":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity callback returned a result Flowchart Defer":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "12:26:12 Continuation waiting Flowchart":
+            - time: 12:26:12
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity started WriteLine Running":
+            - time: 12:26:12
+            - strong: Activity started
+            - text: WriteLine Running
+        - listitem:
+          - button "12:26:12 Activity callback started WriteLine":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity callback returned a result WriteLine Complete":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: WriteLine Complete
+        - listitem:
+          - button "12:26:12 Continuation completed WriteLine":
+            - time: 12:26:12
+            - strong: Continuation completed
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity completed WriteLine Completed":
+            - time: 12:26:12
+            - strong: Activity completed
+            - text: WriteLine Completed
+        - listitem:
+          - button "12:26:12 Activity callback started Flowchart":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity callback returned a result Flowchart Defer":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "12:26:12 Continuation waiting Flowchart":
+            - time: 12:26:12
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity started WriteLine Running":
+            - time: 12:26:12
+            - strong: Activity started
+            - text: WriteLine Running
+        - listitem:
+          - button "12:26:12 Activity callback started WriteLine":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity callback returned a result WriteLine Complete":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: WriteLine Complete
+        - listitem:
+          - button "12:26:12 Continuation completed WriteLine":
+            - time: 12:26:12
+            - strong: Continuation completed
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity completed WriteLine Completed":
+            - time: 12:26:12
+            - strong: Activity completed
+            - text: WriteLine Completed
+        - listitem:
+          - button "12:26:12 Activity callback started Flowchart":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity callback returned a result Flowchart Defer":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "12:26:12 Continuation waiting Flowchart":
+            - time: 12:26:12
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity started WriteLine Running":
+            - time: 12:26:12
+            - strong: Activity started
+            - text: WriteLine Running
+        - listitem:
+          - button "12:26:12 Activity callback started WriteLine":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity callback returned a result WriteLine Complete":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: WriteLine Complete
+        - listitem:
+          - button "12:26:12 Continuation completed WriteLine":
+            - time: 12:26:12
+            - strong: Continuation completed
+            - text: WriteLine
+        - listitem:
+          - button "12:26:12 Activity completed WriteLine Completed":
+            - time: 12:26:12
+            - strong: Activity completed
+            - text: WriteLine Completed
+        - listitem:
+          - button "12:26:12 Activity callback started Flowchart":
+            - time: 12:26:12
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity callback returned a result Flowchart Complete":
+            - time: 12:26:12
+            - strong: Activity callback returned a result
+            - text: Flowchart Complete
+        - listitem:
+          - button "12:26:12 Continuation completed Flowchart":
+            - time: 12:26:12
+            - strong: Continuation completed
+            - text: Flowchart
+        - listitem:
+          - button "12:26:12 Activity completed Flowchart Completed":
+            - time: 12:26:12
+            - strong: Activity completed
+            - text: Flowchart Completed
+        - listitem:
+          - button "12:26:12 Run completed Completed":
+            - time: 12:26:12
+            - strong: Run completed
+            - text: Completed
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Activity scheduled" [level=3]
+        - paragraph: Committed runtime transition
+        - term: Recorded position
+        - definition:
+          - text: "9"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 12:26:12 PM · 2026-11-22T11:26:12.518269+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Recorded status
+        - definition:
+          - text: Scheduled
+          - button "Copy recorded status":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: first
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - group: Technical details
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

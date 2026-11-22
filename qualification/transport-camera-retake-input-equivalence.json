@@ -1,0 +1,10 @@
+{
+  "qualifiedFull48Head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+  "transportRetakeHead": "1086a9dd93a9e0c84c5fb98b80dcf29855ed7e17",
+  "onlyChangedPath": "Studio/tests/acceptance/activityPlaybackJourney.ts",
+  "change": "Exactly two readiness text selectors; all source/asset/build/dependency inputs and all other acceptance code byte-identical",
+  "beforeBlobSha256": "6c4b348dd99b4e2b5272e32a36682e1e0603edc5e0b5cb6d5fb1c6b2bcbfce2e",
+  "afterBlobSha256": "0754051990ed2ca3213f5db34d31f84c7dcb7e0bd5cbfa7f24339f6d0cafc1f3",
+  "allOtherTreeSha256": "6c586a0c319476732be93680199fd87ee77ae9919dcc535478ec69d6ee8c4181",
+  "diffSha256": "dac74386ce53bd9e7937fb21605e0125044ae3c5db9f9cfc494073ce9be666c3"
+}

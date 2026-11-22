@@ -1,0 +1,16 @@
+{
+  "review": "R41",
+  "exact_head": "3982b1c60a4029985272cf412a959eb20c28bc71",
+  "previous_reviewed_head": "45888e0988e6e6863b80d31447137ef36e0e0252",
+  "actual_main_base": "5479729406c068a3591193a69d7f492d76347d58",
+  "diff_stat": "1 file changed, 26 insertions(+), 11 deletions(-)",
+  "only_changed_file": "Studio/tests/acceptance/timelineDiagnosticsJourney.ts",
+  "all_other_tree_entries_sha256": "8ee11cb4bae859c757c7ce59b91bce1abc409d3ac619580d96266dd406916247",
+  "all_other_tree_entries_identical": true,
+  "diff_sha256": "d011ff1668d2139797230ee24cbbb393e17c7c41352dd15f89ab866a7df8931d",
+  "findings": [],
+  "source_only": true,
+  "no_builds_dotnet_playwright_tests_edits_peer_reports": true,
+  "new66_capture_visual_approval": false,
+  "final54_case_artifact_approval": false
+}

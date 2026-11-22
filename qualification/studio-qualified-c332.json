@@ -1,0 +1,212 @@
+{
+  "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+  "checks": [
+    {
+      "check": "workflows",
+      "sourceStart": {
+        "utc": "2026-11-22T05:44:07.709627+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "command": [
+          "pnpm",
+          "--filter",
+          "@elsa-workflows/studio-workflows",
+          "test",
+          "--reporter=json",
+          "--outputFile=/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-workflows-v5-a7.json"
+        ]
+      },
+      "sourceEnd": {
+        "utc": "2026-11-22T05:44:46.475574+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "exitCode": 0
+      },
+      "log": "studio-current-owning/workflows-v5-a7.log",
+      "sha256": "9aa0cf0a3c1a7d50d4a169924f5bd9ef0a2394fbaaea431183f1409cb218cf93"
+    },
+    {
+      "check": "browser",
+      "sourceStart": {
+        "utc": "2026-11-22T05:44:07.709614+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "command": [
+          "pnpm",
+          "exec",
+          "playwright",
+          "test",
+          "--config",
+          "/Users/sipke/.codex/recoveries/3849-delivery-2026-11-21/studio-current-owning/browser-v5-a9.config.mts"
+        ]
+      },
+      "sourceEnd": {
+        "utc": "2026-11-22T05:45:52.408975+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "exitCode": 0
+      },
+      "log": "studio-current-owning/browser-v5-a9.log",
+      "sha256": "0a522a25792dea0271a1483036b808df9ba30420f544d574b9b22b3d21f137e6"
+    },
+    {
+      "check": "workspaceTypeScript",
+      "sourceStart": {
+        "utc": "2026-11-22T05:44:07.710583+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "command": [
+          "pnpm",
+          "typecheck"
+        ]
+      },
+      "sourceEnd": {
+        "utc": "2026-11-22T05:44:46.009787+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "exitCode": 0
+      },
+      "log": "studio-current-owning/typecheck-v5-a7.log",
+      "sha256": "0865666a7bc68704cc0de4425317b748a030e0e233b21dea97e9c78093cb18f7"
+    },
+    {
+      "check": "bundle",
+      "sourceStart": {
+        "utc": "2026-11-22T05:44:07.710949+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "command": [
+          "pnpm",
+          "check:bundle:workflows"
+        ]
+      },
+      "sourceEnd": {
+        "utc": "2026-11-22T05:44:16.821124+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "exitCode": 0
+      },
+      "log": "studio-current-owning/bundle-v5-a7.log",
+      "sha256": "36ceeac57e44a3e7ef108c4fd64e0e6e48895816186a62a3d6c57a9cfe48243f"
+    },
+    {
+      "check": "eslint",
+      "sourceStart": {
+        "utc": "2026-11-22T05:44:07.713419+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "command": [
+          "pnpm",
+          "exec",
+          "eslint",
+          "--config",
+          "eslint.config.js",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/ReadOnlyWorkflowSequence.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/WorkflowInstanceDetailsLayout.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlayback.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPlaybackApi.test.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/attachedExecutionSelection.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/module.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/routeRenderingHelpers.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryApi.test.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryFixtures.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryInspection.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryLocation.test.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryObservation.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/runtimeHistoryResource.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowActivityExecutionDetails.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowWeaver.test.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/activityPlayback.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/api/runtimeHistory.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPlaybackControls.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ReadOnlyWorkflowSequence.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowActivityExecutionDetails.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityPlaybackModel.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/executableRunHelpers.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/prepareAttachedExecution.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/HistoryInspection.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/HistoryValueInspection.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/RunHistorySummary.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/RunHistoryTimeline.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/historyLocation.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/historyPresentation.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/useHistoryResource.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/useRunHistory.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useActivityPlayback.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useExecutableWorkflowRun.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/activityPlaybackJourney.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/expectQualifiedTimelineCoverage.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/historyOccurrenceQualificationJourney.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/journeys.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/nativeHistoryOwnersJourney.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/rangePosition.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/timelineSelectionJourney.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/timerHistoryJourney.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/acceptance/waitCapturedPlaybackReady.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/activity-definitions.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/activity-playback.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/activityDuplicateEditorFixture.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/activityPlaybackFixture.tsx",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/executionDetails.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/instance-live-canvas.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/iteration-inspection.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/playwright.activity-playback.config.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/playwright.outlined-fields.config.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/timeline-selection.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/timeline-workspace-layout.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/typings/playback-node-url.d.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/unified-execution-accessibility.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/vite.config.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/vite.outlined-fields.config.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/workflow-run-detail-layout.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/workspace-appearance.spec.ts",
+          "/Users/sipke/.codex/worktrees/playback-studio-integration/elsa-foundation/Studio/tests/browser/workspaceAppearanceFixture.tsx"
+        ]
+      },
+      "sourceEnd": {
+        "utc": "2026-11-22T05:44:12.582093+00:00",
+        "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+        "status": "",
+        "exitCode": 0
+      },
+      "log": "studio-current-owning/eslint-v5-a5.log",
+      "sha256": "4e4c4fa17f53af3579fdf96dcadf18bce8886da7af38e23ffb1abd18cf510c02"
+    }
+  ],
+  "workflows": {
+    "numTotalTests": 5058,
+    "numPassedTests": 5058,
+    "numFailedTests": 0,
+    "numPendingTests": 0
+  },
+  "browser": {
+    "startTime": "2026-11-22T05:44:08.494Z",
+    "duration": 103895.55099999999,
+    "expected": 66,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "inputTree": {
+    "head": "c332f177bbf3a90ff24a77fb66f59bb1c836723f",
+    "method": "git ls-tree -r -z HEAD; omit only specs1211 and1226; preserve modes, blob IDs and paths in tree order",
+    "entries": 19744,
+    "sha256": "05034e08081aa478c6445f2fb95cd47443d8b0c6ee7cd68684fc716f53d8cd65"
+  },
+  "hostingEarlierWhole": {
+    "testedHead": "2cb9cbd39d767d2d1179cff855ac0b552d928266",
+    "passed": 1228,
+    "pending": 0,
+    "note": "Earlier exact-head evidence; no restamp; verify unchanged owning inputs."
+  },
+  "cssEarlier": {
+    "testedHead": "419b247bd49609f1268cb97277e20e0f4e101244",
+    "check": "stylelint-v5-a3",
+    "note": "All three CSS files unchanged through c332"
+  }
+}

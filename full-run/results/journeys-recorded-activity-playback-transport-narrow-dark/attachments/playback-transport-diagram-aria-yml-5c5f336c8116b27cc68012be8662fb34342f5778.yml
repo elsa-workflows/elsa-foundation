@@ -1,0 +1,150 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Playback narrow-dark 4dbe9d20
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Playback narrow-dark 4dbe9d20 · Execution" [selected]: Run · Playback narrow-dark 4dbe9d20
+  - tab "Home"
+- button "New tab"
+- button "All tabs (3)"
+- main:
+  - tabpanel "Run · Playback narrow-dark 4dbe9d20 · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Playback narrow-dark 4dbe9d20" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline"
+      - button "Diagram" [pressed]
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 4 of 9 · For Each
+      - text: Activity position
+      - slider "Activity position": "3"
+      - group:
+        - text: Playback options Presentation pace
+        - combobox "Playback speed":
+          - option "0.5×"
+          - option "1×" [selected]
+          - option "2×"
+          - option "4×"
+        - paragraph: Recorded order · 1× = one activity step per second
+        - paragraph: First observed 11/22/26, 9:42:32 AM
+        - group: "Recorded playback range · through #106"
+    - region "Workflow run canvas":
+      - navigation "Execution scope":
+        - button "All executions"
+        - button "Sequence":
+          - img
+          - text: Sequence
+      - paragraph: Diagram shows the latest observed state of this execution context. Selecting a history event does not rewind it.
+      - text: Sequence · runs top to bottom
+      - button "Preview activities"
+      - list "Sequence steps":
+        - listitem:
+          - button "1. If": If Control Flow true
+          - button "Open Then, 1 activity": Then 1 activity
+          - button "Open Else, 1 activity": Else 1 activity
+          - text: Completed
+        - listitem:
+          - button "2. For Each" [pressed]: For Each Control Flow
+          - button "Open Body, 1 activity": Body 1 activity
+          - text: Completed
+        - listitem:
+          - button "3. Parallel": Parallel Control Flow
+          - button "Open left, 1 activity": left 1 activity
+          - button "Open right, 1 activity": right 1 activity
+          - text: Completed
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

@@ -1,0 +1,32 @@
+{
+  "review": "Studio correctness R44",
+  "base": "45888e0988e6e6863b80d31447137ef36e0e0252",
+  "head": "3982b1c60a4029985272cf412a959eb20c28bc71",
+  "clean": true,
+  "mode": "Read-only source review; no tests/builds/.NET/peer reports",
+  "treeEntryCountBefore": 19771,
+  "treeEntryCountAfter": 19771,
+  "changedPaths": [
+    "Studio/tests/acceptance/timelineDiagnosticsJourney.ts"
+  ],
+  "allOtherTreeEntriesIdentical": true,
+  "diffNumstat": "26\t11\tStudio/tests/acceptance/timelineDiagnosticsJourney.ts",
+  "files": {
+    "Studio/tests/acceptance/timelineDiagnosticsJourney.ts": {
+      "gitObject": "ea4656d2af0dee93812743a0193d072687e39999",
+      "sha256": "e5befa770bb287827be50c2c5d8efef599565d840efcf841904ef8dc0e1fb584"
+    },
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/HistoryInspection.tsx": {
+      "gitObject": "7471194dedba53266decf4e527f29160fda3dae1",
+      "sha256": "39118d5fecde0713e6df6a88996ebd56049f3e8a3a8d91a2c5ec0d0d5ebb16ba"
+    },
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/RunHistoryTimeline.tsx": {
+      "gitObject": "66037a136b89c391a93a49eb410bd51f439806b8",
+      "sha256": "8c58fc4382375d733c9a0f1828a35d077342ff0a5944ea5182f8c74cb805fd17"
+    },
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/run-history/historyPresentation.tsx": {
+      "gitObject": "8ae5df14635872a38decb5bbec711aa928032ce1",
+      "sha256": "fb4d3a2dc6314caee3ce7f654076bdc7d6129e4a7e3d15f4917d16d3e54937ae"
+    }
+  }
+}

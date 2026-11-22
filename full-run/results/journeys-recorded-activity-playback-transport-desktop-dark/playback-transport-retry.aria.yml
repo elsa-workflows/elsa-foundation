@@ -1,0 +1,298 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:51579
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Playback desktop-dark dfe06a5e
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light"
+    - radio "Dark" [checked]
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Run · Playback desktop-dark 73d725fe · Execution": Run · Playback desktop-dark 73d725fe Execution
+  - tab "Home"
+  - tab "Run · Playback desktop-dark 73d725fe · Execution": Run · Playback desktop-dark 73d725fe Execution
+  - tab "Run · Playback desktop-dark dfe06a5e · Execution" [selected]: Run · Playback desktop-dark dfe06a5e Execution
+- button "New tab"
+- button "All tabs (5)"
+- main:
+  - tabpanel "Run · Playback desktop-dark dfe06a5e · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Playback desktop-dark dfe06a5e" [level=2]
+      - text: Running
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run End of available segment
+      - group "Playback controls":
+        - button "Previous"
+        - button "Replay"
+        - button "Next" [disabled]
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 2 · Fault
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - heading "Playback desktop-dark dfe06a5e" [level=2]
+    - text: Running
+    - paragraph: Elapsed 6s at last observation. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 16 shown · 22 loaded · 22 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "07:52:57 Run started Running Recorded position 1":
+            - time: 07:52:57
+            - strong: Run started
+            - text: "Running #1"
+        - listitem:
+          - button "07:52:57 Activity started Fault Running Recorded position 3":
+            - time: 07:52:57
+            - strong: Activity started
+            - text: "Fault Running #3"
+        - listitem:
+          - button "07:52:57 Activity callback started Fault Recorded position 9":
+            - time: 07:52:57
+            - strong: Activity callback started
+            - text: "Fault #9"
+        - listitem:
+          - button "07:52:57 Activity callback returned a result Fault Fault Recorded position 10":
+            - time: 07:52:57
+            - strong: Activity callback returned a result
+            - text: "Fault Fault #10"
+        - listitem:
+          - button "07:52:57 Continuation faulted Fault Recorded position 11":
+            - time: 07:52:57
+            - strong: Continuation faulted
+            - text: "Fault #11"
+        - listitem:
+          - button "07:52:57 Activity faulted Fault Faulted Recorded position 12":
+            - time: 07:52:57
+            - strong: Activity faulted
+            - text: "Fault Faulted #12"
+        - listitem:
+          - button "07:52:57 Incident recorded Fault Blocking Recorded position 13":
+            - time: 07:52:57
+            - strong: Incident recorded
+            - text: "Fault Blocking #13"
+        - listitem:
+          - button "07:52:57 Incident strategy evaluated Fault Blocking WaitForIntervention Recorded position 14":
+            - time: 07:52:57
+            - strong: Incident strategy evaluated
+            - text: "Fault Blocking WaitForIntervention #14"
+        - listitem:
+          - button "07:52:57 Incident strategy decisions applied Recorded position 15":
+            - time: 07:52:57
+            - strong: Incident strategy decisions applied
+            - text: "#15"
+        - listitem:
+          - button "07:53:02 Control applied Fault operator-retry Recorded position 16":
+            - time: 07:53:02
+            - strong: Control applied
+            - text: "Fault operator-retry #16"
+        - listitem:
+          - button "07:53:02 Activity retry scheduled Fault operator-retry Recorded position 17":
+            - time: 07:53:02
+            - strong: Activity retry scheduled
+            - text: "Fault operator-retry #17"
+        - listitem:
+          - button "07:53:02 Control applied Fault successor-started Recorded position 18":
+            - time: 07:53:02
+            - strong: Control applied
+            - text: "Fault successor-started #18"
+        - listitem:
+          - button "07:53:02 Run alteration applied succeeded Recorded position 19":
+            - time: 07:53:02
+            - strong: Run alteration applied
+            - text: "succeeded #19"
+        - listitem:
+          - button "07:53:02 Activity started Fault Running Recorded position 20":
+            - time: 07:53:02
+            - strong: Activity started
+            - text: "Fault Running #20"
+        - listitem:
+          - button "07:53:02 Incident resolved Fault Resolved Recorded position 21":
+            - time: 07:53:02
+            - strong: Incident resolved
+            - text: "Fault Resolved #21"
+        - listitem:
+          - button "07:53:02 Run alteration recorded Recorded position 22":
+            - time: 07:53:02
+            - strong: Run alteration recorded
+            - text: "#22"
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues (1)"
+        - tab "Details"
+      - text: Selected activity
+      - heading "Fault" [level=4]
+      - button "Copy activity name":
+        - img
+      - text: Fault v1.0.0 Running
+      - button "Copy activity status":
+        - img
+      - region "Activity executions":
+        - button "Previous activity execution":
+          - img
+        - button "Execution 2 of 2":
+          - text: Execution 2 of 2
+          - img
+        - button "Next activity execution" [disabled]:
+          - img
+      - tablist "Activity execution views":
+        - tab "Journal"
+        - tab "Bookmarks"
+        - tab "Data" [selected]
+      - tablist "Activity execution details":
+        - tab "Overview" [selected]
+        - tab "Inputs"
+        - tab "Outputs"
+      - tabpanel "Overview":
+        - term: Started
+        - definition:
+          - text: 11/22/2026, 7:53:02 AM
+          - button "Copy start time":
+            - img
+        - term: Duration
+        - definition:
+          - text: Unknown
+          - button "Copy duration":
+            - img
+        - term: Incidents
+        - definition:
+          - text: "0"
+          - button "Copy incident count":
+            - img
+        - heading "Outcomes" [level=4]
+        - text: No records
+        - paragraph: No runtime outcomes were recorded for this execution.
+        - group:
+          - text: Execution details 5 values
+          - term: Activity Execution ID
+          - definition:
+            - code: e5a48191be76e809:alteration-retry:0:01a2020787fc7eaaa1d891a9d528a546
+            - button "Copy activity execution ID":
+              - img
+          - term: Authored Activity ID
+          - definition:
+            - code: held-fault
+            - button "Copy authored activity ID":
+              - img
+          - term: Activity type
+          - definition:
+            - code: Elsa.Activities.Primitives.Activities.Fault@1.0.0+c332f177bbf3a90ff24a77fb66f59bb1c836723f
+            - button "Copy activity type":
+              - img
+          - term: Completed
+          - definition
+          - term: Current bookmarks
+          - definition:
+            - text: "0"
+            - button "Copy bookmark count":
+              - img
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert
