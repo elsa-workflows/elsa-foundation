@@ -32,6 +32,7 @@ public static class LeaseChecks
         await FoundationMigrationDispatchChecks.Run(Check);
         await ContractStatechartChecks.Run(Check);
         await ContractNativeChecks.Run(Check);
+        await ContractNativeChecks.CheckRecoveryTimers(Check);
         await PassTurnBudgetChecks.Run(Check);
         await TenantPassChecks.Run(Check);
         await ScopeAgeChecks.Run(Check);
