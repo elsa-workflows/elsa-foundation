@@ -66,7 +66,7 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
         {
             try
             {
-                var cursor = JsonSerializer.Deserialize<Cursor>(continuationCodec.Decode(CursorPurpose, token));
+                var cursor = JsonSerializer.Deserialize<Cursor>(continuationCodec.DecodeJson(CursorPurpose, token));
                 if (cursor is null || cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.After != Order(cursor.ExecutionId))
                     throw new FormatException();
                 after = cursor.After;
@@ -82,7 +82,7 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
             var page = await rows.OrderBy(x => x.ExecutionIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken);
             var states = page.Take(request.Limit).Select(x => Read(x, scope, Decode(x.ExecutionId))).ToArray();
             var next = page.Length > request.Limit
-                ? continuationCodec.Encode(CursorPurpose, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Cursor(1, Hash(scope), states[^1].ExecutionId, Order(states[^1].ExecutionId)))))
+                ? continuationCodec.EncodeJson(CursorPurpose, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Cursor(1, Hash(scope), states[^1].ExecutionId, Order(states[^1].ExecutionId)))))
                 : null;
             return new(request, states, next);
         }

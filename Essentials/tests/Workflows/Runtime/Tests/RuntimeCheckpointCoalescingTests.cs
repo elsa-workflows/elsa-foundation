@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Primitives.Models;
@@ -1727,7 +1726,7 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
             WorkflowExecutionId: "wfexec-1",
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
-            Payload: JsonSerializer.SerializeToElement(payload),
+            Payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             Metadata: metadata);
 
         return new(
@@ -1800,8 +1799,8 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
         {
             Binding = binding,
             Cursor = new { LastIdentity = lastIdentity, InnerContinuation = innerContinuation, InnerExhausted = exhausted }
-        });
-        return $"crsp1.{EncodeBase64Url(payload)}.{EncodeBase64Url(SHA256.HashData(payload))}";
+        }, Elsa.Serialization.Core.JsonBaseline.Options);
+        return $"crsp1.{EncodeBase64Url(payload)}.{EncodeBase64Url(Convert.FromHexString(Elsa.Serialization.Core.JsonHashInput.HashUtf8(payload)))}";
     }
 
     private static string DecodeCoalescingContinuationPayload(string token)
@@ -1948,7 +1947,7 @@ public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper o
             expiresAt: Now.AddMinutes(30),
             reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
             metadata: new Dictionary<string, string> { ["customer"] = "northwind" },
-            valueSnapshots: []));
+            valueSnapshots: []), Elsa.Serialization.Core.JsonBaseline.Options);
 
         var command = new WorkflowExecutionCommand(
             CommandId: "command-create-bookmark",

@@ -45,7 +45,7 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
         {
             try
             {
-                var cursor = JsonSerializer.Deserialize<BrowserCursor>(codec.Decode(Purpose, request.Cursor));
+                var cursor = JsonSerializer.Deserialize<BrowserCursor>(codec.DecodeJson(Purpose, request.Cursor));
                 if (cursor is null || cursor.Binding != binding || cursor.Offset < 0) throw new FormatException();
                 offset = cursor.Offset;
             }
@@ -57,7 +57,7 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
         var page = await inspections.BrowseAsync(new ActivityExecutionBrowseQuery(request.WorkflowExecutionId,
             request.Limit, offset, request.ExecutableNodeId, request.ParentActivityExecutionId,
             request.AncestorActivityExecutionId, request.AnchorActivityExecutionId), cancellationToken);
-        string Cursor(long position) => codec.Encode(Purpose, JsonSerializer.SerializeToUtf8Bytes(new BrowserCursor(binding, position)));
+        string Cursor(long position) => codec.EncodeJson(Purpose, JsonSerializer.SerializeToUtf8Bytes(new BrowserCursor(binding, position)));
         return new ActivityExecutionBrowsePageView(page.Items.Select(item => new ActivityExecutionBrowseEntryView(
                 ActivityExecutionInspectionSummaryView.From(item.Execution), item.Position,
                 item.PreviousActivityExecutionId, item.NextActivityExecutionId, ActivityExecutionAttemptView.From(item.Execution.Attempt), item.IterationPosition)).ToArray(),

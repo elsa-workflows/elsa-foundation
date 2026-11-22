@@ -295,6 +295,9 @@ public sealed class BpmnCatalogTests
     }
     private sealed class Codec : IRuntimeRecoveryContinuationCodec
     {
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => ((IRuntimeRecoveryContinuationCodec)this).Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => ((IRuntimeRecoveryContinuationCodec)this).Decode(purpose, token);
+
         private readonly Dictionary<string, (string Purpose, byte[] Bytes)> _values = [];
         public string Encode(string purpose, ReadOnlySpan<byte> payload) { var id = Guid.NewGuid().ToString(); _values[id] = (purpose, payload.ToArray()); return id; }
         public byte[] Decode(string purpose, string token) => _values.TryGetValue(token, out var value) && value.Purpose == purpose ? value.Bytes.ToArray() : throw new ArgumentException("Invalid protected cursor.");

@@ -1014,7 +1014,7 @@ internal sealed partial class EfEtlRuntimeStore(
     {
         var seed = EtlRuntimeRecordCodec.Write(new { Version = "etl-terminal-v1", run.InvocationFingerprint, outcome, diagnostic,
             run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords });
-        return new(HashAscii(seed), outcome, run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords,
+        return new(Elsa.Serialization.Core.JsonHashInput.HashJson(seed), outcome, run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords,
             diagnostic, EtlRuntimeRecordCodec.ReadUtc(now));
     }
 

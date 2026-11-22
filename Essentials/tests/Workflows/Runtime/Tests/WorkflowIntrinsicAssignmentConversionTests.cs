@@ -220,7 +220,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             Now,
             Now,
             1,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 

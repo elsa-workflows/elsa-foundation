@@ -129,7 +129,7 @@ public sealed class SecretInputPathCoverageTests
         // No activity state, so not the boundary's withheld snapshot either, is carried over: the retried execution
         // materializes a fresh snapshot when its scheduled work runs.
         Assert.Empty(commit.StateChanges.ActivityExecutions);
-        var scheduled = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var scheduled = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
         Assert.Empty(activator.Requests);
         Assert.Empty(_resolver.Requests);

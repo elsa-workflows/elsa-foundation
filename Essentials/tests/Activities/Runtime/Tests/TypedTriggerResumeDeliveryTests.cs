@@ -234,7 +234,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 _now.AddSeconds(index),
                 _now.AddSeconds(index),
                 40 + index,
-                JsonSerializer.SerializeToElement(payload),
+                JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 new Dictionary<string, string>(),
                 new Dictionary<string, string>());
 
@@ -496,9 +496,9 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityAttemptClaimed).Commit;
         Assert.Equal(RuntimeStateChangeOperation.Delete, Assert.Single(claimCommit.StateChanges.Bookmarks).Operation);
         var replacementIntent = Assert.Single(commit.PostCommitIntents);
-        var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, replacementWork.CommandKind);
-        Assert.Equal(replacement.RegistrationId, replacementWork.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId);
+        Assert.Equal(replacement.RegistrationId, replacementWork.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!.BookmarkId);
         Assert.True(Assert.Single(activator.Activities).Disposed);
     }
 
@@ -578,7 +578,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             _checkpointWriter.ListCommits(),
             write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityCancelled).Commit;
         Assert.Equal(Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.ActivityCancelled, commit.Checkpoint.Name);
-        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        var cancelWork = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(WorkflowExecutionCommandKind.Cancel, cancelWork.CommandKind);
     }
 

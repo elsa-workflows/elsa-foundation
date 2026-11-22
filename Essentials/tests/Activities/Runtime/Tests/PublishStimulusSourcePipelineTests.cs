@@ -51,7 +51,7 @@ public sealed class PublishStimulusSourcePipelineTests
         Assert.Equal(local ? 1 : 4, harness.Actors.Accepted.Count);
         Assert.All(harness.Actors.Accepted.Where(item => item.Command.Kind == WorkflowExecutionCommandKind.ResumeBookmark), item =>
         {
-            var payload = item.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
+            var payload = item.Command.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
             Assert.NotNull(payload.ExpectedBookmarkResume); Assert.Equal("immutable-value", payload.Input!.Value.GetProperty("value").GetString());
         });
     }

@@ -124,6 +124,8 @@ static Elsa.Serialization.Core.JsonHashInput.SerializeToElement<T>(T value) -> S
 static Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(System.Text.Json.JsonElement value) -> byte[]!
 static Elsa.Serialization.Core.JsonHashInput.HashFramed(System.ReadOnlySpan<byte> frame) -> string!
 static Elsa.Serialization.Core.JsonHashInput.HashKeyed(System.Text.Json.JsonElement value, System.ReadOnlySpan<byte> key) -> byte[]!
+static Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(System.ReadOnlyMemory<byte> json, System.ReadOnlySpan<byte> key) -> byte[]!
+static Elsa.Serialization.Core.JsonHashInput.HashKeyedFramed(System.ReadOnlySpan<byte> frame, System.ReadOnlySpan<byte> key) -> byte[]!
 static Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(object? value, System.Type? type = null) -> System.Text.Json.JsonElement
 static Elsa.Serialization.Core.JsonConversionContract.SerializeToElement<T>(T value) -> System.Text.Json.JsonElement
 static Elsa.Serialization.Core.JsonConversionContract.Serialize(object? value) -> string!

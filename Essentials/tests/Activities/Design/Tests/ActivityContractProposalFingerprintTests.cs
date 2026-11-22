@@ -126,7 +126,7 @@ public sealed class ActivityContractProposalFingerprintTests
         Assert.NotEqual(
             $"sha256:{Convert.ToHexString(SHA256.HashData(legacyBytes)).ToLowerInvariant()}",
             proposal.ProposalFingerprint);
-        Assert.True(proposal.ProposalFingerprint == "pending",
+        Assert.True(proposal.ProposalFingerprint == "sha256:cee7ddc10379839ccd1d16983d272d26ebfd2bd2ec1025c33162b3ca96a68189",
             "First-stable hash freeze: changes require an explicit identity/migration decision. Actual: " + proposal.ProposalFingerprint);
     }
 

@@ -743,7 +743,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             executable,
             executableNodeId: "node-1",
             activityExecutionId: "activity-1",
-            reason: RuntimeStartActivityCommandPayload.ScheduledActivityReason));
+            reason: RuntimeStartActivityCommandPayload.ScheduledActivityReason), Elsa.Serialization.Core.JsonBaseline.Options);
         return NewWorkItem(index, WorkflowExecutionCommandKind.StartActivity, payload);
     }
 

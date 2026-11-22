@@ -123,7 +123,7 @@ public sealed class EtlCursorCodecTests
     private static string Sign(string json, string signingKey)
     {
         var payload = Encoding.UTF8.GetBytes(json);
-        var signature = HMACSHA256.HashData(Encoding.UTF8.GetBytes(signingKey), payload);
+        var signature = Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, Encoding.UTF8.GetBytes(signingKey));
         return $"{EncodeBase64Url(payload)}.{EncodeBase64Url(signature)}";
     }
 

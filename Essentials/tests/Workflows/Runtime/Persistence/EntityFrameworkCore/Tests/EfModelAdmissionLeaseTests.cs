@@ -152,4 +152,7 @@ internal sealed class AdmissionUniqueLeaseManager(IWorkflowExecutableRootWriteLe
 }
 internal sealed class AdmissionStubDrain : IWorkflowSchedulerDrainer { public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest r, CancellationToken t = default) => ValueTask.FromResult(new RuntimeSchedulerDrainResult(r.WorkflowExecutionId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [])); }
 internal sealed class AdmissionAccess : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("default")); }
-internal sealed class AdmissionCodec : IRuntimeRecoveryContinuationCodec { public string Encode(string p, ReadOnlySpan<byte> b) => p + ":" + Convert.ToBase64String(b); public byte[] Decode(string p, string t) => Convert.FromBase64String(t[(p.Length + 1)..]); }
+internal sealed class AdmissionCodec : IRuntimeRecoveryContinuationCodec {
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => ((IRuntimeRecoveryContinuationCodec)this).Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => ((IRuntimeRecoveryContinuationCodec)this).Decode(purpose, token);
+ public string Encode(string p, ReadOnlySpan<byte> b) => p + ":" + Convert.ToBase64String(b); public byte[] Decode(string p, string t) => Convert.FromBase64String(t[(p.Length + 1)..]); }

@@ -575,6 +575,8 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryCandidateSource.SettleAsyn
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryContinuationCodec
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryContinuationCodec.Decode(string! purpose, string! token) -> byte[]!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryContinuationCodec.Encode(string! purpose, System.ReadOnlySpan<byte> payload) -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryContinuationCodec.EncodeJson(string! purpose, System.ReadOnlySpan<byte> payload) -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryContinuationCodec.DecodeJson(string! purpose, string! token) -> byte[]!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryLivenessPageSource
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryLivenessPageSource.ListRecoveryPageAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeRecoveryScanRequest! request, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! query, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.ExecutionLivenessState!>!>
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeRecoveryPagedScanner

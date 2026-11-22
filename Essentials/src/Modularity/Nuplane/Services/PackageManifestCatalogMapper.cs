@@ -22,8 +22,8 @@ public static class PackageManifestCatalogMapper
         if (manifest is null)
             return PackageManifestReadResult.Missing("Package manifest was empty.");
 
-        // Hash the original file bytes (BOM included) so the content identity matches the file on disk.
-        var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        // Catalog content identity includes unknown members, but not BOM, whitespace or JSON spelling.
+        var hash = Elsa.Serialization.Core.JsonHashInput.HashUtf8(StripByteOrderMark(bytes).ToArray());
         return PackageManifestReadResult.Found(path, hash, manifest);
     }
 

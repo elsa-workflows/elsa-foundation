@@ -1106,6 +1106,9 @@ public sealed class EfRuntimeModelCheckpointTests
     }
     private sealed class Codec : IRuntimeRecoveryContinuationCodec
     {
+        public string EncodeJson(string purpose, ReadOnlySpan<byte> payload) => ((IRuntimeRecoveryContinuationCodec)this).Encode(purpose, payload);
+        public byte[] DecodeJson(string purpose, string token) => ((IRuntimeRecoveryContinuationCodec)this).Decode(purpose, token);
+
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => purpose + ":" + Convert.ToBase64String(payload);
         public byte[] Decode(string purpose, string token) => token.StartsWith(purpose + ":", StringComparison.Ordinal)
             ? Convert.FromBase64String(token[(purpose.Length + 1)..]) : throw new FormatException();

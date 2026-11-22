@@ -346,7 +346,7 @@ public sealed class CheckpointRuleViolationWorkflowFaulterTests
             WorkflowExecutionId: executionId,
             Kind: kind,
             EnqueuedAt: Now,
-            Payload: payloadElement ?? JsonSerializer.SerializeToElement(payload),
+            Payload: payloadElement ?? JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             // The mode the start dispatcher decided for the run.
             Metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Ephemeral) });
         return new WorkflowExecutionCommandEnvelope(

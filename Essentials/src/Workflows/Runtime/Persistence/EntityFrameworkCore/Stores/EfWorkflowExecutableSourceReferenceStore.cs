@@ -704,7 +704,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
         return Hash(shape);
     }
 
-    private string EncodeCursor(string binding, string scopeKey, string key, string id) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, binding, scopeKey, key, id))));
+    private string EncodeCursor(string binding, string scopeKey, string key, string id) => continuationCodec.EncodeJson(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, binding, scopeKey, key, id))));
 
     private Cursor? Decode(string? token, string binding)
     {
@@ -712,7 +712,7 @@ public sealed partial class EfWorkflowExecutableSourceReferenceStore(
             return null;
         try
         {
-            var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
+            var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.DecodeJson(ContinuationPurpose, token)));
             if (cursor.Version != 1 || cursor.Binding != binding || string.IsNullOrWhiteSpace(cursor.ScopeKeyOrderKey) || string.IsNullOrWhiteSpace(cursor.Key) || string.IsNullOrWhiteSpace(cursor.Id))
                 throw new FormatException();
             return cursor;

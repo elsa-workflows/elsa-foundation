@@ -1122,6 +1122,8 @@ Elsa.Workflows.Runtime.Services.Pipelines.RuntimeWorkflowExecutionPipeline.Runti
 Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec
 Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec.Decode(string! purpose, string! token) -> byte[]!
 Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec.Encode(string! purpose, System.ReadOnlySpan<byte> payload) -> string!
+Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec.EncodeJson(string! purpose, System.ReadOnlySpan<byte> payload) -> string!
+Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec.DecodeJson(string! purpose, string! token) -> byte[]!
 Elsa.Workflows.Runtime.Services.Recovery.HmacRuntimeRecoveryContinuationCodec.HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.IOptions<Elsa.Workflows.Runtime.Core.Models.RuntimeRecoveryContinuationOptions!>! options) -> void
 Elsa.Workflows.Runtime.Services.Recovery.InMemoryRuntimeRecoveryScanner
 Elsa.Workflows.Runtime.Services.Recovery.InMemoryRuntimeRecoveryScanner.InMemoryRuntimeRecoveryScanner(Elsa.Workflows.Runtime.Core.Contracts.IExecutionLivenessStateStore! operationalStateStore) -> void

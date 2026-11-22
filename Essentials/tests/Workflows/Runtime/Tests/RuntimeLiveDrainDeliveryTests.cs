@@ -158,7 +158,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
                 recordedAt: Now,
                 activityExecutionId: null,
                 idempotencyKey: $"checkpoint:{workItem.WorkItemId}",
-                payload: JsonSerializer.SerializeToElement(workItem)),
+                payload: JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options)),
             status: RuntimePostCommitOutboxStatus.Pending,
             recordedAt: Now,
             availableAt: Now);

@@ -2729,3 +2729,5 @@ export class StudioHttpError extends Error {
     this.name = "StudioHttpError";
   }
 }
+export { canonicalJsonText, canonicalJsonValue, hashJson, hashJsonText, hashJsonTextAsync } from "./jsonHashInput";
+export { sha256, sha256Hex } from "./sha256";

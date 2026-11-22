@@ -253,7 +253,7 @@ public sealed class DecideInterventionAlterationHandlerTests
         Assert.Equal(WorkflowExecutionCommandKind.DeliverInterventionDecision, delivery.CommandKind);
         Assert.Equal("requester-scope", delivery.ExecutionScopeId);
         Assert.Equal(DecideInterventionAlterationHandler.Kind, delivery.CommandMetadata["runtime.alteration.kind"]);
-        var payload = delivery.Payload!.Value.Deserialize<RuntimeInterventionDecisionCommandPayload>()!;
+        var payload = delivery.Payload!.Value.Deserialize<RuntimeInterventionDecisionCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal("requester", payload.ActivityExecutionId);
         Assert.Equal("requester-node", payload.ExecutableNodeId);
         Assert.Equal("incident", payload.IncidentId);

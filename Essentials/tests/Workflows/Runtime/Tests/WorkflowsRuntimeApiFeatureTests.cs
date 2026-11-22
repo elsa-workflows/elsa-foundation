@@ -485,7 +485,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
                 "node-start",
                 "actexec-1",
-                RuntimeStartActivityCommandPayload.ScheduledActivityReason))));
+                RuntimeStartActivityCommandPayload.ScheduledActivityReason), Elsa.Serialization.Core.JsonBaseline.Options)));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
         var remaining = await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
@@ -855,7 +855,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
                 checkpointName,
                 [activityExecutionId],
-                RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason)),
+                RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason), Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: new Dictionary<string, string>(),
             envelopeMetadata: new Dictionary<string, string>());
 

@@ -244,7 +244,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
             completedChildActivityExecutionId: isParentEvaluation ? "actexec-child" : null,
             parentOutcome: parentOutcome);
 
-        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload));
+        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     private sealed class ShortCircuitActivityMiddleware : ActivityRuntimeMiddlewareBase

@@ -52,7 +52,7 @@ public sealed class ActivityAuthoringCapabilityFingerprintTests
         Assert.NotEqual(
             $"sha256:{Convert.ToHexString(SHA256.HashData(legacyBytes)).ToLowerInvariant()}",
             view.SnapshotFingerprint);
-        Assert.True(view.SnapshotFingerprint == "pending",
+        Assert.True(view.SnapshotFingerprint == "sha256:eb6d930ac1a22629e4521625cf77d93620e96cb0e2c11c0466e6676cab53a87a",
             "First-stable hash freeze: changes require an explicit identity/migration decision. Actual: " + view.SnapshotFingerprint);
     }
 

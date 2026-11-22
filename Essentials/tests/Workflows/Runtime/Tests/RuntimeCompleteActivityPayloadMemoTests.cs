@@ -66,7 +66,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
         var payload = NewParentOutcomePayload();
 
         var json = JsonSerializer.SerializeToElement(payload);
-        var deserialized = json.Deserialize<RuntimeCompleteActivityCommandPayload>();
+        var deserialized = json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
 
         Assert.NotNull(deserialized);
         Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, deserialized.CompletionKind);
@@ -88,7 +88,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
             ["Done"],
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
-        var json = JsonSerializer.SerializeToElement(payload);
+        var json = JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options);
         var constructor = typeof(RuntimeCompleteActivityCommandPayload).GetConstructor([
             typeof(WorkflowExecutableIdentity),
             typeof(string),
@@ -103,7 +103,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
 
         Assert.NotNull(constructor);
         Assert.False(json.TryGetProperty(nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome), out _));
-        Assert.Null(json.Deserialize<RuntimeCompleteActivityCommandPayload>()?.ParentOutcome);
+        Assert.Null(json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)?.ParentOutcome);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
         var json = JsonNode.Parse(JsonSerializer.Serialize(NewParentOutcomePayload()))!.AsObject();
         json[nameof(RuntimeCompleteActivityCommandPayload.ParentOutcome)]![nameof(RuntimeParentOutcome.Version)] = RuntimeParentOutcome.CurrentVersion + 1;
 
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => json.Deserialize<RuntimeCompleteActivityCommandPayload>());
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => json.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options));
         Assert.Equal("version", exception.ParamName);
     }
 
@@ -161,7 +161,7 @@ public sealed class RuntimeCompleteActivityPayloadMemoTests : RuntimePipelineTes
             completionKind: SchedulerCompletionKind.ParentCompletionEvaluation,
             completedChildActivityExecutionId: "actexec-child");
 
-        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, index: index, payload: JsonSerializer.SerializeToElement(payload));
+        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, index: index, payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     private RuntimeCompleteActivityCommandPayload NewParentOutcomePayload() => new(

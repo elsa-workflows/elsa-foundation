@@ -239,7 +239,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         string? after = null;
         if (request.ContinuationToken is not null)
         {
-            var cursor = JsonSerializer.Deserialize<WorkCursor>(continuations.Decode(WorkPagePurpose, request.ContinuationToken), Web)
+            var cursor = JsonSerializer.Deserialize<WorkCursor>(continuations.DecodeJson(WorkPagePurpose, request.ContinuationToken), Web)
                 ?? throw new ArgumentException("The work continuation is invalid.");
             if (cursor.Scope != scopeKey || cursor.Execution != executionId || cursor.Revision != state.Revision)
                 throw new ArgumentException("The work continuation belongs to a different execution snapshot.");
@@ -251,7 +251,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             .Where(item => after is null || string.CompareOrdinal(item.InvocationId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;
         if (more) items = items[..request.Limit];
-        var next = more ? continuations.Encode(WorkPagePurpose,
+        var next = more ? continuations.EncodeJson(WorkPagePurpose,
             JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].InvocationId), Web)) : null;
         return new(request, items.Select(item => new BpmnHumanWork(item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId)
             { ClaimRequired = claimBindings?.Contains(item.BindingId, StringComparer.Ordinal) == true, Claim = CurrentClaim(document, item) }).ToArray(), next);
@@ -279,7 +279,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         string? after = null;
         if (request.ContinuationToken is not null)
         {
-            var cursor = JsonSerializer.Deserialize<WorkCursor>(continuations.Decode(IncidentPagePurpose, request.ContinuationToken), Web)
+            var cursor = JsonSerializer.Deserialize<WorkCursor>(continuations.DecodeJson(IncidentPagePurpose, request.ContinuationToken), Web)
                 ?? throw new ArgumentException("The incident continuation is invalid.");
             if (cursor.Scope != scopeKey || cursor.Execution != executionId || cursor.Revision != state.Revision)
                 throw new ArgumentException("The incident continuation belongs to a different execution snapshot.");
@@ -290,7 +290,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             .Where(item => after is null || string.CompareOrdinal(item.IncidentId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;
         if (more) items = items[..request.Limit];
-        var next = more ? continuations.Encode(IncidentPagePurpose,
+        var next = more ? continuations.EncodeJson(IncidentPagePurpose,
             JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].IncidentId), Web)) : null;
         return new(request, items.Select(item => Incident(document, item)).ToArray(), next);
     }

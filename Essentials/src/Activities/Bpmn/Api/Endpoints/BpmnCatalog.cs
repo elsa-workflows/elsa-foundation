@@ -81,7 +81,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         if (request.ContinuationToken is null) return (identity, scope, new(binding, null, clock.GetUtcNow().UtcTicks));
         try
         {
-            var cursor = JsonSerializer.Deserialize<Cursor>(continuations.Decode(purpose, request.ContinuationToken));
+            var cursor = JsonSerializer.Deserialize<Cursor>(continuations.DecodeJson(purpose, request.ContinuationToken));
             if (cursor is null || cursor.Binding != binding || cursor.Raw is null ||
                 cursor.LiveUtcTicks <= DateTimeOffset.MinValue.UtcTicks || cursor.LiveUtcTicks >= DateTimeOffset.MaxValue.UtcTicks)
                 throw new ArgumentException("Invalid catalog continuation.");
@@ -95,7 +95,7 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
     }
 
     private string? Next(string purpose, Cursor cursor, string? raw) => raw is null ? null :
-        continuations.Encode(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor with { Raw = raw }));
+        continuations.EncodeJson(purpose, JsonSerializer.SerializeToUtf8Bytes(cursor with { Raw = raw }));
     private sealed record Cursor(string Binding, string? Raw, long LiveUtcTicks);
 }
 

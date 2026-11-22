@@ -48,6 +48,16 @@ public static partial class JsonHashInput
     /// <summary>Preserves a secret-bearing revision's keyed integrity while canonicalizing its JSON input.</summary>
     public static byte[] HashKeyed(JsonElement value, ReadOnlySpan<byte> key) => HMACSHA256.HashData(key, JsonCanonicalForm.GetBytes(value));
 
+    /// <summary>Authenticates a JSON wire value canonically while its retained payload keeps its original bytes.</summary>
+    public static byte[] HashKeyedUtf8(ReadOnlyMemory<byte> json, ReadOnlySpan<byte> key)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        return HashKeyed(document.RootElement, key);
+    }
+
+    /// <summary>Authenticates an explicit binary frame whose JSON components have already been canonicalized.</summary>
+    public static byte[] HashKeyedFramed(ReadOnlySpan<byte> frame, ReadOnlySpan<byte> key) => HMACSHA256.HashData(key, frame);
+
     // The settings contract is singular and frozen. Metadata belongs to this operation, so an arbitrary
     // collectible contract (also nested in a BCL generic/object slot) cannot be pinned by Core's static options.
     private static JsonSerializerOptions OperationOptions()

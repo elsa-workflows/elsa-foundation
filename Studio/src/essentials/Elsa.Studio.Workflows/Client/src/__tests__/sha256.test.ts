@@ -28,12 +28,12 @@ describe("module-owned SHA-256", () => {
     expect(sha256Hex("é")).not.toBe(hex(sha256(Uint8Array.of(0xe9))));
   });
 
-  it("gives every working state a collision-resistant content revision, while the 32-bit hash stays for change detection", () => {
+  it("uses the shared JSON hash for content revisions and change detection", () => {
     const draft: WorkflowDraft = { id: "draft", definitionId: "definition", state: { rootActivity: null }, layout: [], validationErrors: [] };
     const moved: WorkflowDraft = { ...draft, layout: [{ nodeId: "a", x: 1, y: 2 }] };
     expect(getDraftContentRevision(draft)).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(getDraftContentRevision(draft)).toBe(getDraftContentRevision(structuredClone(draft)));
     expect(getDraftContentRevision(moved)).not.toBe(getDraftContentRevision(draft));
-    expect(getDraftRevision(draft)).toMatch(/^[0-9a-f]{8}$/);
+    expect(getDraftRevision(draft)).toMatch(/^[0-9a-f]{64}$/);
   });
 });

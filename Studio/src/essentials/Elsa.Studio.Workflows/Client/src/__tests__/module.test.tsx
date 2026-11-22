@@ -3280,7 +3280,7 @@ describe("workflows module", () => {
     expect(testRunCall).toBeTruthy();
     const requestBody = JSON.parse(testRunCall?.body ?? "{}");
     expect(requestBody.definitionId).toBe("definition-1");
-    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
+    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{64}$/);
     expect(requestBody.inputs).toEqual({ Greeting: "Hello from test run" });
     expect(requestBody.state.rootActivity).toMatchObject({
       nodeId: "root",

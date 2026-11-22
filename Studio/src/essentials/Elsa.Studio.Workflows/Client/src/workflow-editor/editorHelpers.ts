@@ -1,4 +1,4 @@
-import { sha256Hex } from "../sha256";
+import { canonicalJsonValue, hashJson, hashJsonText } from "@elsa-workflows/studio-sdk";
 import type { Node } from "@xyflow/react";
 import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
@@ -548,16 +548,16 @@ export function midpointBetween(source: Node, target: Node) {
 }
 
 export function getDraftSignature(draft: WorkflowDraft) {
-  return JSON.stringify({
+  return canonicalJsonValue({
     state: draft.state,
     layout: draft.layout,
     activityPresentation: draft.activityPresentation
   });
 }
 
-/** A fast 32-bit hash of the working state, for change detection only. It is not a binding identity. */
+/** The canonical working-state digest used for change detection. */
 export function getDraftRevision(draft: WorkflowDraft) {
-  return hashString(getDraftSignature(draft));
+  return hashJsonText(getDraftSignature(draft));
 }
 
 // Keyed by the exact canonical signature, never by object identity, so a draft object changed in place can never be
@@ -573,7 +573,7 @@ export function getDraftContentRevision(draft: WorkflowDraft) {
   const signature = getDraftSignature(draft);
   let revision = contentRevisions.get(signature);
   if (!revision) {
-    revision = `sha256:${sha256Hex(signature)}`;
+    revision = `sha256:${hashJsonText(signature)}`;
     if (contentRevisions.size >= 8) contentRevisions.delete(contentRevisions.keys().next().value!);
     contentRevisions.set(signature, revision);
   }
@@ -694,17 +694,7 @@ export function createDraftSnapshotId(draft: WorkflowDraft) {
   // Test Run snapshot identity describes executable behavior. Presentation and canvas layout still
   // participate in autosave/undo through getDraftSignature, but must not mint a different behavioral
   // snapshot for an otherwise identical workflow.
-  return `${draft.id}-${hashString(JSON.stringify(draft.state))}`;
-}
-
-function hashString(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return `${draft.id}-${hashJson(draft.state)}`;
 }
 
 export function isRejectedTestRun(testRun: WorkflowTestRunView) {

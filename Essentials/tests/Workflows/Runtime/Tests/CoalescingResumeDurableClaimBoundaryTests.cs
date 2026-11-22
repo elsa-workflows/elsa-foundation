@@ -105,7 +105,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         Assert.Equal(
             ["schedule-3", "schedule-4"],
             resumeCheckpoint.Commit.StateChanges.PostCommitOutbox
-                .Select(change => change.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!.WorkItemId));
+                .Select(change => change.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!.WorkItemId));
         var suffixWorkOutboxIds = resumeCheckpoint.Commit.StateChanges.PostCommitOutbox
             .Select(change => change.State.OutboxItemId)
             .ToArray();
@@ -151,7 +151,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
         var resumeCheckpoint = Assert.Single(InnerCommitStore(scope.ServiceProvider).ListCommits()
             .Where(item => item.Commit.Checkpoint.Name == RuntimeCheckpointNames.BookmarkConsumed));
         var continuationOutbox = Assert.Single(resumeCheckpoint.Commit.StateChanges.PostCommitOutbox);
-        Assert.Equal("schedule-3", continuationOutbox.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!.WorkItemId);
+        Assert.Equal("schedule-3", continuationOutbox.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!.WorkItemId);
         var outboxLookup = scope.ServiceProvider.GetRequiredService<CoalescingInner<IPostCommitOutboxLookupStore>>().Value;
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await outboxLookup.FindAsync(continuationOutbox.State.OutboxItemId))?.Status);
         Assert.Empty(await shared.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)));
@@ -185,7 +185,7 @@ public sealed class CoalescingResumeDurableClaimBoundaryTests
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
         var workItemIds = resumeCheckpoint.Commit.StateChanges.PostCommitOutbox
-            .Select(change => change.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!.WorkItemId)
+            .Select(change => change.State.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>(Elsa.Serialization.Core.JsonBaseline.Options)!.WorkItemId)
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(outboxIds, externalDelivery.Settlements.Select(item => item.OutboxItemId).OrderBy(id => id, StringComparer.Ordinal));

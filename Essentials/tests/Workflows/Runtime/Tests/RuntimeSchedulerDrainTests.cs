@@ -971,7 +971,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, parentWork.CommandKind);
         Assert.Equal(RuntimeChainId.Derive("work-1", "parent:actexec-parent:child:actexec-1"), parentWork.WorkItemId);
         Assert.Equal(2, parentWork.Sequence);
-        var parentPayload = parentWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        var parentPayload = parentWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, parentPayload.CompletionKind);
         Assert.Equal("actexec-parent", parentPayload.ActivityExecutionId);
         Assert.Equal("actexec-1", parentPayload.CompletedChildActivityExecutionId);
@@ -998,7 +998,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
         Assert.Equal(RuntimeChainId.Derive("work-1", "continuation:actexec-1"), continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
-        var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(SchedulerCompletionKind.ContinuationScheduling, continuationPayload.CompletionKind);
         Assert.Equal(RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason, continuationPayload.Reason);
         Assert.Equal("actexec-1", continuationPayload.ActivityExecutionId);
@@ -1031,7 +1031,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(WorkflowExecutionCommandKind.CompleteActivity, continuationWork.CommandKind);
         Assert.Equal(RuntimeChainId.Derive("work-1", "continuation:actexec-parent"), continuationWork.WorkItemId);
         Assert.Equal(2, continuationWork.Sequence);
-        var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        var continuationPayload = continuationWork.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(SchedulerCompletionKind.ContinuationScheduling, continuationPayload.CompletionKind);
         Assert.Equal(RuntimeCompleteActivityCommandPayload.ContinuationSchedulingReason, continuationPayload.Reason);
         Assert.Equal("actexec-parent", continuationPayload.ActivityExecutionId);
@@ -1104,7 +1104,7 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(WorkflowExecutionCommandKind.Checkpoint, checkpointWork.CommandKind);
         Assert.Equal(RuntimeChainId.Derive("work-1", "checkpoint:WorkflowCompleted:actexec-parent"), checkpointWork.WorkItemId);
         Assert.Equal(2, checkpointWork.Sequence);
-        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>()!;
+        var checkpointPayload = checkpointWork.Payload!.Value.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, checkpointPayload.CheckpointName);
         Assert.Equal(RuntimeCheckpointCommandPayload.ActivityCompletionPropagationReason, checkpointPayload.Reason);
         Assert.Equal(["actexec-parent"], checkpointPayload.ActivityExecutionIds);
@@ -1235,7 +1235,7 @@ public sealed class RuntimeSchedulerDrainTests
                 NewPinnedExecutable(),
                 "node-start",
                 $"actexec-{index}",
-                RuntimeScheduleActivityCommandPayload.WorkflowStartReason)));
+                RuntimeScheduleActivityCommandPayload.WorkflowStartReason), Elsa.Serialization.Core.JsonBaseline.Options));
 
     private RuntimeSchedulerWorkItem NewStartActivityWorkItem(int index, JsonSerializerOptions? jsonSerializerOptions = null) =>
         NewWorkItem(
@@ -1255,7 +1255,7 @@ public sealed class RuntimeSchedulerDrainTests
                 NewPinnedExecutable(),
                 "node-start",
                 $"actexec-{index}",
-                RuntimeInvokeActivityCommandPayload.StartedActivityReason)));
+                RuntimeInvokeActivityCommandPayload.StartedActivityReason), Elsa.Serialization.Core.JsonBaseline.Options));
 
     private RuntimeSchedulerWorkItem NewGeneratedEventWorkItem(int index) =>
         NewWorkItem(

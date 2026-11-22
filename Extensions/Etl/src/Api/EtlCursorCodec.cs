@@ -39,8 +39,8 @@ internal sealed class EtlCursorCodec
         if (!IsValidState(state))
             throw new ArgumentException("The ETL cursor state is invalid or outside its supported bounds.", nameof(state));
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(state, EtlCursorJsonContext.Default.EtlCursorState);
-        var signature = HMACSHA256.HashData(_signingKey, payload);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(state, EtlCursorJsonContext.WireContext.EtlCursorState);
+        var signature = Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _signingKey);
         var token = $"{EncodeBase64Url(payload)}.{EncodeBase64Url(signature)}";
         if (token.Length > MaximumTokenLength)
             throw new ArgumentException("The encoded ETL cursor exceeds its supported length.", nameof(state));
@@ -70,14 +70,16 @@ internal sealed class EtlCursorCodec
 
         if (signature.Length != SignatureLength)
             throw InvalidToken();
-        var expectedSignature = HMACSHA256.HashData(_signingKey, payload);
+        byte[] expectedSignature;
+        try { expectedSignature = Elsa.Serialization.Core.JsonHashInput.HashKeyedUtf8(payload, _signingKey); }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException) { throw InvalidToken(exception); }
         if (!CryptographicOperations.FixedTimeEquals(signature, expectedSignature))
             throw InvalidToken();
 
         EtlCursorState? state;
         try
         {
-            state = JsonSerializer.Deserialize(payload, EtlCursorJsonContext.Default.EtlCursorState);
+            state = JsonSerializer.Deserialize(payload, EtlCursorJsonContext.WireContext.EtlCursorState);
         }
         catch (JsonException exception)
         {
@@ -87,7 +89,7 @@ internal sealed class EtlCursorCodec
         if (!IsValidState(state))
             throw InvalidToken();
 
-        var canonicalPayload = JsonSerializer.SerializeToUtf8Bytes(state, EtlCursorJsonContext.Default.EtlCursorState);
+        var canonicalPayload = JsonSerializer.SerializeToUtf8Bytes(state, EtlCursorJsonContext.WireContext.EtlCursorState);
         if (!payload.AsSpan().SequenceEqual(canonicalPayload))
             throw InvalidToken();
 
@@ -166,7 +168,6 @@ internal sealed record EtlCursorState(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? LastOrdinal = null);
 
 [JsonSourceGenerationOptions(
-    JsonSerializerDefaults.Web,
     GenerationMode = JsonSourceGenerationMode.Metadata,
     PropertyNameCaseInsensitive = false,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
@@ -174,4 +175,8 @@ internal sealed record EtlCursorState(
 [JsonSerializable(typeof(EtlCursorState))]
 internal partial class EtlCursorJsonContext : JsonSerializerContext
 {
+    internal static EtlCursorJsonContext WireContext { get; } = new(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+    });
 }
