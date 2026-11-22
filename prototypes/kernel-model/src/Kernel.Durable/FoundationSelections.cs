@@ -15,7 +15,7 @@ public sealed partial class InMemoryStore
             : null;
     }
 
-    internal bool MatchesFoundationSelection(string tenant, string? reference, string? token)
+    internal bool MatchesFoundationSelection(string tenant, string? reference, string? token, bool requireTerminal = false)
     {
         lock (_gate)
         {
@@ -23,7 +23,25 @@ public sealed partial class InMemoryStore
             Span<byte> presented = stackalloc byte[SelectionBytes];
             if (!TryOpenReadCursor(SelectionContext(tenant, actor.Binding.Reference), token, presented)) return false;
             Span<byte> committed = stackalloc byte[SelectionBytes];
-            return TryEncodeSelectionMark(Checkpoint(actor.Row, actor.Binding), committed) && presented.SequenceEqual(committed);
+            var checkpoint = Checkpoint(actor.Row, actor.Binding);
+            return (!requireTerminal || checkpoint.Terminal is not null) &&
+                TryEncodeSelectionMark(checkpoint, committed) && presented.SequenceEqual(committed);
+        }
+    }
+
+    internal bool AuthorizesEndedRecoverThenDelete(InstanceRow row, Message input)
+    {
+        lock (_gate)
+        {
+            if (row is not { Status: not InstanceStatus.Running, ParkRecovery: not null } ||
+                !MatchesThenDeleteTarget(row, input)) return false;
+            if (input.Operator!.Selection is not { } selection) return true;
+            var identity = FoundationIdentity(row.Id, row.Creation);
+            if (_foundationParks.GetValueOrDefault(new(row.Id, row.Creation)) is not { } park) return false;
+            Span<byte> mark = stackalloc byte[SelectionBytes];
+            return TryOpenReadCursor(SelectionContext(identity.Tenant, identity.Reference), selection, mark) && mark[0] == 1 &&
+                BinaryPrimitives.ReadInt64LittleEndian(mark[1..]) == park.Revision &&
+                BinaryPrimitives.ReadInt64LittleEndian(mark[(1 + sizeof(long))..]) == park.At;
         }
     }
 

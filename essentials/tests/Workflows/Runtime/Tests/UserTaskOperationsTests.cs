@@ -121,6 +121,17 @@ public sealed class UserTaskOperationsTests
     }
 
     [Fact]
+    public async Task Blank_group_assignment_is_visible_in_mine_and_not_in_queue()
+    {
+        var store = Store();
+        await store.TryWriteAsync(Task() with { AssigneeId = "alice", GroupId = "" }, null);
+        var operations = Operations(store, Actor("alice"));
+
+        Assert.Equal("task", Assert.Single((await operations.ListAsync("mine")).Items).Id);
+        Assert.Empty((await operations.ListAsync("queue")).Items);
+    }
+
+    [Fact]
     public void Basic_forms_enforce_types_choices_casing_required_waiver_and_read_only_values()
     {
         var forms = new BasicUserTaskForms();

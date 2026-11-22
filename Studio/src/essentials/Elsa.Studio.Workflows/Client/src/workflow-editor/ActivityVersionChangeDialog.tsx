@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
-  ActivityDefinitionVersionManagementView,
   ActivityDefinitionVersionView,
   RecommendedActivityDefinition
 } from "../activityDefinitionTypes";
@@ -70,6 +69,7 @@ export function ActivityVersionChangeDialog({
   const impact = target.data && diff.data
     ? analyzeActivityVersionChange(draft, occurrence, current, target.data, diff.data, scope)
     : null;
+  const selectedTargetIsActive = activeTargets.some(item => item.version.versionId === targetVersionId);
 
   useEffect(() => {
     if (targetVersionId && activeTargets.some(item => item.version.versionId === targetVersionId)) return;
@@ -79,7 +79,10 @@ export function ActivityVersionChangeDialog({
   }, [activeTargets, recommendation?.versionId, targetVersionId]);
 
   const canApply = Boolean(
-    target.data
+    !versions.isFetching
+    && !versions.isError
+    && selectedTargetIsActive
+    && target.data
     && diff.data
     && diff.data.from.versionId === current.versionId
     && diff.data.to.versionId === target.data.versionId
@@ -101,136 +104,162 @@ export function ActivityVersionChangeDialog({
             .catch(cause => setError(cause instanceof Error ? cause.message : String(cause)))
             .finally(() => setBusy(false));
         }}>
-      <dl className="wf-version-change-facts">
-        <div><dt>Definition</dt><dd>{current.definition.definitionId}</dd></div>
-        <div><dt>Selected occurrence</dt><dd>{occurrence.nodeId}</dd></div>
-        <div><dt>Current exact version</dt><dd>v{current.version} · {current.versionId}</dd></div>
-        <div><dt>Target exact version</dt><dd>{target.data ? `v${target.data.version} · ${target.data.versionId}` : "Select an active version"}</dd></div>
-      </dl>
+      <div className="wf-version-change-version-pair">
+        <span>Current version <strong>v{current.version}</strong></span>
+        <span>Target version <strong>{target.data ? `v${target.data.version}` : "Choose an active version"}</strong></span>
+      </div>
 
-      <fieldset disabled={busy || versions.isPending}>
-        <legend>Active target version</legend>
-        {activeTargets.length ? activeTargets.map(item => (
-          <VersionChoice
-            key={item.version.versionId}
-            item={item}
-            checked={targetVersionId === item.version.versionId}
-            recommended={item.version.versionId === recommendation?.versionId}
-            onChange={() => setTargetVersionId(item.version.versionId)}
-          />
-        )) : (
-          <p className="wf-muted">{versions.isPending ? "Loading active versions…" : "No other active version is available."}</p>
-        )}
-        <div className="wf-version-page-actions">
-          <button
-            type="button"
-            disabled={busy || cursorHistory.length === 0}
-            onClick={() => {
-              const previous = cursorHistory[cursorHistory.length - 1] ?? null;
-              setCursorHistory(history => history.slice(0, -1));
-              setCursor(previous);
-            }}
-          >
-            Previous versions
-          </button>
-          <button
-            type="button"
-            disabled={busy || !versions.data?.continuation}
-            onClick={() => {
-              setCursorHistory(history => [...history, cursor]);
-              setCursor(versions.data?.continuation ?? null);
-            }}
-          >
-            More versions
-          </button>
-        </div>
-      </fieldset>
+      <div className="wf-version-change-content">
+        <fieldset disabled={busy || versions.isFetching || versions.isError}>
+          <legend>Target version</legend>
+          <label className="wf-version-change-target">
+            <span>Target active version</span>
+            <select
+              aria-label="Target active version"
+              disabled={activeTargets.length === 0}
+              value={selectedTargetIsActive ? targetVersionId! : ""}
+              onChange={event => setTargetVersionId(event.target.value || null)}
+            >
+              {activeTargets.length ? activeTargets.map(item => (
+                <option key={item.version.versionId} value={item.version.versionId}>
+                  v{item.version.version}{item.version.versionId === recommendation?.versionId ? " · Recommended" : ""}
+                </option>
+              )) : (
+                <option value="">{versions.isError ? "Active versions unavailable" : "No other active version available"}</option>
+              )}
+            </select>
+          </label>
+          <div className="wf-version-page-actions">
+            {cursorHistory.length > 0 ? (
+              <button
+                type="button"
+                disabled={busy || versions.isFetching || versions.isError}
+                onClick={() => {
+                  const previous = cursorHistory[cursorHistory.length - 1] ?? null;
+                  setCursorHistory(history => history.slice(0, -1));
+                  setCursor(previous);
+                }}
+              >
+                Previous versions
+              </button>
+            ) : null}
+            {versions.data?.continuation ? (
+              <button
+                type="button"
+                disabled={busy || versions.isFetching || versions.isError}
+                onClick={() => {
+                  setCursorHistory(history => [...history, cursor]);
+                  setCursor(versions.data?.continuation ?? null);
+                }}
+              >
+                More versions
+              </button>
+            ) : null}
+          </div>
+        </fieldset>
 
-      <fieldset disabled={busy}>
-        <legend>Apply scope</legend>
-        <label>
-          <input type="radio" name="version-change-scope" checked={scope === "occurrence"} onChange={() => setScope("occurrence")} />
-          This occurrence only
-        </label>
-        <label>
-          <input type="radio" name="version-change-scope" checked={scope === "matching"} onChange={() => setScope("matching")} />
-          All matching occurrences in this workflow draft
-        </label>
-      </fieldset>
+        <fieldset className="wf-version-change-scope" disabled={busy}>
+          <legend>Apply scope</legend>
+          <label>
+            <input type="radio" name="version-change-scope" checked={scope === "occurrence"} onChange={() => setScope("occurrence")} />
+            This occurrence only
+          </label>
+          <label>
+            <input type="radio" name="version-change-scope" checked={scope === "matching"} onChange={() => setScope("matching")} />
+            All matching occurrences in this workflow draft
+          </label>
+        </fieldset>
 
-      {diff.isPending || target.isPending ? <p role="status">Loading compatibility details…</p> : null}
-      {diff.data && impact ? (
-        <>
-          <section className="wf-version-change-section" aria-labelledby="version-compatibility-title">
-            <h4 id="version-compatibility-title">Compatibility and public contract</h4>
-            <dl>
-              <div><dt>Compatibility</dt><dd>{diff.data.compatibility}</dd></div>
-              <div><dt>Required bump</dt><dd>{diff.data.requiredBump}</dd></div>
-              <div><dt>Behavior changed</dt><dd>{diff.data.behaviorChanged ? "Yes" : "No"}</dd></div>
-              <div><dt>Contract changes</dt><dd>{diff.data.summary.breaking} breaking, {diff.data.summary.additive} additive, {diff.data.summary.nonBehavioral} non-behavioral</dd></div>
-              <div><dt>Occurrences</dt><dd>{impact.occurrenceIds.length}</dd></div>
-            </dl>
-            {diff.data.changes.length ? (
-              <ul className="wf-version-change-list">
-                {diff.data.changes.map(change => (
-                  <li key={change.changeId}>
-                    <strong>{change.subject.memberKind ?? change.area}{change.subject.referenceKey ? ` · ${change.subject.referenceKey}` : ""}</strong>
-                    <span>{change.message}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p>No public-contract changes.</p>}
-          </section>
+        {versions.isFetching ? <p role="status">Loading active versions…</p> : null}
+        {!versions.isFetching && !versions.isError && activeTargets.length === 0 ? (
+          <p role="status">No other active version is available.</p>
+        ) : null}
+        {targetVersionId && (diff.isPending || target.isPending) ? <p role="status">Loading authoritative compatibility evidence…</p> : null}
+        {!versions.isFetching && !versions.isError && diff.data && impact ? (
+          <>
+            <section className="wf-version-change-summary" aria-label="Compatibility and unresolved impact">
+              <div className="wf-version-change-summary-heading">
+                <strong>{diff.data.compatibility}</strong>
+                <span>{diff.data.summary.breaking} breaking changes</span>
+              </div>
+              <dl>
+                <div><dt>Required bump</dt><dd>{diff.data.requiredBump}</dd></div>
+                <div><dt>Behavior changed</dt><dd>{diff.data.behaviorChanged ? "Yes" : "No"}</dd></div>
+                <div><dt>Unresolved input bindings</dt><dd>{impact.unresolvedBindingKeys.length}</dd></div>
+                <div><dt>Unresolved outcome connections</dt><dd>{impact.unresolvedOutcomeKeys.length}</dd></div>
+                <div><dt>Occurrences in scope</dt><dd>{impact.occurrenceIds.length}</dd></div>
+              </dl>
+            </section>
 
-          <ImpactSection
-            title="Binding impact"
-            preserved={impact.preservedBindingKeys}
-            unresolved={impact.unresolvedBindingKeys}
-            empty="No authored input bindings on the selected occurrence."
-          />
-          <ImpactSection
-            title="Outcome and connection impact"
-            preserved={impact.preservedOutcomeKeys}
-            unresolved={impact.unresolvedOutcomeKeys}
-            empty="No outgoing outcome connections on the selected scope."
-          />
-          <p className="wf-dialog-note">
-            Bindings and connections are retained only by stable reference key. Removed or incompatible members remain attached as explicit unresolved authoring work; Studio never guesses a replacement.
-          </p>
-          <p className="wf-dialog-note">
-            This operation updates draft {draft.id} only. Published workflow artifacts and every other draft remain immutable.
-          </p>
-        </>
-      ) : null}
+            <details className="wf-version-change-details">
+              <summary>Detailed technical evidence</summary>
+              <dl className="wf-version-change-facts">
+                <div><dt>Draft ID</dt><dd>{draft.id}</dd></div>
+                <div><dt>Definition ID</dt><dd>{current.definition.definitionId}</dd></div>
+                <div><dt>Selected occurrence</dt><dd>{occurrence.nodeId}</dd></div>
+                <div><dt>Current exact version</dt><dd>v{current.version} · {current.versionId}</dd></div>
+                <div><dt>Target exact version</dt><dd>{target.data ? `v${target.data.version} · ${target.data.versionId}` : "Unavailable"}</dd></div>
+              </dl>
 
-      {versions.isError || target.isError || diff.isError ? (
-        <p className="wf-publication-recovery" role="alert">The version details could not be loaded. Retry the review.</p>
-      ) : null}
-      {error ? <p className="wf-publication-recovery" role="alert">{error}</p> : null}
+              <section className="wf-version-change-section" aria-labelledby="version-compatibility-title">
+                <h4 id="version-compatibility-title">Compatibility and public contract</h4>
+                <dl>
+                  <div><dt>Compatibility</dt><dd>{diff.data.compatibility}</dd></div>
+                  <div><dt>Required bump</dt><dd>{diff.data.requiredBump}</dd></div>
+                  <div><dt>Behavior changed</dt><dd>{diff.data.behaviorChanged ? "Yes" : "No"}</dd></div>
+                  <div><dt>Contract changes</dt><dd>{diff.data.summary.breaking} breaking, {diff.data.summary.additive} additive, {diff.data.summary.nonBehavioral} non-behavioral</dd></div>
+                  <div><dt>Occurrences</dt><dd>{impact.occurrenceIds.length}</dd></div>
+                  <div><dt>Provider change</dt><dd>{diff.data.provider.fromKey ?? "Unknown"} to {diff.data.provider.toKey ?? "Unknown"} · {diff.data.provider.changed ? "Changed" : "Unchanged"}</dd></div>
+                </dl>
+                {diff.data.changes.length ? (
+                  <ul className="wf-version-change-list">
+                    {diff.data.changes.map(change => (
+                      <li key={change.changeId}>
+                        <strong>{change.subject.memberKind ?? change.area}{change.subject.referenceKey ? ` · ${change.subject.referenceKey}` : ""}</strong>
+                        <span>{change.impact} · {change.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p>No public-contract changes.</p>}
+              </section>
+
+              <ImpactSection
+                title="Binding impact"
+                preserved={impact.preservedBindingKeys}
+                unresolved={impact.unresolvedBindingKeys}
+                empty="No authored input bindings on the selected occurrence."
+              />
+              <ImpactSection
+                title="Outcome and connection impact"
+                preserved={impact.preservedOutcomeKeys}
+                unresolved={impact.unresolvedOutcomeKeys}
+                empty="No outgoing outcome connections on the selected scope."
+              />
+              {diff.data.diagnostics.length ? (
+                <section className="wf-version-change-section">
+                  <h4>Compatibility diagnostics</h4>
+                  <ul className="wf-version-change-list">
+                    {diff.data.diagnostics.map((diagnostic, index) => <li key={`${diagnostic.code ?? "diagnostic"}-${index}`}>{diagnostic.message ?? diagnostic.code ?? "Compatibility diagnostic"}</li>)}
+                  </ul>
+                </section>
+              ) : null}
+              <p className="wf-dialog-note">
+                Bindings and connections are retained only by stable reference key. Removed or incompatible members remain attached as explicit unresolved authoring work; Studio never guesses a replacement.
+              </p>
+              <p className="wf-dialog-note">
+                This operation updates draft {draft.id} only. Published workflow artifacts and every other draft remain immutable.
+              </p>
+            </details>
+          </>
+        ) : null}
+
+        {versions.isError || target.isError || diff.isError ? (
+          <p className="wf-publication-recovery" role="alert">Authorized exact-version evidence could not be loaded. Try the review again.</p>
+        ) : null}
+        {error ? <p className="wf-publication-recovery" role="alert">{error}</p> : null}
+      </div>
     </StudioDialog>
   </>);
-}
-
-function VersionChoice({
-  item,
-  checked,
-  recommended,
-  onChange
-}: {
-  item: ActivityDefinitionVersionManagementView;
-  checked: boolean;
-  recommended: boolean;
-  onChange(): void;
-}) {
-  return (
-    <label className="wf-version-choice">
-      <input type="radio" name="target-activity-version" checked={checked} onChange={onChange} />
-      <span>
-        <strong>v{item.version.version}</strong>
-        <small>{item.version.versionId} · Active{recommended ? " · Recommended" : ""}</small>
-      </span>
-    </label>
-  );
 }
 
 function ImpactSection({

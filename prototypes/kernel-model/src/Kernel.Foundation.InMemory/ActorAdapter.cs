@@ -7,7 +7,7 @@ namespace Kernel.Foundation.InMemory;
 
 /// <summary>Runs a contract actor in the owner's turn. The adapter only stages effects.</summary>
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
-    (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
+    (Durable.Requests Requests, string Node)? local = null, Func<Contract.ActorHeader, TimeSpan?>? retentionWindow = null) : Durable.IActorType
 {
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -85,12 +85,32 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return ExpirePark(input);
         if (message.Kind == Durable.Kinds.Drain)
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
+        if (message is { Kind: Contract.Kinds.Delete, Operator: { } deletion } && input.Row is { } deletionTarget)
+        {
+            var identity = store.FoundationIdentity(deletionTarget.Id, deletionTarget.Creation);
+            if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection, requireTerminal: true))
+                return Durable.CreationProtocol.Refuse(input.Actor, deletionTarget, input.Taken, "StaleSelection");
+            if (deletion.RetentionDelete && RetentionRefusal(input, deletionTarget) is { } refusal) return refusal;
+        }
+        if (message.Operator?.DeleteTarget is not null &&
+            (input.Row is not { } intended || !store.MatchesThenDeleteTarget(intended, message)))
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "TargetMismatch");
         if (input.Row is { ParkDiscard: not null } draining)
+        {
+            if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && draining.ParkDiscard.DeletesAtComplete)
+                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
             return RefuseDuringDiscard(input, draining);
+        }
         if (message.Kind == Contract.Kinds.Terminate &&
             input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
             store.FoundationTurnHeader(liveRecovery).Park is { } recoveryPark)
             return OpenParkTerminate(input, liveRecovery, recoveryPark);
+        if (message is { Kind: Contract.Kinds.Delete, Operator.Selection: { } recoverySelection } &&
+            input.Row is { Status: not Durable.InstanceStatus.Running, ParkRecovery: not null } endedRecovery)
+            return TakeOverEndedRecovery(input, endedRecovery, recoverySelection);
+        if (message.Operator is { DeleteTarget: not null } terminateDelete &&
+            input.Row is { Status: not Durable.InstanceStatus.Running, ParkRecovery: not null } endedForDelete)
+            return TakeOverEndedRecovery(input, endedForDelete, terminateDelete.Selection, thenDelete: true);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
@@ -138,7 +158,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || parked) && input.Row is { } completedRow &&
             delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
             return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), message.JobGeneration, ticket.Timer, cancel: false, keepCheckpoint: parked);
-        if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
+        if (message.Kind != Contract.Kinds.Delete && message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
             if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection))
@@ -147,17 +167,15 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && input.Row is { } ended)
         {
             var checkpoint = store.FoundationTurnHeader(ended);
-            if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null)
+            if (ended.Status == Durable.InstanceStatus.Running)
                 return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
-            try
-            {
-                if (actor.ProtectsDeletion(Header(checkpoint), ended.State, input.Services.Now))
-                    return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
-            }
-            catch (Exception)
-            {
-                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "ProtectionUnavailable");
-            }
+            if (checkpoint.Park is not null)
+                return message.Operator.Selection is null
+                    ? Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "StaleSelection")
+                    : OpenParkDelete(input, ended, checkpoint);
+            var protection = DeletionRefusal(Header(checkpoint), ended.State, input.Services.Now);
+            if (protection is not null)
+                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, protection);
 
             var marker = Durable.CreationProtocol.Retire(ended, Durable.CascadeRegistry.ForRetirement(ended));
             return new(input.Actor)
@@ -170,6 +188,17 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return OpenParkTerminate(input, row, park);
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
+        if (message.Operator?.DeleteTarget is not null && input.Row is { Status: not Durable.InstanceStatus.Running } endedThenDelete)
+        {
+            var header = Header(store.FoundationTurnHeader(endedThenDelete));
+            var protection = DeletionRefusal(header, endedThenDelete.State, input.Services.Now);
+            if (protection is not null)
+                return Durable.CreationProtocol.Refuse(input.Actor, endedThenDelete, input.Taken, protection);
+            var outcome = ParkCheckpoint(input, endedThenDelete, endedThenDelete);
+            if (endedThenDelete.Cascade is null)
+                Durable.CascadeProtocol.Open(outcome, Durable.CascadeRegistry.From(endedThenDelete));
+            return RetireAfterTerminate(delivery, endedThenDelete, outcome);
+        }
         if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
         {
             if (terminal.Cascade is not null || message.ActorAuthored || message.CascadeOrigin && terminal is { Children: null, Jobs: null })
@@ -187,6 +216,20 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (!IsChildNotice(input.Row, message))
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "InvalidChildCompletion");
         return null;
+    }
+
+    private Durable.TurnOutcome? RetentionRefusal(Durable.TurnInput input, Durable.InstanceRow row)
+    {
+        var operation = row.ParkDiscard is { DeletesAtComplete: true } drain ? drain.Operation : row.ParkRecovery?.Deletion?.Operation;
+        if (operation is not null)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InProgress", operation);
+
+        var checkpoint = store.FoundationTurnHeader(row);
+        if (checkpoint.Park is null && checkpoint.Terminal is { } mark &&
+            retentionWindow?.Invoke(Header(checkpoint)) is { Ticks: >= 0 } window &&
+            (decimal)input.Services.Now - mark.At >= (long)window.TotalMilliseconds)
+            return null;
+        return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "NotEligible");
     }
 
     private Durable.TurnOutcome TimeoutJob(Durable.TurnInput input, Durable.Message message)
@@ -244,6 +287,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var turn = new ActorTurn(store, input, header, ambient);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
+        var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
+        if (thenDelete) turn.EnsureTerminated();
         var outcome = turn.Seal();
         if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
@@ -263,6 +308,33 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);
         }
+        return thenDelete && input.Row is { } prior ? FinishThenDelete(input, delivery, prior, header, outcome) : outcome;
+    }
+
+    private Durable.TurnOutcome FinishThenDelete(Durable.TurnInput input, Durable.Delivery delivery, Durable.InstanceRow prior,
+        Contract.ActorHeader header, Durable.TurnOutcome outcome)
+    {
+        var ended = outcome.Row ?? throw new InvalidOperationException("Terminate and delete requires an ended checkpoint.");
+        var updated = header with
+        {
+            Status = (Contract.ActorStatus)ended.Status,
+            TypeData = outcome.FoundationHeader?.TypeData ?? header.TypeData,
+            Labels = outcome.FoundationHeader?.Labels ?? header.Labels
+        };
+        if (DeletionRefusal(updated, ended.State, input.Services.Now) is null)
+            return RetireAfterTerminate(delivery, prior, outcome);
+        outcome.ReplyTo(delivery, "terminated and kept");
+        return outcome;
+    }
+
+    private static Durable.TurnOutcome RetireAfterTerminate(Durable.Delivery delivery, Durable.InstanceRow prior,
+        Durable.TurnOutcome outcome)
+    {
+        outcome.ReplyTo(delivery, "deleted");
+        outcome.Row = Durable.CreationProtocol.Retire(outcome.Row! with { Revision = prior.Revision });
+        outcome.Journal = Durable.Json.Write(new { Outcome = "deleted", Operation = delivery.Message.Id });
+        outcome.FoundationHeader = null;
+        outcome.Delete = outcome.Unsubscribe = true;
         return outcome;
     }
 

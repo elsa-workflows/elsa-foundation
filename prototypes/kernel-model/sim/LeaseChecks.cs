@@ -32,6 +32,7 @@ public static class LeaseChecks
         await FoundationMigrationDispatchChecks.Run(Check);
         await ContractStatechartChecks.Run(Check);
         await ContractNativeChecks.Run(Check);
+        await ParkHandoffCreditChecks.Run(Check);
         await ContractHeldRequestChecks.Run(Check, flaw);
         await FoundationEventSendChecks.Run(Check);
         await FoundationEventSendChecks.CheckPagedPublication(Check);
@@ -45,7 +46,10 @@ public static class LeaseChecks
         await CommandAuthorityChecks.RunCascade(Check);
         await CascadePageChecks.Run(Check);
         await RetirementCascadeChecks.Run(Check);
+        await ParkDeleteChecks.Run(Check);
+        await RetentionDeleteChecks.Run(Check);
         await ParkDrainCascadeChecks.Run(Check);
+        await ParkCohortTupleChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);

@@ -167,7 +167,7 @@ function isBracketedTypeArgument(text: string): boolean {
 interface WorkflowInputArgumentBindingsProps {
   inputs: WorkflowInput[];
   inputBindingTarget: "name" | "referenceKey";
-  bindingMode: "arguments" | "direct";
+  bindingMode: "arguments" | "direct" | "both";
   value: unknown;
   syntax: string;
   activityInput: StudioActivityInputDescriptor;
@@ -225,10 +225,13 @@ export function WorkflowInputArgumentBindings({
   onEscape
 }: WorkflowInputArgumentBindingsProps) {
   const inputKind = inputBindingTarget === "referenceKey" ? "activity" : "workflow";
-  const selectId = useId();
+  const directSelectId = useId();
+  const argumentSelectId = useId();
   const arguments_ = readWorkflowInputExpressionArguments(value, syntax);
   const bindingsByArgumentName = new Map(arguments_.map(binding => [binding.argumentName, binding]));
-  const directMemberKey = bindingMode === "direct" ? readWorkflowRequestMemberKey(value, syntax) : null;
+  const hasDirectPicker = bindingMode === "direct" || bindingMode === "both";
+  const hasArgumentPicker = bindingMode === "arguments" || bindingMode === "both";
+  const directMemberKey = hasDirectPicker ? readWorkflowRequestMemberKey(value, syntax) : null;
   const directInput = inputs.find(input => input.referenceKey === directMemberKey);
 
   return (
@@ -245,39 +248,47 @@ export function WorkflowInputArgumentBindings({
       }}
     >
       {expanded ? <>
-          <div className="wf-js-input-binding-add">
-            <label htmlFor={selectId}>Add {inputKind} input</label>
+          {hasDirectPicker ? <div className="wf-js-input-binding-add">
+            <label htmlFor={directSelectId}>{inputBindingTarget === "referenceKey" ? "Use input directly" : `Add ${inputKind} input`}</label>
             <select
-              id={selectId}
-              value={bindingMode === "direct" ? directMemberKey ?? "" : ""}
+              id={directSelectId}
+              value={directMemberKey ?? ""}
+              disabled={disabled || inputs.length === 0}
+              onChange={event => {
+                const selected = inputs.find(workflowInput => workflowInput.referenceKey === event.currentTarget.value);
+                if (selected) onDirectInputSelect?.(selected);
+              }}
+            >
+              <option value="">Select an input…</option>
+              {directMemberKey && !directInput ? (
+                <option value={directMemberKey} disabled>{directMemberKey} — missing activity input</option>
+              ) : null}
+              {inputs.map(workflowInput => <option key={workflowInput.referenceKey} value={workflowInput.referenceKey}>
+                {workflowInput.displayName?.trim() || workflowInput.name}
+              </option>)}
+            </select>
+          </div> : null}
+          {hasArgumentPicker ? <div className="wf-js-input-binding-add">
+            <label htmlFor={argumentSelectId}>{inputBindingTarget === "referenceKey" ? "Bind as JavaScript argument" : `Add ${inputKind} input`}</label>
+            <select
+              id={argumentSelectId}
+              value=""
               disabled={disabled || inputs.length === 0}
               onChange={event => {
                 const selected = inputs.find(workflowInput => workflowInput[inputBindingTarget] === event.currentTarget.value);
                 if (!selected) return;
-                if (bindingMode === "direct") {
-                  onDirectInputSelect?.(selected);
-                  return;
-                }
                 const definition = withWorkflowInputExpressionArgument(value, syntax, activityInput, selected, inputBindingTarget);
                 if (definition) onChange(withLiteralValue(wrapped, definition));
               }}
             >
               <option value="">Select an input…</option>
-              {bindingMode === "direct" && directMemberKey && !directInput ? (
-                <option value={directMemberKey} disabled>{directMemberKey} — missing activity input</option>
-              ) : null}
               {inputs.map(workflowInput => {
-                if (bindingMode === "direct") {
-                  return <option key={workflowInput.referenceKey} value={workflowInput.referenceKey}>
-                    {workflowInput.displayName?.trim() || workflowInput.name}
-                  </option>;
-                }
                 const alreadyBound = bindingsByArgumentName.has(workflowInput.name);
                 const occupied = valueHasParameter(value, syntax, workflowInput.name) && !alreadyBound;
                 return <option key={workflowInput.referenceKey} value={workflowInput.name} disabled={alreadyBound || occupied}>{workflowInput.name}{occupied ? " — argument name already used" : ""}</option>;
               })}
             </select>
-          </div>
+          </div> : null}
           {arguments_.length > 0 ? (
             <ul className="wf-reference-list wf-js-input-binding-list" aria-label={`Bound ${inputKind} inputs`}>
               {arguments_.map(binding => {
