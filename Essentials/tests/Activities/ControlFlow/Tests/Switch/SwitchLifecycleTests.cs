@@ -8,6 +8,13 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Alterations;
+using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Activities.Sequence;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -73,6 +80,30 @@ public sealed class SwitchLifecycleTests
         Assert.NotEmpty(run.State("c").IncidentIds);
         Assert.NotEqual(ActivityExecutionStatus.Completed, run.State("switch").Status);
         Assert.Null(run.State("switch").Completion);
+        Assert.Contains(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, run.State("c").Metadata.Keys);
+        // Isolate parent admission in a projected nonterminal workflow after workflow/incident recovery. The
+        // actual terminal fault and live incident correctly refuse earlier; neither grants a parent capability.
+        var staging = new AlterationStaging();
+        var planner = new ActivityExecutionSupersessionPlanner(new ActivityScopeCleanupStore(
+            harness.Services.GetRequiredService<IBookmarkStateStore>(), harness.Services.GetRequiredService<IDurableTimerStore>(),
+            harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()));
+        var handler = new RescheduleActivityAlterationHandler(harness.Services.GetRequiredService<IWorkflowExecutableStore>(),
+            new InMemoryIncidentStateStore(), planner, TimeProvider.System);
+        var job = new WorkflowAlterationJobState("job", "plan", harness.ExecutionId, "tenant", 0, WorkflowAlterationJobStatus.Running,
+            new WorkflowAlterationJobClaim("worker", "claim", DateTimeOffset.MaxValue), 1, [], null, null, DateTimeOffset.UnixEpoch, null, null, 0);
+        var result = await handler.PreflightAsync(new WorkflowAlterationPreflightContext(job,
+            new WorkflowAlterationEnvelope("RescheduleActivity", 1, JsonSerializer.SerializeToElement(new { sourceActivityExecutionId = run.State("c").InvocationId })),
+            0, new WorkflowAlterationProjectedState([run.WorkflowState! with { Status = WorkflowExecutionStatus.Running, CompletedAt = null },
+                new WorkflowAlterationActorCommandExecutor.WorkflowAlterationActivityExecutionProjection(run.ActivityStates)]), staging));
+        Assert.False(result.IsAccepted);
+        Assert.Equal("ParentDoesNotAcceptRescheduledChild", result.Failure?.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    private sealed class AlterationStaging : IWorkflowAlterationStagingWorkspace
+    {
+        public IReadOnlyList<IWorkflowAlterationStagedChange> StagedChanges { get; } = [];
+        public void Stage(IWorkflowAlterationStagedChange change) => throw new InvalidOperationException("A refused Switch alteration must not stage a change.");
     }
 
     private static WorkflowExecutionHarness Harness() => WorkflowExecutionHarness.Create()
@@ -85,9 +116,14 @@ public sealed class SwitchLifecycleTests
         var hold = new HoldSelectedStart();
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => { new ActivitiesControlFlowFeature().ConfigureServices(services); new ActivitiesSequenceFeature().ConfigureServices(services); })
-            .ConfigureServices(hold.Decorate).WithProbeLeaf().Build(Enumerable.Range(1, 30).Select(value => $"held-switch-{value}"));
+            .ConfigureServices(services =>
+            {
+                // Hold a real Start item on the supported discrete-hop path; fusion otherwise elides it.
+                services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false });
+                hold.Decorate(services);
+            }).WithProbeLeaf().Build(Enumerable.Range(1, 30).Select(value => $"held-switch-{value}"));
         var owner = Executable(WorkflowExecutionHarness.NewProbeNode("a", [ActivityOutcomes.Break]), WorkflowExecutionHarness.NewProbeNode("c")).RootActivity;
-        var condition = Elsa.Primitives.Models.ValueEnvelope.Inline(new("Boolean"), JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline);
+        var condition = ValueEnvelope.Inline(new("Boolean"), JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline);
         var loop = new ExecutableNode("loop", "loop", typeof(Elsa.Activities.While.Activities.While).FullName!, "1.0.0", "test/loop", JsonSerializer.SerializeToElement(new { }),
             new Dictionary<string, RuntimeInputBinding> { ["Condition"] = new("Condition", new("Boolean"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal, literal: condition) },
             new Dictionary<string, string>(), childSlots: [new("While.Body", [owner])],
@@ -116,7 +152,7 @@ public sealed class SwitchLifecycleTests
         completed.AssertWorkflowCompleted();
     }
 
-    private sealed class HoldSelectedStart : IWorkflowSchedulerWorkHandler
+    private sealed class HoldSelectedStart : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
     {
         private IWorkflowSchedulerWorkHandler _inner = null!;
         public RuntimeSchedulerWorkItem? Captured { get; private set; }
@@ -134,6 +170,13 @@ public sealed class SwitchLifecycleTests
             }
             return _inner.HandleAsync(item, cancellationToken);
         }
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem item, IRuntimePipelineContext context, CancellationToken cancellationToken = default)
+        {
+            if (!Released && item.Payload is { } payload
+                && payload.TryGetProperty(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId), out var id) && id.GetString() == "c")
+                return HandleAsync(item, cancellationToken);
+            return ((IRuntimePipelineWorkHandler)_inner).HandleAsync(item, context, cancellationToken);
+        }
         public void Decorate(IServiceCollection services)
         {
             var descriptor = services.Single(item => item.ServiceType == typeof(IWorkflowSchedulerWorkHandler)
@@ -148,7 +191,7 @@ public sealed class SwitchLifecycleTests
     }
 
     [Fact]
-    public async Task Workflow_Finish_cancels_a_waiting_case_without_successfully_completing_Switch()
+    public async Task Workflow_Finish_retains_its_terminal_semantics_without_successfully_completing_Switch()
     {
         await using var harness = Harness();
         var finish = new ExecutableNode("c", "c", "elsa.intrinsic.finish", "1.0.0", "intrinsic",
@@ -157,13 +200,15 @@ public sealed class SwitchLifecycleTests
             {
                 [WorkflowIntrinsicInputKeys.Outcome] = new(WorkflowIntrinsicInputKeys.Outcome, new("String"),
                     ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
-                    literal: Elsa.Primitives.Models.ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement(ActivityOutcomes.Done), ValueProtectionPolicy.InstanceInline))
+                    literal: ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement(ActivityOutcomes.Done), ValueProtectionPolicy.InstanceInline))
             }, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Finish);
         var run = await harness.RunAsync(Executable(Wait("a"), finish), allowPendingWorkOnTerminalCompletion: true);
         run.AssertWorkflowCompleted();
         Assert.NotEqual(ActivityExecutionStatus.Completed, run.State("switch").Status);
-        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("a").Status);
-        Assert.Empty(await Bookmarks(harness));
+        // Existing Finish (#293) terminates the run and abandons further dispatch; it does not turn already
+        // suspended child history into successful Switch completion or an enclosing cancellation operation.
+        Assert.Equal(ActivityExecutionStatus.Suspended, run.State("a").Status);
+        Assert.Single(await Bookmarks(harness));
     }
 
     [Fact]

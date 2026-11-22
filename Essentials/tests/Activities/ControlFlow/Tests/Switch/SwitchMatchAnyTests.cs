@@ -22,6 +22,18 @@ namespace Elsa.Activities.Switch.Tests;
 public sealed class SwitchMatchAnyTests
 {
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Zero_cases_selects_Default_with_or_without_its_body(bool includeDefault)
+    {
+        await using var harness = NewHarness();
+        var run = await harness.RunAsync(Executable(SwitchModes.MatchAny, false, false, false,
+            includeDefault: includeDefault, zeroCases: true));
+        run.AssertOutcomes("switch", ActivityOutcomes.Default);
+        Assert.Equal(includeDefault, run.DidRun("fallback"));
+        run.AssertWorkflowCompleted();
+    }
+    [Theory]
     [InlineData(true, true, true, new[] { "Approved", "Audit", "Notify" })]
     [InlineData(true, false, true, new[] { "Approved", "Notify" })]
     [InlineData(false, true, false, new[] { "Audit" })]
@@ -198,13 +210,13 @@ public sealed class SwitchMatchAnyTests
 
     // Three empty cases with pinned Boolean conditions and a Default branch, as the publish compiler pins a Switch.
     internal static WorkflowExecutable Executable(string? mode, bool approved, bool audit, bool notify,
-        IReadOnlyDictionary<string, ExecutableNode>? bodies = null, bool includeDefault = true)
+        IReadOnlyDictionary<string, ExecutableNode>? bodies = null, bool includeDefault = true, bool zeroCases = false)
     {
         bodies ??= new Dictionary<string, ExecutableNode>();
         var labels = new[] { ("Approved", "a", approved), ("Audit", "b", audit), ("Notify", "c", notify) };
         var payload = JsonSerializer.SerializeToElement(new
         {
-            cases = labels.Select(item => new { match = item.Item1, activity = bodies.GetValueOrDefault(item.Item2)?.ExecutableNodeId, conditionInputKey = SwitchActivity.ConditionInputKey(item.Item2) }).ToArray(),
+            cases = labels.Where(_ => !zeroCases).Select(item => new { match = item.Item1, activity = bodies.GetValueOrDefault(item.Item2)?.ExecutableNodeId, conditionInputKey = SwitchActivity.ConditionInputKey(item.Item2) }).ToArray(),
             @default = includeDefault ? "fallback" : null,
             mode
         });

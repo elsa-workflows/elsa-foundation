@@ -106,7 +106,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     }
     await condition(index, true);
     await cases().getByRole("button", { name: `Choose ${label} activity`, exact: true }).click();
-    await page.getByRole("option", { name: /Write Line/ }).click();
+    await page.getByRole("option", { name: "Write Line Primitives", exact: true }).click();
     await configureBody(label);
     await returnToOwner();
   }
@@ -131,7 +131,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await capture(page, info, "no-match");
   await publishAndRun([]);
   await page.getByRole("button", { name: "Choose Default activity", exact: true }).click();
-  await page.getByRole("option", { name: /Write Line/ }).click();
+  await page.getByRole("option", { name: "Write Line Primitives", exact: true }).click();
   await configureBody("fallback");
   await returnToOwner();
   const fallback = (await save()).structure!.payload.default!.nodeId;
