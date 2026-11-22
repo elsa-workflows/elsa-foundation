@@ -69,7 +69,7 @@ import { readToastDurationPreference, saveToastDurationPreference, type ToastDur
 import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
-import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
+import { StudioTabs, StudioTabPanel, tabElementIds } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
@@ -1020,14 +1020,6 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const activePanelIndex = panels.indexOf(activePanel);
   const ActivePanelComponent = activePanel.component;
   const tabsBaseId = useId();
-  const panelKeyDown = useTablistKeyboard(
-    panels.map(panel => panel.id),
-    activePanel.id,
-    id => {
-      setActivePanelId(id);
-      setCollapsed(false);
-    }
-  );
 
   useEffect(() => {
     if (activePanelId && !panels.some(panel => panel.id === activePanelId)) {
@@ -1182,31 +1174,18 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
         />
       ) : null}
       <div className="bottom-panel-tabs">
-        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
-          {panels.map((panel, index) => {
-            const isActive = panel.id === activePanel.id;
-            const ids = tabElementIds(tabsBaseId, index);
-            return (
-              <button
-                key={panel.id}
-                id={ids.tabId}
-                data-tab-id={panel.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={ids.panelId}
-                tabIndex={isActive ? 0 : -1}
-                className={isActive ? "active" : ""}
-                onClick={() => {
-                  setActivePanelId(panel.id);
-                  setCollapsed(false);
-                }}
-              >
-                {panel.title}
-              </button>
-            );
-          })}
-        </div>
+        <StudioTabs
+          className="bottom-panel-tab-list"
+          ariaLabel="Bottom panels"
+          baseId={tabsBaseId}
+          compact
+          tabs={panels.map(panel => ({ id: panel.id, label: panel.title }))}
+          activeTab={activePanel.id}
+          onSelect={id => {
+            setActivePanelId(id);
+            setCollapsed(false);
+          }}
+        />
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
           <button
             type="button"
@@ -1228,6 +1207,9 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           </button>
         </div>
       </div>
+      {panels.map((panel, index) => panel.id === activePanel.id ? null : (
+        <StudioTabPanel key={panel.id} baseId={tabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ))}
       <div
         className="bottom-panel-content"
         role="tabpanel"
