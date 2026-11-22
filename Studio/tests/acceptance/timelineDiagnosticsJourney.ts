@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import type { RuntimeHistoryBookmarkPage, RuntimeHistoryPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes";
@@ -16,6 +16,22 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const backend = process.env.ELSA_WORKBENCH_URL, control = process.env.UX_RESTART_CONTROL_DIR;
   if (!backend || !control || process.env.UX_ACCEPTANCE_OWNED !== "1") throw new Error("Owned restart composition required");
   if (["narrow-light", "narrow-dark"].includes(info.project.name)) await page.setViewportSize({ width: 320, height: 900 });
+  const frame = async (target: Locator) => {
+    // Drain the existing bounded readiness focus before choosing the camera target.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await target.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    await expect(target).toBeInViewport({ ratio: 1 });
+    await expect.poll(async () => {
+      const bounds = await target.boundingBox();
+      const console = await page.getByRole("tab", { name: "Console", exact: true }).boundingBox();
+      return bounds !== null && console !== null && bounds.y + bounds.height <= console.y;
+    }).toBe(true);
+    await expect.poll(() => target.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      return hit !== null && (element.contains(hit) || hit.contains(element));
+    })).toBe(true);
+  };
   const api = async <T>(path: string, method = "GET", data?: unknown, headers?: Record<string, string>): Promise<T> => {
     const response = await page.request.fetch(`${backend}${path}`, { method, data, headers, timeout: 30_000 });
     expect(response.ok(), `${method} ${path}: ${response.status()} ${await response.text()}`).toBe(true);
@@ -133,7 +149,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const waitingLifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(waitingLifecycle.locator('[data-status="Active"]')).toHaveCount(1);
   await expect(waitingLifecycle).toContainText("Eligible");
-  await expect(waitingLifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeInViewport({ ratio: 1 });
+  await frame(waitingLifecycle.locator('[data-status="Active"]'));
+  await expect(waitingLifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeEnabled();
   await capture(page, info, "diagnostics-approval-before-restart");
   await restart();
   const restored = { details: await details(approval.id), history: await history(approval.id), bookmarks: await bookmarks(approval.id),
@@ -176,7 +193,9 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await expect(lifecycle).toContainText("Expired"); await expect(lifecycle).toContainText("It does not wake, time out or cancel the activity.");
   await capture(page, info, "diagnostics-passive-expiry");
   await openOwner(expiry.id, passive.createdHistoryEventId!, "Journal");
-  await expect(page.getByRole("region", { name: "Activity journal", exact: true })).toContainText("Bookmark created");
+  const expiryJournal = page.getByRole("region", { name: "Activity journal", exact: true });
+  await expect(expiryJournal).toContainText("Bookmark created");
+  await frame(expiryJournal.getByText("Bookmark created", { exact: true }));
   await capture(page, info, "diagnostics-passive-expiry-journal");
   await cancel(expiry.id); // Explicit later native cancellation, never attributed to clock passage.
 
@@ -191,7 +210,9 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   expect(duplicateBookmarks.items.find(item => item.status === "Consumed")!.bookmark.identity.bookmarkId).toBe(duplicateBefore.items[0].bookmark.identity.bookmarkId);
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline&historyEvent=${duplicateEvent[0].historyEventId}`);
   await waitCapturedPlaybackReady(page);
-  await expect(page.getByRole("region", { name: "History event details", exact: true })).toContainText("Duplicate delivery observed");
+  const duplicateDetails = page.getByRole("region", { name: "History event details", exact: true });
+  await expect(duplicateDetails).toContainText("Duplicate delivery observed");
+  await frame(duplicateDetails.getByRole("heading", { name: "Duplicate delivery observed", exact: true }));
   await capture(page, info, "diagnostics-duplicate-delivery");
   lifecycle = await openLifecycle(duplicate.id, duplicateBefore.items[0].createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1); await capture(page, info, "diagnostics-single-consumption");
@@ -230,13 +251,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
     await expect(selectedDetails.getByRole("heading").first()).toHaveText(selectedHeading!);
     const retry = timeline.getByRole("button", { name: "Retry history", exact: true });
-    await retry.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
-    await expect(retry).toBeInViewport({ ratio: 1 });
-    await expect.poll(() => retry.evaluate(element => {
-      const bounds = element.getBoundingClientRect();
-      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
-      return hit !== null && element.contains(hit);
-    })).toBe(true);
+    await frame(retry);
     await capture(page, info, "diagnostics-history-stale");
   } finally { await page.unroute(matcher); }
   const response = page.waitForResponse(message => matcher(new URL(message.url())) && message.ok());
