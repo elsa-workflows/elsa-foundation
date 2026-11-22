@@ -169,6 +169,13 @@ Input, not for a present expression result. Generic Get/conversion then supplies
 value-type result. String blanks remain strings for String targets. Enum parsing precedes the whitespace fallback,
 so blank HTTP-status text is not assumed to become zero.
 
+The tagged loader also ignores a serialized `memoryReference` property: the resolved expression descriptor creates
+the wrapped Input's reference. A typeName/memoryReference wrapper with no expression returns a null Input, rather
+than reading that variable. Corrected built-ins refuse that unsupported binding shape; their valid expressions
+discard this ignored metadata so a JSON Literal cannot be replaced by a memory read. A proper Variable expression
+still uses declaration-ID lowering. Non-string payloads for unknown/script syntaxes are refused before they can
+bypass shared text-expression validation. The generic lowerer and unconfigured custom maps remain unchanged.
+
 Sources: [input converter, 3.6.3](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
 [input converter, 3.5.3](https://github.com/elsa-workflows/elsa-core/blob/7646867ac5365af35f0507fde72b2df98790bec9/src/modules/Elsa.Workflows.Core/Serialization/Converters/InputJsonConverter.cs),
 [input evaluation](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Workflows.Core/Extensions/ActivityExecutionContextExtensions.InputEvaluation.cs),

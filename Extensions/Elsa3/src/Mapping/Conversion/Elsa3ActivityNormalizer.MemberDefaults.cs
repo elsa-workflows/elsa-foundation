@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
@@ -39,6 +40,32 @@ internal sealed partial class Elsa3ActivityNormalizer
         type.ValueKind == JsonValueKind.String && StringComparer.OrdinalIgnoreCase.Equals(type.GetString(), "Literal") &&
         (!expression.TryGetProperty("value", out var value) || value.ValueKind == JsonValueKind.Null);
 
+    private static bool HasLowerableExpressionShape(JsonElement source)
+    {
+        if (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
+            !Elsa3TypedValues.TryGetExpression(source, out var syntax, out var value))
+            return false;
+
+        // Literal/Object can carry JSON and Variable has its own declaration-ID validation. Other syntaxes need
+        // text for the shared lowerer to validate them; a non-string payload must not bypass that validation.
+        return value.ValueKind == JsonValueKind.String ||
+               syntax.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+               syntax.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
+               syntax.Equals("Variable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static JsonElement WithoutSerializedInputMemoryReference(JsonElement source)
+    {
+        if (source.ValueKind != JsonValueKind.Object || !source.TryGetProperty("memoryReference", out _))
+            return source;
+
+        // Tagged Input loading derives its reference from the expression descriptor and ignores this serialized
+        // property. Preserve the expression's value instead of letting the generic memory path replace it.
+        var input = JsonNode.Parse(source.GetRawText())!.AsObject();
+        input.Remove("memoryReference");
+        return JsonSerializer.SerializeToElement(input);
+    }
+
     private static bool ApplySourceCorrection(Elsa3RewriteContext context, Elsa3MemberRule rule, string property,
         JsonElement source, Dictionary<string, JsonElement> result, Dictionary<string, string> boundBy)
     {
@@ -58,13 +85,10 @@ internal sealed partial class Elsa3ActivityNormalizer
                 ApplyRule(context, rule, property, JsonNull, result, boundBy);
             return true;
         }
-        if (source.ValueKind == JsonValueKind.Object &&
-            (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
-             (source.TryGetProperty("expression", out _) || !Elsa3TypedValues.IsCaptured(source)) &&
-             !Elsa3TypedValues.TryGetExpression(source, out _, out _)))
+        if (source.ValueKind == JsonValueKind.Object && !HasLowerableExpressionShape(source))
         {
-            context.Error(ValueOutsideContract, $"Member '{property}' has unsupported input/expression metadata.",
-                $"Set an explicit compatible value for '{property}' in the Elsa 3 workflow.", property);
+            context.Error(ValueOutsideContract, $"Member '{property}' has unsupported input/expression metadata; a serialized memory reference alone is not an Elsa 3 input expression.",
+                $"Set a compatible expression for '{property}' in Elsa 3; use a Variable expression naming its declaration id for a variable read.", property);
             return true;
         }
         if (rule.OnBlank is { } blank && Elsa3TypedValues.TryGetLiteral(source, out var text) && string.IsNullOrWhiteSpace(text))

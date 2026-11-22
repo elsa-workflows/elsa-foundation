@@ -39,6 +39,42 @@ public sealed class MemberDefaultParityTests
     }
 
     [Fact]
+    public async Task Memory_only_input_is_refused_before_import_writes()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var loop = Activity("loop", "Elsa.For");
+        loop["outerBoundInclusive"] = new JsonObject { ["typeName"] = "Boolean", ["memoryReference"] = new JsonObject { ["id"] = "inclusive" } };
+        var definition = Definition(Sequence(loop));
+        definition["variables"] = new JsonArray(new JsonObject { ["id"] = "inclusive", ["name"] = "inclusive", ["typeName"] = "Boolean", ["value"] = "false" });
+        await RefusedWithoutWrites(host, definition, "outerBoundInclusive");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_resolved_expression_wins_over_serialized_memory_metadata(bool variableExpression)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var loop = Activity("loop", "Elsa.For");
+        loop["start"] = Literal("0"); loop["end"] = Literal("1"); loop["step"] = Literal("1"); loop["body"] = Write("iteration");
+        loop["outerBoundInclusive"] = new JsonObject
+        {
+            ["typeName"] = "Boolean",
+            ["expression"] = variableExpression
+                ? new JsonObject { ["type"] = "Variable", ["value"] = new JsonObject { ["id"] = "selected", ["name"] = "selected" } }
+                : new JsonObject { ["type"] = "Literal", ["value"] = false },
+            ["memoryReference"] = new JsonObject { ["id"] = "ignored" }
+        };
+        var definition = Definition(Sequence(loop));
+        definition["variables"] = new JsonArray(
+            new JsonObject { ["id"] = "selected", ["name"] = "selected", ["typeName"] = "Boolean", ["value"] = "false" },
+            new JsonObject { ["id"] = "ignored", ["name"] = "ignored", ["typeName"] = "Boolean", ["value"] = "true" });
+        var run = await host.RunAsync(await ImportPublish(host, definition));
+        Completed(run);
+        Assert.Single(run.ExecutedNodeIds, id => id == "iteration");
+    }
+
+    [Fact]
     public async Task A_deliberate_null_Delay_schedules_zero_in_the_real_runtime()
     {
         var timers = new ConcurrentQueue<DurableTimer>();

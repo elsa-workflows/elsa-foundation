@@ -132,13 +132,52 @@ public sealed class Elsa3MemberDefaultParityTests
     }
 
     [Fact]
-    public async Task A_genuine_memory_only_input_keeps_its_reference_contract()
+    public async Task A_typed_Variable_expression_keeps_its_declaration_reference_contract()
     {
-        var node = Subject("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"memoryReference\":{\"id\":\"inclusive\"}}", "unbound");
-        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "true" };
+        var node = Subject("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"expression\":{\"type\":\"Variable\",\"value\":{\"id\":\"inclusive\",\"name\":\"inclusive\"}}}", "unbound");
+        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "false" };
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal("Variable", Input(Node(result.Value!.State, "subject"), "EndInclusive").Value.ExpressionType);
+    }
+
+    [Theory]
+    [InlineData("Elsa.For", "outerBoundInclusive", "Boolean", "false")]
+    [InlineData("Elsa.SendHttpRequest", "method", "String", "POST")]
+    [InlineData("Elsa.FlowSendHttpRequest", "method", "String", "POST")]
+    public async Task Memory_only_wrappers_cannot_replace_the_legacy_default_with_a_variable(string type, string member, string alias, string initial)
+    {
+        var node = Subject(type, member, JsonSerializer.Serialize(new { typeName = alias, memoryReference = new { id = "source" } }), "unbound");
+        var variable = new Elsa3Variable { Id = "source", Name = "source", TypeName = alias, Value = initial };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith("." + member, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Unknown", "false")]
+    [InlineData("Unknown", "1")]
+    [InlineData("", "false")]
+    [InlineData("", "1")]
+    [InlineData("JavaScript", "false")]
+    [InlineData("Liquid", "1")]
+    public async Task Non_string_unknown_or_script_expression_payloads_are_refused_at_the_member(string syntax, string payload)
+    {
+        var result = await Convert("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"expression\":{\"type\":" + JsonSerializer.Serialize(syntax) + ",\"value\":" + payload + "}}");
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith(".outerBoundInclusive", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_Literal_value_takes_precedence_over_ignored_serialized_memory_metadata()
+    {
+        var node = Subject("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"expression\":{\"type\":\"Literal\",\"value\":false},\"memoryReference\":{\"id\":\"inclusive\"}}", "unbound");
+        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "true" };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var input = Input(Node(result.Value!.State, "subject"), "EndInclusive");
+        Assert.Equal("Literal", input.Value.ExpressionType);
+        Assert.Equal("false", Text(input));
     }
 
     [Theory]

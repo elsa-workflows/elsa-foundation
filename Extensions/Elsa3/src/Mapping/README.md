@@ -324,7 +324,9 @@ Known differences that convert without a diagnostic, because they depend on how 
 ## Missing, blank and deliberately null members (spec 267 follow-up)
 
 The built-in map distinguishes missing/defaulted Input wrappers (`{}`, typeName-only and typed `expression:{}`)
-from a resolved typed Literal with a null or omitted value. Malformed expression metadata is refused. Explicit
+from a resolved typed Literal with a null or omitted value. Malformed expression metadata and memory-only input
+wrappers are refused. A valid expression takes precedence over serialized memory-reference metadata, which the
+legacy loader ignores; valid Variable expressions retain declaration-ID lowering. Explicit
 collections and the String text `"null"` cannot acquire a declared default by being classified as unbound.
 
 | Member | Conversion |

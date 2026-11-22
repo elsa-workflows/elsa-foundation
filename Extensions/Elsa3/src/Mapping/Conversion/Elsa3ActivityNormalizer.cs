@@ -249,6 +249,7 @@ internal sealed partial class Elsa3ActivityNormalizer(
                 correctedBy[rule.Elsa4Key!] = propertyName;
                 if (ApplySourceCorrection(context, rule, propertyName, source, result, boundBy))
                     continue;
+                value = WithoutSerializedInputMemoryReference(value);
             }
             ApplyRule(context, rule, propertyName, value, result, boundBy);
         }
