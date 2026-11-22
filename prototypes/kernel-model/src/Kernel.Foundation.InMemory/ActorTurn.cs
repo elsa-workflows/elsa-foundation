@@ -126,7 +126,7 @@ internal sealed partial class ActorAdapter
             _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         }
 
-        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
+        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait, Header.Tenant);
 
         public string Publish(string key, string? payload, TimeSpan keepFor)
         {
@@ -233,9 +233,8 @@ internal sealed partial class ActorAdapter
             var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
                 ? _store.MessageHandle("inbox:" + logicalId) : message.Id;
-            if (message.Start is null && message.EventMatch is { } encoded)
+            if (message.Start is null && Durable.Events.MatchFor(message) is { } match)
             {
-                var match = Durable.EventMatch.Decode(encoded);
                 if (!match.Key.StartsWith(Qualify(""), StringComparison.Ordinal))
                     throw new InvalidOperationException("An event from another scope reached this turn.");
                 var key = match.Key[(Header.Tenant.Length + 1)..];

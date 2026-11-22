@@ -2301,7 +2301,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             // NATIVE N1: a publish ticket is the publisher's side, done by the owner after the commit that sent it.
             foreach (var ticket in tickets.Where(t => t.Message.Kind == Kinds.Publish))
-                await Events.PublishAsync(_store, FoundationEventTicket.Decode(ticket.Message), Partitions, cancellationToken);
+            {
+                var publication = FoundationEventTicket.Decode(ticket.Message);
+                if (publication.FoundationTenant is not null)
+                    publication = publication with { FoundationPublishTicket = ticket.Message.InboxKey };
+                await Events.PublishAsync(_store, publication, Partitions, cancellationToken);
+            }
             var waits = tickets.Where(t => t.Message.Kind == Kinds.Meet).SelectMany(t => t.Message.Read<SubscriptionRow[]>()).ToList();
             if (waits.Count > 0)
                 foreach (var match in await _store.KeptMatchesAsync(waits, cancellationToken))
