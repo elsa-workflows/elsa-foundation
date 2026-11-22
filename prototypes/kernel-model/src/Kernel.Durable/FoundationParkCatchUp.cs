@@ -14,6 +14,7 @@ internal readonly record struct CatchUpPosition(string Key, string Wait, string 
 }
 
 internal sealed record ParkCatchUpTicket(string Chain, long Page, long Entitlement, CatchUpPosition? After = null);
+internal sealed record ParkCatchUpFailure(InboxKey Key, int Attempts, int Limit);
 
 public sealed partial class InMemoryStore
 {
@@ -54,8 +55,14 @@ public sealed partial class InMemoryStore
 
     private CatchUpStep? PrepareParkCatchUp(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, IReadOnlySet<Guid>? revoked)
     {
+        if (turn.FoundationCatchUpFailed is { } failed)
+        {
+            ValidateParkCatchUpFailure(turn, failed, epochs);
+            return null;
+        }
         if (turn.FoundationCatchUpStep is not { } key)
         {
+            if (turn.FoundationCatchUpBefore is not null || turn.FoundationCatchUpExpected is not null) throw InvalidCatchUpFailure();
             if (turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
                 throw new StoreException(Failure.Definite, "A recovery catch-up ticket requires its own fenced step.");
             return null;
@@ -63,7 +70,9 @@ public sealed partial class InMemoryStore
         if (turn.Consumed is not [var input] || input != key || turn.Row is not null || turn.Delete || turn.Journal is not null ||
             turn.Sent.Count != 0 || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Unsubscribe || turn.Done.Count != 0 ||
             turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
-            Messages.GetValueOrDefault(key) is not { Done: false, Message: { ParkCatchUp: { } ticket, Kind: Kinds.Meet } source } ||
+            turn.FoundationCatchUpExpected is not { } expected || turn.FoundationCatchUpBefore is null ||
+            Messages.GetValueOrDefault(key) is not { Done: false, Message: { ParkCatchUp: { } ticket, Kind: Kinds.Meet } source } stored ||
+            expected != stored.Attempts ||
             source.Target.Id != turn.Instance || !epochs.ContainsKey(source.Target.Partition))
             throw new StoreException(Failure.Definite, "A catch-up step must consume its exact ticket under its partition's fence.");
 
@@ -92,6 +101,51 @@ public sealed partial class InMemoryStore
         var successor = CatchUpMessage(FoundationEventIdentity.CatchUpSuccessor(next.Chain, next.Page), turn.Instance,
             source.TargetCreation!.Value, next);
         return new(ticket, deliveries, successor);
+    }
+
+    private void ValidateParkCatchUpFailure(TurnCommit turn, ParkCatchUpFailure failed, IReadOnlyDictionary<int, long> epochs)
+    {
+        if (turn.FoundationCatchUpStep is not null || turn.FoundationCatchUpBefore is not null ||
+            turn.FoundationCatchUpExpected is not null || failed.Limit <= 0 ||
+            Messages.GetValueOrDefault(failed.Key) is not { Done: false, Message: { Kind: Kinds.Meet, ParkCatchUp: not null } envelope } stored ||
+            stored.Attempts != failed.Attempts || envelope.Target.Id != turn.Instance || !epochs.ContainsKey(envelope.Target.Partition) ||
+            turn.Delete || turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
+            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0)
+            throw InvalidCatchUpFailure();
+
+        if (failed.Attempts >= failed.Limit && Instances.GetValueOrDefault(turn.Instance) is
+                { Status: InstanceStatus.Running, Retired: false } actor && OwnsParkCatchUp(actor, envelope))
+        {
+            if (turn.Row is not { Status: InstanceStatus.Faulted, Retired: false } next || next.Creation != actor.Creation ||
+                !turn.Unsubscribe || turn.FoundationKept?.GetValueOrDefault(failed.Key) != ParkKeepReason.Consumed ||
+                !turn.Done.Contains(failed.Key))
+                throw InvalidCatchUpFailure();
+        }
+        else if (turn.Row is not null || turn.Unsubscribe || turn.Journal is not null || turn.Sent.Count != 0 ||
+            turn.Done.Count != 0 || (failed.Attempts < failed.Limit ? turn.Consumed.Count != 0 :
+                turn.Consumed is not [var consumed] || consumed != failed.Key))
+            throw InvalidCatchUpFailure();
+    }
+
+    internal bool OwnsParkCatchUp(InstanceRow actor, Message source)
+    {
+        lock (_gate)
+            return actor.Id == source.Target.Id && actor.Creation == source.TargetCreation &&
+                source.ParkCatchUp is { } ticket && _foundationCatchUpCoverage.Values.Any(entry =>
+                    entry.Ticket.Chain == ticket.Chain && entry.Wait.Instance == actor.Id && entry.Wait.Creation == actor.Creation);
+    }
+
+    private static StoreException InvalidCatchUpFailure() =>
+        new(Failure.Definite, "A catch-up failure must match the pending ticket, its attempts and its owner's fence.");
+
+    private void ApplyParkCatchUpFailure(TurnCommit turn)
+    {
+        if (turn.FoundationCatchUpFailed is not { } failed) return;
+        var ticket = Messages[failed.Key];
+        if (failed.Attempts < failed.Limit)
+            ticket.Attempts++;
+        else if (turn.Row is null)
+            ApplyParkCatchUp(new(ticket.Message.ParkCatchUp!, [], null));
     }
 
     private IEnumerable<(EventRow Publication, SubscriptionRow Wait)> CatchUpMatches(ParkCatchUpTicket ticket, Message source, IReadOnlySet<Guid>? revoked)

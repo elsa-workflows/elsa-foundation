@@ -114,6 +114,12 @@ internal static class EventIdentityChecks
             $"{label}: catch-up uses the publication's stored spelling when deriving its digest");
         if (!slowConsumer) await Pump(active);
         now += 21;
+        var beforeSweep = await edge.SendAsync(scope, new Contract.Target.Event("Order-7"), folds ? "e" : "E",
+            Contract.Kinds.Event, "premature replacement", options);
+        check(beforeSweep.Outcome == Contract.AdmissionOutcome.Duplicate &&
+            store.FoundationEvents[("events_" + firstKey, "E")] == original &&
+            store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == 1,
+            $"{label}: an unswept publication remains the receipt after the keep window");
         await store.SweepAsync();
         check(!store.FoundationEvents.ContainsKey(("events_" + firstKey, "E")) &&
             store.Messages.GetValueOrDefault(oldKey) is { } oldRow && oldRow.Done == !slowConsumer,

@@ -167,6 +167,9 @@ public sealed record TurnCommit(
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }
     internal InboxKey? FoundationCatchUpStep { get; init; }
+    internal long? FoundationCatchUpBefore { get; init; }
+    internal int? FoundationCatchUpExpected { get; init; }
+    internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

@@ -672,11 +672,145 @@ internal static class ParkKeptChecks
         await CheckRecoverKeptEvents(count: 2, revoke: false, check, byteCut: true);
         await CheckRecoverKeptEvents(count: 1, revoke: false, check, sweepBackstep: true);
         await CheckRecoverKeptEvents(count: 1, revoke: false, check, repeatPublication: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, retryBeforeOpen: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, zeroWindow: true);
         await CheckRecoverKeptEvents(count: 4096, revoke: false, check, probePageWork: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false);
+        await CheckFailedCatchUp(check, recoverAfterFailure: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
+    }
+
+    private static async Task CheckFailedCatchUp(Action<bool, string> check, bool recoverAfterFailure,
+        bool delayedResponse = false, bool revoked = false)
+    {
+        var now = 1_701_400_030_200L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new KeepingRecoveryProbe();
+        var scope = new Contract.BoundScope("catch-up-attempt");
+        var faults = 0;
+        CommitBatch? delayed = null;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var forward = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed || batch.Turns is not [{ FoundationCatchUpStep: not null } step]) return;
+            switch (faults)
+            {
+                case 0:
+                    faults++;
+                    throw new StoreException(Failure.Definite, "injected refusal before the step");
+                case 1 when !recoverAfterFailure:
+                    faults++;
+                    if (delayedResponse) delayed = batch;
+                    else now = step.FoundationCatchUpBefore!.Value;
+                    break;
+            }
+        }, beforeCommit: batch => ReferenceEquals(batch, delayed) ? new(release.Task) : default);
+        Worker NewOwner(string name) => new(name, 0, forward, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = () => 0, MaxAttempts = 2,
+                ParkCatchUpTimeout = delayedResponse ? TimeSpan.FromMilliseconds(30) : null
+            });
+        var worker = NewOwner("first-catch-up");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var id = store.Instances.Values.Single().Id;
+        var before = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var count = recoverAfterFailure ? 171 : 1;
+        for (var index = 0; index < count; index++)
+            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"kept-{index:D4}", Contract.Kinds.Event, "owed",
+                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(before)));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        var originalControl = store.Instances[id].ParkRecovery!.Control;
+        var (key, _) = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null);
+        await CatchUpOnly(worker);
+        var unchanged = worker.Owns && faults == 1 && store.Messages.GetValueOrDefault(key) is
+            { Done: false, Attempts: 1, Message.ParkCatchUp.Page: 0 } &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Event);
+        check(unchanged, "a refused isolated step counts one fenced attempt and advances no delivery or cursor");
+        if (!unchanged) return;
+        await owner.DisposeAsync();
+        worker = NewOwner("second-catch-up");
+        await using var successor = (await new DurableHost([worker]).ActivateAsync(0))!;
+        try { await CatchUpOnly(worker).WaitAsync(TimeSpan.FromSeconds(5)); }
+        finally { release.TrySetResult(); }
+        if (recoverAfterFailure)
+        {
+            check(store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) is
+                { Done: false, Attempts: 0, Message.ParkCatchUp.Page: 1 },
+                "a successful retry writes a fresh next-page ticket with its full attempt budget");
+            await Pump(successor);
+            check(probe.Received.Count == count && probe.Received.Distinct().Count() == count &&
+                store.Instances[id] is { Status: InstanceStatus.Running, ParkRecovery: null },
+                "the successor completes all kept-event pages once after a prior failed step");
+            return;
+        }
+        check(worker.Owns && faults == 2 && store.Messages.GetValueOrDefault(key) is
+            { Done: false, Attempts: 2, Message.ParkCatchUp.Page: 0 } &&
+            store.Instances[id].ParkRecovery?.Control == originalControl &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Event),
+            delayedResponse ? "the owner stops waiting on a stalled store request and records one failure" :
+                "the step deadline at equality writes no page and the successor counts its second failure");
+        if (delayed is not null)
+        {
+            var ejected = await DefiniteRejection(() => store.CommitAsync(delayed));
+            check(ejected && store.Messages.GetValueOrDefault(key) is { Attempts: 2, Done: false },
+                "the old request cannot apply after its attempt is counted, even before the database deadline");
+            now += 21;
+        }
+        if (revoked)
+        {
+            var oldWait = store.Subscriptions.Single();
+            var unbind = new TurnCommit(id, null, null, [], [], [], [], [oldWait], null);
+            var fence = worker.Fences.Single();
+            var result = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+                false, [unbind], [], []));
+            var newWait = oldWait with { FoundationIncarnation = Guid.NewGuid() };
+            await store.SubscribeAsync(newWait);
+            await CatchUpOnly(worker);
+            check(result.Landed && !store.Messages.ContainsKey(key) && store.Instances[id].ParkRecovery?.Control == originalControl &&
+                store.Subscriptions.Single().FoundationIncarnation == newWait.FoundationIncarnation,
+                "an exhausted superseded chain settles without re-parking the actor or removing a new wait");
+            return;
+        }
+        await worker.PollAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        check(store.Instances[id].ParkRecovery?.Control == originalControl,
+            "the open recovery cannot Complete ahead of an exhausted meet with active coverage");
+        await CatchUpOnly(worker);
+        check(store.Instances[id] is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+            !store.Messages.ContainsKey(originalControl) && store.Subscriptions.Count == 0 && probe.Received.Count == 0,
+            "the exhausted meet re-parks an open recovery and atomically removes its subscriptions");
+        await store.SweepAsync();
+        check(store.FoundationEvents.Count == 0, "the exhausted meet releases coverage of its expired publication");
+
+        static async Task CatchUpOnly(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.FlushAsync();
+            await owner.MeetAsync();
+            await owner.FlushAsync();
+        }
     }
 
     private static async Task CheckRecoverKeptEvents(int count, bool revoke, Action<bool, string> check, bool byteCut = false,
-        bool sweepBackstep = false, bool repeatPublication = false, bool probePageWork = false)
+        bool sweepBackstep = false, bool repeatPublication = false, bool probePageWork = false,
+        bool retryBeforeOpen = false, bool zeroWindow = false)
     {
         const long initial = 1_701_400_030_200;
         var now = initial;
@@ -715,11 +849,25 @@ internal static class ParkKeptChecks
         foreach (var eventId in expected)
             await ingress.SendAsync(scope, publisher, eventId, Contract.Kinds.Event,
                 byteCut && eventId == expected[0] ? new string('x', ParkRecoveryCredit.LimitBytes) : "payload",
+                new Contract.AddOptions(KeepFor: zeroWindow ? TimeSpan.Zero : TimeSpan.FromMilliseconds(20)));
+        if (zeroWindow)
+            check(store.FoundationEvents.Values.Single().KeepUntil == now,
+                "an explicit zero keep window includes its own acceptance timestamp");
+        if (retryBeforeOpen)
+        {
+            var key = (scope.Tenant + "_approval", expected[0]);
+            var original = store.FoundationEvents[key];
+            now += 21;
+            var retry = await ingress.SendAsync(scope, publisher, expected[0], Contract.Kinds.Event, "replacement",
                 new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+            check(retry.Outcome == Contract.AdmissionOutcome.Duplicate && store.FoundationEvents[key] == original,
+                "a retry after the window leaves the unswept publication intact before there is any coverage");
+            now = initial;
+        }
         await ingress.SendAsync(scope, publisher, "expired-before-open", Contract.Kinds.Event, "too old",
-            new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+            zeroWindow ? null : new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
         await Pump(owner);
-        now += 2;
+        if (!zeroWindow) now += 2;
         var fixture = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
             store.FoundationEvents.Count == count + 1 && store.Subscriptions.Count == 0 && probe.Received.Count == 0;
         check(fixture, "a kept event is still available when the keeping wait's Park is unresolved");
@@ -766,7 +914,7 @@ internal static class ParkKeptChecks
             var originalWait = store.Subscriptions.Single();
             var replacement = originalWait with { FoundationIncarnation = Guid.NewGuid() };
             var step = new TurnCommit(id, null, null, [originalTicket.InboxKey], [], [], [], [], null)
-            { FoundationCatchUpStep = originalTicket.InboxKey };
+            { FoundationCatchUpStep = originalTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
             var unregister = new TurnCommit(id, null, null, [], [], [], [], [originalWait], null);
             var fence = worker.Fences.Single();
             var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [step, unregister], [], []);
@@ -790,7 +938,7 @@ internal static class ParkKeptChecks
                 var publication = store.FoundationEvents.Values.Single(row => row.Id == expected[0]);
                 var generated = new EventRoute(publication, store.Subscriptions.Single()).Delivery().Message;
                 var step = new TurnCommit(id, null, null, [originalTicket.InboxKey], [], [], [], [], null)
-                    { FoundationCatchUpStep = originalTicket.InboxKey };
+                    { FoundationCatchUpStep = originalTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
                 bool Unchanged() => store.Messages.ContainsKey(originalTicket.InboxKey) && store.Messages.Values.All(row => row.Message.Kind != Kinds.Event);
                 CheckCatchUpCollision(store, worker.Fences.Single(), step, successorCollision, Unchanged, "page successor", check);
                 CheckCatchUpCollision(store, worker.Fences.Single(), step, generated with { Kind = "ordinary" }, Unchanged, "event delivery", check);
@@ -822,7 +970,7 @@ internal static class ParkKeptChecks
             var successor = MakeWorker("recover-kept-successor");
             await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
             var staleStep = new TurnCommit(id, null, null, [successorTicket!.InboxKey], [], [], [], [], null)
-                { FoundationCatchUpStep = successorTicket.InboxKey };
+                { FoundationCatchUpStep = successorTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
             var stale = await store.CommitAsync(new(oldFence.Partition, oldFence.Epoch, oldFence.Position, Defaults.Lease, false, [staleStep], [], []));
             check(!stale.Landed && store.Messages.ContainsKey(successorTicket.InboxKey), "a stale owner cannot advance the successor catch-up page");
             await Complete(next);

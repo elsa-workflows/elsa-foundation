@@ -45,6 +45,7 @@ public interface IActorType
     internal bool SettlesWhileWithheld(InstanceRow row, Delivery delivery) => false;
 
     internal ParkPageCursor? FirstUnheldRecoveryInput(InstanceRow row, ParkRelease release, Predicate<InboxKey> isHeld) => null;
+    internal bool OwnsParkCatchUp(InstanceRow row, Message ticket) => false;
 
     /// <summary>
     /// A turn the actor type handles alone, without any of the actor's own code: a command (<see cref="Kinds.IsControl"/>),
@@ -245,6 +246,9 @@ public sealed class TurnOutcome(string instance)
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
     internal InboxKey? FoundationCatchUpStep;
+    internal long? FoundationCatchUpBefore;
+    internal int? FoundationCatchUpExpected;
+    internal ParkCatchUpFailure? FoundationCatchUpFailed;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;

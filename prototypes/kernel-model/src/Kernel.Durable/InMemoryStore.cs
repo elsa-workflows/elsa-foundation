@@ -346,6 +346,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (catchUpOpens is not null || catchUpSteps is not null)
                     ValidateCatchUpWrites(batch, catchUpOpens?.Values ?? (IEnumerable<Message>)[],
                         catchUpSteps?.Values ?? (IEnumerable<CatchUpStep>)[], initialExpiries?.Values ?? (IEnumerable<Message>)[]);
+                if (batch.Turns.Any(turn => turn.FoundationCatchUpBefore is { } deadline && clock() >= deadline))
+                    throw new StoreException(Failure.Definite, "The catch-up step reached its deadline before committing.");
                 // A mark records its message's own partition's epoch, so a mark outside the fenced set would be unbound, and a
                 // delete outside it would be a write no fence covers.
                 if (batch.Fences is not null)
@@ -403,6 +405,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         Deleted[key.Partition]++;
                     }
                 }
+                ApplyParkCatchUpFailure(turn);
                 foreach (var id in turn.Consumed) Messages.Remove(id);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
@@ -657,7 +660,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var until = keepFor is { Ticks: > 0 } keep ? checked(now + (long)keep.TotalMilliseconds) : now - 1;
+            var until = keepFor is { } keep ? checked(now + (long)keep.TotalMilliseconds) : now - 1;
             var reuseUntil = checked(now + (long)(keepFor ?? IngressDeduplicationWindow).TotalMilliseconds);
             var publication = new EventRow(tenant + "_" + correlation, id, payload, until) { FoundationTenant = tenant };
             var receipt = PublishOutside(publication, replyTo, replyTo is not null, reuseUntil, now, cancellationToken);
@@ -671,9 +674,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         cancellationToken.ThrowIfCancellationRequested();
         var key = (request.Key, request.Id);
         var events = EventsFor(request);
-        if (reuseUntil is null ? events.ContainsKey(key) :
-            _foundationEventReceipts.TryGetValue(key, out var prior) && now <= prior ||
-            events.TryGetValue(key, out var publication) && OwedToCatchUp(publication))
+        if (events.ContainsKey(key) ||
+            reuseUntil is not null && _foundationEventReceipts.TryGetValue(key, out var prior) && now <= prior)
             return new(true, []);
 
         if (reuseUntil is not null)
