@@ -1430,8 +1430,8 @@ describe("workflows module", () => {
 
       await click(buttonByLabel(container, "Copy executable ID artifact-current"));
       expect(writeText).toHaveBeenCalledWith("artifact-current");
-      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied artifact ID" }));
-      expect(container.textContent).not.toContain("Copied artifact ID");
+      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied executable ID" }));
+      expect(container.textContent).not.toContain("Copied executable ID");
 
       await click(buttonByLabel(container, "Run executable artifact-current"));
       await waitForText(container, "Provide the workflow inputs for this run.");

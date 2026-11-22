@@ -52,8 +52,8 @@ describe("workflow definition route browse session", () => {
     const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions?search=original&view=previous-view", fetchMock, capabilities);
     await waitForCondition(() => expect(button(container, "Save view")).not.toBeNull());
     await click(button(container, "Save view"));
-    await waitForCondition(() => expect(button(container, "Delete saved view")).not.toBeNull());
-    await click(button(container, "Delete saved view"));
+    await waitForCondition(() => expect(button(document.body, "Delete saved view")).not.toBeNull());
+    await click(button(document.body, "Delete saved view"));
     await waitForCondition(() => expect(finishDelete).toBeTypeOf("function"));
     updateEndpoint("https://current.example/");
     await click(button(container, "Refresh"));

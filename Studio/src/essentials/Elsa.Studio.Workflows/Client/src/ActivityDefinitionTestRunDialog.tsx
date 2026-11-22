@@ -294,7 +294,7 @@ export function ActivityDefinitionTestRunDialog({
           <div>
             <span className="ad-kicker">Activity Definition Test Run</span>
             <h2 id={titleId}>{definitionLabel}</h2>
-            <p>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable Run data without publishing this Activity Definition.</p>
+            <p>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable run data without publishing this Activity Definition.</p>
           </div>
           <button type="button" className="ad-icon-action" aria-label="Close Test Run" onClick={onClose} disabled={busy}>
             <X size={17} aria-hidden />
@@ -489,7 +489,7 @@ function ActivityTestRunEvidence({
           <ActivityTestRunTechnicalIdentity label="Test Run" value={view.testRunId} copiedLabel="Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityTestRunTechnicalIdentity label="Workflow execution" value={view.workflowExecutionId} href={activityTestRunWorkflowUrl(view)} onOpenRun={onOpenRun} copiedLabel="workflow execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           {view.outerActivityExecutionId ? <ActivityTestRunTechnicalIdentity label="Outer activity execution" value={view.outerActivityExecutionId} href={activityTestRunActivityUrl(view)} onOpenRun={onOpenRun} copiedLabel="outer activity execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
-          {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper artifact" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
+          {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper executable" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
           {view.sourceReferenceId ? <ActivityTestRunTechnicalIdentity label="Source Reference" value={view.sourceReferenceId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="Source Reference ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
           {view.commandDispatchStatus ? <div><dt>Command dispatch</dt><dd>{view.commandDispatchStatus}</dd></div> : null}
         </dl>

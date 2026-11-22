@@ -1177,7 +1177,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await dialog.getByText("Technical details", { exact: true }).click();
   const workflowLink = dialog.getByRole("link", { name: "Open Workflow execution" });
   const activityLink = dialog.getByRole("link", { name: "Open Outer activity execution" });
-  const artifactLink = dialog.getByRole("link", { name: "Open Wrapper artifact" });
+  const artifactLink = dialog.getByRole("link", { name: "Open Wrapper executable" });
   const sourceReferenceLink = dialog.getByRole("link", { name: "Open Source Reference" });
   await expect(workflowLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
   await expect(activityLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}?activityExecutionId=${encodeURIComponent(activityExecutionId)}`);

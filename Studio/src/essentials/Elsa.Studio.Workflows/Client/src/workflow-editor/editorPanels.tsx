@@ -137,7 +137,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
     return (
       <div className="wf-runtime-panel">
         {executionControls}
-        <div className="wf-empty">Run the draft to see Run data.</div>
+        <div className="wf-empty">Run the draft to see its run data.</div>
       </div>
     );
   }

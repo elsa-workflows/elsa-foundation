@@ -541,10 +541,10 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
           <section className="wf-instance-section">
             <h4>Identity</h4>
             <dl className="wf-instance-meta">
-              <dt>Artifact ID</dt>
-              <dd><CopyableIdentifier label="Artifact ID" value={detail.artifactId} labelPlacement="external" /></dd>
-              <dt>Artifact hash</dt>
-              <dd><CopyableIdentifier label="Artifact hash" value={detail.artifactHash} labelPlacement="external" /></dd>
+              <dt>Executable ID</dt>
+              <dd><CopyableIdentifier label="Executable ID" value={detail.artifactId} labelPlacement="external" /></dd>
+              <dt>Executable hash</dt>
+              <dd><CopyableIdentifier label="Executable hash" value={detail.artifactHash} labelPlacement="external" /></dd>
               <dt>Root activity</dt>
               <dd className="wf-identity-cell">
                 <span>{rootActivityLabel}</span>

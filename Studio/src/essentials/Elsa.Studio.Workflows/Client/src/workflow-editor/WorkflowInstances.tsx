@@ -485,7 +485,7 @@ export function WorkflowInstances({ context, navigate }: {
               <legend>Workflow identifiers</legend>
               <div className="wf-run-filter-grid">
                 <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
-                <RunFilterInput label="Artifact" value={draftFilters.artifactId} onChange={value => setDraftFilters(current => ({ ...current, artifactId: value }))} />
+                <RunFilterInput label="Executable" value={draftFilters.artifactId} onChange={value => setDraftFilters(current => ({ ...current, artifactId: value }))} />
                 <RunFilterInput label="Correlation" value={draftFilters.correlationId} onChange={value => setDraftFilters(current => ({ ...current, correlationId: value }))} />
               </div>
             </fieldset>
