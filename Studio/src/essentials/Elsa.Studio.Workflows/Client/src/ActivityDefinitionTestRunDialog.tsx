@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -14,9 +14,6 @@ import {
   CheckCircle2,
   CircleStop,
   ExternalLink,
-  Play,
-  RotateCcw,
-  X
 } from "lucide-react";
 import {
   StudioHttpError,
@@ -56,7 +53,6 @@ import type { ActivityExecutionStateSummary } from "./workflowTypes";
 import { WorkflowActivityExecutionDetails } from "./workflow-editor/WorkflowActivityExecutionDetails";
 import { WorkflowRunInputField } from "./workflow-editor/WorkflowRunInputDialog";
 import { CopyValueButton } from "./workflow-editor/executableShared";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { StudioLink } from "./StudioLink";
 
 type PreparationPhase = "saving" | "validating" | "ready" | "failed";
@@ -89,7 +85,6 @@ export function ActivityDefinitionTestRunDialog({
   onOpenRun(path: string): void;
 }) {
   const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const prepareExactRevisionRef = useRef(prepareExactRevision);
   const preparationTaskRef = useRef<Promise<PreparedActivityTestRunRevision | null> | null>(null);
@@ -283,23 +278,11 @@ export function ActivityDefinitionTestRunDialog({
   const busy = blocksClose;
   const canRerun = Boolean(stage && isTerminalActivityTestRun(stage));
   const activityUrl = currentRun ? activityTestRunActivityUrl(currentRun) : null;
-  useDialogFocus(dialogRef, busy ? null : onClose);
 
   return (
-    <div className="ad-dialog-backdrop ad-test-run-backdrop" role="presentation" onMouseDown={event => {
-      if (!busy && event.target === event.currentTarget) onClose();
-    }}>
-      <section ref={dialogRef} className="ad-dialog ad-test-run-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <header>
-          <div>
-            <span className="ad-kicker">Activity Definition Test Run</span>
-            <h2 id={titleId}>{definitionLabel}</h2>
-            <p>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable run data without publishing this Activity Definition.</p>
-          </div>
-          <button type="button" className="ad-icon-action" aria-label="Close Test Run" onClick={onClose} disabled={busy}>
-            <X size={17} aria-hidden />
-          </button>
-        </header>
+    <StudioDialog open className="ad-test-run-dialog" title={definitionLabel} onClose={onClose}
+      closeLabel="Close Test Run" dismissDisabled={busy}
+      description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable Runtime Evidence without publishing this Activity Definition.</>}>
 
         {preparation !== "ready" ? (
           <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
@@ -401,31 +384,18 @@ export function ActivityDefinitionTestRunDialog({
 
         {operationError ? <p className="ad-inline-error ad-test-run-operation-error" role="alert">{operationError}</p> : null}
 
-        <footer>
-          <button type="button" onClick={onClose} disabled={busy}>Close</button>
-          {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ? (
-            <button type="button" onClick={() => void cancel()} disabled={busy}>
-              <CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}
-            </button>
-          ) : null}
-          {activityUrl ? (
-            <button type="button" onClick={() => onOpenRun(activityUrl)}>
-              <ExternalLink size={16} aria-hidden /> Open focused run data
-            </button>
-          ) : null}
-          {canRerun ? (
-            <button type="button" onClick={() => void dispatch()} disabled={busy}>
-              <RotateCcw size={16} aria-hidden /> Rerun as new run data
-            </button>
-          ) : null}
-          {!currentRun && validation?.isValid ? (
-            <button type="button" className="ad-primary-action" onClick={() => void dispatch()} disabled={busy}>
-              <Play size={16} aria-hidden /> {dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run"}
-            </button>
-          ) : null}
-        </footer>
-      </section>
-    </div>
+        <StudioDialogFooter
+          leading={<>
+            {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
+              <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}
+            {activityUrl ? <StudioButton onClick={() => onOpenRun(activityUrl)}><ExternalLink size={16} aria-hidden /> Open focused Runtime Evidence</StudioButton> : null}
+          </>}
+          onCancel={onClose} cancelDisabled={busy} cancelLabel={currentRun ? "Close" : "Cancel"}
+          confirmLabel={canRerun ? "Rerun as new evidence" : !currentRun && validation?.isValid ?
+            (dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run") : undefined}
+          confirmDisabled={busy} onConfirm={() => void dispatch()}
+        />
+    </StudioDialog>
   );
 }
 

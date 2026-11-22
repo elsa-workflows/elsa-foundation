@@ -20,7 +20,7 @@
 .ad-designed-collection .ad-status-copy { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-designed-collection .ad-collection-empty > div { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: .4rem; }
 
-.ad-create-dialog { width: min(46rem, 100%); }
+.studio-dialog.ad-create-dialog { width: min(46rem, calc(100vw - 32px)); }
 .ad-create-advanced { padding-top: .65rem; border-top: 1px solid var(--studio-border); }
 .ad-create-advanced > summary { width: fit-content; color: var(--studio-accent); font-weight: 700; cursor: pointer; }
 .ad-create-advanced[open] > summary { margin-bottom: .7rem; }
@@ -35,6 +35,4 @@
   .ad-designed-collection .ad-advanced-filters[open] > .ad-disclosure-panel { position: static; width: 100%; min-width: 0; margin-top: .4rem; }
   .ad-designed-collection .ad-collection-disclosure > summary { width: 100%; }
   .ad-designed-collection .ad-collection-empty > div { display: grid; width: 100%; }
-  .ad-create-dialog { width: 100%; }
 }
-.ad-create-dialog footer > .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }

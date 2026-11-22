@@ -1,5 +1,5 @@
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -24,7 +24,6 @@ import {
   migrationProviderChoices
 } from "./activityDefinitionDraftManagementShared";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 export function ActivityDefinitionForkDialog({
   context,
@@ -60,9 +59,7 @@ export function ActivityDefinitionForkDialog({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewAttempt = useRef<{ material: string; idempotencyKey: string } | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
   const submitting = previewing || applying;
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!choices.some(choice => choiceValue(choice) === target)) {
@@ -160,9 +157,7 @@ export function ActivityDefinitionForkDialog({
   );
 
   return <ActivityDefinitionManagementDialogShell
-    dialogRef={dialogRef}
     title={preview ? "Review activity fork" : "Fork recommended activity version"}
-    kicker="Source-owned to Design-owned"
     submitting={submitting}
     onClose={onClose}
   >
@@ -182,7 +177,9 @@ export function ActivityDefinitionForkDialog({
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this target provider schema is unavailable. Forking is disabled.</div> : null}
     </> : <ForkReview preview={preview} />}
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    {preview ? <footer><button type="button" onClick={editRequest} disabled={submitting}>Edit request</button><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={submitting || !canApply}>{applying ? "Applying atomically…" : "Apply reviewed fork"}</button></footer>
+    {preview ? <StudioDialogFooter leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
+      onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying atomically…" : "Apply reviewed fork"}
+      confirmDisabled={submitting || !canApply} onConfirm={() => void apply()} />
       : <ActivityDefinitionManagementDialogActions submitting={submitting} submitLabel="Create fork preview" canSubmit={canPreview} onClose={onClose} onSubmit={requestPreview} />}
   </ActivityDefinitionManagementDialogShell>;
 }
