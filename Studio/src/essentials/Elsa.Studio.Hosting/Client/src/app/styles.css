@@ -1119,6 +1119,15 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   min-width: 0;
 }
 
+.studio-shell-breadcrumb-outlet:empty,
+.studio-shell-breadcrumb-outlet:not(:empty) + .breadcrumb {
+  display: none;
+}
+
+.studio-shell-breadcrumb-outlet .studio-breadcrumbs {
+  margin-bottom: 0;
+}
+
 .breadcrumb {
   display: block;
   color: var(--muted-foreground);

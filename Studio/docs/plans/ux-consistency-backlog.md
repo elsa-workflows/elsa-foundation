@@ -148,10 +148,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
-- [ ] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
+- [x] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
   (start in `H/App.tsx`) and whether a page can already supply a multi-level, clickable trail to it;
   the audit did not identify such a mechanism. Design it before any X2 item starts, and say what
-  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5`
+  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5` (PR #5293)
 
 Candidates reported by source readers. Confirm the need before building any of them.
 

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { createContext, useContext } from "react";
+import { createPortal } from "react-dom";
 import "./Breadcrumbs.css";
 
 export interface StudioBreadcrumbLink {
@@ -27,4 +28,15 @@ export function StudioBreadcrumbs({ items, current, renderLink, className, ...pr
       </li>
     </ol>
   </nav>;
+}
+// Undefined is a standalone host. Null is a Studio shell whose outlet is unavailable
+// (first mount or a background workspace tab).
+export const StudioShellBreadcrumbTarget = createContext<HTMLElement | null | undefined>(undefined);
+
+/** Render route navigation in the active shell header, or inline in standalone hosts. */
+export function StudioShellBreadcrumbs(props: StudioBreadcrumbsProps) {
+  const target = useContext(StudioShellBreadcrumbTarget);
+  if (target === null) return null;
+  const trail = <StudioBreadcrumbs {...props} />;
+  return target ? createPortal(trail, target) : trail;
 }
