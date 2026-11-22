@@ -425,7 +425,7 @@ in scope.
 - [x] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`. (PR #5320)
 - [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu). (PR #5325)
-- [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
+- [x] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon). (PR #5343)
 - [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
   searching for a `StudioButton` labelled "Refresh" outside `KIT`.
 
@@ -487,7 +487,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `EXT/UserTasks/TaskDetailPage.tsx:34, 150`, `FormsPage.tsx:53`;
   `EXT/Decisions/CasePanel.tsx:107`, `DecisionInputsEditor.tsx:141`;
   `EXT/Attention/AttentionWidget.tsx:12`; `DASH/WidgetFrame.tsx:88, 92` ([verified] `:88`).
-- [ ] **X9.2** (#5129) [verified] Suspense fallbacks in `WF/workflow-editor/WorkflowDefinitions.tsx:816` and
+- [x] **X9.2** (#5129) [verified] Suspense fallbacks in `WF/workflow-editor/WorkflowDefinitions.tsx:816` and (PR #5343)
   `:991` (also `:992`, `:994`, `:1014` [source]).
 - [x] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and (PR #5309)
   `ActivityDefinitionCreateDialog.tsx:126` (`ad-inline-status`);
@@ -501,7 +501,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `H/App.tsx:1895` (`backend-connection-notice`) and `:1911`,
   `H/workspace/WorkspaceTabPanels.tsx:92–93`, `DASH/WidgetFrame.tsx:89, 148`.
   [check] `.etl-error`, `.external-auth-error`. Host startup, workspace tabs, ETL and Identity completed in PR #5339.
-- [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
+- [x] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support (PR #5343)
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
 - [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
@@ -546,7 +546,7 @@ the designer header is a documented exception.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
 - [x] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11). (PR #5334)
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
-- [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
+- [x] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9). (PR #5343)
 - [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
 - [x] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`, (PR #5316)
   "Fork recommended version", "Create parallel draft" shown twice).
@@ -699,7 +699,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   ("✏️Edit"). Use an `OverflowMenu`.
 - [x] **W4** (#5216) [seen] Definitions table: the "Published" column header is clipped behind "Actions" at (PR #5322)
   1440px.
-- [ ] **W5** (#5217) [seen] Activity availability: raw 32px filter input and 16px-radius option cards.
+- [x] **W5** (#5217) [seen] Activity availability: raw 32px filter input and 16px-radius option cards. (PR #5343)
 - [x] **W6** (#5218) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23–35` renders a published (PR #5322)
   version with `data-status="completed"` and retired with `"cancelled"`. Use a tone that matches the
   meaning.
@@ -710,7 +710,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   sidebar selection jumps to Library.
 - [x] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter (PR #5322)
   toolbar. `needs: K6`
-- [ ] **W10** (#5222) [source] `WF/ActivityDefinitionsPage.tsx:515` div-grid table with `role="table"` and
+- [x] **W10** (#5222) [source] `WF/ActivityDefinitionsPage.tsx:515` div-grid table with `role="table"` and (PR #5343)
   `WF/workflow-editor/WorkflowDefinitions.tsx:867` `.wf-grid` → `StudioDataGrid`.
 - [x] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit (PR #5322)
   components; use the kit components directly.
@@ -719,7 +719,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
 - [x] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`. (PR #5334)
-- [ ] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with
+- [x] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with (PR #5343)
   inconsistent parenting; Upgrades and Elsa 3 import have no nav entry.
 - [ ] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a
   trailing space, a duplicate `aria-label` and a `<small>Optional</small>`. Under D13 the optional
