@@ -215,6 +215,28 @@ R7 structure members, ports and custom properties keep their own handling, which
 | Unchanged (spec 236's mapping) | ExecuteWorkflow.WaitForCompletion: Elsa 3 ran a null as `false`, but spec 236 maps ExecuteWorkflow to a Dispatch that waits (`true`), with `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` |
 | No binding, by rule | A null output (nothing captures it); a null member of an activity resolved by name (on an alias or a verbatim catalog key, with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT` where the Elsa 4 input declares a default, #3293); R3 removed inputs and R6 restrictions, which already treat null as absent |
 
+### Missing, blank and deliberate-null corrections (spec 267 follow-up)
+
+The original table above applies to bare JSON null. For the named built-ins only, optional source-shape actions are
+applied before normalization; generic custom-map contracts and the member-rule constructor are unchanged.
+
+| Members | Missing/defaulted wrapper | Deliberate Literal-null / blank / explicit boundary |
+|---|---|---|
+| SendHttpRequest / FlowSendHttpRequest.ContentType | Refuse when Content may be non-null; retain no body for known-null Content | Null retains the no-body refusal. Blank refuses the selected 3.6 JSON writer's no-charset header versus the target's appended charset. Empty or unproven computed/referenced String Content refuses the target's body/header omission. |
+| FlowSendHttpRequest.ExpectedStatusCodes | Emit `[200]` | Null/blank/empty list refuses incompatible Done-on-every-response versus target non-2xx Failed. Supported nonempty literal lists keep existing mapping. |
+| For.OuterBoundInclusive | true (selected 3.6.3 semantics) | Literal null or blank emits false |
+| Delay.TimeSpan | one minute | Literal null or blank emits explicit zero duration |
+| Timer.Interval | one minute | Only positive literal intervals; null/blank/nonpositive/invalid values refuse |
+| SendHttpRequest / FlowSendHttpRequest.Method | GET | Literal null uses GET; authored blanks refuse rather than normalize to GET |
+| WriteHttpResponse.StatusCode | 200 | Literal null/zero/negative/invalid text and unproven computed ranges refuse; supported positive literals remain raw |
+| Cron.CronExpression / RunJavaScript.Script | Refuse disabled/no-work conversion under the converted authoring contract | Blank/null retain member-specific refusal; no claim that the target script runtime lacks a blank-script path |
+| Fault.Message | Accepted silent text difference | Retain existing treatment |
+
+Defaulted wrappers are `{}`, typeName-only and a typed `expression:{}`; a resolved typed Literal whose value is
+omitted is deliberate null. Unsupported metadata receives a member-specific refusal. Explicit collections and
+literal `"null"` are authored values, never a general default trigger. See spec267 FR-011–FR-015 and research R-13 for
+version differences and the bounded S-2 integration boundary.
+
 ## SetOutput in reusable workflows
 
 Elsa 3's `SetOutput` writes to the nearest ancestor activity that declares an output of that name, else to the

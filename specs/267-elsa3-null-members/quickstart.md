@@ -22,12 +22,14 @@ performance-bigdata past the `possibleOutcomes` error, and no definition that co
 
 ## #3281 follow-up verification
 
-The follow-up is unimplemented. Filtered commands above are development checks for the delivered unit, not whole
-#3281 acceptance. After coordinator agreement and proposal merge, use the separate implementation branch and the
-SC-008 matrix plus owned real import host/local HTTP receiver for SC-009.
+The follow-up is implemented separately. Filtered commands above exercise the original delivered unit. Run both
+whole affected projects for #3281, including `Elsa3MemberDefaultParityTests` and `MemberDefaultParityTests`; the
+fresh result/limitations are in spec.md's follow-up local validation receipt.
 
 Cover 200/404/500, cleared-list refusal/no writes/no request, absent-versus-blank ContentType with empty/nonempty
 String Content, For boundary counts, Delay zero, effective GET and Timer/status no-default controls.
+Use opposing values for valid expression versus ignored memory metadata and Variable-expression versus For-default
+controls. Duplicate-expression keys must use different first/last values; a first-wins mutation must fail.
 
 Run both complete affected projects with discovery comparison, correction-removal red/green, Release/Debug graph
 restores, whole Architecture and generated-filter check. Use isolated local/Linux validation with shared-machine

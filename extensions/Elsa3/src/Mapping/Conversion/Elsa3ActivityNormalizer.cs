@@ -20,7 +20,7 @@ namespace Elsa3.Mapping.Conversion;
 /// routes port children into slots. Properties are renamed to their exact Elsa 4 keys, so value-flow lowering and
 /// mapping see Elsa 4 member names (research R-8). Every cause is a diagnostic; nothing throws for input.
 /// </summary>
-internal sealed class Elsa3ActivityNormalizer(
+internal sealed partial class Elsa3ActivityNormalizer(
     Elsa3ActivityResolver resolver,
     IEnumerable<IElsa3NodeRewrite> rewrites,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
@@ -216,6 +216,7 @@ internal sealed class Elsa3ActivityNormalizer(
         var properties = context.Activity.AdditionalProperties.ToArray();
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var boundBy = new Dictionary<string, string>(StringComparer.Ordinal);
+        var correctedBy = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var (propertyName, source) in properties)
         {
@@ -237,11 +238,27 @@ internal sealed class Elsa3ActivityNormalizer(
                 continue;
             }
 
+            if (HasSourceCorrections(rule))
+            {
+                if (correctedBy.TryGetValue(rule.Elsa4Key!, out var other))
+                {
+                    context.Error(DuplicateInputBinding, $"Properties '{other}' and '{propertyName}' both bind Elsa 4 member '{rule.Elsa4Key}'.",
+                        "Keep one of the two properties.", propertyName);
+                    continue;
+                }
+                correctedBy[rule.Elsa4Key!] = propertyName;
+                if (ApplySourceCorrection(context, rule, propertyName, source, result, boundBy))
+                    continue;
+                value = WithoutSerializedInputMemoryReference(value);
+            }
             ApplyRule(context, rule, propertyName, value, result, boundBy);
         }
 
         if (entry is not null)
         {
+            foreach (var rule in entry.Members.Where(rule => rule.OnAbsent is not null &&
+                         !properties.Any(property => StringComparer.OrdinalIgnoreCase.Equals(property.Key, rule.Elsa3Name))))
+                ApplyNull(context, rule, rule.OnAbsent!, Elsa3ConversionDiagnostics.JsonName(rule.Elsa3Name), result, boundBy, "missing");
             ApplySlotForChildren(context, entry);
             ApplyDefaults(context, entry, properties, result);
             ApplyCustomProperties(context, entry, result);
@@ -426,7 +443,8 @@ internal sealed class Elsa3ActivityNormalizer(
         Elsa3NullConversion onNull,
         string propertyName,
         Dictionary<string, JsonElement> result,
-        Dictionary<string, string> boundBy)
+        Dictionary<string, string> boundBy,
+        string? sourceShape = null)
     {
         var key = rule.Elsa4Key!;
         var alias = context.Node.Resolved!.FindInput(key)?.Type.Alias ?? TypeAliasConvention.AnyAlias;
@@ -439,15 +457,17 @@ internal sealed class Elsa3ActivityNormalizer(
                 return;
             case Elsa3NullRule.Emit:
                 Add(context, key, propertyName, Elsa3TypedValues.CreateLiteral(alias, LiteralNode(onNull.Value ?? string.Empty)), result, boundBy);
-                context.Node.NullEmits.Add(key);
+                context.Node.NullEmits[key] = onNull.Value ?? string.Empty;
                 return;
-            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other && !HasValue(context, other):
+            case Elsa3NullRule.Refuse when onNull.WhenBound is { } other &&
+                !(HasSourceCorrections(rule) ? HasPotentialValue(context, other) : HasValue(context, other)):
                 Add(context, key, propertyName, Elsa3TypedValues.CreateNull(alias), result, boundBy);
                 return;
             case Elsa3NullRule.Refuse:
-                context.Error(NullUnconvertible,
-                    $"Member '{propertyName}' is null. {onNull.Reason}",
-                    $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
+                context.Error(sourceShape is null ? NullUnconvertible : ValueOutsideContract,
+                    $"Member '{propertyName}' is {sourceShape ?? "null"}. {onNull.Reason}",
+                    rule.Contract == Elsa3ValueContract.NonemptyHttpStatusCodes ? StatusListGuidance :
+                        $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
                     propertyName);
                 return;
         }
@@ -544,7 +564,7 @@ internal sealed class Elsa3ActivityNormalizer(
                 continue;
             // A typed null is the conversion of a null member (spec 267); only the member pass writes one.
             if (result.TryGetValue(rule.Elsa4Key, out var existing) &&
-                (Elsa3TypedValues.IsBound(existing) || Elsa3TypedValues.IsNullLiteral(existing)))
+                (Elsa3TypedValues.IsBound(existing) || Elsa3TypedValues.IsNullLiteral(existing) || context.Node.NullEmits.ContainsKey(rule.Elsa4Key)))
                 continue;
             if (rule.WhenBound is { } other &&
                 !properties.Any(property => StringComparer.OrdinalIgnoreCase.Equals(property.Key, other) && Elsa3TypedValues.IsBound(property.Value)))
@@ -704,6 +724,8 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         if (rule.Contract == Elsa3ValueContract.HttpResponseHeaders)
             return CheckHttpResponseHeaders(context, propertyName, value);
+        if (CheckFocusedContract(context, rule, propertyName, value, out var focused))
+            return focused;
         if (!Elsa3TypedValues.IsBound(value))
             return value;
 
@@ -1053,7 +1075,7 @@ internal sealed class Elsa3ActivityNormalizer(
                                                                           StringComparer.Ordinal.Equals(member.Elsa4Key, elsa4Key));
         var emitted = rule switch
         {
-            { OnNull: { Rule: Elsa3NullRule.Emit, Value: { } onNull } } when node.NullEmits.Contains(elsa4Key) => onNull,
+            _ when node.NullEmits.TryGetValue(elsa4Key, out var corrected) => corrected,
             { Rule: Elsa3MemberRuleKind.DefaultFlip, Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } => elsa3Default.GetString(),
             _ => null
         };

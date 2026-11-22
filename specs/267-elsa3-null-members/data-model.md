@@ -31,7 +31,7 @@ Gains `OnNull` (`Elsa3NullConversion?`, default null).
 | `Refuse(r)` | node fails with `ELS3-ACTIVITY-NULL-UNCONVERTIBLE` |
 | none, R2 / R5 default | the default `ApplyDefaults` already emits |
 
-## #3281 proposed source-shape corrections
+## #3281 source-shape corrections
 
 The original OnNull model remains delivered. The follow-up adds nullable init properties `OnAbsent`, `OnBlank`
 and `OnLiteralNull` to the existing member-rule body; its positional constructor stays intact. Each reuses existing

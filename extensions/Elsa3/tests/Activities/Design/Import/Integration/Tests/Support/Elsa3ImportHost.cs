@@ -213,7 +213,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         string? reconcileFolder = null,
         bool strict = false,
         bool refuseAllPublications = false,
-        DirectoryInfo? existingRoot = null)
+        DirectoryInfo? existingRoot = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
@@ -297,6 +298,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa3ImportPublishSeamFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
+            configureServices?.Invoke(builder.Services);
             var app = builder.Build();
             app.MapShells();
             // Select the shell before authentication/authorization resolve its services. Explicit calls
