@@ -364,8 +364,8 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     the fenced retirement's job-pair and parent checks. A timed job's cancellation callback can fail after
     Delete commits. The Worker finishes applying the commit and the cascade recalls the generation-addressed
     deadline even if the retired run's job ticket has already been consumed. A legacy job ticket carries the
-    only link to its ordinal deadline, so consuming an obsolete ticket at the marker settles that exact
-    linked deadline in the same fenced commit. Park-drain Complete, ThenDelete and physical providers have
+    only link to its ordinal deadline. A terminal checkpoint that consumes the ticket settles that exact
+    linked deadline in the same fenced commit, before or after Delete. Park-drain Complete, ThenDelete and physical providers have
     separate qualification.
 - **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
   actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends

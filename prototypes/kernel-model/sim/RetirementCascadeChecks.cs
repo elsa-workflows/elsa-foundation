@@ -11,11 +11,13 @@ internal static class RetirementCascadeChecks
         await CheckTree(check, total: 1, refuseOpen: true);
         await CheckTree(check, total: 1, timedJob: true);
         await CheckTree(check, total: 1, timedJob: true, legacyDeadline: true);
+        await CheckTree(check, total: 1, timedJob: true, legacyDeadline: true, retakeBeforeDelete: true);
         await CheckTree(check, total: CascadeProtocol.PageLimit + 1);
         await CheckRetirementShape(check);
     }
 
-    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false, bool timedJob = false, bool legacyDeadline = false)
+    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false, bool timedJob = false,
+        bool legacyDeadline = false, bool retakeBeforeDelete = false)
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
@@ -83,6 +85,21 @@ internal static class RetirementCascadeChecks
         check(finished.Status == InstanceStatus.Finished && Row(parent).Children is not null &&
             Row(descendant).Status == InstanceStatus.Running, "an ended child still has a live subtree and an outstanding parent registration");
 
+        if (retakeBeforeDelete)
+        {
+            await owner.DisposeAsync();
+            worker = NewWorker();
+        }
+        await using var beforeDeleteOwner = retakeBeforeDelete
+            ? (await new DurableHost([worker]).ActivateAsync(0))! : null;
+        if (retakeBeforeDelete && timed is { } beforeDelete)
+        {
+            for (var pass = 0; pass < 4; pass++) await Step(child);
+            check(Row(child) is { Retired: false, Status: InstanceStatus.Finished } &&
+                !store.Messages.ContainsKey(beforeDelete.Ticket) && !store.Messages.ContainsKey(beforeDelete.Deadline),
+                "a fresh owner settles the linked legacy deadline when it consumes the ticket before Delete");
+        }
+
         var selection = (await reads.GetAsync(scope, child))!.Selection!;
         var operation = Json.Write(new Contract.OperatorCommand(selection));
         var delete = await Send(child, "delete-child", Contract.Kinds.Delete, operation);
@@ -123,7 +140,8 @@ internal static class RetirementCascadeChecks
                 cascades.Count(message => message.Sender == finished.Id) == CascadeProtocol.PageLimit,
                 "the first parent-bound page durably moves the held obligation to discharging");
         }
-        await owner.DisposeAsync();
+        if (beforeDeleteOwner is not null) await beforeDeleteOwner.DisposeAsync();
+        else await owner.DisposeAsync();
         worker = NewWorker();
         await using var successor = (await new DurableHost([worker]).ActivateAsync(0))!;
         // Takeover recovers a suspect at a time with the default trial group.

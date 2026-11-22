@@ -294,7 +294,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
                     if ((PrepareCascade(turn, previous, epochs, earlier, competing) ??
-                        PrepareRetiredDeadlines(turn, previous, epochs, batch)) is { } cascade)
+                        PrepareTerminalJobDeadlines(turn, previous, epochs, batch)) is { } cascade)
                     {
                         if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
                         (cascades ??= new(ReferenceEqualityComparer.Instance)).Add(turn, cascade);
