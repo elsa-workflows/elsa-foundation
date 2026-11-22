@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
@@ -166,6 +167,49 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
     }
 
     [Theory]
+    [InlineData("Object")]
+    [InlineData("String")]
+    public async Task A_for_index_read_by_a_Variable_expression_into_text_is_refused(string variableType)
+    {
+        var loop = For(Activity("inside", "Elsa.WriteLine", ("text", VariableExpression("i", "String"))));
+
+        var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "i", Name = "i", TypeName = variableType });
+
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput);
+        Assert.Contains("current index of loop 'loop'", diagnostic.Message);
+        Assert.Contains("String(…)", diagnostic.Guidance);
+        Assert.EndsWith(".text.expression.value.id", diagnostic.Path, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("'true'", false)]
+    [InlineData("getVariable('flag')", false)]
+    public async Task A_captured_result_read_by_a_Variable_expression_keeps_the_producer_kind_check(string script, bool converts)
+    {
+        var root = Sequence("root",
+            Activity("calc", "Elsa.RunJavaScript", ("script", Literal(script)), ("result", Captured("ok"))),
+            Activity("decide", "Elsa.FlowDecision", ("condition", VariableExpression("ok", "Boolean"))));
+
+        var result = await ConvertAsync(root,
+            new Elsa3Variable { Id = "ok", Name = "ok", TypeName = "Object" },
+            new Elsa3Variable { Id = "flag", Name = "flag", TypeName = "Boolean" });
+
+        Assert.Equal(converts, result.Succeeded);
+        Assert.Equal(!converts, result.Diagnostics.Any(item => item.Code == Elsa3ImportDiagnosticCodes.UntypedResultIntoTypedInput));
+    }
+
+    [Fact]
+    public async Task A_for_index_read_by_a_Variable_expression_into_an_integer_input_converts()
+    {
+        var inner = Activity("inner", "Elsa.For", ("start", Literal("0", "Int32")), ("end", VariableExpression("i", "Int32")));
+
+        var result = await ConvertAsync(Sequence("root", For(inner)), new Elsa3Variable { Id = "i", Name = "i", TypeName = "Object" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
     [InlineData("x > 1", true)]
     [InlineData("getVariable('flag')", false)]
     public async Task A_script_result_captured_into_a_variable_is_checked_like_a_direct_read(string script, bool converts)
@@ -205,4 +249,82 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
 
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertAsync(Elsa3Activity root, params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: variables));
+
+    private static JsonElement VariableExpression(string id, string typeName) => JsonSerializer.SerializeToElement(new
+    {
+        typeName,
+        expression = new { type = "Variable", value = new { id } }
+    });
+
+    [Theory]
+    [InlineData("typed")]
+    [InlineData("unclassified")]
+    [InlineData("explicit-write")]
+    [InlineData("script-write")]
+    public async Task A_captured_variable_needs_positive_compatible_kind_evidence(string scenario)
+    {
+        var producer = scenario == "typed"
+            ? Activity("calc", "Elsa.ReadLine", ("result", Captured("ok")))
+            : Activity("calc", "Elsa.RunJavaScript", ("script", Literal(scenario == "unclassified" ? "42" : "true")), ("result", Captured("ok")));
+        var consumer = scenario == "unclassified"
+            ? Activity("consume", "Elsa.Delay", ("timeSpan", VariableExpression("ok", "TimeSpan")))
+            : Activity("consume", "Elsa.FlowDecision", ("condition", VariableExpression("ok", "Boolean")));
+        var children = new List<Elsa3Activity> { producer };
+        if (scenario == "explicit-write")
+            children.Add(Activity("overwrite", "Elsa.SetVariable",
+                ("variable", JsonSerializer.SerializeToElement(new { id = "ok" })), ("value", Literal("not boolean"))));
+        if (scenario == "script-write")
+            children.Add(Activity("overwrite", "Elsa.RunJavaScript", ("script", Literal("const name = 'ok'; setVariable(name, 'not boolean'); return 1;"))));
+        children.Add(consumer);
+
+        var result = await ConvertAsync(Sequence("root", children.ToArray()), new Elsa3Variable { Id = "ok", Name = "ok", TypeName = "Object" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
+    }
+
+    [Fact]
+    public async Task A_computed_script_write_to_a_loop_capture_does_not_become_a_read_of_the_unchanged_index()
+    {
+        var write = Activity("write", "Elsa.RunJavaScript", ("script", Literal("const name = 'i'; setVariable(name, 99); return 1;")));
+        var read = Activity("read", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", VariableExpression("i", "Object")));
+
+        var result = await ConvertAsync(Sequence("root", For(Sequence("body", write, read))), new Elsa3Variable { Id = "i", Name = "i", TypeName = "Int32" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_future_or_optional_capture_does_not_prove_the_value_at_a_typed_read(bool optional)
+    {
+        var producer = Activity("calc", "Elsa.RunJavaScript", ("script", Literal("true")), ("result", Captured("ok")));
+        var consumer = Activity("consume", "Elsa.FlowDecision", ("condition", VariableExpression("ok", "Boolean")));
+        var root = optional
+            ? Sequence("root", Activity("optional", "Elsa.If", ("condition", Literal("false", "Boolean")), ("then", Port(producer))), consumer)
+            : Sequence("root", consumer, producer);
+
+        var result = await ConvertAsync(root, new Elsa3Variable { Id = "ok", Name = "ok", TypeName = "Object", Value = "true" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
+    }
+
+    [Theory]
+    [InlineData("literal")]
+    [InlineData("LITERAL")]
+    public async Task A_pure_script_with_a_case_variant_literal_marker_does_not_invalidate_a_loop_read(string literalType)
+    {
+        var pure = Activity("pure", "Elsa.RunJavaScript", ("script", JsonSerializer.SerializeToElement(new
+        {
+            typeName = "String", expression = new { type = literalType, value = "return 1;" }
+        })));
+        var read = Activity("read", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", VariableExpression("i", "Object")));
+
+        var result = await ConvertAsync(Sequence("root", For(Sequence("body", pure, read))), new Elsa3Variable { Id = "i", Name = "i", TypeName = "Int32" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
 }
