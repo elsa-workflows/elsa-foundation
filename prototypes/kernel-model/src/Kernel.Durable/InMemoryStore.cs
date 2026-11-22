@@ -237,12 +237,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
             Dictionary<InboxKey, int>? keptPayloadSizes = null;
+            Dictionary<string, Message>? initialExpiries = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
                 var at = fences.ToDictionary(f => f.Partition, f => f.Position);
                 HashSet<CreationAddress>? childAddresses = null;
                 HashSet<string>? childReferences = null;
+                long? expiryFrom = null, expiryUntil = null;
                 foreach (var turn in batch.Turns)
                 {
                     if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
@@ -257,7 +259,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     CreationProtocol.Validate(turn, previous);
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
-                    ValidateParkDrain(turn, previous, epochs);
+                    if (ValidateParkDrain(turn, previous, epochs, now) is { } expiryWindow)
+                    {
+                        if (expiryWindow.Due) expiryFrom = Math.Max(expiryFrom ?? long.MinValue, expiryWindow.At);
+                        else expiryUntil = Math.Min(expiryUntil ?? long.MaxValue, expiryWindow.At);
+                    }
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
@@ -289,6 +295,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var source = turn.Row ?? previous;
                     var foundation = inlineRoot is not null ||
                         source is { } bound && _referenceBirths.ContainsKey(new(bound.Id, bound.Creation));
+                    if (foundation && PrepareInitialParkExpiry(turn, previous, now) is { } expiry)
+                    {
+                        if (Messages.ContainsKey(expiry.InboxKey)) Diverged($"expiry {expiry.Id} exists already");
+                        (initialExpiries ??= new(StringComparer.Ordinal)).Add(turn.Instance, expiry);
+                    }
                     foreach (var message in turn.Sent)
                     {
                         if ((foundation || message.BindFoundationChild) && !FoundationMetadataLimits.FitsComposed(message))
@@ -313,10 +324,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     foreach (var id in batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(t => t.Consumed.Concat(t.Done))))
                         if (Messages.GetValueOrDefault(id) is { } marked && !epochs.ContainsKey(marked.Message.Target.Partition))
                             throw new StoreException(Failure.Definite, $"message {id} is outside the batch's fenced partitions");
-                if (batch.Window is { } window)
+                if (batch.Window is not null || expiryFrom is not null || expiryUntil is not null)
                 {
                     var atCommit = clock();
-                    if (atCommit < now || atCommit < window.FromInclusive || atCommit >= window.UntilExclusive)
+                    if (batch.Window is { } window && (atCommit < now || atCommit < window.FromInclusive || atCommit >= window.UntilExclusive) ||
+                        atCommit < expiryFrom || atCommit >= expiryUntil)
                         throw new StoreException(Failure.WindowExpired, "The database clock left the decision's authority window.");
                 }
                 foreach (var fence in fences)
@@ -326,6 +338,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             }
 
             List<LifecycleObservation.Change>? changes = null;
+            List<Stored>? armedExpiries = null;
             var (next, seqs) = (fences.ToDictionary(f => f.Partition, f => f.Position), new List<long>());
             List<(CreationAddress Address, DeletedCheckpoint Checkpoint, (int, long)? Position)>? deletes = null;
             foreach (var turn in batch.Turns)
@@ -342,7 +355,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 {
                     if (inlineRoots?.GetValueOrDefault(stored.Id) is { } root) InsertReference(root);
                     Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
-                    RecordFoundationMetadata(turn, stored, now);
+                    var expiry = initialExpiries?.GetValueOrDefault(turn.Instance);
+                    RecordFoundationMetadata(turn, stored, now, expiry);
+                    if (expiry is not null)
+                    {
+                        var seen = batch.HandOver ? epochs.GetValueOrDefault(expiry.Target.Partition) : 0;
+                        Messages[expiry.InboxKey] = new(expiry, ++_seq, seen);
+                        (armedExpiries ??= []).Add(new(expiry, _seq, seen, 0, 0));
+                    }
                 }
                 if (turn.Delete)
                 {
@@ -416,7 +436,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var (address, checkpoint, receiptPosition) in deletes)
                     if (_watchedDeletes!.Remove(address, out var watch))
                         watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault(slot) : null });
-            return new(new Committed(fenced, now, seqs));
+            return new(new Committed(fenced, now, seqs) { ParkExpiries = armedExpiries ?? [] });
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
             void Diverged(string what)
