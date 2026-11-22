@@ -568,7 +568,8 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   domain, issuer and consumer rules; its outstanding key is `Cascade.Control` on the row, in place of a `ParkRecord`
   field ("A termination cascade is paged and idempotent" above):
   - **The kinds are reserved.** Every kind under `kernel.` other than the public commands (`kernel.suspend`,
-    `kernel.resume`, `kernel.terminate`, `kernel.delete`, `kernel.recover`, `kernel.discard`) is reserved for layer 2.
+    `kernel.resume`, `kernel.terminate`, `kernel.delete`, `kernel.recover`, `kernel.discard`, and K2's `kernel.migrate`)
+    is reserved for layer 2.
     `Kinds.RequireApplicationSend` refuses a reserved kind with a definite error. Existing prototype behaviour: it
     refuses the job and event tickets by name ([Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs)
     lines 75–79); the proposal replaces the list with the prefix rule, so a later private kind is refused without a
@@ -591,6 +592,11 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
       throw: existing prototype behaviour, `Turns.cs` 208, and the tree terminate is built that way
       (`WorkflowInstance.cs` 196). The commit-side check below refuses such a message as a definite error, so the
       commit lands nothing and the sending turn fails by the commit's failure rule.
+
+    **Prototype evidence.** `--private-kinds-check` runs the prefix checks for store adds, local posts, both key ingress
+    paths and turn sends, including direct outcomes carrying a kind with no implemented issuer. It also verifies the
+    public commands and an existing trusted job ticket. P-4's issuer, outstanding-key and delayed-control cases still
+    need the private controls themselves.
   - **They live in a protected identity domain.** Layer 2 writes a private control only in the commit that writes the
     `ParkRecord` field naming it, with the instance itself as `Sender` and `SenderCreation`, its own creation as
     `TargetCreation` when positive and none otherwise, as the built self-send sets it (`Turns.cs` 335), and no `Start`. So the built creation protocol
