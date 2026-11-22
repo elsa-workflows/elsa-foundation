@@ -29,11 +29,12 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   const literal = (referenceKey: string, value: unknown) => ({ referenceKey, value: { expressionType: "Literal", value } });
   const tracked: string[] = [];
   cleanup(async () => { for (const id of tracked) await api(`/design/workflows/definitions/${id}`, "DELETE"); });
-  async function seed(name: string, activityVersionId: string, inputs: unknown[]): Promise<Definition> {
+  async function seed(name: string, activityVersionId: string, inputs: unknown[], initial?: { activityVersionId: string; inputs: unknown[] }): Promise<Definition> {
     const result = await api<Definition>("/design/workflows/definitions/submit", "POST", {
       name: `${name} ${stamp}`, state: { inputs: [], outputs: [], variables: [], rootActivity: {
         nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
         structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { variables: [], activities: [
+          ...(initial ? [{ nodeId: "initial", ...initial, outputs: [] }] : []),
           { nodeId: "body", activityVersionId, inputs, outputs: [] }
         ] } }
       } }
@@ -103,6 +104,13 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await inspector().getByRole("tab", { name: "Timeline", exact: true }).press("Enter");
   await expect(inspector()).toContainText("Completion accepted");
   await capture(page, info, "accepted-timeline");
+  const clearDefinition = await seed("Cleared state", native, [literal("Mode", "clear")], { activityVersionId: native, inputs: [literal("Mode", "complete")] });
+  const cleared = await run(clearDefinition.version.id, "Completed");
+  expect(cleared.details.instance.correlationId).toBeNull(); expect(cleared.details.instance.instanceName).toBeNull();
+  await inspector().getByRole("tab", { name: "Details", exact: true }).press("Enter");
+  await expect(inspector().locator("dl")).toContainText("Instance nameNone");
+  await expect(inspector().locator("dl")).toContainText("CorrelationNone");
+  await capture(page, info, "cleared-state");
 
   const source = JSON.parse(readFileSync(new URL("../../../Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Fixtures/script-workflow-state.json", import.meta.url), "utf8"));
   source.id = `state-version-${stamp}`; source.definitionId = `state-${stamp}`; source.name = `Imported state ${stamp}`;

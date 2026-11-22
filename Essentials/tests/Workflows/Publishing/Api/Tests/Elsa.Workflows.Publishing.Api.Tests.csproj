@@ -32,6 +32,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- State-call publication controls use the real parser, alongside the existing synthetic variable-read fixtures. -->
+    <ProjectReference Include="../../../../../src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <!-- Retained only for the historical FastEndpoints oracle and coexistence canary. Production Publishing API no longer references it. -->

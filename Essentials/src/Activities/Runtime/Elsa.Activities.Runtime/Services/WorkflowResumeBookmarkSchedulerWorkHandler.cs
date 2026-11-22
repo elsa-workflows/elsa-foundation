@@ -379,7 +379,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                 executionState, await durableValueStateStore.ListAllDurableValueStatesAsync(workItem.WorkflowExecutionId, cancellationToken),
                 stepSession, cancellationToken);
-            faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput);
+            faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput ||
+                    activity is not IStepWorkflowStateConsumer && stateSession.HasReadProtectedValue);
             stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)

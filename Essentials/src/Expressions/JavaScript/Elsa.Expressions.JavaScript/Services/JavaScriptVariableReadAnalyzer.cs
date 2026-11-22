@@ -76,9 +76,11 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         var opaque = false;
         var correlation = false;
         var instanceName = false;
-        void Visit(Node node, Node? parent)
+        var invalid = false;
+        void Visit(Node node, Node? parent, bool shadowed)
         {
-            if (node is Identifier { Name: "workflowState" })
+            shadowed |= DeclaresStateRootInScope(node);
+            if (!shadowed && node is Identifier { Name: "workflowState" })
             {
                 access = true;
                 if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
@@ -95,12 +97,27 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                 !(parent is MemberExpression accessMember && ReferenceEquals(accessMember.Object, intrinsic) ||
                   parent is CallExpression invocation && ReferenceEquals(invocation.Callee, intrinsic) || parent is NewExpression))
             { access = true; opaque = true; }
-            if (node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
+            if (!shadowed && node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
             {
                 if (member.Computed || member.Property is not Identifier method || parent is not CallExpression call || !ReferenceEquals(call.Callee, member))
                     opaque = true;
                 else
                 {
+                    if (!shadowed && !call.Arguments.Any(argument => argument is SpreadElement))
+                    {
+                        var expected = method.Name switch
+                        {
+                            "setOutput" => 2,
+                            "getOutput" or "setCorrelationId" or "setInstanceName" or "requireExactIdentity" => 1,
+                            "getCorrelationId" or "getInstanceName" => 0,
+                            _ => -1
+                        };
+                        if (expected >= 0 && call.Arguments.Count != expected) invalid = true;
+                        else if (method.Name is "getOutput" or "setOutput" && call.Arguments[0] is Literal nameLiteral &&
+                                 (nameLiteral.Value is not string literalName || string.IsNullOrWhiteSpace(literalName))) invalid = true;
+                        else if (method.Name is "setCorrelationId" or "setInstanceName" or "requireExactIdentity" &&
+                                 call.Arguments[0] is Literal { Value: not null and not string }) invalid = true;
+                    }
                     switch (method.Name)
                     {
                         case "setOutput":
@@ -114,11 +131,47 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     }
                 }
             }
-            foreach (var child in node.ChildNodes) Visit(child, node);
+            foreach (var child in node.ChildNodes) Visit(child, node, shadowed);
         }
-        Visit(parsed, null);
+        Visit(parsed, null, false);
         return new ScriptWorkflowStateEffects { AccessesState = access, OutputNames = names.Order(StringComparer.Ordinal).ToArray(),
-            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque };
+            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque, HasInvalidLiteralCall = invalid };
+    }
+
+    // Lexical ownership is needed only for the reserved capability root: local lookalikes are ordinary data.
+    private static bool DeclaresStateRootInScope(Node scope)
+    {
+        bool Binds(Node? binding) => binding switch
+        {
+            Identifier { Name: "workflowState" } => true,
+            AssignmentPattern pattern => Binds(pattern.Left),
+            RestElement rest => Binds(rest.Argument),
+            ArrayPattern pattern => pattern.Elements.Any(Binds),
+            ObjectPattern pattern => pattern.Properties.Any(property => Binds(property is Property pair ? pair.Value : property)),
+            _ => false
+        };
+        bool Declaration(VariableDeclaration declaration) => declaration.Declarations.Any(item => Binds(item.Id));
+        bool Lexical(IEnumerable<Node> statements) => statements.Any(statement => statement switch
+        {
+            VariableDeclaration { Kind: not VariableDeclarationKind.Var } declaration => Declaration(declaration),
+            FunctionDeclaration function => Binds(function.Id),
+            ClassDeclaration type => Binds(type.Id),
+            _ => false
+        });
+        bool Hoisted(Node root) => root.ChildNodes.Any(child => child is not IFunction and not StaticBlock &&
+            (child is VariableDeclaration { Kind: VariableDeclarationKind.Var } declaration && Declaration(declaration) || Hoisted(child)));
+        return scope switch
+        {
+            Script script => Lexical(script.Body) || Hoisted(script),
+            IFunction function => Binds(function.Id) || function.Params.Any(Binds) || Hoisted(function.Body),
+            BlockStatement block => Lexical(block.Body),
+            CatchClause caught => Binds(caught.Param),
+            ForStatement { Init: VariableDeclaration declaration } => Declaration(declaration),
+            ForInStatement { Left: VariableDeclaration declaration } => Declaration(declaration),
+            ForOfStatement { Left: VariableDeclaration declaration } => Declaration(declaration),
+            ClassExpression type => Binds(type.Id),
+            _ => false
+        };
     }
 
     private static bool IsOpaqueStateMember(Node key, bool computed) => key switch

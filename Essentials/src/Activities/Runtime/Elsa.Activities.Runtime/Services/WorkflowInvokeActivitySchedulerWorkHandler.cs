@@ -289,7 +289,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
                 stateSession = await StepWorkflowState.CreateAsync(serviceProvider, scopeService, activity, executableNode,
                     executionContextState, persistedDurableValues, stepSession, cancellationToken);
-                faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput);
+                faultMasking.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedOutput ||
+                    activity is not IStepWorkflowStateConsumer && stateSession.HasReadProtectedValue);
                 stepWarnings.ProtectWorkflowStateReads(() => stateSession.HasReadProtectedValue);
             }
         }

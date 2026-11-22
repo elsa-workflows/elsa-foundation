@@ -121,6 +121,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
             using var scriptWork = EvaluationLimits.CountScriptWork(engine);
             if (current() is not { } variables || !variables.TryGet(name, out var held))
                 return session.Read(name);
+            if (variables.WasAssigned(name)) session.ObservePendingRead(name);
             if (held.IsUndefined())
                 return Elsa.Expressions.Core.Contracts.ExpressionVariableRead.Missing;
             // What the value bridge would write now, so the function gets what the session will hold. Unchanged: the

@@ -193,7 +193,10 @@ internal static class IsolatedJintEngine
         JsValue Read(string name)
         {
             if (variables.TryGet(name, out var known))
+            {
+                if (variables.WasAssigned(name)) session?.ObservePendingRead(name);
                 return known;
+            }
             if (pinned.TryGetValue(name, out var element))
                 return variables.Enter(name, element);
             // A name that only an engine probe asks for (JSON.stringify asks for toJSON, string conversion for toString

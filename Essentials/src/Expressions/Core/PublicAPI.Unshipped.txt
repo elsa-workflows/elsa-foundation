@@ -855,3 +855,6 @@ override Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.ToString() -> s
 static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.None.get -> Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects!
 static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.operator !=(Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? left, Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? right) -> bool
 static Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.operator ==(Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? left, Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects? right) -> bool
+
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.get -> bool
+Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects.HasInvalidLiteralCall.init -> void

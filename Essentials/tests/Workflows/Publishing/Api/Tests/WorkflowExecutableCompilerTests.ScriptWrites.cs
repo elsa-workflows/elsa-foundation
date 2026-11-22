@@ -81,7 +81,8 @@ public sealed partial class WorkflowExecutableCompilerTests
         Assert.Equal("true", executable.RootActivity.Metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable]);
     }
 
-    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null)
+    private ValueTask<WorkflowExecutable> CompileBodyAsync(string script, Type? probeType = null,
+        Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? readResolver = null)
     {
         probeType ??= typeof(ScriptProbe);
         var registry = TestWellKnownTypeRegistry.Create();
@@ -98,7 +99,7 @@ public sealed partial class WorkflowExecutableCompilerTests
                 new FakeActivityVersionStore([probe]),
                 _activityStructureService,
                 registry,
-                scriptVariableReadResolver: ReadResolver)
+                scriptVariableReadResolver: readResolver ?? ReadResolver)
             .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
     }
 

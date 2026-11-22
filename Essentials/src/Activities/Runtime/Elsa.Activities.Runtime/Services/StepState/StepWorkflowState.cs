@@ -103,9 +103,12 @@ internal sealed class StepWorkflowState : IStepWorkflowState
     {
         EnsureAvailable();
         ValidateName(name);
-        if (value.ValueKind == JsonValueKind.Undefined)
-            throw Refuse("VF-STATE-001: An output assignment requires an explicit JSON value.");
-        try { Assignments[name] = value.Clone(); }
+        try
+        {
+            if (value.ValueKind == JsonValueKind.Undefined)
+                throw new InvalidOperationException();
+            Assignments[name] = value.Clone();
+        }
         catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
         { throw Refuse("VF-STATE-001: An output assignment requires an available JSON value."); }
     }
@@ -120,7 +123,7 @@ internal sealed class StepWorkflowState : IStepWorkflowState
     internal ValueProtectionPolicy SourcePolicy()
     {
         var result = ValueProtectionPolicy.InstanceInline;
-        foreach (var policy in _inputs.Concat(_reads).Concat(_variables?.Reads.Select(read => read.Policy) ?? []))
+        foreach (var policy in _inputs.Concat(_reads).Concat(_variables?.ReadPolicies ?? []))
             result = ValuePolicyCombiner.Combine(result, policy, "Step workflow-state source");
         return result;
     }

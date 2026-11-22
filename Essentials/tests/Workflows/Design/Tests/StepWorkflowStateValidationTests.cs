@@ -6,6 +6,18 @@ namespace Elsa.Workflows.Design.Tests;
 public sealed partial class StepVariableWriteValidationTests
 {
     [Theory]
+    [InlineData("workflowState.setOutput('',1);")]
+    [InlineData("workflowState.setOutput(null,1);")]
+    [InlineData("workflowState.setOutput('x');")]
+    [InlineData("workflowState.setCorrelationId(42);")]
+    [InlineData("workflowState.setInstanceName(false);")]
+    [InlineData("workflowState.getCorrelationId(1);")]
+    public async Task StepWorkflowState_provably_invalid_literal_calls_fail_authoring_validation(string script)
+    {
+        Assert.Contains(await Validate(Sequence("root", Script("script", script))), error => error.Type == "VF-STATE-001");
+    }
+
+    [Theory]
     [InlineData("workflowState.setCorrelationId('new');")]
     [InlineData("workflowState.setInstanceName('Ready');")]
     [InlineData("workflowState.setOutput('Count', 1);")]

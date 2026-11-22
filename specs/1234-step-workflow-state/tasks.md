@@ -77,7 +77,7 @@ All tasks below are implementation work and remain unchecked until executed. Con
 - [X] T031 [US5] Test header/output/inspection consistency, failure versus committed attribution and protected payload permissions in `Essentials/tests/Workflows/Runtime/Api/Tests/StepWorkflowStateInspectionTests.cs`.
 - [X] T032 [US5] Show known/conservative node effects in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx` using existing effect UI primitives and pinned descriptor facts; include native and imported bodies.
 - [X] T033 [US5] Present committed outputs/current identity and value-free effect attribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowInstanceInspection.ts`, `WorkflowInstanceTimeline.tsx` and `workflow-editor/WorkflowInstanceInspectionFacts.tsx`, preserving failure/cancel/protected/empty states.
-- [ ] T034 [US5] Add interaction/regression cases in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstanceInspection.test.tsx` and affected Activity Properties tests; run affected whole frontend suites.
+- [X] T034 [US5] Add interaction/regression cases in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstanceInspection.test.tsx` and affected Activity Properties tests; run affected whole frontend suites.
 - [ ] T035 [US5] Extend owned composed-host journeys in `Studio/tests/acceptance` and the journey/artifact inventory in `tools/ux-acceptance/run.py` for native/imported authoring and success/fault/cancel/protected inspection, narrow/themes/keyboard; retain exact-head artifacts and an independent inspected UX verdict on the implementation PR.
 
 ## Phase 8 — Cross-cutting delivery

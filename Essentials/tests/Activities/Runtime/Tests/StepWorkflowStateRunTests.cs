@@ -94,9 +94,20 @@ public sealed class StepWorkflowStateRunTests
         Assert.DoesNotContain("Safe", JsonSerializer.Serialize(run.State("node-js").Fault), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("String(variables.total)")]
+    [InlineData("String(getVariable('total'))")]
+    public async Task Script_pending_variable_reads_cannot_flow_into_public_identity(string pendingRead)
+    {
+        var (run, _) = await RunAsync($"variables.total = 99; workflowState.setCorrelationId({pendingRead}); return 1;", protectedVariable: true);
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-js").Status);
+        Assert.Null(run.WorkflowState!.CorrelationId);
+        Assert.Equal(10, run.WorkflowState.RootVariableFrame!.Values["var-total"].InlineValue!.Value.GetInt32());
+    }
+
     private static JsonElement Result(WorkflowExecutionRun run) => run.AssertCompleted("node-js").Completion!.Result.InlineValue!.Value.GetProperty("value");
 
-    private static async Task<(WorkflowExecutionRun, IReadOnlyCollection<DurableValueState>)> RunAsync(string script, bool protectedOutput = false)
+    private static async Task<(WorkflowExecutionRun, IReadOnlyCollection<DurableValueState>)> RunAsync(string script, bool protectedOutput = false, bool protectedVariable = false)
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesScriptingFeature().ConfigureServices(services))
@@ -111,7 +122,7 @@ public sealed class StepWorkflowStateRunTests
                 new JintFeature().ConfigureServices(services);
             }).Build("actexec-state");
         var type = new ValueTypeDescriptor("Int32");
-        var policy = ValueProtectionPolicy.InstanceInline;
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: protectedVariable);
         var declaration = new RuntimeVariableDeclaration("var-total", "total", type, policy,
             new RuntimeInputBinding("var-total", type, policy, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(10), policy)));

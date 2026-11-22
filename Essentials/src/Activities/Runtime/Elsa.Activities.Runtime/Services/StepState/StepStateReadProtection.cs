@@ -9,7 +9,7 @@ internal static class StepStateReadProtection
     internal static ActivityValuePolicy? Read(StepVariableSession? variables, StepWorkflowState? state)
     {
         ActivityValuePolicy? result = null;
-        foreach (var policy in (variables?.Reads.Select(read => read.Policy) ?? []).Concat(state?.ReadPolicies ?? []))
+        foreach (var policy in (variables?.ReadPolicies ?? []).Concat(state?.ReadPolicies ?? []))
         {
             if (!policy.IsSensitive && !policy.RequiresEncryption && string.IsNullOrWhiteSpace(policy.RedactionMode)) continue;
             var minimum = new ActivityValuePolicy(true, policy.IsSensitive, policy.RequiresEncryption, policy.RedactionMode);

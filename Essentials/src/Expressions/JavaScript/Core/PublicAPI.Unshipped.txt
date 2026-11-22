@@ -284,3 +284,5 @@ Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.ThrowIfRefused()
 Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.TryGetOutput(string! name, out System.Text.Json.JsonElement value) -> bool
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.WorkflowState.get -> Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState?
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.WorkflowState.init -> void
+
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.ObservePendingRead(string! name) -> void

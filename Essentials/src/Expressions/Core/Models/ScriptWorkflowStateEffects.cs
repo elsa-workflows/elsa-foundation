@@ -8,5 +8,7 @@ public sealed record ScriptWorkflowStateEffects
     public bool WritesCorrelationId { get; init; }
     public bool WritesInstanceName { get; init; }
     public bool Conservative { get; init; }
+    /// <summary>A direct unshadowed call has provably invalid literal name, identity kind or arity.</summary>
+    public bool HasInvalidLiteralCall { get; init; }
     public static ScriptWorkflowStateEffects None { get; } = new();
 }

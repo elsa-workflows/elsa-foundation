@@ -855,3 +855,5 @@ virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult, TState>.
 virtual Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>.Equals(Elsa.Activities.Runtime.Core.Models.ActivityTransition<TResult>? other) -> bool
 ~override Elsa.Activities.Runtime.Core.Models.ActivityUnit.Equals(object obj) -> bool
 ~override Elsa.Activities.Runtime.Core.Models.ActivityUnit.ToString() -> string
+
+Elsa.Activities.Runtime.Core.Contracts.IStepVariableSession.ObservePendingRead(Elsa.Activities.Runtime.Core.Contracts.StepVariableTarget! target) -> void

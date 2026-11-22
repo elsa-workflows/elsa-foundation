@@ -56,6 +56,7 @@ public sealed class StepWorkflowStateTests
     [InlineData("caught", ActivityExecutionStatus.Faulted)]
     [InlineData("dispose", ActivityExecutionStatus.Faulted)]
     [InlineData("dispose-caught-access", ActivityExecutionStatus.Faulted)]
+    [InlineData("disposed-json", ActivityExecutionStatus.Faulted)]
     public async Task Native_failure_paths_discard_every_pending_effect(string mode, ActivityExecutionStatus expected)
     {
         await using var harness = VariableLifecycleTestGraph.NewHarness("actexec-root");
@@ -98,6 +99,14 @@ public sealed class NativeStateWriter : Activity<Incremented>, IDisposable
         if (Mode == "caught")
             try { context.WorkflowState.SetOutput("", JsonSerializer.SerializeToElement(1)); }
             catch (InvalidOperationException) { }
+        if (Mode == "disposed-json")
+        {
+            var document = JsonDocument.Parse("42");
+            var disposed = document.RootElement;
+            document.Dispose();
+            try { context.WorkflowState.SetOutput("Bad", disposed); }
+            catch (InvalidOperationException) { }
+        }
         return ValueTask.FromResult(Mode switch
         {
             "fault" => ActivityTransition.Fault<Incremented>(new ActivityFault("test", "body fault")),

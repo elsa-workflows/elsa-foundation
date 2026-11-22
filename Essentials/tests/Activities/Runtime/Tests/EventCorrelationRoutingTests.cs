@@ -25,6 +25,7 @@ public sealed class EventCorrelationRoutingTests
 
     [Theory]
     [InlineData("independent")]
+    [InlineData("new")]
     [InlineData(null)]
     public async Task Changing_workflow_identity_keeps_old_wait_keys_and_later_waits_use_their_own_input(string? laterCorrelation)
     {
@@ -62,10 +63,11 @@ public sealed class EventCorrelationRoutingTests
         async Task<int> Route(string key) => (await router.RouteAsync(new StimulusDispatchRequest(EventStimulus.StimulusType,
             EventStimulus.Hash(EventName), input: JsonSerializer.SerializeToElement(new { eventName = EventName }), mode: StimulusRoutingMode.ResumeOnly, correlationId: key,
             payloadType: new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventReceived)), schemaVersion: 1), providerId: PublishEvent.ActivityType) { ResumeAllMatchingBookmarks = true })).ResumedCount;
-        Assert.Equal(0, await Route("new"));
+        Assert.Equal(0, await Route("unmatched"));
+        if (laterCorrelation != "new") Assert.Equal(0, await Route("new"));
         Assert.Equal(1, await Route("old"));
         Assert.Equal(ActivityExecutionStatus.Suspended, (await harness.ReadRunAsync(harness.ExecutionId)).State("later").Status);
-        Assert.Equal(1, await Route("independent"));
+        Assert.Equal(1, await Route(laterCorrelation));
         Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness));
     }
 

@@ -71,6 +71,10 @@ public interface IScriptVariableSession : Elsa.Expressions.Core.Contracts.IExpre
     /// </summary>
     bool HasReadProtectedValue { get; }
 
+    /// <summary>Observes protection when the engine returns a value held after assignment.</summary>
+    /// <remarks>The compatible default uses an ordinary session read; hosts may keep protection separate from read bases.</remarks>
+    void ObservePendingRead(string name) { _ = Read(name); }
+
     /// <summary>
     /// Whether the variable is read-only to the script (a loop's item or index): the engine freezes it, so a change throws
     /// where the script makes it (ADR 0090, spec 1231 FR-006).

@@ -5,10 +5,10 @@ namespace Elsa.Activities.Runtime.Core.Contracts;
 /// <summary>Running-workflow state available only during one inline leaf body evaluation.</summary>
 public interface IStepWorkflowState
 {
-    /// <summary>Reads a JSON copy, distinguishing an absent output from an explicit null.</summary>
     /// <summary>Whether the evaluation read a protected value through this capability.</summary>
     bool HasReadProtectedValue { get; }
 
+    /// <summary>Reads a JSON copy, distinguishing an absent output from an explicit null.</summary>
     bool TryGetOutput(string name, out JsonElement value);
 
     /// <summary>Stages a complete JSON output assignment for the evaluation's checkpoint.</summary>

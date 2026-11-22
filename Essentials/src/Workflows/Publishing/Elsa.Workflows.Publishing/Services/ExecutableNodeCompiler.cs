@@ -353,6 +353,8 @@ public sealed class ExecutableNodeCompiler(
     /// </summary>
     private static void EnsureBodyWritesAllowed(string nodeId, string inputKey, string script, ScriptVariableReadPlan plan)
     {
+        if (plan.WorkflowState.HasInvalidLiteralCall)
+            throw new ArgumentException("VF-STATE-001: A workflow-state call has an invalid literal output name, identity kind or argument count. Use a nonblank string output name, string/null identity and exact method arguments.");
         foreach (var (write, code) in plan.RefusedLiteralWrites(IsTransient))
             throw new ArgumentException(ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, inputKey, nodeId, script, write));
     }

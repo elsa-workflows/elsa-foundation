@@ -1249,3 +1249,4 @@ User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 by
 
 - **Kind:** single-implementation replacement seam for canonical step-output encoding and projection. The default is the existing scoped `WorkflowIntrinsicExecutor` instance.
 - **Usage:** `PrepareOutputAsync` encodes one Any JSON output under its effective policy and returns its immutable durable-value change. It does not accept a checkpoint or persist workflow headers. The caller combines source/destination policy through `ValuePolicyCombiner` and accepts every evaluation effect together.
+- **Startup:** `StatePreparationStartupTask` is a singleton `IStartupTask`, run once per shell activation. It rejects duplicate `IWorkflowStateChangePreparer` registrations before execution. The singleton holds registration metadata only and never resolves the scoped preparation provider or its stores; it has no recurring cadence or persistence side effects.

@@ -77,6 +77,10 @@ public interface IStepVariableSession : IStepVariables
     /// </summary>
     bool HasReadProtectedValue { get; }
 
+    /// <summary>Observes the policy of a script-held pending value without advancing a concurrency read base.</summary>
+    /// <remarks>The compatible default performs an ordinary read; the runtime session records protection separately.</remarks>
+    void ObservePendingRead(StepVariableTarget target) { _ = ReadJson(target); }
+
     /// <summary>
     /// Whether a target is read-only to a step: a loop's item or index (spec 1231 FR-006). A script gets it frozen, so a
     /// change throws where the script makes it.
