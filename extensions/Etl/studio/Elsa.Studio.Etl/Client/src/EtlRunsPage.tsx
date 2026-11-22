@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StatusChip, type StudioStatusTone } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioPageHeader, StudioButton, StatusChip, type StudioStatusTone } from "@elsa-workflows/studio-ui";
 import { appendUnique } from "./paging";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioBackendSession, StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -517,7 +517,7 @@ function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure;
         : failure.kind === "not-found"
           ? `The requested ${subject} is no longer available in this scope.`
           : `Could not load ${subject}.`;
-  return <div className="etl-run-error" role="alert"><p>{message}</p><button type="button" onClick={onRetry}>Retry</button></div>;
+  return <StudioAlert tone="danger"><p>{message}</p><StudioButton onClick={onRetry}>Retry</StudioButton></StudioAlert>;
 }
 
 function failureOf(error: unknown): RequestFailure {

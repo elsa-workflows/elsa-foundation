@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioWorkspaceTab,
   type StudioDialogApi, type StudioEndpointContext, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, formatStudioDateTime, StudioTimestamp, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioAlert, CopyableIdentifier, formatStudioDateTime, StudioTimestamp, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ExternalAuthenticationClient, identityAccessError, type IdentityLink, type IdentityLinks,
   type IdentitySession, type IdentitySessions, type IdentityUser, type IdentityUsers } from "./sdk";
 
@@ -186,8 +186,8 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
 
   return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" headingLevel={2} description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
     actions={<StudioButton onClick={() => void refresh()} disabled={Boolean(busy || loadingUsers || reauthenticate)}>Refresh user access</StudioButton>} />
-    {directoryError ? <p role="alert" className="external-auth-error">{directoryError}</p> : null}
-    {error ? <p ref={feedback.errorRef} tabIndex={-1} role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh user access before another change." : ""}</p> : null}
+    {directoryError ? <StudioAlert tone="danger">{directoryError}</StudioAlert> : null}
+    {error ? <StudioAlert tone="danger" ref={feedback.errorRef} tabIndex={-1}>{error}{needsRefresh ? " Refresh user access before another change." : ""}</StudioAlert> : null}
     {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {loadingUsers && !visible ? <p role="status">Loading users…</p> : null}
     {visible ? <><div className="external-auth-workspace"><section className="external-auth-list" aria-label="Users">
@@ -209,7 +209,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
         {visible.linkManagementUnavailableReason ? <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.linkManagementUnavailableReason } })}</p> : null}
         {loadingAccess ? <p role="status">Loading user access…</p> : null}
         <section className="external-auth-user-section" aria-label="Identity links"><h3>Identity links</h3>
-          {!visible.canReadLinks ? <p className="external-auth-callout">You do not have permission to read identity links.</p> : linksError ? <p role="alert" className="external-auth-error">{linksError}</p> : links ? <>
+          {!visible.canReadLinks ? <p className="external-auth-callout">You do not have permission to read identity links.</p> : linksError ? <StudioAlert tone="danger">{linksError}</StudioAlert> : links ? <>
             {!links.items.length ? <p className="external-auth-empty">No identities are linked to this user.</p> : links.items.map(link => <article className="external-auth-user-entry" key={`${link.provider}:${link.issuer}:${link.subject}`}>
               <h4>{link.connectionDisplayName ?? link.provider}</h4><dl><dt>Provider key</dt><dd>{link.provider}</dd><dt>Issuer</dt><dd>{link.issuer ?? "Legacy issuer-less identity"}</dd>
                 <dt>Subject</dt><dd><CopyableIdentifier value={link.subject} label="External subject" /></dd><dt>Linked</dt><dd><StudioTimestamp value={link.linkedAt} format="date-time" fallback="Not recorded" /></dd></dl>
@@ -231,7 +231,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
         </section>
         <section className="external-auth-user-section" aria-label="Sessions"><h3>Sessions</h3>
           {!visible.canReadSessions ? <p className="external-auth-callout">You do not have permission to read sessions.</p> : visible.sessionAdministrationUnavailableReason ?
-            <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.sessionAdministrationUnavailableReason } })} Link removal also requires this service.</p> : sessionsError ? <p role="alert" className="external-auth-error">{sessionsError}</p> : sessions ? <>
+            <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.sessionAdministrationUnavailableReason } })} Link removal also requires this service.</p> : sessionsError ? <StudioAlert tone="danger">{sessionsError}</StudioAlert> : sessions ? <>
               {!sessions.items.length ? <p className="external-auth-empty">No retained sessions for this user.</p> : sessions.items.map(session => <article className="external-auth-user-entry" key={session.id}>
                 <h4>{session.connectionKey ?? session.provider}{session.current ? " · Current session" : ""}</h4><StatusChip>{session.state}</StatusChip>
                 <dl><dt>Session ID</dt><dd><CopyableIdentifier value={session.id} label="Session ID" /></dd><dt>Created</dt><dd><StudioTimestamp value={session.createdAt} format="date-time" fallback="Not recorded" /></dd>

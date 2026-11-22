@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioPageHeader, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useStudioRouteLocation, useStudioWorkspaceTab, studioNavigationRequestedEvent, type StudioNavigationRequest, type StudioDialogApi, type StudioEndpointContext, type StudioNotificationApi } from "@elsa-workflows/studio-sdk";
 import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
@@ -684,7 +684,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
     {!contextIsLoaded && definition && definitionsFailure ? <FailureNotice failure={definitionsFailure} subject="ETL definitions" onRetry={refreshDefinitions} /> : null}
     {contextIsLoaded ? <>
       {draftLoadFailure ? <FailureNotice failure={draftLoadFailure.failure} subject={`draft ${draftLoadFailure.definitionId}`} onRetry={() => void selectDefinition(draftLoadFailure.definitionId)} /> : null}
-      {editorFailure ? <div className="etl-error" role="alert">{editorFailure}</div> : null}
+      {editorFailure ? <StudioAlert tone="danger">{editorFailure}</StudioAlert> : null}
       {editorNotice ? <div className="etl-notice" role="status" aria-live="polite">{editorNotice}</div> : null}
 
       {visibleDraft && visiblePipeline ? <section className="etl-editor-section" aria-labelledby={`${pageId}-draft`}>
@@ -752,9 +752,9 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
           </button>
         </div> : null}
         {versionsMoreFailure ? <FailureNotice failure={versionsMoreFailure} subject="more published versions" onRetry={() => void loadMoreVersions()} /> : null}
-        {artifactFailure ? <div className="etl-error" role="alert"><p>{artifactFailure}</p>
-          {selectedVersion ? <button type="button" disabled={artifactLoading || mutation !== null} onClick={() => retryArtifact(selectedVersion)}>Retry</button> : null}
-        </div> : null}
+        {artifactFailure ? <StudioAlert tone="danger"><p>{artifactFailure}</p>
+          {selectedVersion ? <StudioButton disabled={artifactLoading || mutation !== null} onClick={() => retryArtifact(selectedVersion)}>Retry</StudioButton> : null}
+        </StudioAlert> : null}
         {artifactLoading ? <p role="status" aria-live="polite">Loading selected immutable artifact…</p> : null}
         {artifact && selectedVersion && artifact.version.selection === selectedVersion.selection ? <section className="etl-editor-section" aria-label="Published ETL artifact">
           <h3>Published artifact · version {artifact.version.definitionVersion}</h3>
@@ -774,7 +774,7 @@ function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure;
       : failure.kind === "not-found"
         ? `The requested ${subject} is no longer available.`
         : `Could not load ${subject}.`;
-  return <div className="etl-error" role="alert"><p>{message}</p><button type="button" onClick={onRetry}>Retry</button></div>;
+  return <StudioAlert tone="danger"><p>{message}</p><StudioButton onClick={onRetry}>Retry</StudioButton></StudioAlert>;
 }
 
 function failureOf(error: unknown): RequestFailure {
