@@ -76,7 +76,12 @@ internal static class FoundationTenantChecks
 
         var leftList = await reads.ListAsync(first, new Contract.ActorQuery());
         var rightList = await reads.ListAsync(second, new Contract.ActorQuery());
-        check(leftList.Items.Count == 3 && rightList.Items.Count == 3 &&
+        var listedLeft = leftList.Items.Select(view => view.Header.Ref).ToHashSet();
+        var listedRight = rightList.Items.Select(view => view.Header.Ref).ToHashSet();
+        check(leftList.Items.Count == 3 && rightList.Items.Count == 3 && listedLeft.Count == 3 && listedRight.Count == 3 &&
+            left.Actor is { } leftRoot && listedLeft.Contains(leftRoot) && listedLeft.Contains(leftActor) &&
+            right.Actor is { } rightRoot && listedRight.Contains(rightRoot) && listedRight.Contains(rightActor) &&
+            !listedLeft.Overlaps(listedRight) &&
             leftList.Items.All(view => view.Header.Tenant == first.Tenant) &&
             rightList.Items.All(view => view.Header.Tenant == second.Tenant) &&
             leftList.Items.Count(view => view.Header.TypeData == "event-start" &&
