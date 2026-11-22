@@ -34,18 +34,49 @@ public sealed partial class RuntimeHistoryInspectionService
             (head.LastSequence == 0 ? head.FirstSequence is not (0 or 1) : head.FirstSequence != 1))
             return (null, "Unavailable history prevents establishing all source responsibility for this recorded prefix.");
 
+        string? binding = null;
+        const string changedContext = "The inspection context changed while source responsibility was read. Refresh to inspect its current boundary.";
+        var pendingAuthorities = new List<Func<bool>>(2);
+        async ValueTask<(bool? Pending, string? Limitation)> LimitedAsync(string? limitation)
+        {
+            token.ThrowIfCancellationRequested();
+            if (pendingAuthorities.Count == 0) return (null, limitation);
+            if (await BindingAsync(token) != binding) return (null, changedContext);
+            var knownPending = false;
+            var authorityChanged = false;
+            foreach (var qualify in pendingAuthorities)
+            {
+                var qualified = false;
+                try { qualified = qualify(); }
+                catch (Exception error) when (IsMalformedSource(error))
+                { throw new RuntimeHistoryIntegrityException(run, "source inspection could not interpret its retained owner evidence", error); }
+                catch (Exception error) when (IsAvailabilityFailure(error) || error is OperationCanceledException)
+                { token.ThrowIfCancellationRequested(); }
+                knownPending |= qualified;
+                authorityChanged |= !qualified;
+            }
+            if (await BindingAsync(token) != binding) return (null, changedContext);
+            return (knownPending ? true : null, limitation ?? (authorityChanged || !knownPending ? changedContext : null));
+        }
+
         try
         {
             const int sourceLimitPerKind = 100;
-            var binding = await BindingAsync(token);
+            binding = await BindingAsync(token);
             var checkedSources = new Dictionary<string, string>(StringComparer.Ordinal);
             IPostCommitOutboxLookupStore? lookup = null;
             var pending = false;
+            var outboxPending = false;
             // An incomplete timer vocabulary stays unknown, while another known owed source still proves pending.
             var timerOwner = timers && DurableTimerHistoryFacts.Kinds.All(Supports) ? TimerLookup?.Invoke() : null;
             if (timerOwner is { SupportsHistoryResponsibility: true } && timerOwner.CanInspectHistorySources(history))
             {
                 pending = await timerOwner.HasPendingHistoryAsync(run, token);
+                if (pending)
+                {
+                    var observedTimer = timerOwner;
+                    pendingAuthorities.Add(() => observedTimer.SupportsHistoryResponsibility && observedTimer.CanInspectHistorySources(history));
+                }
                 timerUnknown = false;
             }
             bool TimerAuthorityChanged() => !timerUnknown && timerOwner is not null &&
@@ -57,7 +88,7 @@ public sealed partial class RuntimeHistoryInspectionService
                 if (!SameSourceBoundary(head, page.Head) || page.UpperSequence != head.LastSequence ||
                     page.ScannedThroughSequence != page.UpperSequence || page.NextContinuationToken is not null ||
                     !page.ScopeComplete || page.Items.Count > sourceLimitPerKind || page.ScannedCount < page.Items.Count)
-                    return (null, "The bounded source inspection could not establish this recorded range. More or newer source history may remain.");
+                    return await LimitedAsync("The bounded source inspection could not establish this recorded range. More or newer source history may remain.");
                 long previous = 0;
                 foreach (var item in page.Items)
                 {
@@ -66,11 +97,11 @@ public sealed partial class RuntimeHistoryInspectionService
                         throw new RuntimeHistoryIntegrityException(run, "source inspection disagrees with its committed origin range");
                     previous = item.Sequence;
                     if (item.SchemaVersion != 1)
-                        return (null, "A recorded source version is unsupported for settlement inspection.");
+                        return await LimitedAsync("A recorded source version is unsupported for settlement inspection.");
                     // Causation identifies the incoming trigger, which can be a different delivery.
                     // Only an explicit outgoing source identity can establish this event's responsibility.
                     if (!item.Metadata.TryGetValue("history.sourceDeliveryId", out var sourceId) || string.IsNullOrWhiteSpace(sourceId))
-                        return (null, "A recorded source has no inspectable responsibility identity.");
+                        return await LimitedAsync("A recorded source has no inspectable responsibility identity.");
                     if (checkedSources.TryGetValue(sourceId, out var original))
                     {
                         if (original != item.HistoryEventId)
@@ -80,10 +111,10 @@ public sealed partial class RuntimeHistoryInspectionService
                     checkedSources.Add(sourceId, item.HistoryEventId);
                     lookup ??= SourceLookup?.Invoke();
                     if (lookup is null || !lookup.CanInspectHistorySources(history))
-                        return (null, "The selected source and history providers cannot establish one scoped responsibility owner.");
+                        return await LimitedAsync("The selected source and history providers cannot establish one scoped responsibility owner.");
                     var source = await lookup.FindDurableAsync(sourceId, token);
                     if (source is null)
-                        return (null, "Part of the recorded source responsibility is no longer inspectable.");
+                        return await LimitedAsync("Part of the recorded source responsibility is no longer inspectable.");
                     // A child's terminal origin can address its parent, rather than the run being inspected.
                     var target = group.Origin == "ChildWorkflowSettled"
                         ? item.Metadata.GetValueOrDefault("history.relatedWorkflowExecutionId") : run;
@@ -102,12 +133,22 @@ public sealed partial class RuntimeHistoryInspectionService
                     if (!Enum.IsDefined(source.Status))
                         throw new RuntimeHistoryIntegrityException(run, "durable source has an unknown delivery status");
                     // Failed-final/cancelled/delayed work does not prove its history responsibility acknowledged.
-                    pending |= source.Status != RuntimePostCommitOutboxStatus.Delivered;
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered)
+                    {
+                        pending = true;
+                        if (!outboxPending)
+                        {
+                            var observedLookup = lookup;
+                            pendingAuthorities.Add(() => observedLookup.CanInspectHistorySources(history));
+                            outboxPending = true;
+                        }
+                    }
                 }
             }
-            if (await BindingAsync(token) != binding || lookup is not null && !lookup.CanInspectHistorySources(history) || TimerAuthorityChanged())
-                return (null, "The inspection context changed while source responsibility was read. Refresh to inspect its current boundary.");
-            if (pending) return (true, timerUnknown ? "Timer history settlement remains unknown." : null);
+            if (await BindingAsync(token) != binding) return (null, changedContext);
+            var authorityChanged = lookup is not null && !lookup.CanInspectHistorySources(history) || TimerAuthorityChanged();
+            if (pending) return await LimitedAsync(timerUnknown ? "Timer history settlement remains unknown." : authorityChanged ? changedContext : null);
+            if (authorityChanged) return (null, changedContext);
             // Even absence is only an observation of this exact retained prefix, never future source closure.
             // Keep the original page's head/bounds; a concurrent append, purge or policy change invalidates the negative.
             if (!SameSourceBoundary(head, await history.FindHeadAsync(run, token)))
@@ -125,7 +166,7 @@ public sealed partial class RuntimeHistoryInspectionService
         {
             token.ThrowIfCancellationRequested();
             logger?.LogWarning("Source history responsibility could not be read ({FailureType}).", error.GetType().Name);
-            return (null, "Source history settlement could not be checked. Recorded events remain readable.");
+            return await LimitedAsync("Source history settlement could not be checked. Recorded events remain readable.");
         }
     }
 

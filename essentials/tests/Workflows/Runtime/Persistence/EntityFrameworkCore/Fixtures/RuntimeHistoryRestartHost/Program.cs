@@ -62,7 +62,7 @@ try
     var context = host.Services.GetRequiredService<RuntimeDbContext>();
     if (context.Database.HasPendingModelChanges()) throw new InvalidDataException("Fixture model has pending changes.");
     var migrations = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
-    if (migrations.Length != 7) throw new InvalidDataException("Fixture did not apply the seven official Runtime migrations.");
+    if (migrations.Length != 8) throw new InvalidDataException("Fixture did not apply the eight official Runtime migrations.");
     var reader = host.Services.GetRequiredService<IRuntimeHistoryStore>();
     var occurrences = (IRuntimeHistoryOccurrenceStore)reader;
     var writer = host.Services.GetRequiredService<IRuntimeCheckpointCommitStore>();

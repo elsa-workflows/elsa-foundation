@@ -84,7 +84,7 @@ public sealed partial class RuntimeHistoryApiTests
     public async Task Occurrence_authority_retired_during_pending_source_settlement_never_discloses_rows_or_window(bool profile)
     {
         var policy = new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true, SourcePolicy.SupportedKinds.Append("ActivityStarted").ToArray());
-        var page = OccurrencePage(); page = page with { Head = page.Head! with { Policy = policy } };
+        var page = OccurrencePage(policy: policy);
         var source = new OccurrenceProjection { Occurrences = page,
             SettlementPage = new(page.Head, [Origin()], 1, 1, 1, null, "catch-up") };
         var lookup = new HeldSettlementLookup(source); var current = new CurrentOccurrencePermissions();
@@ -366,9 +366,9 @@ public sealed partial class RuntimeHistoryApiTests
                 services.Replace(ServiceDescriptor.Scoped<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
         }, workflow: Workflow() with { HistoryCapturePolicy = policy ?? OccurrencePolicy });
 
-    private static RuntimeHistoryOccurrencePage OccurrencePage(long sequence = 1)
+    private static RuntimeHistoryOccurrencePage OccurrencePage(long sequence = 1, RuntimeHistoryCapturePolicy? policy = null)
     {
-        var head = Head() with { Policy = OccurrencePolicy, LastSequence = sequence };
+        var head = Head() with { Policy = policy ?? OccurrencePolicy, LastSequence = sequence };
         var observation = new RuntimeHistoryEvent("first", "run", sequence, RuntimeHistoryEventCategory.ActivityLifecycle,
             "ActivityStarted", Now, "activity", metadata: new Dictionary<string, string> { ["private"] = "withheld" })
         { Authority = RuntimeHistoryAuthority.CommittedTransition, RecordedAt = Now, PhysicalCommitId = "physical", OccurredAtKnown = false };

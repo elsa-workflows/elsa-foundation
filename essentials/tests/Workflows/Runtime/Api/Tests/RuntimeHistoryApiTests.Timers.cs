@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Api.Endpoints;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -16,6 +17,60 @@ public sealed partial class RuntimeHistoryApiTests
         projection.Head = projection.Head with { Policy = new("runtime-history-v4", 4, true, DurableTimerHistoryFacts.Kinds) };
         projection.Refreshed = projection.Head;
         return projection;
+    }
+
+    [Theory]
+    [InlineData("missing-owner")] [InlineData("missing-row")] [InlineData("unavailable")]
+    public async Task Known_pending_timer_responsibility_survives_unknown_outbox_evidence(string boundary)
+    {
+        var projection = new SourceProjection();
+        projection.Head = projection.Head with { Policy = new("runtime-history-v4", 4, true,
+            SourcePolicy.SupportedKinds.Concat(DurableTimerHistoryFacts.Kinds).ToArray()) };
+        projection.Refreshed = projection.Head;
+        var owner = new TimerLookup(projection) { Pending = true };
+        var lookup = boundary == "missing-owner" ? null : new SourceLookup(projection);
+        if (boundary == "missing-row") lookup!.Item = null;
+        if (boundary == "unavailable") lookup!.Failure = new IOException("private source details");
+        using var provider = await SourceServices(projection, lookup, resolveTimer: () => owner);
+        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        Assert.True(view.Coverage.SourceHistoryPending);
+        Assert.Equal("pending", view.Coverage.State);
+        Assert.NotNull(view.Coverage.SourceHistoryLimitation);
+        Assert.DoesNotContain("private", view.Coverage.SourceHistoryLimitation);
+        Assert.Equal(new[] { "run" }, owner.Reads);
+    }
+
+    [Theory]
+    [InlineData("pair")] [InlineData("support")] [InlineData("actor")]
+    public async Task Pending_timer_witness_is_revalidated_after_an_outbox_failure(string boundary)
+    {
+        var projection = new SourceProjection();
+        projection.Head = projection.Head with { Policy = new("runtime-history-v4", 4, true,
+            SourcePolicy.SupportedKinds.Concat(DurableTimerHistoryFacts.Kinds).ToArray()) };
+        projection.Refreshed = projection.Head;
+        var owner = new TimerLookup(projection) { Pending = true }; var auth = new Authorization();
+        var lookup = new SourceLookup(projection) { Failure = new IOException("private source details"), BeforeFailure = () =>
+            { if (boundary == "pair") owner.Paired = false; else if (boundary == "support") owner.Supported = false; else auth.Subject = "replacement"; } };
+        using var provider = await SourceServices(projection, lookup, auth, resolveTimer: () => owner);
+        var reading = provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        if (boundary == "actor") { await Assert.ThrowsAsync<RuntimeResourceMissingSignal>(() => reading); return; }
+        var view = await reading;
+        Assert.Null(view.Coverage.SourceHistoryPending); Assert.Equal("partial", view.Coverage.State);
+        Assert.NotNull(view.Coverage.SourceHistoryLimitation); Assert.DoesNotContain("private", view.Coverage.SourceHistoryLimitation);
+    }
+
+    [Fact]
+    public async Task Pending_timer_witness_does_not_soften_malformed_outbox_evidence()
+    {
+        var projection = new SourceProjection();
+        projection.Head = projection.Head with { Policy = new("runtime-history-v4", 4, true,
+            SourcePolicy.SupportedKinds.Concat(DurableTimerHistoryFacts.Kinds).ToArray()) };
+        projection.Refreshed = projection.Head;
+        var owner = new TimerLookup(projection) { Pending = true };
+        using var provider = await SourceServices(projection, new SourceLookup(projection) { Failure = new InvalidDataException("private") }, resolveTimer: () => owner);
+        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        Assert.Equal("invalid", view.Coverage.State); Assert.Null(view.Coverage.SourceHistoryPending);
+        Assert.Empty(view.Items); Assert.Null(view.CatchUpToken);
     }
 
     [Theory]
@@ -63,7 +118,14 @@ public sealed partial class RuntimeHistoryApiTests
         var projection = TimerProjection(); var owner = new TimerLookup(projection); var auth = new Authorization();
         owner.AfterRead = () => { if (boundary == "pair") owner.Paired = false; else if (boundary == "support") owner.Supported = false; else auth.Subject = "replacement"; };
         using var provider = await SourceServices(projection, auth: auth, resolveTimer: () => owner);
-        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        var reading = provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        if (boundary == "actor")
+        {
+            await Assert.ThrowsAsync<RuntimeResourceMissingSignal>(() => reading);
+            Assert.Equal(0, projection.HeadReads);
+            return;
+        }
+        var view = await reading;
         Assert.Null(view.Coverage.SourceHistoryPending); Assert.Contains("context changed", view.Coverage.SourceHistoryLimitation);
         Assert.Equal(0, projection.HeadReads);
     }
@@ -75,7 +137,14 @@ public sealed partial class RuntimeHistoryApiTests
         var projection = TimerProjection(); var owner = new TimerLookup(projection); var auth = new Authorization();
         projection.BeforeHeadRead = () => { if (boundary == "pair") owner.Paired = false; else if (boundary == "support") owner.Supported = false; else auth.Subject = "replacement"; };
         using var provider = await SourceServices(projection, auth: auth, resolveTimer: () => owner);
-        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        var reading = provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
+        if (boundary == "actor")
+        {
+            await Assert.ThrowsAsync<RuntimeResourceMissingSignal>(() => reading);
+            Assert.Equal(1, projection.HeadReads);
+            return;
+        }
+        var view = await reading;
         Assert.Null(view.Coverage.SourceHistoryPending); Assert.Contains("context changed", view.Coverage.SourceHistoryLimitation);
         Assert.Equal(1, projection.HeadReads);
     }

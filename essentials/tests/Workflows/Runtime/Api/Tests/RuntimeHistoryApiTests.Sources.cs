@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Api.Endpoints;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -223,8 +224,8 @@ public sealed partial class RuntimeHistoryApiTests
         var projection = new SourceProjection(); var auth = new Authorization();
         var lookup = new SourceLookup(projection) { AfterRead = () => auth.Subject = "replacement-operator" };
         using var provider = await SourceServices(projection, lookup, auth);
-        var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
-        Assert.Null(view.Coverage.SourceHistoryPending); Assert.Contains("context changed", view.Coverage.SourceHistoryLimitation);
+        await Assert.ThrowsAsync<RuntimeResourceMissingSignal>(() =>
+            provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run")));
         Assert.Equal(0, projection.HeadReads);
     }
 
@@ -287,6 +288,40 @@ public sealed partial class RuntimeHistoryApiTests
         var lookup = new SourceLookup(projection) { AfterRead = cancellation.Cancel };
         using var provider = await SourceServices(projection, lookup);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"), cancellation.Token));
+    }
+
+    [Theory]
+    [InlineData("page", false)] [InlineData("event", false)]
+    [InlineData("bookmarks", false)] [InlineData("bookmark", false)]
+    [InlineData("page", true)] [InlineData("event", true)]
+    [InlineData("bookmarks", true)] [InlineData("bookmark", true)]
+    public async Task Metadata_authority_retired_during_source_settlement_never_discloses_data_or_tokens(string surface, bool profile)
+    {
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true, SourcePolicy.SupportedKinds);
+        var head = Head() with { Policy = policy };
+        var source = new Projection { Head = head, Event = Origin(),
+            Page = new(head, [Origin()], 1, 1, 1, null, "catch-up"),
+            BookmarkPage = new(head, [Bookmark(NativeBookmark())], null) };
+        var lookup = new HeldSettlementLookup(source);
+        await using var host = await Host.StartAsync(services =>
+        {
+            services.AddSingleton<IRuntimeHistoryStore>(source);
+            services.AddSingleton<IPostCommitOutboxLookupStore>(lookup);
+        }, workflow: Workflow() with { HistoryCapturePolicy = policy });
+        host.Authenticate();
+        var suffix = surface switch { "event" => "/events/origin", "bookmarks" => "/bookmarks", "bookmark" => "/bookmarks/bookmark", _ => "" };
+        var request = host.Client.GetAsync(Path + suffix);
+        try
+        {
+            await lookup.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (profile) host.Authorization.Subject = "replacement";
+            else host.Authorization.Allowed = false;
+        }
+        finally { lookup.Release.TrySetResult(); }
+        using var response = await request;
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, lookup.Reads); Assert.Equal(0, host.Authorization.ValueReads);
     }
 
     private static async Task<ServiceProvider> SourceServices(SourceProjection projection, SourceLookup? lookup = null,
