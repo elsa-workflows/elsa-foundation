@@ -184,14 +184,14 @@ describe("Activity Definition dependency explorer", () => {
     });
     const rendered = renderExplorer(getJson);
     await selectRoot(rendered.container);
-    await waitForText(rendered.container, "Try again");
+    await waitForText(rendered.container, "Retry");
     expect(rendered.container.textContent).toContain("Usage information is unavailable.");
     expect(rendered.container.textContent).toContain("Ask an administrator to restart the server");
     expect(rendered.container.textContent).not.toContain("No evidence matches");
     expect(rendered.container.textContent).not.toContain("private-backend-detail");
     expect(rendered.container.querySelector("table")).toBeNull();
     available = true;
-    click(buttonByText(rendered.container, "Try again"));
+    click(buttonByText(rendered.container, "Retry"));
     await waitForText(rendered.container, "recovered-usage");
     expect(rendered.container.textContent).not.toContain("Usage information is unavailable.");
     await rendered.unmount();

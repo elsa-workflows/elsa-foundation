@@ -111,7 +111,7 @@ function StudioSignInStatus({ failed = false, onRetry }: { failed?: boolean; onR
             : "Signing in…"}
         </p>
         {failed ? (
-          <button type="button" className="studio-auth-retry" onClick={onRetry}>Try again</button>
+          <button type="button" className="studio-auth-retry" onClick={onRetry}>Retry</button>
         ) : (
           <span className="studio-auth-progress" aria-hidden="true" />
         )}
