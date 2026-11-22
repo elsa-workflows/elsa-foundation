@@ -126,7 +126,7 @@ internal static class ActivityExecutionProblemDetails
                     cursor.RecoveryAction));
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        await JsonSerializer.SerializeAsync(context.Response.Body, response, WorkflowsRuntimeJsonContext.Default.ActivityExecutionProblemDetailsView, cancellationToken);
+        await JsonSerializer.SerializeAsync(context.Response.Body, response, WorkflowsRuntimeJsonContext.WireContext.ActivityExecutionProblemDetailsView, cancellationToken);
     }
 
     private static Task WriteAsync(

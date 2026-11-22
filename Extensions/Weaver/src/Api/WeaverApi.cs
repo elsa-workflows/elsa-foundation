@@ -31,7 +31,7 @@ public static class WeaverApi
         // The Weaver operations keep their own reads, writes, failure-carrying response envelopes,
         // and the SSE stream, so every operation stays on the group's raw seam; the group supplies
         // the shared metadata the mapper used to inline per endpoint.
-        var api = endpoints.MapEndpointGroup(OwnerId, WeaverJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(OwnerId, WeaverJsonContext.WireContext, jsonContentType: "application/json");
 
         Map(api, "GET", $"{RoutePrefix}/bootstrap", "Bootstrap", WeaverPermissionKeys.Use,
             null, typeof(WeaverApiResponse<WeaverBootstrapResponse>), HandleBootstrapAsync);
@@ -107,12 +107,12 @@ public static class WeaverApi
             if (RetryAfterSeconds(context, ownership) is { } seconds)
                 context.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Failure(OwnershipError(ownership)),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverSessionPolicyResponse, StatusCodes.Status409Conflict);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionPolicyResponse, StatusCodes.Status409Conflict);
         }
         catch (Exception failure) when (WeaverSessionUnavailableException.Find(failure) is { } unavailable && !context.Response.HasStarted)
         {
             await WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Failure(UnavailableError(unavailable)),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverSessionPolicyResponse, StatusCodes.Status409Conflict);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionPolicyResponse, StatusCodes.Status409Conflict);
         }
     }
 
@@ -152,7 +152,7 @@ public static class WeaverApi
         {
             Recovery = DescribeRecovery(context)
         };
-        await WriteAsync(context, WeaverApiResponse<WeaverBootstrapResponse>.Success(response), WeaverJsonContext.Default.WeaverApiResponseWeaverBootstrapResponse);
+        await WriteAsync(context, WeaverApiResponse<WeaverBootstrapResponse>.Success(response), WeaverJsonContext.WireContext.WeaverApiResponseWeaverBootstrapResponse);
     }
 
     /// <summary>
@@ -172,14 +172,14 @@ public static class WeaverApi
 
     private static async Task HandleCreateSessionAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverCreateSessionRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverCreateSessionRequest);
         if (request is null)
             return;
         if (request.Workspace is { Length: > WeaverSessionCreateRequest.MaxWorkspaceLength } || request.ContinuedFrom is { Length: > WeaverSessionCreateRequest.MaxContinuedFromLength })
         {
             await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.session.invalid_request",
                 $"A workspace is at most {WeaverSessionCreateRequest.MaxWorkspaceLength} characters and a continued session identity at most {WeaverSessionCreateRequest.MaxContinuedFromLength}.", 400)),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 400);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverCreateSessionResponse, 400);
             return;
         }
         var activeSurface = request.ActiveSurface ?? new WeaverSurfaceRequest();
@@ -189,20 +189,20 @@ public static class WeaverApi
         var tenantId = WeaverEndpointActor.ResolveTenant(context.User);
         if (actorId is null || tenantId is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 403);
+            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverCreateSessionResponse, 403);
             return;
         }
 
         var providers = context.RequestServices.GetRequiredService<IWeaverProviderRegistry>();
         if (providers.Active is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.not_found", "No Weaver harness is enabled.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 404);
+            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.not_found", "No Weaver harness is enabled.", 404)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverCreateSessionResponse, 404);
             return;
         }
         var diagnostics = await providers.Active.GetDiagnosticsAsync(context.RequestAborted);
         if (!diagnostics.IsAvailable)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.unavailable", diagnostics.Status, 503)), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse, 503);
+            await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Failure(new("weaver.provider.unavailable", diagnostics.Status, 503)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverCreateSessionResponse, 503);
             return;
         }
 
@@ -237,7 +237,7 @@ public static class WeaverApi
         {
             Policy = await ReadPolicyAsync(context, session.Id, actorId, tenantId)
         };
-        await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Success(created), WeaverJsonContext.Default.WeaverApiResponseWeaverCreateSessionResponse);
+        await WriteAsync(context, WeaverApiResponse<WeaverCreateSessionResponse>.Success(created), WeaverJsonContext.WireContext.WeaverApiResponseWeaverCreateSessionResponse);
     }
 
     /// <summary>
@@ -275,11 +275,11 @@ public static class WeaverApi
             return;
         }
         await WriteAsync(context, WeaverApiResponse<WeaverSessionListResponse>.Success(new(page.Items.Select(x => x.ToResponse()).ToList(), page.Next)),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverSessionListResponse);
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionListResponse);
     }
 
     private static Task WriteSessionListFailureAsync(HttpContext context, WeaverError error) =>
-        WriteAsync(context, WeaverApiResponse<WeaverSessionListResponse>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverSessionListResponse, error.StatusCode);
+        WriteAsync(context, WeaverApiResponse<WeaverSessionListResponse>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionListResponse, error.StatusCode);
 
     private static async Task HandleGetSessionAsync(HttpContext context)
     {
@@ -287,7 +287,7 @@ public static class WeaverApi
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverSessionDetailsResponse>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverSessionDetailsResponse, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverSessionDetailsResponse>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionDetailsResponse, error.StatusCode);
             return;
         }
         var sessions = context.RequestServices.GetRequiredService<IWeaverSessionService>();
@@ -301,7 +301,7 @@ public static class WeaverApi
             Policy = await ReadPolicyAsync(context, session.Id, WeaverEndpointActor.Resolve(context.User)!, WeaverEndpointActor.ResolveTenant(context.User)!),
             LimitReached = session.LimitReached
         };
-        await WriteAsync(context, WeaverApiResponse<WeaverSessionDetailsResponse>.Success(data), WeaverJsonContext.Default.WeaverApiResponseWeaverSessionDetailsResponse);
+        await WriteAsync(context, WeaverApiResponse<WeaverSessionDetailsResponse>.Success(data), WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionDetailsResponse);
     }
 
     /// <summary>
@@ -318,7 +318,7 @@ public static class WeaverApi
         WeaverSessionAutonomyRequest? request;
         try
         {
-            request = await context.Request.ReadFromJsonAsync(WeaverJsonContext.Default.WeaverSessionAutonomyRequest, context.RequestAborted);
+            request = await context.Request.ReadFromJsonAsync(WeaverJsonContext.WireContext.WeaverSessionAutonomyRequest, context.RequestAborted);
         }
         catch (NotSupportedException)
         {
@@ -350,7 +350,7 @@ public static class WeaverApi
                 mode, expectedRevision), context.RequestAborted);
         if (result is { Outcome: WeaverSessionPolicyOutcome.Succeeded, State: { } state })
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Success(state.ToResponse()), WeaverJsonContext.Default.WeaverApiResponseWeaverSessionPolicyResponse);
+            await WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Success(state.ToResponse()), WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionPolicyResponse);
             return;
         }
         await WritePolicyFailureAsync(context, result.Outcome switch
@@ -367,7 +367,7 @@ public static class WeaverApi
     private const string AutonomyInvalidCode = "weaver.session.autonomy_invalid";
 
     private static Task WritePolicyFailureAsync(HttpContext context, WeaverError error) =>
-        WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverSessionPolicyResponse, error.StatusCode);
+        WriteAsync(context, WeaverApiResponse<WeaverSessionPolicyResponse>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverSessionPolicyResponse, error.StatusCode);
 
     /// <summary>Reads the owner's acknowledged policy; null only when the installed composition cannot read it back.</summary>
     private static async Task<WeaverSessionPolicyResponse?> ReadPolicyAsync(HttpContext context, string sessionId, string actorId, string tenantId)
@@ -381,7 +381,7 @@ public static class WeaverApi
 
     private static async Task HandlePostMessageAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverMessageRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverMessageRequest);
         if (request is null)
             return;
         var sessionId = RouteValueOrFallback(context, "sessionId", request.SessionId);
@@ -392,12 +392,12 @@ public static class WeaverApi
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(sessions, context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, error.StatusCode);
             return;
         }
         sessionId = session!.Id;
         var evaluator = context.RequestServices.GetRequiredService<IWeaverPolicyEvaluator>();
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, WeaverJsonContext.Default.WeaverMessageRequest)));
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, WeaverJsonContext.WireContext.WeaverMessageRequest)));
         if (!string.IsNullOrWhiteSpace(request.RequestId))
         {
             var existing = (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).FirstOrDefault(x => x.Role == WeaverRole.User && x.RequestId == request.RequestId);
@@ -405,20 +405,20 @@ public static class WeaverApi
             {
                 if (existing.DeliveryFingerprint != fingerprint)
                 {
-                    await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.message.delivery_conflict", "This prompt delivery identity was reused with different input.", 409)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+                    await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.message.delivery_conflict", "This prompt delivery identity was reused with different input.", 409)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
                     return;
                 }
                 // A failure after accepted insertion can precede context retention. Recovery retains only the
                 // original accepted message's own context; the store deduplicates by attachment identity.
                 await sessions.AddContextAsync(sessionId, existing.Context, context.RequestAborted);
-                await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(existing.ToAcceptedResponse([new("weaver.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse);
+                await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(existing.ToAcceptedResponse([new("weaver.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
                 return;
             }
         }
         if (context.RequestServices.GetRequiredService<IWeaverTurnRegistry>().IsActive(sessionId)
             || await context.RequestServices.GetRequiredService<IWeaverTurnStateStore>().FindAsync(sessionId, context.RequestAborted) is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.session.busy", "Finish or resolve the current turn before sending another prompt.", 409)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.session.busy", "Finish or resolve the current turn before sending another prompt.", 409)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
             return;
         }
         var availability = await evaluator.EvaluateAvailabilityAsync(session!.Policy, context.RequestAborted);
@@ -450,7 +450,7 @@ public static class WeaverApi
         {
             await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.context.required_unavailable",
                 "A requested retained context attachment is unavailable. Refresh the current context before retrying.", 409)),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
             return;
         }
         var requestedStored = requestedContextIds.Count == 0 ? [] : stored.Where(x => requestedContextIds.Contains(x.Id)).ToList();
@@ -476,12 +476,12 @@ public static class WeaverApi
         }
         catch (WeaverContributionException)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.context.composition_invalid", "Installed module context contributions conflict or cannot be transported.", 409)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.context.composition_invalid", "Installed module context contributions conflict or cannot be transported.", 409)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
             return;
         }
         if (!collected.Succeeded || collected.Value is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(collected.Error!), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, collected.Error!.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(collected.Error!), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, collected.Error!.StatusCode);
             return;
         }
         var contextItems = collected.Value.Attachments;
@@ -502,17 +502,17 @@ public static class WeaverApi
         try { message = await sessions.AddMessageAsync(sessionId, messageRequest, context.RequestAborted); }
         catch (WeaverSessionPolicyChangedException)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new(WeaverSessionPolicyChangedException.Code, "The session policy changed while this prompt was being authorized. Review the current policy and send it again.", 409)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new(WeaverSessionPolicyChangedException.Code, "The session policy changed while this prompt was being authorized. Review the current policy and send it again.", 409)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
             return;
         }
         catch (WeaverContributionException)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.message.delivery_conflict", "Another prompt is pending, or this delivery identity conflicts with an accepted prompt.", 409)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
+            await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.message.delivery_conflict", "Another prompt is pending, or this delivery identity conflicts with an accepted prompt.", 409)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 409);
             return;
         }
         await sessions.AddContextAsync(sessionId, contextItems, context.RequestAborted);
         var warnings = collected.Value.Diagnostics.Select(x => new WeaverViolation(x.Code, x.Message, x.ContributorId)).ToList();
-        await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse(warnings)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse);
+        await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse(warnings)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
     }
 
     /// <summary>Preview: the session's proposals with their statuses, previews and deadlines, for the session's owner only.</summary>
@@ -526,7 +526,7 @@ public static class WeaverApi
         await WriteAsync(context, result.Succeeded
                 ? WeaverApiResponse<IReadOnlyCollection<WeaverActionProposal>>.Success(result.Value!.ToList())
                 : WeaverApiResponse<IReadOnlyCollection<WeaverActionProposal>>.Failure(result.Error!),
-            WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
+            WeaverJsonContext.WireContext.WeaverApiResponseIReadOnlyCollectionWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     /// <summary>
@@ -541,24 +541,24 @@ public static class WeaverApi
         await WriteAsync(context, result.Succeeded
                 ? WeaverApiResponse<WeaverMessageViewModelResponse>.Success(result.Value!.ToViewModel())
                 : WeaverApiResponse<WeaverMessageViewModelResponse>.Failure(result.Error!),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverMessageViewModelResponse, result.Succeeded ? 200 : result.Error!.StatusCode);
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageViewModelResponse, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleCancelTurnAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverTurnCancelRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverTurnCancelRequest);
         if (request is null)
             return;
         var sessionId = RouteValueOrFallback(context, "sessionId", request.SessionId);
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverTurnCancelResponse>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverTurnCancelResponse, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverTurnCancelResponse>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverTurnCancelResponse, error.StatusCode);
             return;
         }
         var turnId = RouteValueOrFallback(context, "turnId", request.TurnId);
         var cancelled = context.RequestServices.GetRequiredService<IWeaverTurnRegistry>().Cancel(session!.Id, turnId);
-        await WriteAsync(context, WeaverApiResponse<WeaverTurnCancelResponse>.Success(new(turnId, cancelled)), WeaverJsonContext.Default.WeaverApiResponseWeaverTurnCancelResponse);
+        await WriteAsync(context, WeaverApiResponse<WeaverTurnCancelResponse>.Success(new(turnId, cancelled)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverTurnCancelResponse);
     }
 
     private static async Task HandleStreamSessionAsync(HttpContext context)
@@ -601,33 +601,33 @@ public static class WeaverApi
 
     private static async Task HandleFeedbackAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverFeedbackApiRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverFeedbackApiRequest);
         if (request is null)
             return;
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, request.SessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverFeedback, error.StatusCode);
             return;
         }
         var actorId = WeaverEndpointActor.Resolve(context.User);
         if (actorId is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback, 403);
+            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverFeedback, 403);
             return;
         }
         if (!string.IsNullOrWhiteSpace(request.MessageId) && await context.RequestServices.GetRequiredService<IWeaverSessionService>().FindMessageAsync(request.SessionId, request.MessageId, context.RequestAborted) is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.message.not_found", $"Weaver message '{request.MessageId}' was not found in session '{request.SessionId}'.", 404)), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback, 404);
+            await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Failure(new("weaver.message.not_found", $"Weaver message '{request.MessageId}' was not found in session '{request.SessionId}'.", 404)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverFeedback, 404);
             return;
         }
         var feedback = new WeaverFeedback(WeaverProviderPrimitives.NewId(), session!.Id, request.MessageId, request.Rating > 0 ? "positive" : "negative", request.Comment, actorId, DateTimeOffset.UtcNow);
-        await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Success(await context.RequestServices.GetRequiredService<IWeaverFeedbackService>().AddAsync(feedback, context.RequestAborted)), WeaverJsonContext.Default.WeaverApiResponseWeaverFeedback);
+        await WriteAsync(context, WeaverApiResponse<WeaverFeedback>.Success(await context.RequestServices.GetRequiredService<IWeaverFeedbackService>().AddAsync(feedback, context.RequestAborted)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverFeedback);
     }
 
     private static async Task HandleApproveProposalAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverProposalDecisionRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverProposalDecisionRequest);
         if (request is null)
             return;
         var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
@@ -636,28 +636,28 @@ public static class WeaverApi
         var error = await WeaverProposalAuthorization.AuthorizeAsync(proposals, sessions, context.User, proposalId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, error.StatusCode);
             return;
         }
         var actorId = WeaverEndpointActor.Resolve(context.User);
         if (actorId is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, 403);
+            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, 403);
             return;
         }
         var result = await proposals.ApproveAsync(proposalId, actorId, request.Revision, request.Comment, context.RequestAborted);
         if (!result.Succeeded && await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted) is { } terminalOutcome)
         {
             await WriteAsync(context, new WeaverApiResponse<WeaverProposalExecutionResult>(terminalOutcome, result.Error),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, result.Error!.StatusCode);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, result.Error!.StatusCode);
             return;
         }
-        await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverActionProposal>.Success(result.Value!) : WeaverApiResponse<WeaverActionProposal>.Failure(result.Error!), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
+        await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverActionProposal>.Success(result.Value!) : WeaverApiResponse<WeaverActionProposal>.Failure(result.Error!), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleDenyProposalAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverProposalDecisionRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverProposalDecisionRequest);
         if (request is null)
             return;
         var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
@@ -665,28 +665,28 @@ public static class WeaverApi
         var error = await WeaverProposalAuthorization.AuthorizeAsync(proposals, context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, proposalId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, error.StatusCode);
             return;
         }
         var actorId = WeaverEndpointActor.Resolve(context.User);
         if (actorId is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, 403);
+            await WriteAsync(context, WeaverApiResponse<WeaverActionProposal>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, 403);
             return;
         }
         var result = await proposals.DenyAsync(proposalId, actorId, request.Comment ?? request.Reason, context.RequestAborted);
         if (!result.Succeeded && await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted) is { } terminalOutcome)
         {
             await WriteAsync(context, new WeaverApiResponse<WeaverProposalExecutionResult>(terminalOutcome, result.Error),
-                WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, result.Error!.StatusCode);
+                WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, result.Error!.StatusCode);
             return;
         }
-        await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverActionProposal>.Success(result.Value!) : WeaverApiResponse<WeaverActionProposal>.Failure(result.Error!), WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
+        await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverActionProposal>.Success(result.Value!) : WeaverApiResponse<WeaverActionProposal>.Failure(result.Error!), WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleExecuteProposalAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverProposalDecisionRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverProposalDecisionRequest);
         if (request is null)
             return;
         var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
@@ -694,13 +694,13 @@ public static class WeaverApi
         var error = await WeaverProposalAuthorization.AuthorizeAsync(proposals, context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, proposalId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, error.StatusCode);
             return;
         }
         var actorId = WeaverEndpointActor.Resolve(context.User);
         if (actorId is null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, 403);
+            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(new("weaver.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, 403);
             return;
         }
         var result = await proposals.ExecuteAsync(proposalId, actorId, request.Revision, context.RequestAborted);
@@ -709,7 +709,7 @@ public static class WeaverApi
         var failureData = result.Succeeded ? null : await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted);
         var response = result.Succeeded ? WeaverApiResponse<WeaverProposalExecutionResult>.Success(result.Value!)
             : new WeaverApiResponse<WeaverProposalExecutionResult>(failureData, result.Error);
-        await WriteAsync(context, response, WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult,
+        await WriteAsync(context, response, WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult,
             result.Succeeded ? result.Value!.ClientInvocation is not null ? 202 : 200 : result.Error!.StatusCode);
     }
 
@@ -738,20 +738,20 @@ public static class WeaverApi
 
     private static async Task HandleClientAcknowledgementAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverClientAcknowledgement);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverClientAcknowledgement);
         if (request is null)
             return;
         var sessionId = RouteValue(context, "sessionId");
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IWeaverSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, error.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<WeaverProposalExecutionResult>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, error.StatusCode);
             return;
         }
         var result = await context.RequestServices.GetRequiredService<IWeaverProposalService>().AcknowledgeAsync(session!.Id,
             RouteValue(context, "invocationId"), session!.ActorId, request, context.RequestAborted);
         await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverProposalExecutionResult>.Success(result.Value!) : WeaverApiResponse<WeaverProposalExecutionResult>.Failure(result.Error!),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     /// <summary>
@@ -760,7 +760,7 @@ public static class WeaverApi
     /// </summary>
     private static async Task HandleClientResolutionAsync(HttpContext context)
     {
-        var request = await ReadAsync(context, WeaverJsonContext.Default.WeaverClientInvocationResolutionRequest);
+        var request = await ReadAsync(context, WeaverJsonContext.WireContext.WeaverClientInvocationResolutionRequest);
         if (request is null)
             return;
         var (session, error) = await WeaverSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IWeaverSessionService>(),
@@ -774,7 +774,7 @@ public static class WeaverApi
             result = await context.RequestServices.GetRequiredService<IWeaverProposalService>().ResolveClientInvocationAsync(session!.Id,
                 RouteValue(context, "invocationId"), session.ActorId, claim, context.RequestAborted);
         await WriteAsync(context, result.Succeeded ? WeaverApiResponse<WeaverActionProposal>.Success(result.Value!) : WeaverApiResponse<WeaverActionProposal>.Failure(result.Error!),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleAuditAsync(HttpContext context)
@@ -793,7 +793,7 @@ public static class WeaverApi
                 context.User, sessionId, context.RequestAborted);
             if (error is not null)
             {
-                await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(error), WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, error.StatusCode);
+                await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(error), WeaverJsonContext.WireContext.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, error.StatusCode);
                 return;
             }
         }
@@ -802,7 +802,7 @@ public static class WeaverApi
         if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(tenantId))
         {
             var unresolved = new WeaverError("weaver.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403);
-            await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(unresolved), WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, unresolved.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(unresolved), WeaverJsonContext.WireContext.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, unresolved.StatusCode);
             return;
         }
         // The owning reader filters by ownership and orders before the limit. There is deliberately no
@@ -812,10 +812,10 @@ public static class WeaverApi
         if (!result.Succeeded)
         {
             var unsupported = new WeaverError("weaver.audit.query_unsupported", "The installed Weaver audit reader cannot answer owner-scoped audit queries.", 409);
-            await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(unsupported), WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, unsupported.StatusCode);
+            await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Failure(unsupported), WeaverJsonContext.WireContext.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent, unsupported.StatusCode);
             return;
         }
-        await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Success(result.Events), WeaverJsonContext.Default.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent);
+        await WriteAsync(context, WeaverApiResponse<IReadOnlyCollection<WeaverAuditEvent>>.Success(result.Events), WeaverJsonContext.WireContext.WeaverApiResponseIReadOnlyCollectionWeaverAuditEvent);
     }
 
     private static async Task WriteDeniedAsync(HttpContext context, string sessionId, WeaverPolicyDecision decision)
@@ -829,7 +829,7 @@ public static class WeaverApi
             DateTimeOffset.UtcNow,
             decision.Violations.Select((violation, index) => new { Key = $"{index}:{violation.Code}", violation.Message }).ToDictionary(x => x.Key, x => x.Message)),
             context.RequestAborted);
-        await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse, 403);
+        await WriteAsync(context, WeaverApiResponse<WeaverMessageAcceptedResponse>.Failure(new("weaver.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse, 403);
     }
 
     private static async Task<T?> ReadAsync<T>(HttpContext context, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
@@ -862,14 +862,14 @@ public static class WeaverApi
 
     private static async Task WriteEventAsync(HttpContext context, WeaverStreamEvent item)
     {
-        await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, WeaverSseJsonContext.Default.WeaverStreamEvent)}\n\n", context.RequestAborted);
+        await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, WeaverSseJsonContext.WireContext.WeaverStreamEvent)}\n\n", context.RequestAborted);
         await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 
     private static Task WriteBindingErrorAsync(HttpContext context, string field, string message) =>
         Results.Json(
             new WeaverBindingErrorResponse(400, "One or more errors occurred!", new Dictionary<string, string[]> { [field] = [message] }),
-            WeaverJsonContext.Default.WeaverBindingErrorResponse,
+            WeaverJsonContext.WireContext.WeaverBindingErrorResponse,
             contentType: "application/problem+json; charset=utf-8",
             statusCode: StatusCodes.Status400BadRequest)
             .ExecuteAsync(context);

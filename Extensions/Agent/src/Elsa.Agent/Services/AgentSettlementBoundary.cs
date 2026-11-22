@@ -16,7 +16,7 @@ internal sealed class AgentSettlementBoundary(IWorkflowExecutionStateStore workf
 {
     internal const string CancelKind = "elsa.agent.cancel/1";
     internal const string AppliedKind = "elsa.agent.applied/1";
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    internal static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
 
     internal async ValueTask<(WorkflowExecutionState Workflow, WorkflowExecutable Executable)> WorkflowAsync(string workflowId, CancellationToken cancellationToken)
     {

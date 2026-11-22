@@ -73,7 +73,7 @@ public sealed class EfActivityDesignStores(
     private readonly IPersistenceAccessContextAccessor? access = accessContextAccessor;
     private readonly IDesignAtomicWriter? atomic = atomicWriter;
     private readonly EfActivityManagementProjectionWriter? projections = projectionWriter;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly DefaultActivityDefinitionHasher SharedActivityDefinitionHasher = new();
     private const int MaximumPageSize = 500;
     private const int IntegrityValidationBatchSize = 256;

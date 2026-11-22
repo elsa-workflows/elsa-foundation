@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Graph.Runtime.Services;
@@ -56,7 +57,6 @@ public sealed class GraphActivity(
     private OutcomeSelection? _mappedSelection;
     private readonly IPortableExpressionEvaluator? _portableExpressionEvaluator = portableExpressionEvaluator;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry = wellKnownTypeRegistry;
-    private static readonly JsonSerializerOptions ExpressionJsonOptions = new(JsonSerializerDefaults.Web);
 
     public GraphActivityDescriptor Descriptor { get; } = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
 
@@ -361,7 +361,7 @@ public sealed class GraphActivity(
 
                 // Spec 1222 FR-006: a declared variable with no value reads null, never undefined.
                 var captured = await scope.ReadVariableAsync(variable.ReferenceKey, cancellationToken);
-                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonSerializer.SerializeToElement<object?>(null));
+                ambientVariables.Add(variable.Name, captured.Exists ? ToJsonElement(captured.Value) : JsonValueConversion.SerializeToElement<object?>(null));
             }
 
             if (expression.Value.ValueKind != JsonValueKind.String)
@@ -372,7 +372,7 @@ public sealed class GraphActivity(
                 expression.Value.GetString()!,
                 expected.ToTypeReference(),
                 parameterBindings,
-                JsonSerializer.SerializeToElement(new Dictionary<string, object?>()),
+                JsonValueConversion.SerializeToElement(new Dictionary<string, object?>()),
                 ExpressionCapabilityProfiles.BindingReadonlyV1);
             // The graph's own variables are read by name through the variables root (spec 1222): a graph expression is
             // evaluated in-process from the graph scope, so the values are already here and every name is looked up.
@@ -407,7 +407,7 @@ public sealed class GraphActivity(
 
         try
         {
-            return JsonSerializer.Deserialize(json.GetRawText(), targetType, ExpressionJsonOptions);
+            return JsonValueConversion.Deserialize(json.GetRawText(), targetType);
         }
         catch (JsonException exception)
         {
@@ -421,15 +421,15 @@ public sealed class GraphActivity(
     {
         if (type.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("A graph expression target type must be a JSON object.");
-        return JsonSerializer.Deserialize<ValueTypeDescriptor>(type.GetRawText(), ExpressionJsonOptions)
+        return JsonValueConversion.Deserialize<ValueTypeDescriptor>(type.GetRawText())
                ?? throw new InvalidOperationException("A graph expression target type resolved to null.");
     }
 
     private static JsonElement ToJsonElement(object? value) => value switch
     {
         JsonElement element => element.Clone(),
-        null => JsonSerializer.SerializeToElement<object?>(null),
-        _ => JsonSerializer.SerializeToElement(value, value.GetType(), ExpressionJsonOptions)
+        null => JsonValueConversion.SerializeToElement<object?>(null),
+        _ => JsonValueConversion.SerializeToElement(value, value.GetType())
     };
 
     private static string ReadInputReferenceKey(GraphActivityExpression expression)

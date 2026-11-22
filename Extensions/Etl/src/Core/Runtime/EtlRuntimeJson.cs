@@ -55,7 +55,7 @@ internal static class EtlRuntimeJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)
         {
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
             PropertyNameCaseInsensitive = false

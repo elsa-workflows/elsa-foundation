@@ -22,7 +22,7 @@ public static class BpmnInterchangeApi
                               ?? typeof(BpmnInterchangeApi).Assembly.GetName().Name!;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            BpmnInterchangeJsonContext.Default,
+            BpmnInterchangeJsonContext.WireContext,
             jsonContentType: "application/json; charset=utf-8",
             tag: applicationName);
 

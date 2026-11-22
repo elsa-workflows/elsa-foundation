@@ -474,7 +474,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             throw new WorkflowExecutableStartRejectedException(
                 WorkflowExecutableStartRejectionCategory.Input,
                 validation.Findings.First().ReasonCode,
-                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+                string.Join(" ", validation.Findings.Select(finding => finding.Message))) { InputPath = validation.Findings.First().JsonPath };
         }
 
         return validation.NormalizedInputs;

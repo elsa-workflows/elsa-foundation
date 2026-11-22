@@ -19,7 +19,8 @@ internal static class ActivitiesDesignJsonOptions
 {
     public static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         Configure(options);
         return options;
     }
@@ -29,9 +30,8 @@ internal static class ActivitiesDesignJsonOptions
 
     public static void Configure(JsonSerializerOptions options)
     {
-        options.PropertyNameCaseInsensitive = true;
+        options.PropertyNameCaseInsensitive = false;
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
         // The former Minimal API JsonResult path wrote with the host HTTP options, whose default
         // encoder is relaxed; the owner options keep that wire shape.
         options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
@@ -53,10 +53,8 @@ internal static class ActivitiesDesignJsonOptions
 /// over a replaceable feature assembly.
 /// </summary>
 [JsonSourceGenerationOptions(
-    JsonSerializerDefaults.Web,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
 // Requests and commands accepted by the 38 registrations.
@@ -209,6 +207,8 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(JsonElement))]
 internal partial class ActivitiesDesignJsonContext : JsonSerializerContext
 {
+    internal static ActivitiesDesignJsonContext WireContext { get; } = new(ActivitiesDesignJsonOptions.Create());
+
 }
 
 /// <summary>

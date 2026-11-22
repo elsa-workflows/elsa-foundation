@@ -161,7 +161,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
 
     internal async ValueTask<(BpmnEmbeddedInvocation Invocation, StimulusResumeRecipient? Wait)> ValidateInputAsync(RuntimeModelExecutionContext context, CancellationToken token)
     {
-        var input = context.Command.Payload.Deserialize<BpmnEmbeddedInput>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw BpmnEmbeddingJson.Invalid();
+        var input = context.Command.Payload.Deserialize<BpmnEmbeddedInput>(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)) ?? throw BpmnEmbeddingJson.Invalid();
         var invocation = Read(new RunBpmnState(1, input.Invocation));
         if (invocation.RegistrationId is null || invocation.NativeAttemptId is null || context.Scope != invocation.Scope ||
             context.WorkItem.WorkflowExecutionId != invocation.ExecutionId || context.Command.MaterialIncarnationId != invocation.Model.MaterialIncarnationId ||

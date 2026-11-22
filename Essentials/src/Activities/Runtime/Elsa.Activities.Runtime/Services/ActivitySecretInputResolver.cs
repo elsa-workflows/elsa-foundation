@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -150,7 +151,7 @@ public sealed class ActivitySecretInputResolver(
         try
         {
             return valueConversionExecutor.Convert(
-                ValueEnvelope.Inline(plan.SourceType, JsonSerializer.SerializeToElement(value), secret.Envelope.Policy),
+                ValueEnvelope.Inline(plan.SourceType, JsonValueConversion.SerializeToElement(value), secret.Envelope.Policy),
                 plan);
         }
         catch (Exception exception) when (!IsFatal(exception))

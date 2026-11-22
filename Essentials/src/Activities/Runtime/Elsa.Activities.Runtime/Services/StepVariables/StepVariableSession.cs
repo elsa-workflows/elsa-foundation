@@ -38,6 +38,7 @@ internal sealed class StepVariableSession : IStepVariableSession
     private readonly bool _suspends;
     private readonly IReadOnlyDictionary<(string ScopeId, string Key), bool> _bound;
     private readonly bool _engineConsumer;
+    private readonly Elsa.Expressions.Core.Contracts.IExecutionWarningSink? _warnings;
     private readonly Dictionary<(string ScopeId, string Key), VariableSessionRead> _reads = new();
     private readonly List<VariableSessionRead> _readOrder = [];
     private readonly Dictionary<(string ScopeId, string Key), StepVariableWriteIntent> _intents = new();
@@ -59,7 +60,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         string? attemptId = null,
         bool suspends = false,
         IReadOnlyDictionary<(string ScopeId, string Key), bool>? boundReferences = null,
-        bool engineConsumer = false)
+        bool engineConsumer = false,
+        Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(invocation);
@@ -76,6 +78,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         _suspends = suspends;
         _bound = boundReferences ?? new Dictionary<(string ScopeId, string Key), bool>();
         _engineConsumer = engineConsumer;
+        _warnings = warnings;
         AttemptId = attemptId
                     ?? invocation.Attempts?.LastOrDefault(attempt => attempt.EndedAt is null)?.AttemptId
                     ?? invocation.Attempts?.LastOrDefault()?.AttemptId
@@ -263,7 +266,8 @@ internal sealed class StepVariableSession : IStepVariableSession
         T value;
         try
         {
-            value = inline.Deserialize<T>(ActivityValueJson.Options)!;
+            value = (T)Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Read(inline, typeof(T),
+                diagnostic => _warnings?.Report(Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"variables.{variable.Name}")))!;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
@@ -328,7 +332,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         JsonElement? json;
         try
         {
-            json = value is null ? null : JsonSerializer.SerializeToElement(value, ActivityValueJson.Options);
+            json = value is null ? null : Elsa.Serialization.Core.JsonConversionContract.For(typeof(T)).Write(value, typeof(T));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

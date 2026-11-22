@@ -116,16 +116,16 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             {
                 try
                 {
-                    _ = input.Value.Deserialize(targetType);
+                    _ = JsonConversionContract.For(targetType).Read(input.Value, targetType);
                 }
-                catch (JsonException)
+                catch (JsonException exception)
                 {
                     return WorkflowExecutableInputValidation.Failure(
                     [
                         new WorkflowExecutableInputValidationFinding(
-                            WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
-                            $"Workflow input '{declaration.Name}' is incompatible with its declared type.",
-                            declaration.Name)
+                            exception.Message.Contains("json-datetime-offset-missing", StringComparison.Ordinal) ? "json-datetime-offset-missing" : WorkflowExecutableInputValidationReasonCodes.IncompatibleValue,
+                            $"Workflow input '{declaration.Name}' is incompatible with its declared type: {exception.Message}",
+                            declaration.Name) { JsonPath = "$[" + System.Text.Json.JsonSerializer.Serialize(declaration.Name, JsonBaseline.Options) + "]" + (exception.Path ?? "$").TrimStart('$') }
                     ]);
                 }
             }

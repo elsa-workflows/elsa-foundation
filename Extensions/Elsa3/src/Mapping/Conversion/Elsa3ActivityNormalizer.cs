@@ -39,7 +39,7 @@ internal sealed class Elsa3ActivityNormalizer(
     internal const int MaxSequenceNestingDepth = (MaxNodeJsonLevel - RootJsonLevel) / 4;
     private const string ParallelTypeKey = "Elsa.Activities.Parallel.Activities.Parallel";
 
-    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Elsa3JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly JsonElement JsonNull = JsonSerializer.SerializeToElement<object?>(null);
     private readonly IReadOnlyDictionary<Elsa3NodeRewriteKind, IElsa3NodeRewrite> _rewrites =
         rewrites.ToDictionary(rewrite => rewrite.Kind);

@@ -101,7 +101,7 @@ public sealed class RuntimeModelMaterial
     /// <summary>Hashes model behavior independently of producer identity and the unchanged native artifact format.</summary>
     public string ComputeContentHash()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new ExactStringWriter());
         var payload = JsonSerializer.SerializeToElement(new { Domain = "elsa.runtime.model-material/v1", FormatVersion,
             Protocol, Profile, Definition, InputContract, Outputs, Dependencies, RuntimeRequirements }, options);

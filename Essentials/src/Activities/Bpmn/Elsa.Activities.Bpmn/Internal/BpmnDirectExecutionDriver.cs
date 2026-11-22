@@ -20,8 +20,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     BpmnNativeWorkBoundary? nativeWork = null, BpmnEmbeddingBoundary? embedding = null,
     BpmnDurationTimerDelivery? durationTimers = null) : IRuntimeExecutionProtocolDriver
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
-    private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
+    private static readonly JsonSerializerOptions Strict = new(Elsa.Serialization.Core.JsonBaseline.Options) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     private IRuntimeModelExecutionReader Reader => reader ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
     private BpmnNativeWorkBoundary NativeWork => nativeWork ?? throw new NotSupportedException("The native BPMN work binding is not installed.");

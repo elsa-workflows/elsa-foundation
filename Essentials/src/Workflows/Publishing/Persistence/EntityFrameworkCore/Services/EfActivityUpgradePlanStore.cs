@@ -56,7 +56,7 @@ public sealed class EfActivityUpgradePlanStore(
     IActivityUpgradePlanMutationStore,
     IActivityUpgradePublishedDraftResolver
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private const int DiscoveryPageSize = 500;
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 

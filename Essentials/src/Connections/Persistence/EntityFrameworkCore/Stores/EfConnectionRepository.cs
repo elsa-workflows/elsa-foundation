@@ -11,7 +11,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfConnectionRepository(DbContext context) : IConnectionRepository
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private DbSet<ConnectionRecord> Connections => context.Set<ConnectionRecord>();
     private DbSet<ConnectionSecretReferenceRecord> SecretReferences => context.Set<ConnectionSecretReferenceRecord>();
 

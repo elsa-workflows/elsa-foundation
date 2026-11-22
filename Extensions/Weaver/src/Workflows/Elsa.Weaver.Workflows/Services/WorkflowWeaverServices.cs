@@ -43,7 +43,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
     internal const string WithheldDiagnostic = "weaver.workflow.server_read_withheld";
     internal const string PropertyContextUnverified = "weaver.workflow.property_context_unverified";
     private static readonly WeaverToolDescriptor ReadDescriptor = new WorkflowReadGraphTool().Descriptor;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public WeaverContextProviderDescriptor Descriptor { get; } = new(
         "workflows.context", WorkflowWeaverSnapshot.ModuleId, "workflow",
         ["workflow.definition", "workflow.request", "workflow.guidance", WorkflowActivityCatalog.ContentType, PermissionsContentType,

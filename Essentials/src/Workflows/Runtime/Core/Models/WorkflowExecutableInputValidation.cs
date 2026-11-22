@@ -61,6 +61,8 @@ public sealed class WorkflowExecutableInputValidationFinding
     public string ReasonCode { get; }
     public string Message { get; }
     public string? InputName { get; }
+    /// <summary>The precise serializer path for a refused typed input conversion.</summary>
+    public string? JsonPath { get; init; }
 }
 
 /// <summary>Stable reason codes emitted by executable input validation.</summary>

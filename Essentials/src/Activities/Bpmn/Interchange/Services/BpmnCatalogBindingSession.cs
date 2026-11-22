@@ -15,7 +15,7 @@ internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalo
     /// <summary>The capability of a task bound by the author's confirmation of a binding the document retained.</summary>
     public const string RetainedBindingCapability = "RetainedBinding";
 
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };

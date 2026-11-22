@@ -209,7 +209,7 @@ public sealed record BackgroundActivityWorkItem(
 /// <summary>Receipt identity computed from the canonical terminal payload, never supplied by a worker.</summary>
 public static class BackgroundActivityWorkReceipt
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static string ComputeDigest(BackgroundActivityWorkRequest request, BackgroundActivityWorkTerminalResult result)
     {

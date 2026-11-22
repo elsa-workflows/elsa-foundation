@@ -10,10 +10,21 @@ namespace Elsa.Studio.Preferences.Api;
 /// context only mirrors that shape for the group.
 /// </summary>
 [JsonSourceGenerationOptions(
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(StudioPreferenceDocument))]
 [JsonSerializable(typeof(HomeLayoutDocument))]
 [JsonSerializable(typeof(PutHomeLayoutRequest))]
-internal partial class StudioPreferencesJsonContext : JsonSerializerContext;
+internal partial class StudioPreferencesJsonContext : JsonSerializerContext
+{
+    internal static StudioPreferencesJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}

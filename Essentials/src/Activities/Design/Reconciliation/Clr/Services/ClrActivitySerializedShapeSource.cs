@@ -25,7 +25,7 @@ internal sealed class ClrActivitySerializedShapeSource(
     IActivityDefinitionHasher? hasher = null) : IActivitySerializedShapeSource
 {
     private readonly ClrReconciliationOptions _options = options.Value;
-    private static readonly JsonSerializerOptions DescriptorOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions DescriptorOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public ValueTask<ActivitySerializedShape?> DescribeResultAsync(IActivityDefinitionVersion admittedVersion,
         string projectionKey, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken cancellationToken = default)

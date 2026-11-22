@@ -16,7 +16,7 @@ internal sealed class BpmnStateCodec
     internal const string StateAlias = "Elsa.Bpmn.ExecutionState";
     internal const int CurrentVersion = 2;
     private const string InvocationKey = "invocationCorrelation";
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public BpmnStateDocument Read(ActivityPrivateState? document, IReadOnlyDictionary<string, string>? invocation = null)
     {

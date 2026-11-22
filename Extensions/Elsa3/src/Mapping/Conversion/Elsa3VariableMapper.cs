@@ -28,7 +28,7 @@ internal static class Elsa3VariableMapper
     /// The options Elsa 3's <c>ObjectConverter</c> read a collection's JSON text with: enums by name and case-insensitive
     /// property names. They only read the Elsa 3 text; the result is written back with default options for Elsa 4.
     /// </summary>
-    private static readonly JsonSerializerOptions Elsa3ReadOptions = new()
+    private static readonly JsonSerializerOptions Elsa3ReadOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,

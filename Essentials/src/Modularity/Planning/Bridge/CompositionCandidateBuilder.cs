@@ -600,7 +600,7 @@ public static class CompositionCandidateBuilder
     }
     private static bool SameType(JsonValueKind left, JsonValueKind right) =>
         left == right || (left is JsonValueKind.True or JsonValueKind.False) && (right is JsonValueKind.True or JsonValueKind.False);
-    private static byte[] Serialize(JsonObject root) => new UTF8Encoding(false).GetBytes(root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    private static byte[] Serialize(JsonObject root) => new UTF8Encoding(false).GetBytes(root.ToJsonString(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true }));
     private static CompositionImportException Refuse(string code, string message) => new(code, message);
 
     private sealed record SettingPatch(string FeatureId, string Pointer, ImmutableArray<string> Segments, JsonElement Value, string ValueType, CshellsSourceLayer SourceLayer)

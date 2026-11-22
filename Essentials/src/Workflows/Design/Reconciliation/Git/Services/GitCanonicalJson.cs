@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 /// </summary>
 public static class GitCanonicalJson
 {
-    private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions IndentedOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
 
     /// <summary>The compact canonical serialization of <paramref name="state"/> — the hash preimage.</summary>
     public static string ToCompact(WorkflowDefinitionState state, IPayloadSerializer serializer) =>

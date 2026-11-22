@@ -65,7 +65,7 @@ public sealed class ActivityTemplatePlacer(
     IWellKnownTypeRegistry? typeRegistry = null,
     Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver? scriptVariableReadResolver = null)
 {
-    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };

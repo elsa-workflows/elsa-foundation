@@ -61,7 +61,7 @@ public sealed class DecisionEngine : IDecisionCompiler, IDecisionEvaluator
                 Tick();
                 if (copied.Count >= 32 || entry.Key is null || !copied.TryAdd(entry.Key, DecisionScalars.Normalize(entry.Value))) return Result("InvalidInput", code: "InputMembership");
             }
-            if (JsonSerializer.SerializeToUtf8Bytes(copied, new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }).Length > 262_144) return Result("InvalidInput", code: "InputPayloadTooLarge");
+            if (JsonSerializer.SerializeToUtf8Bytes(copied, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }).Length > 262_144) return Result("InvalidInput", code: "InputPayloadTooLarge");
             foreach (var input in table.Inputs)
             {
                 if (!copied.TryGetValue(input.Name, out var value)) return Result("InvalidInput", code: "MissingInput");

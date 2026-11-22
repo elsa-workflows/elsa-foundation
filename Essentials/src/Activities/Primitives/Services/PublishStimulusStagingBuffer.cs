@@ -20,7 +20,7 @@ public sealed class PublishStimulusStagingBuffer :
     IPublishStimulusStager,
     IPublishStimulusStagingAccessor
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     private readonly ConcurrentDictionary<(string WorkflowExecutionId, string ActivityExecutionId), List<PublishStimulusRequest>> _requests = new();
     private readonly TimeProvider _timeProvider;

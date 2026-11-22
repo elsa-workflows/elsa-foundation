@@ -35,7 +35,7 @@ internal static class WorkflowVersionContext
     internal const string AuthorityUnavailableCode = "workflow.authority.composition_unavailable";
     internal const string AuthorityUnavailableMessage = "Exactly one owning workflow definition authorizer is required; workflow versions are unavailable.";
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The disclosure gate: the host's current workflow design read permission for the session actor in its tenant.</summary>
     internal static readonly WeaverToolDescriptor ReadGate = new("workflow_version_read", "Read workflow version", "Reads one exact workflow version.",

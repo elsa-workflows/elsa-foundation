@@ -24,7 +24,7 @@ public static class WorkflowsDashboardApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            WorkflowsDashboardJsonContext.Default,
+            WorkflowsDashboardJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
@@ -57,7 +57,7 @@ public static class WorkflowsDashboardApi
 
         var service = context.RequestServices.GetRequiredService<IWorkflowPortfolioService>();
         var snapshot = await service.QueryAsync(tenantId, context.RequestAborted);
-        await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowPortfolioSnapshot, contentType: "application/json").ExecuteAsync(context);
+        await Results.Json(snapshot, WorkflowsDashboardJsonContext.WireContext.WorkflowPortfolioSnapshot, contentType: "application/json").ExecuteAsync(context);
     }
 
     private static async Task HandleWorkflowRunHealthAsync(HttpContext context)
@@ -90,7 +90,7 @@ public static class WorkflowsDashboardApi
                 includeTestRuns);
             var service = context.RequestServices.GetRequiredService<IWorkflowRunHealthService>();
             var snapshot = await service.QueryAsync(query, context.RequestAborted);
-            await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowRunHealthSnapshot, contentType: "application/json").ExecuteAsync(context);
+            await Results.Json(snapshot, WorkflowsDashboardJsonContext.WireContext.WorkflowRunHealthSnapshot, contentType: "application/json").ExecuteAsync(context);
         }
         catch (WorkflowRunHealthQueryException exception)
         {

@@ -20,7 +20,7 @@ internal static class RulesNativeBoundary
     public const string ProviderId = "elsa.rules.native.v1";
     public const string InvalidRoundLimit = "rules.invalid-round-limit";
     public static readonly ValueTypeDescriptor CompletionType = new(typeof(RunRulesCompletion).FullName!, schemaVersion: FormatVersion);
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 32

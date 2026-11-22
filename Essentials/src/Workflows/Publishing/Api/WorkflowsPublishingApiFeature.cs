@@ -88,7 +88,11 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         // Keep the owner serializer contract ready for the Minimal API mapper. The effective host
         // options preserve the former FastEndpoints web defaults while routing Publishing types
         // through generated metadata before any general fallback resolver.
-        services.ConfigureHttpJsonOptions(options => WorkflowsPublishingJsonOptions.Configure(options.SerializerOptions));
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is JsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new JsonTypeInfoResolver());
+        });
         services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
         // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry, supplied by
         // the engine) but advertised under the client's expressions capability; the source merges that relation

@@ -20,7 +20,7 @@ public sealed class ActivityTokenSigningOptions
 /// </summary>
 internal sealed class HmacTokenCodec<TState> where TState : class
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly byte[] _key;
 
     public HmacTokenCodec(string? signingKey, string tokenName)

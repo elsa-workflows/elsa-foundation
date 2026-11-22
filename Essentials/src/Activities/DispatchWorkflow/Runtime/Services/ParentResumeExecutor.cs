@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
@@ -18,7 +19,6 @@ public sealed class ParentResumeExecutor(
     IBookmarkStateStore bookmarkStateStore,
     ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitIntentHandler
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<ParentResumeExecutor> _logger = logger ?? NullLogger<ParentResumeExecutor>.Instance;
 
     public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -30,7 +30,7 @@ public sealed class ParentResumeExecutor(
             throw new InvalidOperationException($"ParentResumeExecutor cannot handle post-commit intent '{intent.IntentId}'.");
         }
 
-        var payload = intent.Payload.Value.Deserialize<WorkflowDispatchParentResumePayload>(SerializerOptions)
+        var payload = JsonValueConversion.Deserialize<WorkflowDispatchParentResumePayload>(intent.Payload.Value)
             ?? throw new InvalidOperationException($"DispatchWorkflow parent-resume intent '{intent.IntentId}' has an invalid payload.");
         var identity = new WorkflowDispatchIdentity(
             payload.ParentWorkflowExecutionId,
@@ -49,7 +49,7 @@ public sealed class ParentResumeExecutor(
                 workflowExecutionId: payload.ParentWorkflowExecutionId,
                 stimulusType: payload.StimulusType,
                 stimulusHash: payload.StimulusHash,
-                input: JsonSerializer.SerializeToElement(payload),
+                input: JsonValueConversion.SerializeToElement(payload),
                 idempotencyKey: identity.ParentResumeIdempotencyKey,
                 requestedBy: DispatchWorkflowConstants.ParentResumeProviderId,
                 metadata: new Dictionary<string, string>

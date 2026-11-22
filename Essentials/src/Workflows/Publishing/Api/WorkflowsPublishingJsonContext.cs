@@ -22,7 +22,8 @@ internal static class WorkflowsPublishingJsonOptions
 {
     public static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         Configure(options);
         return options;
     }
@@ -34,9 +35,8 @@ internal static class WorkflowsPublishingJsonOptions
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        options.PropertyNameCaseInsensitive = true;
+        options.PropertyNameCaseInsensitive = false;
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-        options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
         // The former Minimal API JsonResult path wrote with the host HTTP options, whose default
         // encoder is relaxed; the owner options keep that wire shape.
         options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
@@ -55,10 +55,8 @@ internal static class WorkflowsPublishingJsonOptions
 /// host payloads but must never be required for this route contract graph.
 /// </summary>
 [JsonSourceGenerationOptions(
-    JsonSerializerDefaults.Web,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase,
-    PropertyNameCaseInsensitive = true,
+    PropertyNameCaseInsensitive = false,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
 // Requests accepted by the 23 Publishing registrations.
@@ -179,6 +177,8 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(JsonElement))]
 internal partial class WorkflowsPublishingJsonContext : JsonSerializerContext
 {
+    internal static WorkflowsPublishingJsonContext WireContext { get; } = new(WorkflowsPublishingJsonOptions.Create());
+
 }
 
 /// <summary>Resolves generated metadata using the host's exact mutable serializer options.</summary>

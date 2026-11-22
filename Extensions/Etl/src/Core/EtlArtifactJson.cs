@@ -63,8 +63,7 @@ public static class EtlArtifactJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions
-        {
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = false,
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,

@@ -40,7 +40,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         EfWriteRetry.DefaultMaxAttempts,
         EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient,
         attempt => RetryDelay * attempt + TimeSpan.FromMilliseconds(Random.Shared.Next(1, 16)));
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };

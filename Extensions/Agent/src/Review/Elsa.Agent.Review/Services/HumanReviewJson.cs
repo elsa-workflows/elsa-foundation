@@ -15,5 +15,5 @@ internal static class HumanReviewJson
     public static readonly JsonSerializerOptions Runtime = JsonSerializerOptions.Default;
 
     /// <summary>The protected envelope plaintext and the typed terminal result (camelCase).</summary>
-    public static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    public static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 }

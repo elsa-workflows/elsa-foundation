@@ -13,7 +13,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Provider-neutral persistence encoding and integrity checks for ETL authoring records.</summary>
 internal static class EtlDefinitionRecordCodec
 {
-    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
     };

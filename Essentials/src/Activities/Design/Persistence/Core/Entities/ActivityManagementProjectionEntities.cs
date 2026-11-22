@@ -49,7 +49,7 @@ public abstract class ActivityManagementProjectionRevision : TenantEntity
 /// <summary>Disclosure-safe temporal definition summary. It intentionally excludes contracts, provider payloads, layouts and diagnostics.</summary>
 public sealed class ActivityDefinitionManagementProjectionRevision : ActivityManagementProjectionRevision
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public string ActivityTypeKey { get; init; } = null!;
 
     public string Category { get; init; } = null!;

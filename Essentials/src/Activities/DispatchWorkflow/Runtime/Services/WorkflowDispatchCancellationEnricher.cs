@@ -11,7 +11,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 /// <summary>Records provider-atomic child cancellation responsibility from workflow or activity cancellation checkpoints.</summary>
 public sealed class WorkflowDispatchCancellationEnricher : IRuntimeCheckpointCommitEnricher
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IWorkflowDispatchStore _store;
     private readonly IPostCommitOutboxLookupStore? _outboxLookupStore;
 

@@ -113,7 +113,7 @@ internal static partial class StudioBackendProfiles
                 if (body.Length + count > 34 * 1024) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
                 body.Write(buffer, 0, count);
             }
-            var request = JsonSerializer.Deserialize<ProfileWrite>(body.ToArray(), new JsonSerializerOptions(JsonSerializerDefaults.Web) { MaxDepth = 16, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow });
+            var request = JsonSerializer.Deserialize<ProfileWrite>(body.ToArray(), new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 16, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow });
             if (request is null || !new BackendProfilesPreferenceNamespace().Validate(request.Value)) return Results.BadRequest();
             var configured = configuration.GetSection("Studio:Backends:Profiles").GetChildren().Select(section => section["Id"]).ToHashSet(StringComparer.Ordinal);
             if (request.Value.GetProperty("profiles").EnumerateArray().Any(profile => configured.Contains(profile.GetProperty("id").GetString())))

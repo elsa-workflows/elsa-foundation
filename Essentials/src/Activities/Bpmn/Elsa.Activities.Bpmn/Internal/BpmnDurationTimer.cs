@@ -61,7 +61,7 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
     IWorkflowSchedulerWorkQueue queue, IPersistenceAccessContextAccessor access, IWorkflowExecutionActorProvider actors,
     TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal async ValueTask ValidateAsync(RuntimeModelExecutionState model, RuntimeModelExecutionCommand command, CancellationToken cancellationToken)
     {

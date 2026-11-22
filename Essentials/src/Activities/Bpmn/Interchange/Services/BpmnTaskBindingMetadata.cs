@@ -20,7 +20,7 @@ internal static class BpmnTaskBindingMetadata
     private const int MaximumBytes = 16 * 1024;
     private const int MaximumDepth = 32;
     private const int MaximumIdLength = 512;
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The BPMN task types whose bound child is the author's own work; every other element's child is re-established by import.</summary>
     public static readonly IReadOnlySet<string> TaskTypes = new HashSet<string>(StringComparer.Ordinal)

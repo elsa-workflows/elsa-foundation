@@ -10,7 +10,7 @@ namespace Elsa.Decisions.Persistence.EntityFrameworkCore;
 
 internal sealed class EfDecisionStore<TContext>(IDbContextFactory<TContext> factory) : IDecisionReader, IDecisionWriter where TContext : DbContext
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private const int MaximumInventory = 1000;
 
     public ValueTask<IReadOnlyList<DecisionAsset>> ListAssetsAsync(string tenantId, CancellationToken ct = default) => List<DecisionAsset>(tenantId, "asset", null, ct);

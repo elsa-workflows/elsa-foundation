@@ -32,7 +32,7 @@ public static class StudioHomeLayoutApi
 
         var owner = typeof(StudioPreferencesApiFeature).Assembly.GetName().Name
             ?? throw new InvalidOperationException("The Studio Preferences API assembly has no name.");
-        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.WireContext, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", UserRoute, "GetHomeLayout",
                 typeof(HomeLayoutDocument), StatusCodes.Status200OK, null, HandleGetUserAsync,

@@ -22,7 +22,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 /// </summary>
 public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbContext(options), IEfSchemaVersionedContext
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     /// <summary>
     /// Domain-separated key for the global definition scope. The prefix keeps a global row
     /// distinct from every opaque tenant identifier without reserving a user-visible tenant ID.
@@ -509,7 +509,7 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     private static void ConfigureConversions<TEntity>(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity> entity)
         where TEntity : class
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         foreach (var property in typeof(TEntity).GetProperties().Where(p =>
                      p.CanWrite && p.PropertyType != typeof(string) &&
                      (p.PropertyType.IsClass || p.PropertyType.IsInterface) &&

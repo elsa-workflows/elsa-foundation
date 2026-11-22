@@ -76,7 +76,7 @@ public sealed class ActivityActivator(
             var inputs = await DereferenceInputsAsync(request.Inputs, cancellationToken);
             if (secretInputs is not null)
                 inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, request.ActivityExecutionId, inputs, cancellationToken);
-            inputHydrator.Hydrate(lease.Activity, request.Contract, inputs);
+            inputHydrator.Hydrate(lease.Activity, request.Contract, inputs, request.Warnings);
             return lease;
         }
         catch (Exception activationException)

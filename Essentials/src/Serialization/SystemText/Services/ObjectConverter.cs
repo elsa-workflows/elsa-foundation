@@ -21,25 +21,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// </summary>
 internal sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectConverter
 {
-    private static JsonSerializerOptions? _defaultSerializerOptions;
-    private static JsonSerializerOptions? _internalSerializerOptions;
-
-    private static readonly JsonSerializerOptions DefaultSerializerOptions = _defaultSerializerOptions ??= new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        ReferenceHandler = ReferenceHandler.Preserve,
-        Converters =
-        {
-            new JsonStringEnumConverter()
-        },
-        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
-    };
-
-    private static JsonSerializerOptions InternalSerializerOptions => _internalSerializerOptions ??= new()
-    {
-        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
-    };
+    private static JsonSerializerOptions InternalSerializerOptions => JsonBaseline.Options;
 
     /// <summary>
     /// Attempts to convert the source value into the destination type.
@@ -85,6 +67,17 @@ internal sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjec
     [RequiresUnreferencedCode("The JsonSerializer type is not trim-compatible.")]
     public object? ConvertTo(object? value, Type targetType, ObjectConverterOptions? converterOptions = null)
     {
+        // JSON data and scalar text always cross the declared contract; they never fall into TypeDescriptor,
+        // Convert.ChangeType or recursive text parsing. A CLR-to-CLR extension converter remains explicit below.
+        if (value is JsonElement element)
+            return JsonConversionContract.For(targetType).Read(element, targetType);
+        if (value is JsonNode node)
+            return JsonConversionContract.For(targetType).Read(System.Text.Json.JsonSerializer.SerializeToElement(node, JsonBaseline.Options), targetType);
+        if (value is string text && targetType != typeof(string))
+            return JsonConversionContract.For(targetType).Read(JsonConversionContract.SerializeToElement(text), targetType);
+        if (value is DateTime or DateTimeOffset or DateOnly or TimeOnly or TimeSpan)
+            return JsonConversionContract.For(targetType).Read(JsonConversionContract.SerializeToElement(value), targetType);
+
         if (TryGetTypeConverter(targetType, out var typeConverter))
             return typeConverter.Convert(value);
 
@@ -98,7 +91,7 @@ internal sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjec
         if (targetType.IsAssignableFrom(sourceType))
             return value;
 
-        var serializerOptions = converterOptions?.SerializerOptions ?? DefaultSerializerOptions;
+        var serializerOptions = converterOptions?.SerializerOptions ?? JsonConversionContract.For(targetType).Options;
         var underlyingTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
         var underlyingSourceType = Nullable.GetUnderlyingType(sourceType) ?? sourceType;
 

@@ -9,7 +9,7 @@ namespace Elsa.Activities.Primitives.Services;
 /// <summary>The owning payload decoder for canonical persisted named-event sends; performs no delivery effects.</summary>
 internal sealed class PublishStimulusIntentAdapter : IStimulusDeliveryIntentAdapter
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public PublishStimulusIntentAdapter() { }
     public string IntentKind => PublishStimulusConstants.PublishStimulusIntentKind;
 

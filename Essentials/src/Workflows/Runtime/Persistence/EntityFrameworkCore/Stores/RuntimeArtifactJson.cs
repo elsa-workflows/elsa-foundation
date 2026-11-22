@@ -20,7 +20,7 @@ internal static class RuntimeArtifactJson
             info.Properties.Remove(info.Properties.Single(x => x.Name.Equals(nameof(WorkflowExecutable.Nodes), StringComparison.OrdinalIgnoreCase)));
             info.Properties.Remove(info.Properties.Single(x => x.Name.Equals(nameof(WorkflowExecutable.NodesById), StringComparison.OrdinalIgnoreCase)));
         });
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) { TypeInfoResolver = resolver };
         options.Converters.Add(new JsonStringEnumConverter());
         // Runtime artifact identities are opaque UTF-16 values. Encoding string values as framed UTF-16
         // preserves accepted lone surrogates in JSON before the payload reaches a provider.

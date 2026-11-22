@@ -59,7 +59,7 @@ public sealed class ClrAssemblyScanner(
     /// <summary>The design facet that records the activity type names an activity declares it replaces.</summary>
     public const string ReplacedActivityTypesFacetKind = "elsa.replaced-activity-types";
     private static readonly string StringTypeFullName = typeof(string).FullName!;
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
     {

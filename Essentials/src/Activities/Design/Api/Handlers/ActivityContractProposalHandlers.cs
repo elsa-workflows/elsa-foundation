@@ -294,7 +294,7 @@ public sealed class ActivityContractProposalService(
     // collectible module context. The owner context avoids that; it is bound to plain Web defaults
     // (strict encoder, no wire converters) because the fingerprint bytes are a frozen contract.
     private static readonly ActivitiesDesignJsonContext FingerprintContext =
-        new(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        new(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
 
     private static string ComputeFingerprint(
         string draftId,

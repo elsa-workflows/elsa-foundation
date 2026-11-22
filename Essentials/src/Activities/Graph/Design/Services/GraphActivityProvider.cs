@@ -52,7 +52,7 @@ public sealed class GraphActivityProvider(
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
     private const string UnorderedWriteCode = "activity.graph.unordered-variable-write";
     private const string DuplicateCaptureTargetCode = "activity.graph.duplicate-capture-target";
-    private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions NodeSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>
     /// The catalog definition id of <see cref="CompleteActivityTypeKey"/>: CLR catalog rows derive it from the type key, so
@@ -319,7 +319,7 @@ public sealed class GraphActivityProvider(
         ActivityNode? node;
         try
         {
-            node = element.Deserialize<ActivityNode>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            node = element.Deserialize<ActivityNode>(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
         }
         catch (JsonException)
         {
@@ -1441,7 +1441,7 @@ public sealed class GraphActivityProvider(
             requiredInputReferenceKeys = contract.Inputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray(),
             requiredOutputReferenceKeys = contract.Outputs.Where(x => x.IsRequired).Select(x => x.ReferenceKey).Order(StringComparer.Ordinal).ToArray()
         };
-        var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var serializerOptions = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         var payload = JsonSerializer.SerializeToElement(plan, serializerOptions);
         var closedPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
         // The body is a closed value scope. Placement reads this to remap body references and mark the

@@ -40,7 +40,7 @@ internal static class WorkflowRunContext
     internal const string RunControls =
         "Retry, cancel, delete and dispatch are not available to Weaver; use the run page's own controls (the run toolbar and the Runs list) for them.";
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The disclosure gate: the host's current workflow runtime read permission for the session actor in its tenant.</summary>
     internal static readonly WeaverToolDescriptor ReadGate = new("workflow_run_read", "Read workflow Run", "Reads one exact workflow Run.",

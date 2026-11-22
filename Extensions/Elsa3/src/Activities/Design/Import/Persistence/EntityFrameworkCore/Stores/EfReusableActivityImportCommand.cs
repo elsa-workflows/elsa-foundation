@@ -51,7 +51,7 @@ public sealed class EfReusableActivityImportCommand(
     private static readonly EfWriteRetry WriteConflicts = new(EfWriteRetry.DefaultMaxAttempts, IsWriteConflict);
     private const int ReconciliationReads = 3;
     private const string DefinitionBindingKind = "elsa3ReusableImportDefinitionBinding";
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
     public async ValueTask<ReusableActivityImportCommitResult> CommitAsync(

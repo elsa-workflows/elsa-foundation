@@ -41,7 +41,7 @@ public sealed class EfRecurringTriggerScheduleStore(
     private const string ActivationCursorPurpose = "ef-runtime-recurring-schedule-activation-v1";
     private const string ArtifactCursorPurpose = "ef-runtime-recurring-schedule-artifact-v1";
     private const int MaterializationBatchSize = 256;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {

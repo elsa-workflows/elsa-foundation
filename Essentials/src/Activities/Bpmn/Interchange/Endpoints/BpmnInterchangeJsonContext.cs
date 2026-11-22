@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints;
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AnalyzeBpmnDocumentRequest))]
 [JsonSerializable(typeof(ImportBpmnDocumentRequest))]
 [JsonSerializable(typeof(ExportBpmnDocumentRequest))]
@@ -15,4 +15,13 @@ namespace Elsa.Activities.Bpmn.Interchange.Endpoints;
 [JsonSerializable(typeof(BpmnInterchangeError))]
 internal partial class BpmnInterchangeJsonContext : JsonSerializerContext
 {
+    internal static BpmnInterchangeJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
 }

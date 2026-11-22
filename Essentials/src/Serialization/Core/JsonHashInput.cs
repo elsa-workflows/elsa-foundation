@@ -20,6 +20,32 @@ public static class JsonHashInput
     /// <summary>Serializes with the declared contract type, then hashes the canonical value.</summary>
     public static string Hash(object? value, Type type) => Hash(JsonSerializer.SerializeToElement(value, type, Options));
 
+    /// <summary>Parses a JSON document and hashes its canonical value, never its whitespace or escape spelling.</summary>
+    public static string HashJson(string json)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        return Hash(document.RootElement);
+    }
+
+    /// <summary>Parses UTF-8 JSON emitted by an explicit projection writer, then hashes its canonical value.</summary>
+    public static string HashUtf8(ReadOnlyMemory<byte> json)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        return Hash(document.RootElement);
+    }
+
+    /// <summary>Serializes a component of an explicit hash projection with the fixed hash settings.</summary>
+    public static JsonElement SerializeToElement<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
+
+    /// <summary>Gets canonical UTF-8 bytes for a JSON component of an existing framed or keyed hash protocol.</summary>
+    public static byte[] CanonicalBytes(JsonElement value) => JsonCanonicalForm.GetBytes(value);
+
+    /// <summary>Hashes an existing binary frame whose JSON components have been canonicalized through this contract.</summary>
+    public static string HashFramed(ReadOnlySpan<byte> frame) => Convert.ToHexStringLower(SHA256.HashData(frame));
+
+    /// <summary>Preserves a secret-bearing revision's keyed integrity while canonicalizing its JSON input.</summary>
+    public static byte[] HashKeyed(JsonElement value, ReadOnlySpan<byte> key) => HMACSHA256.HashData(key, JsonCanonicalForm.GetBytes(value));
+
     private static JsonSerializerOptions CreateOptions()
     {
         // Deliberately independent of JsonBaseline, Web and framework Default option instances.

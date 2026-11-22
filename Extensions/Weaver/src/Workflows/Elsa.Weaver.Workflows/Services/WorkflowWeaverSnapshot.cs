@@ -46,7 +46,7 @@ internal sealed record WorkflowWeaverSnapshot(WeaverResourceTarget Target, Weave
     /// <summary>Whether the target is one of this module's editor working states: a definition draft or a template.</summary>
     internal static bool IsEditorTarget(WeaverResourceTarget? target) =>
         target is { ModuleId: ModuleId } && target.ResourceType is ResourceType or TemplateResourceType;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The same snapshot without the selected activity's property context, for when the owning catalog cannot confirm it.</summary>
     internal WorkflowWeaverSnapshot WithoutSelectedActivity()

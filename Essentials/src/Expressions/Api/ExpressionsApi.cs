@@ -19,7 +19,7 @@ internal static class ExpressionsApi
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
         var api = endpoints.MapEndpointGroup(
             OwnerId,
-            ExpressionsJsonContext.Default,
+            ExpressionsJsonContext.WireContext,
             jsonContentType: "application/json",
             tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 

@@ -27,7 +27,7 @@ internal sealed class OAuth2TokenService(
 {
     public static readonly TimeSpan ExpirySkew = TimeSpan.FromSeconds(60);
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower

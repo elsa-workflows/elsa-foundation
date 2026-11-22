@@ -29,7 +29,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     private const string InconsistentBindingMessage = "The EF structured-log scope binding is inconsistent.";
     private static readonly TimeSpan AppendIdempotencyWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(25);
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };

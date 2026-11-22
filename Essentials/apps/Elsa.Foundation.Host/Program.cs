@@ -17,6 +17,11 @@ using Nuplane.Sources.Directory.Configuration;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    Elsa.Serialization.Core.JsonBaseline.Configure(options.SerializerOptions);
+    Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options.SerializerOptions, apiMode: true);
+});
 
 // Shell composition (which features each shell enables) is authored in shells.json, layered under the
 // standard appsettings files. reloadOnChange lets CShells re-read a shell's blueprint on reload.

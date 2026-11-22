@@ -32,7 +32,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentExporter(IActivityDefinitionLookup? catalog = null) : IBpmnDocumentExporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };

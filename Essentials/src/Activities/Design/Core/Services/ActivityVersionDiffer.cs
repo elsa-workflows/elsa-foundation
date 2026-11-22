@@ -14,7 +14,7 @@ namespace Elsa.Activities.Design.Core.Services;
 /// </summary>
 public sealed class ActivityVersionDiffer : IActivityVersionDiffer
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };

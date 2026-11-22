@@ -347,7 +347,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
+                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor) { Warnings = stepWarnings },
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -373,7 +373,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 scopedVariableEnvelopes: scopedVariableEnvelopes);
             stepSession = await StepVariableSessions.CreateAsync(
                 serviceProvider, scopeService, activity, executable, executableNode, executionState, durableValues: null, cancellationToken,
-                attemptId: resumeAttempt.AttemptId);
+                attemptId: resumeAttempt.AttemptId, warnings: stepWarnings);
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {

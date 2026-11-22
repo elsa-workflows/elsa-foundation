@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workbench.Constants;
@@ -9,8 +9,7 @@ internal static class JsonSerializerOptionsCache
 
     private static JsonSerializerOptions Create()
     {
-        var result = new JsonSerializerOptions
-        {
+        var result = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) {
             PropertyNameCaseInsensitive = true,
             DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase

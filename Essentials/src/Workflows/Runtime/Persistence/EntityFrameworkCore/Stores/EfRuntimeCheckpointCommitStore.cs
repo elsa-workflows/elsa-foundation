@@ -36,7 +36,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
     /// </summary>
     internal EfExecutionFenceCursors? FenceCursors { private get; init; }
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;

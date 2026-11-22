@@ -19,7 +19,7 @@ internal static class Elsa3ImportRecordCodec
 {
     private const string GlobalTenantKey = "g:";
     private const string TenantKeyPrefix = "t:";
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>A provider-safe, domain-separated tenant partition: global scope can never equal a tenant.</summary>
     public static string TenantKey(string? tenantId) =>

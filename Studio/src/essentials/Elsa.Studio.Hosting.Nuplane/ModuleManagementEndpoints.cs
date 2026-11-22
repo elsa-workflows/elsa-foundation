@@ -11,7 +11,7 @@ namespace Elsa.Studio.Hosting.Nuplane;
 internal static class ModuleManagementEndpoints
 {
     internal const string FeedPrefix = "Nuplane:Setup:Feeds";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static void Map(IEndpointRouteBuilder endpoints)
     {

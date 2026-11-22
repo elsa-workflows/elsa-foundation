@@ -13,7 +13,7 @@ namespace Elsa.Cli;
 /// <summary>Creates an authored composition pinned to a Foundation profile in the bundled catalog.</summary>
 internal static class CompositionInitCommand
 {
-    private static readonly JsonSerializerOptions s_json = new()
+    private static readonly JsonSerializerOptions s_json = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true

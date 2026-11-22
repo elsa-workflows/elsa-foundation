@@ -6,7 +6,7 @@ namespace Elsa.Studio.Hosting.Nuplane;
 internal sealed class ManagementConfigurationStore(StudioNuplaneSettings settings, IConfigurationRoot configuration, StudioConfigurationMutationGate gate)
 {
     public const string RetentionPrefix = "Studio:PackageManagement:RetentionPolicy";
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
 
     public bool CanWrite(string prefix) => ConfigurationOwnership.IsExclusive(configuration, settings.ManagementFile, prefix);
 

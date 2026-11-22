@@ -39,7 +39,7 @@ public sealed record AgentModelCapabilitiesRequest(string ProviderKey, string Co
 /// <summary>Current authorized capabilities of one connection's model, read without inference.</summary>
 public sealed record AgentModelCapabilitiesView(JsonElement SettingsSchema, bool SupportsJsonSchema, int MaximumOutputTokens);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
 [JsonSerializable(typeof(AgentSourceCreate))]
 [JsonSerializable(typeof(AgentSourceSave))]
@@ -64,6 +64,15 @@ public sealed record AgentModelCapabilitiesView(JsonElement SettingsSchema, bool
 [JsonSerializable(typeof(AgentModelCapabilitiesView))]
 internal partial class AgentApiJsonContext : JsonSerializerContext
 {
+    internal static AgentApiJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
     internal static AgentApiJsonContext WireContext => Wire.Context;
 
     private static class Wire

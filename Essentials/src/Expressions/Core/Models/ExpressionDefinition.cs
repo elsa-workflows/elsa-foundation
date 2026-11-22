@@ -15,7 +15,7 @@ namespace Elsa.Expressions.Core.Models;
 /// </summary>
 public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 {
-    private static readonly JsonSerializerOptions FingerprintSerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions FingerprintSerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     [JsonConstructor]
     public ExpressionDefinition(

@@ -24,7 +24,7 @@ public static class ExecutionEvidenceApi
                               ?? typeof(ExecutionEvidenceApi).Assembly.GetName().Name!;
         var api = endpoints.MapEndpointGroup(
             ExecutionEvidencePermissionKeys.OwnerId,
-            ExecutionEvidenceJsonContext.Default,
+            ExecutionEvidenceJsonContext.WireContext,
             jsonContentType: "application/json; charset=utf-8",
             tag: applicationName);
 
@@ -70,7 +70,7 @@ public static class ExecutionEvidenceApi
             context.RequestAborted);
         await Results.Json(
             page,
-            ExecutionEvidenceJsonContext.Default.ExecutionEvidencePage,
+            ExecutionEvidenceJsonContext.WireContext.ExecutionEvidencePage,
             contentType: "application/json; charset=utf-8").ExecuteAsync(context);
     }
 
@@ -93,7 +93,7 @@ public static class ExecutionEvidenceApi
             context.RequestAborted);
         await Results.Json(
             page,
-            ExecutionEvidenceJsonContext.Default.ExecutionEvidencePage,
+            ExecutionEvidenceJsonContext.WireContext.ExecutionEvidencePage,
             contentType: "application/json; charset=utf-8").ExecuteAsync(context);
     }
 

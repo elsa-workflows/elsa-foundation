@@ -36,7 +36,7 @@ public sealed class ReusableActivityImportPublishPhase(
     /// </summary>
     private const string ApplyAgain = "upload the same export again and apply it under a new idempotency key";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <param name="operationKey">Names this import operation in the publisher's idempotency keys: the receipt id.</param>
     public async ValueTask<IReadOnlyList<ReusableActivityPublicationState>> PublishAsync(

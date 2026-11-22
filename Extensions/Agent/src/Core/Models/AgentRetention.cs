@@ -23,7 +23,7 @@ public sealed record AgentRetentionPage(IReadOnlyList<AgentRetentionCandidate> I
 
 internal static class AgentRetentionRules
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { MaxDepth = 32 };
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 32 };
     internal static bool Settled(AgentTurnStatus status) => status is AgentTurnStatus.Accepted or AgentTurnStatus.Failed or AgentTurnStatus.Cancelled;
     internal static void Query(AgentRetentionQuery query)
     {

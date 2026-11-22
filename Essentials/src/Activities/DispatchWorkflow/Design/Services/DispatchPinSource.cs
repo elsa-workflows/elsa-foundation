@@ -16,7 +16,7 @@ public sealed class DispatchPinSource(
     IWorkflowExecutableInputValidator inputValidator,
     TimeProvider timeProvider) : IExecutableCompilationSource, IExecutableNodeMetadataSource
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private const string WorkflowDefinitionIdInput = "WorkflowDefinitionId";
     private const string InputsInput = "Inputs";
 

@@ -19,7 +19,7 @@ namespace Elsa.Workbench;
 internal static class ElsaModuleManagementApi
 {
     private const string ManagementFileName = "appsettings.json";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
 
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {

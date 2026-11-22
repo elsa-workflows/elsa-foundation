@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -199,7 +200,7 @@ public static class RuntimeWorkflowStateSeed
     private static JsonElement Serialize(object? value) =>
         value is JsonElement json
             ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
+            : JsonValueConversion.SerializeToElement(value, value?.GetType() ?? typeof(object));
 
     private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
         new("clr", value?.GetType().FullName ?? typeof(object).FullName, null);

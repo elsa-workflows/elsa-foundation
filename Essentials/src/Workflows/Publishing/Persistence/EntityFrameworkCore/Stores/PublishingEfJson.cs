@@ -35,7 +35,7 @@ internal static class PublishingEfJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
         options.Converters.Add(new LosslessUtf16StringConverter());
         return options;

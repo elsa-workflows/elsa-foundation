@@ -21,7 +21,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     private const string SourceKind = "BpmnModel";
     private const string WorkPagePurpose = "bpmn-human-work-v1";
     private const string IncidentPagePurpose = "bpmn-service-incidents-v1";
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private IRuntimeModelExecutionReader States => states ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
     public bool AdmitNewExecutions => driver.AdmitNewExecutions;

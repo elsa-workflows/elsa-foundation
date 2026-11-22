@@ -22,7 +22,7 @@ public sealed class WeaverGitHubCopilotProvider(
 
     private const string MutationPolicyMessage = "GitHub Copilot SDK tool approval is not exposed directly. Elsa-owned proposal approval is required for mutating operations.";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };

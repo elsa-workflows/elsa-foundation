@@ -11,7 +11,7 @@ namespace Elsa.Decisions.Design;
 public sealed class DecisionDesignService(IDecisionReader reader, IDecisionWriter writer, IDecisionCompiler compiler,
     IDecisionEvaluator evaluator, IDecisionAccessPolicy policy, DecisionDesignOptions options)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly HashSet<string> Statuses = ["Success", "NoMatch", "InvalidInput", "Unsupported", "HitPolicyViolation", "Unavailable"];
 
     public async ValueTask<IReadOnlyList<DecisionAssetView>> ListAsync(DecisionCaller caller, CancellationToken ct = default)

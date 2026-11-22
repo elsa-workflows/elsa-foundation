@@ -18,11 +18,11 @@ namespace Elsa.Decisions.Api;
 /// <summary>Maps Decisions operations through the host's normal endpoint catalog and authorization policies.</summary>
 public static class DecisionsApi
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true, MaxDepth = 64 };
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { PropertyNameCaseInsensitive = true, MaxDepth = 64 };
 
     public static void MapDecisionsApi(this IEndpointRouteBuilder endpoints)
     {
-        var api = endpoints.MapEndpointGroup("Elsa.Decisions.Api", DecisionsJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup("Elsa.Decisions.Api", DecisionsJsonContext.WireContext, jsonContentType: "application/json");
         void Map(string method, string path, string name, string permission, Type? response, Func<HttpContext, DecisionDesignService, DecisionCaller, Task<object?>> action)
         {
             api.MapUnboundOperation(method, "/decisions" + path, name, response, StatusCodes.Status200OK, null,

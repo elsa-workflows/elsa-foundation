@@ -20,7 +20,7 @@ public sealed class JsonShellFeatureConfigurationStore(
     IOptions<FeatureManagementOptions> options,
     HostBuilderContext hostContext) : IShellFeatureConfigurationStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         WriteIndented = true
     };

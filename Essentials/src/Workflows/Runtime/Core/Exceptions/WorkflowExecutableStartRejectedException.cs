@@ -22,6 +22,8 @@ public sealed class WorkflowExecutableStartRejectedException : Exception
 
     public WorkflowExecutableStartRejectionCategory Category { get; }
     public string ReasonCode { get; }
+    /// <summary>The input conversion path, when rejection came from the serializer.</summary>
+    public string? InputPath { get; init; }
 }
 
 public enum WorkflowExecutableStartRejectionCategory

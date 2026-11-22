@@ -141,8 +141,7 @@ public static class EtlArtifactV2Json
 
     private static JsonSerializerOptions CreateSerializerOptions()
     {
-        var options = new JsonSerializerOptions
-        {
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options) {
             AllowTrailingCommas = false,
             AllowOutOfOrderMetadataProperties = true,
             MaxDepth = MaximumJsonDepth,

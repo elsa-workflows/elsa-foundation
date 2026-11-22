@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, IPublicationSnapshotReviewStore store)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
     private const int CleanupBatchSize = 128;
 

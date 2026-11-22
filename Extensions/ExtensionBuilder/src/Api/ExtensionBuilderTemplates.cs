@@ -10,7 +10,7 @@ internal interface IExtensionBuilderTemplateCatalog
 
 internal sealed class ExtensionBuilderTemplateCatalog : IExtensionBuilderTemplateCatalog
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly ExtensionTemplate[] _templates;
 
     public ExtensionBuilderTemplateCatalog()

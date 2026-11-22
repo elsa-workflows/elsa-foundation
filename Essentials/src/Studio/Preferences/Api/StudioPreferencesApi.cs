@@ -34,7 +34,7 @@ public static class StudioPreferencesApi
         // Both operations keep their own reads, writes, precondition handling, ETag headers, and
         // problem shapes — and the published contract lets unexpected failures reach the host's
         // exception pipeline — so the surface stays on the group's raw seam.
-        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.WireContext, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", PreferencesRoute, "Get",
                 typeof(StudioPreferenceDocument), StatusCodes.Status200OK, null, HandleGetRequestAsync,

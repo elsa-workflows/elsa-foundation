@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Shared typed endpoint ownership/security metadata; this host still compiles no Elsa feature implementation. -->
     <ProjectReference Include="..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
 
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions

@@ -16,7 +16,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private const string DeliveryFailureSummary = "The child workflow could not be started.";
     private const string DistributedOwningNodeMetadataKey = "runtime.distributed.owningNode";
     private const string DistributedTransportItemIdMetadataKey = "runtime.distributed.transportItemId";
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IWorkflowStartDispatcher _workflowStartDispatcher;
     private readonly int _maxNestingDepth;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;

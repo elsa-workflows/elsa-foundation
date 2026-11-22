@@ -162,7 +162,7 @@ internal static class EfSchedulerStateJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }

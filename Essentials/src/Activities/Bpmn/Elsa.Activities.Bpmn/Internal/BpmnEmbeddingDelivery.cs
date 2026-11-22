@@ -12,7 +12,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
     IWorkflowSchedulerWorkQueue queue, IBookmarkResumeDispatcher resumes,
     IWorkflowExecutionActorProvider actors, TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         try { await HandleCoreAsync(source, cancellationToken); }

@@ -102,7 +102,7 @@ public sealed class EfDesignAtomicWrite(
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>>? transactionFactory = null) : IDesignAtomicWriter
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly Func<CancellationToken, Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>> beginTransaction =
         transactionFactory ?? (token => db.Database.BeginTransactionAsync(token));
 
@@ -312,7 +312,7 @@ public static class EfDesignAtomicCommand
         ArgumentNullException.ThrowIfNull(requestMaterial);
         ArgumentNullException.ThrowIfNull(mutatedUnits);
         ArgumentNullException.ThrowIfNull(stage);
-        var options = jsonOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = jsonOptions ?? new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         var requestJson = SerializeOrThrow(new { Kind = operationKind, Version = MaterialSchemaVersion, Value = requestMaterial }, options, operationKind);
         var result = await atomicWrite.ExecuteAsync(
             new(new EfDesignOperationIdentity(operationKind, operationKey.Value), Fingerprint(requestJson), mutatedUnits, tenantId),

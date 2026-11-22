@@ -43,6 +43,12 @@ public sealed class ExecutableNodeCompiler(
     /// recursive node compilation reads it without threading it through every call (spec 1222 FR-001, FR-004a).
     /// </summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, ScopedVariableVisibility> ReadVisibility = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<ActivityTreeProjection, Elsa.Expressions.Core.Contracts.IExecutionWarningSink> _conversionWarnings = new();
+
+    internal void SetConversionWarningSink(ActivityTreeProjection projection, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
+    {
+        if (warnings is not null) _conversionWarnings.AddOrUpdate(projection, warnings);
+    }
 
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
@@ -157,7 +163,8 @@ public sealed class ExecutableNodeCompiler(
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
         var inputBindings = PinScriptReads(
             activity.NodeId,
-            inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
+            inputBindingCompiler.WithConversionBoundary(clrActivityType, _conversionWarnings.TryGetValue(projection, out var conversionWarnings) ? conversionWarnings : null, activity.NodeId)
+                .CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States),
             projection,
             clrActivityType?.GetCustomAttribute<ActivityScriptOutcomesAttribute>(inherit: true)?.ScriptInputKey,
             out var bodyReadPlan,

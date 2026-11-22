@@ -26,7 +26,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
     internal const string CancelKind = "Elsa.Bpmn.CancelNativeWork.v1";
-    internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     internal IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
         ? physicalWorkflows?.Value ?? throw new NotSupportedException("The physical native workflow reader is unavailable.") : workflows;
     internal IActivityExecutionStateStore PhysicalActivities => activities.GetType() == typeof(CoalescingActivityExecutionStateStore)

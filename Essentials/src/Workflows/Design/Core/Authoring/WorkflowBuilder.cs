@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -102,7 +103,6 @@ public sealed class ActivityCall<TResult>
 
 internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TRequest, TResult>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HashSet<string> _nodeIds = new(StringComparer.Ordinal) { "root" };
     private readonly SequenceBuilder _root;
     private int _nodeOrdinal;
@@ -331,7 +331,7 @@ internal sealed class WorkflowBuilder<TRequest, TResult> : IWorkflowBuilder<TReq
 
         public ActivityNode Lower(string nodeId, string activityVersionId)
         {
-            var payload = JsonSerializer.SerializeToElement(new { activities = _activities, variables = _variables }, JsonOptions);
+            var payload = JsonValueConversion.SerializeToElement(new { activities = _activities, variables = _variables });
             return new ActivityNode(
                 nodeId,
                 activityVersionId,

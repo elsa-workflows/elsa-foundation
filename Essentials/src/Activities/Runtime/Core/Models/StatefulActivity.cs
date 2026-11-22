@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Collections;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
@@ -84,9 +85,9 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
         TTrigger trigger;
         try
         {
-            state = request.StatePayload.Deserialize<TState>()
+            state = JsonValueConversion.Deserialize<TState>(request.StatePayload)
                 ?? throw new InvalidOperationException("The committed activity private state resolved to null.");
-            trigger = request.TriggerPayload.Deserialize<TTrigger>()
+            trigger = JsonValueConversion.Deserialize<TTrigger>(request.TriggerPayload)
                 ?? throw new InvalidOperationException("The validated activity trigger resolved to null.");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
@@ -221,7 +222,7 @@ public sealed class ActivityStartContext<TTrigger>
 
         try
         {
-            var trigger = payload.Deserialize<TTrigger>()
+            var trigger = JsonValueConversion.Deserialize<TTrigger>(payload)
                 ?? throw new JsonException("The targeted start trigger payload resolved to null.");
             PersistableActivityValue.ValidateType(typeof(TTrigger), "start trigger");
             return new ActivityStartContext<TTrigger>(attempt, true, trigger);
@@ -419,7 +420,7 @@ internal static class PersistableActivityValue
     {
         try
         {
-            return payload.Deserialize<T>()
+            return JsonValueConversion.Deserialize<T>(payload)
                    ?? throw new ArgumentException($"The activity {role} must be a non-null persistable value.", "value");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
@@ -435,7 +436,7 @@ internal static class PersistableActivityValue
 
         try
         {
-            return JsonSerializer.SerializeToElement(value, typeof(T));
+            return JsonValueConversion.SerializeToElement(value, typeof(T));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

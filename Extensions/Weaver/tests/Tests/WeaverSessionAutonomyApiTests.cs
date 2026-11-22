@@ -367,7 +367,7 @@ public sealed class WeaverSessionAutonomyApiTests
         var domain = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(message, domainOptions))!.AsObject();
         var response = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(
             WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse))!["data"]!["message"]!.AsObject();
 
         Assert.Equal(domain.Select(x => x.Key).ToArray(), response.Select(x => x.Key).ToArray());
         domain.Remove("acceptedPolicy");
@@ -380,7 +380,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var message = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Pending, null, DateTimeOffset.UtcNow, null, null, [], [], []);
         var json = JsonSerializer.Serialize(WeaverApiResponse<WeaverMessageAcceptedResponse>.Success(message.ToAcceptedResponse([])),
-            WeaverJsonContext.Default.WeaverApiResponseWeaverMessageAcceptedResponse);
+            WeaverJsonContext.WireContext.WeaverApiResponseWeaverMessageAcceptedResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("data").GetProperty("message").GetProperty("acceptedPolicy").ValueKind);
@@ -391,7 +391,7 @@ public sealed class WeaverSessionAutonomyApiTests
     {
         var view = new WeaverMessage("m", "s", WeaverRole.User, "c", WeaverMessageStatus.Completed, null, DateTimeOffset.UtcNow, null, null, [], [], [])
             .ToViewModel();
-        var json = JsonSerializer.Serialize(view, WeaverJsonContext.Default.WeaverMessageViewModelResponse);
+        var json = JsonSerializer.Serialize(view, WeaverJsonContext.WireContext.WeaverMessageViewModelResponse);
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("acceptedPolicyRevision").ValueKind);

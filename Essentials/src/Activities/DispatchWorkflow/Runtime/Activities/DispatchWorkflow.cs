@@ -37,7 +37,7 @@ public sealed class DispatchWorkflow(
     TimeProvider timeProvider) :
     StatefulActivity<DispatchWorkflowActivityResult, DispatchWorkflowState, WorkflowDispatchParentResumePayload>
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     public const string ActivityType = DispatchWorkflowConstants.ActivityType;
 
     [ActivityInput(

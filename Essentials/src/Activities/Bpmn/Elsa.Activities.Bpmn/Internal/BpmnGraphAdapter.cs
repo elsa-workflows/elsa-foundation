@@ -14,7 +14,7 @@ internal static class BpmnGraphAdapter
 {
     public const BpmnHostCapabilities Capabilities = BpmnHostCapabilities.SubtreeCancellation |
         BpmnHostCapabilities.ScopeSignalling | BpmnHostCapabilities.IterationScopes | BpmnHostCapabilities.ScopeVariables;
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static LibraryGraph Build(ExecutableNode node)
     {

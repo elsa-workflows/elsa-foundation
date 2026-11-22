@@ -13,7 +13,7 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
     IPersistenceAccessContextAccessor access, IServiceProvider scopedServices, IWorkflowSchedulerWorkQueue queue,
     IRuntimeModelExecutionReader? stateReader = null)
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly HashSet<string> selected = new(StringComparer.Ordinal);
     public bool IsSelectedModel(string executionId) => selected.Contains(executionId);
 

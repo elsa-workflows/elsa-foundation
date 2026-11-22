@@ -14,8 +14,8 @@ public sealed record GitDefinitionMetadata(
     [property: JsonPropertyName("description")] string? Description,
     [property: JsonPropertyName("deleted")] bool Deleted)
 {
-    private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
-    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions ReadOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions WriteOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
 
     /// <summary>Reads <c>definition.json</c>, or <c>null</c> when it is missing or malformed.</summary>
     public static GitDefinitionMetadata? Read(string path)

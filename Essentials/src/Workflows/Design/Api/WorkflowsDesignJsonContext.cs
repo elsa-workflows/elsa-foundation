@@ -34,7 +34,8 @@ internal static class WorkflowsDesignJsonOptions
 
     private static JsonSerializerOptions Create()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         // The schema emits these authored enums as camel-case strings. Shared type-attributed
         // enums keep their own existing converters and response casing for current Studio clients.
         options.Converters.Add(new JsonStringEnumConverter<AuthoredWorkflowIntrinsicKind>(JsonNamingPolicy.CamelCase));
@@ -47,7 +48,7 @@ internal static class WorkflowsDesignJsonOptions
     }
 }
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ListWorkflowFolders))]
 [JsonSerializable(typeof(GetWorkflowFolder))]
 [JsonSerializable(typeof(CreateWorkflowFolder))]
@@ -148,6 +149,15 @@ internal static class WorkflowsDesignJsonOptions
 [JsonSerializable(typeof(WorkflowDesignError))]
 internal partial class WorkflowsDesignJsonContext : JsonSerializerContext
 {
+    internal static WorkflowsDesignJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
 }
 
 /// <summary>
@@ -163,7 +173,7 @@ internal sealed class WorkflowsDesignJsonTypeInfoResolver : IJsonTypeInfoResolve
         // its private Create_* factories with the caller's exact options. The
         // context instance only supplies those generated factories; its own
         // options are deliberately not used for the returned metadata.
-        return ((IJsonTypeInfoResolver)new WorkflowsDesignJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+        return ((IJsonTypeInfoResolver)new WorkflowsDesignJsonContext(new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options)))
             .GetTypeInfo(type, options);
     }
 }

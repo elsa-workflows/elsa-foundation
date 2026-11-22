@@ -164,6 +164,7 @@ public sealed class WorkflowExecutableCompiler(
             // Single tree walk: children are projected once here and reused for both flattening and node
             // compilation, replacing the former double ProjectChildren traversal.
             var projection = activityTreeProjector.Project(rootActivity);
+            executableNodeCompiler.SetConversionWarningSink(projection, request.Warnings);
             ActivityTreeProjector.Validate(projection.Nodes);
             executableNodeCompiler.ValidateIntrinsicVariableTargets(state, projection.Nodes);
 

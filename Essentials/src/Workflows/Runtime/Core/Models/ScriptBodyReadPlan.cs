@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed record ScriptBodyReadPlan
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     [JsonConstructor]
     public ScriptBodyReadPlan(

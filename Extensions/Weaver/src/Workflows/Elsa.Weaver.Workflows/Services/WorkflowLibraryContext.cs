@@ -30,7 +30,7 @@ internal static class WorkflowLibraryContext
     /// <summary>Each admitted client context's bound on its JSON text, well under the host's 32 KiB per-attachment budget.</summary>
     internal const int ContentLimit = 16 * 1024;
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>One admitted client context: its kind, exact target, client binding and the admitted projection.</summary>
     internal sealed record Admitted(string Kind, WeaverResourceTarget Target, WeaverClientBinding Client, JsonElement Content);

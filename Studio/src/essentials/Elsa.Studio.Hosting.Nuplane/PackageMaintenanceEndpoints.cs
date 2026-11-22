@@ -7,7 +7,7 @@ namespace Elsa.Studio.Hosting.Nuplane;
 
 internal static class PackageMaintenanceEndpoints
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         Converters = { new JsonStringEnumConverter() }
     };

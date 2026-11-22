@@ -39,7 +39,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// </summary>
 public sealed class BpmnDocumentImporter(IBpmnWorkBinder workBinder, IActivityDefinitionLookup? catalog = null) : IBpmnDocumentImporter
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>Placeholder activity version id for nested BPMN process nodes; API hosts override via options later.</summary>
     public const string DefaultBpmnProcessActivityVersionId = BpmnProcessActivity.ProcessAlias;

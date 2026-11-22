@@ -32,7 +32,7 @@ internal static class WorkflowExecutableContext
     internal const string UnavailableCode = "workflow.executable.inspection_unavailable";
     internal const string UnavailableMessage = "Exactly one owning workflow Executable inspection is required; workflow Executables are unavailable.";
 
-    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     /// <summary>The disclosure gate: the host's current workflow runtime read permission for the session actor in its tenant.</summary>
     internal static readonly WeaverToolDescriptor ReadGate = new("workflow_executable_read", "Read workflow Executable", "Reads one exact workflow Executable.",

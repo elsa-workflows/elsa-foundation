@@ -17,7 +17,7 @@ internal sealed record Elsa3InputItem(string FilePath, Elsa3WorkflowDefinition D
 internal sealed class Elsa3JsonFileReader(ILogger<Elsa3JsonFileReader> logger)
 {
     // The collection upload reads with the same options (ReusableActivityImportOperationService).
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async Task<IReadOnlyList<Elsa3InputItem>> ReadAsync(Elsa3JsonReconciliationOptions options, CancellationToken cancellationToken)
     {

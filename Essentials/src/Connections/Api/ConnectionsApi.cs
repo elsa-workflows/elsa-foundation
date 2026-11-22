@@ -40,7 +40,7 @@ public static class ConnectionsApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var api = endpoints.MapEndpointGroup(OwnerId, ConnectionsJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(OwnerId, ConnectionsJsonContext.WireContext, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", ConnectionsRoute, "ConnectionsList",
                 typeof(ListConnectionsResponse), StatusCodes.Status200OK, null, HandleListAsync, containFailures: false)
@@ -450,12 +450,8 @@ public static class ConnectionsApi
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
         options.MakeReadOnly();

@@ -24,7 +24,7 @@ internal static class EtlNativeBoundary
     public const string CancelKind = "Elsa.Etl.Cancel.v1";
     private static readonly ValueTypeDescriptor StateType = new(typeof(RunEtlState).FullName!, schemaVersion: FormatVersion);
     public static readonly ValueTypeDescriptor CompletionType = new(typeof(RunEtlCompletion).FullName!, schemaVersion: FormatVersion);
-    private static readonly JsonSerializerOptions PinOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions PinOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
     };

@@ -11,7 +11,7 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProviderReferenceRewriter(IActivityStructureService structureService)
     : IActivityProviderReferenceRewriter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly IReadOnlySet<string> Schemas = new HashSet<string>(
         [ActivityGraphManifest.SchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion],
         StringComparer.Ordinal);

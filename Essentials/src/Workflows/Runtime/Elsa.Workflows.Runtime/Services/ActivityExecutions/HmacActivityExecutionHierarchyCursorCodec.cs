@@ -15,7 +15,7 @@ public sealed class ActivityExecutionHierarchyCursorOptions
 
 public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecutionHierarchyCursorCodec
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly byte[] _key;
 
     public HmacActivityExecutionHierarchyCursorCodec(IOptions<ActivityExecutionHierarchyCursorOptions> options)

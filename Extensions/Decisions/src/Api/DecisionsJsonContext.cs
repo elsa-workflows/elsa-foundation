@@ -5,7 +5,7 @@ using Elsa.Decisions.Persistence.Core;
 
 namespace Elsa.Decisions.Api;
 
-[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = false, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(DecisionAssetsResponse))]
 [JsonSerializable(typeof(DecisionVersionsResponse))]
@@ -25,4 +25,15 @@ namespace Elsa.Decisions.Api;
 [JsonSerializable(typeof(EvaluateDecisionRequest))]
 [JsonSerializable(typeof(SaveDecisionCaseRequest))]
 [JsonSerializable(typeof(TestDecisionRequest))]
-internal partial class DecisionsJsonContext : JsonSerializerContext;
+internal partial class DecisionsJsonContext : JsonSerializerContext
+{
+    internal static DecisionsJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}

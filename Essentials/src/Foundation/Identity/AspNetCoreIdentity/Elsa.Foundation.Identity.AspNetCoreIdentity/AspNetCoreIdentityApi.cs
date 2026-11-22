@@ -31,7 +31,7 @@ public static class AspNetCoreIdentityApi
         // The published operation ids predate the naming scheme, the tag is the literal "Identity",
         // and the sign-in flow owns an HTML page, dual JSON/form binding, antiforgery, and
         // content-negotiated redirects — so both operations stay on the group's raw seam.
-        var api = endpoints.MapEndpointGroup(owner, AspNetCoreIdentityJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(owner, AspNetCoreIdentityJsonContext.WireContext, tag: "Identity");
 
         api.MapUnboundOperation("GET", "/" + AspNetCoreIdentityDefaults.LoginRoute, "LoginPage",
                 typeof(string), StatusCodes.Status200OK, null, HandleLoginPageAsync,
@@ -120,7 +120,7 @@ public static class AspNetCoreIdentityApi
             return;
         }
 
-        await Results.Json(outcome.Session!, AspNetCoreIdentityJsonContext.Default.AuthSession).ExecuteAsync(context);
+        await Results.Json(outcome.Session!, AspNetCoreIdentityJsonContext.WireContext.AuthSession).ExecuteAsync(context);
     }
 
     private static async Task<LoginRequest?> ReadLoginRequestAsync(HttpContext context)
@@ -139,7 +139,7 @@ public static class AspNetCoreIdentityApi
                 };
             }
 
-            var request = await context.Request.ReadFromJsonAsync(AspNetCoreIdentityJsonContext.Default.LoginRequest, context.RequestAborted);
+            var request = await context.Request.ReadFromJsonAsync(AspNetCoreIdentityJsonContext.WireContext.LoginRequest, context.RequestAborted);
             return request is null
                 ? null
                 : request with

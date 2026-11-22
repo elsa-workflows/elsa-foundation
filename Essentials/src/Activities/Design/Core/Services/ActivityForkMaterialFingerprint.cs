@@ -6,7 +6,7 @@ namespace Elsa.Activities.Design.Core.Services;
 /// <summary>Computes the canonical hash used to bind reviewed reusable-activity fork material.</summary>
 public static class ActivityForkMaterialFingerprint
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static string Compute(object value)
     {

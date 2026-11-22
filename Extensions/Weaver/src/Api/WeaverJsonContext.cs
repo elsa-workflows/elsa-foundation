@@ -10,7 +10,7 @@ internal sealed class WeaverCamelCaseEnumConverter : JsonStringEnumConverter
     public WeaverCamelCaseEnumConverter() : base(JsonNamingPolicy.CamelCase) { }
 }
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(WeaverCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(Converters = [typeof(WeaverCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverBootstrapResponse>))]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverCreateSessionResponse>))]
 [JsonSerializable(typeof(WeaverApiResponse<WeaverSessionDetailsResponse>))]
@@ -35,9 +35,20 @@ internal sealed class WeaverCamelCaseEnumConverter : JsonStringEnumConverter
 [JsonSerializable(typeof(WeaverAuditQueryRequest))]
 [JsonSerializable(typeof(WeaverSessionListQueryRequest))]
 [JsonSerializable(typeof(WeaverClientInvocationResolutionRequest))]
-public partial class WeaverJsonContext : JsonSerializerContext;
+public partial class WeaverJsonContext : JsonSerializerContext
+{
+    internal static WeaverJsonContext WireContext { get; } = new(CreateWireOptions());
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(WeaverCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}
+
+[JsonSourceGenerationOptions(Converters = [typeof(WeaverCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WeaverStreamEvent))]
 [JsonSerializable(typeof(WeaverContextContribution))]
 [JsonSerializable(typeof(WeaverActionProposal))]
@@ -51,4 +62,15 @@ public partial class WeaverJsonContext : JsonSerializerContext;
 [JsonSerializable(typeof(WeaverToolCallOutcome))]
 [JsonSerializable(typeof(WeaverPlanUpdate))]
 [JsonSerializable(typeof(WeaverProviderNotice))]
-public partial class WeaverSseJsonContext : JsonSerializerContext;
+public partial class WeaverSseJsonContext : JsonSerializerContext
+{
+    internal static WeaverSseJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
+}

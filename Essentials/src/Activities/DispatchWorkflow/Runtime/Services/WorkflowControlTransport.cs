@@ -12,7 +12,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 internal static class WorkflowControlTransport
 {
     internal const string NotifyIntentKind = "Elsa.Activities.DispatchWorkflow.NotifyControl";
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     internal static string NotifyIntentId(RuntimeChildControlTarget target, long ordinal) =>
         "intent:dispatch-control:v1:" + target.DispatchId + ":" + ordinal.ToString(CultureInfo.InvariantCulture);

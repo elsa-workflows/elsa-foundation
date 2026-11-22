@@ -28,7 +28,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private const string SequenceStructureKind = "elsa.sequence.structure";
     private const string StructureSchemaVersion = "1.0.0";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public async ValueTask<ReusableActivityImportMutation> MaterializeAsync(
         ReusableActivityImportCollection collection,

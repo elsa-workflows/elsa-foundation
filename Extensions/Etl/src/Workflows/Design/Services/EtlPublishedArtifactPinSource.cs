@@ -24,7 +24,7 @@ internal sealed class EtlPublishedArtifactPinSource(
 {
     private const string PinMetadataKey = "etl.pipeline.v1";
     private const string PipelineInputKey = nameof(RunEtl.Pipeline);
-    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions ArtifactJsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };

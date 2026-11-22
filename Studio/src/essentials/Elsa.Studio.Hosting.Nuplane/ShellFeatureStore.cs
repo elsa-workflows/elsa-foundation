@@ -21,7 +21,7 @@ internal sealed class ShellFeatureStore(
     StudioConfigurationMutationGate mutationGate) : IShellFeatureConfigurationStore
 {
     private static readonly byte[] RevisionKey = RandomNumberGenerator.GetBytes(32);
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
     private string ShellName => options.Value.ShellName;
     private string Prefix => $"CShells:Shells:{ShellName}:Features";
 

@@ -12,7 +12,20 @@ public static class JsonBaseline
     public static JsonSerializerOptions Options { get; } = Create();
 
     /// <summary>Creates independent mutable options for a module's own metadata and registered deviations.</summary>
-    public static JsonSerializerOptions CreateCopy() => new(Options);
+    public static JsonSerializerOptions CreateCopy() => new(Options) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+
+    /// <summary>Applies the baseline at an owning host's composition root, retaining its metadata resolvers.</summary>
+    public static void Configure(JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.PropertyNamingPolicy = Options.PropertyNamingPolicy;
+        options.DictionaryKeyPolicy = null;
+        options.PropertyNameCaseInsensitive = false;
+        options.NumberHandling = JsonNumberHandling.Strict;
+        options.DefaultIgnoreCondition = JsonIgnoreCondition.Never;
+        options.Encoder = Options.Encoder;
+        if (!options.Converters.Any(converter => converter is RawJsonElementConverter)) options.Converters.Insert(0, new RawJsonElementConverter());
+    }
 
     private static JsonSerializerOptions Create()
     {
@@ -28,6 +41,7 @@ public static class JsonBaseline
         };
         options.Converters.Add(new RawJsonElementConverter());
         options.MakeReadOnly();
+        _ = options.GetTypeInfo(typeof(object)); // Freeze the baseline's reflection resolver as well as its option setters.
         return options;
     }
 }

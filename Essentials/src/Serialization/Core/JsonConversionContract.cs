@@ -58,7 +58,7 @@ public sealed class JsonConversionContract
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null)
             return Members.GetValue(member, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), type));
-        return Types.GetValue(type, key => key.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is { } attribute ? new(attribute, key) : Default);
+        return Types.GetValue(type, key => new(key.GetCustomAttribute<JsonConversionAttribute>(inherit: true), key));
     }
 
     internal static bool HasSelection(Type type, MemberInfo? member = null) => member?.GetCustomAttribute<JsonConversionAttribute>(inherit: true) is not null ||
@@ -73,6 +73,34 @@ public sealed class JsonConversionContract
 
     /// <summary>Writes with the same effective contract used for reads.</summary>
     public JsonElement Write(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, Options);
+
+    /// <summary>Converts a CLR value using its type's declared contract.</summary>
+    public static JsonElement SerializeToElement(object? value, Type? type = null)
+    {
+        type ??= value?.GetType() ?? typeof(object);
+        return For(type).Write(value, type);
+    }
+
+    /// <summary>Converts a value with an explicitly selected CLR contract.</summary>
+    public static JsonElement SerializeToElement<T>(T value) => For(typeof(T)).Write(value, typeof(T));
+
+    /// <summary>Converts a CLR value to JSON text using its type's declared contract.</summary>
+    public static string Serialize(object? value) => SerializeToElement(value).GetRawText();
+    /// <summary>Converts a value to text with an explicitly selected CLR contract.</summary>
+    public static string Serialize(object? value, Type type) => For(type).Write(value, type).GetRawText();
+
+    /// <summary>Reads a typed copy with the target's contract.</summary>
+    public static object? Deserialize(JsonElement value, Type type) => For(type).Read(value, type);
+    /// <summary>Reads a typed copy with the target's contract.</summary>
+    public static T? Deserialize<T>(JsonElement value) => (T?)For(typeof(T)).Read(value, typeof(T));
+    /// <summary>Reads a typed copy of JSON text with the target's contract.</summary>
+    public static object? Deserialize(string value, Type type)
+    {
+        using var document = JsonDocument.Parse(value);
+        return Deserialize(document.RootElement, type);
+    }
+    /// <summary>Reads a typed copy of JSON text with the target's contract.</summary>
+    public static T? Deserialize<T>(string value) => (T?)Deserialize(value, typeof(T));
 
     private static JsonConverter CreateBoundaryConverter(Type type, JsonConversionContract contract) =>
         (JsonConverter)Activator.CreateInstance(typeof(BoundaryConverter<>).MakeGenericType(type), contract)!;

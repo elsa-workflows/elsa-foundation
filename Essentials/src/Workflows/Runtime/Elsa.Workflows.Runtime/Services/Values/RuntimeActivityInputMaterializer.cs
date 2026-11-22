@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Reflection;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
@@ -304,6 +305,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         {
             var expressionType = binding.ConversionPlan?.SourceType ?? binding.TargetType;
             var type = ResolveType(expressionType, node.ExecutableNodeId, input.Key);
+            var conversion = ConversionFor(node, input.Key, type);
             var evaluated = await EvaluateExpressionAsync(
                 resolved,
                 type,
@@ -312,16 +314,19 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 node.ExecutableNodeId,
                 input.Key,
                 resolutionContext,
-                cancellationToken);
+                cancellationToken,
+                conversion);
             var materialized = CoerceToType(
                 evaluated.Value,
-                type);
+                type,
+                conversion,
+                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}")));
             var expressionPolicy = evaluated.EffectivePolicy ?? binding.EffectivePolicy;
             var envelope = materialized is null
                 ? ValueEnvelope.Null(expressionType, expressionPolicy)
                 : ValueEnvelope.Inline(
                     expressionType,
-                    JsonSerializer.SerializeToElement(materialized, materialized.GetType()),
+                    conversion.Write(materialized, type),
                     expressionPolicy);
             return await ApplyDestinationStorageAsync(
                 invocationId,
@@ -446,7 +451,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 {
                     throw RuntimeReadSelectionException.DoesNotFit(binding, node.ExecutableNodeId, exception);
                 }
-                FitSelectedMember(binding, value, node.ExecutableNodeId);
+                FitSelectedMember(binding, value, node, resolutionContext);
                 break;
         }
 
@@ -463,10 +468,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
     // The activity-value profile is what hydration uses to construct the consumer's input, so a member that does not
     // deserialize into the input's type under it is refused here, before the snapshot, rather than at construction.
-    private static readonly JsonSerializerOptions SelectedMemberFitOptions = Elsa.Activities.Runtime.Core.Serialization.ActivityValueJsonProfile.CreateOptions();
-
-    private void FitSelectedMember(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    private void FitSelectedMember(RuntimeInputBinding binding, ValueEnvelope value, ExecutableNode node, RuntimeInputBindingResolutionContext resolutionContext)
     {
+        var nodeId = node.ExecutableNodeId;
         if (value.Presence != ValuePresence.Present || value.InlineValue is not { } payload)
             return;
         // A single Any accepts any value. A collection of Any still has a shape to fit, as the intrinsic path checks it:
@@ -476,7 +480,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             return;
         try
         {
-            _ = payload.Deserialize(type, SelectedMemberFitOptions);
+            _ = ConversionFor(node, binding.InputKey, type).Read(payload, type,
+                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{binding.InputKey}")));
         }
         catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
         {
@@ -732,13 +737,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         string nodeId,
         string inputName,
         RuntimeInputBindingResolutionContext resolutionContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        JsonConversionContract conversion)
     {
         var expression = resolved.Expression
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is an expression binding without an expression payload.");
 
         if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.OrdinalIgnoreCase))
-            return new EvaluatedExpression(DeserializeObjectExpression(expression, type, nodeId, inputName), null);
+            return new EvaluatedExpression(DeserializeObjectExpression(expression, type, nodeId, inputName, conversion, resolutionContext), null);
 
         var evaluated = await _portableExpressionEvaluator.EvaluateAsync(
             expression,
@@ -751,11 +757,13 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         return new EvaluatedExpression(evaluated.Value, evaluated.EffectivePolicy);
     }
 
-    private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, Type type, string nodeId, string inputName)
+    private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, Type type, string nodeId, string inputName, JsonConversionContract conversion, RuntimeInputBindingResolutionContext resolutionContext)
     {
         try
         {
-            return JsonSerializer.Deserialize(expression.Expression, type);
+            using var document = JsonDocument.Parse(expression.Expression);
+            return conversion.Read(document.RootElement, type,
+                diagnostic => resolutionContext.Warnings?.Report(ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{inputName}")));
         }
         catch (JsonException exception)
         {
@@ -771,14 +779,34 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     /// without this it would reach the activity as a boxed element rather than the declared CLR type.
     /// Non-<see cref="JsonElement"/> results (the usual literal/script case) are returned unchanged.
     /// </summary>
-    private static object? CoerceToType(object? value, Type type)
+    private static object? CoerceToType(object? value, Type type, JsonConversionContract conversion, Action<JsonConversionDiagnostic> report)
     {
         if (value is not JsonElement element)
             return value;
 
         return element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? null
-            : JsonSerializer.Deserialize(element.GetRawText(), type);
+            : conversion.Read(element, type, report);
+    }
+
+    private JsonConversionContract ConversionFor(ExecutableNode node, string key, Type type)
+    {
+        if (_wellKnownTypeRegistry is null || node.Descriptor is not { ConsumerKey: WellKnownRuntimeActivityConsumers.ClrActivity } descriptor)
+            return JsonConversionContract.For(type);
+        var clr = descriptor.Payload.Deserialize<ClrActivityDescriptor>(JsonBaseline.Options);
+        if (clr is null || !_wellKnownTypeRegistry.TryGetTypeOrDefault(clr.TypeAlias, out var activityType)) return JsonConversionContract.For(type);
+        var member = activityType.GetProperties().FirstOrDefault(property => InputKey(property) == key);
+        return JsonConversionContract.For(type, member);
+    }
+
+    private static string? InputKey(PropertyInfo property)
+    {
+        for (var owner = property.DeclaringType; owner is not null; owner = owner.BaseType)
+        {
+            var declaration = owner.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            if (declaration?.GetCustomAttribute<Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute>(inherit: false) is { } input) return input.Key ?? property.Name;
+        }
+        return null;
     }
 
     private Type ResolveInputType(RuntimeInputBinding binding, string nodeId, string inputName)

@@ -12,7 +12,7 @@ internal sealed class WorkflowSetDesignerPositionTool(IWeaverToolAuthorizer auth
 {
     public const string ToolName = "workflow_set_designer_position";
     public const string ResultType = "workflows.layout-change";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     // Static so the context source can report the same host decision the engine applies to this tool's advertisement.
     internal static WeaverToolDescriptor Contract { get; } = new(ToolName, "Set activity position",
         "Proposes a reviewed position change for an existing activity in the exact open workflow working state. Does not save or publish.",

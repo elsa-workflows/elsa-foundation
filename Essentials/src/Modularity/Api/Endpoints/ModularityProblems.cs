@@ -24,7 +24,7 @@ internal static class ModularityProblemWriting
             "One or more errors occurred!",
             problem.StatusCode);
         return context.Response.WriteAsync(
-            JsonSerializer.Serialize(error, ModularityJsonContext.Default.ModularityError),
+            JsonSerializer.Serialize(error, ModularityJsonContext.WireContext.ModularityError),
             context.RequestAborted);
     }
 }

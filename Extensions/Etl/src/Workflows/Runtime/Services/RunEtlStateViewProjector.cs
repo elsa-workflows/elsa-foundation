@@ -12,7 +12,7 @@ namespace Elsa.Etl.Workflows.Runtime.Services;
 /// <summary>Projects only a native invocation's ETL run reference after Runtime authorizes its activity context.</summary>
 internal sealed class RunEtlStateViewProjector : IActivityStateViewProjector
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private readonly IServiceScopeFactory? scopes;
     private readonly IEtlRuntimeStore? store;
 

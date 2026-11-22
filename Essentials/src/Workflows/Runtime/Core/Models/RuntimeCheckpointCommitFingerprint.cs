@@ -10,12 +10,12 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>Computes the canonical replay identity of a provider-facing checkpoint bundle.</summary>
 public static class RuntimeCheckpointCommitFingerprint
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly JsonSerializerOptions ExactBookmarkOptions = ExactOptions();
 
     private static JsonSerializerOptions ExactOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new ExactOpaqueStringWriter());
         return options;
     }

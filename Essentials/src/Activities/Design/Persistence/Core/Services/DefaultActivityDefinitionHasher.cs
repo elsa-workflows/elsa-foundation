@@ -30,7 +30,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         nameof(Primitives.Entities.Entity.CreatedAt),
         nameof(Primitives.Entities.Entity.RowNumber),
     };
-    private static readonly JsonSerializerOptions options = new()
+    private static readonly JsonSerializerOptions options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };

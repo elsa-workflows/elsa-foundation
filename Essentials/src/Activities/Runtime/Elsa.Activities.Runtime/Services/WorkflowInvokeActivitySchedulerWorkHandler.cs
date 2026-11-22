@@ -240,7 +240,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 state = activationClaim.State;
                 valueFlowAttempt = activationClaim.Attempt;
                 activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                    new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                    new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor) { Warnings = stepWarnings },
                     cancellationToken);
                 activity = activationLease.Activity;
             }
@@ -284,7 +284,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     triggerMetadata: projections.TriggerMetadata,
                     scopedVariableEnvelopes: scopedVariableEnvelopes);
                 stepSession = await StepVariableSessions.CreateAsync(
-                    serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken);
+                    serviceProvider, scopeService, activity, executable, executableNode, executionContextState, persistedDurableValues, cancellationToken, warnings: stepWarnings);
             }
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
@@ -303,7 +303,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled: false);
             var subStatus = disposalException is null ? "ActivityConstructionFailed" : "ActivityDisposalFailed";
-            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking, workItem, invokePayload, state.WithWarnings(stepWarnings.Warnings), fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 

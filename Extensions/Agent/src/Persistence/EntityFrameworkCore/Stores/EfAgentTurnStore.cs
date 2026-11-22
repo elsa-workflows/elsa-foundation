@@ -15,7 +15,7 @@ namespace Elsa.Agent.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfAgentTurnStore(DbContext context, IPersistenceAccessContextAccessor access) : IAgentTurnStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { MaxDepth = 32 };
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options) { MaxDepth = 32 };
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private const int MaximumRecordBytes = 64 * 1024 * 1024;
     public ValueTask<AgentJournalCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)

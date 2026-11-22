@@ -80,7 +80,7 @@ internal static class Elsa3NativeStructureBuilder
 
     private static JsonSerializerOptions CreatePayloadJsonOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var options = new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options);
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         return options;
     }

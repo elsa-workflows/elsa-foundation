@@ -8,7 +8,7 @@ namespace Elsa.Etl.Design.Api;
 
 internal sealed class EtlCamelCaseEnumConverter() : JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false);
 
-[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata,
+[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata,
     UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     Converters = new[] { typeof(EtlCamelCaseEnumConverter), typeof(EtlPipelineV2JsonConverter) })]
 [JsonSerializable(typeof(EtlPageRequest))]
@@ -34,6 +34,15 @@ internal sealed class EtlCamelCaseEnumConverter() : JsonStringEnumConverter(Json
 [JsonSerializable(typeof(EtlApiProblem))]
 internal partial class EtlDesignJsonContext : JsonSerializerContext
 {
+    internal static EtlDesignJsonContext WireContext { get; } = new(CreateWireOptions());
+
+    private static System.Text.Json.JsonSerializerOptions CreateWireOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        Elsa.Serialization.Core.StrictDateTimeConverters.Configure(options, apiMode: true);
+        return options;
+    }
+
     internal static EtlDesignJsonContext WireContext => Wire.Context;
 
     // Initialize after the generated context's own static defaults, irrespective of partial-file order.

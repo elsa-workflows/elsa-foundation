@@ -10,7 +10,7 @@ namespace Elsa.Activities.Compensation.Internal;
 /// </summary>
 internal static class CompensationScopeAuthoredStructureReader
 {
-    public static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    public static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         // Authored ArgumentState.Conversion enums arrive as camelCase strings from the global web JSON options;
         // nested structure payload reads must match.

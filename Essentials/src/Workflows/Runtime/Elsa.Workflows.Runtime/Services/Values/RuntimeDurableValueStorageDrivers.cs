@@ -1,3 +1,4 @@
+using JsonValueConversion = Elsa.Serialization.Core.JsonConversionContract;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -45,7 +46,6 @@ public sealed class RuntimeDurableValueStorageDriverRegistry : IRuntimeDurableVa
 /// <summary>Built-in JSON codec that stores the encoded value inline.</summary>
 public sealed class JsonRuntimeDurableValueStorageDriver : IRuntimeDurableValueStorageDriver
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public string DriverKey => WellKnownRuntimeDurableValueStorageDrivers.Json;
 
@@ -61,7 +61,7 @@ public sealed class JsonRuntimeDurableValueStorageDriver : IRuntimeDurableValueS
         {
             var encoded = value is JsonElement element
                 ? element.Clone()
-                : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object), SerializerOptions);
+                : JsonValueConversion.SerializeToElement(value, value?.GetType() ?? typeof(object));
             return ValueTask.FromResult(new RuntimeDurableValueEncoding(DurableValueStorage.Inline, encoded, null));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)

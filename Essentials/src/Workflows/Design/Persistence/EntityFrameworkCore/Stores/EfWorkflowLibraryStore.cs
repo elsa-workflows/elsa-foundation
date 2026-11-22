@@ -21,7 +21,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
     private const int MaximumFolders = 10000;
     private const int MaximumTags = 10000;
     private const int MaximumAssignments = 64;
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private string Tenant => access.Current.RequireScope().Value;
     private static string NewId(string prefix) => prefix + Guid.NewGuid().ToString("N");
     private static string Revision() => Guid.NewGuid().ToString("N");

@@ -11,7 +11,7 @@ namespace Elsa.Rules.Workflows.Runtime.Models;
 public sealed record RuleWorkflowProgramPin
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions Options = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 24

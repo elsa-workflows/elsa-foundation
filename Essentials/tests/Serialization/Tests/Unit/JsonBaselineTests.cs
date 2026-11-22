@@ -16,6 +16,10 @@ public sealed class JsonBaselineTests
         copy.PropertyNameCaseInsensitive = true;
         Assert.False(JsonBaseline.Options.PropertyNameCaseInsensitive);
         Assert.False(JsonBaseline.CreateCopy().PropertyNameCaseInsensitive);
+        var resolver = Assert.IsType<System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver>(copy.TypeInfoResolver);
+        resolver.Modifiers.Add(info => info.NumberHandling = JsonNumberHandling.AllowReadingFromString);
+        Assert.Throws<InvalidOperationException>(() => Assert.IsType<System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver>(JsonBaseline.Options.TypeInfoResolver).Modifiers.Add(_ => { }));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<int>("\"42\"", JsonBaseline.Options));
     }
 
     [Fact]

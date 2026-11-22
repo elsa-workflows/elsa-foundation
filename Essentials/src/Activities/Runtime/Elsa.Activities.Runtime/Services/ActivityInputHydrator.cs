@@ -19,6 +19,10 @@ public sealed class ActivityInputHydrator
     private readonly ConditionalWeakTable<Type, Dictionary<string, InputPropertyPlan>> _inputPlans = new();
 
     public void Hydrate(IActivity activity, ActivityContract contract, ActivityInputSnapshot snapshot)
+        => Hydrate(activity, contract, snapshot, null);
+
+    /// <summary>Hydrates inputs and records typed-conversion diagnostics on the owning step.</summary>
+    public void Hydrate(IActivity activity, ActivityContract contract, ActivityInputSnapshot snapshot, Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
     {
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(contract);
@@ -43,7 +47,7 @@ public sealed class ActivityInputHydrator
             if (!snapshot.Values.TryGetValue(input.Key, out var envelope))
                 throw new InvalidOperationException($"Activity input '{input.Key}' is missing from the complete pinned snapshot.");
 
-            property.Property.SetValue(activity, Materialize(property, input, envelope));
+            property.Property.SetValue(activity, Materialize(property, input, envelope, warnings));
         }
 
         if (activity is IRuntimeStructureInputConsumer consumer)
@@ -83,7 +87,8 @@ public sealed class ActivityInputHydrator
     private static object? Materialize(
         InputPropertyPlan plan,
         ActivityInputContract input,
-        ValueEnvelope envelope)
+        ValueEnvelope envelope,
+        Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings)
     {
         if (envelope.Presence == ValuePresence.Absent)
         {
@@ -106,7 +111,8 @@ public sealed class ActivityInputHydrator
             ?? throw new InvalidOperationException($"Activity input '{input.Key}' has no inline payload.");
         try
         {
-            return inline.Deserialize(plan.Property.PropertyType, ActivityValueJson.Options);
+            return Elsa.Serialization.Core.JsonConversionContract.For(plan.Property.PropertyType, plan.Property).Read(inline, plan.Property.PropertyType,
+                diagnostic => warnings?.Report(Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}")));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {

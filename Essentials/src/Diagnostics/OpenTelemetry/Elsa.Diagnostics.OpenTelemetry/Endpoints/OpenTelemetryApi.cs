@@ -32,25 +32,25 @@ public static class OpenTelemetryApi
         // stays on the group's raw seam with per-operation name overrides.
         var api = endpoints.MapEndpointGroup(
             OpenTelemetryPermissions.OwnerId,
-            OpenTelemetryJsonContext.Default,
+            OpenTelemetryJsonContext.WireContext,
             tag: QueryTag);
 
         MapPost<OpenTelemetryResourceFilter, OpenTelemetryResourceResult>(api,
             "/diagnostics/opentelemetry/resources/search", "ResourcesSearch", "OpenTelemetryResourcesSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetResourcesAsync(filter, cancellationToken),
-            OpenTelemetryJsonContext.Default.OpenTelemetryResourceFilter, OpenTelemetryJsonContext.Default.OpenTelemetryResourceResult);
+            OpenTelemetryJsonContext.WireContext.OpenTelemetryResourceFilter, OpenTelemetryJsonContext.WireContext.OpenTelemetryResourceResult);
         MapPost<OpenTelemetryTraceFilter, OpenTelemetryTraceResult>(api,
             "/diagnostics/opentelemetry/traces/search", "TracesSearch", "OpenTelemetryTracesSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetTracesAsync(filter, cancellationToken),
-            OpenTelemetryJsonContext.Default.OpenTelemetryTraceFilter, OpenTelemetryJsonContext.Default.OpenTelemetryTraceResult);
+            OpenTelemetryJsonContext.WireContext.OpenTelemetryTraceFilter, OpenTelemetryJsonContext.WireContext.OpenTelemetryTraceResult);
         MapPost<OpenTelemetryMetricFilter, OpenTelemetryMetricResult>(api,
             "/diagnostics/opentelemetry/metrics/search", "MetricsSearch", "OpenTelemetryMetricsSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetMetricsAsync(filter, cancellationToken),
-            OpenTelemetryJsonContext.Default.OpenTelemetryMetricFilter, OpenTelemetryJsonContext.Default.OpenTelemetryMetricResult);
+            OpenTelemetryJsonContext.WireContext.OpenTelemetryMetricFilter, OpenTelemetryJsonContext.WireContext.OpenTelemetryMetricResult);
         MapPost<OpenTelemetryLogFilter, OpenTelemetryLogResult>(api,
             "/diagnostics/opentelemetry/logs/search", "LogsSearch", "OpenTelemetryLogsSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetLogsAsync(filter, cancellationToken),
-            OpenTelemetryJsonContext.Default.OpenTelemetryLogFilter, OpenTelemetryJsonContext.Default.OpenTelemetryLogResult);
+            OpenTelemetryJsonContext.WireContext.OpenTelemetryLogFilter, OpenTelemetryJsonContext.WireContext.OpenTelemetryLogResult);
 
         api.MapUnboundOperation("GET", "/diagnostics/opentelemetry/traces/{traceId}", "TraceDetail",
                 typeof(OpenTelemetryTraceDetail), StatusCodes.Status200OK, null,
@@ -64,7 +64,7 @@ public static class OpenTelemetryApi
                         return;
                     }
 
-                    await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryTraceDetail).ExecuteAsync(context);
+                    await Results.Json(result, OpenTelemetryJsonContext.WireContext.OpenTelemetryTraceDetail).ExecuteAsync(context);
                 },
                 name: "OpenTelemetryTraceDetail", documentAuthResponses: false)
             .RequirePermission(OpenTelemetryPermissions.Read)
@@ -79,7 +79,7 @@ public static class OpenTelemetryApi
                 async context =>
                 {
                     var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetStorageDiagnosticsAsync(context.RequestAborted);
-                    await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryStorageDiagnostics).ExecuteAsync(context);
+                    await Results.Json(result, OpenTelemetryJsonContext.WireContext.OpenTelemetryStorageDiagnostics).ExecuteAsync(context);
                 },
                 name: "OpenTelemetryStorage")
             .RequirePermission(OpenTelemetryPermissions.Read);
@@ -89,7 +89,7 @@ public static class OpenTelemetryApi
                 async context =>
                 {
                     var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetCollectorConfigurationAsync(context.RequestAborted);
-                    await Results.Json(result, OpenTelemetryJsonContext.Default.CollectorConfiguration).ExecuteAsync(context);
+                    await Results.Json(result, OpenTelemetryJsonContext.WireContext.CollectorConfiguration).ExecuteAsync(context);
                 },
                 name: "OpenTelemetryCollectorConfiguration")
             .RequirePermission(OpenTelemetryPermissions.Read);
@@ -153,7 +153,7 @@ public static class OpenTelemetryApi
                 new Dictionary<string, string[]> { ["serializerErrors"] = [NormalizeJsonError(exception.Message)] });
             await Results.Json(
                     problem,
-                    OpenTelemetryJsonContext.Default.OpenTelemetryBindingProblemDetails,
+                    OpenTelemetryJsonContext.WireContext.OpenTelemetryBindingProblemDetails,
                     "application/problem+json; charset=utf-8",
                     StatusCodes.Status400BadRequest)
                 .ExecuteAsync(context);

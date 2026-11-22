@@ -29,7 +29,7 @@ internal sealed class RulesNativeDeliveryInspector(
     // array is therefore malformed/unsupported persisted state, not a valid retry chain.
     private const int MaxRetainedAttempts = 32;
     private const int MaxRetainedTriggerDeliveries = 32;
-    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions WebJson = new(Elsa.Serialization.Core.JsonBaseline.Options)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         MaxDepth = 24

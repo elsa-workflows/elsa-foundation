@@ -31,7 +31,7 @@ internal sealed record ActivityDataReadBinding(
     // properties, last-wins aliases and polymorphic metadata in canonicalized object order.
     // Only existing expression contract types are deserialized; arbitrary authored CLR values
     // must never be serialized or inspected through their getters here.
-    private static readonly JsonSerializerOptions PortableExpressionOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions PortableExpressionOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
         { AllowOutOfOrderMetadataProperties = true };
 
     public static IEnumerable<ActivityDataReadBinding> Read(ArgumentValue? argument)

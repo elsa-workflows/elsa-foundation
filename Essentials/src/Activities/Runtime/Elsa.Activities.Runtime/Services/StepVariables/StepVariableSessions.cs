@@ -22,7 +22,8 @@ internal static class StepVariableSessions
         ActivityExecutionState invocation,
         IReadOnlyCollection<DurableValueState>? durableValues,
         CancellationToken cancellationToken,
-        string? attemptId = null)
+        string? attemptId = null,
+        Elsa.Expressions.Core.Contracts.IExecutionWarningSink? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(scopeService);
@@ -47,7 +48,7 @@ internal static class StepVariableSessions
             : null;
         var suspends = activity is IStatefulActivity || activity is IRuntimeActivityCheckpointParticipant;
         return new StepVariableSession(frames, executable, invocation, node, services.GetService<IWorkflowExecutableInputValidator>(), attemptId, suspends,
-            BoundReferences(node, contract), activity is IStepVariableSessionConsumer);
+            BoundReferences(node, contract), activity is IStepVariableSessionConsumer, warnings);
     }
 
     // The variables this node's reference inputs are bound to, from their pinned bindings, and whether each is writable.
