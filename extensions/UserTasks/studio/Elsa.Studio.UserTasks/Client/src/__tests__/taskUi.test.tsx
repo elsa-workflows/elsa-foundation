@@ -65,6 +65,31 @@ async function editFirstForm() {
 async function input(element: HTMLInputElement | HTMLTextAreaElement, value: string) { await act(async () => { const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value); element.dispatchEvent(new Event("input", { bubbles: true })); }); }
 
 describe("task form rendering and decision delivery", () => {
+  it("uses the shared outlined-field control contract for scalar fields", async () => {
+    const form = { fields: [
+      { key: "name", label: "Name", kind: "text" },
+      { key: "notes", label: "Notes", kind: "multiline" },
+      { key: "quantity", label: "Quantity", kind: "number" },
+      { key: "startDate", label: "Start date", kind: "date" }
+    ] };
+    const props = { form, value: { name: "Ada", notes: "Details", quantity: 3, startDate: "2026-11-21" }, onChange: vi.fn(), readOnly: false, errors: { notes: "Add more detail." } };
+    await act(async () => root.render(<BasicTaskForm {...props} />));
+
+    const controls = [...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[type="text"], textarea, input[type="number"], input[type="date"]')];
+    expect(controls).toHaveLength(4);
+    expect(controls.every(control => control.hasAttribute("data-studio-field-control"))).toBe(true);
+    expect(controls.map(control => control.value)).toEqual(["Ada", "Details", "3", "2026-11-21"]);
+    expect(controls.every(control => Boolean(control.id))).toBe(true);
+    expect(controls[1].getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("Add more detail.");
+    expect(container.textContent).toContain("Start date");
+
+    await act(async () => root.render(<BasicTaskForm {...props} readOnly />));
+    const readOnlyControls = [...container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[type="text"], textarea, input[type="number"], input[type="date"]')];
+    expect(readOnlyControls.every(control => control.disabled)).toBe(true);
+    expect(readOnlyControls.every(control => control.hasAttribute("data-studio-field-control"))).toBe(true);
+  });
+
   it("treats opaque prototype keys as absent and preserves a submitted __proto__ property", async () => {
     const onChange = vi.fn();
     await act(async () => root.render(<BasicTaskForm form={{ fields: [{ key: "constructor", label: "Constructor", kind: "multiline" }, { key: "__proto__", label: "Opaque", kind: "text" }] }} value={{}} onChange={onChange} readOnly={false} errors={{}} />));

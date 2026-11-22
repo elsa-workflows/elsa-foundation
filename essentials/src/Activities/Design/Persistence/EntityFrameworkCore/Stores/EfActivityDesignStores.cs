@@ -57,6 +57,7 @@ public sealed partial class EfActivityDesignStores(
     ICreateActivityDraftCommand,
     IUpdateActivityDefinitionPresentationCommand,
     IArchiveActivityDefinitionCommand,
+    IRestoreActivityDefinitionCommand,
     IUpdateActivityDraftPresentationCommand,
     IStoreActivityDraftValidationCommand,
     IChangeActivityVersionLifecycleCommand,
@@ -296,10 +297,15 @@ public sealed partial class EfActivityDesignStores(
         var rows = Access(db.ActivityDefinitionManagementProjections.AsNoTracking()).Where(x => x.ValidFromSequence <= snapshot.Sequence && x.ValidToSequenceExclusive > snapshot.Sequence);
         rows = ApplyVisibility(rows, query.TenantId);
         var archivedDefinitions = Access(db.ActivityDefinitionAuthoringStates.AsNoTracking()).Where(x => x.ArchivedAt != null);
-        rows = rows.Where(x => !archivedDefinitions.Any(authoring =>
-            authoring.DefinitionId == x.DefinitionId && authoring.TenantId == x.TenantId &&
-            EF.Property<string>(authoring, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
-            EF.Property<string>(authoring, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash")));
+        rows = query.ArchivedOnly
+            ? rows.Where(x => x.ArchivedAt != null && archivedDefinitions.Any(authoring =>
+                authoring.DefinitionId == x.DefinitionId && authoring.TenantId == x.TenantId &&
+                EF.Property<string>(authoring, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                EF.Property<string>(authoring, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash")))
+            : rows.Where(x => !archivedDefinitions.Any(authoring =>
+                authoring.DefinitionId == x.DefinitionId && authoring.TenantId == x.TenantId &&
+                EF.Property<string>(authoring, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                EF.Property<string>(authoring, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash")));
         if (!string.IsNullOrWhiteSpace(query.Search)) rows = rows.Where(x => x.SearchText.Contains(query.Search.Trim().ToUpperInvariant()));
         if (query.Authority is { } authority) rows = rows.Where(x => x.ContentAuthorityKind == authority);
         if (!string.IsNullOrWhiteSpace(query.ProviderKey))
@@ -867,6 +873,40 @@ public sealed partial class EfActivityDesignStores(
         if (projections is not null)
             await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
                 request.ArchivedAt,
+                [new EfActivityManagementDefinitionChange(definition, authoring)],
+                [], []), cancellationToken);
+        else await SaveAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+    }
+
+    public async Task ExecuteAsync(RestoreActivityDefinitionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DefinitionId);
+        if (request.RestoredAt == default) throw new ArgumentException("RestoredAt is required.", nameof(request));
+        EnsureTenant(request.TenantId);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        var authoring = await ByReference(Access(db.ActivityDefinitionAuthoringStates), nameof(ActivityDefinitionAuthoringState.DefinitionId), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity authoring state was not found.");
+        if (authoring.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
+            throw new InvalidOperationException("Only Design-owned Activity Definitions can be restored.");
+        if (authoring.ArchivedAt is null)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return;
+        }
+
+        var definition = await ById(Access(db.ActivityDefinitions), request.DefinitionId)
+            .SingleOrDefaultAsync(x => x.TenantId == request.DefinitionTenantId, cancellationToken)
+            ?? throw new InvalidOperationException("Activity definition was not found.");
+        await AdvanceConcurrencyFenceAsync(db.ActivityDefinitionAuthoringStates, authoring, "Activity definition changed before it could be restored.", cancellationToken);
+        authoring.ArchivedAt = null;
+        authoring.LastModifiedAt = request.RestoredAt;
+        definition.LastModifiedAt = request.RestoredAt;
+        if (projections is not null)
+            await projections.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
+                request.RestoredAt,
                 [new EfActivityManagementDefinitionChange(definition, authoring)],
                 [], []), cancellationToken);
         else await SaveAsync(cancellationToken);

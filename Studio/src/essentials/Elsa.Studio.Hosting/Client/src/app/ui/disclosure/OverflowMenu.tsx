@@ -132,15 +132,23 @@ function ActionMenu({
     if (!isAction(item)) {
       return <div key={index} className="studio-overflow-menu-separator" role="separator" />;
     }
+    const checkable = !item.selection && item.checked !== undefined;
     return (
       <button key={item.id} id={`${menuId}-item-${index}`} type="button"
-        role={item.selection ? `menuitem${item.selection.type}` : "menuitem"}
-        aria-checked={item.selection?.checked} className="studio-overflow-menu-item"
+        role={item.selection ? `menuitem${item.selection.type}` : checkable ? "menuitemcheckbox" : "menuitem"}
+        aria-checked={item.selection ? item.selection.checked : checkable ? item.checked : undefined} className="studio-overflow-menu-item"
+        data-checkable={checkable || undefined}
         aria-describedby={item.describedBy} data-destructive={item.destructive || undefined} disabled={item.disabled} title={item.title}
         tabIndex={index === activeIndex ? 0 : -1} onFocus={() => setActiveIndex(index)}
         onClick={event => activate(item, event.currentTarget)}>
-        {item.selection ? <Check size={15} aria-hidden="true" style={{ visibility: item.selection.checked ? "visible" : "hidden" }} /> : item.icon}
-        {item.label}{item.detail && <span className="studio-menu-detail">{item.detail}</span>}
+        {checkable ? <>
+          <span className="studio-overflow-menu-check" aria-hidden="true">{item.checked ? "✓" : ""}</span>
+          <span>{item.label}</span>
+          {item.value !== undefined ? <span className="studio-overflow-menu-value">{item.value}</span> : null}
+        </> : <>
+          {item.selection ? <Check size={15} aria-hidden="true" style={{ visibility: item.selection.checked ? "visible" : "hidden" }} /> : item.icon}
+          {item.label}{item.detail && <span className="studio-menu-detail">{item.detail}</span>}
+        </>}
       </button>
     );
   }
