@@ -135,12 +135,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     internal static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
     {
         if (row.Jobs is null) return null;
-        var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion) && i.Message.Target.Id == row.Id)
+        var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion || i.Message.FoundationJobResult)
+                && i.Message.Target.Id == row.Id)
             .Select(i => i.Message.InboxKey).ToHashSet();
         if (consumed.Count == 0) return row.Jobs;
-        var jobs = DurableKeyJson.ReadKeys(row.Jobs);
-        if (jobs.RemoveAll(key => consumed.Contains(InboxKey.Ticket(row.Id, key, row.Creation))) == 0) return row.Jobs;
-        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
+        var jobs = JobRegistry.Read(row.Jobs);
+        if (jobs.RemoveAll(job => consumed.Contains(InboxKey.Ticket(row.Id, job.Key, row.Creation, job.Generation)) ||
+            consumed.Contains(InboxKey.JobResult(row.Id, job.Key, row.Creation, job.Generation))) == 0) return row.Jobs;
+        return JobRegistry.Write(jobs);
     }
 
     /// <summary>Decision 4: an instance kept in memory past its short wait is written as it is, at the revision it has.</summary>
@@ -195,7 +197,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             Journal = Journal(row.History, ["terminated"]),
             Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
                 TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued()).ToList(),
-            Cancelled = (row.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : []).Select(key => InboxKey.Ticket(instance, key, row.Creation)).ToList(),
+            Cancelled = JobRegistry.Read(row.Jobs).Select(job => InboxKey.Ticket(instance, job.Key, row.Creation, job.Generation)).ToList(),
         };
         foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));

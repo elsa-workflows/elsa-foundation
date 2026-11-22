@@ -96,7 +96,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return TimeoutJob(input, message);
         if (delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || parked) && input.Row is { } completedRow &&
             delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
-            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), ticket.Timer, cancel: false, keepCheckpoint: parked);
+            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), message.JobGeneration, ticket.Timer, cancel: false, keepCheckpoint: parked);
         if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
@@ -146,23 +146,25 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             message.Sender != row.Id || message.SenderCreation != row.Creation)
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row?.Status };
         var key = message.Read<Durable.JobDeadline>().Key;
-        var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key);
-        if (ticket is null && input.VolatileMessage(Durable.InboxKey.Ticket(row.Id, key, row.Creation)) is { Kind: Durable.Kinds.Job } local)
+        if (Durable.JobRegistry.Generation(row, key) is not { } generation)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+        var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key, generation);
+        if (ticket is null && input.VolatileMessage(Durable.InboxKey.Ticket(row.Id, key, row.Creation, generation)) is { Kind: Durable.Kinds.Job } local)
             ticket = local.Read<Durable.JobTicket>();
         if (ticket is null || ticket.Timer != message.Id || ticket.Deadline != message.Due || attempts >= input.MaxAttempts)
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
 
-        return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), null, cancel: true);
+        return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true);
     }
 
     private Durable.TurnOutcome SettleJob(Durable.TurnInput input, Durable.InstanceRow row, Durable.JobFinished result,
-        string? timer, bool cancel, bool keepCheckpoint = false)
+        long generation, string? timer, bool cancel, bool keepCheckpoint = false)
     {
-        var turn = new Durable.DurableTurn(input);
+        var turn = new Durable.DurableTurn(input, foundation: true);
         if (cancel) turn.CancelJob(result.Key);
         else if (timer is not null && (store.HasStoredJobDeadline(row.Id, row.Creation, timer) ||
             input.VolatileMessage(Durable.InboxKey.Issued(timer)) is { Kind: Durable.Kinds.JobDeadline })) turn.Recall(timer);
-        turn.ReportFoundationJobResult(result);
+        turn.ReportFoundationJobResult(result, generation);
         // The logical job remains pending until the actor applies or cancels this recorded result.
         var checkpoint = row with { Revision = turn.Revision };
         var outcome = turn.Outcome(row.Status);
@@ -215,7 +217,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
         var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
-        var jobs = row.Jobs is null ? 0 : Durable.DurableKeyJson.ReadKeys(row.Jobs).Count;
+        var jobs = Durable.JobRegistry.Read(row.Jobs).Count;
         var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
             + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
         var headerBytes = row.Status == Durable.InstanceStatus.Running ? HeaderLimits.VariableHeaderReserve
