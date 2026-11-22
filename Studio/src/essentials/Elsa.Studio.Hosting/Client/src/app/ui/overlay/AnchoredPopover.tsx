@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type HTMLAttributes,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -27,7 +28,7 @@ export interface AnchoredPopoverPosition {
 
 export type AnchoredPopoverDismissReason = "anchor-hidden" | "outside-pointer";
 
-export interface AnchoredPopoverProps extends AnchoredPopoverOptions {
+export interface AnchoredPopoverProps extends AnchoredPopoverOptions, Pick<HTMLAttributes<HTMLDivElement>, "role" | "aria-label" | "onKeyDown"> {
   anchorRef: RefObject<HTMLElement | null>;
   /** Keeps nested popovers within their modal's stacking and focus scope. Defaults to document.body. */
   portalContainer?: Element | DocumentFragment | null;
@@ -80,6 +81,9 @@ export function AnchoredPopover({
   id,
   onDismiss,
   onPositioned,
+  role,
+  "aria-label": ariaLabel,
+  onKeyDown,
   ...options
 }: AnchoredPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -186,6 +190,9 @@ export function AnchoredPopover({
     <div
       ref={popoverRef}
       id={id}
+      role={role}
+      aria-label={ariaLabel}
+      onKeyDown={onKeyDown}
       className={["studio-anchored-popover", className].filter(Boolean).join(" ")}
       data-placement={position?.placement}
       style={style}

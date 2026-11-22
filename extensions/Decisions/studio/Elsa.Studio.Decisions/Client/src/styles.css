@@ -118,7 +118,6 @@
 .decision-column-settings:hover, .decision-column-settings[aria-expanded="true"] { border-color: var(--studio-border); color: var(--studio-text); }
 .decision-column-settings:focus-visible { outline: 2px solid var(--studio-accent); outline-offset: 2px; }
 .decision-column-popover { display: grid; gap: .55rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-card, 8px); background: var(--studio-surface); color: var(--studio-text); }
-.decision-column-popover > div { display: grid; gap: .55rem; }
 .decision-column-popover label { display: grid; gap: .25rem; font-size: .8rem; }
 .decision-grid-actions { width: 3.25rem; min-width: 3.25rem; padding-inline: .35rem !important; }
 .decision-grid-actions .studio-overflow-menu { display: flex; justify-content: center; }

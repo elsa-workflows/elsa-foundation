@@ -1,8 +1,9 @@
 import { StudioField } from "@elsa-workflows/studio-ui";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActivityNode } from "../workflowTypes";
 import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, type CollectionSlot } from "../collectionSlots";
+import { getDialogs } from "./dialogs";
 import "./collectionSlotEditor.css";
 
 export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch, renderCondition, hasOutgoingConnections }: {
@@ -14,6 +15,11 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
   renderCondition?(item: Record<string, unknown>): ReactNode;
   hasOutgoingConnections?(index: number): boolean;
 }) {
+  const currentActivity = useRef<ActivityNode | null>(null);
+  useLayoutEffect(() => {
+    currentActivity.current = readOnly ? null : activity;
+    return () => { currentActivity.current = null; };
+  }, [activity, readOnly]);
   const items = collectionSlotItems(activity, collection);
   if (!items) return null;
   const noun = collection.itemName[0].toUpperCase() + collection.itemName.slice(1);
@@ -34,12 +40,16 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
           readOnly={readOnly}
           duplicate={value => items.some((candidate, position) => position !== index && candidate[collection.labelProperty] === value)}
           onRename={value => onChange(renameCollectionItem(activity, collection, index, item[collection.labelProperty] as string, value))}
-          onRemove={() => {
+          onRemove={async () => {
             const connected = hasOutgoingConnections?.(index) === true;
             const message = connected
               ? `Remove this ${collection.itemName}, its outgoing connections, and any nested activity content?`
               : `Remove this ${collection.itemName} and its activity, including nested content?`;
-            if ((item[collection.childProperty] || connected) && !window.confirm(message)) return;
+            if (item[collection.childProperty] || connected) {
+              const accepted = await getDialogs().confirm({ title: `Remove ${collection.itemName}?`, message,
+                confirmLabel: `Remove ${collection.itemName}`, cancelLabel: "Cancel", tone: "danger" });
+              if (!accepted || currentActivity.current !== activity) return;
+            }
             onChange(removeCollectionItem(activity, collection, index, item[collection.labelProperty] as string));
           }}
           removeLabel={`Remove ${collection.itemName} ${index + 1}`}

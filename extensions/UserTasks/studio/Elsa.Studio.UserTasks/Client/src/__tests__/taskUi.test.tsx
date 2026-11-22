@@ -917,14 +917,15 @@ describe("inbox and form polish (#4068)", () => {
       history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }, { operation: "completed", action: "Approve", actorId: "alice", actorName: "Alice", at: "2026-11-02T12:01:00Z" }, { operation: "reassigned", actorId: "bob", actorName: "Bob Builder", at: "2026-11-02T12:02:00Z" }, { operation: "released", actorId: "erin", actorName: null, at: "2026-11-02T12:03:00Z" }] };
     const get = vi.fn().mockResolvedValue(completed);
     await act(async () => root.render(<TaskDetail api={api(get)} id="task" identity={identity} />));
-    await vi.waitFor(() => expect(container.textContent).toContain("Bob Builder"));
+    await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
     const note = container.querySelector("textarea")!;
     expect(note.disabled).toBe(true); expect(note.value).toBe("Done");
     expect(note.closest(".user-task-response")!.hasAttribute("data-final")).toBe(true);
     expect(container.querySelector(`label[for="${note.id}"]`)!.textContent).toBe("Note");
     expect(note.hasAttribute("aria-describedby")).toBe(false);
     expect(container.querySelector(".user-task-actions")).toBeNull();
-    expect([...container.querySelectorAll(".user-task-history-list li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder", "released · erin"]);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-controls="user-task-history-dialog"]')!.click());
+    expect([...document.querySelectorAll("#user-task-history-dialog .user-task-history-list li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder", "released · erin"]);
     expect(readsDirectory(get)).toBe(false);
   });
   it("keeps the required marker while the response can still be filled in", async () => {
