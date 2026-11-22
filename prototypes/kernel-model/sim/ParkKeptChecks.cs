@@ -1459,7 +1459,7 @@ internal static class ParkKeptChecks
         var successor = new Worker("retry-poison-ticket", 0, store, new ActorAdapter(store, probe), new WorkerOptions
         {
             Monotonic = () => 0,
-            JobScheduler = pendingCallbacks ?? TaskScheduler.Default,
+            JobScheduler = pendingCallbacks,
             OnPreparedCheckpoint = (turn, _, _) =>
             {
                 if (turn.FoundationRecoveryPage is not { } page) return;
