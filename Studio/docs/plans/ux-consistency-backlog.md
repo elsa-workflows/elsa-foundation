@@ -529,7 +529,7 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
 - [x] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`: (PR #5329)
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
-- [ ] **X10.10** (#5148) [source] Identifiers shown as plain text → `CopyableIdentifier`:
+- [x] **X10.10** (#5148, PRs #5340 and #5341) [source] Identifiers shown as plain text → `CopyableIdentifier`:
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
   `EXT/Secrets/CopySecretNameButton.tsx:37` (custom copy button). See also E2.
 
@@ -567,7 +567,7 @@ the designer header is a documented exception.
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
   `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
 - [x] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`. (PR #5313)
-- [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
+- [x] **X11.18** (#5167, PRs #5340 and #5341) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
 - [x] **X11.19** (#5168) [check] ETL draft toolbar. (PR #5326)
@@ -767,7 +767,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **E17** (#5247, PR #5341) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
   `requiresBackend` (`EXT/Secrets/module.tsx:40–44`). **[check]** whether the legacy route is still
   needed.
-- [ ] **E18** (#5248) [source] Row opening in the other lists (D12): Secrets uses an
+- [x] **E18** (#5248, PRs #5340 and #5341) [source] Row opening in the other lists (D12): Secrets uses an
   `<a class="secrets-row-link">` plus an "Edit" button (`SecretsPage.tsx:316, 328`), Decisions a raw
   `decision-link` button (`DecisionsPage.tsx:193–199`), Forms a raw `user-task-link` button
   (`FormsPage.tsx:169–179`). Move each to `studioRowInteraction`. **[check]** keyboard access, and
