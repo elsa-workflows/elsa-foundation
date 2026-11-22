@@ -471,7 +471,7 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   // Interleave bounded frame drains with real network settling; do not scroll the node to mask failed reveal.
   await expect(selectedNode).toBeVisible();
   await expect(h.controls.getByRole("button", { name: "Play", exact: true })).toBeVisible();
-  const visibleLoading = page.locator(".wf-run-diagram-view").getByText("Loading visible execution evidence…", { exact: true }).filter({ visible: true });
+  const visibleLoading = page.locator(".wf-run-diagram-view").getByText("Loading visible run data…", { exact: true }).filter({ visible: true });
   await page.clock.runFor(300);
   await expect.poll(async () => {
     await page.clock.runFor(50);
@@ -481,7 +481,7 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
     });
     return inViewport && await visibleLoading.count() === 0;
   }, { timeout: 10_000, intervals: [50, 100, 250] }).toBe(true);
-  await expect(page.locator(".wf-run-diagram-view").getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true }).filter({ visible: true })).toHaveCount(0);
+  await expect(page.locator(".wf-run-diagram-view").getByText("Some visible run data could not be loaded. Refresh to retry.", { exact: true }).filter({ visible: true })).toHaveCount(0);
   await expect(selectedNode).toBeInViewport({ ratio: 1 });
   await h.position(3, 9, sequence.items[3].activityExecutionId);
   await expect(h.controls.getByRole("slider", { name: "Activity position", exact: true })).toBeFocused();
