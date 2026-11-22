@@ -2,12 +2,12 @@ import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { getActivityGraphOutputSetters } from "./activityGraphOutputSources";
 import { activityGraphDocumentAdapter } from "./activityGraphDocumentAdapter";
 import { NativeBlockAuthorityProvider } from "./graph-authoring/nativeBlockAuthority";
-import { validateActivityDefinitionCandidate } from "./api/activityDesign";
+import { validateActivityDefinitionCandidate, validateActivityDefinitionVersionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudioButton, tabElementIds, StudioAlert, StudioResultState, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, Play, RefreshCw, Variable, Workflow as WorkflowIcon } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, MoreHorizontal, Play, Save, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
   authSessionStartedEvent,
@@ -27,7 +27,7 @@ import {
   type StudioWorkflowDesignerPanelContribution,
   type StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
-import type { ActivityDefinitionDraftView, ActivityDefinitionVersionView } from "./activityDefinitionTypes";
+import type { ActivityDefinitionDraftView, ActivityDefinitionVersionView, ActivityDefinitionWorkspaceContribution } from "./activityDefinitionTypes";
 import { activityDesignKeys, createActivityDefinitionDraft, createActivityDefinitionConflictCopy, getActivityDefinitionVersion, replaceActivityDefinitionDraft, useActivityAuthoringCapabilities, useActivityContractExpressionDescriptors, useActivityDefinition, useFullActivityDefinitionDraft, useFullActivityDefinitionVersion, validateActivityDefinitionDraft } from "./api/activityDesign";
 import { createActivityDefinitionRecoveryStore, type ActivityDefinitionRecoverySnapshot } from "./activityDefinitionRecovery";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
@@ -36,7 +36,7 @@ import { ActivityDefinitionDiagnosticsPanel, type ActivityDraftValidationFailure
 import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublicationReview";
 import { ActivityDefinitionContractProposalReview } from "./ActivityDefinitionContractProposalReview";
 import { ActivityDefinitionProviderMigrationDialog } from "./ActivityDefinitionDraftManagementDialogs";
-import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds, hasCapabilityLink } from "./api/capabilities";
 import type { ActivityPublicationOutcome } from "./api/publishing";
 import type { PreparedActivityTestRunRevision } from "./ActivityDefinitionTestRunDialog";
 import {
@@ -47,7 +47,7 @@ import { isWorkflowChunkLoadFailure } from "./WorkflowLazyBoundary";
 import "./activityDefinitionAuthoring.css";
 import { ActivityDefinitionAuthoringTabsHostContext } from "./activityDefinitionAuthoringTabsHost";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
-import { WorkflowCanvasToolsHostContext, WorkflowEditorToolbarFrame } from "./workflow-editor/WorkflowEditorToolbar";
+import { WorkflowCanvasToolsHostContext, WorkflowEditorSaveStatus, WorkflowEditorToolbarFrame } from "./workflow-editor/WorkflowEditorToolbar";
 import { StudioLink } from "./StudioLink";
 import {
   canRedo,
@@ -68,7 +68,7 @@ const ActivityGraphVariablesEditor = lazy(() => import("./ActivityGraphImplement
 
 type ManagementSection = "drafts" | "versions" | "overview" | "relationships";
 
-export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context, definitionId, draftId, versionId, allowStartEditing = false, readOnly = false, openPublicationReviewOnMount = false, onManage, onDraftStarted, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context, definitionId, draftId, versionId, allowStartEditing = false, readOnly = false, openPublicationReviewOnMount = false, onManage, onDraftStarted, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, workspaceContribution, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   agentWorkspace?: boolean;
   context: StudioEndpointContext;
   definitionId: string;
@@ -86,6 +86,7 @@ export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context,
   inputEditors?: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
+  workspaceContribution?: ActivityDefinitionWorkspaceContribution;
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
@@ -133,10 +134,10 @@ export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context,
     setStarted({ draft, version, scope });
     onDraftStarted?.(draft);
     onOpenDraft(definitionId, draft.draftId);
-  }} blockAuthoringAllowed={designAuthoringAllowed} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || initialDraft.presentationLabel?.trim() || generatedDraftLabel(initialDraft)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
+  }} blockAuthoringAllowed={designAuthoringAllowed} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || initialDraft.presentationLabel?.trim() || generatedDraftLabel(initialDraft)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} workspaceContribution={workspaceContribution} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialDraft, initialVersion, allowStartEditing, readOnly, openPublicationReviewOnMount, onManage, onDraftStarted, blockAuthoringAllowed, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialDraft, initialVersion, allowStartEditing, readOnly, openPublicationReviewOnMount, onManage, onDraftStarted, blockAuthoringAllowed, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, workspaceContribution, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
   agentWorkspace: boolean;
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
@@ -156,6 +157,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   inputEditors: StudioWorkflowRunInputEditorContribution[];
   recoverySettings?: StudioActivityDefinitionRecoverySettings;
   identity?: StudioRuntimeIdentity;
+  workspaceContribution?: ActivityDefinitionWorkspaceContribution;
   onNavigationGuardChange(blocked: boolean): void;
   onBack(force?: boolean): void;
   onOpenDraft(definitionId: string, draftId: string): void;
@@ -195,6 +197,10 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const [migrationOpen, setMigrationOpen] = useState(false);
   const testRunTriggerRef = useRef<HTMLButtonElement>(null);
   const [testRunOpen, setTestRunOpen] = useState(false);
+  const [publishedTestRunAvailability, setPublishedTestRunAvailability] = useState<"unavailable" | "unverified" | null>(null);
+  const [checkingPublishedTestRunAvailability, setCheckingPublishedTestRunAvailability] = useState(false);
+  const [workspaceTestHostRevision, setWorkspaceTestHostRevision] = useState<number | null>(null);
+  const [workspaceTestHostPanel, setWorkspaceTestHostPanel] = useState<"editor" | "test">("editor");
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
   const [canvasToolsHost, setCanvasToolsHost] = useState<HTMLElement | null>(null);
@@ -224,6 +230,8 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const contractEditorRef = useRef<HTMLDivElement | null>(null);
   const contractEditorHandle = useRef<ActivityDefinitionContractEditorHandle | null>(null);
   const providerEditorRef = useRef<HTMLElement | null>(null);
+  const moreActionsTriggerRef = useRef<HTMLElement | null>(null);
+  const publicationFocusPendingRef = useRef(false);
   const variablesEditorRef = useRef<HTMLElement | null>(null);
   const diagnosticsPanelRef = useRef<HTMLElement | null>(null);
   const providerPublicInterfaceRef = useRef<HTMLElement | null>(null);
@@ -307,7 +315,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
         ...created,
         contract: local.contract,
         provider: { ...created.provider, payload: local.provider.payload },
-        layout: layoutEditedRef.current ? local.layout : created.layout,
+        layout: layoutEditedRef.current ? mergeActivityDefinitionLayout(created.layout, local.layout) : created.layout,
         activityPresentation: local.activityPresentation ?? created.activityPresentation ?? [],
         presentationLabel: local.presentationLabel ?? null
       };
@@ -623,6 +631,14 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     }
   };
 
+  const openWorkspaceTestHost = async () => {
+    if (!workspaceContribution?.testHost || !draft.draftId || dependentActionsBlocked) return;
+    const prepared = await prepareExactTestRunRevision(() => undefined);
+    if (!prepared) return;
+    setWorkspaceTestHostRevision(prepared.revision);
+    setWorkspaceTestHostPanel("test");
+  };
+
   const [outputNavigationFailure, setOutputNavigationFailure] = useState<string | null>(null);
   const revealOutputStep = async (nodeId: string): Promise<StudioActivityDiagnosticFocusResult> => {
     setOutputNavigationFailure(null);
@@ -740,6 +756,31 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const canEditProvider = !readOnly && draftIsActive && !publicationPending && hasPayload && Boolean(contribution && Editor) && !providerEditorFailed;
   const revisionSensitiveActionsBlocked = publicationPending || status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty;
   const dependentActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !draftIsActive || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
+  const testRunActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty || (!draftIsActive && (Boolean(draft.draftId) || !initialVersion));
+  const openTestRun = async () => {
+    if (!initialVersion || draft.draftId) {
+      setTestRunOpen(true);
+      return;
+    }
+    setCheckingPublishedTestRunAvailability(true);
+    try {
+      const links = await Promise.all([
+        hasCapabilityLink(context, capabilityIds.publishing, "activity-version-test-run-dispatch"),
+        hasCapabilityLink(context, capabilityIds.publishing, "activity-version-test-run-idempotency-status")
+      ]);
+      setPublishedTestRunAvailability(links.every(Boolean) ? null : "unavailable");
+    } catch {
+      setPublishedTestRunAvailability("unverified");
+    } finally {
+      setCheckingPublishedTestRunAvailability(false);
+      setTestRunOpen(true);
+    }
+  };
+  useLayoutEffect(() => {
+    if (!publicationFocusPendingRef.current || draftIsActive) return;
+    publicationFocusPendingRef.current = false;
+    moreActionsTriggerRef.current?.focus();
+  }, [draft.status, draftIsActive]);
   const graphDesignerViewActive = activeView === "designer" && draft.provider.providerKey === "elsa.activity-graph";
   const hasGraphVariables = hasPayload && Boolean(contribution) && draft.provider.providerKey === "elsa.activity-graph" && ["1", "2"].includes(draft.provider.schemaVersion);
   const authoringViewTabIndices: Record<ActivityDefinitionAuthoringView, number> = {
@@ -831,6 +872,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   const markDraftPublished = (outcome: ActivityPublicationOutcome) => {
     const current = currentRef.current;
     if (!isActiveDraft(current.status)) return;
+    publicationFocusPendingRef.current = true;
     autosavePausedRef.current = true;
     const published = { ...current, status: "published" };
     currentRef.current = published;
@@ -872,9 +914,11 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
   };
   const draftErrorCount = draft.validation?.diagnostics.filter(item => activityDiagnosticSeverity(item.severity) === "Error").length ?? 0;
   const diagnosticsLabel = codeBufferState.dirty ? "View draft diagnostics" : validationFailure ? "View validation problem" : draftErrorCount ? `View ${draftErrorCount} draft error${draftErrorCount === 1 ? "" : "s"}` : "View draft diagnostics";
-  const saveChip = <span className={`ad-save-chip is-${draftIsActive && !contractLocallyValid ? "failed" : draftIsActive ? status : "published"}`}>{draftIsActive ? contractLocallyValid ? saveStatusLabel(status, draft.revision, false) : "Finish editing" : "Published"}</span>;
+  const saveStatusText = codeBufferState.dirty ? "Unapplied changes" : !contractLocallyValid ? "Finish editing" : saveStatusLabel(status, draft.revision, false);
+  const saveStatusAttention = status === "offline" || status === "failed" || status === "conflict" || !contractLocallyValid || codeBufferState.dirty;
+  const hasWorkspaceTestHost = Boolean(workspaceContribution?.testHost && workspaceTestHostRevision !== null && draft.draftId);
   const authoringViewPanels = <>
-    <section id={tabElementIds(authoringTabsId, 1).panelId} className="ad-public-interface-view" role="tabpanel" aria-label={activeView === "outputs" ? "Outputs" : activeView === "outcomes" ? "Outcomes" : "Inputs"} aria-labelledby={tabElementIds(authoringTabsId, isContractView(activeView) ? authoringViewTabIndices[activeView] : 1).tabId} hidden={!isContractView(activeView)}>
+    <section id={tabElementIds(authoringTabsId, 1).panelId} className={`ad-public-interface-view${authoringTabsShouldBeHosted ? " is-graph-hosted wf-properties-view" : ""}`} role="tabpanel" aria-label={activeView === "outputs" ? "Outputs" : activeView === "outcomes" ? "Outcomes" : "Inputs"} aria-labelledby={tabElementIds(authoringTabsId, isContractView(activeView) ? authoringViewTabIndices[activeView] : 1).tabId} hidden={!isContractView(activeView)}>
       {activeView === "outputs" && outputNavigationFailure ? <p role="alert">{outputNavigationFailure}</p> : null}
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading available input and output types…</div> : <div ref={contractEditorRef}><ActivityDefinitionContractEditor
         ref={contractEditorHandle}
@@ -927,7 +971,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
         />
       </details> : null}
     </section>
-    {hasGraphVariables ? <section ref={variablesEditorRef} id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className="ad-variables-view" role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
+    {hasGraphVariables ? <section ref={variablesEditorRef} id={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).panelId} className={`ad-variables-view${authoringTabsShouldBeHosted ? " wf-properties-view" : ""}`} role="tabpanel" aria-label="Variables" aria-labelledby={tabElementIds(authoringTabsId, authoringViewTabIndices.variables).tabId} hidden={activeView !== "variables"}>
       {activeView === "variables" ? <>
         <p className="wf-muted">Private to each execution of this activity and available throughout its designer.</p>
         <ProviderEditorBoundary label="Variables editor" onFailure={() => setProviderEditorFailed(true)}>
@@ -937,7 +981,7 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
         </ProviderEditorBoundary>
       </> : null}
     </section> : null}
-    <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.code).panelId} role="tabpanel" aria-label="Code" aria-labelledby={activeView === "code" ? tabElementIds(authoringTabsId, authoringViewTabIndices.code).tabId : undefined} hidden={activeView !== "code"}>
+    <section id={tabElementIds(authoringTabsId, authoringViewTabIndices.code).panelId} className={`ad-authoring-code-panel${authoringTabsShouldBeHosted ? " is-graph-hosted" : ""}`} role="tabpanel" aria-label="Code" aria-labelledby={activeView === "code" ? tabElementIds(authoringTabsId, authoringViewTabIndices.code).tabId : undefined} hidden={activeView !== "code"}>
       <ActivityDefinitionDraftCodeView
         draft={draft}
         readOnly={providerReadOnly}
@@ -951,12 +995,18 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     </section>
   </>;
 
-  return <main className={`ad-page ad-draft-editor${graphWorkbenchActive ? " is-graph-designer" : ""}`} aria-labelledby="activity-draft-title">
+  return <main className={`ad-page ad-draft-editor${graphWorkbenchActive ? " is-graph-designer wf-editor" : ""}`} aria-labelledby="activity-draft-title">
+    <div className={`ad-draft-editor-body${workspaceContribution ? " has-workspace-contribution" : ""}${hasWorkspaceTestHost ? " has-workspace-test-host" : ""}`} data-active-panel={workspaceTestHostPanel}>
+    {hasWorkspaceTestHost ? <div className="ad-workspace-test-tabs" role="tablist" aria-label="Agent workspace panels">
+      <button type="button" role="tab" aria-selected={workspaceTestHostPanel === "editor"} aria-controls="agent-workspace-editor-panel" onClick={() => setWorkspaceTestHostPanel("editor")}>Instructions</button>
+      <button type="button" role="tab" aria-selected={workspaceTestHostPanel === "test"} aria-controls="agent-workspace-test-panel" onClick={() => setWorkspaceTestHostPanel("test")}>{workspaceContribution?.testHost?.label ?? "Test Run"}</button>
+    </div> : null}
+    <div className="ad-draft-editor-content" id={workspaceContribution ? "agent-workspace-editor-panel" : undefined} role={hasWorkspaceTestHost ? "tabpanel" : undefined} aria-label={hasWorkspaceTestHost ? "Instructions and settings" : undefined}>
     <div className="ad-draft-editor-toolbar">
       <WorkflowEditorToolbarFrame
         className="ad-workbench-header"
         identity={<><StudioShellBreadcrumbs
-          items={[{ href: agentWorkspace ? "/agents" : "/workflows/activity-definitions", label: agentWorkspace ? "Agents" : onManage ? "Activity Definitions" : "Activity Definition" }]}
+          items={[{ href: workspaceContribution?.homePath ?? (agentWorkspace ? "/agents" : "/workflows/activity-definitions"), label: workspaceContribution?.homeLabel ?? (agentWorkspace ? "Agents" : onManage ? "Activity Definitions" : "Activity Definition") }]}
           current={draftHeaderTitle(definitionDisplayName, draft)}
           renderLink={item => <StudioLink href={item.href} aria-disabled={revisionSensitiveActionsBlocked || undefined} tabIndex={revisionSensitiveActionsBlocked ? -1 : undefined} onClick={event => {
             if (revisionSensitiveActionsBlocked) { event.preventDefault(); return; }
@@ -966,14 +1016,21 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
           }}>{item.label}</StudioLink>} />
           <span className="wf-editor-title"><strong id="activity-draft-title" role="heading" aria-level={1} title={draftHeaderTitle(definitionDisplayName, draft)}>{draftHeaderTitle(definitionDisplayName, draft)}</strong><span className="wf-chip">{draftIsActive ? "Draft" : "Published"}</span></span></>}
         metadata={<div className="ad-draft-context">
-          {publishedVersion && !draftIsActive ? <><span>Version {publishedVersion}</span><span aria-hidden>·</span></> : !onManage || draftIsActive || status !== "saved" || codeBufferState.dirty ? <><span>{onManage ? "Unpublished changes" : draftIsActive ? "Draft" : "Published draft"}</span><span aria-hidden>·</span></> : null}
+          {publishedVersion && !draftIsActive ? <span>Version {publishedVersion}</span> : null}
+          {draftIsActive || saveStatusAttention ? <WorkflowEditorSaveStatus
+            status={saveStatusText}
+            saving={status === "pending" || status === "saving"}
+            success={draftIsActive && status === "saved" && contractLocallyValid && !codeBufferState.dirty}
+            attention={saveStatusAttention}
+          /> : null}
           {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure || codeBufferState.dirty ? " needs-attention" : ""}`} aria-label={diagnosticsLabel} title={diagnosticsLabel} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
-            {saveChip}{draftErrorCount || validationFailure || codeBufferState.dirty ? <><AlertTriangle size={14} aria-hidden /><span>{codeBufferState.dirty ? "Diagnostics" : validationFailure ? "Validation problem" : `${draftErrorCount} error${draftErrorCount === 1 ? "" : "s"}`}</span></> : null}
-          </button> : draftIsActive ? saveChip : null}
+            {draftErrorCount || validationFailure || codeBufferState.dirty ? <><AlertTriangle size={14} aria-hidden /><span>{codeBufferState.dirty ? "Diagnostics" : validationFailure ? "Validation problem" : `${draftErrorCount} error${draftErrorCount === 1 ? "" : "s"}`}</span></> : <span>Diagnostics</span>}
+          </button> : null}
         </div>}
         actions={<div className="ad-header-actions ad-authoring-toolbar-actions">
           {graphWorkbenchActive ? <span ref={setCanvasToolsHost} className="wf-canvas-command-host" /> : null}
-          {draft.draftId ? <ActivityDefinitionPublicationReview
+          <button type="button" className="wf-icon-button wf-save-button" aria-label="Save" title="Save Activity Definition" onClick={saveNow} disabled={!documentEditable || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
+          {draft.draftId && draftIsActive ? <ActivityDefinitionPublicationReview
             context={context}
             definitionId={draft.definitionId}
             draftId={draft.draftId}
@@ -990,62 +1047,75 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           /> : null}
-          <StudioButton size="sm" ref={testRunTriggerRef} type="button" onClick={event => {
+          {workspaceContribution && draftIsActive ? workspaceContribution.testHost ? <StudioButton size="sm" ref={testRunTriggerRef} type="button" className="wf-run-button" title="Test the exact saved agent revision" onClick={event => {
+            event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => { disclosure.open = false; });
+            void openWorkspaceTestHost();
+          }} disabled={dependentActionsBlocked || !draft.draftId}><Play size={16} aria-hidden="true" /> Test Run</StudioButton> : null : <StudioButton size="sm" ref={testRunTriggerRef} type="button" className="wf-run-button" onClick={event => {
             event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => {
               disclosure.open = false;
             });
-            setTestRunOpen(true);
-          }} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</StudioButton>
-          <StudioButton variant="primary" onClick={saveNow} disabled={!documentEditable || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</StudioButton>
-          {onManage ? <details className="ad-authoring-history" onKeyDown={event => {
+            void openTestRun();
+          }} disabled={testRunActionsBlocked || checkingPublishedTestRunAvailability} title={initialVersion && !draft.draftId ? `Test published version ${initialVersion.version}` : "Test the exact saved draft revision"}><Play size={16} aria-hidden="true" /> Test Run</StudioButton>}
+          <details className="ad-authoring-more-actions" onKeyDown={event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
             event.currentTarget.open = false;
-            event.currentTarget.querySelector("summary")?.focus();
+            event.currentTarget.querySelector<HTMLElement>(":scope > summary")?.focus();
           }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }}>
-            <summary>History</summary>
-            <div className="ad-authoring-history-panel">
-              {([["drafts", "Drafts"], ["versions", "Versions"], ["relationships", "Used by"], ["overview", "Details"]] as const).map(([section, label]) => <button key={section} type="button" disabled={revisionSensitiveActionsBlocked} onClick={event => {
-                const disclosure = event.currentTarget.closest("details");
-                if (disclosure) { disclosure.open = false; disclosure.querySelector("summary")?.focus(); }
-                onManage(section);
-              }}>{label}</button>)}
-            </div>
-          </details> : null}
-          <details className="ad-authoring-advanced">
-            <summary>Advanced</summary>
-            <div className="ad-authoring-advanced-panel">
-              <dl className="ad-authoring-identity">
-                {draft.draftId ? <div><dt>Draft ID</dt><dd><code>{draft.draftId}</code></dd></div> : <div><dt>Version ID</dt><dd><code>{initialVersion?.versionId}</code></dd></div>}
-                <div><dt>Definition ID</dt><dd><code>{draft.definitionId}</code></dd></div>
-                <div><dt>Provider</dt><dd><code>{draft.provider.providerKey}</code></dd></div>
-                <div><dt>Provider schema</dt><dd>{draft.provider.schemaVersion}</dd></div>
-                {draft.draftId ? <div><dt>Saved revision</dt><dd>{draft.revision}</dd></div> : <div><dt>Version</dt><dd>{initialVersion?.version}</dd></div>}
-              </dl>
-              <StudioField className="ad-draft-label" label={<><span>Draft label </span></>}><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={readOnly || !draftIsActive || publicationPending || status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small><small>Optional · need not be unique</small></StudioField>
-              {advancedSaveStatus}
-              <div className="ad-authoring-advanced-actions">
-                <button type="button" onClick={async event => { setActiveView("code"); event.currentTarget.closest("details")?.removeAttribute("open"); await waitForAuthoringView(); document.getElementById(tabElementIds(authoringTabsId, authoringViewTabIndices.code).tabId)?.focus(); }} disabled={!contractLocallyValid}>Edit code</button>
-                <button type="button" onClick={() => setMigrationOpen(true)} disabled={readOnly || !draftIsActive || revisionSensitiveActionsBlocked}>Migrate provider</button>
-                <button type="button" onClick={() => void validateSavedRevision()} disabled={dependentActionsBlocked}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button>
-              </div>
+            <summary ref={element => { moreActionsTriggerRef.current = element; }} role="button" aria-label="More activity actions" title="More activity actions"><MoreHorizontal size={18} aria-hidden="true" /></summary>
+            <div className="ad-authoring-more-actions-panel">
+              {onManage ? <details className="ad-authoring-history" onKeyDown={event => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.currentTarget.open = false;
+                event.currentTarget.querySelector("summary")?.focus();
+              }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }}>
+                <summary>History</summary>
+                <div className="ad-authoring-history-panel">
+                  {([["drafts", "Drafts"], ["versions", "Versions"], ["relationships", "Used by"], ["overview", "Details"]] as const).filter(([section]) => !workspaceContribution || section === "versions").map(([section, label]) => <button key={section} type="button" disabled={revisionSensitiveActionsBlocked} onClick={event => {
+                    const disclosure = event.currentTarget.closest("details");
+                    if (disclosure) { disclosure.open = false; disclosure.querySelector("summary")?.focus(); }
+                    onManage(section);
+                  }}>{label}</button>)}
+                </div>
+              </details> : null}
+              <details className="ad-authoring-advanced">
+                <summary>Advanced</summary>
+                <div className="ad-authoring-advanced-panel">
+                  <dl className="ad-authoring-identity">
+                    {draft.draftId ? <div><dt>Draft ID</dt><dd><code>{draft.draftId}</code></dd></div> : <div><dt>Version ID</dt><dd><code>{initialVersion?.versionId}</code></dd></div>}
+                    <div><dt>Definition ID</dt><dd><code>{draft.definitionId}</code></dd></div>
+                    <div><dt>Provider</dt><dd><code>{draft.provider.providerKey}</code></dd></div>
+                    <div><dt>Provider schema</dt><dd>{draft.provider.schemaVersion}</dd></div>
+                    {draft.draftId ? <div><dt>Saved revision</dt><dd>{draft.revision}</dd></div> : <div><dt>Version</dt><dd>{initialVersion?.version}</dd></div>}
+                  </dl>
+                  <StudioField className="ad-draft-label" label={<><span>Draft label </span></>}><input value={draft.presentationLabel ?? ""} maxLength={200} disabled={readOnly || !draftIsActive || publicationPending || status === "conflict"} placeholder={generatedDraftLabel(draft)} onChange={event => scheduleSave({ ...currentRef.current, presentationLabel: event.target.value || null })} /><small>The generated fallback is derived from the stable draft identity.</small><small>Optional · need not be unique</small></StudioField>
+                  {advancedSaveStatus}
+                  <div className="ad-authoring-advanced-actions">
+                    <button type="button" onClick={async event => { setActiveView("code"); event.currentTarget.closest("details")?.removeAttribute("open"); await waitForAuthoringView(); document.getElementById(tabElementIds(authoringTabsId, authoringViewTabIndices.code).tabId)?.focus(); }} disabled={!contractLocallyValid}>Edit code</button>
+                    <button type="button" onClick={() => setMigrationOpen(true)} disabled={readOnly || !draftIsActive || revisionSensitiveActionsBlocked}>Migrate provider</button>
+                    <button type="button" onClick={() => void validateSavedRevision()} disabled={dependentActionsBlocked}><CheckCircle2 size={16} /> {validating ? "Saving & validating…" : "Validate saved revision"}</button>
+                  </div>
+                </div>
+              </details>
             </div>
           </details>
         </div>}
       />
     </div>
     {visibleSaveStatus}
-    {!draftIsActive && !canStartEditing && status === "saved" ? <section className="ad-save-state is-published" role="status"><strong>{initialVersion ? `Version ${initialVersion.version} is read-only.` : `Published revision ${draft.revision} is read-only.`}</strong><span>{onManage ? "Open History to review versions and details." : "Use Activity Definition to review immutable versions or create another draft."}</span></section> : null}
     {shouldPortalAuthoringTabs && authoringTabsHost ? createPortal(authoringViewTablist, authoringTabsHost) : authoringViewTablist}
     {testRunOpen && !readOnly ? <Suspense fallback={<div className="ad-inline-status" role="status">Loading the Activity Definition Test Run workbench…</div>}><ActivityDefinitionTestRunDialog
       context={context}
       draft={draft}
+      sourceVersion={!draft.draftId ? initialVersion : null}
+      publishedRunAvailability={publishedTestRunAvailability}
       definitionLabel={definitionLabel}
       inputEditors={inputEditors}
       expressionEditors={expressionEditors}
       prepareExactRevision={prepareExactTestRunRevision}
       onFocusDiagnostic={focusDiagnostic}
-      onClose={() => setTestRunOpen(false)}
+      onClose={() => { setTestRunOpen(false); setPublishedTestRunAvailability(null); }}
       restoreFocus={() => testRunTriggerRef.current?.focus()}
       onOpenRun={onOpenStudioPath}
     /></Suspense> : null}
@@ -1062,19 +1132,29 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     >
     {!hasPayload ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation payload unavailable</>} description={<>The exact provider payload was not disclosed. Studio preserves the server draft and does not invent provider state.</>} actions={<></>} /> : !contribution || !Editor ? <StudioResultState tone="danger" headingLevel={2} icon={<AlertTriangle size={22} aria-hidden />} title={<>Implementation editor unavailable</>} description={<>No exact Studio contribution is available for <code>{draft.provider.providerKey}</code> schema {draft.provider.schemaVersion}. The server draft is preserved and no fallback editor is invoked.</>} actions={<></>} /> : <section ref={providerEditorRef} className="ad-implementation-shell" aria-label="Provider implementation editor"><NativeBlockAuthorityProvider value={{
       sourceKey: JSON.stringify([draft, blockAuthoringAllowed, providerReadOnly, proposalApplying, publicationPending]),
-      canEdit: Boolean(draft.draftId) && blockAuthoringAllowed && !providerReadOnly,
-      ...(canStartEditing && !providerReadOnly ? { startEditing: () => { void startDraft(); }, startingEditing: starting } : {}),
-      canApply: () => Boolean(currentRef.current.draftId) && blockAuthoringAllowed && !providerReadOnly && !publicationPendingRef.current && isActiveDraft(currentRef.current.status) && JSON.stringify(currentRef.current) === JSON.stringify(draft),
+      canEdit: Boolean(draft.draftId) || canStartEditing ? blockAuthoringAllowed && !providerReadOnly : false,
+      canApply: () => {
+        const current = currentRef.current;
+        const editable = current.draftId ? isActiveDraft(current.status) : Boolean(sourceVersionRef.current && startAllowedRef.current);
+        return editable && blockAuthoringAllowed && !providerReadOnly && !publicationPendingRef.current && JSON.stringify(current) === JSON.stringify(draft);
+      },
       async validate(candidate) {
         const source = currentRef.current;
         const signature = JSON.stringify(source);
-        if (!blockAuthoringAllowed || providerReadOnly || proposalApplying || publicationPendingRef.current || !isActiveDraft(source.status)) return { state: "denied", messages: [] };
-        const result = await validateActivityDefinitionCandidate(context, source.draftId, {
-          expectedRevision: revisionRef.current, contract: source.contract,
+        const sourceVersion = sourceVersionRef.current;
+        const unstartedVersion = !source.draftId && Boolean(sourceVersion && startAllowedRef.current);
+        if (!blockAuthoringAllowed || providerReadOnly || proposalApplying || publicationPendingRef.current || (!isActiveDraft(source.status) && !unstartedVersion)) return { state: "denied", messages: [] };
+        const candidateRequest = {
+          contract: source.contract,
           provider: { providerKey: source.provider.providerKey, schemaVersion: source.provider.schemaVersion, payload: candidate.payload },
           layout: candidate.layout, activityPresentation: candidate.activityPresentation ?? []
-        });
-        if (signature !== JSON.stringify(currentRef.current) || !isActiveDraft(currentRef.current.status)) return { state: "stale", messages: [] };
+        };
+        const result = source.draftId
+          ? await validateActivityDefinitionCandidate(context, source.draftId, { ...candidateRequest, expectedRevision: revisionRef.current })
+          : sourceVersion
+            ? await validateActivityDefinitionVersionCandidate(context, sourceVersion.versionId, candidateRequest)
+            : { state: "denied", validation: null };
+        if (signature !== JSON.stringify(currentRef.current) || (unstartedVersion && sourceVersionRef.current?.versionId !== sourceVersion?.versionId)) return { state: "stale", messages: [] };
         return { state: result.state, messages: result.validation?.diagnostics.map(item => `${item.code}: ${item.message}`) ?? [] };
       }
     }}><WorkflowCanvasToolsHostContext.Provider value={graphWorkbenchActive ? canvasToolsHost : null}><ActivityDefinitionAuthoringTabsHostContext.Provider value={authoringTabsHostContext}><ProviderEditorBoundary key={`${historyIdentity}:${draft.provider.providerKey}:${draft.provider.schemaVersion}`} label="Implementation editor" onFailure={() => setProviderEditorFailed(true)}><Suspense fallback={<div className="ad-inline-status" role="status">Loading the exact provider editor…</div>}><Editor context={context} definitionId={draft.definitionId} draftId={draft.draftId} revision={draft.revision} providerKey={draft.provider.providerKey} providerSchemaVersion={draft.provider.schemaVersion} manifestFingerprint={draft.provider.manifestFingerprint} contract={draft.contract} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} historyResetKey={historyResetKey} value={{ payload: draft.provider.payload, layout: draft.layout, activityPresentation: draft.activityPresentation ?? [] }} readOnly={providerReadOnly} onChange={updateImplementation} /></Suspense></ProviderEditorBoundary></ActivityDefinitionAuthoringTabsHostContext.Provider></WorkflowCanvasToolsHostContext.Provider></NativeBlockAuthorityProvider></section>}
@@ -1098,6 +1178,18 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     />
     {revisionSensitiveActionsBlocked && contractLocallyValid && (status === "failed" || status === "offline" || status === "conflict" || codeBufferState.dirty) ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><StudioButton variant="danger" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</StudioButton></div> : null}
     {migrationOpen && !readOnly ? <ActivityDefinitionProviderMigrationDialog context={context} draft={draft} activityEditors={activityEditors} onClose={() => setMigrationOpen(false)} onCreated={created => { setMigrationOpen(false); onOpenDraft(created.definitionId, created.draftId); }} /> : null}
+    </div>
+    {hasWorkspaceTestHost && workspaceContribution?.testHost ? <aside id="agent-workspace-test-panel" className="ad-workspace-test-host" role="tabpanel" aria-label={workspaceContribution.testHost.label}>
+      {workspaceContribution.testHost.render({
+        context,
+        draftId: draft.draftId,
+        expectedRevision: workspaceTestHostRevision!,
+        currentRevision: draft.revision,
+        canRun: workspaceTestHostRevision === draft.revision && !dependentActionsBlocked && !readOnly,
+        onClose: () => { setWorkspaceTestHostRevision(null); setWorkspaceTestHostPanel("editor"); }
+      })}
+    </aside> : null}
+    </div>
   </main>;
 }
 
@@ -1136,6 +1228,15 @@ function publishedEditorDocument(version: ActivityDefinitionVersionView): Activi
     createdAt: version.publishedAt,
     updatedAt: version.publishedAt
   };
+}
+
+function mergeActivityDefinitionLayout(
+  source: ActivityDefinitionDraftView["layout"],
+  edited: ActivityDefinitionDraftView["layout"]
+): ActivityDefinitionDraftView["layout"] {
+  const records = new Map(source.map(record => [record.nodeId, record]));
+  for (const record of edited) records.set(record.nodeId, record);
+  return [...records.values()];
 }
 
 function editableSignature(draft: ActivityDefinitionDraftView) {
@@ -1231,15 +1332,18 @@ function focusContractDiagnostic(
   }
   const field = contractFieldAtPointer(jsonPointer)
     ?? (member && referenceKey && /^\/contract\/(?:inputs|outputs|outcomes)$/.test(jsonPointer ?? "") ? "referenceKey" : null);
+  const memberContexts = member ? [...editor.querySelectorAll<HTMLElement>("[data-contract-kind][data-contract-index][data-contract-reference-key]")]
+    .filter(element => element.dataset.contractKind === member.dataset.contractKind && element.dataset.contractIndex === member.dataset.contractIndex && element.dataset.contractReferenceKey === member.dataset.contractReferenceKey) : [];
   const exact = member && field
-    ? [...member.querySelectorAll<HTMLElement>("[data-contract-field]")]
+    ? memberContexts.flatMap(context => [context, ...context.querySelectorAll<HTMLElement>("[data-contract-field]")])
       .find(element => element.dataset.contractField === field)
     : null;
-  const target = exact ?? member ?? editor.querySelector<HTMLElement>("[data-contract-schema]");
+  const memberDetails = memberContexts.find(context => context.matches("section.ad-contract-workbench-member"));
+  const target = exact ?? memberDetails ?? member ?? editor.querySelector<HTMLElement>("[data-contract-schema]");
   if (!target) return unsupportedDiagnosticFocus();
   const memberPanel = target.closest<HTMLElement>(".ad-member-settings > [role='tabpanel']");
   if (memberPanel?.hidden && member) {
-    const tab = [...member.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(button => button.getAttribute("aria-controls") === memberPanel.id);
+    const tab = [...target.closest<HTMLElement>(".ad-member-settings")?.querySelectorAll<HTMLButtonElement>("[role='tab']") ?? []].find(button => button.getAttribute("aria-controls") === memberPanel.id);
     flushSync(() => tab?.click());
   }
   const fold = target.closest(".studio-disclosure-fold") ?? target.querySelector(".studio-disclosure-fold");

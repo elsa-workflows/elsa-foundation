@@ -44,6 +44,8 @@ public sealed record UpdateReusableActivityDefinition(
 
 public sealed record ArchiveReusableActivityDefinition([property: JsonIgnore] string DefinitionId) : ICommand;
 
+public sealed record RestoreReusableActivityDefinition([property: JsonIgnore] string DefinitionId) : ICommand;
+
 public sealed record CreateReusableActivityDraft(
     [property: JsonIgnore] string DefinitionId,
     string? SourceVersionId,
@@ -178,7 +180,8 @@ public sealed record ListReusableActivityDefinitions(
     string? Search = null,
     string? Authority = null,
     string? ProviderKey = null,
-    string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityDefinitionManagementView>>;
+    string Sort = "identity-asc",
+    bool ArchivedOnly = false) : IRequest<ActivityManagementPageView<ReusableActivityDefinitionManagementView>>;
 
 public sealed record GetReusableActivityDefinition(string DefinitionId) : IRequest<ReusableActivityDefinitionManagementView>;
 
@@ -208,6 +211,16 @@ public sealed record GetReusableActivityVersion(string VersionId) : IRequest<Reu
 public sealed record ValidateReusableActivityCandidate(
     [property: JsonIgnore] string DraftId,
     long ExpectedRevision,
+    ActivityContractView Contract,
+    ActivityProviderManifest Provider,
+    IReadOnlyList<ActivityLayoutRecord> Layout)
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}
+
+/// <summary>Validates an unsaved proposal against the exact published version without writing a draft.</summary>
+public sealed record ValidateReusableActivityVersionCandidate(
+    [property: JsonIgnore] string VersionId,
     ActivityContractView Contract,
     ActivityProviderManifest Provider,
     IReadOnlyList<ActivityLayoutRecord> Layout)

@@ -27,7 +27,9 @@ public sealed class PublishingApiContractCompatibilityTests
         // GetPublicationRecord, the request for the Publishing-owned read of one journal record, and #1659 added
         // PublicationSlotOwnerView, the nullable targetSlotOwner both workflow preflight views now carry.
         // #2862 adds module-neutral Test Drive discovery, selection, status, stop and wait delivery contracts.
-        Assert.Equal(79, ContractTypes.Length);
+        // Reviewed publication-slot unpublish adds a path-bound command contract with a mandatory slot revision.
+        // Published activity-version Test Runs add the version start request and its path-bound idempotency lookup.
+        Assert.Equal(82, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -64,19 +66,24 @@ public sealed class PublishingApiContractCompatibilityTests
         // #2862 adds optional start selection/action fields and twelve Test Drive wire contracts.
         // Draft Test Runs add optional Layout coordinates to the unshipped request constructor; executable behavior stays unchanged.
         // #1407 adds the nullable Descriptor init property to trigger conflicts, preserving the positional contract.
+        // Published activity-version Test Runs add only the nullable SourceVersionId init property to ActivityDraftTestRunView
+        // on the legacy surface; the version start and idempotency-lookup requests join the complete surface only.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
                                                        type != typeof(ExpressionPublicationValidationProblemDetails) &&
-                                                       type != typeof(RuntimePreflightProblemDetails)).ToArray();
+                                                       type != typeof(RuntimePreflightProblemDetails) &&
+                                                       type != typeof(UnpublishPublicationSlotAtRevisionRequest) &&
+                                                       type != typeof(StartActivityVersionTestRun) &&
+                                                       type != typeof(GetActivityVersionTestRunByIdempotencyKey)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            legacyHash == "f150e2f01767f0fc6f3eb30de9fcd169517a6268dbe83648bea18bb899df3e6b",
+            legacyHash == "0d4281529fdec4fa791bdc3d9b2d9ce0a8586574028d4059c5f0f706551bc064",
             $"The Publishing API legacy public-shape hash changed to {legacyHash}; complete surface {actualHash}.");
         Assert.True(
             // #3922 adds only null-omitted AuthoredPath to the modern located diagnostic; legacy surface above is unchanged.
-            actualHash == "637bc06baf5a03d0955b94a5746abc80267bf6cf4c1a3ca0784cbc353e91f117",
+            actualHash == "4fc3edafa3dbb52f9eaf9262a15878009f3dec9e4a08ecfa25ee84dfa8dfb961",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

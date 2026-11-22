@@ -43,7 +43,8 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await expect(page.getByRole("button", { name: "Select Text field 1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+  await page.getByRole("button", { name: "Form actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Discard draft", exact: true }).click();
   await expect(name).toHaveValue("Contact version two");
   await expect(page.getByRole("button", { name: "Select Text field 1", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();

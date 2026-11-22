@@ -13,6 +13,12 @@ public sealed record StartActivityDraftTestRun(
     IReadOnlyDictionary<string, ActivityDraftTestRunInput>? Inputs = null,
     string? CorrelationId = null) : IRequest<ActivityDraftTestRunView>;
 
+public sealed record StartActivityVersionTestRun(
+    [property: JsonIgnore] string VersionId,
+    string IdempotencyKey,
+    IReadOnlyDictionary<string, ActivityDraftTestRunInput>? Inputs = null,
+    string? CorrelationId = null) : IRequest<ActivityDraftTestRunView>;
+
 public sealed record ActivityDraftTestRunView(
     string TestRunId,
     string DraftId,
@@ -28,7 +34,10 @@ public sealed record ActivityDraftTestRunView(
     ActivityDraftTestRunExpirationView Expiration,
     ActivityDraftTestRunCancellationView Cancellation,
     DateTimeOffset RequestedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public string? SourceVersionId { get; init; }
+}
 
 public sealed record ActivityDraftTestRunFailureView(
     string Kind,
@@ -58,6 +67,10 @@ public sealed record GetActivityDraftTestRun(
 
 public sealed record GetActivityDraftTestRunByIdempotencyKey(
     [property: JsonIgnore] string DraftId,
+    [property: JsonIgnore] string IdempotencyKey) : IRequest<ActivityDraftTestRunView>;
+
+public sealed record GetActivityVersionTestRunByIdempotencyKey(
+    [property: JsonIgnore] string VersionId,
     [property: JsonIgnore] string IdempotencyKey) : IRequest<ActivityDraftTestRunView>;
 
 public sealed record CancelActivityDraftTestRun(
