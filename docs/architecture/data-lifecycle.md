@@ -151,6 +151,13 @@ Release 1 uses option a ([write volume](write-volume.md), decision 1a). Option b
 | Erasure lag | None beyond the delete | Until the sweeper runs |
 | Costs | One row write per value, in the fenced batch, plus its own WAL and TOAST once per value; one more row delete per value at delete time | Witness: by reference costs more engine calls than inline (13 against 5 to the first value-bearing commit; 20 against 12 for a fresh owner's read), plus one object put and one read. At delete time: one read-model row per deleted instance, then object deletes |
 
+The in-memory store stages immutable value bytes beside their owning checkpoint. The fenced writer
+validates the exact creation and commits both together. Values with the same digest share one row
+within that creation. Qualified Delete erases its rows in the same commit, and caller-key reuse sees
+a new value namespace. `--foundation-value-check` exercises stale fences, immutable reads, missing
+checkpoints, lost answers and deletion. Provider persistence is K4. The model-facing API and PostgreSQL
+WAL acceptance retain their release 1 milestones.
+
 ### Proposed: archiving, after release 1
 
 An archive is written before the instance's delete and must not read the store directly, so layer 3 stays off positions:

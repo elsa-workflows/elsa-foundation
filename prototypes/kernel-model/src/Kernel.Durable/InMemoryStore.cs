@@ -232,7 +232,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear,
-            supportsFoundationParkResolution: true);
+            supportsFoundationParkResolution: true, supportsFoundationValues: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -312,6 +312,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     var thenDelete = IsThenDeleteRetirement(turn, previous, now);
                     CreationProtocol.Validate(turn, previous, thenDelete);
+                    ValidateFoundationValues(turn);
                     if ((PrepareCascade(turn, previous, epochs, earlier, competing, thenDelete) ??
                         PrepareTerminalJobDeadlines(turn, previous, epochs, batch)) is { } cascade)
                     {
@@ -470,6 +471,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
                     var expiry = initialExpiries?.GetValueOrDefault(turn.Instance);
                     RecordFoundationMetadata(turn, stored, previous, now, expiry);
+                    ApplyFoundationValues(turn);
                     if (previous?.ParkRecovery is not null && stored.ParkRecovery is null &&
                         stored.Status == InstanceStatus.Faulted && turn.FoundationKept is { Count: > 0 })
                         RevertFoundationRetryMarks(stored);
@@ -482,6 +484,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 if (turn.Delete)
                 {
+                    var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
+                    _foundationValues.Remove(new(turn.Instance, creation));
                     if (turn.Row is not { Retired: true } && Instances.Remove(turn.Instance, out var removed) && _referenceBirths.Count > 0)
                         RemoveFoundationMetadata(new(removed.Id, removed.Creation));
                     foreach (var key in Journal.Where(j => j.Value.Instance == turn.Instance && j.Value.Revision > 0 && !Has(Flaw.DeleteLeavesJournal)).Select(j => j.Key).ToList())
