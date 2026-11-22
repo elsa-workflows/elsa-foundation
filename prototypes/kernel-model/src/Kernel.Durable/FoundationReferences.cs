@@ -292,9 +292,10 @@ public sealed partial class InMemoryStore
         {
             var continuingPark = row.Status == InstanceStatus.Faulted && row.ParkRecovery is null && !row.ParkDiscarded
                 ? _foundationParks.GetValueOrDefault(address) : null;
-            var mark = continuingPark is null ? new FoundationTerminalMark(row.Revision, now)
-                : new(continuingPark.Revision, continuingPark.At);
-            _foundationEnds.TryAdd(address, mark);
+            if (continuingPark is not null)
+                _foundationEnds.TryAdd(address, new(continuingPark.Revision, continuingPark.At));
+            else if (previous is null or { Retired: true } or { Status: InstanceStatus.Running })
+                _foundationEnds.TryAdd(address, new(row.Revision, now));
         }
         if (previous?.ParkRecovery is not null && row.ParkRecovery is null && turn.FoundationKept is null)
         {

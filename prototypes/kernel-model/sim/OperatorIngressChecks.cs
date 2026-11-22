@@ -129,6 +129,21 @@ internal static class OperatorIngressChecks
         check(saved.Landed && after.Row.Revision == row.Revision + 1 && after.Terminal == mark &&
             store.MatchesFoundationSelection(scope.Tenant, actor.Id, selection),
             "a later fenced bookkeeping commit keeps the original terminal mark and its selection");
+
+        var legacy = (await edge.SendAsync(scope, new Contract.Target.Start(new("operator-probe", "legacy")),
+            "legacy", Contract.Kinds.Start)).Actor!.Value;
+        await Pump(owner);
+        // Seed the old persisted shape. It has creation identity and final status, with no terminal transition stamp.
+        var legacyRow = store.ReadFoundationActor(scope.Tenant, legacy.Id).Actor!.Row with { Status = InstanceStatus.Finished };
+        store.Instances[legacyRow.Id] = legacyRow;
+        var legacyFence = worker.Fences.Single();
+        var legacyUpdate = new TurnCommit(legacyRow.Id, legacyRow with { Revision = legacyRow.Revision + 1 },
+            legacyRow.Revision, [], [], [], [], [], null);
+        var legacySaved = await store.CommitAsync(new(0, legacyFence.Epoch, legacyFence.Position, Defaults.Lease, false, [legacyUpdate], [], []));
+        var legacyRead = await reads.GetAsync(scope, legacy);
+        check(legacySaved.Landed && legacyRead is { Selection: null, Header.EndedAt: null } &&
+            store.ReadFoundationActor(scope.Tenant, legacy.Id).Actor!.Terminal is null,
+            "bookkeeping cannot manufacture a terminal mark or a qualified selection for a legacy ended row");
     }
 
     public static async Task Fallback(Action<bool, string> check)
