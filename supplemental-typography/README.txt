@@ -1,0 +1,1 @@
+Four supplemental component-fixture captures at320px and1440px. They verify public typography roles and an independent focus/selection palette on actual Studio components. They are not part of the354 composed runtime PNG/ARIA pairs. See source.json for exact source and unchanged image hashes.

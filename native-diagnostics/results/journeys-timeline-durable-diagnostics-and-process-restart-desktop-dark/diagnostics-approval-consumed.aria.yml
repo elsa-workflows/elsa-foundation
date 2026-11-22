@@ -1,0 +1,372 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:54230
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Timeline approval restart desktop-dark ebdcea0a
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light"
+    - radio "Dark" [checked]
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Studio"
+  - tab "Workflow run · 01a20253…": Workflow run 01a20253…
+  - tab "Restart approval desktop-dark fc438ae5 · User task": Restart approval desktop-dark fc438ae5 User task
+  - tab "Run · Timeline approval restart desktop-dark ebdcea0a · Execution" [selected]: Run · Timeline approval restart desktop-dark ebdcea0a Execution
+- button "New tab"
+- button "All tabs (5)"
+- main:
+  - tabpanel "Run · Timeline approval restart desktop-dark ebdcea0a · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Timeline approval restart desktop-dark ebdcea0a" [level=2]
+      - text: Completed
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 3 · CreateUserTask
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - heading "Timeline approval restart desktop-dark ebdcea0a" [level=2]
+    - text: Completed
+    - paragraph: Elapsed 12s. Elapsed includes waiting. Active execution time is not recorded.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 32 shown · 62 loaded · 62 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "09:15:59 Run started Running Recorded position 1":
+            - time: 09:15:59
+            - strong: Run started
+            - text: "Running #1"
+        - listitem:
+          - button "09:16:00 Activity started Flowchart Running Recorded position 3":
+            - time: 09:16:00
+            - strong: Activity started
+            - text: "Flowchart Running #3"
+        - listitem:
+          - button "09:16:00 Activity callback started Flowchart Recorded position 5":
+            - time: 09:16:00
+            - strong: Activity callback started
+            - text: "Flowchart #5"
+        - listitem:
+          - button "09:16:00 Activity callback returned a result Flowchart Defer Recorded position 6":
+            - time: 09:16:00
+            - strong: Activity callback returned a result
+            - text: "Flowchart Defer #6"
+        - listitem:
+          - button "09:16:00 Continuation waiting Flowchart Recorded position 7":
+            - time: 09:16:00
+            - strong: Continuation waiting
+            - text: "Flowchart #7"
+        - listitem:
+          - button "09:16:00 Activity started CreateUserTask Running Recorded position 9":
+            - time: 09:16:00
+            - strong: Activity started
+            - text: "CreateUserTask Running #9"
+        - listitem:
+          - button "09:16:00 Activity callback started CreateUserTask Recorded position 20":
+            - time: 09:16:00
+            - strong: Activity callback started
+            - text: "CreateUserTask #20"
+        - listitem:
+          - button "09:16:00 Activity callback returned a result CreateUserTask Suspend Recorded position 21":
+            - time: 09:16:00
+            - strong: Activity callback returned a result
+            - text: "CreateUserTask Suspend #21"
+        - listitem:
+          - button "09:16:00 Continuation waiting CreateUserTask Recorded position 22":
+            - time: 09:16:00
+            - strong: Continuation waiting
+            - text: "CreateUserTask #22"
+        - listitem:
+          - button "09:16:00 Activity waiting CreateUserTask Suspended Recorded position 23":
+            - time: 09:16:00
+            - strong: Activity waiting
+            - text: "CreateUserTask Suspended #23"
+        - listitem:
+          - button "09:16:00 Bookmark created CreateUserTask Recorded position 24":
+            - time: 09:16:00
+            - strong: Bookmark created
+            - text: "CreateUserTask #24"
+        - listitem:
+          - button "09:16:10 Delivery received CreateUserTask Recorded delivery observation Recorded position 25":
+            - time: 09:16:10
+            - strong: Delivery received
+            - text: "CreateUserTask Recorded delivery observation #25"
+        - listitem:
+          - button "09:16:10 Activity resumption claimed CreateUserTask Running Recorded position 26":
+            - time: 09:16:10
+            - strong: Activity resumption claimed
+            - text: "CreateUserTask Running #26"
+        - listitem:
+          - button "09:16:10 Bookmark consumed CreateUserTask Handle lifetime 10s Recorded position 27":
+            - time: 09:16:10
+            - strong: Bookmark consumed
+            - text: "CreateUserTask Handle lifetime 10s #27"
+        - listitem:
+          - button "09:16:10 Activity callback started CreateUserTask Recorded position 37":
+            - time: 09:16:10
+            - strong: Activity callback started
+            - text: "CreateUserTask #37"
+        - listitem:
+          - button "09:16:10 Activity callback returned a result CreateUserTask Complete Recorded position 38":
+            - time: 09:16:10
+            - strong: Activity callback returned a result
+            - text: "CreateUserTask Complete #38"
+        - listitem:
+          - button "09:16:10 Continuation completed CreateUserTask Recorded position 42":
+            - time: 09:16:10
+            - strong: Continuation completed
+            - text: "CreateUserTask #42"
+        - listitem:
+          - button "09:16:10 Activity completed CreateUserTask Completed Recorded position 43":
+            - time: 09:16:10
+            - strong: Activity completed
+            - text: "CreateUserTask Completed #43"
+        - listitem:
+          - button "09:16:10 Activity callback started Flowchart Recorded position 45":
+            - time: 09:16:10
+            - strong: Activity callback started
+            - text: "Flowchart #45"
+        - listitem:
+          - button "09:16:10 Activity callback returned a result Flowchart Defer Recorded position 46":
+            - time: 09:16:10
+            - strong: Activity callback returned a result
+            - text: "Flowchart Defer #46"
+        - listitem:
+          - button "09:16:10 Continuation waiting Flowchart Recorded position 47":
+            - time: 09:16:10
+            - strong: Continuation waiting
+            - text: "Flowchart #47"
+        - listitem:
+          - button "09:16:11 Activity started Write Line Running Recorded position 49":
+            - time: 09:16:11
+            - strong: Activity started
+            - text: "Write Line Running #49"
+        - listitem:
+          - button "09:16:11 Activity callback started Write Line Recorded position 52":
+            - time: 09:16:11
+            - strong: Activity callback started
+            - text: "Write Line #52"
+        - listitem:
+          - button "09:16:11 Activity callback returned a result Write Line Complete Recorded position 53":
+            - time: 09:16:11
+            - strong: Activity callback returned a result
+            - text: "Write Line Complete #53"
+        - listitem:
+          - button "09:16:11 Continuation completed Write Line Recorded position 54":
+            - time: 09:16:11
+            - strong: Continuation completed
+            - text: "Write Line #54"
+        - listitem:
+          - button "09:16:11 Activity completed Write Line Completed Recorded position 55":
+            - time: 09:16:11
+            - strong: Activity completed
+            - text: "Write Line Completed #55"
+        - listitem:
+          - button "09:16:11 Activity callback started Flowchart Recorded position 57":
+            - time: 09:16:11
+            - strong: Activity callback started
+            - text: "Flowchart #57"
+        - listitem:
+          - button "09:16:11 Activity callback returned a result Flowchart Complete Recorded position 58":
+            - time: 09:16:11
+            - strong: Activity callback returned a result
+            - text: "Flowchart Complete #58"
+        - listitem:
+          - button "09:16:11 Continuation completed Flowchart Recorded position 59":
+            - time: 09:16:11
+            - strong: Continuation completed
+            - text: "Flowchart #59"
+        - listitem:
+          - button "09:16:11 Activity completed Flowchart Completed Recorded position 60":
+            - time: 09:16:11
+            - strong: Activity completed
+            - text: "Flowchart Completed #60"
+        - listitem:
+          - button "09:16:11 Run completed Completed Recorded position 61":
+            - time: 09:16:11
+            - strong: Run completed
+            - text: "Completed #61"
+        - listitem:
+          - button "09:16:11 Delivery dispatched CreateUserTask Dispatched Recorded delivery observation Recorded position 62":
+            - time: 09:16:11
+            - strong: Delivery dispatched
+            - text: "CreateUserTask Dispatched Recorded delivery observation #62"
+    - separator "Resize run details panel"
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "Bookmark lifecycle":
+        - button "Back to activity inspection"
+        - button "Refresh bookmark observation"
+        - paragraph: Bookmark lifecycle
+        - heading "User Task" [level=3]
+        - paragraph: "Consumed · current eligibility: Not active"
+        - term: Created
+        - definition:
+          - text: Nov 22, 2026, 09:16:00 AM GMT+1
+          - button "Copy created":
+            - img
+          - status
+        - term: Ended
+        - definition:
+          - text: Nov 22, 2026, 09:16:10 AM GMT+1
+          - button "Copy ended":
+            - img
+          - status
+        - term: Recorded reason
+        - definition:
+          - text: selected-resume
+          - button "Copy recorded reason":
+            - img
+          - status
+        - term: Handle lifetime
+        - definition:
+          - text: 10s
+          - button "Copy handle lifetime":
+            - img
+          - status
+        - button "Inspect consumed event →"
+        - button "Inspect creation event →"
+        - button "Inspect last recorded transition →"
+        - group: Technical details
+        - text: Recorded bookmark events.
+        - list "Activity journal events":
+          - listitem:
+            - paragraph: Sun, Nov 22, 2026, GMT+1
+            - button "09:16:00 Bookmark created Execution 01a202538eb07fbeb91f1535dfce2877":
+              - time: 09:16:00
+              - strong: Bookmark created
+              - text: Execution 01a202538eb07fbeb91f1535dfce2877
+          - listitem:
+            - button "09:16:10 Delivery received Execution 01a202538eb07fbeb91f1535dfce2877 Recorded delivery observation":
+              - time: 09:16:10
+              - strong: Delivery received
+              - text: Execution 01a202538eb07fbeb91f1535dfce2877 Recorded delivery observation
+          - listitem:
+            - button "09:16:10 Bookmark consumed Execution 01a202538eb07fbeb91f1535dfce2877 Handle lifetime 10s":
+              - time: 09:16:10
+              - strong: Bookmark consumed
+              - text: Execution 01a202538eb07fbeb91f1535dfce2877 Handle lifetime 10s
+          - listitem:
+            - button "09:16:11 Delivery dispatched Execution 01a202538eb07fbeb91f1535dfce2877 Dispatched Recorded delivery observation":
+              - time: 09:16:11
+              - strong: Delivery dispatched
+              - text: Execution 01a202538eb07fbeb91f1535dfce2877 Dispatched Recorded delivery observation
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

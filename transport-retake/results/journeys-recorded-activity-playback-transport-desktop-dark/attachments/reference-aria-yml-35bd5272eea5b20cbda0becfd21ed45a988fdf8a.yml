@@ -1,0 +1,153 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - button "Collapse navigation" [expanded]:
+    - img
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+  - group "Environment and account":
+    - 'button "Select backend. Current: Default backend"':
+      - strong: Default backend
+      - text: localhost:58519
+    - 'button "Account: Administrator"': Administrator
+- banner:
+  - text: Studio / Definitions
+  - heading "Definitions" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - radiogroup "Colour mode":
+    - radio "Light"
+    - radio "Dark" [checked]
+    - radio "Dim"
+  - button "Select theme":
+    - img
+- tablist "Open screens":
+  - tab "Definitions" [selected]
+- button "New tab"
+- button "All tabs (1)"
+- main:
+  - tabpanel "Definitions":
+    - heading "Workflow definitions" [level=1]
+    - paragraph: Create and organize workflow definitions, then open a definition to edit its behavior.
+    - group "Workflow definition page actions":
+      - button "New workflow":
+        - img
+        - text: New workflow
+      - button "Refresh workflow definitions": Refresh
+      - 'button "Refresh workflow definitions: refresh interval"'
+    - complementary "Workflow folders":
+      - strong: Folders
+      - button "Create folder":
+        - img
+      - button "Collapse folders" [expanded]
+      - tree "Workflow folders":
+        - treeitem "All workflows" [selected]
+        - treeitem "Unfiled"
+      - button "Recycle bin"
+    - text: All workflows
+    - region "Workflow library organization":
+      - searchbox "Search all workflows"
+      - group "Filter and sort workflows":
+        - button "Favorites"
+        - button "Filters"
+        - text: Sort
+        - combobox "Sort workflows":
+          - option "Name A–Z" [selected]
+          - option "Name Z–A"
+          - option "Recently modified"
+      - group "Workflow views, folders, and tags":
+        - text: View
+        - combobox "Saved workflow view":
+          - option "Unsaved view" [selected]
+        - button "Save view"
+        - link "Manage views":
+          - /url: /workflows/views?backend=default
+        - button "Manage folders"
+        - link "Manage tags":
+          - /url: /workflows/tags?backend=default
+    - status:
+      - heading "No active workflow definitions in All workflows" [level=3]
+      - paragraph: Create a workflow to start designing automation, or adjust your filters to see more.
+      - button "New workflow":
+        - img
+        - text: New workflow
+    - text: Showing 0 of 0 matching workflows Rows
+    - combobox "Rows":
+      - option "10" [selected]
+      - option "25"
+      - option "50"
+    - button "Previous page" [disabled]:
+      - img
+      - text: Previous
+    - text: Page 1
+    - button "Next page" [disabled]:
+      - text: Next
+      - img
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert

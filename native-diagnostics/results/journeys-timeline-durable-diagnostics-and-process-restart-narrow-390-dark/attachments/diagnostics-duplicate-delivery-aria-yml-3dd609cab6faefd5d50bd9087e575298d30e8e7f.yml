@@ -1,0 +1,335 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /?backend=default
+    - strong: Elsa Studio
+    - text: Workflow studio
+  - searchbox "Search Studio"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard?backend=default
+  - navigation "Build":
+    - button "Build" [expanded]
+    - link "Workflows":
+      - /url: /workflows/definitions?backend=default
+    - link "Definitions":
+      - /url: /workflows/definitions?backend=default
+    - link "Executables":
+      - /url: /workflows/executables?backend=default
+    - link "Agents":
+      - /url: /agents?backend=default
+    - link "Decisions":
+      - /url: /decisions?backend=default
+    - link "Library":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Activity definitions":
+      - /url: /workflows/activity-definitions?backend=default
+    - link "Templates":
+      - /url: /workflows/templates?backend=default
+    - link "Activity upgrades":
+      - /url: /workflows/activity-definitions/upgrades?backend=default
+    - link "Import from Elsa 3":
+      - /url: /workflows/activity-definitions/import-elsa3?backend=default
+  - navigation "Operate":
+    - button "Operate" [expanded]
+    - link "Dashboards":
+      - /url: /dashboards?backend=default
+    - link "Questions":
+      - /url: /questions?backend=default
+    - link "Runs":
+      - /url: /workflows/instances?backend=default
+    - link "User tasks":
+      - /url: /user-tasks?backend=default
+    - link "Task forms":
+      - /url: /user-tasks/forms?backend=default
+    - link "Diagnostics":
+      - /url: /diagnostics?backend=default
+  - navigation "Integrations":
+    - button "Integrations" [expanded]
+    - link "Connections":
+      - /url: /security/connections?backend=default
+    - link "Secrets":
+      - /url: /security/secrets?backend=default
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings?backend=default
+- banner:
+  - navigation "Breadcrumb":
+    - list:
+      - listitem:
+        - link "Runs":
+          - /url: /workflows/instances?backend=default
+      - listitem: Run · Timeline duplicate narrow-390-dark 47e1501f
+  - heading "Runs" [level=1]
+  - button "Notifications, 0 unread"
+  - button "Weaver":
+    - img
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+    - img
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+    - img
+  - button "Select theme":
+    - img
+  - 'button "Account: Administrator"'
+- tablist "Open screens":
+  - tab "Definitions"
+  - tab "Studio"
+  - tab "Workflow run · 01a20256…": Workflow run
+  - tab "Task · 7a2715d7…": Task
+  - tab "Workflow run · 01a20256…": Workflow run
+  - tab "Run · Timeline approval restart narrow-390-dark 95af2bde · Execution": Run · Timeline approval restart narrow-390-dark 95af2bde
+  - tab "Run · Timeline passive expiry narrow-390-dark b276a943 · Execution": Run · Timeline passive expiry narrow-390-dark b276a943
+  - tab "Run · Timeline passive expiry narrow-390-dark b276a943 · Execution": Run · Timeline passive expiry narrow-390-dark b276a943
+  - tab "Run · Timeline duplicate narrow-390-dark 47e1501f · Execution" [selected]: Run · Timeline duplicate narrow-390-dark 47e1501f
+- button "New tab"
+- button "All tabs (9)"
+- main:
+  - tabpanel "Run · Timeline duplicate narrow-390-dark 47e1501f · Execution":
+    - group "Run workspace actions":
+      - heading "Run · Timeline duplicate narrow-390-dark 47e1501f" [level=2]
+      - text: Running
+      - button "Refresh execution": Refresh
+      - button "Open definition"
+      - button "More run actions"
+      - status
+    - navigation "Run workspace views":
+      - button "Timeline" [pressed]
+      - button "Diagram"
+    - region "Activity playback":
+      - strong: Activity playback
+      - text: Entire run Paused
+      - group "Playback controls":
+        - button "Previous"
+        - button "Play"
+        - button "Next"
+        - button "Refresh playback"
+      - status:
+        - strong: Step 2 of 3 · Event
+      - text: Activity position
+      - slider "Activity position": "1"
+      - group: Playback options
+    - heading "Timeline duplicate narrow-390-dark 47e1501f" [level=2]
+    - text: Running
+    - paragraph: Elapsed 1s at last observation. Elapsed includes waiting. Active execution time is not recorded.
+    - heading "Waiting at last observation" [level=3]
+    - list:
+      - listitem:
+        - button "Event Event · execution 01a20286badd7dbdba7820afd1f96aa6 Handle open for 1s":
+          - strong: Event
+          - text: Event · execution 01a20286badd7dbdba7820afd1f96aa6 Handle open for 1s
+    - paragraph: Waiting handles observed 11/22/2026, 10:11:54 AM · 2026-11-22T09:11:54.641094+00:00.
+    - region "Run timeline":
+      - heading "Timeline" [level=3]
+      - paragraph: Recorded order · Europe/Amsterdam
+      - button "Refresh run history"
+      - group: Filter events · Entire run · Highlights
+      - button "Pause live updates" [pressed]
+      - button "Follow latest"
+      - status: Live history
+      - status:
+        - paragraph: History available from run start.
+        - group: Recording coverage
+      - paragraph: 30 shown · 51 loaded · 51 snapshot records searched
+      - list "Run history events":
+        - listitem:
+          - paragraph: Sun, Nov 22, 2026, GMT+1
+          - button "10:11:53 Run started Running":
+            - time: 10:11:53
+            - strong: Run started
+            - text: Running
+        - listitem:
+          - button "10:11:53 Activity started Flowchart Running":
+            - time: 10:11:53
+            - strong: Activity started
+            - text: Flowchart Running
+        - listitem:
+          - button "10:11:53 Activity callback started Flowchart":
+            - time: 10:11:53
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "10:11:53 Activity callback returned a result Flowchart Defer":
+            - time: 10:11:53
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "10:11:53 Continuation waiting Flowchart":
+            - time: 10:11:53
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "10:11:53 Activity started Event Running":
+            - time: 10:11:53
+            - strong: Activity started
+            - text: Event Running
+        - listitem:
+          - button "10:11:53 Activity callback started Event":
+            - time: 10:11:53
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity callback returned a result Event Suspend":
+            - time: 10:11:53
+            - strong: Activity callback returned a result
+            - text: Event Suspend
+        - listitem:
+          - button "10:11:53 Continuation waiting Event":
+            - time: 10:11:53
+            - strong: Continuation waiting
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity waiting Event Suspended":
+            - time: 10:11:53
+            - strong: Activity waiting
+            - text: Event Suspended
+        - listitem:
+          - button "10:11:53 Bookmark created Event":
+            - time: 10:11:53
+            - strong: Bookmark created
+            - text: Event
+        - listitem:
+          - button "10:11:53 Delivery received Recorded delivery observation":
+            - time: 10:11:53
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "10:11:53 Delivery received Recorded delivery observation":
+            - time: 10:11:53
+            - strong: Delivery received
+            - text: Recorded delivery observation
+        - listitem:
+          - button "10:11:53 Activity resumption claimed Event Running":
+            - time: 10:11:53
+            - strong: Activity resumption claimed
+            - text: Event Running
+        - listitem:
+          - button "10:11:53 Bookmark consumed Event Handle lifetime 0s":
+            - time: 10:11:53
+            - strong: Bookmark consumed
+            - text: Event Handle lifetime 0s
+        - listitem:
+          - button "10:11:53 Activity callback started Event":
+            - time: 10:11:53
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity callback returned a result Event Complete":
+            - time: 10:11:53
+            - strong: Activity callback returned a result
+            - text: Event Complete
+        - listitem:
+          - button "10:11:53 Continuation completed Event":
+            - time: 10:11:53
+            - strong: Continuation completed
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity completed Event Completed":
+            - time: 10:11:53
+            - strong: Activity completed
+            - text: Event Completed
+        - listitem:
+          - button "10:11:53 Activity callback started Flowchart":
+            - time: 10:11:53
+            - strong: Activity callback started
+            - text: Flowchart
+        - listitem:
+          - button "10:11:53 Activity callback returned a result Flowchart Defer":
+            - time: 10:11:53
+            - strong: Activity callback returned a result
+            - text: Flowchart Defer
+        - listitem:
+          - button "10:11:53 Continuation waiting Flowchart":
+            - time: 10:11:53
+            - strong: Continuation waiting
+            - text: Flowchart
+        - listitem:
+          - button "10:11:53 Activity started Event Running":
+            - time: 10:11:53
+            - strong: Activity started
+            - text: Event Running
+        - listitem:
+          - button "10:11:53 Activity callback started Event":
+            - time: 10:11:53
+            - strong: Activity callback started
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity callback returned a result Event Suspend":
+            - time: 10:11:53
+            - strong: Activity callback returned a result
+            - text: Event Suspend
+        - listitem:
+          - button "10:11:53 Continuation waiting Event":
+            - time: 10:11:53
+            - strong: Continuation waiting
+            - text: Event
+        - listitem:
+          - button "10:11:53 Activity waiting Event Suspended":
+            - time: 10:11:53
+            - strong: Activity waiting
+            - text: Event Suspended
+        - listitem:
+          - button "10:11:53 Bookmark created Event":
+            - time: 10:11:53
+            - strong: Bookmark created
+            - text: Event
+        - listitem:
+          - button "10:11:53 Delivery dispatched Event Dispatched Recorded delivery observation":
+            - time: 10:11:53
+            - strong: Delivery dispatched
+            - text: Event Dispatched Recorded delivery observation
+        - listitem:
+          - button "10:11:53 Duplicate delivery observed Event Duplicate Recorded delivery observation" [pressed]:
+            - time: 10:11:53
+            - strong: Duplicate delivery observed
+            - text: Event Duplicate Recorded delivery observation
+    - complementary "Run details panel":
+      - tablist "Run details tabs":
+        - tab "Activity" [selected]
+        - tab "Issues"
+        - tab "Details"
+      - region "History event details":
+        - button "Back to activity inspection"
+        - paragraph: Recorded event
+        - heading "Duplicate delivery observed" [level=3]
+        - paragraph: Recorded delivery observation
+        - term: Recorded position
+        - definition:
+          - text: "51"
+          - status
+        - term: Occurred
+        - definition:
+          - text: 11/22/2026, 10:11:53 AM · 2026-11-22T09:11:53.930226+00:00
+          - button "Copy occurred":
+            - img
+          - status
+        - term: Activity node
+        - definition:
+          - text: first
+          - button "Copy activity node":
+            - img
+          - status
+        - button "Inspect owning execution →"
+        - button "Inspect bookmark →"
+        - button "Inspect causal event →"
+        - group: Technical details
+        - group: Recorded metadata
+        - paragraph:
+          - button "Find causal successors in this run"
+        - paragraph:
+          - button "Focus this execution in timeline"
+        - status:
+          - paragraph: History available from run start.
+          - group: Recording coverage
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - button "Expand bottom panel":
+    - img
+  - button "Maximize bottom panel":
+    - img
+- status
+- alert
