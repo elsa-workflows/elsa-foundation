@@ -228,15 +228,20 @@ public sealed partial class InMemoryStore
         foreach (var row in page.Writes())
         {
             var stored = Messages[row.Cursor.Key];
-            stored.Message = stored.Message with { KeepUntil = until };
+            var restores = !page.TerminalInputs && drain.Restores(row, checkpoint.Status);
+            var authored = stored.Message.FoundationPublish?.Authored is not null;
+            if (authored && restores)
+                stored.Message = (stored.Message with { KeepUntil = null }).AsKernelTicket();
+            else stored.Message = stored.Message with { KeepUntil = until };
             stored.KeptBy = null;
+            if (authored && !restores) stored.ParkDeadLetter = true;
             if (page.TerminalInputs)
             {
                 // The new Done marker removes this input from the next terminal page.
                 (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
                 continue;
             }
-            if (!drain.Restores(row, checkpoint.Status))
+            if (!restores)
             {
                 (stored.Done, stored.Held, stored.Trial) = (true, false, 0);
                 continue;

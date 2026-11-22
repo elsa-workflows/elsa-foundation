@@ -315,7 +315,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         else expiryUntil = Math.Min(expiryUntil ?? long.MaxValue, expiryWindow.At);
                     }
                     if (turn.FoundationPublicationSequence is not null)
+                    {
+                        if (batch.Turns.Count != 1) throw InvalidPublicationPage();
                         publicationPage = PreparePublicationPage(turn, epochs);
+                    }
                     else if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
                         !(catchUpSteps ??= []).TryAdd(turn.FoundationCatchUpStep!.Value, catchUp))
                         throw new StoreException(Failure.Definite, "A catch-up ticket can advance only once per batch.");
@@ -353,6 +356,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     foreach (var message in turn.Sent)
                     {
+                        if (message.FoundationPublish is not null)
+                            ValidateAuthoredPublication(turn, message, inlineRoot?.Tenant ??
+                                (source is null ? null : _referenceBirths.GetValueOrDefault(new(source.Id, source.Creation))?.Tenant), now);
                         if ((foundation || message.BindFoundationChild) && !FoundationMetadataLimits.FitsComposed(message))
                             throw new StoreException(Failure.Definite, "The composed message exceeds the foundation row budget.");
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
@@ -463,7 +469,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var message in turn.Sent)
                 {
                     // Messages the owner hands over in memory to its own partition are written as seen already.
-                    Messages[message.InboxKey] = new MessageRow(message, ++_seq, batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0)
+                    Messages[message.InboxKey] = new MessageRow(StampAuthoredPublication(message, now), ++_seq,
+                        batch.HandOver && epochs.TryGetValue(message.Target.Partition, out var mine) ? mine : 0)
                     {
                         Held = turn.FoundationHeldPromotions?.Contains(message.InboxKey) == true
                     };
@@ -997,7 +1004,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             {
                 if (publication.FoundationPublishTicket is { } ticket)
                     return Messages.GetValueOrDefault(ticket) is { } work &&
-                        (work.Message.FoundationPublish is not null || Active(work));
+                        (work.Message.FoundationPublish is { Authored: null } || Active(work));
                 if (publication.FoundationIncarnation is not null || !publication.Id.StartsWith('~')) return false;
 
                 // A pre-upgrade turn publication may still be paired with a live legacy ticket.
