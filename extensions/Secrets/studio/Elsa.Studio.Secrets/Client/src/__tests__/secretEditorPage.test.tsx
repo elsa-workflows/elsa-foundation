@@ -66,7 +66,7 @@ describe("standalone secret editor lifetime and navigation", () => {
     expect(blocked()).toBe(true);
     click(host, "Cancel"); await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
     expect(navigate).not.toHaveBeenCalled(); expect(control(host, "name").value).toBe("DbConnectionString");
-    click(host, "Back to secrets"); await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    click(host, "Secrets"); await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
     const route = new URL(navigate.mock.calls[0][0], window.location.origin);
     expect(route.pathname).toBe("/security/secrets");
     expect(Object.fromEntries(route.searchParams)).toEqual({ search: "accepted", query: "draft", scope: "Team", focusCreate: "1", backend: "original" });
@@ -77,8 +77,8 @@ describe("standalone secret editor lifetime and navigation", () => {
     const request = deferred<unknown>(); const post = vi.fn(() => request.promise);
     const { host, navigate, confirm } = renderEditor({ context: endpoint(post) }); await ready(host); fill(host); submit(host); submit(host);
     expect(post).toHaveBeenCalledTimes(1); expect(blocked()).toBe(true);
-    click(host, "Back to secrets");
-    await vi.waitFor(() => expect(button(host, "Back to secrets").disabled).toBe(true));
+    click(host, "Secrets");
+    await vi.waitFor(() => expect(button(host, "Secrets").disabled).toBe(true));
     expect(button(host, "Cancel").disabled).toBe(true);
     expect(confirm).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
     request.reject(new Error("Write unavailable."));

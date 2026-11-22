@@ -174,7 +174,7 @@ for (const theme of ["light", "dark"]) {
     await feedback(page, row, row.locator(".studio-row-link"), info, "form-");
     await row.locator("td").nth(1).click();
     await expect(page.getByRole("region", { name: "Published form", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(row.locator(".studio-row-link")).toBeFocused();
   });
 

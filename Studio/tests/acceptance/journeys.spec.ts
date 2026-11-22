@@ -431,7 +431,7 @@ test("collections and connection creation", async ({ page }, info) => {
   const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Secrets", exact: true }).click();
   await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");

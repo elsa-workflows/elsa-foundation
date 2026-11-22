@@ -153,7 +153,7 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await expect(detail).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(detail).toBeVisible();
-  await detail.getByRole("button", { name: "Back to secrets", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Secrets", exact: true }).click();
   await expect(detail).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Edit knownlaterintegrationbillingcredentialsforregionalpartnernetwork", exact: true })).toBeFocused();
   await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();

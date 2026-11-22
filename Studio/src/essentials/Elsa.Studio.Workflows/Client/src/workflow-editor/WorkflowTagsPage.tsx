@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { studioRowInteraction, SkeletonRows, StudioBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowTag, listWorkflowTags, workflowOrganizationSupport, type WorkflowTag, type WorkflowTagPage } from "../api/workflowOrganization";
 import { StudioLink } from "../StudioLink";
@@ -16,7 +16,7 @@ function WorkflowTagBreadcrumbs({ view, current, navigate }: { view: View; curre
   const items = view === "list"
     ? [{ href: "/workflows/definitions", label: "Definitions" }]
     : [{ href: "/workflows/definitions", label: "Definitions" }, { href: tagsPath, label: "Workflow tags" }];
-  return <StudioBreadcrumbs items={items} current={current} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />;
+  return <StudioShellBreadcrumbs items={items} current={current} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />;
 }
 
 export function WorkflowTagsRoute({ context, view, navigate }: { context: StudioEndpointContext; view: View; navigate(path: string): void }) {
@@ -58,7 +58,8 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
 
   if (!loaded || loaded.context !== context || loaded.identity !== identity) return <SkeletonRows label="Loading workflow tags" />;
   if (loaded.error || loaded.unsupported || (view !== "list" && loaded.page?.permissions?.canManageTags !== true)) {
-    return <StudioPage><StudioPageHeader title="Workflow tags" breadcrumbs={<WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "Create tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />} />
+    return <StudioPage><WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "Create tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />
+    <StudioPageHeader title="Workflow tags" />
       <StudioResultState tone={loaded.error ? "danger" : undefined}
         title={loaded.error ? "Could not load workflow tags" : loaded.unsupported ? "Workflow tags unavailable" : "Tag management is not allowed"}
         description={loaded.error ?? (loaded.unsupported ? "This backend does not support workflow tags." : "You do not have permission to manage workflow tags.")}
@@ -93,7 +94,8 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
   };
   const canManage = page.permissions?.canManageTags === true;
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tags-title">
-    <StudioPageHeader title="Workflow tags" titleId="workflow-tags-title" breadcrumbs={<WorkflowTagBreadcrumbs view="list" current="Workflow tags" navigate={navigate} />} description="Manage reusable labels and controlled classifications for workflows."
+    <WorkflowTagBreadcrumbs view="list" current="Workflow tags" navigate={navigate} />
+    <StudioPageHeader title="Workflow tags" titleId="workflow-tags-title" description="Manage reusable labels and controlled classifications for workflows."
       actions={<>
         {canManage ? <StudioButton variant="primary" onClick={() => navigate(`${tagsPath}/new`)}>Create tag</StudioButton> : null}
         <StudioButton disabled={busy} onClick={() => void load(term)}>Refresh</StudioButton>

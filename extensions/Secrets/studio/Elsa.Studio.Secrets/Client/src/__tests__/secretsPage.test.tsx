@@ -155,7 +155,7 @@ describe("secrets page", () => {
     const editor = container.querySelector<HTMLElement>(".secrets-editor-page")!;
     flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(container.querySelector(".secrets-editor-page")).toBe(editor);
-    await waitFor(() => [...editor.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Back to secrets"))?.disabled === true);
+    await waitFor(() => [...editor.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.includes("Secrets"))?.disabled === true);
     finishSave(paymentSecret());
     await waitFor(() => notifications.notify.mock.calls.some(([input]) => input.title === "Secret metadata updated."));
     expect(container.querySelector(".secrets-editor-page")).toBeNull();

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { StudioBreadcrumbs, StudioButton, StudioPage, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, StudioButton, StudioPage, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import { useStudioWorkspaceWhenActive, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createWorkflowTag, getWorkflowTag, updateWorkflowTag, workflowOperationKey, type WorkflowTag, type WorkflowTagInput } from "../api/workflowOrganization";
 import { StudioLink } from "../StudioLink";
@@ -51,10 +51,11 @@ export function WorkflowTagEditor({ context, tag, onBack, navigate, onCreated }:
     } catch (caught) { complete(() => setError(caught instanceof Error ? caught.message : "Couldn't reload the selected tag.")); }
   };
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tag-title">
-    <StudioPageHeader breadcrumbs={<StudioBreadcrumbs items={[
+    <StudioShellBreadcrumbs items={[
       { href: "/workflows/definitions", label: "Definitions" },
       { href: "/workflows/tags", label: "Workflow tags" }
-    ]} current={editingId ? tag!.name : "Create tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />}
+    ]} current={editingId ? tag!.name : "Create tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />
+    <StudioPageHeader
       title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"
       description={editingId ? "Update this tag and its values." : "Create a reusable label or controlled classification for workflows."}
     />
