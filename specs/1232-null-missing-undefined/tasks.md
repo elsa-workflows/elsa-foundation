@@ -4,8 +4,8 @@
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/null-policies.md, quickstart.md
 
-**Gate**: start once the coordinator has approved and merged this spec and the ADR 0089 decision-8 amendment is
-agreed and merged (D-18). S-8's value bridge, which Phase 7 builds on, is merged.
+**Gate**: start once the coordinator has approved and merged this spec (D-18). The ADR 0089 decision-8 amendment is
+agreed and merged. S-8's value bridge, which Phase 7 builds on, is merged.
 
 **Tests**: required by framework §2.23 for every logic-bearing change, and by SC-004 to SC-006. The application
 declares no TDD cadence, so tests follow implementation within each story; the PR's bite-proof shows each new test

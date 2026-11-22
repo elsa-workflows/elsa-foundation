@@ -25,7 +25,7 @@
 
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover the four issues and ADR 0089 R3
-- [ ] ADR 0089 decision 8 is amended to match FR-001c, agreed and merged; the ADR baseline, S-4 and S-8 are delivered
+- [x] ADR 0089 decision 8 is amended to match FR-001c, agreed and merged; the ADR baseline, S-4 and S-8 are delivered
 - [x] Studio acceptance has a goal/reference/state record and composed-host evidence/independent inspection tasks
 
 ## Notes

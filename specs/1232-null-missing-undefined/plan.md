@@ -2,8 +2,8 @@
 
 **Branch**: `agent/claude/3052-s2-null-missing-undefined` | **Date**: 2026-11-03 | **Spec**: [spec.md](spec.md)
 
-**Status**: draft with the spec. The ADR baseline and S-8's value bridge (#4838) are merged. FR-001c requires the
-ADR 0089 decision-8 amendment. Implementation starts once that amendment and the spec are agreed and merged (D-18).
+**Status**: draft with the spec. The ADR baseline, including ADR 0089's decision-8 amendment, and S-8's value bridge
+(#4838) are merged. Implementation starts once the spec is agreed and merged (D-18).
 
 ## Summary
 
@@ -69,7 +69,7 @@ in research R-6 and their tests. Reconcile source paths with the initiative's re
 | §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for T033 to T035 and composed-host acceptance in T035a. |
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
-| ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 | ACTION | The baseline is merged. FR-001c needs the separate ADR 0089 decision-8 amendment before implementation. |
+| ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 and decision 8 | PASS | All are agreed and merged; ADR 0089's initial-value rule matches FR-001c. |
 | Studio UX acceptance / initiatives guide, *Studio work stays in the initiative* | ACTION | Policy controls remain absent (Q6); changed nullability/default controls and diagnostics follow [ux-acceptance.md](ux-acceptance.md), T033 to T035a, on the composed host with independent inspection. |
 
 ## Decisions
