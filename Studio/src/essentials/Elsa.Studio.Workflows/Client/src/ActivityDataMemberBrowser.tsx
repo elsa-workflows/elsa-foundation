@@ -141,44 +141,44 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
         <strong>{shown.label}</strong>
       </div>
       {memberNavigation ? <nav aria-label="Member path" className="wf-data-member-path">
-        {activityDataBreadcrumbs(shown.path).map(crumb => <button key={crumb.key} type="button"
+        {activityDataBreadcrumbs(shown.path).map(crumb => <StudioButton key={crumb.key} type="button"
           aria-current={crumb.memberPath.length === shown.path.length ? "location" : undefined}
-          disabled={!current || pending} onClick={() => changePath(crumb.memberPath)}>{crumb.label}</button>)}
+          disabled={!current || pending} onClick={() => changePath(crumb.memberPath)}>{crumb.label}</StudioButton>)}
       </nav> : null}
-      <button type="button" className="wf-data-member-use" disabled={!ready || !!model?.reason || !(expressionType ? packet?.source.parameterSource : packet?.source.binding)}
-        onClick={() => changePath(shown.path, true)}>{shown.path.length ? "Use this value" : "Use whole value"}</button>
+      <StudioButton type="button" className="wf-data-member-use" disabled={!ready || !!model?.reason || !(expressionType ? packet?.source.parameterSource : packet?.source.binding)}
+        onClick={() => changePath(shown.path, true)}>{shown.path.length ? "Use this value" : "Use whole value"}</StudioButton>
       {model?.typeLabel ? <p className="wf-data-chooser-note">{model.typeLabel}{model.typeKnowledge === "deferred" ? " · Checked when the workflow runs" : ""}</p> : null}
       {error ? <div className="wf-data-chooser-notice" role="alert"><span>{error}</span>
-        <button type="button" onClick={() => selection && setSelection({ ...selection, choose: false })}>Retry</button></div> : null}
+        <StudioButton type="button" onClick={() => selection && setSelection({ ...selection, choose: false })}>Retry</StudioButton></div> : null}
       {!packet && pending ? <SkeletonRows rows={3} label="Loading members" /> : null}
       {model ? <>
         {model.information ? <p className="wf-data-chooser-note" role={model.reason ? "status" : undefined}>{model.information}</p> : null}
         {model.members.length ? <div className="wf-data-chooser-list" role="listbox" aria-label="Members">
-          {model.members.map(member => <button key={member.key} type="button" role="option" aria-selected={false} tabIndex={-1}
+          {model.members.map(member => <StudioButton key={member.key} type="button" role="option" aria-selected={false} tabIndex={-1}
             aria-disabled={!ready || undefined} className="wf-data-chooser-option" onKeyDown={activateOption} onClick={() => {
               if (ready) changePath(member.memberPath, member.shape.kind === "scalar" || member.shape.kind === "collection");
             }}>
             <span className="wf-data-chooser-option-label">{member.serializedName === "" ? '"" (empty name)' : member.serializedName}</span>
             <span className="wf-data-chooser-option-type" title={activityDataTypeLabel(member.shape.type) ?? undefined}>{activityDataTypeLabel(member.shape.type)}</span>
             {member.shape.kind === "scalar" || member.shape.kind === "collection" ? null : <ChevronRight size={12} aria-hidden="true" />}
-          </button>)}
+          </StudioButton>)}
         </div> : null}
         {model.allowLiteral ? <div className="wf-data-member-literal">
           <StudioField label="Member name"><input aria-label="Member name" value={literal} disabled={!ready}
             onChange={event => setLiteral(event.target.value)} onKeyDown={event => {
               if (event.key === "Enter") { event.preventDefault(); const path = appendActivityDataMember(shown.path, literal); if (ready && path) changePath(path); }
             }} /></StudioField>
-          <button type="button" disabled={!ready || !appendActivityDataMember(shown.path, literal)}
+          <StudioButton type="button" disabled={!ready || !appendActivityDataMember(shown.path, literal)}
             onClick={() => { const path = appendActivityDataMember(shown.path, literal); if (path) changePath(path); }}>
             {literal === "" ? "Open empty member" : "Open member"}
-          </button>
+          </StudioButton>
         </div> : null}
       </> : null}
     </> : <>
       {families.map(family => <div key={family.family} className="wf-data-chooser-group" role="group" aria-label={family.label}>
         <div className="wf-data-chooser-group-label">{family.label}</div>
         <div role="listbox" aria-label={family.label}>
-          {family.options.map(option => <button key={option.source.id} type="button" role="option" aria-selected={false} tabIndex={-1}
+          {family.options.map(option => <StudioButton key={option.source.id} type="button" role="option" aria-selected={false} tabIndex={-1}
             className="wf-data-chooser-option" aria-disabled={!!option.unavailableReason || !current || undefined} onKeyDown={activateOption}
             onClick={() => {
               if (!current || option.unavailableReason || !(expressionType ? option.source.parameterSource : option.source.binding)) return;
@@ -188,7 +188,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
             <span className="wf-data-chooser-option-label">{option.label}{option.disambiguation ? ` · ${option.disambiguation}` : ""}{option.shadowed ? " (outer scope)" : ""}</span>
             <span className="wf-data-chooser-option-type" title={option.typeLabel ?? undefined}>{option.typeLabel}</span>
             {option.unavailableReason ? <small>{option.unavailableReason}</small> : memberNavigation ? <ChevronRight size={12} aria-hidden="true" /> : null}
-          </button>)}
+          </StudioButton>)}
         </div>
       </div>)}
       {families.length === 0 ? <p className="wf-data-chooser-note">No earlier data is available for this input.</p> : null}
