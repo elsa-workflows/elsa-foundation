@@ -117,10 +117,13 @@ public sealed partial class InMemoryStore
         }
         else
         {
+            var cancelled = next.Status == InstanceStatus.Cancelled && (previous is null || previous.Status == InstanceStatus.Running);
+            var tookTerminate = turn.Consumed.Concat(turn.Done).Any(key =>
+                Messages.GetValueOrDefault(key)?.Message is { Kind: Kinds.Terminate } command &&
+                command.Target.Id == next.Id && CreationProtocol.TargetError(next, command) is null &&
+                (!command.CascadeOrigin || CreationProtocol.MatchesCascadeParent(next, command)));
             if (next.Retired || (previous is null ? next.Revision <= 0 : next.Revision != checked(previous.Revision + 1)) ||
-                next.Status == InstanceStatus.Running && !turn.Consumed.Concat(turn.Done).Any(key =>
-                    Messages.GetValueOrDefault(key)?.Message is { Kind: Kinds.Terminate } command &&
-                    command.Target.Id == next.Id && (command.TargetCreation ?? 0) == next.Creation) ||
+                !(cancelled || tookTerminate) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)
                 throw InvalidCascade();

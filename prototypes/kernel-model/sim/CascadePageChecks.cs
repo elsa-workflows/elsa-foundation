@@ -95,10 +95,24 @@ internal static class CascadePageChecks
         var canFail = !delete;
         var markedTested = false;
         var markRefused = false;
+        var ordinaryEndTested = false;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             foreach (var turn in batch.Turns.Where(turn => turn.FoundationCascade is not null))
             {
+                if (!landed && !ordinaryEndTested && count == CascadeProtocol.PageLimit && !keepRunning)
+                {
+                    ordinaryEndTested = true;
+                    foreach (var status in new[] { InstanceStatus.Finished, InstanceStatus.Faulted })
+                    {
+                        var invalid = turn with { Row = turn.Row! with { Status = status } };
+                        var turns = batch.Turns.Select(candidate => ReferenceEquals(candidate, turn) ? invalid : candidate).ToArray();
+                        var refused = false;
+                        try { _ = store.CommitAsync(batch with { Turns = turns }).Result; }
+                        catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+                        check(refused, $"the store refuses a cascade on an ordinary {status} without consuming Terminate");
+                    }
+                }
                 if (delete && !landed && !markedTested && turn.Sent.FirstOrDefault(message => message.Kind == Kinds.Cascade) is { } control)
                 {
                     markedTested = true;
