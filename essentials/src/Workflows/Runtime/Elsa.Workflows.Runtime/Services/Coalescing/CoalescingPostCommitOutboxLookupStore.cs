@@ -13,6 +13,8 @@ internal sealed class CoalescingPostCommitOutboxLookupStore(
     CoalescingInner<IPostCommitOutboxLookupStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IPostCommitOutboxLookupStore
 {
+    public bool CanInspectHistorySources(IRuntimeHistoryStore history) => inner.Value.CanInspectHistorySources(history);
+
     public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
         FindAsync(sessionAccessor, inner.Value, outboxItemId, cancellationToken);
 

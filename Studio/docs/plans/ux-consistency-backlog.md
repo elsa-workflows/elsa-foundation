@@ -163,8 +163,8 @@ Candidates reported by source readers. Confirm the need before building any of t
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
-- [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
-  `DASH/native/NamedDashboards.tsx:524`).
+- [x] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
+  `DASH/native/NamedDashboards.tsx:524`). (PR #5313)
 
 ## Phase 1: cross-cutting items
 
@@ -297,8 +297,8 @@ Activity definitions:
 
 Host and Dashboard:
 
-- [ ] **X3.21** (#5057) [source] `H/modules/PackageFeedsPage.tsx:339` (`modules-upload-dialog`). Footer at
-  `:367–368` has no primary submit.
+- [x] **X3.21** (#5057) [source] `H/modules/PackageFeedsPage.tsx:339` (`modules-upload-dialog`). Footer at
+  `:367–368` has no primary submit. (PR #5314)
 - [x] **X3.22** (#5058, PR #5312) [source] `DASH/native/ResourceDialogs.tsx:15` (`named-dialog`).
 - [x] **X3.23** (#5059, PR #5312) [source] `DASH/HomeTaskGroup.tsx:166`; footer at `:197` is a lone raw "Cancel".
 - [x] **X3.24** (#5060, PR #5312) [source] `DASH/WidgetFrame.tsx:178`; footer at `:192–193` uses raw buttons with
@@ -324,7 +324,7 @@ Browser dialogs and busy labels (no kit prerequisite):
 
 - [ ] **X3.33** (#5069) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
   `api.dialogs.confirm`.
-- [ ] **X3.34** (#5070) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
+- [x] **X3.34** (#5070, PR #5319) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [ ] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
   `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`.
 - [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
@@ -526,12 +526,12 @@ the designer header is a documented exception.
   20px `.ad-primary-action` buttons.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
 - [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
-- [ ] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10).
+- [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
 - [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
-- [ ] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`,
+- [x] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`, (PR #5316)
   "Fork recommended version", "Create parallel draft" shown twice).
-- [ ] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard
+- [x] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard (PR #5316)
   recovery".
 - [ ] **X11.12** (#5161) [source] `WF/ActivityUpgradeWorkbenchPage.tsx` (5), `WF/ActivityAvailabilityPage.tsx`
   (6), `WF/ActivityDefinitionsPage.tsx` (8), `WF/ActivityDataChooser.tsx` (10),
@@ -547,7 +547,7 @@ the designer header is a documented exception.
 - [x] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
   `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
-- [ ] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`.
+- [x] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`. (PR #5313)
 - [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
@@ -557,7 +557,7 @@ the designer header is a documented exception.
 
 ### X12. Native `<details>` instead of `AdvancedSection` / `TechnicalDetails`
 
-- [ ] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567`
+- [x] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567` (PR #5316)
   [source]). "Advanced" appears three times with three class names.
 - [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
@@ -570,11 +570,11 @@ the designer header is a documented exception.
 - [x] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`. (PR #5304)
 - [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
   about `:193`).
-- [ ] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles.
-- [ ] **X12.10** (#5180) [source] `WF/ActivityDefinitionContractProposalChangeList.tsx:52` ("Technical
+- [x] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles. (PR #5316)
+- [x] **X12.10** (#5180) [source] `WF/ActivityDefinitionContractProposalChangeList.tsx:52` ("Technical (PR #5316)
   comparison") and `ActivityDefinitionContractProposalReview.tsx:166` ("Technical details"): one label,
   `TechnicalDetails`.
-- [ ] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"),
+- [x] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"), (PR #5316)
   `WF/Elsa3ReusableImportPage.tsx:716–743`, `WF/ActivityDefinitionPublicationReview.tsx:337–467`.
 - [ ] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`.
@@ -631,8 +631,8 @@ Raw font sizes, weights, radii and colours:
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
 - [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
-- [ ] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
-  `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`.
+- [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
+  `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
 - [ ] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move
   it to CSS with tokens.
@@ -719,9 +719,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
 - [ ] **E4** (#5234) [seen] Forms: the editor is wrapped in a page card; "Publish" and "Cancel" sit inside the
   card while "Back to forms" sits above it; the page title is 12px.
-- [ ] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
+- [x] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
-  reads "1 loaded questions".
+  reads "1 loaded questions". (PR #5313)
 - [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
   secondary ones into an overflow menu. (PR #5292)
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
@@ -736,10 +736,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`FormsPage.tsx:161`).
 - [x] **E12** (#5242) [source] Collection footers word counts differently: "N shown" (PR #5299)
   (`ConnectionsPage.tsx:157`) against "N agents".
-- [ ] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
+- [x] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
-  `NamedDashboards.tsx:522–524`.
-- [ ] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval.
+  `NamedDashboards.tsx:522–524`. (PR #5313)
+- [x] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval. (PR #5313)
 - [ ] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
   `WorkflowRunHealthWidget.tsx:147`.

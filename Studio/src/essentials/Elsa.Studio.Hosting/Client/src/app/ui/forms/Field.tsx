@@ -156,3 +156,17 @@ export const StudioField = forwardRef<HTMLDivElement, Omit<FieldProps, "hint"> &
     {after}
   </div></FieldAdornments.Provider>;
 });
+
+export function StudioMultiSelectField({ label, value, onChange, children, disabled }: {
+  label: React.ReactNode;
+  value: readonly string[];
+  onChange(values: string[]): void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return <StudioField label={label} disabled={disabled}>
+    <select multiple value={value} onChange={event => onChange(Array.from(event.currentTarget.selectedOptions, option => option.value))}>
+      {children}
+    </select>
+  </StudioField>;
+}

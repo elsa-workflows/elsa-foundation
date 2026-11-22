@@ -1954,3 +1954,4 @@ Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryDurableTimerStore.DischargeUnr
 Elsa.Workflows.Runtime.Extensions.DurableTimerServiceCollectionExtensions
 static Elsa.Workflows.Runtime.Extensions.DurableTimerServiceCollectionExtensions.AddRuntimeDurableTimerScheduler(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Workflows.Runtime.Services.Bookmarks.DurableTimerScheduler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimePostCommitOutboxStore.CanInspectHistorySources(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! history) -> bool

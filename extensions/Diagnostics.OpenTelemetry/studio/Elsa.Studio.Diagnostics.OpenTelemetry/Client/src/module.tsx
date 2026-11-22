@@ -187,7 +187,7 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/diagnostics/open-telemetry",
     activePathPrefix: "/diagnostics/open-telemetry",
     order: 880,
-    iconColor: "#22c55e",
+    iconColor: "var(--studio-success-fg)",
     parentId: "diagnostics"
   });
 

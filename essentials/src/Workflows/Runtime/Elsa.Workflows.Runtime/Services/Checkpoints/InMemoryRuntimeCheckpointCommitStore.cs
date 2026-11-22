@@ -317,6 +317,9 @@ public sealed partial class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheck
         catch (InvalidOperationException) { return false; }
     }
 
+    bool IPostCommitOutboxLookupStore.CanInspectHistorySources(IRuntimeHistoryStore history) =>
+        ((IRuntimeCheckpointCommitStore)this).CanCommitHistory(history);
+
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume =>
         _bookmarkStateStore is InMemoryBookmarkStateStore bookmarks && bookmarks.Coordinates(_state) &&
         _activityExecutionStateStore is InMemoryActivityExecutionStateStore activities && activities.Coordinates(_state) &&

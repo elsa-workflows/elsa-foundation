@@ -6,7 +6,7 @@ import { validateActivityDefinitionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { tabElementIds, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { StudioButton, tabElementIds, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, Play, RefreshCw, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
@@ -997,7 +997,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
             });
             setTestRunOpen(true);
           }} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
-          <button type="button" className="ad-primary-action" onClick={saveNow} disabled={!documentEditable || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</button>
+          <StudioButton variant="primary" onClick={saveNow} disabled={!documentEditable || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</StudioButton>
           {onManage ? <details className="ad-authoring-history" onKeyDown={event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
@@ -1050,7 +1050,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       restoreFocus={() => testRunTriggerRef.current?.focus()}
       onOpenRun={onOpenStudioPath}
     /></Suspense> : null}
-    {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}
+    {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<StudioButton variant="danger" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</StudioButton>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}
     {status === "conflict" ? <section className="ad-conflict-card" role="alert"><AlertTriangle size={20} /><div><h2>Local work preserved</h2><p>The server draft advanced to revision {conflictRevision}. Studio paused autosave and will not force overwrite or merge opaque provider state.</p><button type="button" onClick={() => void createConflictCopy()} disabled={readOnly || copying}><CopyPlus size={16} /> {copying ? "Creating recovery draft…" : "Create parallel recovery draft"}</button>{copyError ? <span>Recovery could not be confirmed. The local work remains in this editor.</span> : null}</div></section> : null}
     {authoringTabsShouldBeHosted && authoringViewHost ? createPortal(authoringViewPanels, authoringViewHost) : authoringViewPanels}
     <section
@@ -1097,7 +1097,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       onFocus={focusDiagnostic}
       onReturn={returnToDiagnostic}
     />
-    {revisionSensitiveActionsBlocked && contractLocallyValid && (status === "failed" || status === "offline" || status === "conflict" || codeBufferState.dirty) ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><button type="button" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</button></div> : null}
+    {revisionSensitiveActionsBlocked && contractLocallyValid && (status === "failed" || status === "offline" || status === "conflict" || codeBufferState.dirty) ? <div className="ad-revision-gate" role="status"><span>Revision-sensitive lifecycle actions and navigation are paused until this exact draft revision is saved.</span><StudioButton variant="danger" onClick={discardLocalChanges} disabled={status === "pending" || status === "saving"}>{status === "pending" || status === "saving" ? "Waiting for save before navigation" : "Discard local changes and return"}</StudioButton></div> : null}
     {migrationOpen && !readOnly ? <ActivityDefinitionProviderMigrationDialog context={context} draft={draft} activityEditors={activityEditors} onClose={() => setMigrationOpen(false)} onCreated={created => { setMigrationOpen(false); onOpenDraft(created.definitionId, created.draftId); }} /> : null}
   </main>;
 }
@@ -1243,7 +1243,9 @@ function focusContractDiagnostic(
     const tab = [...member.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(button => button.getAttribute("aria-controls") === memberPanel.id);
     flushSync(() => tab?.click());
   }
-  target.closest("details")?.setAttribute("open", "");
+  const fold = target.closest(".studio-disclosure-fold") ?? target.querySelector(".studio-disclosure-fold");
+  const trigger = fold?.querySelector<HTMLButtonElement>(":scope > button[aria-expanded='false']");
+  if (trigger) flushSync(() => trigger.click());
   const disabledContext = target.matches(":disabled")
     ? target.closest<HTMLElement>(".studio-form-control, label") ?? member
     : null;

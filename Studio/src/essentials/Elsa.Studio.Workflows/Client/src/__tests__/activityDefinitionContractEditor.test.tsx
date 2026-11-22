@@ -120,8 +120,8 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(input.textContent).not.toContain("CLR type names");
     expect(input.textContent).not.toContain("Type alias");
     expect(container.textContent).not.toContain("exact-revision draft queue");
-    const schemaDetails = container.querySelector<HTMLDetailsElement>("details[data-contract-schema]")!;
-    expect(schemaDetails.open).toBe(false);
+    const schemaDetails = container.querySelector<HTMLElement>("[data-contract-schema] .studio-disclosure-fold")!;
+    expect(schemaDetails.dataset.open).toBe("false");
     expect(schemaDetails.textContent).toContain("Schema version");
     expect(container.querySelector(".ad-badge[data-contract-schema]")).toBeNull();
     expect(basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")?.options).toHaveLength(4);

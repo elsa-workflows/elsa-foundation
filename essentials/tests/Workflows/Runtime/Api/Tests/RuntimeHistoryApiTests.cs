@@ -467,7 +467,7 @@ public sealed partial class RuntimeHistoryApiTests
         public ValueTask<RuntimeHistoryHead?> FindHeadAsync(string run, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
         public ValueTask<RuntimeHistoryEvent?> FindEventAsync(string run, string id, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
         public ValueTask<RuntimeHistoryBookmark?> FindBookmarkAsync(string run, string id, CancellationToken token = default) { IndependentExactReads++; throw new InvalidOperationException("Independent read forbidden."); }
-        public ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken token = default) { Read(token); Query = query; return ValueTask.FromResult(Page); }
+        public virtual ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken token = default) { Read(token); Query = query; return ValueTask.FromResult(Page); }
         public ValueTask<RuntimeHistoryBookmarkPage> ListBookmarksAsync(RuntimeHistoryBookmarkQuery query, CancellationToken token = default) { Read(token); BookmarkQuery = query; return ValueTask.FromResult(BookmarkPage ?? new RuntimeHistoryBookmarkPage(Head, [], null)); }
     }
 

@@ -1,5 +1,5 @@
 import { graphPublicationValidationFailure } from "./activityPublicationValidationFailure";
-import { StudioFactList, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioFactList, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -307,23 +307,23 @@ export function ActivityDefinitionPublicationReview({
       {mode === "toolbar" ? <>
         {!preflight.hasBaseline ? <>
           <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
-          <details className="ad-publication-technical-details"><summary>Review initial activity contents</summary>
+          <AdvancedSection label="Review initial activity contents">
             <ImpactReview changes={preflight.impactFirstChanges} compact />
-          </details>
-        </> : <details className="ad-publication-technical-details"><summary>Changes</summary>
+          </AdvancedSection>
+        </> : <AdvancedSection label="Changes">
           <ImpactReview changes={preflight.impactFirstChanges} compact />
-        </details>}
-        {(preflight.isPublishable || hasBlockingDiagnostics) ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
+        </AdvancedSection>}
+        {(preflight.isPublishable || hasBlockingDiagnostics) ? <TechnicalDetails label="Technical readiness checks">
           <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />
-        </details> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />}
+        </TechnicalDetails> : <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact />}
         {!publicationBlocked && diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
-        {!publicationBlocked ? <details className="ad-publication-technical-details"><summary>Version</summary>
+        {!publicationBlocked ? <AdvancedSection label="Version">
           <div className="ad-publication-version">
             <StudioField label={<><span>Publication version</span></>}><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></StudioField>
             <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>Suggested version based on these changes. You can choose a higher version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
             {versionError ? <p role="alert">{versionError}</p> : null}
           </div>
-        </details> : null}
+        </AdvancedSection> : null}
       </> : <>
         <ImpactReview changes={preflight.impactFirstChanges} compact={false} />
         <ReadinessReview preflight={preflight} blocked={publicationBlocked} previous={phase === "failed" && Boolean(receipt)} compact={false} />
@@ -345,9 +345,9 @@ export function ActivityDefinitionPublicationReview({
   const reviewPanel = <section ref={reviewPanelRef} tabIndex={mode === "toolbar" ? -1 : undefined} className="ad-publication-review" aria-labelledby={mode === "full" ? "activity-publication-title" : undefined}>
     {mode === "full" ? <header className="ad-publication-header">
       <div>{titleLevel === "h3" ? <h3 id="activity-publication-title">Review &amp; publish</h3> : <h2 id="activity-publication-title">Review &amp; publish</h2>}<p>Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection.</p></div>
-      <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
+      <StudioButton variant="primary" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
         <GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}
-      </button>
+      </StudioButton>
     </header> : null}
     {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</StudioButton></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
@@ -359,17 +359,17 @@ export function ActivityDefinitionPublicationReview({
       {onOpenWorkflows ? <StudioButton onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></StudioButton> : null}
       {onOpenVersion ? <StudioButton onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></StudioButton> : null}
     </div> : null}
-    {phase === "success" && mode === "toolbar" ? <details className="ad-publication-technical-details"><summary>Publication review details</summary>{reviewDetails}</details> : reviewDetails}
+    {phase === "success" && mode === "toolbar" ? <TechnicalDetails label="Publication review details">{reviewDetails}</TechnicalDetails> : reviewDetails}
   </section>;
 
   if (mode === "full") return reviewPanel;
   return <div className="ad-publication-toolbar">
-    <button ref={reviewTriggerRef} type="button" className="ad-publication-toolbar-trigger" onClick={() => {
+    <StudioButton ref={reviewTriggerRef} className="ad-publication-toolbar-trigger" variant="primary" onClick={() => {
       setDialogOpen(true);
       if (phase === "idle") void prepare();
     }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
       <GitCompareArrows size={16} aria-hidden /> {publicationTriggerLabel(phase, Boolean(preflight))}
-    </button>
+    </StudioButton>
     {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className="ad-publication-toolbar-status is-attention" role={needsAttention ? "alert" : "status"}>
       <AlertTriangle size={18} aria-hidden />
       <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
@@ -402,14 +402,13 @@ function PublicationSummary({ preflight, publishedOutcome, version, compact = fa
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
       <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>
     </StudioFactList>
-    <details className="ad-publication-technical-details">
-      <summary>Exact publication identities</summary>
+    <TechnicalDetails label="Exact publication identities">
       <StudioFactList>
         <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
         <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
         <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
       </StudioFactList>
-    </details>
+    </TechnicalDetails>
   </>;
 }
 
@@ -417,7 +416,7 @@ function ImpactReview({ changes, compact = false }: { changes: ActivityPublicati
   const groups = useMemo(() => groupChanges(changes), [changes]);
   return <section className="ad-publication-impact" aria-labelledby="activity-impact-title"><header><h3 id="activity-impact-title">{compact ? "Changes" : "Impact-first comparison"}</h3><p>{compact ? "Review what will change before publishing." : "Impact is shown before contract, provider, dependency, and presentation grouping."}</p></header>
     {!changes.length ? <p className="ad-publication-empty">No behavioral or presentation changes were reported.</p> : null}
-    {groups.map(group => <section key={group.impact} className={`ad-impact-group ${impactClass(group.impact)}`}><h4>{compact && group.impact === "NonBehavioral" ? "Non-behavioral changes" : group.label}</h4>{group.areas.map(area => <div key={area.area}><h5>{area.area}</h5><ul>{area.changes.map(change => <li key={change.changeId}><strong>{safeChangeKind(change.kind)}</strong><span>{change.message}</span>{compact ? <details><summary>Show exact values</summary><small>{changeValueSummary(change)}</small></details> : <small>{changeValueSummary(change)}</small>}</li>)}</ul></div>)}</section>)}
+    {groups.map(group => <section key={group.impact} className={`ad-impact-group ${impactClass(group.impact)}`}><h4>{compact && group.impact === "NonBehavioral" ? "Non-behavioral changes" : group.label}</h4>{group.areas.map(area => <div key={area.area}><h5>{area.area}</h5><ul>{area.changes.map(change => <li key={change.changeId}><strong>{safeChangeKind(change.kind)}</strong><span>{change.message}</span>{compact ? <TechnicalDetails label="Show exact values"><small>{changeValueSummary(change)}</small></TechnicalDetails> : <small>{changeValueSummary(change)}</small>}</li>)}</ul></div>)}</section>)}
 
   </section>;
 }
@@ -425,8 +424,8 @@ function ImpactReview({ changes, compact = false }: { changes: ActivityPublicati
 function ReadinessReview({ preflight, compact = false, blocked = false, previous = false }: { preflight: ActivityPublicationPreflight; compact?: boolean; blocked?: boolean; previous?: boolean }) {
   const readiness = [preflight.provider, ...preflight.storage, ...preflight.runtime];
   return <section className="ad-publication-readiness" aria-labelledby="activity-readiness-title"><header><h3 id="activity-readiness-title">{previous ? "Checks from the earlier review" : compact ? "Readiness" : "Dependencies &amp; Runtime readiness"}</h3><span className={preflight.isPublishable && !blocked ? "is-ready" : "is-blocked"}>{previous ? "Recheck after correcting the issues above" : preflight.isPublishable && !blocked ? "Ready to publish" : "Publication blocked"}</span></header>
-    <div className="ad-readiness-grid">{readiness.map((item, index) => <article key={`${item.kind}:${item.key}:${index}`}><strong>{item.kind}</strong>{compact ? <details><summary>Technical details</summary><code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code></details> : <code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code>}<span>{item.status}</span></article>)}</div>
-    {preflight.dependencies.length ? <details><summary>{preflight.dependencies.length} exact direct {preflight.dependencies.length === 1 ? "dependency" : "dependencies"}</summary><ul>{preflight.dependencies.map(item => <li key={item.occurrenceId}><strong>{item.version}</strong><code>{item.definitionId} · {item.versionId}</code></li>)}</ul></details> : <p>No direct reusable-activity dependencies were reported.</p>}
+    <div className="ad-readiness-grid">{readiness.map((item, index) => <article key={`${item.kind}:${item.key}:${index}`}><strong>{item.kind}</strong>{compact ? <TechnicalDetails><code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code></TechnicalDetails> : <code>{item.key}{item.schemaVersion ? ` · ${item.schemaVersion}` : ""}</code>}<span>{item.status}</span></article>)}</div>
+    {preflight.dependencies.length ? <TechnicalDetails label={<>{preflight.dependencies.length} exact direct {preflight.dependencies.length === 1 ? "dependency" : "dependencies"}</>}><ul>{preflight.dependencies.map(item => <li key={item.occurrenceId}><strong>{item.version}</strong><code>{item.definitionId} · {item.versionId}</code></li>)}</ul></TechnicalDetails> : <p>No direct reusable-activity dependencies were reported.</p>}
   </section>;
 }
 
@@ -437,8 +436,8 @@ function PublicationDiagnostics({ diagnostics, onFocus, disabled = false, embedd
     return <li key={`${item.code}:${index}`}>
       <strong>{item.message}</strong>
       {item.remediation ? <p>{item.remediation}</p> : null}
-      {focusable ? <button type="button" onClick={event => void onFocus(item, event.currentTarget)} disabled={disabled}><LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}</button> : null}
-      <details className="ad-publication-diagnostic-details"><summary>Diagnostic details</summary><span>{diagnosticSeverity(item.severity)}</span><code>{safeDiagnosticCode(item.code)}</code></details>
+      {focusable ? <StudioButton onClick={event => void onFocus(item, event.currentTarget)} disabled={disabled}><LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}</StudioButton> : null}
+      <TechnicalDetails label="Diagnostic details"><span>{diagnosticSeverity(item.severity)}</span><code>{safeDiagnosticCode(item.code)}</code></TechnicalDetails>
     </li>;
   })}</ol></section>;
 }

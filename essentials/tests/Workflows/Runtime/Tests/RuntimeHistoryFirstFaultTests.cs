@@ -30,7 +30,7 @@ public sealed class RuntimeHistoryFirstFaultTests
     {
         using var f = new Fixture();
         var policy = choice is "absent" or "disabled" ? null : choice == "future"
-            ? new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true, ["WorkflowFaulted"]) : f.Policy;
+            ? new RuntimeHistoryCapturePolicy($"runtime-history-v{f.Policy.Version + 1}", f.Policy.Version + 1, true, ["WorkflowFaulted"]) : f.Policy;
         bool? enabled = choice is "unknown" or "absent" ? null : choice != "disabled";
         var envelope = Envelope(policy, enabled);
         await f.Faulter.FaultIfCheckpointRuleViolatedAsync("run", null, new RuntimeCheckpointCommitValidationException("refused"), envelope);

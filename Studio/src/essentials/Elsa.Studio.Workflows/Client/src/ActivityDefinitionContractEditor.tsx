@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Plus, Trash2, X } from "lucide-react";
-import { StudioFactList, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioFactList, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityAuthoringCapabilities,
@@ -368,8 +368,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
         </div>
       </div>
     </div>
-    <details className="ad-contract-workbench-advanced" data-contract-schema tabIndex={-1}>
-      <summary>Advanced interface details</summary>
+    <div data-contract-schema tabIndex={-1}><TechnicalDetails label="Advanced interface details">
       <StudioFactList>
         <div><dt>Schema version</dt><dd>{contract.contractSchemaVersion}</dd></div>
         {sourceVersionId ? <div><dt>Published baseline version ID</dt><dd>{sourceVersionId}</dd></div> : null}
@@ -377,7 +376,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
         {sourceVersionId && baselineContract ? <BaselineClassification contract={contract} baseline={baselineContract} /> : null}
         {sourceVersionId && !baselineContract && !baselineUnavailable ? <p className="ad-contract-workbench-note">Loading the exact immutable contract used for local impact classification…</p> : null}
         {sourceVersionId && baselineUnavailable ? <p className="ad-contract-workbench-note">Impact counts are unavailable until the immutable baseline can be loaded.</p> : null}
-    </details>
+    </TechnicalDetails></div>
     {pendingImpact ? <ImpactReviewDialog impact={pendingImpact} onClose={() => setPendingImpact(null)} /> : null}
   </section>;
 });
@@ -524,13 +523,13 @@ function OutputEditor({ member, valueEditor, index, selected, nameInputRef, capa
       </div>
       {valueEditor}
     </div>
-    <details className="ad-output-disclosure"><summary>Presentation</summary><PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} /></details>
-    <details className="ad-output-disclosure"><summary>Advanced</summary><div className="ad-contract-fields">
+    <AdvancedSection label="Presentation"><PresentationFields member={member} categories={categories} readOnly={readOnly} onChange={onChange} /></AdvancedSection>
+    <AdvancedSection label="Advanced"><div className="ad-contract-fields">
       <NullabilityField member={member} type={type} readOnly={readOnly} onChange={onChange} />
       <AdvancedTypeFields member={member} type={type} capabilities={capabilities} authorableTypes={authorableTypes} readOnly={readOnly} onChange={onChange} />
       <DurabilityFields member={member} type={type} capabilities={capabilities} readOnly={readOnly} onChange={onChange} />
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly} onApply={onReferenceKeyChange} />
-    </div></details>
+    </div></AdvancedSection>
   </section>;
 }
 
@@ -553,9 +552,9 @@ function OutcomeEditor({ member, index, selected, nameInputRef, providerRequired
       <StudioField className="ad-contract-description" label={<><span>Description</span></>}><textarea data-contract-field="description" value={member.description ?? ""} onChange={event => onChange({ ...member, description: event.target.value || null })} disabled={readOnly} rows={2} /></StudioField>
       {!providerRequired ? <label className="ad-contract-check"><input data-contract-field="isEmitted" type="checkbox" checked={member.isEmitted} onChange={event => onChange({ ...member, isEmitted: event.target.checked })} disabled={readOnly} /><span>Emitted by this activity</span></label> : null}
     </div>
-    <details className="ad-contract-advanced"><summary>Advanced</summary><div className="ad-contract-fields">
+    <AdvancedSection label="Advanced"><div className="ad-contract-fields">
       <ReferenceKeyField value={member.referenceKey} readOnly={readOnly || providerRequired} onApply={onReferenceKeyChange} />
-    </div></details>
+    </div></AdvancedSection>
   </section>;
 }
 

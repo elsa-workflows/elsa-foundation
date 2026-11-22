@@ -1,8 +1,8 @@
 .named-workspace { min-width: 0; color: var(--studio-text); }
 .named-workspace .studio-page-header :is(h1, h2) { min-width: 0; overflow-wrap: anywhere; }
 .named-editor-content { display: grid; gap: 1rem; min-width: 0; }
-.named-workspace label, .named-dialog label { display: grid; gap: .35rem; min-width: 0; font-weight: 550; }
-.named-workspace input:not([type="checkbox"]):not(.studio-search-input), .named-workspace select, .named-workspace textarea, .named-dialog input:not([type="checkbox"]):not(.studio-search-input), .named-dialog select { min-width: 0; max-width: 100%; padding: .5rem .65rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); font: inherit; }
+.named-workspace label:not(.studio-field-label), .named-dialog label:not(.studio-field-label) { display: grid; gap: .35rem; min-width: 0; font-weight: 550; }
+.named-workspace input:not([type="checkbox"]):not(.studio-search-input):not([data-studio-field-control]), .named-workspace select:not([data-studio-field-control]), .named-workspace textarea:not([data-studio-field-control]), .named-dialog input:not([type="checkbox"]):not(.studio-search-input):not([data-studio-field-control]), .named-dialog select:not([data-studio-field-control]) { min-width: 0; max-width: 100%; padding: .5rem .65rem; color: var(--studio-text); background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); font: inherit; }
 /* Keep native checkbox geometry stable when the host's text-input focus style changes. */
 .named-workspace input[type="checkbox"], .named-dialog input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; flex: 0 0 auto; accent-color: var(--studio-accent); }
 .named-workspace :is(input, select, textarea, button, a):focus-visible, .named-dialog :is(input, select, textarea, button, a):focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
@@ -26,14 +26,14 @@
 .named-query-controls > details[open] > summary::after, .named-optional-metadata[open] > summary::after, .named-weaver-disclosure[open] > summary::after { transform: rotate(225deg); }
 .named-query-configured, .named-weaver-disclosure > summary > span { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 500; }
 .named-optional-metadata { min-width: 0; padding-block-start: .75rem; border-block-start: 1px solid var(--studio-border); }
-.named-optional-metadata > label { margin-block-start: .75rem; }
+.named-optional-metadata > .studio-field { margin-block-start: .75rem; }
 .named-weaver-disclosure { display: grid; gap: .75rem; min-width: 0; padding-block: .75rem; border-block-start: 1px solid var(--studio-border); }
 .named-query-controls > legend, .named-query-controls fieldset > legend { font-weight: 650; padding-inline: .3rem; }
 .named-query-controls:disabled { opacity: .8; }
 .named-query-controls label.named-inline, .named-checks label { display: flex; align-items: center; gap: .5rem; }
 .named-checks, .named-value-controls, .named-value-list { display: grid; gap: .65rem; }
 .named-condition { display: flex; gap: .65rem; align-items: end; flex-wrap: wrap; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); }
-.named-condition > label, .named-condition > .named-value-controls { flex: 1 1 10rem; }
+.named-condition > .studio-field, .named-condition > .named-value-controls { flex: 1 1 10rem; }
 .named-actions, .named-search { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .named-actions label { display: flex; align-items: center; gap: .4rem; }
 .named-search { flex: 1 1 16rem; }
