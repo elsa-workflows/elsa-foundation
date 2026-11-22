@@ -30,7 +30,8 @@ public sealed partial class InMemoryStore
         new Message(id, new(actor), Kinds.Meet, Sender: actor, TargetCreation: creation, SenderCreation: creation)
             { ParkCatchUp = ticket }.AsIssued().AsKernelTicket();
 
-    private FoundationSubscriptionInsert? PrepareFoundationSubscriptionInsert(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, long now)
+    private FoundationSubscriptionInsert? PrepareFoundationSubscriptionInsert(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, long now,
+        IReadOnlySet<SubscriptionRow>? removed, IReadOnlySet<string>? cleared)
     {
         var requested = turn.Subscribed.Where(subscription => subscription.FoundationTenant is not null).ToArray();
         if (requested.Length == 0)
@@ -51,7 +52,8 @@ public sealed partial class InMemoryStore
         var rows = new List<SubscriptionRow>();
         foreach (var subscription in requested)
         {
-            if (Reserve(subscription) && RegisteredSubscription(subscription) is null)
+            var existing = RegisteredSubscription(subscription);
+            if (Reserve(subscription) && (existing is null || removed?.Contains(existing) == true || cleared?.Contains(row.Id) == true))
                 rows.Add(subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now });
             else if (restoring)
                 throw new StoreException(Failure.Definite, "A restored subscription must insert a new registration.");
@@ -64,6 +66,8 @@ public sealed partial class InMemoryStore
             throw new StoreException(Failure.Definite, "The subscription writes exceed the plan budget.");
         if (keeping is null)
             return new(rows, null);
+        if (turn.Sent.Count >= FoundationMetadataLimits.MaxTurnSends)
+            throw new StoreException(Failure.Definite, "The catch-up ticket would exceed the turn's send limit.");
 
         var suffix = restoring ? "0001" : "keep";
         var origin = CreationProtocol.Origin(row.Id, row.Creation);

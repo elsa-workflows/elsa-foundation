@@ -262,7 +262,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
             Dictionary<string, Message>? initialExpiries = null;
-            Dictionary<string, FoundationSubscriptionInsert>? subscriptionInserts = null;
+            Dictionary<TurnCommit, FoundationSubscriptionInsert>? subscriptionInserts = null;
+            HashSet<string>? subscriptionWriters = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
             PublicationPage? publicationPage = null;
             Dictionary<TurnCommit, CascadeInputs>? cascades = null;
@@ -275,6 +276,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 HashSet<string>? childReferences = null;
                 long? expiryFrom = null, expiryUntil = null;
                 var revoked = CatchUpRevocations(batch);
+                var trackSubscriptionRemovals = batch.Turns.Count > 1 &&
+                    batch.Turns.Any(turn => turn.Subscribed.Any(wait => wait.FoundationTenant is not null));
+                var removedWaits = trackSubscriptionRemovals ? new HashSet<SubscriptionRow>(ReferenceEqualityComparer.Instance) : null;
+                var clearedWaits = trackSubscriptionRemovals ? new HashSet<string>(StringComparer.Ordinal) : null;
                 var earlier = batch.Turns.Any(turn => turn.FoundationCascade is not null) ? new HashSet<InboxKey>() : null;
                 var competing = earlier is not null
                     ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
@@ -326,9 +331,17 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
-                    if (PrepareFoundationSubscriptionInsert(turn, epochs, now) is { } subscriptions &&
-                        !(subscriptionInserts ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, subscriptions))
-                        Diverged($"two subscription writes for {turn.Instance}");
+                    if (PrepareFoundationSubscriptionInsert(turn, epochs, now, removedWaits, clearedWaits) is { } subscriptions)
+                    {
+                        if (!(subscriptionWriters ??= new(StringComparer.Ordinal)).Add(turn.Instance))
+                            Diverged($"two subscription writes for {turn.Instance}");
+                        (subscriptionInserts ??= new(ReferenceEqualityComparer.Instance)).Add(turn, subscriptions);
+                    }
+                    if (turn.Unsubscribe) clearedWaits?.Add(turn.Instance);
+                    if (removedWaits is not null)
+                        foreach (var removal in turn.Unsubscribed)
+                            if (RegisteredSubscription(removal) is { } wait && (removal.FoundationTenant is null || wait.Creation == removal.Creation))
+                                removedWaits.Add(wait);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var id in turn.FoundationReleasedHolds ?? [])
@@ -478,7 +491,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     seqs.Add(_seq);
                     if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
-                if (subscriptionInserts?.GetValueOrDefault(turn.Instance) is { } subscriptions)
+                if (subscriptionInserts?.GetValueOrDefault(turn) is { } subscriptions)
                     InsertFoundationSubscriptions(subscriptions);
                 foreach (var subscription in turn.Subscribed)
                     if (subscription.FoundationTenant is null && RegisteredSubscription(subscription) is null) AddRegisteredSubscription(subscription);
