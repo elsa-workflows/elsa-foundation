@@ -170,10 +170,10 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           onAutoLayout={props.onAutoLayout}
           canvasToolsSlot={props.canvasToolsSlot}
         />
-        <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
+        <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={16} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
-        {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button> : null}
+        {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</button> : null}
         <button
           ref={triggerRef}
           type="button"
@@ -203,7 +203,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           <div role="group" aria-label="Saving">
             <span className="wf-editor-menu-heading" aria-hidden="true">Saving</span>
             <button type="button" role="menuitemcheckbox" aria-checked={props.autosaveEnabled} tabIndex={-1} onClick={() => props.onAutosaveChange(!props.autosaveEnabled)}>
-              <Check size={15} aria-hidden="true" style={{ visibility: props.autosaveEnabled ? "visible" : "hidden" }} /> Autosave
+              <Check size={16} aria-hidden="true" style={{ visibility: props.autosaveEnabled ? "visible" : "hidden" }} /> Autosave
               <span className="wf-editor-menu-value">{props.autosaveEnabled ? "On" : "Off"}</span>
             </button>
           </div>

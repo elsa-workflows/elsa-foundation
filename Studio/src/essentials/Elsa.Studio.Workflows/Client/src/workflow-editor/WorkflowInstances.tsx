@@ -43,7 +43,6 @@ import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverla
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
-import { WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
@@ -80,7 +79,7 @@ import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioResultState, SkeletonRows, studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import { StudioLink } from "../StudioLink";
@@ -502,10 +501,10 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
         </AdvancedSection>
       </form>
-      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} action={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
-      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} actions={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
+      {state === "ready" && error ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
-      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
+      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><SkeletonRows /></div> : null}
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
         <div className="wf-run-deletion-toolbar" aria-label="Workflow run deletion controls">
           <span aria-live="polite">{formatRunCount(selectedRunIds.size)} selected</span>
@@ -1742,7 +1741,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       </div>
       {operator.dialog}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {currentData ? (
         <div ref={containerRef} className={workbenchClassName} style={workbenchStyle}>
           {currentData.incidentAssociationLookupIncomplete ? (
@@ -2579,7 +2578,7 @@ function WorkflowInstanceInspector({
       {expanded ? (
         <>
           {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
-          {state === "failed" ? <WfErrorCard message={error} /> : null}
+          {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
           {state === "ready" && details ? (
             <div className="wf-instance-tab-content">
               {activeTab === "timeline" ? (

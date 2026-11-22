@@ -709,6 +709,7 @@
 }
 
 .wf-run-filter-field [data-studio-field-control] {
+  font-weight: 400;
   max-width: 100%;
   min-width: 0;
 }
