@@ -1,13 +1,17 @@
+using System.Text;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
 
 internal sealed record FoundationPublishWork(string Key, string Id, Guid Incarnation, SubscriptionPosition? After = null);
+internal sealed record FoundationPublicationReservation(InboxKey Key, long Sequence, int Attempts);
 internal enum FoundationPublicationStatus { Pending, Matched, DeadLettered }
 internal sealed record FoundationPublicationReceipt(bool Duplicate, EventRow? Event, FoundationPublicationStatus Status);
 
 public sealed partial class InMemoryStore
 {
+    internal Func<Guid> NewPublicationIncarnation { get; init; } = Guid.NewGuid;
+
     private sealed record PublicationPage(MessageRow Source, IReadOnlyList<EventWrite> Writes, long Serial,
         Message? Next = null, ParkCatchUpFailure? Failed = null);
 
@@ -33,7 +37,7 @@ public sealed partial class InMemoryStore
             if (!CreationIdentityAvailable)
                 throw new StoreException(Failure.Definite, "A publication requires qualified creation identity.");
 
-            var incarnation = Guid.NewGuid();
+            var incarnation = NewPublicationIncarnation();
             var keepUntil = checked(now + (long)(keepFor ?? TimeSpan.Zero).TotalMilliseconds);
             var receiptUntil = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
             var publication = new EventRow(key.Item1, id, payload, keepUntil)
@@ -96,18 +100,23 @@ public sealed partial class InMemoryStore
         foreach (var wait in FoundationWaits(tenant, publication.Key, work.After).Take(ParkPageLimit))
         {
             var delivery = MatchRoute(publication, wait).Delivery(partitions);
-            var size = CatchUpDeliveryBytes(delivery.Message) + (delivery.Message.Start is { } start
-                ? 512L + System.Text.Encoding.UTF8.GetByteCount(start.Input ?? "") : 0);
-            if (matched != 0 && bytes + size > ParkRecoveryCredit.LimitBytes)
-            {
-                cut = true;
-                break;
-            }
             ValidateEventIdentity(delivery);
-            if (!Messages.ContainsKey(delivery.Message.InboxKey) && keys.Add(delivery.Message.InboxKey))
-                writes.Add(PrepareEventWrite(delivery, ref serial));
+            if (!Messages.ContainsKey(delivery.Message.InboxKey) && !keys.Contains(delivery.Message.InboxKey))
+            {
+                var candidateSerial = serial;
+                var write = PrepareEventWrite(delivery, ref candidateSerial);
+                var size = PublicationWriteBytes(write);
+                if (writes.Count != 0 && bytes + size > ParkRecoveryCredit.LimitBytes)
+                {
+                    cut = true;
+                    break;
+                }
+                serial = candidateSerial;
+                keys.Add(delivery.Message.InboxKey);
+                writes.Add(write);
+                bytes += size;
+            }
             matched++;
-            bytes += size;
             after = new(wait.Instance, wait.Wait);
         }
 
@@ -120,6 +129,27 @@ public sealed partial class InMemoryStore
 
     private static StoreException InvalidPublicationPage() =>
         new(Failure.Definite, "A publication step requires its exact issued ticket, sequence and partition fence.");
+
+    private static long PublicationWriteBytes(EventWrite write)
+    {
+        var bytes = MessageBytes(write.Delivery);
+        if (write.Creator is { } creator && write.Birth is { } birth)
+            bytes += MessageBytes(creator) + 64L + TextBytes(birth.Tenant) + TextBytes(birth.Reference) +
+                TextBytes(birth.Address.Id) + TextBytes(birth.Creator.Id) + TextBytes(birth.Creator.Match) + TextBytes(birth.Fingerprint);
+        return bytes;
+
+        static long MessageBytes(Message message)
+        {
+            var bytes = CatchUpDeliveryBytes(message) + TextBytes(message.Sender) + TextBytes(message.ReplyTo) +
+                TextBytes(message.StorageId) + TextBytes(message.EventStartAmbientKey);
+            if (message.Start is { } start)
+                bytes += 64L + TextBytes(start.Model) + TextBytes(start.Definition) + TextBytes(start.Parent) +
+                    TextBytes(start.Creation?.Intent) + (message.StoreStartInputOnce ? 0 : TextBytes(start.Input));
+            return bytes;
+        }
+
+        static int TextBytes(string? text) => text is null ? 0 : Encoding.UTF8.GetByteCount(text);
+    }
 
     private void ApplyPublicationPage(PublicationPage page)
     {

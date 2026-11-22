@@ -131,6 +131,7 @@ internal static class FoundationEventSendChecks
         await CheckConcurrentAdmission(check);
         await CheckPage(check, byteCut: false, loseAfter: null);
         await CheckPage(check, byteCut: true, loseAfter: null);
+        await CheckPage(check, byteCut: false, loseAfter: null, largeStart: true);
         await CheckPage(check, byteCut: false, loseAfter: false);
         await CheckPage(check, byteCut: false, loseAfter: true);
         await CheckDeadLetter(check);
@@ -160,7 +161,7 @@ internal static class FoundationEventSendChecks
             "concurrent folded first submissions leave one ticket and answer with the winner's spelling and incarnation");
     }
 
-    private static async Task CheckPage(Action<bool, string> check, bool byteCut, bool? loseAfter)
+    private static async Task CheckPage(Action<bool, string> check, bool byteCut, bool? loseAfter, bool largeStart = false)
     {
         const long start = 1_702_200_000_000;
         var now = start;
@@ -169,9 +170,10 @@ internal static class FoundationEventSendChecks
         var edge = new EventIngress(store, new Requests("publisher"), "publisher");
         var count = byteCut ? 2 : InMemoryStore.ParkPageLimit + 1;
         var firstSize = byteCut ? 1 : InMemoryStore.ParkPageLimit;
+        var typeData = largeStart ? new string('z', FoundationMetadataLimits.TypeDataBytes) : "subscriber";
         for (var i = count - 1; i >= 0; i--)
-            await edge.SetStartAsync(scope, "Signal", $"wait-{i:D3}", new("event-send", "subscriber"));
-        var payload = byteCut ? new string('x', ParkRecoveryCredit.LimitBytes) : "intact";
+            await edge.SetStartAsync(scope, "Signal", $"wait-{i:D3}", new("event-send", typeData));
+        var payload = byteCut ? new string('x', ParkRecoveryCredit.LimitBytes) : largeStart ? new string('x', 16 * 1_024) : "intact";
         var accepted = await edge.SendAsync(scope, new("signal"), "Event", payload, new(KeepFor: TimeSpan.Zero));
         var duplicate = await edge.SendAsync(scope, new("SIGNAL"), "event", "replacement", null);
         var evt = store.FoundationEvents.Values.Single();
@@ -185,10 +187,12 @@ internal static class FoundationEventSendChecks
             "outside admission atomically stores one event and one payload-free issued ticket with the original receipt");
 
         CommitBatch? firstRequest = null;
+        CommitBatch? firstReservation = null;
         var lost = false;
         var lateRefused = false;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
+            if (!landed && batch.Trial.Contains(key)) firstReservation ??= batch;
             if (batch.Turns is not [{ FoundationPublicationSequence: not null, FoundationCatchUpStep: not null }]) return;
             if (loseAfter == landed && !lost)
             {
@@ -211,10 +215,27 @@ internal static class FoundationEventSendChecks
         if (loseAfter == false)
             check(lost && !worker.Owns && Deliveries() == 0 && front is { Attempts: 0, Trial: > 0, Message.FoundationPublish.After: null },
                 "a lost page before its commit preserves just the reserved current ticket");
+        else if (largeStart)
+        {
+            var written = Deliveries();
+            var actualContent = store.Messages.Values.Sum(row => (row.Message.Payload?.Length ?? 0L) + (row.Message.Start?.Definition.Length ?? 0L));
+            check(written is > 0 and < InMemoryStore.ParkPageLimit && actualContent <= ParkRecoveryCredit.LimitBytes &&
+                front.Message.FoundationPublish?.After?.Wait == $"wait-{written - 1:D3}",
+                "the byte cut counts stored start TypeData alongside every event payload");
+        }
         else
             check(Deliveries() == firstSize && front is { Done: false, Attempts: 0, Trial: 0, Message.FoundationPublish.After: { } cursor } &&
                 cursor.Wait == $"wait-{firstSize - 1:D3}" && front.Seq != ticket.Seq,
                 byteCut ? "one delivery above 4 MiB makes singleton progress" : "one page commits exactly the 170 indexed pairs and advances its cursor");
+
+        if (loseAfter is null)
+        {
+            var oldReservationRefused = false;
+            try { await store.CommitAsync(firstReservation!); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { oldReservationRefused = true; }
+            check(oldReservationRefused && front is { Seen: 0, Trial: 0, Attempts: 0 },
+                "a late reservation for the old sequence cannot mark the next page seen or charge it on takeover");
+        }
 
         now++;
         await store.SweepAsync();
@@ -257,10 +278,16 @@ internal static class FoundationEventSendChecks
         var published = await edge.SendAsync(scope, new("live"), "stalled", "skip", null);
         var failedKey = store.FoundationEvents.Values.Single().FoundationPublishTicket!.Value;
         await edge.SendAsync(scope, new("live"), "healthy", "deliver", null);
+        CommitBatch? firstFailure = null;
+        var oldAttemptRefused = false;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
-            if (!landed && batch.Turns is [{ FoundationCatchUpStep: { } key }] && key == failedKey)
-                throw new StoreException(Failure.Definite, "publication page did not land");
+            if (landed || batch.Turns is not [{ FoundationCatchUpStep: { } key }] || key != failedKey) return;
+            if (firstFailure is null) firstFailure = batch;
+            else
+                try { _ = store.CommitAsync(firstFailure).Result; }
+                catch (StoreException error) when (error.Failure == Failure.Definite) { oldAttemptRefused = true; }
+            throw new StoreException(Failure.Definite, "publication page did not land");
         });
         var worker = new Worker("publisher", 0, wire, new ActorAdapter(store, new Probe()),
             new WorkerOptions { Monotonic = () => now - start, MaxAttempts = 2 });
@@ -269,6 +296,7 @@ internal static class FoundationEventSendChecks
         now++;
         await store.SweepAsync();
         var repeat = await edge.SendAsync(scope, new("live"), "stalled", "ignored", null);
+        check(oldAttemptRefused, "a late request cannot use a newer reservation on the same sequence after its own failure was charged");
         check(repeat is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.Status: Contract.PublicationStatus.DeadLettered } &&
               repeat.Publication.Incarnation == published.Publication!.Incarnation && store.Messages[failedKey] is { Done: true, Attempts: 2 } &&
               store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == 1,

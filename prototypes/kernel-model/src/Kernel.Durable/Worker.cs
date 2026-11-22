@@ -2700,6 +2700,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial).Concat(clearedJobs ?? []), handOver, beat), _options.Lease, handOver, turns, seen, tried);
             if (clearedJobs is not null) batch = batch with { ClearJobTrials = [.. clearedJobs.Select(ticket => ticket.Message.InboxKey)] };
+            if (trial is [var ticket] && ticket.Message.FoundationPublish is not null)
+                batch = batch with { PublicationReservation = new(ticket.Message.InboxKey, ticket.Seq, ticket.Attempts) };
         }
         foreach (var unit in units)
             if (unit.Window is { } window)

@@ -160,12 +160,17 @@ public sealed partial class InMemoryStore
 
     private void ValidateParkCatchUpMarks(CommitBatch batch, IReadOnlyDictionary<int, long> epochs)
     {
+        if (batch.PublicationReservation is { } reserved && Messages.GetValueOrDefault(reserved.Key) is not
+                { Done: false, Message: { FoundationPublish: not null, HasIssuedTicket: true } })
+            throw InvalidPublicationPage();
         if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.HasFencedEventStep == true))
             throw new StoreException(Failure.Definite, "A catch-up ticket is marked only when its step begins.");
         foreach (var key in batch.Trial)
             if (Messages.GetValueOrDefault(key) is { Message.HasFencedEventStep: true } ticket &&
                 (ticket.Done || !epochs.ContainsKey(ticket.Message.Target.Partition) || batch.Trial.Count != 1 ||
-                    batch.Turns.Count != 0 || batch.Seen.Count != 0))
+                    batch.Turns.Count != 0 || batch.Seen.Count != 0 || ticket.Message.FoundationPublish is not null &&
+                    (batch.PublicationReservation is not { } expected || expected.Sequence != ticket.Seq ||
+                        expected.Attempts != ticket.Attempts)))
                 throw new StoreException(Failure.Definite, "A catch-up reservation requires its own pending ticket and partition fence.");
     }
 

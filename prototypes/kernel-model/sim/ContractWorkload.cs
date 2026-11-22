@@ -301,7 +301,12 @@ internal static class ContractWorkload
             ArgumentOutOfRangeException.ThrowIfLessThan(partitions, 2);
             _type = type;
             _mixedTypes = mixedTypes;
-            _store = new(partitions, () => Now, flaws) { Refuses = refuses };
+            var publication = 0;
+            _store = new(partitions, () => Now, flaws)
+            {
+                Refuses = refuses,
+                NewPublicationIncarnation = () => new Guid(++publication, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            };
             _wire = new CountingStore(_store, () => { }, (batch, landed) =>
             {
                 observeCommit?.Invoke(batch, landed);
@@ -388,12 +393,33 @@ internal static class ContractWorkload
             Require(_loseAt is null, "the scheduled commit loss was not reached");
         }
 
-        public async Task Pass(int count)
+        private async Task StartPendingPublications()
         {
             var publishers = _store.Messages.Values.Where(row => !row.Done && row.Message.FoundationPublish is not null)
                 .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
             foreach (var partition in publishers)
                 if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
+        }
+
+        internal async Task MatchPendingPublications()
+        {
+            await StartPendingPublications();
+            // Stage the durable creator rows before arming the actor-turn fault. A publisher may
+            // share its virtual partition with a creator, so a normal scope pass could run the birth.
+            for (var pass = 0; pass < 4; pass++)
+            foreach (var owner in _owners)
+            {
+                var worker = owner.Host.NodeWorker!;
+                await worker.PollAsync();
+                await worker.MeetAsync();
+            }
+            Require(_store.Messages.Values.All(row => row.Done || row.Message.FoundationPublish is null),
+                "the driver did not settle pending publication pages before the birth fault");
+        }
+
+        public async Task Pass(int count)
+        {
+            await StartPendingPublications();
             // Renewal is a separate node heartbeat. A quiet scope can own a future timer without writing a turn.
             foreach (var owner in _owners)
                 await owner.Host.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));

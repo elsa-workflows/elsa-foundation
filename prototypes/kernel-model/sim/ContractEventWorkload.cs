@@ -183,7 +183,7 @@ internal static class ContractEventWorkload
             await Register("live-birth");
             await PublishEvent("live-birth", "first", "trigger", keep: 1_000);
             await PublishEvent("live-birth", "first", "changed", keep: 1_000, duplicate: true);
-            await _driver.Pass(4);
+            await _driver.MatchPendingPublications();
             await _driver.StartPendingEventCreators();
             await _driver.LoseTurnCommit(landed: true, stopAfterLoss: true);
             await _driver.TakeOver();

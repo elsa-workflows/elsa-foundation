@@ -186,6 +186,8 @@ public sealed record CommitBatch(
     /// <summary>Counted clears of pending job trials at this batch's exact fence epochs.</summary>
     public IReadOnlyList<InboxKey> ClearJobTrials { get; init; } = [];
 
+    internal FoundationPublicationReservation? PublicationReservation { get; init; }
+
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
     /// fenced partition's; in the owned-set form each partition moves by <see cref="PositionsIn"/>.
