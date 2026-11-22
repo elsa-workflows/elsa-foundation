@@ -192,7 +192,7 @@ describe("Elsa 3 reusable import workbench", () => {
     click(button(container, "Cancel analysis"));
     resolveAnalysis(page([item("late-owner", "late-owner-v1")]));
 
-    await waitFor(() => expect(container.textContent).toContain("Side-effect-free analysis cancelled"));
+    await waitFor(() => expect(container.textContent).toContain("Preview cancelled"));
     expect(container.textContent).not.toContain("late-owner-v1");
   });
 

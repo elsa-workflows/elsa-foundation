@@ -2020,7 +2020,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson);
 
     await waitForText(rendered.container, "Activity definitions unavailable");
-    expect(rendered.container.textContent).toContain("No legacy activity fallback is used");
+    expect(rendered.container.textContent).toContain("This backend does not support activity definition management");
     expect(getJson).toHaveBeenCalledTimes(1);
     expect(getJson).toHaveBeenCalledWith("/capabilities");
     await rendered.unmount();

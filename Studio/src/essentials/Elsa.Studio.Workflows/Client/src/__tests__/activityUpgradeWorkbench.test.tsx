@@ -208,7 +208,7 @@ describe("Activity upgrade workbench", () => {
     click(buttonByText(rendered.container, "Review upgrade plan"));
     await waitForText(rendered.container, "Selected dependency closure");
     click(buttonByText(rendered.container, "Apply stage 1 atomically"));
-    await waitForText(rendered.container, "no receipt is visible");
+    await waitForText(rendered.container, "No result is available yet");
     click(buttonByText(rendered.container, "Retry this stage"));
 
     await waitForText(rendered.container, "Reviewed evidence is stale");

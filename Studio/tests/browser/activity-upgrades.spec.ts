@@ -178,7 +178,7 @@ test("an absent durable receipt allows one idempotent retry with the same key", 
   await page.goto("/workflows/activity-definitions/upgrades?rootKind=WorkflowDraft&rootId=workflow-draft&fromVersion=dependency-v1&toVersion=dependency-v2");
   await page.getByRole("button", { name: "Review upgrade plan" }).click();
   await page.getByRole("button", { name: "Apply stage 1 atomically" }).click();
-  await expect(page.getByText(/no receipt is visible/i)).toBeVisible();
+  await expect(page.getByText(/No result is available yet/i)).toBeVisible();
   await page.getByRole("button", { name: "Retry this stage" }).click();
 
   await expect(page.getByText("Upgrade complete")).toBeVisible();
