@@ -6,7 +6,7 @@
 
 - [x] User value, boundaries and five prioritized independently testable stories are explicit.
 - [x] Functional requirements and measurable success criteria cover successful and negative behavior.
-- [x] No unresolved NEEDS CLARIFICATION markers or template placeholders remain.
+- [x] No unresolved clarification markers or template placeholders remain.
 - [x] Accepted ADRs and S-7 transaction/placement limits are identified without a new transaction model.
 - [x] Read-your-writes, capture precedence, faults/cancellation, suspension/recovery and source scope are explicit.
 - [x] Correlation never rebinds existing bookmarks; later waits keep their own input behavior.

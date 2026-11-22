@@ -18,6 +18,8 @@ One `StepWorkflowState` is owned by one inline leaf evaluation and references it
 
 Each intent has an address kind (Output, Correlation, InstanceName), an output name for Output only, a JSON value with explicit presence, type/policy information needed by the existing durable encoder, and evaluation identity. Output names use ordinal equality; identity kinds are singletons. User-shaped strings such as `__proto__` are data keys, not object properties that can acquire authority. The last explicit write wins at one address within one evaluation; distinct addresses cannot overwrite each other during dictionary merging.
 
+A new or replacement body output uses the `Any` type descriptor and InstanceInline owner policy, strengthened by source protection with the existing combiner. It replaces the payload/type, with prior destination policy/storage retained as minima and a fresh encoded external reference where required; an old type is not a declared schema. Reading the old payload additionally contributes source protection minima. Policy conflicts or unsupported encryption/storage refuse the evaluation rather than silently discarding protection.
+
 Missing output reads return absent; null output reads return present JSON null. Assignment of missing/undefined is refused. Identity null is a clear, not absence of an intent; use a separate written flag so clearing a value is not dropped when merging records.
 
 ## Preparation/result

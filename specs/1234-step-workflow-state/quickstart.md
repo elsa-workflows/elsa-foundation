@@ -4,7 +4,7 @@ This is the implementation acceptance guide, not a record of tests already run. 
 
 ## Preparation
 
-Use the stream's isolated checkout, current initiative baseline and the repository's build-slot wrapper. Determine the actual SDK/project target from `the current Directory.Build.props and SDK configuration` and project files. Use an established permitted Linux execution path if Windows Application Control blocks a build/test; record that platform limit and the Linux source SHA. Do not bypass a build queue or disable policy. Check load/core count before calling a timeout a product failure.
+Use the stream's isolated checkout, current initiative baseline and the repository's build-slot wrapper. Determine the actual SDK/project target from current build properties, SDK configuration and project files. Use an established permitted Linux execution path if Windows Application Control blocks a build/test; record that platform limit and the Linux source SHA. Do not bypass a build queue or disable policy. Check load/core count before calling a timeout a product failure.
 
 ## Affected-project suites
 
@@ -28,13 +28,15 @@ Use existing EF-backed test infrastructure in `Essentials/tests/Workflows/Runtim
 | Journey | Expected result | Negative control |
 |---|---|---|
 | Native + imported script set output/correlation/name and variable, then read/return state | All new state and result/outcome commit together; same-body reads use pending values | Throw/cancel after all writes; no successful effect or successor |
-| Repeat output write and null identity clear | Last assignment wins; missing output differs from explicit null; header/projection agree | Undefined output, blank name, number identity and caught refusal reject entire evaluation |
-| Identity-only or output-only body with capture conflict | No partial recorded-completion acceptance | Baseline predicate that checks only variable records must fail this proof |
+| New Any output, typed/external/protected destination replacement, repeated write and null identity clear | Last assignment wins; destination policy/storage minima and source protection survive, or incompatible encoding refuses; null/missing differ; header/projection agree | Undefined output, blank name, number identity and caught refusal reject entire evaluation |
+| Identity-only or output-only body with capture conflict | No partial recorded-completion acceptance | A negative control restoring the variable-records-only predicate must fail this proof |
 | Stale variable base mixed with identity/output | Existing warning/LastWins default; Fault opt-in rolls back all state | Fault-mode variable conflict rejects identity/output, including staged captures |
 | Old wait, identity change, new wait explicitly bound to current identity, restart | Old/new deliveries resume only the corresponding captured keys | Rebinding old bookmark or automatically inheriting identity fails assertions |
 | Suspend, resume, later fault | Suspension writes survive; failed resume writes do not; fresh session | Reused pending session changes or whole-invocation rollback fails |
 | Provider failure before transaction commit; redelivery after durable marker | All-or-none header, projection, outputs, variables and continuation; one accepted delivery | Fail injected participant/save; no partly visible checkpoint |
 | Restricted placement and expression evaluation | Publish and runtime refuse input/structural/background/closed graph writes | Bypass authoring/pinned placement checks; identity-only writer still denied |
+| Imported blank identity | Literal blank refuses import; computed blank latches runtime refusal before native normalization; nonblank/null unchanged | Once-only argument count, same-body comparison and caught-guard controls |
+| Current persistence modes | Durable/Balanced/Ephemeral retain their current flush boundaries, including Ephemeral RecordCompletion on/off and already-persisted terminal writes | Per-setter flush or dropped terminal state of a persisted run fails |
 | Conversion lexical/value semantics | Local helper names untouched; direct calls preserve order/undefined | Alias/root collision/spread/wrong arity refused with stable code/location/guidance |
 | Protected input/read, including read after assignment | Output policy retained; public identity/name write refused; value-free error | Search actual API/inspection/screenshot evidence for sentinel value; zero exposure |
 
