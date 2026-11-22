@@ -184,14 +184,16 @@ async function checkFeedIconActions(page: Page, section: Locator, capture: (name
   const deleteButton = feeds.getByRole("button", { name: /^Delete / }).first();
 
   await edit.press("Enter");
-  const editor = feeds.getByRole("dialog");
+  const editor = page.getByRole("dialog", { name: "Edit feed" });
   const close = editor.getByRole("button", { name: "Close edit feed", exact: true });
   await expect(close).toHaveAttribute("title", "Close edit feed");
-  for (const button of [refresh, edit, deleteButton, close]) {
+  for (const button of [refresh, edit, deleteButton]) {
     await expect(button).toHaveCSS("width", "28px");
     await expect(button).toHaveCSS("height", "28px");
     await expect(button.locator("svg")).toHaveCSS("width", "16px");
   }
+  await expect(close).toHaveClass(/studio-dialog-close/);
+  await expect(close.locator("svg")).toHaveCSS("width", "16px");
   await capture("feeds-edit-dialog");
   await close.press("Enter");
   await expect(editor).toBeHidden();
