@@ -554,7 +554,7 @@ describe("Activity Definition authoring", () => {
     expect(displayName.getAttribute("placeholder")).toBeTruthy();
     expect(category.getAttribute("aria-label")).toBe("Category");
     expect(category.getAttribute("placeholder")).toBeTruthy();
-    expect(description.getAttribute("aria-label")).toBe("Description");
+    expect(description.labels?.[0]?.textContent?.trim()).toBe("Description");
     expect(description.getAttribute("placeholder")).toBeTruthy();
     const advanced = buttonByText(rendered.container, "Advanced");
     expect(advanced.getAttribute("aria-expanded")).toBe("false");
