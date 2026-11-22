@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { QueryCell, QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
 
@@ -81,9 +82,9 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
       {compactProvenance ? <>
         <p><strong>Coverage: {coverageStatus}.</strong></p>
         {freshnessWarnings}
-        <details className="named-result-details"><summary>Result details</summary><div className="named-result-details-content">
+        <div className="named-result-details"><TechnicalDetails label="Result details"><div className="named-result-details-content">
           <p>{interpretation}</p><p>{coverageDescription}</p>{refreshDetails}
-        </div></details>
+        </div></TechnicalDetails></div>
       </> : <>
         <p>{interpretation}</p>
         {freshnessWarnings}
