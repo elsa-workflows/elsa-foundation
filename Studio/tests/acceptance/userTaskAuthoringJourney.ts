@@ -61,7 +61,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
-  await operate.getByRole("link", { name: "Forms", exact: true }).click();
+  await operate.getByRole("link", { name: "Task forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
@@ -83,7 +83,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toHaveCSS("outline-style", "none");
   await capture(page, info, "published-form");
-  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).press("Enter");
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
 
   await page.setViewportSize({ width: 1600, height: 1100 });

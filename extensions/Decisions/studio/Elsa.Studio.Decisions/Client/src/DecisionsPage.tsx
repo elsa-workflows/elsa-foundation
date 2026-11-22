@@ -198,7 +198,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
               <table className="studio-table decision-assets"><thead><tr><th scope="col">Decision</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
                 <tbody>{filtered.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(path(item.id)))}><th scope="row"><button className="decision-link studio-row-link" onClick={() => navigate(path(item.id))}>{item.name}</button>{item.description ? <p className="decision-muted">{item.description}</p> : null}</th>
                   <td>{item.publishedVersionId ? "Published · Draft available" : "Unpublished"}{item.isSensitive ? " · Protected" : ""}</td><td><StudioTimestamp value={item.updatedAt} fallback="—" invalidFallback="Invalid Date" /></td>
-                  <td><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Delete", destructive: true, disabled: busy || loading || !can(api, "decisions:manage"), onSelect: () => void recycle(item, true) }]} /></td></tr>)}</tbody>
+                  <td><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Move to recycle bin", destructive: true, disabled: busy || loading || !can(api, "decisions:manage"), onSelect: () => void recycle(item, true) }]} /></td></tr>)}</tbody>
               </table>
             </StudioTableContainer> : null}
       </StudioTabPanel>

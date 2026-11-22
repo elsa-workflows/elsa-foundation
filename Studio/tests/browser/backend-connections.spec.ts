@@ -44,7 +44,7 @@ test("keeps list, details and edit separate; persists personal metadata on reloa
   await expect(page.getByRole("button",{name:"Renamed backend"})).toBeVisible();
   await page.getByRole("button",{name:"Renamed backend"}).click();
   page.once("dialog",dialog=>dialog.accept());
-  await page.getByRole("button",{name:"Remove backend"}).click();
+  await page.getByRole("button",{name:"Delete profile"}).click();
   await expect(page.getByRole("heading",{name:"Backends",exact:true})).toBeVisible();
   await expect(page.getByRole("button",{name:"Renamed backend"})).toHaveCount(0);
 });

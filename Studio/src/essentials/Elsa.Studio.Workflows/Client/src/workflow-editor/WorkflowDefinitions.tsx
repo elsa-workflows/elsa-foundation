@@ -830,7 +830,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
             title={errorTitle}
             action={(
               <div className="wf-definition-search-actions">
-                <StudioButton onClick={librarySupportError ? () => window.location.reload() : retry}>{librarySupportError ? "Reload workflow support" : "Retry current search"}</StudioButton>
+                <StudioButton onClick={librarySupportError ? () => window.location.reload() : retry}>Retry</StudioButton>
                 {page > 1 ? <StudioButton onClick={() => rebase()}>Restart from first page</StudioButton> : null}
               </div>
             )}
