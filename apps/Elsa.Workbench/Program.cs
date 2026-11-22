@@ -50,6 +50,7 @@ using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Api.Attention;
+using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
@@ -237,10 +238,7 @@ builder.Services
 // This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
 // both preparers leave the legacy shell composition and feature editor behavior unchanged.
 builder.Services.AddEfPersistenceResources(configuration, typeof(WorkbenchEfToolingShellDefaults).Assembly);
-builder.Services.AddNuplaneFeatureCatalog();
-builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
-builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
-builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
+builder.Services.AddElsaModuleManagement(options => options.HostOwner = "Elsa.Workbench");
 // Composed on the host container, before AddCShellsAspNetCore, per the extension's own requirement: it must be
 // registered before any EF feature is enabled, which is why an EF feature cannot bring it itself.
 builder.Services.AddEfPendingMigrationActivationGuard();
@@ -520,7 +518,7 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workb
     .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
     .AllowPublic("health", "Reports whether the Workbench root host is responding.");
 app.MapShellReadiness();
-app.MapElsaModuleManagementApi();
+app.MapElsaModuleManagement();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();
 app.MapShells();

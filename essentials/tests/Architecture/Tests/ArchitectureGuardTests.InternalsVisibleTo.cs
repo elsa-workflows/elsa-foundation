@@ -13,9 +13,8 @@ namespace Elsa.Architecture.Tests;
 public sealed partial class ArchitectureGuardTests
 {
     /// <summary>
-    /// The one grant outside the rule. Hosts belong to no domain, and the Workbench keeps a narrow exception for its
-    /// host-only module-management registry builder (<c>ModuleManagementRegistryBuilder</c>), exercised by
-    /// <c>ModuleManagementRegistryBuilderTests</c>. A new entry needs the architects' agreement.
+    /// The one grant outside the rule. Hosts belong to no domain, and Workbench keeps a narrow exception for its
+    /// host-integration internals, exercised by the Modularity test assembly. A new entry needs the architects' agreement.
     /// </summary>
     private static readonly HashSet<(string Project, string Target)> InternalsVisibleToExceptions =
     [
@@ -76,6 +75,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.Contains(("Elsa.Cli.Worker", "Elsa.Cli.Tests"), grants);
         Assert.Contains(("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"), grants);
         Assert.Contains(("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"), grants);
+        Assert.Contains(("Elsa.Modularity.Api", "Elsa.Modularity.Tests"), grants);
         Assert.Contains(("Elsa.Workbench", "Elsa.Modularity.Tests"), grants);
     }
 
