@@ -4611,7 +4611,7 @@ describe("workflows module", () => {
     expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/placement/bulk") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
 
     resolveMove?.(new Response(null, { status: 204 }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
       level: "success",
       title: "Moved 2 workflow definitions",
@@ -4848,10 +4848,10 @@ describe("workflows module", () => {
     await click(container.querySelector<HTMLButtonElement>(".wf-folder-breadcrumb button"));
     await waitForText(container, "All workflow");
     await click(buttonByText(container, "Folders"));
-    await vi.waitFor(() => expect(container.querySelector(".wf-folder-drawer [role='tree']")).not.toBeNull());
-    expect(container.querySelector(".wf-folder-drawer button[aria-label='Create folder']")).not.toBeNull();
-    await click(container.querySelector(".wf-folder-drawer button[aria-label='Close folder picker']"));
-    expect(container.querySelector(".wf-folder-drawer")).toBeNull();
+    await vi.waitFor(() => expect(document.querySelector(".wf-folder-picker-dialog [role='tree']")).not.toBeNull());
+    expect(document.querySelector(".wf-folder-picker-dialog button[aria-label='Create folder']")).not.toBeNull();
+    await click(document.querySelector(".wf-folder-picker-dialog button[aria-label='Close folder picker']"));
+    expect(document.querySelector(".wf-folder-picker-dialog")).toBeNull();
     await unmount();
   });
 
@@ -5261,7 +5261,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Rename"));
 
     await vi.waitFor(() => expect(renameRequest).toEqual({ name: "Platform operations" }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform operations"));
     expect(document.activeElement).toBe(rename);
@@ -5414,7 +5414,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Move"));
 
     await vi.waitFor(() => expect(moveRequest).toEqual({ parentId: "folder-destination" }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform"));
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
     expect(document.activeElement).toBe(move);
@@ -6391,14 +6391,13 @@ function selectByLabel(container: HTMLElement, label: string) {
 }
 
 function dialog(container: HTMLElement) {
-  const element = container.querySelector<HTMLElement>(".wf-dialog") ?? document.querySelector<HTMLElement>('form[role="dialog"]');
+  const element = container.querySelector<HTMLElement>(".wf-dialog") ?? document.querySelector<HTMLElement>('[role="dialog"]');
   if (!element) throw new Error("Dialog not found");
   return element;
 }
 
 async function waitForDialog(container: HTMLElement) {
-  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
-  return dialog(container);
+  return vi.waitFor(() => dialog(container));
 }
 
 async function waitForEnabledButton(container: HTMLElement, text: string) {
