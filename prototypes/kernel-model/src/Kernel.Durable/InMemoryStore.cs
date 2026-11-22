@@ -28,7 +28,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         internal ParkKeepReason? KeptBy;
         internal int KeptPayloadBytes;
         internal bool ParkDeadLetter;
-        public Message Message = message;
+        public Message Message = message.StoreStartInputOnce ? message with { Payload = null } : message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
         public bool Done, Held;
@@ -248,14 +248,21 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                             throw new StoreException(Failure.Definite, "A kept delivery must be marked done by its exact Park.");
                         foreach (var id in kept.Keys)
                         {
-                            var payload = Messages[id].Message.Payload;
-                            (keptPayloadSizes ??= [])[id] = payload is null ? 0 : Encoding.UTF8.GetByteCount(payload);
+                            var stored = Messages[id].Message;
+                            var bodyBytes = stored.Payload is { } body ? Encoding.UTF8.GetByteCount(body) : 0;
+                            var inputBytes = stored.Start?.Input is { } input ? Encoding.UTF8.GetByteCount(input) : 0;
+                            (keptPayloadSizes ??= [])[id] = checked(bodyBytes + inputBytes);
                         }
                     }
                     if (ChangedFoundationParkInput(turn, previous, epochs) is { } changed)
                         Diverged($"kept input {changed.Cursor.Key} changed before its Park page cleared");
+                    var source = turn.Row ?? previous;
+                    var foundation = inlineRoot is not null ||
+                        source is { } bound && _referenceBirths.ContainsKey(new(bound.Id, bound.Creation));
                     foreach (var message in turn.Sent)
                     {
+                        if ((foundation || message.BindFoundationChild) && !FoundationMetadataLimits.FitsComposed(message))
+                            throw new StoreException(Failure.Definite, "The composed message exceeds the foundation row budget.");
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
                         if (!message.BindFoundationChild) continue;
                         var binding = BindChild(turn, previous, message, inlineRoot);
@@ -462,7 +469,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var rows = Messages.Values
                 .Where(m => epochs.TryGetValue(m.Message.Target.Partition, out var epoch) && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
                 .OrderBy(m => m.Message.DeliveryOrder(m.Seq)).Take(limit)
-                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)
+                .Select(m => new Stored(m.Message is { StoreStartInputOnce: true, Start: { } start }
+                    ? m.Message with { Payload = start.Input } : m.Message,
+                    m.Seq, m.Seen, m.Attempts, m.Trial)
                 {
                     PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&
                         Instances.GetValueOrDefault(m.Message.Target.Id) is { Status: InstanceStatus.Running, Retired: false } row &&
@@ -503,6 +512,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 Kind = Kinds.Start,
                 Payload = start.Input,
                 Start = start,
+                StoreStartInputOnce = true,
                 TargetCreation = 1,
                 KeepUntil = null
             }).WithInboxScope(InboxKey.EventCreatorScope, message.EventMatch);
@@ -535,6 +545,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     internal bool? PublishFoundationEvent(string tenant, string correlation, string id, string? payload, TimeSpan? keepFor,
         string? replyTo, CancellationToken cancellationToken)
     {
+        FoundationMetadataLimits.RequireContent(payload, nameof(payload), FoundationMetadataLimits.EventContentBytes);
         ArgumentOutOfRangeException.ThrowIfLessThan(keepFor ?? TimeSpan.Zero, TimeSpan.Zero, nameof(keepFor));
         lock (_gate)
         {
@@ -598,6 +609,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         if (start is not null && (start.Parent is not null || start.ParentCreation != 0 || start.Creation is not null))
             throw new ArgumentException("A start subscription supplies no creator identity or parent.", nameof(start));
+        FoundationMetadataLimits.RequireContent(start?.Input, nameof(start), FoundationMetadataLimits.EventStartInputBytes);
         var key = tenant + "_" + correlationKey;
         lock (_gate)
         {

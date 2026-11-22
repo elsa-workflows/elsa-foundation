@@ -15,7 +15,9 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
         if (!IsEventId(id)) return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.InvalidEventId));
-        if (!Durable.FoundationMetadataLimits.FitsName(target.CorrelationKey)) return new(new Admission(AdmissionOutcome.Refused));
+        if (!Durable.FoundationMetadataLimits.FitsName(target.CorrelationKey) ||
+            !Durable.FoundationMetadataLimits.FitsContent(payload, Durable.FoundationMetadataLimits.EventContentBytes))
+            return new(new Admission(AdmissionOutcome.Refused));
         if (options?.DueAt is not null) return new(new Admission(AdmissionOutcome.Refused));
         var accepted = store.PublishFoundationEvent(scope.Tenant, target.CorrelationKey, id, payload, options?.KeepFor, null, cancellationToken);
         return new(new Admission(accepted == true ? AdmissionOutcome.Accepted : AdmissionOutcome.Duplicate));
@@ -28,6 +30,7 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
         cancellationToken.ThrowIfCancellationRequested();
         if (!IsEventId(id)) return Error("invalid event id");
         if (!Durable.FoundationMetadataLimits.FitsName(target.CorrelationKey)) return Error("invalid correlation key");
+        if (!Durable.FoundationMetadataLimits.FitsContent(payload, Durable.FoundationMetadataLimits.EventContentBytes)) return Error("event payload too large");
         if (options?.DueAt is not null) return Error("event requests cannot set a due time");
 
         var now = store.FoundationClock();
@@ -52,9 +55,10 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        Durable.FoundationMetadataLimits.RequireName(correlationKey, nameof(correlationKey));
-        Durable.FoundationMetadataLimits.RequireName(wait, nameof(wait));
-        if (spec is not null) HeaderLimits.ValidateStart(spec.Type, spec.TypeData);
+        HeaderLimits.RequireName(correlationKey, nameof(correlationKey));
+        HeaderLimits.RequireName(wait, nameof(wait));
+        HeaderLimits.RequireContent(spec?.Input, nameof(spec), Durable.FoundationMetadataLimits.EventStartInputBytes);
+        if (spec is not null) HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
         var start = spec is null ? null : new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input,
             Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
         store.SetFoundationEventStart(scope.Tenant, correlationKey, wait, start);

@@ -15,6 +15,7 @@ public sealed partial class InMemoryStore
     {
         if (spec.Parent is not null || spec.Creation is not null)
             throw new ArgumentException("The foundation assigns the generated actor's creation.", nameof(spec));
+        FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
         var partition = inlineOwner?.Fences.FirstOrDefault()?.Partition;
         var window = FoundationIngressWindow(keepFor);
         var operation = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
@@ -29,7 +30,8 @@ public sealed partial class InMemoryStore
             var exact = spec with { Creation = new CreationStart(1, 0, operation) };
             var creator = new Message(id, address, Kinds.Start, spec.Input, Start: exact, Due: due, ReplyTo: replyTo, TargetCreation: 1)
             {
-                StorageId = "root:" + address.Id
+                StorageId = "root:" + address.Id,
+                StoreStartInputOnce = true
             };
             var until = checked(now + (long)window.TotalMilliseconds);
             var reference = partition is { } local

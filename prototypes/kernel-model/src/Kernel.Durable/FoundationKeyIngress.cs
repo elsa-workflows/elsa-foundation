@@ -20,7 +20,8 @@ public sealed partial class InMemoryStore
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
         if (!FoundationMetadataLimits.FitsName(key) || !FoundationMetadataLimits.FitsName(id, preservesCodeUnits: true) ||
-            spec is null && !FoundationMetadataLimits.FitsKind(kind))
+            (spec is null ? !FoundationMetadataLimits.FitsKind(kind) || !FoundationMetadataLimits.FitsContent(payload) :
+                !FoundationMetadataLimits.FitsContent(spec.Input, FoundationMetadataLimits.StartContentBytes)))
             return new(KeyAdmissionOutcome.Conflict);
         if (spec is null) Kinds.RequireApplicationSend(kind);
         var window = FoundationIngressWindow(keepFor);
@@ -56,7 +57,8 @@ public sealed partial class InMemoryStore
                 var generation = checked((previous?.Creation ?? 0) + 1);
                 var until = checked(now + (long)window.TotalMilliseconds);
                 var start = spec with { Creation = new CreationStart(generation, generation - 1, operation) };
-                var creator = new Message(request.WireId, address, Kinds.Start, start.Input, Start: start, Due: due, ReplyTo: replyTo, TargetCreation: generation);
+                var creator = new Message(request.WireId, address, Kinds.Start, start.Input, Start: start, Due: due, ReplyTo: replyTo,
+                    TargetCreation: generation) { StoreStartInputOnce = true };
                 var created = AdmitFoundationStart(tenant, creator);
                 if (created is null) return new(KeyAdmissionOutcome.Conflict);
 
