@@ -632,7 +632,8 @@ internal static class ParkDrainCascadeChecks
         var scope = new Contract.BoundScope("recovered-job-open");
         var probe = new Probe(restoreTrial: true);
         var scheduler = new HeldScheduler();
-        var edge = new InMemoryIngress(store, new Requests("recovered-job-open"), "recovered-job-open",
+        var requests = new Requests("recovered-job-open");
+        var edge = new InMemoryIngress(store, requests, "recovered-job-open",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
         var reads = new ActorList(store, 10);
         var refused = 0;
@@ -751,10 +752,15 @@ internal static class ParkDrainCascadeChecks
             return;
         }
 
-        var admission = await Send("terminate", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(park)));
+        var terminate = Json.Write(new Contract.OperatorCommand(park));
+        var reply = cut == OpenCut.Refused
+            ? edge.RequestAsync(scope, target, "terminate", Contract.Kinds.Terminate, terminate, null,
+                new Contract.RequestOptions(null, now + 1_000)).AsTask()
+            : null;
+        var admission = reply is null ? await Send("terminate", Contract.Kinds.Terminate, terminate) : null;
         for (var pass = 0; pass < 4 && Row().ParkDiscard is null && refused == 0; pass++) await Step(owner);
         var after = Row();
-        var landed = admission.Outcome == Contract.AdmissionOutcome.Accepted &&
+        var landed = admission?.Outcome == Contract.AdmissionOutcome.Accepted &&
             after is { Status: InstanceStatus.Running, ParkDiscard.Kind: ParkClearKind.Terminate, ParkRecovery: null };
         switch (cut)
         {
@@ -763,6 +769,9 @@ internal static class ParkDrainCascadeChecks
                     "WJ-1 a queued callback cannot enter after Open lands while acknowledgement is held" + $" ({landed}, queued {queuedAtBoundary}, entered {entriesAtBoundary})");
                 break;
             case OpenCut.Refused:
+                var response = await reply!.WaitAsync(TimeSpan.FromSeconds(5));
+                check(response.Error == "resolution unavailable",
+                    "WJ-1 the refused operator request receives resolution unavailable after the refusal lands");
                 check(refused == 2 && queuedAtBoundary == 1 && entriesAtBoundary == 0 && after == beforeOpen &&
                       owner.Owns && beforeOpen?.ParkRecovery is { } prior && store.Messages.ContainsKey(prior.Control) &&
                       store.Messages.Values.Any(row => ReferenceEquals(row, pending) && !row.Done),
@@ -782,7 +791,7 @@ internal static class ParkDrainCascadeChecks
         }
 
         Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
-            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, MaxAttempts = 1 });
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, MaxAttempts = 1, Transport = new JobOpenReplies(requests) });
         async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
         InstanceRow Row() => store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!.Row;
         ValueTask<Contract.Admission> Send(string operation, string kind, string? payload = null) =>
@@ -801,6 +810,11 @@ internal static class ParkDrainCascadeChecks
         await worker.PollAsync();
         await worker.LoadAsync();
         await worker.FlushAsync();
+    }
+
+    private sealed class JobOpenReplies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply) => requests.Receive(reply);
     }
 
     private sealed class Probe(bool retainOnTerminate = false, bool restoreTrial = false, bool restoreMany = false) : Contract.IActorType
