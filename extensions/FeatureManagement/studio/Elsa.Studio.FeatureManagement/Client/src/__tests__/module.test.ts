@@ -505,6 +505,7 @@ describe("feature management module", () => {
     await click(buttonContainingText(listbox as Element, "Storage"));
 
     expect(container.querySelector(".feature-management-category-popover")).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector("[aria-label='Filter by category']"));
     expect(container.querySelector("[aria-label='Filter by category']")?.textContent).toContain("Storage");
     expect(container.textContent).toContain("1 feature");
     expect(container.textContent).toContain("StorageA");
