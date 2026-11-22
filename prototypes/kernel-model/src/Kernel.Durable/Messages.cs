@@ -59,6 +59,7 @@ public sealed record Message(
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
+    internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
     public string? EventMatch { get; private init; }

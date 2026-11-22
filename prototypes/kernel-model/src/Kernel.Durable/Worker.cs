@@ -1513,7 +1513,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (TrialItems.Count > 0 || Blocked) return [];
         var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect)
-            .OrderBy(i => i.Message.FoundationHeldJobResult ? i.InboxOrder : i.Seq).ToList();
+            .OrderBy(i => i.Message.DeliveryOrder(i.Seq)).ToList();
         if (CanWithdrawJobTrials && suspects.Exists(i => i.Ticket && i.Key is not null) && TerminatePrecedesJobRetry(Now))
             suspects.RemoveAll(i => i.Ticket && i.Key is not null);
         if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;

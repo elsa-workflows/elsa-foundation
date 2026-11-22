@@ -100,7 +100,7 @@ public sealed class Delivery(Message message, long seq)
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
     // F7 puts fresh completions first. Held completions keep their priority and newest-first order after a take.
-    internal long InboxOrder => Message.FoundationHeldJobResult ? -Seq : CompletedOrder == 0 ? Seq : long.MinValue;
+    internal long InboxOrder => CompletedOrder != 0 && !Message.FoundationHeldJobResult ? long.MinValue : Message.DeliveryOrder(Seq);
     internal long ObservedOrder;     // in-memory order of first observation, for local/durable tie-breaking
     internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
     internal long CompletedOrder;    // ordinal when the driver published its result in this owner

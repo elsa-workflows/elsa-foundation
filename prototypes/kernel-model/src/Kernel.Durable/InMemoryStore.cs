@@ -430,7 +430,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var epochs = owned.ToDictionary(f => f.Partition, f => f.Epoch);
             var rows = Messages.Values
                 .Where(m => epochs.TryGetValue(m.Message.Target.Partition, out var epoch) && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
-                .OrderBy(m => m.Message.FoundationHeldJobResult ? -m.Seq : m.Seq).Take(limit)
+                .OrderBy(m => m.Message.DeliveryOrder(m.Seq)).Take(limit)
                 .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)
                 {
                     PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&

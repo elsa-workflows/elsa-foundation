@@ -76,6 +76,15 @@ internal static class HeldJobResultChecks
             check(row.State == "held" && row.Jobs is not null && actor.Handle is not null && actor.Applied == 0 &&
                 !store.Messages.ContainsKey(ticket) && store.Messages.GetValueOrDefault(result) is { Held: true, Message.FoundationJobResult: true },
                 "the landed Hold keeps the original completion and removes its runnable ticket");
+            if (shape is "self-release" or "poll-one")
+            {
+                var reads = new ActorList(store, 1);
+                var first = await reads.InboxAsync(scope, target.Actor);
+                var second = first.Next is { } next ? await reads.InboxAsync(scope, target.Actor, next) : null;
+                check(first.Items is [{ Kind: Contract.Kinds.JobFinished, State: Contract.DeliveryState.Held }] &&
+                    second?.Items is [{ Kind: "release" }] && second.Next is null,
+                    "paged inbox inspection agrees with delivery order across the held result and stimulus");
+            }
 
             if (shape is "singleton" or "singleton-cancel")
             {
