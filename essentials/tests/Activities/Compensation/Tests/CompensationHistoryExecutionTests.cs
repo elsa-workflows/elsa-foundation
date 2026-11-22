@@ -29,6 +29,7 @@ public sealed class CompensationHistoryExecutionTests
         await using var harness = await host.StartHostAsync(participant, services =>
         {
             services.AddWorkflowRuntimeHistory();
+            services.AddWorkflowStimulusRouter();
             services.Replace(ServiceDescriptor.Singleton<IPersistenceAccessContextAccessor>(new Access()));
         });
         var graph = scenario == "confirm"
