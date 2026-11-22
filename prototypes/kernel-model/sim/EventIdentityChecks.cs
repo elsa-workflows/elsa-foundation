@@ -208,7 +208,7 @@ internal static class EventIdentityChecks
         if (doneDelivery)
             store.Messages[ticket.InboxKey].Message = ticket with { Payload = Json.Write(publication) };
         var key = (publication.Key, publication.Id);
-        store.FoundationEvents.Add(key, publication);
+        store.RecordFoundationPublication(publication);
         var legacy = Events.Route(publication, store.Subscriptions.Single());
         await store.AddEventAsync(legacy);
         if (doneDelivery) await SelectAndFlush(worker);

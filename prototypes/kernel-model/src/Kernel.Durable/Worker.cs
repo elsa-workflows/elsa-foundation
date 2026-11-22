@@ -2360,8 +2360,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The subscriber's side of "each side looks after its own commit": read the events for keys just subscribed.</summary>
     public async Task MeetAsync(CancellationToken cancellationToken = default)
     {
-        var tickets = _meets.Where(i => !Awaits(i) && !i.Taken).ToList();
-        if (_meeting || !Owns || tickets.Count == 0) return;
+        if (_meeting || !Owns) return;
+        var catchUp = _meets.FirstOrDefault(i => i.Message.ParkCatchUp is not null && !Awaits(i) && !i.Taken);
+        if (catchUp is not null)
+        {
+            catchUp.Taken = true;
+            Enqueue(new TurnOutcome(catchUp.Message.Target.Id)
+                { Consumed = [catchUp], FoundationCatchUpStep = catchUp.Message.InboxKey }, cancellationToken);
+        }
+        var tickets = _meets.Where(i => i.Message.ParkCatchUp is null && !Awaits(i) && !i.Taken).ToList();
+        if (tickets.Count == 0) return;
         var generation = _generation;
         _meeting = true;
         try
@@ -2762,7 +2770,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
             FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
             FoundationRecoveryJobs = unit.FoundationRecoveryJobs,
-            FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions
+            FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions,
+            FoundationCatchUpStep = unit.FoundationCatchUpStep
         };
     }
 
@@ -2999,6 +3008,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             if (jobs.Writes.Count > 0) _woken = true;
         }
+        if (unit.FoundationCatchUpStep is not null || unit.Subscribed.Exists(wait => wait.FoundationKeepsEvents)) _woken = true;
         if (!handOver)
             foreach (var message in unit.Sent)
                 if (Holds(message.Target.Partition) && message.Due is null && !unit.Volatile.Contains(message.InboxKey) && !unit.Promoted.Contains(message.InboxKey)) _behind[message.InboxKey] = message.Target.Partition;

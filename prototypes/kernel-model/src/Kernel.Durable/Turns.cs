@@ -244,6 +244,7 @@ public sealed class TurnOutcome(string instance)
     internal ParkTimerOpen? FoundationRecoveryTimers;
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
+    internal InboxKey? FoundationCatchUpStep;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;

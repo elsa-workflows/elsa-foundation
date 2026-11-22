@@ -71,6 +71,7 @@ public sealed record Message(
     internal EventMatch? ProjectedEvent { get; init; }
     internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
+    internal ParkCatchUpTicket? ParkCatchUp { get; init; }
     internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }

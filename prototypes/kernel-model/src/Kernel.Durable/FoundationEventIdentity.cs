@@ -27,10 +27,35 @@ internal static class FoundationEventIdentity
         return "ev:" + Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    private static IncrementalHash VersionedHash(byte domain)
+    internal static string CatchUpId(InboxKey first)
+    {
+        using var hash = VersionedHash((byte)'C', 1);
+        AppendName(hash, first.Id);
+        AppendNumber(hash, first.Scope);
+        hash.AppendData([first.Match is null ? (byte)0 : (byte)1]);
+        if (first.Match is { } match) AppendName(hash, match);
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    internal static string CatchUpSuccessor(string chain, long page)
+    {
+        using var hash = VersionedHash((byte)'N', 1);
+        AppendName(hash, chain);
+        AppendNumber(hash, page);
+        return "meet:" + Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void AppendNumber(IncrementalHash hash, long value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        BinaryPrimitives.WriteInt64BigEndian(bytes, value);
+        hash.AppendData(bytes);
+    }
+
+    private static IncrementalHash VersionedHash(byte domain, byte version = 2)
     {
         var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData([domain, 2]);
+        hash.AppendData([domain, version]);
         return hash;
     }
 
