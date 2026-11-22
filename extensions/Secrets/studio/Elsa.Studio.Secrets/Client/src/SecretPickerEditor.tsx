@@ -83,7 +83,7 @@ export function SecretPickerEditor({
         ))}
       </select>
       <p id={statusId} className={`secret-picker-status ${visibleState.status}`} role={visibleState.status === "error" ? "alert" : "status"}>
-        {visibleState.status === "loading" ? "Loading secret metadata..." : null}
+        {visibleState.status === "loading" ? "Loading secret metadata…" : null}
         {visibleState.status === "error" ? (
           <>
             <span>Secret metadata is unavailable.</span>

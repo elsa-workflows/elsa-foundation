@@ -320,7 +320,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                   <td>{labelStore(descriptors, secret.storeName)}</td>
                   <td>{secret.scope || "-"}</td>
                   <td><StatusBadge status={secret.status} /></td>
-                  <td><StudioTimestamp value={secret.updatedAt ?? secret.createdAt} fallback={formatDate(secret.updatedAt ?? secret.createdAt)} /></td>
+                  <td><StudioTimestamp value={secret.updatedAt ?? secret.createdAt} fallback="Unavailable" invalidFallback="Unavailable" /></td>
                   <td>
                     <div className="secrets-row-actions">
                       <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => openEditor(secret.name)}>Edit</StudioButton>
@@ -389,6 +389,3 @@ function labelStore(descriptors: SecretDescriptorsResponse | null, storeName: st
   return descriptors?.stores.find(store => store.name === storeName)?.displayName ?? storeName;
 }
 
-function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : "-";
-}

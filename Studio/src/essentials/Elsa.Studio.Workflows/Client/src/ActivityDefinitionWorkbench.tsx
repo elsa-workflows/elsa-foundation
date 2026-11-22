@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, useId, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioTabs, tabElementIds, StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -34,7 +34,8 @@ type Section = "overview" | "drafts" | "versions" | "relationships";
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; originDraftId?: string | null; originVersionId?: string | null; returnPlanId?: string | null; draftActionVersionId?: string | null; publicationReview?: boolean };
 type DefinitionPrivacyFailure = { definitionId: string; kind: "unavailable" | "forbidden" | "not-found" };
 
-export function ActivityDefinitionWorkbench({ context, definitionId, section, selectedDraftId, selectedVersionId, originDraftId, originVersionId, returnPlanId, requestedDraftActionVersionId, requestedPublicationReview = false, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
+export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, definitionId, section, selectedDraftId, selectedVersionId, originDraftId, originVersionId, returnPlanId, requestedDraftActionVersionId, requestedPublicationReview = false, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
+  agentWorkspace?: boolean;
   context: StudioEndpointContext;
   definitionId: string;
   section: string | null;
@@ -100,7 +101,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const exactVersionFailure = exactVersionQuery.error ? classifyActivityDefinitionReadFailure(exactVersionQuery.error) : null;
   const effectiveDraftSelectionFailure = draftSelectionFailure?.id === selectedDraftId ? draftSelectionFailure.kind : exactDraftFailure;
   const effectiveVersionSelectionFailure = versionSelectionFailure?.id === selectedVersionId ? versionSelectionFailure.kind : exactVersionFailure;
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabBaseId = useId();
 
   useEffect(() => {
     if (!mustDiscardData) return;
@@ -200,8 +201,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   if (!detail && detailQuery.isPending && !detailFailure) return <main className="ad-page ad-workbench" aria-busy="true"><div className="ad-skeleton" role="status">Loading the Activity Definition workbench…</div></main>;
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
-      <StudioShellBreadcrumbs items={[{ label: "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
-      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Activity definitions unavailable" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not support activity definition management. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</button></section>
+      <StudioShellBreadcrumbs items={[{ label: agentWorkspace ? "Agents" : "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
+      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Activity definitions unavailable" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not support activity definition management." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</button></section>
     </main>;
   }
   if (!detail) return null;
@@ -252,7 +253,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
     <StudioShellBreadcrumbs items={[
-      { href: "/workflows/activity-definitions", label: "Activity definitions" },
+      { href: agentWorkspace ? "/agents" : "/workflows/activity-definitions", label: agentWorkspace ? "Agents" : "Activity definitions" },
       ...(returnDesignerHref ? [{ href: returnDesignerHref, label: "Designer" }] : [])
     ]} current={detail.definition.displayName} renderLink={item =>
       <StudioLink href={item.href} navigateToStudioPath={item.href === returnDesignerHref ? returnToDesigner :
@@ -272,10 +273,10 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}
     {startError ? <div className="ad-inline-error" role="alert">{startError}</div> : null}
     {!designOwned ? <details className="ad-technical-details ad-technical-disclosure"><summary>Technical details</summary><IdentityDetails detail={detail} provider={provider} /></details> : null}
-    <div className="ad-tabs" role="tablist" aria-label="Activity Definition sections" onKeyDown={event => handleTabKey(event, tabs, activeSection, tabRefs.current, navigateSection)}>
-      {tabs.map((tab, index) => <button key={tab.id} ref={element => { tabRefs.current[index] = element; }} type="button" role="tab" aria-selected={activeSection === tab.id} tabIndex={activeSection === tab.id ? 0 : -1} onClick={() => navigateSection(tab.id)}>{tab.label}</button>)}
-    </div>
-    <section className="ad-tab-panel" role="tabpanel" aria-label={tabs.find(tab => tab.id === activeSection)?.label}>
+    <StudioTabs compact baseId={tabBaseId} ariaLabel="Activity Definition sections"
+      tabs={tabs.map(tab => ({ ...tab, panelIndex: 0 }))} activeTab={activeSection} onSelect={id => navigateSection(normalizeSection(id))} />
+    <section className="ad-tab-panel" role="tabpanel" id={tabElementIds(tabBaseId, 0).panelId}
+      aria-labelledby={tabElementIds(tabBaseId, tabs.findIndex(tab => tab.id === activeSection)).tabId}>
       {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
       {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} publicationReviewRequested={requestedPublicationReview} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onReviewPublication={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null, publicationReview: true })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
       {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
@@ -471,12 +472,3 @@ function compactContractType(alias: string, collectionKind: string, requirement:
 }
 function draftLabel(item: ActivityDefinitionDraftManagementView) { return item.draft.presentationLabel?.trim() || `Draft ${item.draft.draftId}`; }
 function normalizeSection(value: string | null): Section { return value === "drafts" || value === "versions" || value === "relationships" ? value : "overview"; }
-
-function handleTabKey(event: KeyboardEvent, tabs: { id: Section }[], active: Section, elements: (HTMLButtonElement | null)[], navigate: (section: Section) => void) {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  event.preventDefault();
-  const current = tabs.findIndex(tab => tab.id === active);
-  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-  navigate(tabs[next].id);
-  window.setTimeout(() => elements[next]?.focus());
-}

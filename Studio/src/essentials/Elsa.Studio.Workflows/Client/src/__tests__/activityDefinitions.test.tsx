@@ -346,6 +346,7 @@ describe("Activity Definitions experience", () => {
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
     expect(rendered.container.querySelector(".ad-draft-editor")).toBeNull();
 
+    await waitForText(rendered.container, "Alternative");
     click(buttonByText(rendered.container, "Alternative"));
     click(buttonByText(rendered.container, "Review publication"));
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-2"));

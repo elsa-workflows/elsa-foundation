@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Plus, Trash2, X } from "lucide-react";
-import { AdvancedSection, TechnicalDetails, StudioFactList, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioFactList, StudioTabs, StudioTabPanel, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityAuthoringCapabilities,
@@ -800,13 +800,11 @@ const memberTabs = ["General", "Presentation", "Advanced"];
 function MemberFieldTabs({ general, presentation, advanced }: { general: ReactNode; presentation: ReactNode; advanced: ReactNode }) {
   const [active, setActive] = useState("General");
   const id = useId();
-  const onKeyDown = useTablistKeyboard(memberTabs, active, setActive);
   const panels = [general, presentation, advanced];
   return <div className="ad-member-settings">
-    <div className="ad-tabs ad-member-tabs" role="tablist" aria-label="Member settings" onKeyDown={onKeyDown}>
-      {memberTabs.map((tab, index) => <button key={tab} type="button" role="tab" id={tabElementIds(id, index).tabId} data-tab-id={tab} aria-controls={tabElementIds(id, index).panelId} aria-selected={active === tab} tabIndex={active === tab ? 0 : -1} onClick={() => setActive(tab)}>{tab}</button>)}
-    </div>
-    {panels.map((panel, index) => <div key={memberTabs[index]} role="tabpanel" id={tabElementIds(id, index).panelId} aria-labelledby={tabElementIds(id, index).tabId} hidden={active !== memberTabs[index]}>{panel}</div>)}
+    <StudioTabs compact className="ad-member-tabs" baseId={id} ariaLabel="Member settings"
+      tabs={memberTabs.map(tab => ({ id: tab, label: tab }))} activeTab={active} onSelect={setActive} />
+    {panels.map((panel, index) => <StudioTabPanel key={memberTabs[index]} baseId={id} index={index} hidden={active !== memberTabs[index]}>{panel}</StudioTabPanel>)}
   </div>;
 }
 

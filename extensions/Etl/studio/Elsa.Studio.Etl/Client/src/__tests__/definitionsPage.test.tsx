@@ -212,14 +212,16 @@ describe("ETL definitions page", () => {
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: orders"));
     change(inputByLabel(rendered.host, "Output field 1 name"), "edited-name");
 
-    click(buttonContaining(rendered.host, "returns")!);
+    click(buttonByText(rendered.host, "Back to definitions"));
     await waitFor(() => expect(dialogs.confirm).toHaveBeenCalledTimes(1));
     expect(getEtlDefinition).toHaveBeenCalledTimes(1);
     expect(inputByLabel(rendered.host, "Output field 1 name").value).toBe("edited-name");
     expect(rendered.host.textContent).toContain("Draft: orders");
-    await waitFor(() => expect(buttonContaining(rendered.host, "returns")!.disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.host, "Back to definitions").disabled).toBe(false));
 
     vi.mocked(dialogs.confirm).mockResolvedValue(true);
+    click(buttonByText(rendered.host, "Back to definitions"));
+    await waitFor(() => expect(buttonContaining(rendered.host, "returns")).toBeTruthy());
     click(buttonContaining(rendered.host, "returns")!);
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: returns"));
     expect(getEtlDefinition).toHaveBeenCalledTimes(2);
@@ -269,6 +271,7 @@ describe("ETL definitions page", () => {
     click(buttonByText(rendered.host, "Reload draft"));
     await waitFor(() => expect(inputByLabel(rendered.host, "Output field 1 name").value).toBe("name"));
     expect(getEtlDefinition).toHaveBeenCalledTimes(2);
+    click(buttonByText(rendered.host, "Back to definitions"));
     await waitFor(() => expect(buttonContaining(rendered.host, "orders")?.textContent).toContain("Revision 8 · published through v1"));
     expect(dialogs.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ confirmLabel: "Reload saved draft" }));
   });

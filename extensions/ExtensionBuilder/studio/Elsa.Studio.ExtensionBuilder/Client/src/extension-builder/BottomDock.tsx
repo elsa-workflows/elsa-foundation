@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { StatusChip, tabElementIds, useTablistKeyboard } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioIconButton, StudioTabs, tabElementIds } from "@elsa-workflows/studio-ui";
 import type {
   BuildArtifact,
   BuildDiagnostic,
@@ -127,43 +127,25 @@ export function BottomDock({
     if (!open) onToggleOpen();
   }
 
-  const onTabsKeyDown = useTablistKeyboard(tabs.map(tab => tab.id), effectiveTab, id => selectTab(id as InspectorTab));
-
   return (
     <section className={open ? "extension-builder-dock open" : "extension-builder-dock"} aria-label="Build and runtime dock">
-      <div className="extension-builder-dock-tabs" role="tablist" aria-label="Dock panels" onKeyDown={onTabsKeyDown}>
-        {tabs.map((tab, index) => {
-          const isActive = open && tab.id === effectiveTab;
-          const ids = tabElementIds(tabsBaseId, index);
-          // Roving tabindex tracks the effective tab even while the dock is collapsed, so keyboard
-          // users can always reach and arrow through the tablist to reopen it.
-          const isRovingAnchor = tab.id === effectiveTab;
-          return (
-            <button
-              key={tab.id}
-              id={ids.tabId}
-              data-tab-id={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={ids.panelId}
-              tabIndex={isRovingAnchor ? 0 : -1}
-              className={isActive ? "active" : ""}
-              onClick={() => selectTab(tab.id)}
-            >
-              {tab.label}
-              {tab.id === "source" && changeCount > 0 ? <span className="extension-builder-dock-badge warn">{changeCount}</span> : null}
-              {tab.id === "build" && diagnosticCount > 0 ? <span className="extension-builder-dock-badge">{diagnosticCount}</span> : null}
-            </button>
-          );
-        })}
+      <div className="extension-builder-dock-tabs">
+        <StudioTabs compact baseId={tabsBaseId} ariaLabel="Dock panels" activeTab={effectiveTab}
+          tabs={tabs.map(tab => ({
+            ...tab,
+            label: tab.id === "source" && changeCount ? `${tab.label} (${changeCount})` : tab.id === "build" && diagnosticCount ? `${tab.label} (${diagnosticCount})` : tab.label
+          }))}
+          onSelect={id => selectTab(id as InspectorTab)} />
         <span className="extension-builder-dock-spacer" />
         {activeBuild ? <StatusChip tone={buildTone(activeBuild.status)}>{activeBuild.status}</StatusChip> : null}
-        <button type="button" className="studio-icon-button" aria-label={open ? "Collapse dock" : "Expand dock"} title={open ? "Collapse" : "Expand"} onClick={onToggleOpen}>
+        <StudioIconButton type="button" aria-label={open ? "Collapse dock" : "Expand dock"} title={open ? "Collapse" : "Expand"} onClick={onToggleOpen}>
           {open ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-        </button>
+        </StudioIconButton>
       </div>
 
+      {tabs.map((tab,index) => open && index === effectiveTabIndex ? null : (
+        <div key={tab.id} hidden role="tabpanel" id={tabElementIds(tabsBaseId,index).panelId} aria-labelledby={tabElementIds(tabsBaseId,index).tabId} />
+      ))}
       {open ? (
         <div
           className="extension-builder-dock-body"

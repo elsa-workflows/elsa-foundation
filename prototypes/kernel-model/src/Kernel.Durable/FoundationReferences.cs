@@ -299,6 +299,9 @@ public sealed partial class InMemoryStore
 
     private static bool ReservedMessageId(string id) => id.StartsWith('~') || id.StartsWith("key/", StringComparison.Ordinal);
 
+    private static string FoundationSendReceipt(string reference, string id) =>
+        reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
     internal bool? AddFoundationMessage(string tenant, string? reference, string id, string kind, string? payload = null,
@@ -324,9 +327,10 @@ public sealed partial class InMemoryStore
             if (!live && !starting) return null;
 
             // The receipt expires independently of delivery. A delayed input can still be pending when the id is reused.
-            var receipt = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+            var operatorKey = @operator is not null ? FoundationOperatorKey(tenant, id) : null;
+            var receipt = operatorKey is null ? FoundationSendReceipt(binding.Reference, id) : "operator/" + operatorKey;
             var now = clock();
-            if (_foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
+            if (operatorKey is null && _foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
                 return false;
 
             var occurrence = checked(_seq + 1);
@@ -338,7 +342,8 @@ public sealed partial class InMemoryStore
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
             Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
             _seq = occurrence;
-            _foundationSendReceipts[receipt] = until;
+            if (operatorKey is null) _foundationSendReceipts[receipt] = until;
+            else _foundationOperatorReceipts[operatorKey] = (reference, until);
             return true;
         }
     }

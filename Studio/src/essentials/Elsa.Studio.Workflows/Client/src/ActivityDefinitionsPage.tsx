@@ -74,6 +74,7 @@ if (typeof window !== "undefined") {
 }
 
 export function ActivityDefinitionsPage({
+  agentWorkspace = false,
   context,
   activityEditors = () => [],
   graphExtensions = () => ({ properties: [], expressions: [], panels: [] }),
@@ -81,6 +82,7 @@ export function ActivityDefinitionsPage({
   runtime = {},
   navigateToStudioPath: navigateToStudioPathNow = defaultStudioPathNavigation
 }: {
+  agentWorkspace?: boolean;
   context: StudioEndpointContext;
   activityEditors?: () => StudioActivityDefinitionImplementationEditorContribution[];
   graphExtensions?: () => {
@@ -182,6 +184,7 @@ export function ActivityDefinitionsPage({
   const navigate = (next: RouteState, force = false, replace = false) => whenActive(() => {
     if (navigationBlockedRef.current && !force) return;
     navigationBlockedRef.current = false;
+    if (agentWorkspace && !next.definitionId) { navigateToStudioPath("/agents"); return; }
     writeRouteState(next, replace ? "replace" : "push", routeCollectionContextRef.current);
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
@@ -189,7 +192,7 @@ export function ActivityDefinitionsPage({
   if (route.definitionId) {
     if (route.section === "editor" && (route.draftId || route.versionId)) {
       const extensions = graphExtensions();
-      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor context={context} definitionId={route.definitionId} draftId={route.draftId ?? undefined} versionId={route.versionId ?? undefined} allowStartEditing={!route.draftId && Boolean(route.versionId)} openPublicationReviewOnMount={route.publicationReview} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
+      return <WorkflowLazyBoundary label="activity definition draft editor"><ActivityDefinitionDraftEditor agentWorkspace={agentWorkspace} context={context} definitionId={route.definitionId} draftId={route.draftId ?? undefined} versionId={route.versionId ?? undefined} allowStartEditing={!route.draftId && Boolean(route.versionId)} openPublicationReviewOnMount={route.publicationReview} activityEditors={activityEditors()} propertyEditors={extensions.properties} expressionEditors={extensions.expressions} graphAuthoringPanels={extensions.panels} inputEditors={inputEditors()} recoverySettings={runtime.activityDefinitions?.localRecovery} identity={runtime.identity} onNavigationGuardChange={blocked => { navigationBlockedRef.current = blocked; }} onBack={force => {
         if (route.returnPlanId) {
           navigationBlockedRef.current = false;
           navigateToStudioPath(`/workflows/activity-definitions/upgrades?plan=${encodeURIComponent(route.returnPlanId)}`);
@@ -201,7 +204,7 @@ export function ActivityDefinitionsPage({
     }
     return (
       <WorkflowLazyBoundary label="activity definition workbench">
-        <ActivityDefinitionWorkbench context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} originDraftId={route.originDraftId} originVersionId={route.originVersionId} returnPlanId={route.returnPlanId} requestedDraftActionVersionId={route.draftActionVersionId} requestedPublicationReview={route.publicationReview} activityEditors={activityEditors()} onNavigate={(next, replace) => {
+        <ActivityDefinitionWorkbench agentWorkspace={agentWorkspace} context={context} definitionId={route.definitionId} section={route.section} selectedDraftId={route.draftId} selectedVersionId={route.versionId} originDraftId={route.originDraftId} originVersionId={route.originVersionId} returnPlanId={route.returnPlanId} requestedDraftActionVersionId={route.draftActionVersionId} requestedPublicationReview={route.publicationReview} activityEditors={activityEditors()} onNavigate={(next, replace) => {
           const sameDefinition = next.definitionId !== null && next.definitionId === route.definitionId;
           const destination = sameDefinition ? {
             ...next,
@@ -242,7 +245,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
   const metadata = readActivityHistoryMetadata(state) ?? {};
   if (collection === null) delete metadata.collection;
   else if (collection) metadata.collection = collection;
-  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", qualifyStudioBackendPath(`/workflows/activity-definitions${query ? `?${query}` : ""}`));
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", qualifyStudioBackendPath(`${window.location.pathname === "/agents/definitions" ? "/agents/definitions" : "/workflows/activity-definitions"}${query ? `?${query}` : ""}`));
 }
 
 function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string, section?: string | null, publicationReview?: boolean): void; onCreated(definitionId: string, draftId: string): void }) {

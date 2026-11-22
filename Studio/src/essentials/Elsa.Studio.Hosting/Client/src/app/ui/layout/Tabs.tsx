@@ -5,6 +5,7 @@ export interface StudioTabItem {
   label: string;
   disabled?: boolean;
   icon?: React.ReactNode;
+  trailing?: React.ReactNode;
   /** Link to a tabpanel index, or use `null` when the view has no tabpanel. */
   panelIndex?: number | null;
 }
@@ -152,6 +153,7 @@ export function StudioTabs({
           >
             {tab.icon ? <span className="studio-tab-icon" aria-hidden="true">{tab.icon}</span> : null}
             <span>{tab.label}</span>
+            {tab.trailing}
           </button>
         );
       })}
