@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -275,6 +276,7 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, loseOpenAnswer: true);
         await CheckTerminalCohort(takeover: false, check);
         await CheckTerminalCohort(takeover: true, check);
         await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check);
@@ -290,15 +292,22 @@ internal static class ParkKeptChecks
     }
 
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
-        bool holdAdvance = false, bool holdControl = false)
+        bool holdAdvance = false, bool holdControl = false, bool loseOpenAnswer = false)
     {
         const long initial = 1_701_400_028_000L;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = faultOnAdvance, HoldAdvance = holdAdvance, HoldSuspend = holdControl };
         var scope = new Contract.BoundScope("recover-arrivals");
-        var worker = new Worker("recover-arrivals", 0, store, new ActorAdapter(store, probe),
+        var opens = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed && loseOpenAnswer && batch.Turns.Any(turn => turn.FoundationRecoveryTimers is not null) && ++opens == 1)
+                throw new StoreException(Failure.Unknown, "The first recovery Open landed without its answer.");
+        });
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
+        var worker = Owner("recover-arrivals");
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
             (_, kind) => kind == Contract.Kinds.Recover || holdControl && kind == Contract.Kinds.Suspend);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -341,6 +350,46 @@ internal static class ParkKeptChecks
         }
         probe.PausePages = holdControl;
         var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+        if (loseOpenAnswer)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            var originalEpoch = worker.Fences.Single().Epoch;
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+            var opened = store.Instances[parked.Row.Id];
+            var unacknowledged = opens == 1 && opened.ParkRecovery is { Cursor: null, Operation: "resume" } &&
+                opened.ParkResolutionGeneration == parked.Row.ParkResolutionGeneration + 1 && probe.RecoveredArrivals == 0;
+            check(unacknowledged, "M1-3 the first Open is durable before its owner loses the answer");
+            if (!unacknowledged) return;
+            var retry = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+            await owner.DisposeAsync();
+            now += (long)Defaults.Lease.TotalMilliseconds + 1;
+            var next = Owner("recover-after-lost-open");
+            await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+            for (var pass = 0; pass < 5; pass++)
+            {
+                await Pump(successor);
+                now += 11;
+            }
+            var ended = store.Instances[parked.Row.Id];
+            var again = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+            var history = await new ActorList(store, 20).TailAsync(scope, target.Actor);
+            var outcomes = history.Items.Select(entry => Json.Read<JsonElement>(entry.Entry))
+                .Where(entry => entry.ValueKind == JsonValueKind.Object &&
+                    entry.TryGetProperty("Outcome", out var outcome) && outcome.GetString() == "recovered").ToArray();
+            var oneOutcome = outcomes is [var recovery] && recovery.GetProperty("Operation").GetString() == "resume" &&
+                recovery.GetProperty("Restored").GetInt32() == 1 && recovery.GetProperty("Cleared").GetInt32() == 1;
+            check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+                retry is { Outcome: Contract.AdmissionOutcome.Duplicate } && retry.Actor == started.Actor &&
+                again is { Outcome: Contract.AdmissionOutcome.Duplicate } && again.Actor == started.Actor &&
+                next.Fences.Single().Epoch > originalEpoch && opens == 1 &&
+                ended.ParkRecovery is null && ended.ParkResolutionGeneration == opened.ParkResolutionGeneration &&
+                oneOutcome && probe.RecoveredArrivals == 1,
+                "M1-3 both retries return the original receipt and one recovery outcome survives the cold take");
+            return;
+        }
         if (holdControl)
         {
             await Pump(owner);
