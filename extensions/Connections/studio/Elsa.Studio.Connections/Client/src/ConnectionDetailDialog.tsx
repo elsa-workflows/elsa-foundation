@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Ban, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
-import { StudioButton, StudioDialog, StudioDialogFooter, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog, StudioDialogFooter, StudioTimestamp, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { connectionSchemeLabel, ConnectionStatusBadge, connectionTypeLabel } from "./connectionPresentation";
 
 export type ConnectionAction = "Test" | "Revoke" | "Delete" | "Edit";
@@ -52,14 +52,14 @@ export function ConnectionDetailDialog({ connection, descriptors, busy, notifica
             ? (value === "true" ? "Enabled" : "Disabled") : value || "—";
           return <div key={name}><dt>{field?.displayName || name}</dt><dd>{displayValue}</dd></div>;
         })}</dl></section> : null}
-        <details className="connections-technical"><summary>Technical details</summary><dl className="connections-summary">
+        <TechnicalDetails><dl className="connections-summary">
           <div><dt>Name</dt><dd><code>{connection.name}</code></dd></div>
           <div><dt>Type</dt><dd><code>{connection.typeName}</code></dd></div>
           <div><dt>Auth scheme</dt><dd><code>{connection.authScheme}</code></dd></div>
           <div><dt>Owner</dt><dd>{connection.owner || "—"}</dd></div>
           <div><dt>Managed by</dt><dd>{connection.managedBy || "—"}</dd></div>
           <div><dt>Credential fields</dt><dd>{connection.secretFieldNames.join(", ") || "None"}</dd></div>
-        </dl></details>
+        </dl></TechnicalDetails>
       </div>
   </StudioDialog>;
 }

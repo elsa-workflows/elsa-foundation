@@ -444,7 +444,7 @@ export function ConnectionCreateDialog({
   );
 
   return (
-    <StudioDialog open title={isEdit ? "Edit connection" : "New connection"} closeLabel="Close create connection dialog"
+    <StudioDialog open title={isEdit ? "Edit connection" : "New connection"} closeLabel={isEdit ? "Close edit connection dialog" : "Close create connection dialog"}
       className="connections-create-shell" initialFocusRef={firstField} dismissDisabled={!contextIsCurrent || submitting} onClose={onCancel}
       description={isEdit ? "Update settings and credentials for this connection. Secret values are never shown here." : "Choose a service and how it authenticates. Secret values are never shown here."}
       footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={submitting} confirmDisabled={!canSubmit || submitting}
