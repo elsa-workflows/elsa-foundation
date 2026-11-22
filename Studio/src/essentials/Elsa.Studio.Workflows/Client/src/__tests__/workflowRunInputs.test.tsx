@@ -690,7 +690,7 @@ describe("workflow run inputs", () => {
     expect(document.activeElement).toBe(first);
     submitButton.focus();
     submitButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
-    expect(document.activeElement).toBe(first);
+    expect(document.activeElement).toBe(container.querySelector('[aria-label="Close dialog"]'));
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -702,7 +702,7 @@ function render(ui: React.ReactElement) {
   const root = createRoot(container);
   flushSync(() => root.render(ui));
   active = { root, container };
-  return container;
+  return document.body;
 }
 
 function fill(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null, value: string) {

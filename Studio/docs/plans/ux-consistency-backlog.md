@@ -262,14 +262,14 @@ Workflows:
 
 - [x] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
   Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`. (PR #5271, PR #5278)
-- [ ] **X3.2** (#5038) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
+- [x] **X3.2** (#5038, PR #5323) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
   "Run workflow" has no primary emphasis.
-- [ ] **X3.3** (#5039) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
+- [x] **X3.3** (#5039, PR #5323) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
   `needs: K2`
 - [x] **X3.4** (#5040) [source] `MoveWorkflowDefinitionsDialog.tsx:103–132`. (PR #5301)
-- [ ] **X3.5** (#5041) [source] `HttpTestRequestDialog.tsx:240–247`.
-- [ ] **X3.6** (#5042) [source] `ActivityVersionChangeDialog.tsx:94–226`.
-- [ ] **X3.7** (#5043) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
+- [x] **X3.5** (#5041, PR #5323) [source] `HttpTestRequestDialog.tsx:240–247`.
+- [x] **X3.6** (#5042, PR #5323) [source] `ActivityVersionChangeDialog.tsx:94–226`.
+- [x] **X3.7** (#5043, PR #5323) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
 - [x] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
   footer is raw with `.wf-primary-button`. (PR #5287)
 - [x] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`. (PR #5301)
@@ -281,7 +281,7 @@ Workflows:
 - [x] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`). (PR #5301)
 - [x] **X3.14** (#5050) [source] Folder picker drawer in `WorkflowFolderNavigation.tsx:686`
   (`.wf-folder-drawer`, bare `<strong>` heading). (PR #5301)
-- [ ] **X3.15** (#5051) [source] Incident details dialog in `WorkflowInstances.tsx:3149–3166`.
+- [x] **X3.15** (#5051, PR #5323) [source] Incident details dialog in `WorkflowInstances.tsx:3149–3166`.
 
 Activity definitions:
 
