@@ -178,7 +178,7 @@ public sealed partial class InMemoryStore
 
         if (page.TerminalInputs)
         {
-            if (after != (rescheduled with { Gate = null, Cleared = checked(before.Cleared + current.Count) }))
+            if (after != (rescheduled with { Gate = null }))
                 throw InvalidDrain();
             return;
         }

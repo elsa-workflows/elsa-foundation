@@ -76,10 +76,7 @@ internal sealed partial class ActorAdapter
                 var terminal = store.ReadEndedFoundationRecoveryPage(address, park, release.Generation);
                 if (terminal is null) return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
                 if (terminal.Count != 0)
-                    return NextPage(envelope.Issue(row, serial), drain with
-                    {
-                        Gate = null, Cleared = checked(drain.Cleared + terminal.Count)
-                    }, new(park, terminal, TerminalInputs: true));
+                    return NextPage(envelope.Issue(row, serial), drain with { Gate = null }, new(park, terminal, TerminalInputs: true));
             }
             var cohort = row.Status == Durable.InstanceStatus.Running && store.FirstUnheldRecoveryInput(row, release, _ => false) is not null
                 ? release : (Durable.ParkRelease?)null;

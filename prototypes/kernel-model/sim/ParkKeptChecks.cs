@@ -394,7 +394,7 @@ internal static class ParkKeptChecks
         const long initial = 1_701_400_028_000L;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
+        var probe = new Probe(withholdFaulted: takeover) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
         var scope = new Contract.BoundScope("terminal-recovery");
         var cleared = 0;
         Worker MakeWorker(string node, int limit) => new(node, 0, store, new ActorAdapter(store, probe),
@@ -453,13 +453,20 @@ internal static class ParkKeptChecks
                 probe.RecoveredArrivals == 1 && cleared > 0,
                 takeover ? "a successor settles all released terminal inputs before Complete" :
                     "terminal recovery settles a model-held released input without another stimulus");
-            var offers = probe.Offers;
-            await ingress.SendAsync(scope, target, "after-end", "terminal-pending");
-            await Pump(active);
-            check(probe.Offers == offers && store.Messages.Values.Any(row => row.Message.Id == "after-end" && row.Done),
-                "an ordinary arrival after terminal Complete settles without entering the ended model");
+            var receipt = store.Journal.Values.SingleOrDefault(row => row.Entries.Contains("\"recovered\"", StringComparison.Ordinal));
+            check(receipt is not null && Json.Read<RecoveryTally>(receipt.Entries) == (takeover ? new(169, 7) : new(2, 1)),
+                "terminal settlement does not count an already released input twice in the recovery receipt");
+            if (!takeover)
+            {
+                await ingress.SendAsync(scope, target, "after-end", "terminal-query");
+                await Pump(active);
+                check(probe.TerminalQueryOffer.SequenceEqual(["terminal-query"]),
+                    "terminal dispatch after Complete still accepts a model query without returning the old held input");
+            }
         }
     }
+
+    private sealed record RecoveryTally(long Restored, long Cleared);
 
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
@@ -1065,6 +1072,7 @@ internal static class ParkKeptChecks
         public int RecoveredArrivals { get; private set; }
         public bool FaultOnAdvance { get; init; }
         public bool HoldTerminalInput { get; init; }
+        public string[] TerminalQueryOffer { get; private set; } = [];
         public bool ThrowOnRunningWithholds { get; set; }
         public bool HoldAdvance { get; init; }
         public string[] LateOffer { get; private set; } = [];
@@ -1081,6 +1089,8 @@ internal static class ParkKeptChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             Offers++;
+            if (turn.Inbox.Any(message => message.Kind == "terminal-query"))
+                TerminalQueryOffer = turn.Inbox.Select(message => message.Kind).ToArray();
             if (HoldSuspend && turn.Inbox is [var suspend] && suspend.Kind == Contract.Kinds.Suspend)
             {
                 SuspendOffers++;
