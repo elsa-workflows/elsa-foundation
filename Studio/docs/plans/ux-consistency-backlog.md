@@ -175,7 +175,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`. (PR #5270)
 - [x] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use
   `StudioButton className="active"`. (PR #5280)
-- [ ] **K5. Richer menu and split button.** (#4996) [source] The designer "More workflow actions" menu
+- [x] **K5. Richer menu and split button.** (#4996, PR #5355) [source] The designer "More workflow actions" menu
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:214`) and `PublishActionButton.tsx` duplicate the same
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
