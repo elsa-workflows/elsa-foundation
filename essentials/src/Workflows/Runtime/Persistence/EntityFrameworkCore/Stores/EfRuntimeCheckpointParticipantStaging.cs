@@ -331,6 +331,8 @@ internal static class EfRuntimeCheckpointParticipantStaging
         switch (change.Operation)
         {
             case RuntimeStateChangeOperation.Delete:
+                if (row.TimerHistoryOwnerJson is not null)
+                    throw new InvalidOperationException("Retained timer ownership requires the native run deletion boundary.");
                 context.ExecutionLivenessStates.Remove(row);
                 break;
             case RuntimeStateChangeOperation.Append:
