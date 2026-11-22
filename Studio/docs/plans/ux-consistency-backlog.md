@@ -768,9 +768,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`H/modules/ThemeBuilderPage.tsx:375–379` [source]). Make Save the primary and move the rest into an
   `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`.
 - [ ] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance.
-- [ ] **H4** (#5255) [seen] Workspace tabs accumulate without limit (23 open after normal navigation),
-  including transient ones. D10: transient routes reuse the current tab, and the strip gets a cap that
-  closes the least recently used clean tab. Use 12 tabs and preserve unsaved tabs even above the cap. `needs: D10`
+- [x] **H4** (#5255) Workspace tabs reuse transient create routes and evict the least recently visited clean background tab beyond 12. Unsaved and pinned tabs are protected. (PR #5302)
 - [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
   **[check]** how it behaves at narrow widths.
 - [ ] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
