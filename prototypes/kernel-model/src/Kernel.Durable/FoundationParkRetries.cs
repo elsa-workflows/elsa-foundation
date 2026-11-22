@@ -13,6 +13,7 @@ public sealed partial class InMemoryStore
     internal const int MaxRetryHandleBytes = 256 * 1024;
     private const int MaxRetryKeyUnits = 2 * FoundationMetadataLimits.NameBytes + 160;
     private const int MaxRetryMatchUnits = 64;
+    private const ushort DigestKey = ushort.MaxValue - 1;
     private const int RetryHeaderBytes = 2 * sizeof(long) + 2 * sizeof(ushort);
     private const int MaxRetryPlainBytes = RetryHeaderBytes + 2 * (MaxRetryKeyUnits + MaxRetryMatchUnits);
     internal const int MaxRetryTokenChars = (MaxRetryPlainBytes + CursorNonceBytes + CursorTagBytes + 2) / 3 * 4;
@@ -33,16 +34,18 @@ public sealed partial class InMemoryStore
                 return null;
 
             var (id, scope, match) = key;
-            if (id.Length is 0 or > MaxRetryKeyUnits || match?.Length > MaxRetryMatchUnits) return null;
+            if (id.Length == 0) return null;
             // A re-arm replaces a timer row at the same minted key. Every other handle names one row incarnation.
-            var idBytes = DurableKeyJson.CodeUnits(id);
-            var matchBytes = match is null ? [] : DurableKeyJson.CodeUnits(match);
+            var useDigest = id.Length > MaxRetryKeyUnits || match?.Length > MaxRetryMatchUnits;
+            if (useDigest && timer) return null;
+            var idBytes = useDigest ? FoundationEventIdentity.RetryKey(key) : DurableKeyJson.CodeUnits(id);
+            var matchBytes = useDigest || match is null ? [] : DurableKeyJson.CodeUnits(match);
             var plain = new byte[RetryHeaderBytes + idBytes.Length + matchBytes.Length];
             BinaryPrimitives.WriteInt64LittleEndian(plain, timer ? 0 : row!.Seq);
             BinaryPrimitives.WriteInt64LittleEndian(plain.AsSpan(sizeof(long)), scope);
             BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(2 * sizeof(long)), (ushort)idBytes.Length);
             BinaryPrimitives.WriteUInt16LittleEndian(plain.AsSpan(RetryHeaderBytes - sizeof(ushort)),
-                match is null ? ushort.MaxValue : (ushort)matchBytes.Length);
+                useDigest ? DigestKey : match is null ? ushort.MaxValue : (ushort)matchBytes.Length);
             idBytes.CopyTo(plain, RetryHeaderBytes);
             matchBytes.CopyTo(plain, RetryHeaderBytes + idBytes.Length);
             return SealReadCursor(RetryHandleContext(tenant, reference, actor.Row, park), plain);
@@ -85,9 +88,30 @@ public sealed partial class InMemoryStore
             var marked = new List<ParkPageCursor>();
             var rearms = new List<InboxKey>();
             var alreadyRearmed = new List<InboxKey>();
+            var decoded = new List<(ParkPageCursor Cursor, byte[]? Digest)>(handles!.Count);
+            var indirectSequences = new HashSet<long>();
             foreach (var handle in handles!)
             {
-                if (!TryOpenRetryHandle(context, handle, out var cursor) || !seen.Add(cursor.Key)) return null;
+                if (!TryOpenRetryHandle(context, handle, out var cursor, out var digest)) return null;
+                if (digest is not null) indirectSequences.Add(cursor.Seq);
+                decoded.Add((cursor, digest));
+            }
+            var keptBySequence = indirectSequences.Count == 0 ? null : Messages.Values.Where(row =>
+                    indirectSequences.Contains(row.Seq) && row is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+                    row.Message.Target.Id == actor.Id && row.Message.TargetCreation == actor.Creation)
+                .ToLookup(row => row.Seq);
+            foreach (var (decodedCursor, digest) in decoded)
+            {
+                var cursor = decodedCursor;
+                if (digest is not null)
+                {
+                    var matches = keptBySequence![cursor.Seq].Select(row => row.Message.InboxKey)
+                        .Where(key => key.Scope == cursor.Key.Scope && FoundationEventIdentity.RetryKey(key).AsSpan().SequenceEqual(digest))
+                        .Take(2).ToArray();
+                    if (matches is not [var resolvedKey]) return null;
+                    cursor = cursor with { Key = resolvedKey };
+                }
+                if (!seen.Add(cursor.Key)) return null;
                 var row = FoundationParkDelivery(actor, cursor.Key);
                 if (cursor.Seq == 0)
                 {
@@ -127,9 +151,10 @@ public sealed partial class InMemoryStore
             Read = "park-kept-v1", Tenant = tenant, Reference = reference, Actor = actor.Id, actor.Creation, park.Revision, park.At
         }));
 
-    private bool TryOpenRetryHandle(ReadOnlySpan<byte> context, string token, out ParkPageCursor cursor)
+    private bool TryOpenRetryHandle(ReadOnlySpan<byte> context, string token, out ParkPageCursor cursor, out byte[]? digest)
     {
         cursor = default;
+        digest = null;
         if (token.Length % 4 != 0) return false;
         var padding = token.EndsWith("==", StringComparison.Ordinal) ? 2 : token.EndsWith('=') ? 1 : 0;
         var size = token.Length / 4 * 3 - padding - CursorNonceBytes - CursorTagBytes;
@@ -141,6 +166,13 @@ public sealed partial class InMemoryStore
         var scope = BinaryPrimitives.ReadInt64LittleEndian(plain[sizeof(long)..]);
         var idSize = BinaryPrimitives.ReadUInt16LittleEndian(plain[(2 * sizeof(long))..]);
         var matchSize = BinaryPrimitives.ReadUInt16LittleEndian(plain[(RetryHeaderBytes - sizeof(ushort))..]);
+        if (matchSize == DigestKey)
+        {
+            if (sequence <= 0 || idSize != SHA256.HashSizeInBytes || size != RetryHeaderBytes + idSize) return false;
+            digest = plain[RetryHeaderBytes..].ToArray();
+            cursor = new(sequence, new("", scope));
+            return true;
+        }
         var hasMatch = matchSize != ushort.MaxValue;
         if (sequence < 0 || (idSize & 1) != 0 || idSize is 0 or > 2 * MaxRetryKeyUnits ||
             hasMatch && (matchSize > 2 * MaxRetryMatchUnits || (matchSize & 1) != 0) ||

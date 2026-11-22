@@ -1210,6 +1210,10 @@ Park decision.
   flag. Open marks the selected kept rows `Selected` and re-arms the selected suppressed timers (see "Checks" below), so
   the Resolution never stores the selection and Open writes at most `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
   at most `P` rows, so the next recover starts from the Park's own reasons.
+  The in-memory implementation supports older deliveries whose full key exceeds the direct handle encoding,
+  including JSON event matches. Their sealed handle contains a digest of the full key and the row's sequence.
+  Open resolves it within the selected creation under the store lock, requires one matching retained row, then
+  marks that row by its full key. A physical provider's bounded lookup for those sequences belongs to K4.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
   owned commit, and `B` = 4 MiB of metadata. A page takes at most `P_page` = min(`P`, ⌊`B` / `M`⌋) = 170 rows, so its
   metadata is at most `B` by construction: a plain row limit that every provider supports, with no byte count in the
