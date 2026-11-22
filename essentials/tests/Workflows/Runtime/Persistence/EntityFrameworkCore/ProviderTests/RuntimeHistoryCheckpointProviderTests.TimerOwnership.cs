@@ -76,6 +76,33 @@ internal static partial class RuntimeHistoryCheckpointProviderContract
         }
     }
 
+    private static async Task TimerDeletedCallerSnapshot(Database database)
+    {
+        const string run = "timer-deleted-repeatable-read";
+        var access = new Access();
+        await using var caller = database.Open();
+        await using var transaction = await caller.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+        var nativeId = EfWorkflowExecutionStateStore.CreateId(Scope, run);
+        Assert.False(await caller.WorkflowExecutionStates.AsNoTracking().AnyAsync(row => row.Id == nativeId));
+        var now = database.Clock.GetUtcNow();
+        await using (var producer = database.Open())
+        {
+            var native = new EfWorkflowExecutionStateStore(producer, access, new Codec());
+            await native.SaveAsync(new WorkflowExecutionState(run, new("root", "definition", "version", "1", "hash"),
+                WorkflowExecutionStatus.Running, null, now, now, now, null, null, null, Scope, new Dictionary<string, string>())
+                { HistoryCaptureEnabledAtAdmission = true, HistoryCapturePolicy = new("runtime-history-v3", 3, true, DurableTimerHistoryFacts.Kinds) });
+            Assert.True(await native.DeleteAsync(run));
+        }
+        // The old snapshot saw neither native row nor ownership. The actual current write must
+        // still expose deletion, rather than treating an empty historical snapshot as admission.
+        var timer = new DurableTimer("late", run, "Timer", "timer-stimulus", now.AddMinutes(1), now);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfDurableTimerStore(caller, access, new Codec(), database.Clock).SaveAsync(timer).AsTask());
+        await transaction.RollbackAsync();
+        await using var current = database.Open();
+        Assert.Null(await new EfDurableTimerStore(current, access, new Codec(), database.Clock).FindAsync(run, timer.TimerId));
+        Assert.Null(await new EfWorkflowExecutionStateStore(current, access, new Codec()).FindAsync(run));
+    }
+
     private static async Task TimerCallerSnapshot(Database database, bool probe = false, bool native = false)
     {
         const string run = "timer-repeatable-read-run";

@@ -253,6 +253,30 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         if (transaction is not null) await transaction.RollbackAsync();
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Legacy_timer_refuses_pending_ownership_edits_without_reloading_or_flushing_them(bool callerTransaction)
+    {
+        await using var f = await TimerHistoryFixture.Create(native: false);
+        var executions = new EfWorkflowExecutionStateStore(f.Context, f.Access, new NoopContinuationCodec());
+        await executions.SaveAsync(Execution("workflow-a", "tenant-a") with { HistoryCaptureEnabledAtAdmission = false, HistoryCapturePolicy = null });
+        var row = await f.Context.ExecutionLivenessStates.AsTracking().SingleAsync();
+        var state = EfExecutionLivenessStateStore.Read(row, "tenant-a", "workflow-a", RuntimeExecutionOwnershipStateId.For("workflow-a"));
+        var metadata = new Dictionary<string, string>(state.Metadata) { ["caller.change"] = "preserve-me" };
+        var pending = RuntimeArtifactJson.Serialize(new ExecutionLivenessState(state.ExecutionLivenessStateId, state.WorkflowExecutionId,
+            state.ExecutionLease, state.Heartbeat, state.Drain, state.InterruptedExecution, state.PendingPostCommitIntentIds, metadata));
+        row.ContentJson = pending;
+        Assert.True(f.Context.ChangeTracker.HasChanges());
+        await using var transaction = callerTransaction ? await f.Context.Database.BeginTransactionAsync() : null;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.Store.SaveAsync(HistoryTimer("legacy") with { HistoryResponsibility = null }).AsTask());
+        Assert.Equal(pending, row.ContentJson);
+        Assert.Equal(EntityState.Modified, f.Context.Entry(row).State);
+        Assert.Empty(await f.Context.DurableTimers.AsNoTracking().ToArrayAsync());
+        if (transaction is not null) await transaction.RollbackAsync();
+        await using var fresh = f.Database.Open("tenant-a");
+        Assert.DoesNotContain("caller.change", (await fresh.ExecutionLivenessStates.AsNoTracking().SingleAsync()).ContentJson);
+    }
+
     private static DurableTimer HistoryTimer(string id = "timer")
     {
         var timer = new DurableTimer(id, "workflow-a", "Timer", "stimulus", OccurredAt.AddMinutes(1), OccurredAt,
