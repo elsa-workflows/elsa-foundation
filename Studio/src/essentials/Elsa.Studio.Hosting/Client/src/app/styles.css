@@ -3324,6 +3324,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
     flex: 0 0 auto;
   }
 
+  /* Keep the backend selector reachable in the compact left-navigation strip. */
   .sidebar-footer {
     display: flex;
     flex: 0 0 auto;
@@ -3335,10 +3336,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   }
 
   .sidebar-account {
-    display: none;
-  }
-
-  html[data-nav-mode="left"] .sidebar-footer {
     display: none;
   }
 

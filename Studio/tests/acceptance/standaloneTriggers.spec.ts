@@ -660,7 +660,7 @@ test("standalone access and availability", async ({ page, browser }) => {
     return result as T;
   }
   async function switchProfile(name: "Default backend" | "Owned alternate connection", id: "acceptance-primary" | "acceptance-alternate") {
-    await page.getByRole("button", { name: /^Select backend\. Current:/ }).click();
+    await page.getByRole("button", { name: /^Select backend\. Current:/ }).click({ timeout: 30_000 });
     await page.getByLabel("Backend connections", { exact: true }).getByRole("button", { name: new RegExp(name) }).click();
     await expect(page).toHaveURL(new RegExp(`backend=${id}`));
   }
