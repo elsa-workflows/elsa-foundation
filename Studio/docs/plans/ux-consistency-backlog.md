@@ -423,7 +423,7 @@ Four badge styles were measured [seen]:
 
 Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
-- [ ] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`)
+- [x] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`) (PR #5322)
   `wf-status-badge`. See also W6.
 - [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
@@ -672,28 +672,28 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Workflows module
 
-- [ ] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400.
+- [x] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400. (PR #5322)
 - [ ] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless
   in one and outlined in the other; the ⋯ button is borderless in one and boxed in the other.
   **[check]** palette category headings appear to differ in size.
-- [ ] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil
+- [x] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil (PR #5322)
   ("✏️Edit"). Use an `OverflowMenu`.
-- [ ] **W4** (#5216) [seen] Definitions table: the "Published" column header is clipped behind "Actions" at
+- [x] **W4** (#5216) [seen] Definitions table: the "Published" column header is clipped behind "Actions" at (PR #5322)
   1440px.
 - [ ] **W5** (#5217) [seen] Activity availability: raw 32px filter input and 16px-radius option cards.
-- [ ] **W6** (#5218) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23–35` renders a published
+- [x] **W6** (#5218) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23–35` renders a published (PR #5322)
   version with `data-status="completed"` and retired with `"cancelled"`. Use a tone that matches the
   meaning.
-- [ ] **W7** (#5219) [verified] 15px toolbar icons at `WF/workflow-editor/WorkflowEditorToolbar.tsx:186, 189`;
+- [x] **W7** (#5219) [verified] 15px toolbar icons at `WF/workflow-editor/WorkflowEditorToolbar.tsx:186, 189`; (PR #5322)
   [source] `WorkflowDefinitions.tsx:791, 862`; the kit rule is 16px. Also 14px and 15px in
   `EXT/Connections/ConnectionsPage.tsx:145–146` and `EXT/Secrets/SecretsPage.tsx:253–255`.
 - [ ] **W8** (#5220) [seen] Clicking an agent in Agents opens the Activity definitions workbench, and the
   sidebar selection jumps to Library.
-- [ ] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter
+- [x] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter (PR #5322)
   toolbar. `needs: K6`
 - [ ] **W10** (#5222) [source] `WF/ActivityDefinitionsPage.tsx:515` div-grid table with `role="table"` and
   `WF/workflow-editor/WorkflowDefinitions.tsx:867` `.wf-grid` → `StudioDataGrid`.
-- [ ] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit
+- [x] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit (PR #5322)
   components; use the kit components directly.
 - [ ] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.

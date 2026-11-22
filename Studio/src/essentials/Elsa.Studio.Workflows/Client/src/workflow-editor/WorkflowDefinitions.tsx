@@ -6,7 +6,7 @@ import { useWorkflowPageWeaver } from "./useWorkflowLibraryWeaver";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { AlertCircle, Package, Plus, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioWeaverRegistry, type StudioEndpointContext, type StudioNotificationInput } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioResultState, SkeletonRows, studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -15,7 +15,6 @@ import { getNotifications, notifySuccess } from "./notifications";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpers";
-import { WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
 import { clearUnavailableWorkflowBrowseConstraints, unavailableWorkflowBrowseConstraints, updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey, workflowLibraryFilterKey, type WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
@@ -788,7 +787,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   return (
     <>
       <StudioPageHeader title={recycleBinSelected ? "Recycle bin" : "Workflow definitions"} titleId="workflow-definitions-title" description={recycleBinSelected ? "Restore deleted workflow definitions or delete them permanently." : "Create and organize workflow definitions, then open a definition to edit its behavior."} actionsLabel="Workflow definition page actions" actions={
-        !recycleBinSelected ? <StudioButton variant="primary" size="md" title="New workflow" aria-label="New workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={15} /> New workflow</StudioButton> : undefined
+        !recycleBinSelected ? <StudioButton variant="primary" size="md" title="New workflow" aria-label="New workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={16} /> New workflow</StudioButton> : undefined
       } refresh={{
         id: `workflow-definitions:${context.baseUrl}:${authorityRevision}`,
         label: "Refresh workflow definitions",
@@ -825,10 +824,10 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
 
         {staleStatus ? <div className="wf-status-line wf-definition-refresh-status" role="status">{staleStatus}</div> : null}
         {displayState === "failed" && currentError ? (
-          <WfErrorCard
-            message={currentError}
+          <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />}
+            description={currentError || "Please try again, or check that the Elsa server is reachable."}
             title={errorTitle}
-            action={(
+            actions={(
               <div className="wf-definition-search-actions">
                 <StudioButton onClick={librarySupportError ? () => window.location.reload() : retry}>Retry</StudioButton>
                 {page > 1 ? <StudioButton onClick={() => rebase()}>Restart from first page</StudioButton> : null}
@@ -843,7 +842,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
             <div className="wf-selection-actions">
               {moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? <StudioButton disabled={bulkDeleting} onClick={openMoveDialog}>Move to folder</StudioButton> : null}
               {librarySupport?.bulk && libraryPermissions.canAssignTags === true && listState !== "deleted" ? <StudioButton disabled={bulkDeleting || selectedCount > 100} onClick={() => setBulkTagTargets([...selectedIds])}>Edit tags</StudioButton> : null}
-              {listState === "active" ? <StudioButton ref={bulkDeleteButtonRef} className="wf-delete-action" disabled={bulkDeleting} onClick={() => void deleteSelected()}><Trash2 size={15} aria-hidden="true" />{bulkDeleting ? "Deleting…" : "Delete selected"}</StudioButton> : null}
+              {listState === "active" ? <StudioButton ref={bulkDeleteButtonRef} className="wf-delete-action" disabled={bulkDeleting} onClick={() => void deleteSelected()}><Trash2 size={16} aria-hidden="true" />{bulkDeleting ? "Deleting…" : "Delete selected"}</StudioButton> : null}
               <StudioButton disabled={bulkDeleting} onClick={clearSelection}>Clear selection</StudioButton>
             </div>
           </div>
@@ -853,13 +852,13 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
           {bulkDeleteResult.failures.length ? <ul>{bulkDeleteResult.failures.map(failure => <li key={failure.id}>{failure.id}: {failure.message}</li>)}</ul> : null}
           <StudioButton onClick={() => setBulkDeleteResult(null)}>Dismiss</StudioButton>
         </div> : null}
-        {displayState === "loading" && !renderResultRows ? <WfListSkeleton /> : null}
+        {displayState === "loading" && !renderResultRows ? <SkeletonRows /> : null}
         {isCurrentData && !currentError && definitions.length === 0 ? (
           <StudioCollectionEmptyState headingLevel={3}
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            actions={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> New workflow</StudioButton>}
+            actions={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={16} /> New workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
@@ -962,7 +961,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
                         {librarySupport?.tags && definition.tags?.length ? <p>Tags: {formatWorkflowTags(definition, tagCatalog)}</p> : null}
                       </WorkflowListIdentifiers> : null}
                     </span>
-                    <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
+                    <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <StatusChip tone="neutral">Deleted</StatusChip> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
                     <span className="wf-definition-modified" role="cell"><StudioTimestamp value={definition.lastModifiedAt} fallback="—" /></span>
                     {showTagColumn ? <span className="wf-library-tag-summary" role="cell" title={formatWorkflowTags(definition, tagCatalog)}>{formatWorkflowTags(definition, tagCatalog) || "—"}</span> : null}
