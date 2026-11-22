@@ -47,7 +47,7 @@ public sealed partial class InMemoryStore
         foreach (var subscription in turn.Subscribed)
         {
             var registered = subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now };
-            Subscriptions.Add(registered);
+            AddRegisteredSubscription(registered);
             if (registered.FoundationKeepsEvents)
                 _foundationCatchUpCoverage.Add(registered.FoundationIncarnation!.Value, new(registered, message!.ParkCatchUp!));
         }
@@ -281,12 +281,6 @@ public sealed partial class InMemoryStore
     private bool OwedToCatchUp(EventRow publication) => _foundationCatchUpCoverage.Values.Any(entry =>
         entry.Wait.FoundationTenant == publication.FoundationTenant && _foundationEventEquality.Equals(entry.Wait.Key, publication.Key) &&
         entry.Ticket.Entitlement <= publication.KeepUntil);
-
-    private bool RemoveRegisteredSubscription(SubscriptionRow subscription)
-    {
-        RemoveCatchUpCoverage(subscription);
-        return Subscriptions.Remove(subscription);
-    }
 
     private void RemoveCatchUpCoverage(SubscriptionRow subscription)
     {
