@@ -6,7 +6,7 @@ namespace Elsa.Architecture.Tests;
 
 internal static class JsonBaselineSourceScan
 {
-    internal sealed record Finding(string Setting, string Signature, int Line);
+    internal sealed record Finding(string Setting, string Signature, int Line, string Site = "");
     internal sealed record Registration(string File, IReadOnlySet<string> Settings, string Reason, string Approval);
     private static readonly HashSet<string> WorkflowDataFiles = new(StringComparer.Ordinal)
     {
@@ -16,7 +16,7 @@ internal static class JsonBaselineSourceScan
         "DescriptorPayloadSerializer.cs", "ObjectConverter.cs", "RuntimeWorkflowStateSeed.cs", "ActivitySecretInputResolver.cs", "ParentResumeExecutor.cs"
     };
 
-    internal static string Identity(string path, Finding finding) => path.Replace('\\', '/') + " | " + finding.Signature;
+    internal static string Identity(string path, Finding finding) => path.Replace('\\', '/') + " | " + finding.Site + " | " + finding.Signature;
     internal static bool IsWorkflowData(string path) => WorkflowDataFiles.Contains(Path.GetFileName(path));
     internal static bool IsAccounted(string path, Finding finding, IReadOnlySet<string> legacy, IReadOnlyList<Registration> registrations) =>
         finding.Setting == "optionless"
@@ -68,21 +68,31 @@ internal static class JsonBaselineSourceScan
         }
         foreach (var argument in root.DescendantNodes().OfType<AttributeArgumentSyntax>().Where(x => x.NameEquals is not null))
             if (argument.Ancestors().OfType<AttributeSyntax>().First().Name.ToString().Contains("JsonSourceGenerationOptions", StringComparison.Ordinal) && IsDeviation(argument.NameEquals!.Name.Identifier.ValueText, argument.Expression.ToString())) Add(argument.NameEquals.Name.Identifier.ValueText, argument);
+        var serializerAliases = root.DescendantNodes().OfType<UsingDirectiveSyntax>()
+            .Where(usingDirective => usingDirective.Alias is not null && usingDirective.Name?.ToString().EndsWith(".JsonSerializer", StringComparison.Ordinal) == true)
+            .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
+        var staticSerializer = root.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(usingDirective =>
+            usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) && usingDirective.Name?.ToString().EndsWith(".JsonSerializer", StringComparison.Ordinal) == true);
         foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (call.Expression is not MemberAccessExpressionSyntax member) continue;
-            var name = member.Name.Identifier.ValueText;
-            var serializer = member.Expression.ToString().EndsWith("JsonSerializer", StringComparison.Ordinal);
+            var member = call.Expression as MemberAccessExpressionSyntax;
+            var name = member?.Name.Identifier.ValueText ?? (call.Expression as SimpleNameSyntax)?.Identifier.ValueText;
+            if (name is null) continue;
+            var receiver = member?.Expression.ToString();
+            var serializer = receiver is not null && (receiver == "JsonSerializer" || receiver.EndsWith(".JsonSerializer", StringComparison.Ordinal) || serializerAliases.Contains(receiver)) || member is null && staticSerializer;
             var arguments = call.ArgumentList.Arguments;
-            if (serializer && name is "Serialize" or "SerializeToElement" or "SerializeToUtf8Bytes" or "SerializeAsync" or "Deserialize" or "DeserializeAsync" or "DeserializeAsyncEnumerable")
+            var effective = arguments.Where(argument => argument.NameColon?.Name.Identifier.ValueText != "cancellationToken").ToArray();
+            if (serializer && name is "Serialize" or "SerializeToNode" or "SerializeToElement" or "SerializeToUtf8Bytes" or "SerializeAsync" or "Deserialize" or "DeserializeAsync" or "DeserializeAsyncEnumerable")
             {
-                var minimum = name.Contains("Async", StringComparison.Ordinal) ? 2 : 1;
-                var last = arguments.LastOrDefault()?.Expression;
-                if (arguments.Count == minimum || last?.IsKind(SyntaxKind.NullLiteralExpression) == true ||
-                    arguments.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
-                    arguments.Count == minimum + 1 && (last is TypeOfExpressionSyntax || last?.ToString().EndsWith(".GetType()", StringComparison.Ordinal) == true)) Add("optionless", call);
+                var minimum = name == "SerializeAsync" ? 2 : 1;
+                var last = effective.LastOrDefault()?.Expression;
+                if (effective.Length == minimum || last?.IsKind(SyntaxKind.NullLiteralExpression) == true ||
+                    effective.Any(argument => argument.NameColon?.Name.Identifier.ValueText is "options" or "jsonTypeInfo" && argument.Expression.IsKind(SyntaxKind.NullLiteralExpression)) ||
+                    effective.Length == minimum + 1 && (last is TypeOfExpressionSyntax || last?.ToString().EndsWith(".GetType()", StringComparison.Ordinal) == true)) Add("optionless", call);
             }
-            else if (!serializer && name is "Deserialize" or "DeserializeAsync" && arguments.Count == 0) Add("optionless", call);
+            else if (!serializer && name is "Deserialize" or "DeserializeAsync" &&
+                (effective.Length == 0 || member?.Name is not GenericNameSyntax && effective.Length == 1)) Add("optionless", call);
+            if (member is null) continue;
             if (name == "Add" && member.Expression is MemberAccessExpressionSyntax list)
             {
                 if (list.Name.Identifier.ValueText == "Converters")
@@ -95,7 +105,15 @@ internal static class JsonBaselineSourceScan
             foreach (var converter in assignment.Right.DescendantNodesAndSelf().OfType<ObjectCreationExpressionSyntax>()) Add("converter:" + ConverterName(converter), converter);
         return findings;
 
-        void Add(string setting, SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().NormalizeWhitespace().ToFullString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal), node.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+        void Add(string setting, SyntaxNode node) => findings.Add(new(setting, node.WithoutTrivia().NormalizeWhitespace().ToFullString().Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal), node.GetLocation().GetLineSpan().StartLinePosition.Line + 1, Site(node)));
+    }
+
+    private static string Site(SyntaxNode node)
+    {
+        var owner = node.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "<global>";
+        var method = node.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault();
+        var name = method switch { MethodDeclarationSyntax declaration => declaration.Identifier.ValueText, ConstructorDeclarationSyntax declaration => declaration.Identifier.ValueText, _ => node.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault()?.Identifier.ValueText ?? node.Ancestors().OfType<VariableDeclaratorSyntax>().FirstOrDefault()?.Identifier.ValueText ?? "<initializer>" };
+        return owner + "::" + name + (method is null ? "" : "(" + string.Join(",", method.ParameterList.Parameters.Select(parameter => parameter.Type?.ToString())) + ")");
     }
 
     private static string ConverterName(ExpressionSyntax expression) => expression switch

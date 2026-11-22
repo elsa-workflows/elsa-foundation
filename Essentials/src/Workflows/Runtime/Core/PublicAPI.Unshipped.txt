@@ -10865,3 +10865,10 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidationFinding.Json
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
 Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Warnings.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.InputWarnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartCommandPayload.InputWarnings.init -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation.Warnings.init -> void
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation.Success(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string!, System.Text.Json.JsonElement>>! inputs, System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.ExecutionWarning!>! warnings) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidation!
+Elsa.Workflows.Runtime.Core.Models.RuntimeScheduleActivityCommandPayload.InputWarnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeScheduleActivityCommandPayload.InputWarnings.init -> void

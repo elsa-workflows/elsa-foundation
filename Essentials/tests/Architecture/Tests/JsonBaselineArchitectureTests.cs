@@ -21,6 +21,11 @@ public sealed class JsonBaselineArchitectureTests
     [InlineData("class C { void M() { JsonSerializer.SerializeAsync(stream, value); } }", "optionless")]
     [InlineData("class C { void M() { JsonSerializer.DeserializeAsync<T>(stream); } }", "optionless")]
     [InlineData("class C { void M() { payload.Deserialize<T>(); } }", "optionless")]
+    [InlineData("using JS = System.Text.Json.JsonSerializer; class C { void M() { JS.Serialize(value); } }", "optionless")]
+    [InlineData("using static System.Text.Json.JsonSerializer; class C { void M() { Serialize(value); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.SerializeToNode(value); } }", "optionless")]
+    [InlineData("class C { void M() { payload.Deserialize(typeof(UserType)); } }", "optionless")]
+    [InlineData("class C { void M() { JsonSerializer.SerializeAsync(stream, value, cancellationToken: token); } }", "optionless")]
     public void Every_unregistered_deviation_is_rejected(string source, string setting)
     {
         var finding = Assert.Single(JsonBaselineSourceScan.Scan(source).Where(x => x.Setting == setting));

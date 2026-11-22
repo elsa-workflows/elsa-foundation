@@ -1,3 +1,4 @@
+import { setStudioTimeZonePreference } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,6 +16,7 @@ import { createEnumWorkflowRunInputEditorContribution } from "../workflowRunInpu
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  setStudioTimeZonePreference("browser");
   if (!active) return;
   flushSync(() => active!.root.unmount());
   active.container.remove();
@@ -319,6 +321,28 @@ describe("workflow run inputs", () => {
       },
       errors: {}
     });
+  });
+
+  it.each([
+    ["2026-01-15T12:30", "Europe/Amsterdam", "2026-01-15T12:30+01:00"],
+    ["2026-07-15T12:30", "Europe/Amsterdam", "2026-07-15T12:30+02:00"],
+    ["2026-07-15T12:30", "UTC", "2026-07-15T12:30+00:00"]
+  ])("sends an explicit date-specific offset from the actual Run parser (%s, %s)", (draft, zone, expected) => {
+    setStudioTimeZonePreference(zone);
+    const input = workflowInput("when", "When", "DateTime", true);
+    expect(parseWorkflowRunInputs([input], { when: draft })).toEqual({ values: { When: expected }, errors: {} });
+    const collection = workflowInput("dates", "Dates", "DateTimeOffset", true, "Array");
+    expect(parseWorkflowRunInputs([collection], { dates: JSON.stringify([draft]) })).toEqual({ values: { Dates: [expected] }, errors: {} });
+    const editor = editorContribution("date", 1, () => true);
+    editor.serialize = () => draft;
+    expect(parseWorkflowRunInputs([input], { when: draft }, [editor])).toEqual({ values: { When: expected }, errors: {} });
+  });
+
+  it("refuses DST gaps and impossible dates through the Run parser", () => {
+    setStudioTimeZonePreference("Europe/Amsterdam");
+    const input = workflowInput("when", "When", "DateTime", true);
+    expect(parseWorkflowRunInputs([input], { when: "2026-03-29T02:30" }).errors.when).toContain("does not exist");
+    expect(parseWorkflowRunInputs([input], { when: "2026-02-30T12:30" }).errors.when).toContain("calendar");
   });
 
   it("omits blank optional values and reports declared scalar type errors", () => {

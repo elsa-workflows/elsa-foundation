@@ -180,18 +180,7 @@ public static class ElsaEndpointConventions
         // Ownership is validated as a final convention alongside the package's lifetime check, so
         // both see the completed metadata rather than whatever had been added by this point.
         builder.Finally(endpointBuilder => EndpointOwnershipValidator.Validate(endpointBuilder));
-        builder.Finally(endpointBuilder =>
-        {
-            var next = endpointBuilder.RequestDelegate;
-            if (next is null) return;
-            endpointBuilder.RequestDelegate = context =>
-            {
-                // Installed once by the common Elsa API convention, including binding/problem responses.
-                // Workflow-authored HTTP responses do not pass through this REST convention.
-                context.Response.Headers.XContentTypeOptions = "nosniff";
-                return next(context);
-            };
-        });
+        builder.WithMetadata(ElsaJsonResponseHeadersMetadata.Instance);
         return builder.WithApiExplorerDescription().RequireStableEndpointMetadata();
     }
 

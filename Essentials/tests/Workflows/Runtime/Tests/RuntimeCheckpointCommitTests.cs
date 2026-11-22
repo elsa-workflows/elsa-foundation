@@ -180,6 +180,33 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public void Cleanup_only_changes_participate_in_the_checkpoint_identity()
+    {
+        RuntimeCheckpointStateChangeSet Changes(string scope) => new(null, null, [], [], [], [], [],
+            activityScopeCleanups: [new("wfexec-1", scope, [], [], [], [])]);
+        var first = NewCommit(RuntimeCheckpointNames.ActivityCompleted) with { StateChanges = Changes("scope-a") };
+        var changed = first with { StateChanges = Changes("scope-b") };
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(changed));
+    }
+
+    [Fact]
+    public async Task An_absent_intent_payload_and_explicit_JSON_null_refuse_checkpoint_replay()
+    {
+        RuntimePostCommitIntent Intent(JsonElement? payload) => new("intent-1", "wfexec-1", "DispatchBookmarkRegistration", _now,
+            "actexec-1", "idempotent", payload);
+        var absent = Intent(null); var explicitNull = Intent(Json("null"));
+        Assert.False(absent.IsEquivalentTo(explicitNull));
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.ComputeIntent(absent), RuntimeCheckpointCommitFingerprint.ComputeIntent(explicitNull));
+        var first = NewCommit(RuntimeCheckpointNames.ActivityCompleted, [absent]);
+        var replay = NewCommit(RuntimeCheckpointNames.ActivityCompleted, [explicitNull]);
+        Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(first), RuntimeCheckpointCommitFingerprint.Compute(replay));
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        await writer.CommitAsync(first, decision);
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => writer.CommitAsync(replay, decision).AsTask());
+    }
+
+    [Fact]
     public void RuntimeCheckpointCommitFingerprint_ExcludesExpectedFence()
     {
         var commit = NewCommit(RuntimeCheckpointNames.ActivityCompleted);

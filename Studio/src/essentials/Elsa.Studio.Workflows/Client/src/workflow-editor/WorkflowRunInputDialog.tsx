@@ -65,7 +65,7 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
           <div className="wf-dialog-heading">
             <div>
               <h3 id={titleId}>Run workflow</h3>
-              <p>Provide the workflow inputs for this run. Dates use {resolveStudioTimeZone(timeZone)}. A repeated hour uses its earlier offset; choose an explicit offset in JSON to select the later instant.</p>
+              <p>Provide the workflow inputs for this run. Dates use {resolveStudioTimeZone(timeZone)}. A repeated hour uses its earlier offset.</p>
             </div>
           </div>
           <div className="wf-run-input-list">

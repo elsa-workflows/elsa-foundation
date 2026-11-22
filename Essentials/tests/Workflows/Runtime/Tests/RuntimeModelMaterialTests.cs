@@ -80,6 +80,18 @@ public sealed class RuntimeModelMaterialTests
         Assert.NotEqual(first.ComputeContentHash(), second.ComputeContentHash());
     }
 
+    [Fact]
+    public void Model_input_default_presence_and_all_opaque_protocol_code_units_remain_distinct()
+    {
+        using var definition = JsonDocument.Parse("{}"); using var jsonNull = JsonDocument.Parse("null");
+        RuntimeModelMaterial Material(JsonElement? value) => new(1, Pin, Protocol, "test/1", definition.RootElement,
+            new WorkflowExecutableInputContract(1, [new("value", new TypeReference("String"), false, value)]), [], [], []);
+        Assert.NotEqual(Material(null).ComputeContentHash(), Material(jsonNull.RootElement).ComputeContentHash());
+        var hashes = new[] { "test-\ud800", "test-\ud801", "test-\ufffd" }.Select(key =>
+            new RuntimeModelMaterial(1, Pin, new(key, 1), "test/1", definition.RootElement, new(1, []), [], [], []).ComputeContentHash());
+        Assert.Equal(3, hashes.Distinct().Count());
+    }
+
     private static RuntimeModelMaterial NewMaterial(JsonElement definition, IReadOnlyList<RuntimeModelDependency>? dependencies = null,
         IReadOnlyList<RuntimeModelDeclaredOutput>? outputs = null) =>
         new(1, Pin, Protocol, "test/1", definition, new WorkflowExecutableInputContract(1, []), outputs ?? [], dependencies ?? [], []);

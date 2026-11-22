@@ -835,7 +835,10 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
 
 function toUtcIso(value: string) {
   if (!value) return undefined;
-  return new Date(localDateTimeToIso(value)).toISOString();
+  const explicit = localDateTimeToIso(value);
+  const fraction = /\.(\d{1,7})(?:Z|[+-]\d{2}:\d{2})$/.exec(explicit)?.[1];
+  const utc = new Date(explicit).toISOString();
+  return fraction ? utc.replace(/\.\d{3}Z$/, `.${fraction}Z`) : utc;
 }
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {

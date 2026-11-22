@@ -33,6 +33,7 @@ public static class ElsaEndpointsServiceCollectionExtensions
         // Registered before AddMinimalEndpoints, which uses TryAdd: first registration wins, so this
         // is what displaces the package's ProblemDetails default rather than racing it.
         services.TryAddSingleton<IEndpointProblemWriter, ElsaFallbackEndpointProblemWriter>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Microsoft.AspNetCore.Hosting.IStartupFilter, ElsaJsonResponseHeadersStartupFilter>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IEndpointExceptionTranslator, SchemaWriteRefusalTranslator>());
         services.AddMinimalEndpoints(options => options.OperationConvention = ElsaEndpointConventions.ElsaModuleOperation);
         return services;
