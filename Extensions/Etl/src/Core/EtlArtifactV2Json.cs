@@ -39,7 +39,7 @@ public static class EtlArtifactV2Json
         ValidateCollectionEntries(pipeline);
 
         using var output = new BoundedMemoryStream(MaximumByteLength);
-        using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { MaxDepth = MaximumJsonDepth }))
+        using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { MaxDepth = MaximumJsonDepth, Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
         {
             JsonSerializer.Serialize(writer, pipeline, SerializerOptions);
             writer.Flush();
@@ -276,7 +276,7 @@ public static class EtlArtifactV2Json
             writer.WritePropertyName("comparison");
             JsonSerializer.Serialize(writer, value.Comparison, options);
             writer.WritePropertyName("value");
-            value.Value.WriteTo(writer);
+            JsonSerializer.Serialize(writer, value.Value, options);
             writer.WriteEndObject();
         }
     }

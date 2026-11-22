@@ -691,7 +691,7 @@ internal sealed class EtlConnectorOutputProcessor
 
             using var encoded = new MemoryStream();
             using (var bounded = new BoundedWriteStream(encoded, Math.Min(maxBytes, remainingOutputBytes)))
-            using (var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false }))
+            using (var writer = new Utf8JsonWriter(bounded, new JsonWriterOptions { Indented = false, Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
             {
                 writer.WriteStartObject();
                 writer.WriteNumber("recordOrdinal", error.RecordOrdinal);

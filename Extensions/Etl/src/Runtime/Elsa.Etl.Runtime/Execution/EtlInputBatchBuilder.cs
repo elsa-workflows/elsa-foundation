@@ -472,7 +472,7 @@ internal sealed class EtlInputBatchBuilder : IAsyncDisposable
     private static Utf8JsonWriter NewJsonWriter(Stream stream) => new(stream, new JsonWriterOptions
     {
         Indented = false,
-        Encoder = JavaScriptEncoder.Default
+        Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder
     });
 
     private static void WriteRecord(Utf8JsonWriter writer, CsvRecord record)

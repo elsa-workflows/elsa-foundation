@@ -949,7 +949,7 @@ internal sealed class EtlConnectorInputBatchBuilder : IAsyncDisposable
     private static Utf8JsonWriter NewJsonWriter(Stream stream) => new(stream, new JsonWriterOptions
     {
         Indented = false,
-        Encoder = JavaScriptEncoder.Default
+        Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder
     });
 
     private static long EmptyEnvelopeBytes { get; } = System.Text.Encoding.UTF8.GetByteCount(EmptyEnvelope);

@@ -253,7 +253,7 @@ internal sealed class EtlRowTransformer
         string? currentField = null;
         try
         {
-            using (var writer = new Utf8JsonWriter(outputStream, new JsonWriterOptions { Indented = false }))
+            using (var writer = new Utf8JsonWriter(outputStream, new JsonWriterOptions { Indented = false, Encoder = Elsa.Serialization.Core.JsonBaseline.Options.Encoder }))
             {
                 writer.WriteStartObject();
                 for (var index = 0; index < _mapping.Count; index++)
