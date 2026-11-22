@@ -1,6 +1,6 @@
 import React from "react";
 import { Boxes, ShieldAlert } from "lucide-react";
-import { EmptyState, StudioAlert } from "../ui";
+import { EmptyState, StudioAlert, TechnicalDetails } from "../ui";
 import { labelForBackendRegistryStatus, type BackendRegistryUnavailableKind, type HostModel } from "./moduleManagementApi";
 
 // The explicit backend-management-unavailable state shared by the module-management and package-feeds Server tabs
@@ -35,9 +35,14 @@ export function BackendRegistryUnavailable({
 
   if (status === "unconfigured") {
     return (
-      <EmptyState icon={<Boxes size={22} />}>
-        Privileged host management is not configured. It is optional, but required to manage {host.label} modules. Set <code>Studio:BackendServerBaseUrl</code> (or <code>Studio:BackendBaseUrl</code> for a shared URL) and <code>Studio:BackendModuleManagementApiKey</code> on the Studio host to enable it.
-      </EmptyState>
+      <>
+        <EmptyState icon={<Boxes size={22} />}>
+          {host.label} module management is not connected. Ask your administrator to connect this server to Studio to view its modules and package feeds.
+        </EmptyState>
+        <TechnicalDetails label="Administrator setup">
+          Set <code>Studio:BackendServerBaseUrl</code> (or <code>Studio:BackendBaseUrl</code> for a shared URL) and <code>Studio:BackendModuleManagementApiKey</code> on the Studio host.
+        </TechnicalDetails>
+      </>
     );
   }
 
