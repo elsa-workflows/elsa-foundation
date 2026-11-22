@@ -11,7 +11,7 @@ html[data-workspace-style] :is(.wf-page, .wf-editor, .wf-tokens) {
 html[data-workspace-style] .wf-page {
   border: 0;
   border-radius: 0;
-  background: var(--studio-bg);
+  background: var(--studio-workspace-frame-bg, var(--studio-bg));
 }
 
 html[data-workspace-style] :is(.wf-page-header, .wf-toolbar, .wf-editor-top, .wf-breadcrumb, .wf-validation) {

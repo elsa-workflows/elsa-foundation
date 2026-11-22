@@ -271,12 +271,18 @@ button.wf-compensation-state {
 
 .wf-compensation-row-heading {
   display: flex;
+  flex-wrap: wrap;
   grid-column: 1 / -1;
   align-items: center;
   gap: .5rem;
   min-width: 0;
   padding-bottom: .5rem;
   border-bottom: 1px solid var(--studio-border);
+}
+
+.wf-compensation-row-name {
+  flex: 1 1 8rem;
+  min-width: min(8rem, 100%);
 }
 
 .wf-compensation-row-heading .wf-compensation-name,
@@ -289,7 +295,6 @@ button.wf-compensation-state {
   color: var(--studio-text-muted);
   font-size: .6875rem;
   letter-spacing: .04em;
-  text-transform: uppercase;
 }
 
 .wf-compensation-received-row {
@@ -408,6 +413,7 @@ button.wf-compensation-state {
 
 .wf-compensation-actions {
   display: flex;
+  margin-inline-start: auto;
   gap: .25rem;
 }
 

@@ -19,14 +19,14 @@ for (const width of [320, 768, 1024, 1440]) {
     await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
     await page.goto("/?mode=connections");
     const table = page.getByRole("table", { name: "Connections", exact: true });
-    await expect(table.getByRole("button", { name: "Customer API", exact: true })).toBeVisible();
+    await expect(table.getByRole("cell", { name: /Customer API/ })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() =>
       document.documentElement.scrollWidth <= document.documentElement.clientWidth
     )).toBe(true);
 
-    const opener = page.getByRole("button", { name: "Details for Customer API", exact: true });
-    await opener.click();
+    const opener = page.getByRole("row", { name: /Customer API/ });
+    await opener.press("Enter");
     const details = page.getByRole("dialog", { name: "Customer API", exact: true });
     await expect(details).toBeVisible();
     await expect(details.locator("details")).not.toHaveAttribute("open");
@@ -36,9 +36,9 @@ for (const width of [320, 768, 1024, 1440]) {
     await expect(details).toHaveCount(0);
     await expect(opener).toBeFocused();
 
-    const createOpener = page.getByRole("button", { name: "Create connection", exact: true }).first();
+    const createOpener = page.getByRole("button", { name: "New connection", exact: true }).first();
     await createOpener.click();
-    const create = page.getByRole("dialog", { name: "Create connection", exact: true });
+    const create = page.getByRole("dialog", { name: "New connection", exact: true });
     await expect(create.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
     const bounds = await create.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -65,15 +65,11 @@ test("search waits for initial collection readiness and then accepts Enter", asy
   try {
     await page.goto("/?mode=connections");
     const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
-    const submit = page.getByRole("button", { name: "Search", exact: true });
-    await expect(submit).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toHaveCount(0);
     await expect.poll(() => queries).toEqual([""]);
     await search.fill("absent");
-    await search.press("Enter");
-    expect(queries).toEqual([""]);
+    await expect.poll(() => queries).toEqual(["", "absent"]);
     releaseDescriptors();
-    await expect(submit).toBeEnabled();
-    await search.press("Enter");
     await expect(page.getByRole("button", { name: "Clear search", exact: true })).toBeVisible();
     expect(queries).toEqual(["", "absent"]);
   } finally {
@@ -98,21 +94,20 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
   await expect.poll(() => listQueries).toEqual([""]);
   await search.fill("customer");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect.poll(() => listQueries).toEqual(["", "customer"]);
-  await expect(page.getByRole("button", { name: "Details for Customer API", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Customer API/ })).toBeVisible();
 
   await search.fill("draft-only");
-  await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  await page.getByRole("button", { name: "New connection", exact: true }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
   await dialog.getByLabel("Name", { exact: true }).fill(created.name);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
-  await expect(search).toHaveValue("customer");
-  await expect.poll(() => listQueries).toEqual(["", "customer", "customer"]);
+  await expect(search).toHaveValue("draft-only");
+  await expect.poll(() => listQueries).toEqual(["", "customer", "draft-only", "draft-only"]);
   await expect(page.locator(".studio-toast")).toContainText("Connection 'billing-api' created.");
-  await expect(page.locator(".connections-notice")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
@@ -157,9 +152,9 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
         : route.fulfill({ json: { ...connection, name: draft.name, authScheme: "api-key", settings: draft.settings } });
     });
     await page.goto(`/?mode=connections&theme=${theme}`);
-    const opener = page.getByRole("button", { name: "Create connection", exact: true }).first();
-    await opener.click();
-    const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+    const opener = page.getByRole("button", { name: "New connection", exact: true }).first();
+    await opener.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
     const create = dialog.getByRole("button", { name: "Create", exact: true });
     await expect(dialog.getByLabel("Name", { exact: true })).toBeFocused();
@@ -181,7 +176,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     expect(await credential.evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector(".studio-advanced-section")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     await expect(dialog.getByText(/Base URL.*Allowed hosts.*More options|Allowed hosts.*More options.*Base URL/i)).toBeVisible();
     await dialog.getByLabel("Name", { exact: true }).fill("customer-api");
-    await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+    await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
     await expect(create).toBeDisabled();
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
     await expect(create).toBeEnabled();
@@ -249,7 +244,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     }, secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "customer-api" } } });
 
     // The alternative address and New value path keep runtime defaults un-authored.
-    await opener.click();
+    await opener.press("Enter");
     await dialog.getByLabel("Name", { exact: true }).fill("new-api");
     await dialog.getByRole("radio", { name: "New value", exact: true }).check();
     await dialog.getByLabel("New value for API key", { exact: true }).fill("fixture-operator-value");
@@ -283,10 +278,10 @@ test("API-key creation explains denied Secret metadata and recovers without read
     ? route.fulfill({ status: 403, json: { title: "Forbidden" } })
     : route.fulfill({ json: { items: [{ name: "customer-api", displayName: "Customer API key", typeName: "text", status: "active" }] } }));
   await page.goto("/?mode=connections&theme=light");
-  const opener = page.getByRole("button", { name: "Create connection", exact: true }).first();
+  const opener = page.getByRole("button", { name: "New connection", exact: true }).first();
   await opener.click();
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
-  await expect(dialog.getByRole("alert")).toContainText("Access to existing Secrets is denied.");
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
+  await expect(dialog.getByRole("alert")).toContainText("Access to existing secrets is denied.");
   await expect(dialog.getByRole("alert")).toContainText("you can enter a new value instead.");
   await dialog.getByLabel("Name", { exact: true }).fill("denied-api");
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
@@ -294,13 +289,13 @@ test("API-key creation explains denied Secret metadata and recovers without read
   await dialog.getByRole("radio", { name: "New value", exact: true }).check();
   await dialog.getByLabel("New value for API key", { exact: true }).fill("fixture-new-value");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
-  await dialog.getByRole("radio", { name: "Existing Secret", exact: true }).check();
+  await dialog.getByRole("radio", { name: "Existing secret", exact: true }).check();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   denied = false;
   const retry = dialog.getByRole("button", { name: "Retry", exact: true });
   await retry.focus();
   await page.keyboard.press("Enter");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+  await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   expect(secretRequests).toEqual(["POST /secrets/picker", "POST /secrets/picker"]);
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -321,12 +316,12 @@ for (const width of [320, 1440]) {
       ? route.fulfill({ status: 400, json: { error: "This name is no longer accepted. Choose another name.", errors: { name: ["Choose another name."] } } })
       : route.fulfill({ status: 201, json: { ...connection, name: route.request().postDataJSON().name } }));
     await page.goto("/?mode=connections&theme=light");
-    await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
-    const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+    await page.getByRole("button", { name: "New connection", exact: true }).first().click();
+    const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
     const name = dialog.getByLabel("Name", { exact: true });
     const create = dialog.getByRole("button", { name: "Create", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
-    await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+    await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
     await name.fill("Backend API");
     await expect(name).toHaveAttribute("aria-invalid", "true");
@@ -341,7 +336,7 @@ for (const width of [320, 1440]) {
     await expect(more).toHaveAttribute("aria-expanded", "false");
     await expect(more).not.toContainText("Error");
     await expect(dialog.getByRole("alert")).toContainText("Choose another name.");
-    await expect(dialog.getByLabel("Existing Secret for API key", { exact: true })).toHaveValue("customer-api");
+    await expect(dialog.getByLabel("Existing secret for API key", { exact: true })).toHaveValue("customer-api");
     await expect(dialog.getByLabel("Base URL", { exact: true })).toHaveValue("https://api.example");
     await page.addScriptTag({ content: axe.source });
     expect(await page.evaluate(async () => (await window.axe.run(document.querySelector('[role="dialog"]')!)).violations.map(item => item.id))).toEqual([]);
@@ -365,9 +360,9 @@ for (const controlled of [false, true]) {
     await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
     await page.route("**/connections", async route => { created = true; await route.fulfill({ status: 201, json: value }); });
     await page.goto("/?mode=connections");
-    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
-    await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
-    const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+    await expect(page.getByRole("button", { name: "New connection", exact: true }).first()).toBeEnabled();
+    await page.getByRole("button", { name: "New connection", exact: true }).first().click();
+    const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
     await dialog.getByLabel("Name", { exact: true }).fill(value.name);
     const refresh = page.waitForResponse(response => new URL(response.url()).pathname === "/connections" && response.request().method() === "GET");
     await dialog.getByRole("button", { name: "Create", exact: true }).click();

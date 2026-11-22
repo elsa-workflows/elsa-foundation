@@ -1,3 +1,4 @@
+import { StudioButton, StudioTabs, StudioTimestamp, tabElementIds } from "@elsa-workflows/studio-ui";
 import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
@@ -6,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
 import {
@@ -94,9 +96,6 @@ export function ReusableBoundaryInspector({
   const evidenceControllerRef = useRef<AbortController | null>(null);
   const instanceId = useId();
   const activeFrame = frames.at(-1)!;
-  const paneId = `${instanceId}-boundary-pane`;
-  const stepsTabId = `${instanceId}-steps-tab`;
-  const definitionTabId = `${instanceId}-definition-tab`;
 
   useEffect(() => {
     setFrames([createFrame(inspection)]);
@@ -360,6 +359,7 @@ export function ReusableBoundaryInspector({
     if (!target || index === frames.length - 1) return;
     openControllerRef.current?.abort();
     selectionControllerRef.current?.abort();
+    setOpenState({ activityExecutionId: null, error: "" });
     restoreScrollRef.current = target.scrollTop;
     setFrames(current => current.slice(0, index + 1).map((frame, frameIndex) =>
       frameIndex === index ? prepareFrameForLeave(frame) : frame));
@@ -376,13 +376,13 @@ export function ReusableBoundaryInspector({
           {frames.map((frame, index) => (
             <span key={frame.key} className="wf-boundary-breadcrumb">
               {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
-              <button
+              <StudioButton
                 type="button"
                 aria-current={index === frames.length - 1 ? "page" : undefined}
                 onClick={() => navigateToFrame(index)}
               >
                 {frame.label}
-              </button>
+              </StudioButton>
             </span>
           ))}
           <WorkflowStatusBadge status={activeFrame.inspection.status} subStatus={activeFrame.inspection.subStatus} />
@@ -390,39 +390,11 @@ export function ReusableBoundaryInspector({
       ) : null}
 
       <div className="wf-boundary-controls">
-        <div className="wf-boundary-pane-tabs" role="tablist" aria-label="Activity details">
-          <button
-            type="button"
-            role="tab"
-            id={stepsTabId}
-            aria-controls={paneId}
-            aria-label="Steps"
-            aria-selected={activeFrame.activePane === "evidence"}
-            data-selected={activeFrame.activePane === "evidence"}
-            tabIndex={activeFrame.activePane === "evidence" ? 0 : -1}
-            onClick={() => setPane("evidence")}
-            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
-          >
-            <span>Steps</span>
-            {activeFrame.evidence.committedThroughSequence !== null
-              ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small>
-              : null}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id={definitionTabId}
-            aria-controls={paneId}
-            aria-label="Definition"
-            aria-selected={activeFrame.activePane === "structure"}
-            data-selected={activeFrame.activePane === "structure"}
-            tabIndex={activeFrame.activePane === "structure" ? 0 : -1}
-            onClick={() => setPane("structure")}
-            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
-          >
-            Definition
-          </button>
-        </div>
+        <StudioTabs compact baseId={instanceId} ariaLabel="Activity details" activeTab={activeFrame.activePane}
+          tabs={[
+            { id: "evidence", label: "Steps", panelIndex: 0, trailing: activeFrame.evidence.committedThroughSequence !== null ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small> : undefined },
+            { id: "structure", label: "Definition", panelIndex: 0 }
+          ]} onSelect={id => setPane(id === "structure" ? "structure" : "evidence")} />
         <AuthorizedBoundaryDefinitionLink
           context={context}
           definitionId={boundary.definitionId}
@@ -434,10 +406,10 @@ export function ReusableBoundaryInspector({
       <div
         ref={scrollRef}
         className="wf-boundary-pane-scroll"
-        id={paneId}
+        id={tabElementIds(instanceId, 0).panelId}
         role="tabpanel"
         tabIndex={0}
-        aria-labelledby={activeFrame.activePane === "evidence" ? stepsTabId : definitionTabId}
+        aria-labelledby={tabElementIds(instanceId, activeFrame.activePane === "evidence" ? 0 : 1).tabId}
         onScroll={event => {
           const scrollTop = event.currentTarget.scrollTop;
           updateFrame(activeFrame.key, frame => ({ ...frame, scrollTop }));
@@ -559,7 +531,7 @@ function BoundaryStructurePane({
     return (
       <div className="wf-boundary-panel-message" role="alert">
         <p>Authorized historical structure is unavailable. {frame.layoutError}</p>
-        <button type="button" onClick={onRetry}><RotateCcw size={13} /> Retry structure</button>
+        <StudioButton type="button" onClick={onRetry}><RotateCcw size={13} /> Retry structure</StudioButton>
       </div>
     );
   }
@@ -572,14 +544,15 @@ function BoundaryStructurePane({
     );
   }
 
-  return <HistoricalBoundaryLayout layout={frame.layout} />;
+  return <HistoricalBoundaryLayout layout={frame.layout} compact />;
 }
 
-export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecutableNodeId, statusByNode }: {
+export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecutableNodeId, statusByNode, compact = false }: {
   layout: ActivityExecutionLayout;
   onSelectNode?(executableNodeId: string): void;
   selectedExecutableNodeId?: string;
   statusByNode?: ReadonlyMap<string, string>;
+  compact?: boolean;
 }) {
   const presentation = new Map((layout.activityPresentation ?? []).map(record => [record.executableNodeId, record]));
   const nodeLabel = (node: ActivityExecutionLayout["nodes"][number]) =>
@@ -587,20 +560,33 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   const nodeDescription = (node: ActivityExecutionLayout["nodes"][number]) =>
     presentation.get(node.executableNodeId)?.description?.trim() || undefined;
   const positioned = layout.nodes.filter(node => node.hasPinnedGeometry);
-  if (positioned.length === 0) {
-    return (
-      <div className="wf-boundary-layout wf-boundary-layout-list">
-        <header className="wf-boundary-layout-heading">
-          <strong>Activity structure</strong>
-        </header>
-        {layout.nodes.map(node => (
-          <div className="wf-boundary-layout-list-row" key={node.executableNodeId} title={nodeDescription(node)}>
-            {onSelectNode ? <button type="button" aria-pressed={selectedExecutableNodeId === node.executableNodeId} onClick={() => onSelectNode(node.executableNodeId)}>{nodeLabel(node)}{statusByNode?.get(node.executableNodeId) ? ` · ${statusByNode.get(node.executableNodeId)}` : ""}</button> : <span>{nodeLabel(node)}</span>}
+  const nodeList = (nodes: ActivityExecutionLayout["nodes"], title: string) => (
+    <div className={`wf-boundary-layout wf-boundary-layout-list${compact ? " wf-boundary-layout-compact wf-boundary-layout-list-compact" : ""}`}>
+      <header className="wf-boundary-layout-heading">
+        <strong>{title}</strong>
+        <small>{nodes.length} {nodes.length === 1 ? "activity" : "activities"}</small>
+      </header>
+      {nodes.map(node => {
+        const status = statusByNode?.get(node.executableNodeId);
+        const selected = selectedExecutableNodeId === node.executableNodeId;
+        const contents = (
+          <>
+            <span className="wf-boundary-layout-list-identity">{nodeLabel(node)}</span>
+            {status ? <span className="wf-boundary-layout-list-status"><WorkflowStatusBadge status={status} /></span> : null}
+          </>
+        );
+
+        return (
+          <div className="wf-boundary-layout-list-row" data-selected={selected ? "true" : undefined} key={node.executableNodeId} title={nodeDescription(node)}>
+            {onSelectNode ? <StudioButton className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</StudioButton>
+              : <div className="wf-boundary-layout-list-action">{contents}</div>}
           </div>
-        ))}
-      </div>
-    );
-  }
+        );
+      })}
+    </div>
+  );
+  if (positioned.length === 0) return nodeList(layout.nodes, "Activity structure");
+  const unpositioned = layout.nodes.filter(node => !node.hasPinnedGeometry);
 
   const nodeById = new Map(positioned.map(node => [node.executableNodeId, node]));
   const minX = Math.min(...positioned.map(node => node.x));
@@ -614,7 +600,7 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   const translateY = padding - minY;
 
   return (
-    <figure className="wf-boundary-layout-canvas">
+    <figure className={`wf-boundary-layout-canvas${compact ? " wf-boundary-layout-compact" : ""}`}>
       <figcaption className="wf-boundary-layout-caption">
         <span className="wf-boundary-layout-heading">
           <strong>Saved activity layout</strong>
@@ -623,8 +609,8 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
       </figcaption>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`Pinned historical boundary layout with ${layout.nodes.length} nodes`}
+        role={onSelectNode ? "group" : "img"}
+        aria-label={`Pinned historical boundary layout with ${positioned.length} nodes`}
       >
         <g transform={`translate(${translateX} ${translateY})`}>
           {layout.connections.map((connection, index) => {
@@ -668,6 +654,7 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
           })}
         </g>
       </svg>
+      {unpositioned.length > 0 ? nodeList(unpositioned, "Activities without a saved position") : null}
       {layout.nestedBoundaries.length > 0 ? (
         <p className="wf-muted">
           {layout.nestedBoundaries.length} nested boundary occurrence{layout.nestedBoundaries.length === 1 ? "" : "s"} represented as one node each. Open one from Steps to inspect it.
@@ -709,9 +696,9 @@ function BoundaryEvidencePane({
             ? `${evidence.items.length} recorded step${evidence.items.length === 1 ? "" : "s"}`
             : "Waiting for recorded steps"}
         </small>
-        <button type="button" aria-label="Refresh activity steps" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
+        <StudioButton type="button" aria-label="Refresh activity steps" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
           <RefreshCw size={13} /> Refresh
-        </button>
+        </StudioButton>
       </header>
 
       {evidence.staleReason ? (
@@ -721,14 +708,14 @@ function BoundaryEvidencePane({
             <strong>This steps view is out of date.</strong>
             <small>Refresh from the first page to load a new snapshot. Steps from different snapshots are kept separate.</small>
           </span>
-          <button type="button" onClick={onRestart}>Refresh steps</button>
+          <StudioButton type="button" onClick={onRestart}>Refresh steps</StudioButton>
         </div>
       ) : null}
       {openError ? <p className="wf-boundary-error" role="alert">{openError}</p> : null}
       {frame.evidenceStatus === "failed" ? (
         <div className="wf-boundary-panel-message" role="alert">
           <p>Activity steps are unavailable. {frame.evidenceError}</p>
-          <button type="button" onClick={onRestart}><RotateCcw size={13} /> Retry evidence</button>
+          <StudioButton type="button" onClick={onRestart}><RotateCcw size={13} /> Retry</StudioButton>
         </div>
       ) : null}
       {!hasLoadedEvidence && frame.evidenceStatus === "loading"
@@ -749,14 +736,14 @@ function BoundaryEvidencePane({
         />
       ) : null}
       {evidence.nextCursor && !evidence.staleReason ? (
-        <button
+        <StudioButton
           type="button"
           className="wf-boundary-load-more"
           disabled={frame.evidenceStatus === "loading"}
           onClick={onLoadMore}
         >
           {frame.evidenceStatus === "loading" ? "Loading more steps..." : "Load more steps"}
-        </button>
+        </StudioButton>
       ) : null}
       {frame.selectedActivityExecutionId ? (
         <SelectedExecutionEvidence
@@ -881,7 +868,7 @@ function VirtualizedHierarchy({
                 <strong>{historicalActivityLabel(item.activityType)}</strong>
                 {item.relativeDepth > 1 ? <small>Nested step</small> : null}
                 {item.boundary ? (
-                  <button
+                  <StudioButton
                     type="button"
                     className="wf-boundary-open"
                     disabled={openingActivityExecutionId !== null}
@@ -892,7 +879,7 @@ function VirtualizedHierarchy({
                   >
                     <CornerDownRight size={13} />
                     {openingActivityExecutionId === item.activityExecutionId ? "Opening…" : "View steps"}
-                  </button>
+                  </StudioButton>
                 ) : null}
               </span>
               <span className="wf-boundary-hierarchy-state">
@@ -948,7 +935,7 @@ function BoundaryTechnicalDetails({
 
   return (
     <details key={selectedActivityExecutionId ?? "unselected"} className="wf-boundary-technical">
-      <summary>Technical details</summary>
+      <summary><ChevronRight size={14} aria-hidden="true" />Technical details</summary>
       <dl className="wf-boundary-technical-grid">
         <dt>Definition ID</dt>
         <dd>{boundary.definitionId}</dd>
@@ -991,7 +978,7 @@ function BoundaryTechnicalDetails({
             <dt>Selected attempt</dt>
             <dd>{selectedInspection.attempt ? `${selectedInspection.attempt.attemptNumber} of ${selectedInspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
             <dt>Last committed</dt>
-            <dd>{selectedInspection.lastCommittedAt ?? "Not committed"}</dd>
+            <dd><StudioTimestamp value={selectedInspection.lastCommittedAt} format="date-time" fallback="Not committed" /></dd>
             {selectedInspection.incidents.length > 0 ? (
               <>
                 <dt>Incident IDs</dt>
@@ -1010,11 +997,11 @@ function BoundaryTechnicalDetails({
       {selectedLinks.length > 0 ? (
         <div className="wf-boundary-causal-links" aria-label="Related execution links">
           {selectedLinks.map(link => (
-            <button type="button" key={`${link.label}:${link.id}`} onClick={() => onSelect(link.id)}>
+            <StudioButton type="button" key={`${link.label}:${link.id}`} onClick={() => onSelect(link.id)}>
               <GitBranch size={12} aria-hidden="true" />
               <span>{link.label}</span>
               <small>{link.id}{loadedIds.has(link.id) ? " · loaded step" : ""}</small>
-            </button>
+            </StudioButton>
           ))}
         </div>
       ) : null}
@@ -1027,7 +1014,7 @@ function BoundaryTechnicalDetails({
             items={selectedInspection.bookmarks.slice(0, evidenceSummaryLimit).map(bookmark => ({
               id: bookmark.bookmarkId,
               title: bookmark.stimulusType,
-              detail: `Resume target ${bookmark.resumeTargetId} · created ${bookmark.createdAt}`
+              detail: <>Resume target {bookmark.resumeTargetId} · created <StudioTimestamp value={bookmark.createdAt} format="date-time" fallback="—" /></>
             }))}
           />
         </div>
@@ -1074,7 +1061,7 @@ function SelectedExecutionEvidence({
         <section className="wf-boundary-value-evidence" aria-label="Selected step values">
           <h5>Values</h5>
           {inspection.valueSnapshots.length === 0
-            ? <p>No value evidence was captured for this step.</p>
+            ? <p>No values were captured for this step.</p>
             : inspection.valueSnapshots.map((snapshot, index) => (
               <SelectedValueEvidence
                 key={`${snapshot.subject}:${snapshot.name}:${snapshot.capturedAt}:${index}`}
@@ -1105,7 +1092,7 @@ function BoundedEvidenceSummary({
 }: {
   title: string;
   total: number;
-  items: Array<{ id: string; title: string; detail: string }>;
+  items: Array<{ id: string; title: string; detail: ReactNode }>;
 }) {
   return (
     <section className="wf-boundary-bounded-summary">
@@ -1256,29 +1243,6 @@ function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, Math.max(0, length - 1))}…` : value;
 }
 
-function moveBoundaryTab(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  activePane: BoundaryPane,
-  selectPane: (pane: BoundaryPane) => void
-) {
-  const panes: BoundaryPane[] = ["evidence", "structure"];
-  const currentIndex = panes.indexOf(activePane);
-  const nextIndex = event.key === "ArrowRight" || event.key === "ArrowDown"
-    ? (currentIndex + 1) % panes.length
-    : event.key === "ArrowLeft" || event.key === "ArrowUp"
-      ? (currentIndex + panes.length - 1) % panes.length
-      : event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? panes.length - 1
-          : null;
-  const nextPane = nextIndex === null ? null : panes[nextIndex];
-  if (!nextPane) return;
-  event.preventDefault();
-  if (nextPane !== activePane) selectPane(nextPane);
-  const tabIndex = nextPane === "evidence" ? 0 : 1;
-  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role='tab']")[tabIndex]?.focus();
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);

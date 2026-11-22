@@ -34,7 +34,13 @@ sealed partial class CreationWitness
         Drain(); Require(Row == before && Row.Status == InstanceStatus.Running, "C5", "old pinned wait completed a replacement creation");
         if (kind == "event")
             Events.PublishAsync(_world.Store, new EventRow("event:creation-event", "new-publication", Json.Write("new"), _world.Time + 100)).GetAwaiter().GetResult();
-        else Apply(new("tick", 9000));
+        else
+        {
+            // The replacement timer matures at the initial node lease boundary.
+            Apply(new("pass", Actor.Id));
+            Apply(new("heartbeat", Actor.Id));
+            Apply(new("tick", 9000));
+        }
         Drain(); Require(Row.Status == InstanceStatus.Finished, "C5", "correct new event/deadline did not complete");
         if (kind == "event") Require(State.Results["event"]?["Payload"]?.GetValue<string>() == "new", "C5", "replacement wait received the old payload");
         Console.WriteLine($"PASS creation:transport-race,{mode},kind={kind}");

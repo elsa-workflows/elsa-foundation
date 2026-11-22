@@ -71,6 +71,17 @@ function renderInspector(activity: typeof setVariableActivity, node: ActivityNod
   return { container, onChange };
 }
 
+function openValueConversion(container: HTMLElement) {
+  const row = container.querySelector<HTMLElement>('[role="group"][aria-label="Value property"]')!;
+  const toggle = row.querySelector<HTMLButtonElement>(".wf-conversion-toggle")!;
+  flushSync(() => toggle.click());
+  return row;
+}
+
+function expectedType(container: HTMLElement) {
+  return container.querySelector(".wf-conversion-expected-type")?.textContent;
+}
+
 describe("IntrinsicInspector", () => {
   it("renders the selected variable's current type and updates it after declaration or target changes", () => {
     const node: ActivityNode = {
@@ -79,19 +90,19 @@ describe("IntrinsicInspector", () => {
     };
     const variables = visibleVariables.map(variable => ({ ...variable, type: { alias: "Int32", collectionKind: "Single" as const } }));
     const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
-    const valueType = () => container.querySelector(".wf-property-row-header-meta span")?.textContent;
-    expect(valueType()).toBe("Int32");
+    openValueConversion(container);
+    expect(expectedType(container)).toBe("Expected type: Int32");
     expect(container.querySelector('input[inputmode="numeric"]')).not.toBeNull();
 
     const changed = variables.map(variable => ({ ...variable, type: { alias: variable.scopeId === "workflow" ? "Boolean" : "String", collectionKind: "Single" as const } }));
     flushSync(() => active!.root.render(inspector(setVariableActivity, node, vi.fn(), changed)));
-    expect(valueType()).toBe("Boolean");
+    expect(expectedType(container)).toBe("Expected type: Boolean");
     expect(container.querySelector('input[type="checkbox"]')).not.toBeNull();
     expect(container.querySelector('input[inputmode="numeric"]')).toBeNull();
 
     const retargeted: ActivityNode = { ...node, intrinsic: { ...node.intrinsic!, variable: { referenceKey: "row", declaringScopeId: "container-1" } } };
     flushSync(() => active!.root.render(inspector(setVariableActivity, retargeted, vi.fn(), changed)));
-    expect(valueType()).toBe("String");
+    expect(expectedType(container)).toBe("Expected type: String");
     expect(container.querySelector('input[type="text"]')).not.toBeNull();
     expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   });
@@ -107,7 +118,7 @@ describe("IntrinsicInspector", () => {
     ];
     const container = render(inspector(setVariableActivity, node, vi.fn(), variables));
 
-    expect(container.querySelector(".wf-property-row-header-meta span")?.textContent).toBe("Boolean");
+    expect(expectedType(openValueConversion(container))).toBe("Expected type: Boolean");
   });
 
   it("renders a variable-target picker and hides the variable pseudo-input from the properties panel", () => {
@@ -165,8 +176,7 @@ describe("IntrinsicInspector", () => {
       descriptor={descriptorFor(setOutputActivity)} editors={builtInPropertyEditors} expressionEditors={[]}
       expressionDescriptors={[literalDescriptor]} expressionDescriptorStatus="ready" descriptorStatus="ready"
       visibleVariables={[]} scopeStatus="ready" workflowState={{ outputs: [{ name: "ReviewData", type: { alias: "System.Text.Json.JsonElement", collectionKind: "Single" } }] }} onChange={vi.fn()} />);
-    const row = [...container.querySelectorAll(".wf-property-row")].find(item => item.getAttribute("aria-label") === "Value property")!;
-    expect(row.querySelector(".wf-property-row-header")?.textContent).toContain("JSON");
+    expect(expectedType(openValueConversion(container))).toBe("Expected type: JSON");
   });
 
   it("reads unsaved draft output additions and flags renamed or removed selections without changing them", () => {
@@ -179,7 +189,7 @@ describe("IntrinsicInspector", () => {
       workflowState={{ outputs }} onChange={onChange} />;
     const container = render(renderState([]));
     expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
-    expect(container.textContent).toContain("Add a workflow output");
+    expect(container.textContent).toContain("Add an output");
     flushSync(() => active!.root.render(renderState([{ name: "ReviewData" }])));
     let picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
     expect(picker.disabled).toBe(false);
@@ -193,8 +203,21 @@ describe("IntrinsicInspector", () => {
     flushSync(() => active!.root.render(renderState([], changed)));
     expect(container.querySelector<HTMLSelectElement>(".wf-property-row select")!.disabled).toBe(true);
     expect(container.textContent).toContain("This output is no longer defined.");
-    expect(container.textContent).toContain("Add a workflow output in the editor's Outputs tab");
+    expect(container.textContent).toContain("Add an output in this editor's Outputs tab");
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a populated output target read-only", () => {
+    const node = { ...createActivityNode(setOutputActivity, "readonly-output"), name: { typeName: "String", expression: { type: "Literal", value: "Sum" } } };
+    const onChange = vi.fn();
+    const container = render(<IntrinsicInspector intrinsic={readIntrinsicDescriptor(setOutputActivity)!} activity={node}
+      descriptor={descriptorFor(setOutputActivity)} editors={builtInPropertyEditors} expressionEditors={[]}
+      expressionDescriptors={[literalDescriptor]} expressionDescriptorStatus="ready" descriptorStatus="ready"
+      visibleVariables={[]} scopeStatus="ready" workflowState={{ outputs: [{ name: "Sum", type: { alias: "Double", collectionKind: "Single" } }] }} readOnly onChange={onChange} />);
+    const picker = container.querySelector<HTMLSelectElement>(".wf-property-row select")!;
+    expect(picker.value).toBe("Sum"); expect(picker.disabled).toBe(true);
+    expect(expectedType(openValueConversion(container))).toBe("Expected type: Double");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("shows no variable picker for Set Output and renders its name + value inputs", () => {

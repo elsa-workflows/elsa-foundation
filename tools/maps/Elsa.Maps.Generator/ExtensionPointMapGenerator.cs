@@ -12,7 +12,7 @@ namespace Elsa.Maps.Generator;
 /// </remarks>
 public static partial class ExtensionPointMapGenerator
 {
-    [GeneratedRegex(@"\]\(((?:Essentials/src|Extensions/[^/]+/src)/[^)]+/EXTENSION_POINTS\.md)\)", RegexOptions.Compiled)]
+    [GeneratedRegex(@"\]\(((?:essentials/src|extensions/[^/]+/src)/[^)]+/EXTENSION_POINTS\.md)\)", RegexOptions.Compiled)]
     private static partial Regex RootIndexLinkPattern { get; }
 
     private sealed record Catalog(

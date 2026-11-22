@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe("RunWorkflowPicker", () => {
+  it("uses the shared search shell and restores focus after clearing selection", async () => {
+    vi.mocked(getDefinition).mockResolvedValue({ definition: definition("selected-id", "Selected workflow") } as Awaited<ReturnType<typeof getDefinition>>);
+    const { container, selected } = renderPicker("selected-id");
+    const search = container.querySelector<HTMLInputElement>("input[aria-label='Workflow']")!;
+
+    await waitFor(() => expect(search.value).toBe("Selected workflow"));
+    expect(search.closest(".studio-search")).not.toBeNull();
+    expect(search.getAttribute("role")).toBe("combobox");
+    expect(search.getAttribute("aria-label")).toBe("Workflow");
+    expect(search.placeholder).toBe("Search workflows by name");
+    expect(container.querySelector(".wf-workflow-picker > label")).toBeNull();
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Clear workflow selection']")!.click());
+
+    expect(selected()).toBe("");
+    expect(document.activeElement).toBe(search);
+  });
+
   it("searches by name, distinguishes duplicate identities, and selects the exact definition by keyboard", async () => {
     vi.mocked(listDefinitions).mockResolvedValue({
       definitions: [definition("definition-a", "Process order"), definition("definition-b", "Process order")],

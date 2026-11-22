@@ -1,6 +1,6 @@
 # Output Binding Coercion Uses Pinned Value Representations
 
-Status: proposed (output-capture slice accepted — see Decision status)
+Status: proposed (see the scoped decisions below)
 
 Product requirements are captured in [Typed Output Binding Coercion PRD](../plans/output-binding-coercion-prd.md).
 
@@ -17,6 +17,12 @@ or profile-registration decisions, which stay proposed pending the specs 060/061
 [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md)
 extends the accepted slice with declaration-relative, producer-visible container-frame targets; it
 does not broaden the proposed coercion taxonomy.
+
+**Automatic numeric text on a binding** ([spec 1227](../../specs/1227-double-string-binding/spec.md)).
+Publication may pin the built-in `NumericToString` operation under `Auto` for a scalar,
+unschematized `TypedValue` Double consumed as a plain String. Runtime formats finite values
+as invariant round-trip text and preserves envelope presence and policy. Each binding chooses its
+own operation. `None` continues to require identical contracts. This decision covers this pair only.
 
 Elsa output bindings will support general-purpose, target-aware coercion without treating every CLR object as workflow data. Activity result projections declare a `ValueRepresentation` such as `TypedValue`, `StructuredValue`, `TextValue`, `FormattedContent`, `BinaryContent`, `DurableReference`, or `TransientResource`; publication validates and pins the allowed conversion profile, while runtime applies that profile using runtime facts. `Any` remains a canonical durable JSON projection, not a general-purpose CLR object container.
 

@@ -3,7 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScopedVariablesEditor, VariablesEditor, WorkflowDataView, WorkflowPropertiesView } from "../WorkflowPropertiesView";
-import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import { WorkflowRunInputDialog } from "../workflow-editor/WorkflowRunInputDialog";
+import type { WorkflowDefinitionDetails, WorkflowDraft, WorkflowInput } from "../workflowTypes";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -247,6 +248,166 @@ describe("properties view", () => {
     const container = render(<WorkflowDataView section={section} draft={draft()} context={rejectingContext} onStateChange={vi.fn()} />);
     expect(container.querySelector(`select[aria-label='${section === "inputs" ? "Input" : "Output"} collection kind']`)).not.toBeNull();
     expect(container.querySelector("select[aria-label='Output storage driver']")).toBeNull();
+  });
+
+  it("authors and clears a literal workflow input default, including an explicit empty string", () => {
+    const workflow = draft();
+    workflow.state.inputs = [{
+      referenceKey: "input-1",
+      name: "Greeting",
+      type: { alias: "String", collectionKind: "Single" },
+      displayName: "Greeting",
+      description: "",
+      category: "",
+      uiHint: "singleline",
+      storageDriverType: null,
+      isRequired: true,
+      isNullable: false
+    } as WorkflowInput];
+    const onStateChange = vi.fn();
+    const context = {
+      baseUrl: "test://workflow-input-default-types",
+      http: {
+        getJson: vi.fn(async (url: string) => {
+          if (url === "/capabilities") return { capabilities: [{
+            id: "elsa.api.expressions",
+            contractVersion: "1",
+            links: [{ rel: "variable-types", href: "expressions/variable-types" }]
+          }] };
+          if (url === "/expressions/variable-types") return { items: [{ alias: "String", defaultEditor: "text" }] };
+          return { items: [] };
+        })
+      }
+    } as never;
+    const container = render(<WorkflowDataView section="inputs" draft={workflow} context={context} onStateChange={onStateChange} />);
+
+    const enabled = container.querySelector<HTMLInputElement>("input[aria-label='Default for Greeting']")!;
+    expect(enabled.checked).toBe(false);
+    click(enabled);
+
+    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    const updatedState = producer(workflow.state);
+    expect(updatedState.inputs![0]).toMatchObject({ defaultValue: "", defaultSyntax: "Literal" });
+
+    flushSync(() => active!.root.render(<WorkflowDataView section="inputs" draft={{ ...workflow, state: updatedState }} context={context} onStateChange={onStateChange} />));
+    const clear = container.querySelector<HTMLInputElement>("input[aria-label='Default for Greeting']")!;
+    expect(clear.checked).toBe(true);
+    click(clear);
+
+    const clearProducer = onStateChange.mock.calls.at(-1)![0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    const clearedInput = clearProducer(updatedState).inputs![0] as Record<string, unknown>;
+    expect("defaultValue" in clearedInput).toBe(false);
+    expect("defaultSyntax" in clearedInput).toBe(false);
+  });
+
+  it("uses a type-aware numeric editor and stores its typed literal value", async () => {
+    const workflow = draft();
+    workflow.state.inputs = [{
+      referenceKey: "input-1",
+      name: "Max",
+      type: { alias: "Int32", collectionKind: "Single" },
+      displayName: "Max",
+      description: "",
+      category: "",
+      uiHint: "singleline",
+      storageDriverType: null,
+      isRequired: true,
+      isNullable: false
+    } as WorkflowInput];
+    const onStateChange = vi.fn();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{
+        id: "elsa.api.expressions",
+        contractVersion: "1",
+        links: [{ rel: "variable-types", href: "expressions/variable-types" }]
+      }] };
+      if (url === "/expressions/variable-types") return { items: [{ alias: "Int32", defaultEditor: "number" }] };
+      return { items: [] };
+    });
+    const container = render(<WorkflowDataView section="inputs" draft={workflow} context={{ baseUrl: "test://workflow-input-numeric-default", http: { getJson } } as never} onStateChange={onStateChange} />);
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Input type']")).not.toBeNull());
+    click(container.querySelector<HTMLInputElement>("input[aria-label='Default for Max']")!);
+    await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>("input[aria-label='Input default value']")?.type).toBe("number"));
+    const value = container.querySelector<HTMLInputElement>("input[aria-label='Input default value']")!;
+    setInputValue(value, "10");
+
+    const producer = onStateChange.mock.calls.at(-1)![0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).inputs![0]).toMatchObject({ defaultValue: 10, defaultSyntax: "Literal" });
+  });
+
+  it("keeps invalid JSON defaults local and recovers when the author corrects them", async () => {
+    const workflow = draft();
+    workflow.state.inputs = [{
+      referenceKey: "input-1",
+      name: "Payload",
+      type: { alias: "JsonElement", collectionKind: "Single" },
+      displayName: "Payload",
+      description: "",
+      category: "",
+      uiHint: "singleline",
+      storageDriverType: null,
+      isRequired: false,
+      isNullable: true
+    } as WorkflowInput];
+    const onStateChange = vi.fn();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{
+        id: "elsa.api.expressions",
+        contractVersion: "1",
+        links: [{ rel: "variable-types", href: "expressions/variable-types" }]
+      }] };
+      if (url === "/expressions/variable-types") return { items: [{ alias: "JsonElement", defaultEditor: "json" }] };
+      return { items: [] };
+    });
+    const context = { baseUrl: "test://workflow-input-json-default", http: { getJson } } as never;
+    const container = render(<WorkflowDataView section="inputs" draft={workflow} context={context} onStateChange={onStateChange} />);
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Input type']")).not.toBeNull());
+
+    click(container.querySelector<HTMLInputElement>("input[aria-label='Default for Payload']")!);
+    const value = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Input default value']")!;
+    expect(value).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    setter.call(value, "{invalid");
+    flushSync(() => value.dispatchEvent(new Event("input", { bubbles: true })));
+    expect(container.textContent).toContain("Invalid JSON.");
+    expect(onStateChange).toHaveBeenCalledOnce();
+
+    setter.call(value, "{\"id\":10}");
+    flushSync(() => value.dispatchEvent(new Event("input", { bubbles: true })));
+    const producer = onStateChange.mock.calls.at(-1)![0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).inputs![0]).toMatchObject({ defaultValue: { id: 10 }, defaultSyntax: "Literal" });
+  });
+
+  it("uses the renamed default input display name in the run dialog", () => {
+    const workflow = draft();
+    workflow.state.inputs = [{
+      referenceKey: "input-1",
+      name: "Input1",
+      type: { alias: "String", collectionKind: "Single" },
+      displayName: "Input1",
+      description: "",
+      category: "",
+      uiHint: "singleline",
+      storageDriverType: null,
+      isRequired: false,
+      isNullable: false
+    } as WorkflowInput];
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowDataView section="inputs" draft={workflow} context={rejectingContext} onStateChange={onStateChange} />
+    );
+
+    setInputValue(container.querySelector<HTMLInputElement>("input[aria-label='Input name']")!, "Max");
+
+    const produceState = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    const updatedState = produceState(workflow.state);
+    flushSync(() => active!.root.render(
+      <WorkflowRunInputDialog inputs={updatedState.inputs as WorkflowInput[]} onSubmit={vi.fn()} onCancel={vi.fn()} />
+    ));
+
+    expect(document.querySelector("[role=dialog] input[aria-label='Max']")).not.toBeNull();
   });
 
   it("keeps workflow declarations and version history out of general Properties", () => {

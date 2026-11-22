@@ -430,7 +430,7 @@ function CheckboxEditor({ descriptor, value, disabled, onChange }: StudioActivit
         disabled={disabled}
         onChange={event => onChange(event.target.checked)}
       />
-      <span className="studio-property-switch-state">{checked ? "Enabled" : "Disabled"}</span>
+      <span className="studio-property-switch-state">{checked ? "True" : "False"}</span>
     </label>
   );
 }

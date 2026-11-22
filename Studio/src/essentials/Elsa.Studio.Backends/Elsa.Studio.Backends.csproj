@@ -15,7 +15,7 @@
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <ProjectReference Include="../Elsa.Studio.Core/Elsa.Studio.Core.csproj" />
     <ProjectReference Include="../Elsa.Studio.Api/Elsa.Studio.Api.csproj" />
-    <ProjectReference Include="../../../../Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <None Update="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

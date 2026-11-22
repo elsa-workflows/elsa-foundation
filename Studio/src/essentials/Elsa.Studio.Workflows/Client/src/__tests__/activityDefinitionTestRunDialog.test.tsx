@@ -37,6 +37,7 @@ describe("ActivityDefinitionTestRunDialog", () => {
           draft={draft()}
           definitionLabel="Greeting"
           inputEditors={[]}
+          expressionEditors={[]}
           prepareExactRevision={prepareExactRevision}
           onFocusDiagnostic={vi.fn()}
           onClose={vi.fn()}
@@ -45,7 +46,7 @@ describe("ActivityDefinitionTestRunDialog", () => {
       </React.StrictMode>
     ));
 
-    await waitFor(() => expect(container.textContent).toContain("Revision 5 validated"));
+    await waitFor(() => expect(document.body.textContent).toContain("Revision 5 validated"));
     expect(prepareExactRevision).toHaveBeenCalledTimes(1);
 
     flushSync(() => root.unmount());

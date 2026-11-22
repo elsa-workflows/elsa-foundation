@@ -9,7 +9,7 @@ public sealed class Owner
     public Owner(string node, int partition, IKernelStore store, WorkflowRegistry registry, Network network, Func<long>? monotonic = null, NativeOptions? native = null, TimeSpan? lease = null)
     {
         Requests = network.Node(node);
-        Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal });
+        Model = new NativeModel(registry, new NativeOptions { Flaws = native?.Flaws ?? NativeFlaw.None, Gate = native?.Gate, OnExternal = native?.OnExternal, OnOutbound = native?.OnOutbound });
         Worker = new Worker(node, partition, store, new WorkflowInstance([Model, new Kernel.Sim.Sequence()]), new WorkerOptions
         {
             Monotonic = monotonic ?? (static () => Environment.TickCount64),
@@ -97,10 +97,14 @@ public sealed class Counting : DbCommandInterceptor
 /// <summary>Passes everything through; counts commits and the bytes of instance state they write.</summary>
 public sealed class Sizing(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
     public int Commits, Rows;
     public long StateBytes, MaxStateBytes;
 

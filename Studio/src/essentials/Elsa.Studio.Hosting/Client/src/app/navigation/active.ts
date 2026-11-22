@@ -41,7 +41,7 @@ export function resolveActiveNavigationItem(
   let bestScore = 0;
   for (const item of items) {
     const score = navigationMatchScore(item, path);
-    if (score > bestScore) {
+    if (score > bestScore || (score === bestScore && item.parentId === best?.id)) {
       best = item;
       bestScore = score;
     }

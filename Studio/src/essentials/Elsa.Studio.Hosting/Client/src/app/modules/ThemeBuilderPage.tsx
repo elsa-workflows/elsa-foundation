@@ -1,7 +1,7 @@
 import { useCompactNavigation } from "../navigation/useCompactNavigation";
-import { StudioPageHeader, StudioButton, StudioField } from "../ui";
+import { OverflowMenu, StudioPageHeader, StudioButton, StudioField } from "../ui";
 import React, { useEffect, useMemo, useRef, useState, useId } from "react";
-import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { isStudioThemeLayout, studioNavigationRequestedEvent, studioThemeLayouts, type ElsaStudioModuleApi, type StudioNavigationRequest } from "../../sdk";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
@@ -10,6 +10,8 @@ import {
   cloneThemeDefinition,
   getSupportedThemeModes,
   getThemeModeDefinition,
+  isSidebarBackdrop,
+  sidebarBackdropOptions,
   themeModeKeys,
   themeModeLabels,
   themeTokenNames,
@@ -239,7 +241,13 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }, "Material texture asset uploaded.");
   }
 
-  async function removeAsset(assetId: string) {
+  async function removeAsset(assetId: string, fileName: string) {
+    if (!(await api.dialogs.confirm({
+      title: "Delete theme asset",
+      message: `Delete ${fileName} from the theme asset library?`,
+      confirmLabel: "Delete asset",
+      tone: "danger"
+    }))) return;
     await run(async () => {
       setStore(await deleteThemeAsset(api.host, assetId));
     }, "Material texture asset deleted.");
@@ -308,7 +316,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   if (!store || !draft) {
     return (
       <section className="studio-page theme-builder-page">
-        <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>Loading Theme Store definitions.</>} />
+        <StudioPageHeader headingLevel={2} title={<>Theme builder</>} description={<>Loading Theme Store definitions.</>} />
         {!store && error ? (
           <StudioAlert tone="danger">
             {error}{" "}
@@ -323,7 +331,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   return (
     <section className="studio-page theme-builder-page">
-      <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
+      <StudioPageHeader headingLevel={2} title={<>Theme builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
             <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
               <RefreshCcw size={15} /> Refresh
@@ -344,7 +352,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           </select>
         </label> : <aside ref={navigationRef} className="theme-builder-list" aria-label="Themes">
           {store.themes.map(theme => (
-            <button
+            <StudioButton
               key={theme.id}
               type="button"
               className={theme.id === draft.id ? "active" : ""}
@@ -359,7 +367,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                 <strong>{theme.name}</strong>
                 <small>{theme.source} · {theme.published ? "published" : "draft"} · {theme.enabled ? "enabled" : "disabled"}</small>
               </span>
-            </button>
+            </StudioButton>
           ))}
         </aside>}
 
@@ -370,15 +378,17 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
               <p>{isReadOnly ? "Built-in themes are read-only seeds. Duplicate to customize." : "Custom theme stored by the Studio host."}</p>
             </div>
             <div>
-              <button type="button" className="studio-button" onClick={() => void duplicateSelected()}><Copy size={15} /> Duplicate</button>
-              <button type="button" className="studio-button" onClick={() => void exportSelected()}><Download size={15} /> Export</button>
-              <button type="button" className="studio-button" onClick={() => void makeDefault()} disabled={!getSelectableThemes(store).some(theme => theme.id === draft.id)}><Check size={15} /> Default</button>
-              <button type="button" className="studio-button" onClick={() => void persistDraft()} disabled={isReadOnly || !hasChanges}><Save size={15} /> Save</button>
-              <button type="button" className="studio-button danger" onClick={() => void removeSelected()} disabled={isReadOnly}><Trash2 size={15} /> Delete</button>
+              <StudioButton variant="primary" onClick={() => void persistDraft()} disabled={isReadOnly || !hasChanges}><Save size={15} /> Save</StudioButton>
+              <OverflowMenu ariaLabel="Theme actions" items={[
+                { id: "duplicate", label: "Duplicate", onSelect: () => void duplicateSelected() },
+                { id: "export", label: "Export", onSelect: () => void exportSelected() },
+                { id: "default", label: "Set as default", onSelect: () => void makeDefault(), disabled: !getSelectableThemes(store).some(theme => theme.id === draft.id) },
+                { id: "delete", label: "Delete theme", onSelect: () => void removeSelected(), disabled: isReadOnly, destructive: true }
+              ]} />
             </div>
           </div>
 
-          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} baseId={viewsBaseId} ariaLabel="Theme Builder views" />
+          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} baseId={viewsBaseId} ariaLabel="Theme builder views" />
           {builderTabs.map((item, index) => item.id !== tab ? (
             <StudioTabPanel key={item.id} baseId={viewsBaseId} index={index} hidden>{null}</StudioTabPanel>
           ) : null)}
@@ -398,11 +408,11 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
-                <StudioField className="theme-token-field" label={<><span>Default workspace treatment</span></>}><select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                <StudioField className="theme-token-field" label="Default workspace treatment"><select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
                     <option value="">Original theme treatment</option>
                     {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
                   </select><small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small></StudioField>
-                <StudioField className="theme-token-field" label={<><span>Layout</span></>}><select
+                <StudioField className="theme-token-field" label="Layout"><select
                     value={draft.layout ?? "classic"}
                     disabled={isReadOnly}
                     onChange={event => {
@@ -412,11 +422,21 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   >
                     {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
                   </select></StudioField>
+                <StudioField className="theme-token-field" label="Sidebar backdrop"><select
+                    value={draft.sidebarBackdrop ?? "solid"}
+                    disabled={isReadOnly}
+                    onChange={event => {
+                      const backdrop = event.target.value;
+                      patchDraft({ sidebarBackdrop: isSidebarBackdrop(backdrop) && backdrop !== "solid" ? backdrop : undefined });
+                    }}
+                  >
+                    {sidebarBackdropOptions.map(backdrop => <option key={backdrop} value={backdrop}>{backdrop}</option>)}
+                  </select><small>Decorative paint for the desktop left navigation; High contrast always stays solid.</small></StudioField>
                 {typographyFields.map(field => (
-                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} /></StudioField>
+                  <StudioField key={field.key} className="theme-token-field" label={field.label}><input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} /></StudioField>
                 ))}
                 {shapeFields.map(field => (
-                  <StudioField key={field.key} className="theme-token-field" label={<><span>{field.label}</span></>}><input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} /></StudioField>
+                  <StudioField key={field.key} className="theme-token-field" label={field.label}><input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} /></StudioField>
                 ))}
               </div>
               <StudioTabs tabs={modeTabs} activeTab={mode} onSelect={id => setMode(id as ThemeMode)} baseId={modesBaseId} ariaLabel="Theme mode" />
@@ -428,14 +448,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                 <>
                   {!isReadOnly && optionalMode ? (
                     <div>
-                      <button type="button" className="studio-button danger" onClick={() => setDraft(current => current ? withoutOptionalMode(current, optionalMode) : current)}>
+                      <StudioButton type="button" variant="danger" onClick={() => setDraft(current => current ? withoutOptionalMode(current, optionalMode) : current)}>
                         <Trash2 size={15} /> Remove {themeModeLabels[mode].toLowerCase()} mode
-                      </button>
+                      </StudioButton>
                     </div>
                   ) : null}
                   <div className="theme-token-grid">
                     {themeTokenNames.map(token => (
-                      <StudioField key={token} className="theme-token-field" label={<><span>{token}</span></>}><input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} /></StudioField>
+                      <StudioField key={token} className="theme-token-field" label={token}><input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} /></StudioField>
                     ))}
                   </div>
                 </>
@@ -443,9 +463,9 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                 <StudioAlert tone="info">
                   {draft.name} has no {themeModeLabels[mode].toLowerCase()} mode, so Studio shows its dark mode instead.{" "}
                   {isReadOnly || !optionalMode ? null : (
-                    <button type="button" className="studio-button" onClick={() => setDraft(current => current ? withOptionalMode(current, optionalMode) : current)}>
+                    <StudioButton type="button" onClick={() => setDraft(current => current ? withOptionalMode(current, optionalMode) : current)}>
                       Add {themeModeLabels[mode].toLowerCase()} mode
-                    </button>
+                    </StudioButton>
                   )}
                 </StudioAlert>
               )}
@@ -466,15 +486,15 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                   event.currentTarget.value = "";
                 }}
               />
-              <button type="button" className="theme-upload-dropzone" onClick={() => assetInputRef.current?.click()}>
+              <StudioButton type="button" className="theme-upload-dropzone" onClick={() => assetInputRef.current?.click()}>
                 <ImagePlus size={20} /> Upload tiled material texture
-              </button>
+              </StudioButton>
               <div className="theme-assets-grid">
                 {store.assets.map(asset => (
                   <div className="theme-asset-row" key={asset.id}>
                     <span>{asset.fileName}</span>
                     <small>{asset.contentType} · {formatBytes(asset.size)}</small>
-                    <button type="button" className="studio-button danger" onClick={() => void removeAsset(asset.id)}><Trash2 size={14} /> Delete</button>
+                    <StudioButton type="button" variant="danger" onClick={() => void removeAsset(asset.id, asset.fileName)}><Trash2 size={14} /> Delete</StudioButton>
                   </div>
                 ))}
               </div>
@@ -530,8 +550,8 @@ function OverviewEditor({
 
   return (
     <div className="theme-overview-editor">
-      <StudioField label={<><span>Name</span></>}><input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} /></StudioField>
-      <StudioField label={<><span>Description</span></>}><textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} /></StudioField>
+      <StudioField label="Name"><input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} /></StudioField>
+      <StudioField label="Description"><textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} /></StudioField>
       <div className="theme-toggle-row">
         <label><input type="checkbox" checked={draft.published} disabled={readOnly} onChange={event => onPatch({ published: event.target.checked })} /> Published</label>
         <label title={enabledToggleTitle}>
@@ -573,13 +593,17 @@ function ThemePreview({
     "--preview-foreground": colors.foreground,
     "--preview-card": colors.card,
     "--preview-border": colors.border,
-    "--preview-muted": colors.muted
+    "--preview-muted": colors.muted,
+    "--preview-sidebar": colors.sidebar,
+    "--preview-sidebar-foreground": colors.sidebarForeground,
+    "--preview-sidebar-active": colors.sidebarActive,
+    "--preview-sidebar-active-foreground": colors.sidebarActiveForeground
   } as React.CSSProperties;
 
   return (
     <div className="theme-preview-panel">
       <div className="theme-preview-surface" style={previewStyle}>
-        <nav>
+        <nav data-sidebar-backdrop={mode === "high-contrast" ? "solid" : theme.sidebarBackdrop ?? "solid"}>
           <span>Dashboard</span>
           <span>Workflows</span>
           <span>Weaver</span>
@@ -595,9 +619,9 @@ function ThemePreview({
         </section>
       </div>
       <ValidationList issues={validationIssues} />
-      <button type="button" className="studio-button" onClick={onApply} disabled={validationIssues.some(issue => issue.severity === "error")}>
-        <Paintbrush size={15} /> Apply preview
-      </button>
+      <StudioButton type="button" onClick={onApply} disabled={validationIssues.some(issue => issue.severity === "error")}>
+        <Paintbrush size={15} /> Preview theme
+      </StudioButton>
     </div>
   );
 }

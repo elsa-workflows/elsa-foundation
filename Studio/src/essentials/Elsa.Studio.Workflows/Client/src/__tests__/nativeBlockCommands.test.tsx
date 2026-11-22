@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NativeBlockCommands, type NativeBlockValidation } from "../graph-authoring/NativeBlockCommands";
+import { NativeBlockAuthorityProvider } from "../graph-authoring/nativeBlockAuthority";
 import { planExtractNativeBlock, type NativeBlockContext, type NativeBlockDocument } from "../graph-authoring/nativeBlocks";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { normalizeActivityStructures } from "../workflowAdapter";
@@ -10,13 +11,14 @@ import type { ActivityNode } from "../workflowTypes";
 import { composeExpressionScopePreservation } from "../graph-authoring/expressionScopePreservation";
 import { sequenceActivity, flowchartActivity, sequenceNode, writeLine, leafNode, setVariableActivity } from "./fixtures";
 
-let root: Root, container: HTMLDivElement;
+let root: Root, container: HTMLDivElement, portalHost: HTMLDivElement | null;
 let context: NativeBlockContext;
 let createPosition: { x: number; y: number };
 const validate = vi.fn<(document: NativeBlockDocument) => Promise<NativeBlockValidation>>();
 const apply = vi.fn();
 const open = vi.fn();
 beforeEach(() => {
+  portalHost = null;
   createPosition = { x: 800, y: 100 };
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   context = { document: { rootActivity: sequenceNode("root", [leafNode("one"), leafNode("two")]), layout: [], activityPresentation: [] },
@@ -24,25 +26,99 @@ beforeEach(() => {
   validate.mockReset().mockResolvedValue({ state: "validated", messages: [] }); apply.mockReset(); open.mockReset();
   render();
 });
-afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
-function render() { flushSync(() => root.render(<NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} createPosition={createPosition} validate={validate} apply={apply} open={open} />)); }
-function button(label: string) { const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === label); if (!item) throw new Error(label); return item; }
+afterEach(() => { flushSync(() => root.unmount()); container.remove(); portalHost?.remove(); });
+function render(authority: React.ComponentProps<typeof NativeBlockAuthorityProvider>["value"] = null, toolbarHost?: HTMLElement | null) { flushSync(() => root.render(<NativeBlockAuthorityProvider value={authority}><NativeBlockCommands context={context} selectedNodeIds={["one", "two"]} createPosition={createPosition} validate={validate} apply={apply} open={open} toolbarHost={toolbarHost} /></NativeBlockAuthorityProvider>)); }
+function button(label: string) {
+  let item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  if (!item) {
+    const trigger = container.querySelector<HTMLButtonElement>(".wf-block-menu-trigger");
+    if (trigger && trigger.getAttribute("aria-expanded") !== "true") flushSync(() => trigger.click());
+    item = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === label);
+  }
+  if (!item) throw new Error(label);
+  return item;
+}
 function click(label: string) { flushSync(() => button(label).click()); }
 function name(value: string) {
-  const input = container.querySelector<HTMLInputElement>("input")!;
+  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input')!;
   flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 async function settle() { await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {}); }
+
+it("offers the published host's editing action without applying a block and shows its pending state", () => {
+  context = { ...context, canEdit: false };
+  const startEditing = vi.fn();
+  const authority = { sourceKey: "published:1", canEdit: false, canApply: () => false, validate: vi.fn(), startEditing };
+  const before = structuredClone(context.document);
+  render(authority);
+  expect(container.textContent).not.toContain("Other edits create a draft automatically.");
+  click("Blocks");
+  expect(document.body.textContent).toContain("Other edits create a draft automatically.");
+  expect(document.body.textContent).not.toContain("Open an editable draft");
+  expect(button("Create Sequence block").disabled).toBe(true);
+  expect(startEditing).not.toHaveBeenCalled();
+  click("Start editing");
+  expect(startEditing).toHaveBeenCalledTimes(1);
+  render({ ...authority, startingEditing: true });
+  expect(button("Starting…").disabled).toBe(true);
+  expect(container.querySelector("[role=status]")?.textContent).toBe("Preparing your draft…");
+  click("Starting…");
+  expect(startEditing).toHaveBeenCalledTimes(1);
+  expect(validate).not.toHaveBeenCalled();
+  expect(apply).not.toHaveBeenCalled();
+  expect(context.document).toEqual(before);
+  context = { ...context, canEdit: true };
+  render({ ...authority, canEdit: true, startEditing: undefined });
+  expect(container.textContent).not.toContain("Start editing");
+  expect(button("Create Sequence block").disabled).toBe(false);
+});
+
+it("keeps genuinely read-only block commands unavailable without offering draft creation", () => {
+  context = { ...context, canEdit: false };
+  render();
+  expect(container.textContent).not.toContain("Block editing is unavailable in this view. Open an editable draft.");
+  click("Blocks");
+  expect(document.body.textContent).toContain("Block editing is unavailable in this view. Open an editable draft.");
+  expect(container.textContent).not.toContain("Start editing");
+  expect(button("Create Sequence block").disabled).toBe(true);
+});
 
 it("previews the whole proposal without mutation, then revalidates at confirmation and commits once", async () => {
   const before = JSON.stringify(context.document);
   click("Extract block…"); name("Prepare shipment"); click("Preview change"); await settle();
   expect(validate).toHaveBeenCalledTimes(1); expect(apply).not.toHaveBeenCalled(); expect(JSON.stringify(context.document)).toBe(before);
-  expect(container.querySelector(".wf-block-preview")?.textContent).toContain("Prepare shipment");
-  expect(container.textContent).toContain("2 selected steps");
+  expect(document.querySelector(".wf-block-preview")?.textContent).toContain("Prepare shipment");
+  expect(document.body.textContent).toContain("2 selected steps");
   click("Apply change"); await settle();
-  expect(validate).toHaveBeenCalledTimes(2); expect(apply).toHaveBeenCalledTimes(1); expect(container.querySelector("[role=dialog]")).toBeNull();
+  expect(validate).toHaveBeenCalledTimes(2); expect(apply).toHaveBeenCalledTimes(1); expect(document.querySelector("[role=dialog]")).toBeNull();
   expect(apply.mock.calls[0][0].activityPresentation[0].displayName).toBe("Prepare shipment");
+});
+
+it("keeps block commands in a menu and restores focus to its trigger after Escape", () => {
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+  expect(trigger).not.toBeNull();
+  expect(document.body.textContent).not.toContain("Create Sequence block");
+
+  flushSync(() => trigger!.click());
+  const menu = document.body.querySelector<HTMLElement>('[role="menu"][aria-label="Block commands"]');
+  expect(menu).not.toBeNull();
+  expect(document.body.textContent).toContain("Create Sequence block");
+
+  flushSync(() => menu!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.body.querySelector('[role="menu"][aria-label="Block commands"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("renders block commands in the toolbar host and waits when the host is not mounted", () => {
+  portalHost = document.createElement("div");
+  document.body.append(portalHost);
+  render(null, portalHost);
+  expect(portalHost.querySelector('[aria-label="Named block commands"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Named block commands"]')).toBeNull();
+
+  render(null, null);
+  expect(portalHost.querySelector('[aria-label="Named block commands"]')).toBeNull();
+  expect(container.querySelector('[aria-label="Named block commands"]')).toBeNull();
 });
 
 it.each(["source", "selection", "permission", "catalog"])("refuses a stale %s before confirmation without a history edit", async change => {
@@ -52,7 +128,7 @@ it.each(["source", "selection", "permission", "catalog"])("refuses a stale %s be
   if (change === "permission") context = { ...context, canEdit: false };
   if (change === "catalog") context = { ...context, catalog: [] };
   render();
-  expect(button("Apply change").disabled).toBe(true); expect(container.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
+  expect(button("Apply change").disabled).toBe(true); expect(document.body.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
 });
 
 it("does not accept a candidate whose resource authority changes during the confirmation request", async () => {
@@ -65,18 +141,18 @@ it("does not accept a candidate whose resource authority changes during the conf
 it("ignores an in-flight preview after cancellation and restores normal page scrolling", async () => {
   let resolve!: (result: NativeBlockValidation) => void;
   validate.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-  expect(document.body.style.overflow).not.toBe("hidden");
+  expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
   click("Extract block…"); name("Review"); click("Preview change");
-  expect(document.body.style.overflow).toBe("hidden");
+  expect(document.body.hasAttribute("data-scroll-locked")).toBe(true);
   click("Cancel"); resolve({ state: "validated", messages: [] }); await settle();
-  expect(container.querySelector("[role=dialog]")).toBeNull(); expect(document.body.style.overflow).not.toBe("hidden"); expect(apply).not.toHaveBeenCalled();
+  expect(document.querySelector("[role=dialog]")).toBeNull(); expect(document.body.hasAttribute("data-scroll-locked")).toBe(false); expect(apply).not.toHaveBeenCalled();
   click("Extract block…"); expect(button("Preview change").disabled).toBe(false);
 });
 
 it("keeps a failed normal validation visible and refuses Apply", async () => {
   validate.mockResolvedValueOnce({ state: "invalid", messages: ["A required binding is missing."] });
   click("Extract block…"); name("Review"); click("Preview change"); await settle();
-  expect(container.querySelector("[role=alert]")?.textContent).toContain("required binding"); expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
+  expect(document.querySelector("[role=alert]")?.textContent).toContain("required binding"); expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
 });
 
 it.each(["catalog", "expression support", "same-primary selection"])("rechecks %s at a deferred host commit boundary", async change => {
@@ -110,7 +186,7 @@ it("refuses result-crossing preview when the composing host has no language pres
   context = { ...context, expressionScopePreservation: composeExpressionScopePreservation([]) }; render();
   const before = structuredClone(context.document);
   click("Extract block…"); name("Grouped"); click("Preview change"); await settle();
-  expect(container.querySelector("[role=alert]")?.textContent).toContain("Adding a result variable cannot preserve");
+  expect(document.querySelector("[role=alert]")?.textContent).toContain("Adding a result variable cannot preserve");
   expect(button("Apply change").disabled).toBe(true);
   expect(validate).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(before);
 });
@@ -157,5 +233,67 @@ it("creates at the host's free position and refuses a changed placement before c
   expect(candidate.layout.find(node => candidate.activityPresentation.some(item => item.nodeId === node.nodeId && item.displayName === "Separate block"))).toMatchObject(createPosition);
   createPosition = { x: 1200, y: 100 }; render();
   expect(button("Apply change").disabled).toBe(true);
-  expect(container.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("preview is stale"); expect(apply).not.toHaveBeenCalled();
+});
+
+it("shows safe request details, focuses Retry and validates again without duplicate commits", async () => {
+  const before = structuredClone(context.document);
+  validate.mockRejectedValueOnce(Object.assign(new Error("The validation service is restarting."), {
+    status: 503, payload: { detail: "The validation service is restarting.", errorCode: "validation.unavailable", traceId: "request-123", credentials: "must-not-render" }
+  }));
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  const alert = document.querySelector('[role="alert"]')!;
+  expect(alert.textContent).toContain("The validation service is restarting.");
+  expect(alert.textContent?.match(/The validation service is restarting\./g)).toHaveLength(1);
+  expect(alert.textContent).toContain("HTTP 503");
+  expect(alert.textContent).toContain("validation.unavailable");
+  expect(alert.textContent).toContain("request-123");
+  expect(alert.textContent).not.toContain("must-not-render");
+  expect(document.activeElement).toBe(button("Retry validation"));
+  expect(button("Apply change").disabled).toBe(true);
+  expect(apply).not.toHaveBeenCalled(); expect(context.document).toEqual(before);
+  const retry = button("Retry validation");
+  flushSync(() => { retry.click(); retry.click(); }); await settle();
+  expect(validate).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  expect(button("Apply change").disabled).toBe(false);
+  const confirm = button("Apply change");
+  flushSync(() => { confirm.click(); confirm.click(); }); await settle();
+  expect(validate).toHaveBeenCalledTimes(3); expect(apply).toHaveBeenCalledTimes(1);
+});
+
+it("clears the failed request and validates edited fields as a new proposal", async () => {
+  validate.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  click("Extract block…"); name("Old name"); click("Preview change"); await settle();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain("Failed to fetch");
+  name("New name");
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  expect(button("Apply change").disabled).toBe(true);
+  click("Preview change"); await settle();
+  expect(validate.mock.calls.at(-1)![0].activityPresentation[0].displayName).toBe("New name");
+  expect(apply).not.toHaveBeenCalled();
+});
+
+it("discards a previously validated plan when confirmation validation throws", async () => {
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  validate.mockRejectedValueOnce(Object.assign(new Error("Draft revision changed"), { status: 409, payload: { errorCode: "activity.draft.stale-revision" } }));
+  click("Apply change"); await settle();
+  expect(button("Apply change").disabled).toBe(true);
+  expect(document.querySelector(".wf-block-preview")).toBeNull();
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain("current revision");
+  expect(apply).not.toHaveBeenCalled();
+  click("Retry validation"); await settle();
+  expect(apply).not.toHaveBeenCalled();
+  expect(button("Apply change").disabled).toBe(false);
+});
+
+it("retries an unavailable owner without treating normal invalid findings as an outage", async () => {
+  validate.mockResolvedValueOnce({ state: "unavailable", messages: ["Candidate validation is unavailable for this resource."] });
+  click("Extract block…"); name("Review"); click("Preview change"); await settle();
+  expect(button("Retry validation").disabled).toBe(false);
+  validate.mockResolvedValueOnce({ state: "invalid", messages: ["activity.graph.intrinsic-unsupported: Engine intrinsics are unsupported."] });
+  click("Retry validation"); await settle();
+  expect(button("Preview change").disabled).toBe(false);
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain("intrinsic-unsupported");
+  expect(button("Apply change").disabled).toBe(true); expect(apply).not.toHaveBeenCalled();
 });

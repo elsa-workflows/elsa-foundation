@@ -11,6 +11,7 @@ import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
+import { emptyGraphElements, mergeGraphPaletteGroups, type GraphPaletteElement } from "../graph-authoring/graphPaletteElements";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowNodeResizeContext } from "./contexts";
 import { defaultNodeWidth, maxNodeWidth, minNodeWidth } from "../graph-authoring/nodeWidth";
 import { NodeSlotBadges } from "./NodeSlotBadges";
@@ -254,7 +255,17 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
   );
 }
 
-export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: { clientX: number; clientY: number; activities: ActivityCatalogItem[]; onPick(activity: ActivityCatalogItem): void; onClose(): void }) {
+type ConnectMenuItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
+
+export function ConnectMenu({ clientX, clientY, activities, elements = emptyGraphElements, onPick, onPickElement, onClose }: {
+  clientX: number;
+  clientY: number;
+  activities: ActivityCatalogItem[];
+  elements?: readonly GraphPaletteElement[];
+  onPick(activity: ActivityCatalogItem): void;
+  onPickElement?(element: GraphPaletteElement): void;
+  onClose(): void;
+}) {
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -262,6 +273,7 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
   const returnFocusRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const restoreFocusOnCloseRef = useRef(true);
   const listboxId = React.useId();
+  const hasElements = elements.length > 0 && !!onPickElement;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -274,8 +286,19 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
       (activity.description ?? "").toLowerCase().includes(term));
   }, [activities, search]);
 
-  const groups = useMemo(() => groupActivityPalette(filtered), [filtered]);
-  const flatActivities = useMemo(() => groups.flatMap(group => group.activities), [groups]);
+  const groups = useMemo(
+    () => mergeGraphPaletteGroups(groupActivityPalette(filtered), hasElements ? elements : emptyGraphElements, search),
+    [elements, filtered, hasElements, search]
+  );
+  const itemsByGroup = useMemo(() => groups.map(group => ({
+    category: group.category,
+    items: [
+      ...group.elements.map(element => ({ kind: "element" as const, element })),
+      ...group.activities.map(activity => ({ kind: "activity" as const, activity }))
+    ]
+  })), [groups]);
+  const flatItems = useMemo(() => itemsByGroup.flatMap(group => group.items), [itemsByGroup]);
+  const optionId = (item: ConnectMenuItem) => `${listboxId}-option-${item.kind === "activity" ? `activity-${item.activity.activityVersionId}` : `element-${item.element.id}`}`;
 
   useEffect(() => {
     const returnFocus = returnFocusRef.current;
@@ -307,20 +330,21 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
   const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex(index => Math.min(index + 1, flatActivities.length - 1));
+      setActiveIndex(index => Math.min(index + 1, Math.max(flatItems.length - 1, 0)));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setActiveIndex(index => Math.max(index - 1, 0));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const activity = flatActivities[activeIndex];
-      if (activity) pick(activity);
+      const item = flatItems[activeIndex];
+      if (item) pick(item);
     }
   };
 
-  const pick = (activity: ActivityCatalogItem) => {
+  const pick = (item: ConnectMenuItem) => {
     restoreFocusOnCloseRef.current = false;
-    onPick(activity);
+    if (item.kind === "activity") onPick(item.activity);
+    else onPickElement?.(item.element);
   };
 
   const left = Math.max(8, Math.min(clientX + 4, window.innerWidth - 328));
@@ -333,21 +357,21 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
         ref={inputRef}
         type="search"
         value={search}
-        placeholder="Search activities..."
-        aria-label="Search activities"
+        placeholder={hasElements ? "Search activities and elements..." : "Search activities..."}
+        aria-label={hasElements ? "Search activities and elements" : "Search activities"}
         aria-controls={listboxId}
-        aria-activedescendant={flatActivities[activeIndex] ? `${listboxId}-option-${flatActivities[activeIndex].activityVersionId}` : undefined}
+        aria-activedescendant={flatItems[activeIndex] ? optionId(flatItems[activeIndex]) : undefined}
         onChange={event => {
           setSearch(event.target.value);
           setActiveIndex(0);
         }}
         onKeyDown={onInputKeyDown}
       />
-      <div id={listboxId} className="wf-connect-menu-list" role="listbox" aria-label="Activity picker">
-        {groups.length === 0 ? <p>No matching activities.</p> : groups.map(group => (
+      <div id={listboxId} className="wf-connect-menu-list" role="listbox" aria-label={hasElements ? "Activity and element picker" : "Activity picker"}>
+        {groups.length === 0 ? <p>{hasElements ? "No matching activities or elements." : "No matching activities."}</p> : itemsByGroup.map(group => (
           <section key={group.category}>
             <h4>{group.category}</h4>
-            {group.activities.map(activity => {
+            {group.items.map(item => {
               itemIndex += 1;
               const currentIndex = itemIndex;
               const active = currentIndex === activeIndex;
@@ -355,15 +379,15 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
                 <button
                   type="button"
                   role="option"
-                  id={`${listboxId}-option-${activity.activityVersionId}`}
+                  id={optionId(item)}
                   aria-selected={active}
                   className={active ? "active" : ""}
-                  key={activity.activityVersionId}
+                  key={optionId(item)}
                   onMouseEnter={() => setActiveIndex(currentIndex)}
-                  onClick={() => pick(activity)}
+                  onClick={() => pick(item)}
                 >
-                  <strong>{getActivityDisplay(activity)}</strong>
-                  <small>{activity.category || activity.activityTypeKey}</small>
+                  <strong>{item.kind === "activity" ? getActivityDisplay(item.activity) : item.element.label}</strong>
+                  <small>{item.kind === "activity" ? item.activity.category || item.activity.activityTypeKey : item.element.category}</small>
                 </button>
               );
             })}

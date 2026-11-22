@@ -13,13 +13,13 @@ test("approves the exact pending content with the keyboard and stays resolved af
   await expect(page.getByText("Proofreader: ready to publish.")).toBeVisible();
   await expect(page.getByTestId("review-status")).toHaveText("Awaiting your decision");
 
-  await page.getByLabel("Comment (optional)").focus();
+  await page.getByRole("textbox", { name: "Comment" }).focus();
   await page.keyboard.type("Ship it.");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Approve" })).toBeFocused();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Accepted");
+  await expect(page.getByRole("status").locator("[data-receipt]")).toHaveAttribute("data-receipt", "Accepted");
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
   await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
   await page.reload();
@@ -49,7 +49,7 @@ test("shows structured agent output as formatted JSON", async ({ page }) => {
 test("retries an unavailable submission with the same request ID", async ({ page }) => {
   await open(page, "unavailable");
   await page.getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Unavailable");
+  await expect(page.getByRole("alert").locator("[data-receipt]")).toHaveAttribute("data-receipt", "Unavailable");
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
 
@@ -61,7 +61,7 @@ test("retries an unavailable submission with the same request ID", async ({ page
 test("reports a conflict and an already resolved review without deciding", async ({ page }) => {
   await open(page, "conflict");
   await page.getByRole("button", { name: "Deny" }).click();
-  await expect(page.getByRole("status")).toHaveAttribute("data-receipt", "Conflict");
+  await expect(page.getByRole("alert").locator("[data-receipt]")).toHaveAttribute("data-receipt", "Conflict");
   await expect(page.getByTestId("review-status")).toHaveText("Awaiting your decision");
 
   await open(page, "resolved");

@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -58,10 +59,13 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
     await page.setViewportSize({ width: 1600, height: 1100 });
     if (projectViewport.width < 800) await page.getByRole("button", { name: "Restore inspector panel", exact: true }).click();
   };
-  await page.getByRole("button", { name: "More tools", exact: true }).click();
-  await page.getByRole("link", { name: "Forms", exact: true }).click();
+  const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
+  const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
+  if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
+  await operate.getByRole("link", { name: "Task forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
-  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
+  await page.getByRole("button", { name: "New form", exact: true }).first().click();
+  await confirmNewResource(page, "form", "New form");
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
   await page.getByLabel("Form ID", { exact: true }).fill(formId);
   await page.getByLabel("Name", { exact: true }).fill(title);
@@ -81,13 +85,13 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toHaveCSS("outline-style", "none");
   await capture(page, info, "published-form");
-  await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
 
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.goto("/workflows/definitions");
-  await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await page.getByRole("button", { name: "New workflow" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await dialog.getByLabel("Display name").fill(title);
   const rootKind = dialog.getByRole("radio", { name: "Flowchart", exact: true });
   await expect(rootKind).toBeEnabled(); await rootKind.press("Space"); await expect(rootKind).toBeChecked();
@@ -100,7 +104,23 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
   const taskNodeId = await taskNode.getAttribute("data-id");
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
-  await page.getByLabel("Task assignee", { exact: true }).selectOption(who.userId);
+  const assignee = page.getByLabel("Task assignee", { exact: true });
+  const taskGroup = page.getByLabel("Task group", { exact: true });
+  const assignment = page.getByRole("group", { name: "Assignment", exact: true });
+  await expect(assignment).toBeVisible();
+  await expect(assignment.locator(".wf-property-row")).toHaveCount(2);
+  await expect(assignment).toContainText("Assign this task to one person or one group.");
+  await expect(assignment).toContainText("Choose an assignee or a group—not both.");
+  await assignee.selectOption(who.userId);
+  const availableTargets = await get("/runtime/user-task-targets?skip=0&take=100");
+  const availableGroup = availableTargets.groups?.[0];
+  if (availableGroup) {
+    await taskGroup.selectOption(availableGroup.id);
+    await expect(assignee).toHaveValue("");
+    await assignee.selectOption(who.userId);
+    await expect(taskGroup).toHaveValue("");
+  }
+  await captureInspector("task-assignment", assignee);
   await page.getByLabel("Task form", { exact: true }).selectOption(formId);
   await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   for (const label of ["Task form", "Task form version"]) {
@@ -115,25 +135,29 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const outputNode = page.locator(".react-flow__node").filter({ hasText: "Set Output" });
   const outputNodeId = await outputNode.getAttribute("data-id");
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
-  await expect(page.getByText("Add a workflow output in the editor's Outputs tab, then select it here.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Add an output in this editor's Outputs tab, then select it here.", { exact: true })).toBeVisible();
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   const outputSave = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes("/design/workflows/drafts/") && (response.request().postDataJSON().state?.outputs?.length ?? 0) > 0);
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   const added = await outputSave; expect(added.status()).toBe(200);
   expect(added.request().postDataJSON().state.outputs[0].isNullable).toBe(false);
   await page.getByLabel("Output name", { exact: true }).fill("ReviewData");
-  await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+  // A remounted editor briefly uses the text fallback while its descriptor catalog loads.
+  // This composed host provides the catalog; wait for its native picker before selecting JSON.
+  await page.getByRole("combobox", { name: "Output type", exact: true }).selectOption(jsonAlias);
   await editorViews.getByRole("tab", { name: "Variables", exact: true }).click();
   await page.getByRole("button", { name: "Add variable", exact: true }).click();
   await page.getByLabel("Variable name", { exact: true }).fill("Review data");
-  await page.getByLabel("Variable type", { exact: true }).selectOption(jsonAlias);
+  await page.getByRole("combobox", { name: "Variable type", exact: true }).selectOption(jsonAlias);
   await page.getByLabel("Variable storage driver", { exact: true }).selectOption("elsa.json");
   await page.getByLabel("Variable default value", { exact: true }).fill("{}");
   await expect(page.getByLabel("Variable type", { exact: true })).toHaveValue(jsonAlias);
   await expect(page.getByLabel("Variable storage driver", { exact: true })).toHaveValue("elsa.json");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(page.getByLabel("Output type", { exact: true })).toHaveValue(jsonAlias);
+  await page.setViewportSize(projectViewport);
   await capture(page, info, "json-output-definitions");
+  await page.setViewportSize({ width: 1600, height: 1100 });
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await page.getByRole("combobox", { name: "Output Name", exact: true }).selectOption("ReviewData");
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
@@ -147,12 +171,12 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toBeDisabled();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText(/This output is no longer defined. Add a workflow output in the editor's Outputs tab/)).toBeVisible();
+  await expect(page.getByText(/This output is no longer defined. Add an output in this editor's Outputs tab/)).toBeVisible();
   await captureInspector("removed-output", page.getByRole("combobox", { name: "Output Name", exact: true }));
   await editorViews.getByRole("tab", { name: "Outputs", exact: true }).click();
   await page.getByRole("button", { name: "Add output", exact: true }).click();
   await page.getByLabel("Output name", { exact: true }).fill("RenamedData");
-  await page.getByLabel("Output type", { exact: true }).selectOption(jsonAlias);
+  await page.getByRole("combobox", { name: "Output type", exact: true }).selectOption(jsonAlias);
   await editorViews.getByRole("tab", { name: "Designer", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Output Name", exact: true })).toHaveAttribute("aria-invalid", "false");
   await expect.poll(() => page.getByRole("combobox", { name: "Output Name", exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
@@ -189,7 +213,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect.poll(async () => (await get(`/runtime/workflows/instances/${runId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
   await page.getByRole("button", { name: "Refresh task", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeEnabled();
   const completed = await get(`/runtime/workflows/instances/${runId}`);
   expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
   await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);

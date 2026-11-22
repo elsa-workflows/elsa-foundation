@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, useTheme } from "../app/components/ThemeProvider";
 import { getTheme, getThemeModeDefinition } from "../app/themes/presets";
 import { appearanceResetStorageKeys } from "../app/themes/appearance";
+import { resolveNavigationColors } from "../app/themes/sidebarColor";
 import { normalizeThemeStore, withoutOptionalMode } from "../app/themes/themeStoreApi";
 import type { StudioEndpointContext } from "../sdk";
 
@@ -38,7 +39,7 @@ afterEach(async () => {
   await update(() => root.unmount());
   container.remove();
   for (const name of Array.from(html().attributes).map(attribute => attribute.name)) {
-    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-sidebar-color" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
+    if (name.startsWith("data-theme") || name === "data-nav-mode" || name === "data-sidebar-color" || name === "data-sidebar-backdrop" || name === "data-workspace-style" || name === "data-color-scheme" || name === "style") html().removeAttribute(name);
   }
 });
 
@@ -90,8 +91,43 @@ describe("sidebar color", () => {
   });
 });
 
+describe("sidebar backdrop", () => {
+  it("follows the selected color scheme and stays off for top navigation and High contrast", async () => {
+    await render();
+    await update(() => appearance.setColorScheme("space"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+
+    await update(() => appearance.setSidebarColorPreference("light"));
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(
+      resolveNavigationColors(appearance.currentColorScheme, appearance.mode, appearance.workspaceStyle, "light").bg
+    );
+
+    await update(() => appearance.setColorScheme("signal"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+    await update(() => appearance.setColorScheme("space"));
+    await update(() => appearance.setModePreference("high-contrast"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+
+    await update(() => appearance.setModePreference("dark"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+    await update(() => appearance.setNavModePreference("top"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+    await update(() => appearance.setNavModePreference("left"));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("starfield");
+  });
+
+  it("uses the draft backdrop during preview and suppresses it in High contrast", async () => {
+    await render();
+    await update(() => appearance.previewTheme({ ...getTheme("space")!, sidebarBackdrop: "gradient" }));
+    expect(html().getAttribute("data-sidebar-backdrop")).toBe("gradient");
+
+    await update(() => appearance.setModePreference("high-contrast"));
+    expect(html().hasAttribute("data-sidebar-backdrop")).toBe(false);
+  });
+});
+
 describe("independent workspace appearance", () => {
-  it.each(["builtin:porcelain", "builtin:atelier", "builtin:graphite"] as const)("applies %s as an explicit complete preset and restores it after remount", async id => {
+  it.each(["builtin:porcelain", "builtin:atelier", "builtin:graphite", "space"] as const)("applies %s as an explicit complete appearance preset and restores it after remount", async id => {
     await render();
     await update(() => appearance.setNavModePreference("top"));
     // Theme default: the preset's palette owns the navigation surface.
@@ -140,12 +176,12 @@ describe("independent workspace appearance", () => {
     expect(html().getAttribute("data-theme-layout")).toBe("editorial");
   });
 
-  it("does not apply a hidden complete preset", async () => {
-    const context = { http: { getJson: async () => normalizeThemeStore({ disabledBuiltInThemeIds: ["builtin:graphite"] }) } } as unknown as StudioEndpointContext;
+  it.each(["builtin:graphite", "space"] as const)("does not apply the unavailable %s preset", async id => {
+    const context = { http: { getJson: async () => normalizeThemeStore({ disabledBuiltInThemeIds: [id] }) } } as unknown as StudioEndpointContext;
     await render(context);
-    await vi.waitFor(() => expect(appearance.store.disabledBuiltInThemeIds).toContain("builtin:graphite"));
+    await vi.waitFor(() => expect(appearance.store.disabledBuiltInThemeIds).toContain(id));
     const before = { ...localStorage };
-    await update(() => appearance.applyPreset("builtin:graphite"));
+    await update(() => appearance.applyPreset(id));
     expect(appearance.currentTheme.id).toBe("linen");
     expect({ ...localStorage }).toEqual(before);
   });

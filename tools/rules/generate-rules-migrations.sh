@@ -13,7 +13,7 @@ Usage:
   bash tools/rules/generate-rules-migrations.sh <MigrationName> [Sqlite|PostgreSql|SqlServer|MySql]
 
 The provider defaults to Sqlite. Each context retains its own migration set under
-Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/<Provider>/.
+extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/<Provider>/.
 USAGE
 }
 
@@ -39,16 +39,16 @@ case "$provider" in
   *) fail "Unsupported Rules provider '$provider'." ;;
 esac
 context="Rules${provider}DbContext"
-project_rel="Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"
+project_rel="extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj"
 project="${project_rel}"
-project_dir="$root/Extensions/Rules/src/Persistence/EntityFrameworkCore"
+project_dir="$root/extensions/Rules/src/Persistence/EntityFrameworkCore"
 context_source="$project_dir/${context}.cs"
-tooling="Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"
-factory_source="Extensions/Rules/src/Tooling/${context}Factory.cs"
+tooling="extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj"
+factory_source="extensions/Rules/src/Tooling/${context}Factory.cs"
 output_dir="Migrations/Rules/$provider"
 namespace="Elsa.Rules.Persistence.EntityFrameworkCore.Migrations.Rules.$provider"
 destination="$project_dir/$output_dir"
-expected_destination="$root/Extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/$provider"
+expected_destination="$root/extensions/Rules/src/Persistence/EntityFrameworkCore/Migrations/Rules/$provider"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 [[ "$destination" == "$expected_destination" ]] || fail "Unexpected Rules migration destination."
@@ -65,8 +65,8 @@ grep -Fq "ModuleDesignTimeFactory<$context>" "$factory_source" ||
   fail "The Rules tooling factory does not target the supported context."
 
 # Refuse redirected destinations and non-directory path components before restore/build/scaffolding.
-for path in "$root/Extensions" "$root/Extensions/Rules" "$root/Extensions/Rules/src" \
-            "$root/Extensions/Rules/src/Persistence" "$project_dir" \
+for path in "$root/extensions" "$root/extensions/Rules" "$root/extensions/Rules/src" \
+            "$root/extensions/Rules/src/Persistence" "$project_dir" \
             "$project_dir/Migrations" "$project_dir/Migrations/Rules" "$destination"; do
   [[ ! -L "$path" ]] || fail "Migration path components must not be symlinks: $path."
   [[ ! -e "$path" || -d "$path" ]] || fail "Migration path component is not a directory: $path."

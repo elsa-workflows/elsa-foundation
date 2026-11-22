@@ -14,8 +14,8 @@ for (const width of [320, 768, 1024, 1440]) {
     const title = toolbar.locator("strong[title]");
     const badge = toolbar.getByText("Draft", { exact: true });
     const titleRow = toolbar.locator(".wf-editor-title");
-    const definitions = toolbar.getByRole("button", { name: "Definitions", exact: true });
-    const breadcrumbChevron = toolbar.locator(".wf-editor-identity > svg");
+    const definitions = toolbar.getByRole("link", { name: "Definitions", exact: true });
+    const breadcrumbChevron = toolbar.locator(".studio-breadcrumb-separator");
     const save = toolbar.getByRole("button", { name: "Save", exact: true });
     const canvasTools = toolbar.locator(".wf-canvas-tools");
     const initialTitle = await title.boundingBox();
@@ -180,7 +180,7 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
       const toolbar = page.locator(".wf-editor-toolbar");
       const primary = toolbar.getByRole("button", { name: "Review & publish", exact: true });
-      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
+      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.getByRole("button", { name: "Test Run", exact: true })];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
@@ -229,5 +229,45 @@ for (const theme of ["light", "dark"]) for (const width of [1024, 1440, 2048]) {
       expect(await readButtonPositions(toolbar.getByRole("button"))).toEqual(initialButtons);
     }
     await page.screenshot({ path: testInfo.outputPath("toolbar-feedback.png") });
+  });
+}
+
+
+for (const width of [360, 1440]) for (const theme of ["light", "dark"]) for (const key of ["Enter", "ArrowDown", "ArrowUp"]) {
+  test(`focuses a late-positioned workflow menu at ${width}px ${theme} with ${key}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
+    const trigger = page.getByRole("button", { name: "More workflow actions", exact: true });
+    // Model a layout transition whose anchor becomes measurable after the opening frame.
+    // The real popover remains inert until it can position itself.
+    await trigger.evaluate(button => {
+      button.addEventListener("keydown", () => {
+        const measure = button.getBoundingClientRect;
+        button.getBoundingClientRect = () => new DOMRect();
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          button.getBoundingClientRect = measure;
+          window.dispatchEvent(new Event("resize"));
+        }));
+      }, { once: true });
+    });
+    await trigger.press(key);
+    const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
+    const initial = key === "ArrowUp"
+      ? menu.getByRole("menuitem", { name: "Export BPMN", exact: true })
+      : menu.getByRole("menuitemcheckbox", { name: /^Autosave/ });
+    await expect(initial).toBeFocused();
+    await page.screenshot({ path: info.outputPath("late-menu-focus.png") });
+    await initial.press("ArrowDown");
+    const next = key === "ArrowUp"
+      ? menu.getByRole("menuitemcheckbox", { name: /^Autosave/ })
+      : menu.getByRole("menuitem", { name: "Propose update", exact: true });
+    await expect(next).toBeFocused();
+    await page.evaluate(() => new Promise<void>(resolve => {
+      window.dispatchEvent(new Event("resize"));
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect(next).toBeFocused();
+    await next.press("Escape");
+    await expect(trigger).toBeFocused();
   });
 }

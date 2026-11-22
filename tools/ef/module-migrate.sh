@@ -9,7 +9,7 @@
 #   bash tools/ef/module-migrate.sh script-check <output-dir>
 #
 # `apply`, `validate`, `script` and `script-check` are thin shims (#1878) over the `dotnet elsa persistence`
-# CLI (`Essentials/src/Cli/Elsa.Cli`, spec 171): this script builds that CLI and the tooling project below — which
+# CLI (`essentials/src/Cli/Elsa.Cli`, spec 171): this script builds that CLI and the tooling project below — which
 # references every first-party module and every provider engine, the same project `pending` already builds —
 # and runs the CLI against that project's own build output as its `--host`. `pending` alone still drives
 # `dotnet ef` directly: it needs no host closure, only the tooling project's own compiled model, and the new
@@ -41,10 +41,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 tooling_dir="tools/ef/Elsa.EntityFrameworkCore.Tooling"
-cli_project="Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj"
-cli_dir="Essentials/src/Cli/Elsa.Cli"
-# One root covers every module: required under Essentials/src, optional under Extensions (#1815).
-module_roots=(Essentials/src Extensions)
+cli_project="essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj"
+cli_dir="essentials/src/Cli/Elsa.Cli"
+# One root covers every module: required under essentials/src, optional under Extensions (#1815).
+module_roots=(essentials/src extensions)
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 usage() {

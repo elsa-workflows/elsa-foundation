@@ -95,7 +95,7 @@ refreshed catalog:
 
 The `/_elsa/module-management` upload and reconcile endpoints answer `"RequiresReload": true` for the same reason: the
 package is reconciled and loaded and the catalog refreshed, but no shell has switched yet. The host-level
-`IShellReloader` is `NullShellReloader` (`Essentials/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`), a no-op that
+`IShellReloader` is `NullShellReloader` (`essentials/src/Modularity/Api/ModuleManagement/ModuleManagementApiServiceCollectionExtensions.cs`, registered by `AddElsaModuleManagement`), a no-op that
 reports zero shells reloaded. The one exception is a shell that enables the `ModularityApi` feature: it replaces
 `NullShellReloader` inside that shell with a reloader that does reload it, so a feature change applied through that
 shell's module API also refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying

@@ -6,7 +6,7 @@ import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import { flowchartActivity, sequenceActivity, writeLine, whileActivity, whileNode } from "./fixtures";
 import { compensationScopeStructureKind } from "../compensationScope";
 import { readFileSync } from "node:fs";
-import { preservesJavaScriptWithAddedVariable } from "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation";
+import { preservesJavaScriptWithAddedVariable } from "../../../../../../../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/variableAdditionPreservation";
 
 const expressionScopePreservation = { revision: "javascript-variable-addition-v1", allowsVariableAddition: preservesJavaScriptWithAddedVariable };
 function cloneContext(context: NativeBlockContext): NativeBlockContext {

@@ -20,18 +20,20 @@ import type { ActivityNode } from "../workflowTypes";
 
 // Spec 260 T421 (the confirmation dialog) and T422 (where the actions show).
 
-let container: HTMLDivElement;
+let mountPoint: HTMLDivElement;
+let container: HTMLElement;
 let root: Root;
 
 beforeEach(() => {
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
+  container = document.body;
+  mountPoint = document.createElement("div");
+  document.body.appendChild(mountPoint);
+  root = createRoot(mountPoint);
 });
 
 afterEach(() => {
   flushSync(() => root.unmount());
-  container.remove();
+  mountPoint.remove();
 });
 
 const decisions = ["compensation.resolve.effect-absent", "compensation.resolve.effect-accepted", "compensation.abandon"];
@@ -115,8 +117,8 @@ describe("OperatorActionDialog", () => {
     render(retryActionModel(waitingRow(), scopeContext()), { onConfirm, onCancel });
 
     const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
-    expect(dialog.getAttribute("aria-labelledby")).toBe(dialog.querySelector("h3")!.id);
-    expect(dialog.querySelector("h3")!.textContent).toBe('Retry the compensation of "Reserve delivery"?');
+    expect(dialog.getAttribute("aria-labelledby")).toBe(dialog.querySelector(".studio-dialog-title")!.id);
+    expect(dialog.querySelector(".studio-dialog-title")!.textContent).toBe('Retry the compensation of "Reserve delivery"?');
     expect(document.activeElement).toBe(reason());
     expect(confirmButton().disabled).toBe(false);
     expect(dialog.textContent).toContain("Visible to everyone who can view this run. Do not include secrets.");
@@ -124,7 +126,7 @@ describe("OperatorActionDialog", () => {
     flushSync(() => confirmButton().click());
     expect(onConfirm).toHaveBeenCalledWith({ reason: "", decision: null });
 
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
@@ -165,7 +167,7 @@ describe("OperatorActionDialog", () => {
     render(abandonActionModel(scopeContext()), { busy: true, error: "The runtime is busy. Try again in 7 seconds. Nothing was changed." });
 
     expect([...container.querySelectorAll("li")].map(item => item.textContent)).toEqual(["Reserve inventory (waiting to undo)", "Reserve delivery (undo failed)"]);
-    expect(confirmButton().dataset.tone).toBe("danger");
+    expect(confirmButton().dataset.variant).toBe("danger");
     expect(confirmButton().textContent).toBe("Submitting…");
     expect(confirmButton().disabled).toBe(true);
     expect(reason().disabled).toBe(true);

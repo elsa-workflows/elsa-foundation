@@ -38,7 +38,7 @@ HARNESS = ("tools/bpmn/", "e2e-tests/etl/", "specs/1184-direct-bpmn-studio/")
 
 def product_neutral(name):
     """Paths that no host or browser product is built from: harness, evidence, documentation and tests."""
-    return (name.startswith(HARNESS) or name.endswith(".md") or name.startswith(("Essentials/tests/", "Extensions/")) and "/tests/" in name
+    return (name.startswith(HARNESS) or name.endswith(".md") or name.startswith(("essentials/tests/", "extensions/")) and "/tests/" in name
             or "/__tests__/" in name)
 
 
@@ -50,7 +50,7 @@ def free_port():
 
 def compose_host_roots(backend_root, studio_root, backend_url, studio_url, *, direct_human):
     """Copy current host configuration into owned roots; returns the unsaved shells document and default features."""
-    backend_source = REPO / "Essentials/apps/Elsa.Workbench"
+    backend_source = REPO / "apps/Elsa.Workbench"
     studio_source = REPO / "Studio/src/apps/Elsa.Studio.Web"
     for source, target in ((backend_source, backend_root), (studio_source, studio_root)):
         for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
@@ -164,7 +164,7 @@ def main():
         if any(not product_neutral(name) for name in changed):
             raise ValueError("Product reuse is limited to this journey's harness and evidence changes; rebuild changed product inputs.")
     browser_assets = []
-    for wwwroot in sorted(list((REPO / "Studio/src/essentials").glob("*/wwwroot")) + list((REPO / "Extensions").glob("*/studio/*/wwwroot"))):
+    for wwwroot in sorted(list((REPO / "Studio/src/essentials").glob("*/wwwroot")) + list((REPO / "extensions").glob("*/studio/*/wwwroot"))):
         for asset in sorted(wwwroot.rglob("*")):
             if asset.is_file(): browser_assets.append({"file": str(asset.relative_to(REPO)), "sha256": digest(asset)})
     children = []

@@ -306,7 +306,7 @@ export function DictionaryValueEditor({
                 ? (tableValidation.valid ? 0 : tableValidation.errors.length) + invalidComplexDraftIds.size
                 : jsonValidation.valid ? 0 : jsonValidation.errors.length;
               return (
-                <button
+                <StudioButton
                   type="button"
                   role="tab"
                   id={`${tabsId}-tab-${index}`}
@@ -319,7 +319,7 @@ export function DictionaryValueEditor({
                   onClick={() => requestTab(tab)}
                 >
                   {tab === "table" ? "Table" : "JSON"}{errors > 0 ? ` (${errors} errors)` : ""}
-                </button>
+                </StudioButton>
               );
             })}
           </div>
@@ -561,9 +561,9 @@ function DictionaryRowEditor({
         )}
       </div>
       <div role="cell" className="wf-dictionary-row-actions">
-        <button type="button" aria-label={`Remove ${label}`} title="Remove entry" disabled={disabled} onClick={onRemove}>
+        <StudioButton type="button" aria-label={`Remove ${label}`} title="Remove entry" disabled={disabled} onClick={onRemove}>
           <Trash2 size={14} />
-        </button>
+        </StudioButton>
       </div>
       {errors.length > 0 ? <p id={errorId} className="wf-dictionary-row-error">{errors.map(error => error.message).join(" ")}</p> : null}
     </div>
@@ -604,10 +604,10 @@ function ComplexValueEditor({
 
   return (
     <div className="wf-dictionary-complex-editor">
-      <button type="button" className="wf-dictionary-complex-toggle" aria-expanded={open} onClick={() => setOpen(current => !current)}>
+      <StudioButton type="button" className="wf-dictionary-complex-toggle" aria-expanded={open} onClick={() => setOpen(current => !current)}>
         <span>{summarizeComplexValue(value)}</span>
         <small>{open ? "Hide JSON editor" : "Edit value JSON"}</small>
-      </button>
+      </StudioButton>
       {open ? (
         <StudioCodeEditor
           ariaLabel={`${label} JSON`}

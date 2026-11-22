@@ -8,10 +8,11 @@ for (const appearance of [{ preset: "classic", mode: "light" }, { preset: "class
     await page.setViewportSize({ width, height: 1100 });
     await page.goto(`/runtime-summary.html?theme=${appearance.mode}&preset=${appearance.preset}&backend=test-backend`);
     const panel = page.getByRole("region", { name: "Test run summary", exact: true });
-    await expect(panel.locator(".wf-status-badge")).toHaveText("Completed");
-    await expect(panel.getByRole("heading", { name: "Latest test run" })).toBeVisible();
+    await expect(panel.locator(".studio-status-chip")).toHaveText("Completed");
+    // #4903 replaced the "Latest test run" heading with a compact status and outcome line.
+    await expect(panel.locator(".wf-runtime-status-outcome .wf-runtime-outcome")).toBeVisible();
     await expect(panel.getByText("Waiting triggers", { exact: true })).toBeHidden();
-    await expect(panel.getByRole("button", { name: "Copy Artifact ID", exact: true })).toBeHidden();
+    await expect(panel.getByRole("button", { name: "Copy Executable ID", exact: true })).toBeHidden();
     await expect(panel.getByRole("link", { name: "View artifact", exact: true })).toHaveAttribute("href", /\/workflows\/executables\/artifact-7e88b5cd7828-exact-very-long-reference-for-copy\?backend=test-backend$/);
     await panel.getByRole("button", { name: "Open run", exact: true }).click();
     await expect(page.getByLabel("Opened run", { exact: true })).toHaveText("run-exact-14qxVV6LzBr");
@@ -20,10 +21,10 @@ for (const appearance of [{ preset: "classic", mode: "light" }, { preset: "class
     const disclosure = panel.getByRole("button", { name: "Technical details", exact: true });
     await disclosure.focus(); await disclosure.press("Enter");
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const copy = panel.getByRole("button", { name: "Copy Artifact ID", exact: true });
+    const copy = panel.getByRole("button", { name: "Copy Executable ID", exact: true });
     await copy.focus(); await copy.press("Enter");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("artifact-7e88b5cd7828-exact-very-long-reference-for-copy");
-    await expect(panel.getByRole("status").filter({ hasText: "Artifact ID copied" })).toBeVisible();
+    await expect(panel.getByRole("status").filter({ hasText: "Executable ID copied" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await panel.screenshot({ path: test.info().outputPath("runtime-summary-expanded.png") });
     await page.addScriptTag({ content: axe.source });
@@ -42,7 +43,11 @@ test("runtime summary preserves waiting, faults and observation warnings", async
   const panel = page.getByRole("region", { name: "Test run summary", exact: true });
   const state = page.getByRole("combobox", { name: "Fixture execution state", exact: true });
   await state.selectOption("Suspended");
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Waiting");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Waiting");
+  // #4903 moved waits, incident and observation notices into the collapsible "Run details" fold.
+  const runDetails = panel.locator(".wf-runtime-details").getByRole("button", { name: /^Run details/ });
+  if (await runDetails.getAttribute("aria-expanded") !== "true") await runDetails.click();
+  await expect(runDetails).toHaveAttribute("aria-expanded", "true");
   await expect(panel.getByRole("heading", { name: "Waiting triggers", exact: true })).toBeVisible();
   await state.selectOption("Faulted");
   await expect(panel.getByRole("button", { name: "Review incidents", exact: true })).toBeVisible();
@@ -57,7 +62,7 @@ test("runtime summary preserves waiting, faults and observation warnings", async
   await expect(panel.getByRole("button", { name: "Reconnect execution", exact: true })).toBeVisible();
   await expect(panel.getByText("Execution observation disconnected.", { exact: true })).toBeVisible();
   await state.selectOption("Expired");
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Expired");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Expired");
 });
 
 test("the composed editor Runtime panel follows its real execution observer", async ({ page }) => {
@@ -66,9 +71,9 @@ test("the composed editor Runtime panel follows its real execution observer", as
   await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
   await page.getByRole("tab", { name: "Runtime", exact: true }).click();
   const panel = page.getByRole("region", { name: "Test run summary", exact: true });
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Running");
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Running");
   await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
-  await expect(panel.locator(".wf-status-badge")).toHaveText("Completed", { timeout: 10000 });
+  await expect(panel.locator(".studio-status-chip")).toHaveText("Completed", { timeout: 10000 });
   await expect(panel.getByRole("heading", { name: "Waiting triggers", exact: true })).toBeHidden();
   const artifact = panel.getByRole("link", { name: "View artifact", exact: true });
   await expect(artifact).toHaveAttribute("href", "/workflows/executables/editor-artifact?backend=fixture-backend");

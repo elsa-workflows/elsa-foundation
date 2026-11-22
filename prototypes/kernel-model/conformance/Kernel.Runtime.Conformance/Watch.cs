@@ -17,6 +17,16 @@ public sealed class Watcher
     private readonly Dictionary<(string, int), int> _generations = [];  // a node's successful activations of a scope so far
     private readonly List<string> _violations = [];
     private readonly List<string> _fenced = [];
+    private (string Node, int Scope)? _countPassesFor;
+    private int _countedPasses;
+
+    public void CountPasses(int scope, string node)
+    {
+        lock (_lock) (_countPassesFor, _countedPasses) = ((node, scope), 0);
+    }
+
+    public int CountedPasses { get { lock (_lock) return _countedPasses; } }
+
 
     /// <summary>Activations asked for while another node held the scope: a second activation at once.</summary>
     public int Second { get; private set; }
@@ -68,7 +78,11 @@ public sealed class Watcher
     public IReadOnlyList<string>[] Holders(int partitions)
     {
         lock (_lock)
-            return Enumerable.Range(0, partitions).Select(scope => (IReadOnlyList<string>)Live(scope).Select(w => w.Node).Distinct().ToList()).ToArray();
+        {
+            // One pass over the watched activations, grouped by scope: Live per scope would read them all once per scope.
+            var live = Live().ToLookup(w => w.Scope);
+            return Enumerable.Range(0, partitions).Select(scope => (IReadOnlyList<string>)live[scope].Select(w => w.Node).Distinct().ToList()).ToArray();
+        }
     }
 
     /// <summary>Passes that started holding the scope and ended without it: the fence (a refused commit or beat) told a stale owner, or a commit's outcome was unknown.</summary>
@@ -79,8 +93,11 @@ public sealed class Watcher
         lock (_lock) return _fenced.Count(n => n == node);
     }
 
-    private IEnumerable<Watched> Live(int scope) =>
-        _all.Where(w => w.Scope == scope && !w.Disposed && !_gone.ContainsKey(w.Node) && w.Inner.Active).GroupBy(w => w.Inner, ReferenceEqualityComparer.Instance).Select(g => g.Last());
+    private IEnumerable<Watched> Live(int scope) => Live(_all.Where(w => w.Scope == scope));
+
+    // An activation serves one scope, so grouping by activation over every scope gives each scope's groups, in the same order.
+    private IEnumerable<Watched> Live(IEnumerable<Watched>? watched = null) =>
+        (watched ?? _all).Where(w => !w.Disposed && !_gone.ContainsKey(w.Node) && w.Inner.Active).GroupBy(w => w.Inner, ReferenceEqualityComparer.Instance).Select(g => g.Last());
 
     private void Overlap(int scope)
     {
@@ -110,8 +127,19 @@ public sealed class Watcher
             if (_busy.TryGetValue((node, scope), out var now) && now == what) _busy.Remove((node, scope));
     }
 
-    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost
+    private sealed class Host(Watcher watcher, string node, IScopeHost inner) : IScopeHost, IScopeCount, INodeLeaseHost
     {
+        // K1b: the node lease is layer 2's too; the watcher passes it through, and watches what the node pass adopts as an activation.
+        public TimeSpan? NodeLease => (inner as INodeLeaseHost)?.NodeLease;
+        public ValueTask<Cluster?> HeartbeatAsync(TimeSpan window, CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.HeartbeatAsync(window, cancellationToken) : ValueTask.FromResult<Cluster?>(null);
+        public ValueTask<IReadOnlyCollection<int>> PassAsync(CancellationToken cancellationToken = default) =>
+            inner is INodeLeaseHost lease ? lease.PassAsync(cancellationToken) : ValueTask.FromResult<IReadOnlyCollection<int>>([]);
+
+        // The start's count check is layer 2's: the watcher passes it through, so a mismatch refuses the node here too.
+        public ValueTask CheckScopesAsync(int scopes, CancellationToken cancellationToken = default) =>
+            inner is IScopeCount counted ? counted.CheckScopesAsync(scopes, cancellationToken) : ValueTask.CompletedTask;
+
         public async ValueTask<IScopeActivation?> ActivateAsync(int scope, CancellationToken cancellationToken = default)
         {
             lock (watcher._lock)
@@ -153,12 +181,21 @@ public sealed class Watcher
             if (Disposed) lock (watcher._lock) watcher._violations.Add($"SEAM {node} ran a pass of scope {scope} after giving it up");
             watcher.Enter(node, scope, "ran a pass of");
             var held = inner.Active;
-            try { return await inner.RunAsync(cancellationToken); }
+            var completed = false;
+            try
+            {
+                var next = await inner.RunAsync(cancellationToken);
+                completed = true;
+                return next;
+            }
             finally
             {
                 watcher.Leave(node, scope, "ran a pass of");
                 lock (watcher._lock)
+                {
                     if (held && !inner.Active && !Disposed) watcher._fenced.Add(node);
+                    if (completed && watcher._countPassesFor == (node, Scope) && inner.Active) watcher._countedPasses++;
+                }
                 watcher.Overlap(scope);
             }
         }

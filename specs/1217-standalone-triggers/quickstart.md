@@ -1,6 +1,6 @@
 # Standalone trigger qualification guide
 
-**Status**: Planned qualification. No command/result below is a claim of feature acceptance. Run after implementing the corresponding tasks, using the committed candidate and owned temporary hosts/stores.
+**Status**: Qualification in progress. Backend slices are integrated; Studio, independent consumers, browser journeys and the finite producer are draft [#4580](https://github.com/elsa-workflows/elsa-foundation/pull/4580), [#4582](https://github.com/elsa-workflows/elsa-foundation/pull/4582), [#4584](https://github.com/elsa-workflows/elsa-foundation/pull/4584) and [#4585](https://github.com/elsa-workflows/elsa-foundation/pull/4585). Commands describe required verification, not passing acceptance. Use a committed candidate and owned temporary hosts/stores.
 
 ## Preparation
 
@@ -62,10 +62,10 @@ Extend the existing runner's finite journey/capture inventory before this run. I
 ```bash
 pnpm --dir Studio typecheck
 pnpm --dir Studio check:bundle:workflows
-python3 tools/ux-acceptance/run.py --output /tmp/standalone-triggers-ux-UNIQUE-RUN
+python3 tools/ux-acceptance/standalone.py --suite standalone-triggers --studio-shape coordinated-sdk --output /tmp/standalone-triggers-ux-UNIQUE-RUN
 ```
 
-Choose a new output path for every run; do not reuse or overwrite failed evidence. The existing runner uses the normal development seed without requiring another identity/credential product. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
+Choose a new output path for every run; do not reuse or overwrite failed evidence. The standalone producer requires seven journeys in seven appearances (49 executions), uses the normal development seed and independently composes the SDK consumer's owned store. Its controlled identity/composition setup touches only stopped, token-marked disposable hosts. `--journey` runs all seven appearances of one selected journey and cannot certify the complete feature. The existing `run.py` retains its original suite as its default; it does not run this feature matrix. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
 
 Open the actual screenshots, accessibility snapshots and traces. Independent inspection covers desktop/narrow/light/dark and the additional changed-surface checks named in that record. Retain keyboard/focus, empty/populated, validation/conflict/recovery, source-owned and denied states. Link current-commit downloadable CI artifacts; local paths alone are not shared acceptance evidence.
 
@@ -80,4 +80,4 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
 
 If ProjectReferences change, run the required locked solution restore. Review public API deltas, module catalogs and migration/upcast paths. Keep the PR draft through converged independent correctness/standards/acceptance review, with current-head receipts. Mark ready and request normal review so required checks run on the final head. Follow current org merge rules without bypassing protection or human holds.
 
-After merge, record the actual resulting-main SHA/CI and repeat the applicable composed source/Studio qualification. Advance the spec lifecycle in the finishing implementation PR. Close #3582 only after the full accepted feature matrix is delivered; a design packet, partial milestone or unmerged branch is incomplete.
+After merge, record the actual resulting-main SHA/CI and repeat the applicable composed source/Studio qualification. Advance the spec lifecycle in the finishing implementation PR. The owner closed #3582 on 14 November; preserve that state and append the actual delivery receipt when the full accepted matrix is delivered. If an owning issue remains open, close it only after delivery; a design packet, partial milestone or unmerged branch is incomplete.
