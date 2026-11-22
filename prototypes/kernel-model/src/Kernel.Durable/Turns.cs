@@ -99,7 +99,8 @@ public sealed class Delivery(Message message, long seq)
     internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
-    internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
+    // F7 puts fresh completions first. Held completions keep their priority and newest-first order after a take.
+    internal long InboxOrder => CompletedOrder != 0 && !Message.FoundationHeldJobResult ? long.MinValue : Message.DeliveryOrder(Seq);
     internal long ObservedOrder;     // in-memory order of first observation, for local/durable tie-breaking
     internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
     internal long CompletedOrder;    // ordinal when the driver published its result in this owner
@@ -110,7 +111,7 @@ public sealed class Delivery(Message message, long seq)
     internal bool Durable;            // it is a row
     /// <summary>A completion produced by this worker from its own issued ticket, including an unwritten job.</summary>
     public bool IsWorkerJobCompletion => CompletedJob && Message.Kind == Kinds.JobFinished;
-    public bool IsDurableJobTicket => Durable && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
+    public bool IsDurableJobTicket => Durable && !Message.FoundationJobResult && Message.InboxScope > 0 && Message.Kind is Kinds.Job or Kinds.JobFinished;
     internal bool AwaitPoll;          // promoted while catching up: poll must observe its row before marking it
     internal bool Marked;             // its row says seen at this epoch
     internal bool RecoveryOrdering;   // a previously marked row read on takeover, or a command that matured during recovery
@@ -248,6 +249,10 @@ public sealed class TurnOutcome(string instance)
     public long Until;
     public object? Pending;     // what the turns in memory left for the history, kept with the actor until it is written
     internal HashSet<InboxKey> Promoted = [];     // messages held in memory only, written with this outcome
+    internal Dictionary<Delivery, Message>? HeldJobResults;
+
+    internal bool ConvertsHeldJobResult(Delivery item) => item.IsWorkerJobCompletion && !item.Message.FoundationJobResult &&
+        !Cancelled.Contains(item.Message.InboxKey);
 
     internal bool Durable => Window is not null || Replied.Exists(r => r.Rpc) || !InMemory && (Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.InboxKey)));
 }
@@ -561,8 +566,11 @@ public sealed class DurableTurn
     {
         var jobs = new List<string>(_jobs);
         foreach (var delivery in _input.Taken.Skip(_input.From))
-            if (_held.Contains(delivery.Message.InboxKey) && CompletedTicket(delivery, out var key) && !jobs.Contains(key))
-                jobs.Add(key);
+        {
+            if (!_held.Contains(delivery.Message.InboxKey) || !CompletedTicket(delivery, out var key)) continue;
+            if (_started.ContainsKey(key)) throw new InvalidOperationException($"A held result keeps job '{key}' in flight.");
+            if (!jobs.Contains(key)) jobs.Add(key);
+        }
         return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
     }
 

@@ -117,13 +117,13 @@ internal sealed class ActorList : IActorReads
         Span<byte> cursor = stackalloc byte[sizeof(long)];
         if (from is { } token && !_store.TryOpenReadCursor(context, token.Value, cursor))
             throw new ArgumentException("The continuation does not match this actor inbox.", nameof(from));
-        var after = from is null ? 0 : BinaryPrimitives.ReadInt64LittleEndian(cursor);
+        var after = from is null ? long.MinValue : BinaryPrimitives.ReadInt64LittleEndian(cursor);
         var snapshot = _store.ReadFoundationInbox(scope.Tenant, actor.Id, after, _pageSize + 1);
         var page = snapshot.Rows.Take(_pageSize).Select(row => Delivery(actor, row)).ToArray();
         PageToken? next = null;
         if (snapshot.Rows.Count > _pageSize)
         {
-            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Seq);
+            BinaryPrimitives.WriteInt64LittleEndian(cursor, snapshot.Rows[_pageSize - 1].Order);
             next = new(_store.SealReadCursor(context, cursor));
         }
         return new(new Page<DeliveryView>(page, next, snapshot.AsOf));
