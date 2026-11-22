@@ -46,8 +46,9 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   let scheduledHistory!: RuntimeHistoryPage;
   await expect.poll(async () => {
     scheduledHistory = await api<RuntimeHistoryPage>(`${runPath}/history?limit=100`);
-    return scheduledHistory.items.filter(item => item.name === "TimerScheduled").length;
-  }, { timeout: 20_000 }).toBe(1);
+    return { scheduled: scheduledHistory.items.filter(item => item.name === "TimerScheduled").length,
+      pending: scheduledHistory.coverage.sourceHistoryPending, limitation: scheduledHistory.coverage.sourceHistoryLimitation };
+  }, { timeout: 20_000 }).toEqual({ scheduled: 1, pending: false, limitation: null });
   expectQualifiedTimelineCoverage(scheduledHistory.coverage);
   const scheduled = scheduledHistory.items.find(item => item.name === "TimerScheduled")!;
   expect(scheduled.activityExecutionId).toBe(execution.activityExecutionId);
@@ -80,8 +81,9 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   let completed!: RuntimeHistoryPage;
   await expect.poll(async () => {
     completed = await api<RuntimeHistoryPage>(`${runPath}/history?limit=100`);
-    return completed.items.filter(item => item.name === "TimerDispatched").length;
-  }, { timeout: 20_000 }).toBe(1);
+    return { dispatched: completed.items.filter(item => item.name === "TimerDispatched").length,
+      pending: completed.coverage.sourceHistoryPending, limitation: completed.coverage.sourceHistoryLimitation };
+  }, { timeout: 20_000 }).toEqual({ dispatched: 1, pending: false, limitation: null });
   expectQualifiedTimelineCoverage(completed.coverage);
   const dispatched = completed.items.find(item => item.name === "TimerDispatched")!;
   expect(dispatched.activityExecutionId).toBe(execution.activityExecutionId);
