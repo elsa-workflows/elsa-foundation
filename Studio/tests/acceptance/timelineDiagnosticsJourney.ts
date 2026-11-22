@@ -116,18 +116,60 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     restarts.push(receipt); await signIn(); return receipt;
   };
   const openOwner = async (id: string, eventId: string, tab: "Journal" | "Bookmarks") => {
+    const ownerId = (await history(id)).items.find(item => item.historyEventId === eventId)?.activityExecutionId;
+    expect(ownerId, "The recorded event has an exact activity owner").toBeTruthy();
     await page.goto(`/workflows/instances/${id}?view=timeline&historyEvent=${encodeURIComponent(eventId)}`);
     await waitCapturedPlaybackReady(page);
-    await page.getByRole("region", { name: "History event details", exact: true }).getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
-    await page.getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: tab, exact: true }).click();
+    await page.getByRole("region", { name: "History event details", exact: true }).getByRole("button", { name: "Inspect owning execution →", exact: true }).click({ timeout: 30_000 });
+    await expect(page).toHaveURL(url => url.searchParams.get("selected") === ownerId, { timeout: 30_000 });
+    const views = page.getByRole("tablist", { name: "Activity execution views", exact: true });
+    await expect(views).toBeVisible({ timeout: 30_000 });
+    // Exact-owner navigation can retain the previous inspector while its scope resolves.
+    // Its occurrence controls can also disappear when a singleton read settles.
+    for (const text of ["Resolving execution scope…", "Loading recorded executions…"]) {
+      await expect(page.getByText(text, { exact: true })).toHaveCount(0, { timeout: 30_000 });
+    }
+    await waitCapturedPlaybackReady(page);
+    // The real scoped journal must contain this exact native event before acting
+    // on its owner's tabs; a shared Event label or an updated URL is insufficient.
+    const journal = page.getByRole("region", { name: "Activity journal", exact: true });
+    await expect(journal.locator(`[data-history-event-id="${eventId}"]`)).toBeVisible({ timeout: 30_000 });
+    const identity = journal.getByText("Execution identity", { exact: true });
+    await frame(identity);
+    await identity.click({ timeout: 30_000 });
+    await expect(journal.getByTitle(ownerId!, { exact: true })).toBeVisible({ timeout: 30_000 });
+    await identity.click({ timeout: 30_000 });
+    const target = views.getByRole("tab", { name: tab, exact: true });
+    await frame(target);
+    await target.click({ timeout: 30_000 });
+    await expect(target).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+    if (tab === "Bookmarks") {
+      const records = page.getByRole("region", { name: "Activity bookmark history", exact: true });
+      const expected = (await bookmarks(id)).items.filter(item => item.bookmark.identity.activityExecutionId === ownerId);
+      expect(expected.length).toBeGreaterThan(0);
+      for (const item of expected) {
+        await expect(records.getByText(item.bookmark.identity.bookmarkId, { exact: true })).toBeVisible({ timeout: 30_000 });
+      }
+      await expect(target).toHaveAttribute("aria-selected", "true");
+    }
   };
   const openLifecycle = async (id: string, eventId: string) => {
     await openOwner(id, eventId, "Bookmarks");
-    await page.getByRole("region", { name: "Activity bookmark history", exact: true }).getByRole("button", { name: "View lifecycle →", exact: true }).click();
+    const expected = (await bookmarks(id)).items.find(item => item.createdHistoryEventId === eventId);
+    expect(expected, "The native created event identifies the physical handle").toBeTruthy();
+    const records = page.getByRole("region", { name: "Activity bookmark history", exact: true });
+    const handle = records.locator("article").filter({ has: page.getByText(expected!.bookmark.identity.bookmarkId, { exact: true }) });
+    await handle.getByRole("button", { name: "View lifecycle →", exact: true }).click({ timeout: 30_000 });
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
     await expect(lifecycle).toBeVisible();
     await expect(lifecycle.getByText("Loading exact bookmark lifecycle…", { exact: true })).toHaveCount(0);
     await expect(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeVisible();
+    const technical = lifecycle.getByText("Technical details", { exact: true });
+    await frame(technical);
+    await technical.click({ timeout: 30_000 });
+    await expect(lifecycle.getByText(expected!.bookmark.identity.bookmarkId, { exact: true })).toBeVisible();
+    await technical.click({ timeout: 30_000 });
+    await frame(lifecycle.locator(".wf-history-badge[data-status]"));
     return lifecycle;
   };
   // Each project starts at wall time before admitting any inspected run. The prior project
@@ -171,6 +213,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   let lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true })).toBeVisible();
   await capture(page, info, "diagnostics-approval-consumed");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-approval-consumed-action");
   await restart();
   const retained = { occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?limit=50`), history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
   assertRestartPrefix(completed.history, retained.history);
@@ -179,6 +223,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1);
   await capture(page, info, "diagnostics-approval-retained-after-restart");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-approval-retained-action");
 
   const expiry = await publish("passive expiry", [node("wait", event, { EventName: `expiry-${crypto.randomUUID()}`, CanStartWorkflow: false, ExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString() })]);
   const expiryBefore = { history: await history(expiry.id), bookmarks: await bookmarks(expiry.id) };
@@ -192,6 +238,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   lifecycle = await openLifecycle(expiry.id, passive.createdHistoryEventId!);
   await expect(lifecycle).toContainText("Expired"); await expect(lifecycle).toContainText("It does not wake, time out or cancel the activity.");
   await capture(page, info, "diagnostics-passive-expiry");
+  await frame(lifecycle.getByText("Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.", { exact: true }));
+  await capture(page, info, "diagnostics-passive-expiry-explanation");
   await openOwner(expiry.id, passive.createdHistoryEventId!, "Journal");
   const expiryJournal = page.getByRole("region", { name: "Activity journal", exact: true });
   await expect(expiryJournal).toContainText("Bookmark created");
@@ -216,6 +264,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "diagnostics-duplicate-delivery");
   lifecycle = await openLifecycle(duplicate.id, duplicateBefore.items[0].createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1); await capture(page, info, "diagnostics-single-consumption");
+  await frame(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }));
+  await capture(page, info, "diagnostics-single-consumption-action");
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline`); await waitCapturedPlaybackReady(page);
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
   await timeline.getByText("Filter events", { exact: true }).click();
