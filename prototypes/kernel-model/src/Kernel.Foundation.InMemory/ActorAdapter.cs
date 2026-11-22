@@ -101,6 +101,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
             store.FoundationTurnHeader(liveRecovery).Park is { } recoveryPark)
             return OpenParkTerminate(input, liveRecovery, recoveryPark);
+        if (message is { Kind: Contract.Kinds.Delete, Operator.Selection: { } recoverySelection } &&
+            input.Row is { Status: not Durable.InstanceStatus.Running, ParkRecovery: not null } endedRecovery)
+            return TakeOverEndedRecovery(input, endedRecovery, recoverySelection);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");

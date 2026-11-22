@@ -98,6 +98,11 @@ public sealed partial class InMemoryStore
         }
         if (openingRecovery)
             return ValidateRecoveryOpen(turn, previous, epochs, now);
+        if (next?.ParkRecovery?.Deletion is { } deletion && previous?.ParkRecovery?.Deletion != deletion)
+        {
+            ValidateRecoveryDeleteTakeover(turn, previous, next, deletion, epochs, now);
+            return null;
+        }
         if (!turn.Delete && next is not null && next.EndedDuringParkRecovery != (previous?.EndedDuringParkRecovery ?? false))
             throw InvalidDrain();
         if (interrupted is null && (next is not null && next.ParkRecovery != previous?.ParkRecovery || previous?.ParkRecovery is not null &&

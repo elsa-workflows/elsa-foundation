@@ -1391,6 +1391,10 @@ leaves.
 - **The takeover.** The delete's command turn records its operation and selection in the open
   `ParkRecord.Resolution`. The kind, the cursor, the generation and the `kernel.drain` in flight stay as they are, so
   the drain runs on from its cursor and no page is repeated or skipped.
+  For an operator's separate Delete of a model-ended Recover, the in-memory Worker takes over using
+  the model end's mark and retains the exact outstanding control. `--park-recovery-check` exercises
+  competing Deletes, a cold owner settling the retained suffix, and the protection check at Complete
+  with the original end mark and one parent notice. The operator `ThenDelete` path remains separate.
 - **Complete of a drain that ends in a delete** (the delete of a parked instance, a taken-over drain, or a terminate
   with `ThenDelete`) does three things in one commit:
   1. the kind's own end, where the drain has not yet ended the instance: the disposition, Faulted and the terminal
