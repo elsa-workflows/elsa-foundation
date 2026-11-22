@@ -550,7 +550,11 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
     </>} />
     {error ? <div className="named-inline-error" role="alert"><p>{error}</p></div> : null}
     {!saved.tiles?.length ? <StudioResultState title="No questions on this dashboard" description="This dashboard does not have any saved questions yet." /> : <div className="named-tile-grid">{saved.tiles.map((tile, index) => <article className="named-tile" data-size={tile.size} data-tile-id={tile.id} key={tile.id}><header><h3>Question {index + 1}</h3></header>{tile.referenceState === "unavailable" || !tile.questionId ? <div className="named-tile-body" role="status">This question is unavailable under your current access.</div> : <QuestionTile api={native} dashboard={saved} tile={tile} refresh={refresh} draftLayout={false} position={index + 1} navigate={navigate} />}</article>)}</div>}
-    {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}><DashboardDependencyReview api={native} resource={saved} mode="copy" onReadyChange={setCopyDependenciesReady} /><StudioButton disabled={!copyDependenciesReady || busy} onClick={() => { setDialog(null); copySavedVersion(); }}>Continue with retained references</StudioButton></NativeDialog> : null}
+    {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}
+      footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialog(null)} confirmLabel="Continue with retained references"
+        confirmDisabled={!copyDependenciesReady || busy} onConfirm={() => { setDialog(null); copySavedVersion(); }} />}>
+      <DashboardDependencyReview api={native} resource={saved} mode="copy" onReadyChange={setCopyDependenciesReady} />
+    </NativeDialog> : null}
     {dialog === "share" ? <ShareDialog api={native} resource={saved} onClose={() => setDialog(null)} onSaved={resource => { accepted(resource); notify("Audience saved"); }} /> : null}
     {dialog === "history" ? <HistoryDialog api={native} resource={saved} onAccessLost={historyAccessLost} onClose={() => setDialog(null)} onRestored={resource => { accepted(resource); notify("Definition restored as a new revision"); }} /> : null}
   </div></StudioPage>;
@@ -583,7 +587,11 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
     </>}
     {saved.id && saved.capabilities.canDelete ? <div className="named-danger-actions"><StudioButton disabled={busy} onClick={() => { const current = lifetime.capture(); void api.dialogs.confirm({ title: `Delete ${kind}`, message: kind === "question" ? "Delete this question? Dashboard references will become unavailable. Underlying records will remain." : "Delete this dashboard? Its saved questions will remain.", tone: "danger" }).then(yes => { if (yes && current()) void deleteResource(); }); }}>Delete {kind}</StudioButton></div> : null}
     {editingTile ? <TileOptionsDialog api={native} tile={editingTile} onClose={() => setEditingTile(undefined)} onApply={tile => { setDraft({ ...draft, tiles: draft.tiles?.map(item => item.id === tile.id ? tile : item) }); setEditingTile(undefined); }} /> : null}
-    {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}><DashboardDependencyReview api={native} resource={saved} mode="copy" onReadyChange={setCopyDependenciesReady} /><StudioButton disabled={!copyDependenciesReady || busy} onClick={() => { setDialog(null); copySavedVersion(); }}>Continue with retained references</StudioButton></NativeDialog> : null}
+    {dialog === "copy" ? <NativeDialog title="Review dashboard copy dependencies" onClose={() => setDialog(null)}
+      footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialog(null)} confirmLabel="Continue with retained references"
+        confirmDisabled={!copyDependenciesReady || busy} onConfirm={() => { setDialog(null); copySavedVersion(); }} />}>
+      <DashboardDependencyReview api={native} resource={saved} mode="copy" onReadyChange={setCopyDependenciesReady} />
+    </NativeDialog> : null}
     {dialog === "share" ? <ShareDialog api={native} resource={saved} onClose={() => setDialog(null)} onSaved={resource => { accepted(resource); notify("Audience saved"); }} /> : null}
     {dialog === "history" ? <HistoryDialog api={native} resource={saved} hasUnsavedChanges={dirty} onAccessLost={historyAccessLost} onClose={() => setDialog(null)} onRestored={resource => { accepted(resource); notify("Definition restored as a new revision"); }} /> : null}
     {dialog === "questions" ? <QuestionPickerDialog api={native} onClose={() => setDialog(null)} onPick={question => { setDraft({ ...draftRef.current, tiles: [...(draftRef.current.tiles ?? []), { id: uuid(), questionId: question.id, size: "medium", referenceState: "available" }] }); setDialog(null); }} onCreate={() => navigate("/questions/new")} /> : null}

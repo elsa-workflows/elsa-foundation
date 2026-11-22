@@ -1365,3 +1365,9 @@ html[data-theme-material] .studio-stat-tile {
   white-space: nowrap;
   border: 0;
 }
+
+.studio-loading-status {
+  padding-block: var(--studio-space-2);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+}

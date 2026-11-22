@@ -41,6 +41,13 @@ public sealed record JobSpec(string Key, string? Arguments);
 
 public sealed record SubscriptionSpec(string Key, string Wait, bool Keep);
 
+/// <summary>A supplied field is outside the foundation's representable metadata and message budget.</summary>
+public sealed class MetadataLimitExceeded(string? parameter, int limitBytes)
+    : ArgumentException($"The field must be representable in its text encoding and fit in {limitBytes:N0} bytes.", parameter)
+{
+    public int LimitBytes { get; } = limitBytes;
+}
+
 public sealed record RestorePlan(
     IReadOnlyList<TimerSpec> Timers,
     IReadOnlyList<JobSpec> Jobs,

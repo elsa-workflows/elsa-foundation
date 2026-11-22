@@ -417,12 +417,17 @@ test.describe("customizable Home", () => {
     const dialog = page.getByRole("dialog", { name: "Fixture settings settings" });
     const message = dialog.getByLabel("Message");
     await expect(message).toBeFocused();
+    const close = dialog.getByRole("button", { name: "Close dialog" });
+    await page.keyboard.press("Shift+Tab");
+    await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(dialog.getByRole("button", { name: "Save" })).toBeFocused();
     await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(message).toBeFocused();
 
-    const editHome = page.getByRole("button", { name: "Edit home" });
+    const editHome = page.getByRole("button", { name: "Edit home", includeHidden: true });
     const bounds = await editHome.boundingBox();
     if (!bounds) throw new Error("Edit Home control was not measurable behind the settings dialog.");
     await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);

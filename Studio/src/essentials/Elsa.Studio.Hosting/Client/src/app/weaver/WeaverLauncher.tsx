@@ -1,3 +1,4 @@
+import { StudioButton } from "../ui/forms/Button";
 import React from "react";
 import { Sparkles } from "lucide-react";
 import { WeaverSessionIndicator, type WeaverSessionIndicatorSession } from "./WeaverSessionIndicator";
@@ -14,7 +15,7 @@ export function WeaverLauncher({
   onClick(): void;
 }) {
   return (
-    <button
+    <StudioButton
       type="button"
       className="weaver-launcher"
       aria-expanded={open}
@@ -25,6 +26,6 @@ export function WeaverLauncher({
       <Sparkles size={16} />
       Weaver
       <WeaverSessionIndicator sessions={sessions} />
-    </button>
+    </StudioButton>
   );
 }

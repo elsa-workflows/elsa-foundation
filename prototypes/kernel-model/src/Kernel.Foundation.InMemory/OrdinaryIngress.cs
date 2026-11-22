@@ -11,7 +11,8 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !HeaderLimits.FitsStart(target.Spec.Type, target.Spec.TypeData)) return new(new Admission(AdmissionOutcome.Refused));
+        if (!Durable.InMemoryStore.IsOutsideMessageId(id) || !HeaderLimits.FitsStart(target.Spec.Type, target.Spec.TypeData, target.Spec.Input))
+            return new(new Admission(AdmissionOutcome.Refused));
 
         var receipt = store.AdmitGeneratedFoundationStart(scope.Tenant, id, Start(target.Spec), options?.DueAt, options?.KeepFor, replyTo, inlineOwner);
         var outcome = receipt.Duplicate ? AdmissionOutcome.Duplicate : AdmissionOutcome.Accepted;
@@ -41,7 +42,8 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        if (target.Spec is { } start ? !HeaderLimits.FitsStart(start.Type, start.TypeData) : !IsOrdinary(kind)) return new(new Admission(AdmissionOutcome.Refused));
+        if (target.Spec is { } start ? !HeaderLimits.FitsStart(start.Type, start.TypeData, start.Input) : !IsOrdinary(kind))
+            return new(new Admission(AdmissionOutcome.Refused));
 
         var receipt = store.AdmitFoundationKey(scope.Tenant, target.CallerKey, id, kind, payload,
             target.Spec is { } spec ? Start(spec) : null, options?.DueAt, options?.KeepFor, replyTo);
@@ -54,7 +56,8 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
         });
     }
 
-    private static bool IsOrdinary(string kind) => !kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+    private static bool IsOrdinary(string kind) => Durable.FoundationMetadataLimits.FitsKind(kind) &&
+        !kind.StartsWith("kernel.", StringComparison.Ordinal) &&
         kind is not (Kinds.Start or Kinds.JobFinished or Kinds.Event or Kinds.ChildFinished);
 
     private static Durable.StartSpec Start(StartSpec spec) =>
