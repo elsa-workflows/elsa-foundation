@@ -1,9 +1,11 @@
 using Elsa.Activities.Design.Core.Contracts;
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Validations.Services;
@@ -16,6 +18,8 @@ namespace Elsa.Workflows.Design.Validations.Services;
 /// visible to the node. A loop item or index is not a declared variable yet, so it cannot be bound.</item>
 /// <item>A node's may-write set is its writable bound references; an activity type marked
 /// <c>[AccessesUndeclaredVariables]</c> may write every visible variable.</item>
+/// <item>A script activity's may-write set is what its script body writes or lets escape, resolved as publish resolves it;
+/// a computed or opaque write means it may write every visible variable (FR-019, FR-020a).</item>
 /// <item>A may-write set that overlaps one of the node's own output captures is a warning: the capture applies last.</item>
 /// </list>
 /// </summary>
@@ -29,7 +33,8 @@ internal static class StepVariableWriteValidation
         IReadOnlyCollection<VariableDefinition> workflowVariables,
         IActivityStructureService structures,
         IActivityDefinitionLookup catalog,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ScriptVariableReadResolver? scriptReads = null)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(structures);
@@ -38,6 +43,7 @@ internal static class StepVariableWriteValidation
         var byNode = new Dictionary<string, StepVariableWriters>(StringComparer.Ordinal);
         var versions = new Dictionary<string, IActivityDefinitionVersion?>(StringComparer.Ordinal);
         var workflowKeys = workflowVariables.Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal);
+        ScopedVariableVisibility? visibility = null;
 
         var pending = new Stack<(ActivityNode Node, IReadOnlyList<ActivityNode> Ancestors)>();
         pending.Push((root, []));
@@ -100,6 +106,26 @@ internal static class StepVariableWriteValidation
                     targets.Add(new StepVariableWriteTarget(scopeId, reference.ReferenceKey));
             }
 
+            if (scriptReads is not null && ScriptInputKey(version) is { } scriptInput &&
+                ScriptBodyWriteAnalyzer.LiteralScript(node, scriptInput) is { Length: > 0 } script)
+            {
+                visibility ??= new ScopedVariableResolver(structures)
+                    .Resolve(workflowVariables, root, ScopedVariablePicker.DefaultMaxDepth, includeIterationScopes: true);
+                if (scriptReads.Resolve("JavaScript", script, visibility.GetVisibleScopes(node.NodeId), scriptBody: true) is { } plan)
+                {
+                    // An engine script activity carries the type-level marker (it can reach any visible variable by name);
+                    // its analyzed body says which it may write: every visible variable only for a computed or opaque write.
+                    // A type that declares the marker itself may write any visible variable from its C# code too (FR-028).
+                    everyVisible = VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(version.DesignFacets) || plan.HasComputedWrite;
+                    foreach (var write in plan.MayWrite())
+                    {
+                        var scopeId = UnorderedVariableWriteAnalyzer.NormalizeScopeId(write.ScopeId);
+                        if (!targets.Any(target => target.ScopeId == scopeId && target.ReferenceKey == write.Variable.ReferenceKey))
+                            targets.Add(new StepVariableWriteTarget(scopeId, write.Variable.ReferenceKey));
+                    }
+                }
+            }
+
             if (targets.Count == 0 && !everyVisible)
                 continue;
             byNode[node.NodeId] = new StepVariableWriters(targets, everyVisible);
@@ -107,6 +133,18 @@ internal static class StepVariableWriteValidation
         }
 
         return (new StepVariableWriteFacts(byNode, workflowKeys.ToArray()), errors);
+    }
+
+    // The script input of a script activity: the elsa.outcomes facet's scriptInput, as the read validator finds it.
+    private static string? ScriptInputKey(IActivityDefinitionVersion version)
+    {
+        var facet = version.DesignFacets.FirstOrDefault(item => item.Kind == "elsa.outcomes")?.Payload;
+        return facet is { ValueKind: JsonValueKind.Object } payload &&
+               payload.TryGetProperty("scriptInput", out var scriptInput) &&
+               scriptInput.ValueKind == JsonValueKind.String &&
+               scriptInput.GetString() is { Length: > 0 } key
+            ? key
+            : null;
     }
 
     // FR-029: a step that writes a variable in its session and also captures an output into it. Both commit; the capture

@@ -8,7 +8,8 @@
 | `variables.x = v`, `variables['x'] = v`, `setVariable('x', v)` | whole assignment | pinned; in may-write set |
 | `variables.x += v`, `variables.x++` | read and whole assignment | pinned |
 | `variables.o.m = v`, `getVariable('o').m = v`, mutation through an alias of a read value | member change (C2) | `o` in may-write set |
-| a read value passed to a function, stored in a local or captured by a closure | possible write | in may-write set |
+| a read value passed to a function, stored in a local or captured by a closure | possible write | in may-write set, unless the variable's declared type is a scalar |
+| `[variables.a, variables.b] = …`, `for (variables.k in o)`, `(variables.o ?? {}).m = v` | whole assignment or member change | pinned; in may-write set |
 | `variables[k] = v`, `setVariable(k, v)` | computed write | publishes; node may write every visible variable; name resolved at run time; undeclared or transient → step faults |
 | a write through `variables` or `setVariable` used as a value (`const v = variables; v.X = 1`) | opaque write | same as a computed write (Q5) |
 | literal write to an undeclared, transient, or read-only (loop item/index) target | — | refused |
@@ -45,7 +46,10 @@ public class MyActivity : Activity<MyResult>
 
 | Code | When |
 |---|---|
+| `VF-WRITE-002`, `VF-WRITE-004` | a script body's literal write to an undeclared, or loop item or index target (publish and draft validation) |
+| `VF-WRITE-003` | a script body's literal write to a transient variable (publish only: transience is a runtime storage decision) |
+| `VF-WRITE-005` | warning: a script body writes by a computed or opaque name |
 | `VF-BG-001 (C9)` | background placement of an activity with a variable signal (FR-030), at publication, admission and the worker |
 | `VF-ACT-010` | session read of a withheld value |
-| publish diagnostics (codes chosen in implementation, `ValueFlow/*` family) | unbound / undeclared / read-only-target reference; undeclared, transient or read-only literal script write; may-write set overlaps own capture (warning) |
-| `ELS3-*` (stable, chosen in implementation under `Elsa3ImportDiagnosticCodes`) | computed setter name; setter of an undeclared variable; setter of a transient variable |
+| publish diagnostics (codes chosen in implementation, `ValueFlow/*` family) | unbound / undeclared / read-only-target reference; may-write set overlaps own capture (warning); script writes: see the `VF-WRITE-*` rows |
+| `ELS3-SETTER-UNDECLARED-VARIABLE` (`Elsa3ImportDiagnosticCodes`) | setter of an undeclared variable (a computed setter name converts to `variables[k] = v`, FR-033 as amended; no variable converts to a transient one) |

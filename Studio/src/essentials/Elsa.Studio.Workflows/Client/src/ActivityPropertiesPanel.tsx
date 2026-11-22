@@ -30,7 +30,7 @@ import type {
   StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
 import { objectExpressionEditorId } from "./objectExpressionEditor";
-import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
+import type { ActivityNode, ScriptBodyWriteSet, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import {
@@ -129,6 +129,8 @@ export interface ActivityPropertiesPanelProps {
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
+  /** The selected script activity's may-write set from the scope analysis (spec 1231 FR-036), when it has one. */
+  scriptWrites?: ScriptBodyWriteSet | null;
   dictionarySessionScope?: string;
   expressionEditorSessionScope?: string;
   /** Lets an enclosing Inspector tab provide the section context without a duplicate heading. */
@@ -160,6 +162,7 @@ export function ActivityPropertiesPanel({
   visibleVariables,
   scopeStatus,
   scopeRetry,
+  scriptWrites,
   dictionarySessionScope,
   expressionEditorSessionScope,
   showHeading = true,
@@ -236,7 +239,7 @@ export function ActivityPropertiesPanel({
   if (inputs.length === 0) {
     return (
       <>
-        <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} />
+        <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
         <p className="wf-muted">{emptyLabel}</p>
       </>
     );
@@ -356,7 +359,7 @@ export function ActivityPropertiesPanel({
         hasSnapshot={expressionDescriptors.length > 0}
         onRetry={onRetryDescriptors}
       />
-      <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} />
+      <VariableWritesSummary activity={activity} descriptor={descriptor} visibleVariables={visibleVariables} scopeReady={scopeStatus === "ready"} workflowState={workflowState} scriptWrites={scriptWrites} />
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection

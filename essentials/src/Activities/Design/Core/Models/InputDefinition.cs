@@ -93,6 +93,13 @@ public static class VariableAccessDesignFacet
     public const string SchemaVersion = "1";
     public const string AccessesUndeclaredVariablesMember = "accessesUndeclaredVariables";
 
+    /// <summary>
+    /// Set, and only then present, when the activity type declares <c>[AccessesUndeclaredVariables]</c> itself rather
+    /// than carrying the marker as an engine script activity (spec 1231 FR-028): its C# code may write any visible
+    /// variable whatever its script body writes.
+    /// </summary>
+    public const string DeclaredMember = "declared";
+
     /// <summary>Whether <paramref name="facets"/> mark the activity as accessing undeclared variables.</summary>
     public static bool AccessesUndeclaredVariables(IEnumerable<ActivityDesignFacet>? facets) =>
         facets?.Any(facet =>
@@ -100,4 +107,12 @@ public static class VariableAccessDesignFacet
             facet.Payload.ValueKind == JsonValueKind.Object &&
             facet.Payload.TryGetProperty(AccessesUndeclaredVariablesMember, out var marked) &&
             marked.ValueKind == JsonValueKind.True) == true;
+
+    /// <summary>Whether <paramref name="facets"/> mark an activity type that declares <c>[AccessesUndeclaredVariables]</c> itself.</summary>
+    public static bool DeclaresAccessesUndeclaredVariables(IEnumerable<ActivityDesignFacet>? facets) =>
+        facets?.Any(facet =>
+            StringComparer.Ordinal.Equals(facet.Kind, Kind) &&
+            facet.Payload.ValueKind == JsonValueKind.Object &&
+            facet.Payload.TryGetProperty(DeclaredMember, out var declared) &&
+            declared.ValueKind == JsonValueKind.True) == true;
 }

@@ -704,6 +704,8 @@ export interface StudioActivityDescriptor {
   isTerminal?: boolean;
   /** The activity type is marked `[AccessesUndeclaredVariables]` (spec 1231 FR-026): it may write any visible variable. */
   accessesUndeclaredVariables?: boolean;
+  /** Explicit C# free-name access cannot be narrowed by analysis of an activity's script input. */
+  declaresAccessesUndeclaredVariables?: boolean;
 }
 
 export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";

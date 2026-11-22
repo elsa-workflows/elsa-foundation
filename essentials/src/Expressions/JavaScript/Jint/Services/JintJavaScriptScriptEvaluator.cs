@@ -31,6 +31,13 @@ internal sealed class JintJavaScriptScriptEvaluator(
         ArgumentNullException.ThrowIfNull(request);
         request.CancellationToken.ThrowIfCancellationRequested();
 
+        // Issue #4901: run on a large-stack evaluation thread, so deep script calls cannot overflow the host's stack.
+        var prepared = PreparedJavaScript.Script(request.Source);
+        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared), featureOptions.Value));
+    }
+
+    private JavaScriptScriptEvaluationResult Evaluate(JavaScriptScriptEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)
+    {
         var options = featureOptions.Value;
         var engine = IsolatedJintEngine.Create(options, request.CancellationToken, timeProvider);
         using var values = valueBridge.Begin(engine);
@@ -51,10 +58,9 @@ internal sealed class JintJavaScriptScriptEvaluator(
             : null;
         var completions = ScriptCompletions.Install(engine, request.CancellationToken);
 
-        // Parsed before the count starts: a parse (on a cache miss) is not the script's work.
-        var script = PreparedJavaScript.Script(request.Source);
+        // Parsed before the count starts, on the caller's thread: a parse (on a cache miss) is not the script's work.
         EvaluationLimits.Start(engine);
-        var returned = engine.Evaluate(script);
+        var returned = engine.Evaluate(prepared);
         // Writing the result and the variables runs the script's own toJSON and getters: a phase of its own, as before.
         EvaluationLimits.Start(engine);
 
@@ -81,7 +87,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
         foreach (var warning in warnings)
             sink?.Report(warning);
         JavaScriptValueWrites.WarnLossyReads(values, losses, sink, logger);
-        return ValueTask.FromResult(result);
+        return result;
     }
 
     private static readonly IReadOnlyDictionary<string, JsonElement> NoPinnedValues = new Dictionary<string, JsonElement>(StringComparer.Ordinal);

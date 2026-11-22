@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
+    <!-- The same assembly runs crash probes in a child process, never in the xUnit host. -->
+    <OutputType>Exe</OutputType>
+    <StartupObject>Elsa.Expressions.JavaScript.Jint.Tests.JintCrashProbe</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>

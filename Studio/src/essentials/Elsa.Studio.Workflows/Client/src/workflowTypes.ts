@@ -473,6 +473,20 @@ export interface ScopedVariableShadowingWarning {
 export interface ScopedVariableAnalysisResponse {
   visibleVariables: VisibleVariableView[];
   shadowingWarnings: ScopedVariableShadowingWarning[];
+  /** For a selected script activity with a literal body: the variables the body may write (spec 1231 FR-036). */
+  scriptWrites?: ScriptBodyWriteSet | null;
+}
+
+// The variables one script body may write, resolved as publication pins them (backend ScriptBodyWriteSet).
+export interface ScriptBodyWriteSet {
+  variables: ScriptBodyWriteTarget[];
+  mayWriteEveryVisibleVariable: boolean;
+}
+
+export interface ScriptBodyWriteTarget {
+  name: string;
+  scopeId: string;
+  referenceKey: string;
 }
 
 export interface WorkflowManagementCapabilities {

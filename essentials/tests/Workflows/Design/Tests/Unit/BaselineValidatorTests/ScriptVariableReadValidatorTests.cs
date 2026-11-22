@@ -111,6 +111,58 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_body_that_writes_an_undeclared_variable_by_name_is_an_error_naming_the_position()
+    {
+        // Spec 1231 FR-020: refused once, as a write (not again as an unresolved read).
+        var findings = await ValidateAsync(new ActivityNode("s", ScriptVersionId, [Body("const a = 1;\nsetVariable('nope', a);")], []));
+
+        var error = Assert.Single(findings);
+        Assert.Equal(ScriptVariableReadValidator.RefusedWriteType, error.Type);
+        Assert.Equal(ValidationSeverities.Error, error.Severity);
+        Assert.StartsWith(ScriptVariableReadDiagnostics.UndeclaredLiteralWrite, error.Message, StringComparison.Ordinal);
+        Assert.Contains("variable 'nope' (variables.nope) at line 2, column 1", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("variables.currentItem = 1;")]
+    [InlineData("variables.currentItem.total = 1;")]
+    [InlineData("setVariable('currentIndex', 2);")]
+    public async Task A_body_that_assigns_a_loop_item_or_index_is_an_error(string script)
+    {
+        // Spec 1231 FR-006, FR-020, T029: a loop's item and index are read-only.
+        var loop = new ActivityNode("loop", "av-loop", [], []) { Structure = new ActivityNodeStructure(
+            Elsa.Activities.ForEach.Activities.ForEach.StructureKind, Elsa.Activities.ForEach.Activities.ForEach.StructureSchemaVersion, JsonSerializer.SerializeToElement(new { })) };
+        var handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), item => item.Kind == Elsa.Activities.ForEach.Activities.ForEach.StructureKind);
+        loop = handler.ReplaceChildren(loop, [new ActivityChildProjection(Elsa.Activities.ForEach.Activities.ForEach.BodySlotName,
+            [new ActivityNode("s", ScriptVersionId, [Body(script)], [])])]);
+
+        var error = Assert.Single(await ValidateAsync(loop), finding => finding.Type == ScriptVariableReadValidator.RefusedWriteType);
+
+        Assert.StartsWith(ScriptVariableReadDiagnostics.ReadOnlyLiteralWrite, error.Message, StringComparison.Ordinal);
+        Assert.Contains("loop item or index", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("variables[k] = 1;")]
+    [InlineData("setVariable(k, 1);")]
+    [InlineData("const v = variables; v.order = 1;")]
+    public async Task A_body_with_a_computed_or_opaque_write_is_a_warning(string script)
+    {
+        // Spec 1231 FR-020a: it publishes; the node may write every visible variable.
+        var warning = Assert.Single(await ValidateAsync(new ActivityNode("s", ScriptVersionId, [Body("const k = 'order';\n" + script)], [])),
+            finding => finding.Type == ScriptVariableReadValidator.ComputedWriteType);
+
+        Assert.Equal(ValidationSeverities.Warning, warning.Severity);
+        Assert.StartsWith(ScriptVariableReadDiagnostics.ComputedWriteReported, warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_body_that_writes_a_declared_variable_raises_nothing()
+    {
+        Assert.Empty(await ValidateAsync(new ActivityNode("s", ScriptVersionId, [Body("variables.order = { total: 1 }; setVariable('order', 2); variables.order.total++;")], [])));
+    }
+
+    [Fact]
     public async Task Resolvable_literal_reads_raise_nothing()
     {
         Assert.Empty(await ValidateAsync(new ActivityNode("w", "av-write", [Js("variables.order.total + getVariable('order').tax")], [])));
@@ -122,6 +174,8 @@ public sealed class ScriptVariableReadValidatorTests : IDisposable
         var state = new WorkflowDefinitionState([new VariableDefinition("order-key", "order", new TypeReference("Any"), null, null)], root, [], [], null);
         return [.. await validator.Validate(new Draft(state), CancellationToken.None)];
     }
+
+    private static ArgumentState Body(string source) => new("script", new ArgumentValue(source, "Literal"), null, null, null, null);
 
     private static ArgumentState Js(string source) => new("Text", new ArgumentValue(source, "JavaScript"), null, null, null, null);
 

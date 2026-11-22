@@ -124,15 +124,28 @@ public static class VariableReferenceTypes
     public static bool AccessesUndeclaredVariables(Type activityType)
     {
         ArgumentNullException.ThrowIfNull(activityType);
-        var marker = typeof(Attributes.AccessesUndeclaredVariablesAttribute).FullName;
+        if (DeclaresAccessesUndeclaredVariables(activityType))
+            return true;
         var consumer = typeof(Contracts.IStepVariableSessionConsumer).FullName;
+        return activityType.GetInterfaces().Any(contract => contract.FullName == consumer);
+    }
+
+    /// <summary>
+    /// Whether an activity type declares <c>[AccessesUndeclaredVariables]</c> itself (inherited), as opposed to carrying
+    /// the marker only as an engine script activity: its C# code may then write any visible variable, whatever its script
+    /// body writes (spec 1231 FR-028). Compares by name, as <see cref="AccessesUndeclaredVariables"/> does.
+    /// </summary>
+    public static bool DeclaresAccessesUndeclaredVariables(Type activityType)
+    {
+        ArgumentNullException.ThrowIfNull(activityType);
+        var marker = typeof(Attributes.AccessesUndeclaredVariablesAttribute).FullName;
         for (var current = activityType; current is not null; current = current.BaseType)
         {
             if (current.GetCustomAttributesData().Any(attribute => attribute.AttributeType.FullName == marker))
                 return true;
         }
 
-        return activityType.GetInterfaces().Any(contract => contract.FullName == consumer);
+        return false;
     }
 
     /// <summary>The portable type of a variable-reference input's pinned binding: the reference, never a value.</summary>

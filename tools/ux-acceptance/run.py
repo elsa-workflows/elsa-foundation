@@ -85,6 +85,7 @@ CAPTURES = {
     'recorded activity playback coverage and access': ['reference', 'playback-access-metadata-only', 'playback-access-pending', 'playback-access-revoked', 'playback-coverage-invalidated', 'playback-coverage-retained', 'playback-coverage-pin-unavailable', 'playback-coverage-disabled', 'playback-coverage-uncaptured', 'playback-coverage-unsupported'],
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference'],
+    'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (

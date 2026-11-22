@@ -2,7 +2,7 @@
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and its baseline validators. Three sections:
 
-- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority and the `IUnorderedVariableWriteAnalyzer` (spec 266).
+- **Overridable contracts**: `ICredentialLiteralValidator`, the scoped `IActivityDataSelectionAnalyzer` authority, the `IUnorderedVariableWriteAnalyzer` (spec 266), the `IScriptVariableRenamePlanner` (spec 1222) and the `IScriptBodyWriteAnalyzer` (spec 1231).
 - **Implementable contributor interfaces** — draft validators, provider-owned analysis projections and input-source restrictions.
 - **Events** — validation, input-constraint collection and outcome notification.
 
@@ -28,7 +28,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 - **Kind/signature:** one singleton replacement; `UnorderedVariableWriteAnalysis Analyze(ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default)`, and (spec 1231) `Analyze(ActivityNode root, IActivityStructureService structures, bool includeIntrinsics, StepVariableWriteFacts stepWrites, CancellationToken cancellationToken = default)`, whose default interface body ignores `stepWrites` and calls the first. A replacement that does not override the step-aware overload reports no step-write findings.
 - **Default/registration:** internal `UnorderedVariableWriteAnalyzer`, installed with `TryAddSingleton`. A single-implementation replacement contract (framework §2.6.2): `DataSelectionAnalyzerCompositionCheck` fails shell Prepare unless exactly one singleton is composed. Singleton because the singleton graph provider consumes it.
-- **Behaviour (spec 266):** reports, per variable, every node whose declared write (an output capture and, with `includeIntrinsics`, a Set, Merge or Reduce intrinsic) has no order fixed by the definition, plus duplicate capture targets on one node. The step-aware overload also counts step writers (spec 1231 FR-028): `StepVariableWriteFacts` holds, per node, its `StepVariableWriters` (the `StepVariableWriteTarget`s of its writable variable references, and whether it may write every visible variable, as an `[AccessesUndeclaredVariables]` activity does); such a node counts as writing each variable visible to it: those the definition writes, the workflow variables, and the variables its enclosing containers declare. All ordering knowledge comes from `IActivityStructureHandler.RelateChildren` and `CompletesAfterItsChildren`; it knows no structure kind. Findings carry the author-facing message.
+- **Behaviour (spec 266):** reports, per variable, every node whose declared write (an output capture and, with `includeIntrinsics`, a Set, Merge or Reduce intrinsic) has no order fixed by the definition, plus duplicate capture targets on one node. The step-aware overload also counts step writers (spec 1231 FR-028): `StepVariableWriteFacts` holds, per node, its `StepVariableWriters` (the `StepVariableWriteTarget`s of its writable variable references and of a script body's may-write set, and whether it may write every visible variable, as an `[AccessesUndeclaredVariables]` activity or a script with a computed or opaque write does; an analyzed script body, not the engine script activity's type-level marker, decides that); such a node counts as writing each variable visible to it: those the definition writes, the workflow variables, and the variables its enclosing containers declare. All ordering knowledge comes from `IActivityStructureHandler.RelateChildren` and `CompletesAfterItsChildren`; it knows no structure kind. Findings carry the author-facing message.
 - **Consumers:** `ValueFlowValidator` (`ValueFlow/ConcurrentWrite` and `ValueFlow/DuplicateCaptureTarget`, severity `Warning`; it calls the step-aware overload with the facts `StepVariableWriteValidation` derives from the activity catalog) and Graph Design's `GraphActivityProvider` (draft validation and compilation warnings), which `GraphActivitiesDesignFeature` composes with the required analyzer. The graph provider calls the capture-only overload: step writers in a reusable activity's body are not counted yet (spec 1231 follow-up, #4805).
 
 ### `IActivityBindingConversionPreviewer` *(Core — `Elsa.Workflows.Design.Validations.Core`)*
@@ -54,6 +54,22 @@ The optional scoped Publishing implementation resolves a selected whole activity
   each resolvable literal read on a renamed variable and the references it cannot safely update (spec 1222 FR-021,
   FR-022). It never changes the draft or a published version.
 - **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/rename-plan`.
+
+### `IScriptBodyWriteAnalyzer` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** replacement contract, exactly one per host. `ScriptBodyWriteAnalyzer` is the default, registered with
+  `TryAddScoped` by this feature, so a host's own scoped registration made earlier replaces it; a second registration
+  fails the shell at start (`DataSelectionAnalyzerCompositionCheck`), so none wins silently.
+- **Contract:** `AnalyzeAsync(state, nodeId, scriptInputKeyOf)` returns the variables a script activity's literal body
+  may write, resolved as publication pins them, or that it may write every visible variable (a computed or opaque
+  write); null for a node without a literal script body (spec 1231 FR-019, FR-020a, FR-036).
+- **Consumer:** the Design API endpoint `POST design/workflows/scoped-variables/analyze`, which returns it as
+  `scriptWrites` for the selected node; Studio shows it as the node's may-write set.
+- **Override when:** a host's Studio should show a different may-write set for script nodes, for example one from
+  another script language's analysis. It changes only that display: publication and draft validation resolve the
+  may-write set from `ScriptVariableReadResolver` and `ScriptVariableReadPlan.MayWrite()` themselves, so a replacement
+  that disagrees with them shows a set the concurrent-write warning and the pinned `runtime.mayWriteVariables` do not
+  use.
 
 
 ## Implementable contributor interfaces

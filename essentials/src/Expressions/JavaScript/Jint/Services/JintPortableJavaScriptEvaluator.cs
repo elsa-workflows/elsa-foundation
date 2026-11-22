@@ -38,6 +38,13 @@ internal sealed class JintPortableJavaScriptEvaluator(
 
         var prepared = PreparedJavaScript.Binding(definition.Source);
 
+        // Issue #4901: run on a large-stack evaluation thread, so deep calls in an expression cannot overflow the host's stack.
+        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared), featureOptions.Value));
+    }
+
+    private JsonElement Evaluate(ExpressionEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)
+    {
+        var definition = request.Definition;
         var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken, timeProvider);
         using var values = valueBridge.Begin(engine);
         var functions = new JavaScriptHostFunctionContext(values, request.VariableReader, logger);
@@ -68,6 +75,6 @@ internal sealed class JintPortableJavaScriptEvaluator(
             request.Warnings?.Report(warning);
         var written = JavaScriptValueWrites.Apply(values.Write(result, "result"), "result", precisionPolicy);
         JavaScriptValueWrites.WarnLossyReads(values, written.Losses, request.Warnings, logger);
-        return ValueTask.FromResult(written.Value!.Value);
+        return written.Value!.Value;
     }
 }

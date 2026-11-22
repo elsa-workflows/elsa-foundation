@@ -35,6 +35,17 @@ internal static class IsolatedJintEngine
         // Intl and Temporal take their default zone from the Temporal zone provider, not TimeZone: UTC there too.
         options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
+        // Issue #4901: the stack and call-depth limits come first, so no other limit fires deeper than the stack budget
+        // (see JintEvaluationThreads). JintCallBudget applies this check to calls before default parameters too.
+        // Jint's own near-exhaustion guard remains a fallback and must never hop to an unbudgeted pool thread.
+        var stackBudget = new JintEvaluationThreads.StackBudgetConstraint(
+            configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0 ? maxRecursionDepth : null);
+        options.Constraint(stackBudget);
+        // Enable call statistics for the pre-parameter budget adapter. Total depth is checked there; Jint's
+        // per-function limit must never fire independently at an unguarded depth.
+        options.LimitRecursion(int.MaxValue);
+        options.Constraints.MaxExecutionStackCount = 0;
+
         // Counted across the script: Jint's own limits restart on every call from .NET back into the engine, which every
         // host function makes. The evaluator starts the count (EvaluationLimits.Start).
         var timeout = configured.ExecutionTimeout is { } interval && interval > TimeSpan.Zero ? interval : (TimeSpan?)null;
@@ -42,14 +53,13 @@ internal static class IsolatedJintEngine
         var maxMemoryBytes = configured.MaxMemoryBytes is { } bytes && bytes > 0 ? bytes : (long?)null;
         if (timeout is not null || maxStatements is not null || maxMemoryBytes is not null)
             options.Constraint(new EvaluationLimits(timeout, maxStatements, maxMemoryBytes));
-        if (configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0)
-            options.LimitRecursion(maxRecursionDepth);
         if (configured.MaxArrayLength is { } maxArrayLength && maxArrayLength > 0)
             options.Constraints.MaxArraySize = maxArrayLength;
         if (cancellationToken.CanBeCanceled)
             options.CancellationToken(cancellationToken);
 
         var engine = new Engine(options);
+        stackBudget.Attach(engine);
         JintResultMaterializer.Initialize(engine);
         DefaultIntlToUtc(engine);
         return engine;
@@ -259,6 +269,19 @@ internal static class IsolatedJintEngine
                 ? Read(callArguments[0].AsString())
                 : JsValue.Undefined);
         engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
+
+        // A script body writes through its session: setVariable('x', v) assigns x as a whole, as variables.x = v does
+        // (spec 1231 FR-005). Input expressions only read, so they get no setVariable. There are no generated
+        // set<Name>() accessors (FR-021).
+        if (session is not null)
+        {
+            var setVariable = new ClrFunction(engine, "setVariable", (_, callArguments) =>
+                callArguments.Length >= 1 && callArguments[0].IsString()
+                    ? Assign(callArguments[0].AsString(), callArguments.At(1))
+                    : throw new JavaScriptException(engine.Intrinsics.TypeError, "setVariable(name, value) takes the variable's name as a string."));
+            engine.Global.DefineOwnProperty("setVariable", new PropertyDescriptor(setVariable, writable: false, enumerable: false, configurable: false));
+        }
+
         return variables;
     }
 

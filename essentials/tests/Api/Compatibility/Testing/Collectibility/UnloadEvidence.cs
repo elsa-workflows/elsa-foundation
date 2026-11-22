@@ -86,6 +86,11 @@ public sealed class UnloadEvidence
         var attempts = 0;
         for (; attempts < maxAttempts; attempts++)
         {
+            // A disposed provider can still have DI call-site compilation queued on the thread pool.
+            // Once explicit retention is released, allow that work to drain between bounded GC attempts.
+            // Tight back-to-back collections can otherwise exhaust the probe before the callback runs.
+            if (attempts > 0 && RetentionStageProbe.PublishedStage(cycleId) == RetentionStage.Clean)
+                Thread.Sleep(50);
             ForceCollection();
             if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive && observedTypes.All(type => !type.IsAlive))
             {

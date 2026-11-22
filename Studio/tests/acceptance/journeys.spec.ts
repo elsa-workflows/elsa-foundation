@@ -40,6 +40,7 @@ import { variableRenameJourney } from "./variableRenameJourney";
 import { variableLifecycleJourney } from "./variableLifecycleJourney";
 import { structuredLogsReadabilityJourney } from "./structuredLogsReadabilityJourney";
 import { phoneContentJourney } from "./phoneContentJourney";
+import { scriptVariableWritesJourney } from "./scriptVariableWritesJourney";
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await assertToastPlacementHolds(page);
@@ -1159,4 +1160,8 @@ test("native BPMN reusable blocks retain authoring boundaries", async ({ page },
 test("timeline durable diagnostics and process restart", async ({ page }, info) => {
   test.setTimeout(1_200_000);
   await timelineDiagnosticsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
+test("script variable may-write analysis survives editing and reopening", async ({ page }, info) => {
+  await scriptVariableWritesJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

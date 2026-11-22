@@ -17,7 +17,8 @@ public sealed class ValueFlowValidator(
     IActivityStructureService activityStructureService,
     IActivityDataSelectionAnalyzer sourceAnalyzer,
     IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer,
-    IActivityDefinitionLookup? activityCatalog) : IDraftValidator
+    IActivityDefinitionLookup? activityCatalog,
+    ScriptVariableReadResolver? scriptReads = null) : IDraftValidator
 {
     /// <summary>Without the activity catalog, step writes (spec 1231) are neither checked nor counted.</summary>
     public ValueFlowValidator(
@@ -54,7 +55,7 @@ public sealed class ValueFlowValidator(
         if (activityCatalog is not null)
         {
             var (facts, stepErrors) = await StepVariableWriteValidation.AnalyzeAsync(
-                draft.State.RootActivity, [.. draft.State.Variables], activityStructureService, activityCatalog, cancellationToken);
+                draft.State.RootActivity, [.. draft.State.Variables], activityStructureService, activityCatalog, cancellationToken, scriptReads);
             stepWrites = facts;
             foreach (var error in stepErrors)
                 AddOnce(errors, error);

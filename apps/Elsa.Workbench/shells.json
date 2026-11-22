@@ -20,6 +20,7 @@
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesScheduling": {},
+          "ActivitiesScripting": {},
           "ActivitiesSequence": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
