@@ -466,17 +466,16 @@ and run the converted scripts.
   different scopes, and the panel integration (bulk literal writes leave reference inputs alone). Not covered: the
   "authoring context unavailable" fallback, which the properties panel never renders because it always provides the
   context.
-- **Exclusion: composed-host proof.** No shipped activity exposes a variable-reference input or the free-name marker yet,
-  so no composed journey can reach this surface and a green `tools/ux-acceptance` run is not evidence for it. The first
-  production consumer is spec 1231 Phase 5 (`RunJavaScript`, an engine script activity shown as "May write any visible
-  variable"); a feature-specific journey lands with it. Until then FR-036's UX acceptance is incomplete, recorded here and
-  in the PR.
+- **Exclusion: variable-reference consumers.** No shipped activity exposes a variable-reference input yet; those picker
+  states retain their component evidence until a production consumer provides a composed journey.
 - **Phase 5 (second PR).** A Run JavaScript node shows the may-write set of its own script, from the scoped-variable
   analysis (`scriptWrites`): "May write: total, order", "May write any visible variable (its script writes by a computed
   name)", or nothing for a script that writes nothing; the type-level marker shows only for an activity without an analyzed
   script. Covered in `variableReferenceInputUi.test.tsx` (the four states and two variables of one name). The composed-host
-  journey is still not run: the Workbench host does not enable the scripting feature, so no composed journey reaches a
-  Run JavaScript node; recorded in the PR.
+  journey `script variable may-write analysis survives editing and reopening` uses Workbench's scripting feature and real
+  server analysis: literal targets, computed writes, a read-only script, saved/reopened edits, and a container variable
+  shadowing a workflow variable. Captures cover desktop/narrow and light/dark. Execution and independent visual review
+  status, exact heads and downloadable artifacts are recorded on the implementation PR.
 
 ### Key Entities
 

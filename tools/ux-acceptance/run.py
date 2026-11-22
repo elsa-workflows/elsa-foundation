@@ -34,6 +34,7 @@ CAPTURES = {
     'compact runtime Inputs retain exact captured values and accessible technical details': ['reference', 'compact-values', 'technical-details', 'nested-values', 'details-closed', 'technical-details-320', 'compact-values-320'],
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
     'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference'],
+    'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
 }
 JOURNEYS = set(CAPTURES)
 

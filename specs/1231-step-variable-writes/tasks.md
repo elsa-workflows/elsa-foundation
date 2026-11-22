@@ -96,7 +96,10 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
 - [x] T047 Show a node's may-write set in `ActivityPropertiesPanel.tsx`, and a marker for an activity carrying
   `[AccessesUndeclaredVariables]` ("may write any visible variable"), from the authoring descriptor.
 - [x] T048 [P] Tests in `__tests__/` (vitest): the picker offers only declared variables in scope, the may-write set and
-  the marker render from the descriptor. *`variableReferenceInputUi.test.tsx`. Not yet checked visually in a running Studio.*
+  the marker render from the descriptor. *`variableReferenceInputUi.test.tsx`.*
+- [ ] T049 Qualify FR-036's Run JavaScript may-write presentation on the composed host: real server analysis, literal /
+  computed / no-write states, edit/save/reopen, nearest same-name scope, desktop/narrow and light/dark captures, and
+  independent visual inspection. *Journey: `scriptVariableWritesJourney.ts`; exact-head evidence and verdict on #4912.*
 
 ## Dependencies
 
