@@ -283,7 +283,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await actions.click();
     const menu = page.getByRole("menu", { name: "Actions for Under age boy", exact: true });
     await expect(menu.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Move to recycle bin", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
     expect(await menu.evaluate(element => ({ display: getComputedStyle(element).display, padding: getComputedStyle(element).padding }))).toEqual({ display: "grid", padding: "6px" });
     expect(await menu.getByRole("menuitem", { name: "Edit", exact: true }).evaluate(element => getComputedStyle(element).color)).toBe(await page.evaluate(() => {
       const sample = document.createElement("span");
