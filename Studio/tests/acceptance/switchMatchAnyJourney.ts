@@ -29,7 +29,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
       structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [
         { nodeId: "switch", activityVersionId: switchVersion, inputs: [], outputs: [], structure: { kind: "elsa.switch.structure", schemaVersion: "2.0.0", payload: { cases: [] } } },
-        { nodeId: "after", activityVersionId: line, inputs: [{ referenceKey: "Text", value: { expressionType: "Literal", value: "after all matches" } }], outputs: [] }
+        { nodeId: "after", activityVersionId: line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "after all matches" } }], outputs: [] }
       ] } } } }
   });
   cleanup(async () => { await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE"); });
@@ -62,9 +62,18 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     return draft.state.rootActivity.structure.payload.activities[0];
   }
   async function save() {
+    const persisted = page.waitForResponse(response => response.request().method() === "PUT"
+      && new URL(response.url()).pathname === `/design/workflows/drafts/${submitted.draftId}`);
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    expect((await persisted).ok()).toBe(true);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
     return stored();
+  }
+  async function configureBody(text: string) {
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+    const editor = row.getByRole("textbox").first();
+    await editor.fill(text); await editor.press("Tab");
   }
   async function publishAndRun(expected: string[]) {
     const response = page.waitForResponse(item => item.request().method() === "POST" && item.url().endsWith("/publish"));
@@ -98,6 +107,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     await condition(index, true);
     await cases().getByRole("button", { name: `Choose ${label} activity`, exact: true }).click();
     await page.getByRole("option", { name: /Write Line/ }).click();
+    await configureBody(label);
     await returnToOwner();
   }
   const authored = await save();
@@ -122,6 +132,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await publishAndRun([]);
   await page.getByRole("button", { name: "Choose Default activity", exact: true }).click();
   await page.getByRole("option", { name: /Write Line/ }).click();
+  await configureBody("fallback");
   await returnToOwner();
   const fallback = (await save()).structure!.payload.default!.nodeId;
   await capture(page, info, "default");

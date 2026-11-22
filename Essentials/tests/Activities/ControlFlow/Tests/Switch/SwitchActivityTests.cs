@@ -76,7 +76,8 @@ public sealed class SwitchActivityTests : IDisposable
         var context = NewContext(MatchAnyNode(), null);
         await store.SaveAsync(ChildState("a", "act-a", ActivityExecutionStatus.Completed));
         var other = ChildState(form == "default" ? "fallback" : "c", "other", ActivityExecutionStatus.Completed);
-        if (form == "superseded") other = other with { SupersededByActivityExecutionId = "replacement" };
+        if (form == "superseded") other = other with { Status = ActivityExecutionStatus.Superseded,
+            SupersededByActivityExecutionId = "replacement", SupersededAt = DateTimeOffset.UnixEpoch, Completion = null };
         if (form == "descendant") other = other with { ParentActivityExecutionId = "act-a" };
         await store.SaveAsync(other);
         var result = await BoundMatchAny(store).OnChildCompletedAsync(new(context, "act-a", "a", [ActivityOutcomes.Done]));

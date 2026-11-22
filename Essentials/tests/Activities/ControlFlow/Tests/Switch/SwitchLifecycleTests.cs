@@ -7,6 +7,8 @@ using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.WorkHandlers;
+using Elsa.Activities.Sequence;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -80,16 +82,69 @@ public sealed class SwitchLifecycleTests
     [Fact]
     public async Task Break_suppresses_a_selected_sibling_that_has_not_started()
     {
-        await using var harness = Harness();
-        var run = await harness.RunAsync(Executable(WorkflowExecutionHarness.NewProbeNode("a", [ActivityOutcomes.Break]),
-            WorkflowExecutionHarness.NewProbeNode("c")));
+        var hold = new HoldSelectedStart();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => { new ActivitiesControlFlowFeature().ConfigureServices(services); new ActivitiesSequenceFeature().ConfigureServices(services); })
+            .ConfigureServices(hold.Decorate).WithProbeLeaf().Build(Enumerable.Range(1, 30).Select(value => $"held-switch-{value}"));
+        var owner = Executable(WorkflowExecutionHarness.NewProbeNode("a", [ActivityOutcomes.Break]), WorkflowExecutionHarness.NewProbeNode("c")).RootActivity;
+        var condition = Elsa.Primitives.Models.ValueEnvelope.Inline(new("Boolean"), JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline);
+        var loop = new ExecutableNode("loop", "loop", typeof(Elsa.Activities.While.Activities.While).FullName!, "1.0.0", "test/loop", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding> { ["Condition"] = new("Condition", new("Boolean"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal, literal: condition) },
+            new Dictionary<string, string>(), childSlots: [new("While.Body", [owner])],
+            structure: new("elsa.while.structure", "1.0.0", JsonSerializer.SerializeToElement(new { body = "switch" })));
+        var after = Wait("after");
+        var root = new ExecutableNode("root", "root", typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!, "1.0.0", "test/root", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: [new("Sequence.Activities", [loop, after])],
+            structure: new("elsa.sequence.structure", "1.0.0", JsonSerializer.SerializeToElement(new { activities = new[] { "loop", "after" } })));
+        var executable = new WorkflowExecutable(WorkflowExecutionHarness.Identity, root,
+            new Dictionary<string, WorkflowExecutableResumeTarget> { ["resume:after:wait"] = new("resume:after:wait", "after", "ResumeAsync", new Dictionary<string, string>(), LocalResumeTargetId: "wait") },
+            DateTimeOffset.UnixEpoch, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+        var run = await harness.RunAsync(executable);
         run.AssertOutcomes("switch", ActivityOutcomes.Break);
-        Assert.All(run.States("c"), state =>
+        run.AssertCompleted("loop");
+        Assert.NotNull(hold.Captured);
+        Assert.Equal(ActivityExecutionStatus.Suspended, run.State("after").Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("c").Status);
+        hold.Released = true;
+        await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(hold.Captured!);
+        var completed = await Resume(harness, executable.Identity, Assert.Single(await Bookmarks(harness)));
+        Assert.All(completed.States("c"), state =>
         {
             Assert.Null(state.StartedAt);
             Assert.NotEqual(ActivityExecutionStatus.Completed, state.Status);
         });
-        run.AssertWorkflowCompleted();
+        completed.AssertWorkflowCompleted();
+    }
+
+    private sealed class HoldSelectedStart : IWorkflowSchedulerWorkHandler
+    {
+        private IWorkflowSchedulerWorkHandler _inner = null!;
+        public RuntimeSchedulerWorkItem? Captured { get; private set; }
+        public bool Released { get; set; }
+        public string Name => _inner.Name;
+        public bool CanHandle(RuntimeSchedulerWorkItem item) => _inner.CanHandle(item);
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken = default)
+        {
+            if (!Released && item.Payload is { } payload
+                && payload.TryGetProperty(nameof(RuntimeStartActivityCommandPayload.ExecutableNodeId), out var id) && id.GetString() == "c")
+            {
+                Assert.Null(Captured);
+                Captured = item;
+                return ValueTask.CompletedTask;
+            }
+            return _inner.HandleAsync(item, cancellationToken);
+        }
+        public void Decorate(IServiceCollection services)
+        {
+            var descriptor = services.Single(item => item.ServiceType == typeof(IWorkflowSchedulerWorkHandler)
+                && item.ImplementationType == typeof(WorkflowStartActivitySchedulerWorkHandler));
+            services.Remove(descriptor);
+            services.Add(ServiceDescriptor.Describe(typeof(IWorkflowSchedulerWorkHandler), provider =>
+            {
+                _inner = ActivatorUtilities.CreateInstance<WorkflowStartActivitySchedulerWorkHandler>(provider);
+                return this;
+            }, descriptor.Lifetime));
+        }
     }
 
     [Fact]
@@ -98,7 +153,12 @@ public sealed class SwitchLifecycleTests
         await using var harness = Harness();
         var finish = new ExecutableNode("c", "c", "elsa.intrinsic.finish", "1.0.0", "intrinsic",
             JsonSerializer.SerializeToElement(new { kind = "Finish", schemaVersion = "1.0.0" }),
-            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Finish);
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Outcome] = new(WorkflowIntrinsicInputKeys.Outcome, new("String"),
+                    ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                    literal: Elsa.Primitives.Models.ValueEnvelope.Inline(new("String"), JsonSerializer.SerializeToElement(ActivityOutcomes.Done), ValueProtectionPolicy.InstanceInline))
+            }, new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Finish);
         var run = await harness.RunAsync(Executable(Wait("a"), finish), allowPendingWorkOnTerminalCompletion: true);
         run.AssertWorkflowCompleted();
         Assert.NotEqual(ActivityExecutionStatus.Completed, run.State("switch").Status);
