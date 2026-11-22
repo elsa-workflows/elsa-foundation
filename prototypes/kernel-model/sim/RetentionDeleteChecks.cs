@@ -67,6 +67,7 @@ internal static class RetentionDeleteChecks
         var markA = fixture.Checkpoint(a).Terminal;
         var selection = await fixture.Selection(a);
         var (queued, request) = fixture.Retention(a, selection, fixture.Now + 200);
+        if (!await RejectMarkerLoss(endedA, "retirement")) return;
         await fixture.Send(a, "manual-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selection)));
         await Step(worker, endedA.Id);
         if (!fixture.Store.Instances[endedA.Id].Retired)
@@ -76,6 +77,12 @@ internal static class RetentionDeleteChecks
         }
 
         fixture.Now += 101;
+        await fixture.Store.SweepAsync();
+        var marker = fixture.Store.Instances.GetValueOrDefault(endedA.Id);
+        var retained = marker is { Retired: true } && marker.Creation == endedA.Creation;
+        check(retained, "RD7b sweep retains the creation high-water mark past the reuse window");
+        if (!retained || !await RejectMarkerLoss(marker!, "compaction")) return;
+
         var b = await fixture.Start(worker, "successor", callerKey: "reused");
         await fixture.Send(b, "end-successor", "finish");
         await Step(worker, fixture.Row(b).Id);
@@ -90,6 +97,27 @@ internal static class RetentionDeleteChecks
             request.Answer is CreationResult { Result: "WrongCreation" } && fixture.Row(b) == endedB &&
             fixture.Store.Journal.Values.SequenceEqual(journal),
             "RD1/RD2 a delayed Delete names the retired creation even when the successor has the same terminal revision and status");
+        check(endedB.Creation > marker!.Creation && request.Answer is CreationResult { Result: "WrongCreation" } &&
+            fixture.Row(b) == endedB, "RD7b the retained watermark advances the successor and the old Delete leaves it intact");
+
+        async Task<bool> RejectMarkerLoss(InstanceRow before, string operation)
+        {
+            var fence = worker.Fences.Single();
+            var drop = new TurnCommit(before.Id, null, before.Revision, [], [], [], [], [], "[]", Delete: true);
+            var rejected = false;
+            try
+            {
+                await fixture.Store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [drop], [], []));
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite)
+            {
+                rejected = true;
+            }
+            var intact = rejected && fixture.Store.Instances.GetValueOrDefault(before.Id) == before &&
+                fixture.Store.Partitions[fence.Partition].Position == fence.Position;
+            check(intact, $"RD7b the fenced store refuses {operation} that would erase the creation high-water mark");
+            return intact;
+        }
     }
 
     private static async Task UnresolvedPark(Action<bool, string> check)
