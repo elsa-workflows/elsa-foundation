@@ -921,8 +921,8 @@ internal sealed class RecordingRuntimeCheckpointCommitStore(
     CheckpointRecorder recorder,
     bool failDispatchCommit = false) : IRuntimeCheckpointCommitStore
 {
-    public bool SupportsHistory => inner.SupportsHistory;
-    public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => inner.CanCommitHistory(selectedStore);
+    public bool SupportsHistory => ((IRuntimeCheckpointCommitStore)inner).SupportsHistory;
+    public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => ((IRuntimeCheckpointCommitStore)inner).CanCommitHistory(selectedStore);
 
     public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
