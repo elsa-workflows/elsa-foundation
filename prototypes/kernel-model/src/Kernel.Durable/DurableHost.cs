@@ -29,6 +29,7 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
     private readonly SemaphoreSlim _turn = new(1, 1);     // a pass, a gain and a loss of the node's worker never overlap
     private long _passes, _lastAt, _calls;
     private TimeSpan? _last;
+    private Dictionary<int, TimeSpan> _lastAges = [];
 
     public DurableHost(IEnumerable<Worker> workers)
     {
@@ -173,13 +174,13 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
         finally { _turn.Release(); }
     }
 
-    private async ValueTask<TimeSpan?> PassAsync(NodeScope scope, CancellationToken cancellationToken)
+    private async ValueTask<ScopePass> PassAsync(NodeScope scope, CancellationToken cancellationToken)
     {
         var node = _node!;
         await _turn.WaitAsync(CancellationToken.None);
         try
         {
-            if (!node.Holds(scope.Scope)) return null;
+            if (!node.Holds(scope.Scope)) return default;
             _calls++;
             // Another scope's pass ran since this scope's last call, and no wake or job result came since: that pass
             // served this scope too. Its answer stands until its delay runs out. Then this call runs the pass,
@@ -191,13 +192,19 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
                 if (last == TimeSpan.Zero || left > TimeSpan.Zero)
                 {
                     scope.Seen = _passes;
-                    return last == TimeSpan.Zero ? last : left;
+                    var cachedAge = _lastAges.TryGetValue(scope.Scope, out var sampled)
+                        ? sampled + TimeSpan.FromMilliseconds(Math.Max(0, node.Monotonic - _lastAt))
+                        : (TimeSpan?)null;
+                    return new(last == TimeSpan.Zero ? last : left, cachedAge);
                 }
             }
             scope.Seen = ++_passes;
             _last = await node.RunAsync(cancellationToken);
             _lastAt = node.Monotonic;
-            return node.Holds(scope.Scope) ? _last : null;
+            _lastAges = _last == TimeSpan.Zero && !cancellationToken.IsCancellationRequested ? node.AgeOfReadyWork() : [];
+            return node.Holds(scope.Scope)
+                ? new(_last, _lastAges.TryGetValue(scope.Scope, out var age) ? age : null)
+                : default;
         }
         finally { _turn.Release(); }
     }
@@ -216,7 +223,9 @@ public sealed class DurableHost : IScopeHost, IScopeCount, INodeLeaseHost
         public int Scope => scope;
         public bool Active => host._node!.Holds(scope);
         public ValueTask WokenAsync(InstanceRef? actor, CancellationToken cancellationToken = default) => host._node!.WokenAsync(actor, cancellationToken);
-        public ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) => host.PassAsync(this, cancellationToken);
+        public async ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default) =>
+            (await host.PassAsync(this, cancellationToken)).Delay;
+        public ValueTask<ScopePass> RunWithAgeAsync(CancellationToken cancellationToken = default) => host.PassAsync(this, cancellationToken);
         public ValueTask DisposeAsync() => host.LoseAsync(scope);
     }
 }

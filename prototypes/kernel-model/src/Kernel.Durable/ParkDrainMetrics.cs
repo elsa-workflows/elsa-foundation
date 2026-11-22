@@ -28,7 +28,7 @@ internal static class ParkDrainMetrics
 
 public sealed partial class InMemoryStore
 {
-    ParkDrainSample? IKernelStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere)
+    ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere)
     {
         lock (_gate)
         {

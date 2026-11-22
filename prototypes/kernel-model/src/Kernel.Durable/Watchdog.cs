@@ -111,9 +111,13 @@ public sealed class Watchdog
 /// heartbeats. Every member of <see cref="IKernelStore"/> is its own, so no default of the interface stands in for the
 /// inner store's (a reflection check in the runtime conformance's <c>WatchdogChecks</c>, run by <c>semantic</c>, holds it to that).
 /// </summary>
-public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore
+public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
+    string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
+        (inner as IFoundationSchedulingStore)?.FoundationScheduleTenant(address);
+    ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) =>
+        (inner as IFoundationSchedulingStore)?.SampleParkDrains(node, owned, handedOffHere);
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;

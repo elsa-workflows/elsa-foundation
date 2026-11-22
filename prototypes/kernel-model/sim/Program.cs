@@ -136,6 +136,12 @@ if (args.Contains("--tenant-pass-check"))
     await TenantPassChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--scope-age-check"))
+{
+    var failed = false;
+    await ScopeAgeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--pass-turn-budget-check"))
 {
     var failed = false;

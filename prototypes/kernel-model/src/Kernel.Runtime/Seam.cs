@@ -61,7 +61,14 @@ public interface IScopeActivation : IAsyncDisposable
     /// </para>
     /// </summary>
     ValueTask<TimeSpan?> RunAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Run a pass and optionally report the age of its oldest locally known ready work.</summary>
+    async ValueTask<ScopePass> RunWithAgeAsync(CancellationToken cancellationToken = default) =>
+        new(await RunAsync(cancellationToken));
 }
+
+/// <summary>A scope's next delay and an optional scheduling hint. A null delay means ownership was lost.</summary>
+public readonly record struct ScopePass(TimeSpan? Delay, TimeSpan? OldestWaitingAge = null);
 
 /// <summary>
 /// K1b: a host whose node keeps one lease for every scope it holds (ownership-and-fencing, "The node's heartbeat" and

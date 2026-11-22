@@ -2,10 +2,13 @@ namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
 public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
-    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore
+    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore, IFoundationSchedulingStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
-    string? IKernelStore.FoundationScheduleTenant(CreationAddress address) => inner.FoundationScheduleTenant(address);
+    string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
+        (inner as IFoundationSchedulingStore)?.FoundationScheduleTenant(address);
+    ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) =>
+        (inner as IFoundationSchedulingStore)?.SampleParkDrains(node, owned, handedOffHere);
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
