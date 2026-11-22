@@ -81,6 +81,7 @@ internal sealed class Elsa3ActivityNormalizer(
             if (TryMapVariable(plan, variables[index], path, out var mapped, out var refusal))
             {
                 plan.WorkflowVariables.Add(variables[index], mapped);
+                plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
                 continue;
             }
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(

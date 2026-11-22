@@ -40,6 +40,23 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
     /// <summary>The Elsa 3 server's IANA zone under <see cref="Elsa3DateInterpretation.SourceTimeZone"/>.</summary>
     public string? SourceTimeZone => _options.SourceTimeZone;
 
+    /// <summary>Reuses the mutation-only pass when another lowering depends on captures remaining unchanged.</summary>
+    internal bool ScriptMayWriteVariables(string source, Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve)
+    {
+        try
+        {
+            var script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
+            // Count a loop value too: replacing a later read with its loop slot must not discard a legacy write.
+            var analyzer = new JavaScriptAnalyzer(resolve) { Mode = Elsa3JavaScriptMode.Expression, Source = source };
+            analyzer.CollectReassignedNames(script);
+            return analyzer.ReusableScriptMayWrite(script);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            return true;
+        }
+    }
+
     /// <summary>
     /// What to change in the Elsa 3 workflow when an expression assigns a value: Elsa 4 expressions are pure. In Elsa 3
     /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
