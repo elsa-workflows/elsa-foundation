@@ -7,15 +7,19 @@ namespace Kernel.Sim;
 internal static class ParkPageBoundsChecks
 {
     private enum Resolution { Resume, Discard, Expiry, Terminate, Delete }
+    private enum LateArrival { BeforePage, AfterPage, Tied, BeforeTake, AfterTake }
 
     internal static async Task Run(Action<bool, string> check)
     {
         foreach (var resolution in Enum.GetValues<Resolution>())
             await Run(resolution, check);
         await Run(Resolution.Resume, check, aboveHighWater: true);
+        foreach (var arrival in Enum.GetValues<LateArrival>())
+            await Run(Resolution.Resume, check, arrival: arrival);
     }
 
-    private static async Task Run(Resolution resolution, Action<bool, string> check, bool aboveHighWater = false)
+    private static async Task Run(Resolution resolution, Action<bool, string> check, bool aboveHighWater = false,
+        LateArrival? arrival = null)
     {
         const long start = 1_701_679_300_000;
         var now = start;
@@ -26,6 +30,7 @@ internal static class ParkPageBoundsChecks
         var ingress = new InMemoryIngress(store, new Requests("page-bounds"), "page-bounds", (_, _) => true);
         var pages = new List<IReadOnlyList<ParkPageRow>>();
         var observedPressure = false;
+        var actor = default(Contract.ActorRef);
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (!landed) return;
@@ -37,11 +42,17 @@ internal static class ParkPageBoundsChecks
                 var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
                 if (rows is { Count: > 0 }) pages.Add(rows);
             }
+        }, async batch =>
+        {
+            if (arrival == LateArrival.BeforePage && pages.Count == 0 &&
+                batch.Turns.FirstOrDefault(turn => turn.FoundationRecoveryPage?.Rows.Count == InMemoryStore.ParkPageLimit)
+                    ?.FoundationRecoveryPage?.Rows is { } page)
+                await AdmitEarlier(page[^1].Cursor);
         });
 
         await using var initial = await Owner("page-first");
         var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "metadata")), "birth", Contract.Kinds.Start);
-        var actor = birth.Actor ?? throw new InvalidOperationException("The page fixture could not start its actor.");
+        actor = birth.Actor ?? throw new InvalidOperationException("The page fixture could not start its actor.");
         var target = new Contract.Target.Ref(actor);
         await Pump(initial, 5);
         await ingress.SendAsync(scope, target, WideId(0), kind, "poison");
@@ -58,6 +69,7 @@ internal static class ParkPageBoundsChecks
                 Encoding.UTF8.GetByteCount(row.Message.Kind) == FoundationMetadataLimits.KindBytes);
         check(staged, $"S-5 {resolution}: every retained row has the largest admitted outside id and kind");
         if (!staged) return;
+        var restorable = kept.Where(item => item.Message.Payload == "value").Select(item => item.Message.Id).ToArray();
 
         if (resolution == Resolution.Discard)
         {
@@ -92,34 +104,64 @@ internal static class ParkPageBoundsChecks
         }
         for (var i = 0; i < 12 && pages.Count == 0; i++)
             await Pump(initial, 1);
-        check(pages is [{ Count: InMemoryStore.ParkPageLimit }] && pages[0][0].Cursor.Key == kept.MinBy(row => row.Seq)!.Message.InboxKey,
+        var firstLanded = pages is [{ Count: InMemoryStore.ParkPageLimit }] &&
+            pages[0][0].Cursor.Key == kept.MinBy(row => row.Seq)!.Message.InboxKey;
+        check(firstLanded,
             $"S-5 {resolution}: page one includes the largest first input and stops at the row boundary");
+        if (!firstLanded) return;
+        if (arrival is LateArrival.AfterPage or LateArrival.Tied or LateArrival.BeforeTake)
+            await AdmitEarlier(pages[0][^1].Cursor);
         if (aboveHighWater)
             for (var i = 0; i < 6; i++)
                 await ingress.SendAsync(scope, target, $"unreleased-{i}", "late", "outside the recovery cohort");
-        await initial.DisposeAsync();
-
+        var keepOwner = arrival is LateArrival.BeforePage or LateArrival.AfterPage;
+        if (!keepOwner) await initial.DisposeAsync();
         now++;
-        await using var replacement = await Owner("page-second");
+        await using var replacement = keepOwner ? null : await Owner("page-second");
+        if (arrival == LateArrival.AfterTake) await AdmitEarlier(pages[0][^1].Cursor);
         for (var i = 0; i < 16; i++)
         {
             now += 11;
-            await Pump(replacement, 1);
+            await Pump(replacement ?? initial, 1);
         }
         var row = store.Instances[checkpoint.Row.Id];
         var actual = pages.SelectMany(page => page).Select(item => item.Cursor.Key).ToArray();
         var expected = kept.OrderBy(item => item.Seq).Select(item => item.Message.InboxKey);
-        check(pages is [{ Count: InMemoryStore.ParkPageLimit }, { Count: 1 }] && actual.SequenceEqual(expected) &&
+        var complete = pages is [{ Count: InMemoryStore.ParkPageLimit }, { Count: 1 }] && actual.SequenceEqual(expected) &&
               pages.All(page => Encoding.UTF8.GetByteCount(Json.Write(page)) <= ParkRecoveryCredit.LimitBytes) &&
               store.Messages.Values.All(message => message.KeptBy is null && message.Message.Kind != Kinds.Drain) &&
               row.ParkDiscard is null && row.ParkRecovery is null &&
               (resolution == Resolution.Delete ? row.Retired : Read().Park is null) &&
-              (resolution != Resolution.Resume || probe.Restored == firstBoundary),
+              (resolution != Resolution.Resume || probe.Restored == firstBoundary);
+        check(complete,
             $"S-5 {resolution}: the cold owner finishes the one-row suffix within the projection budget (pages {string.Join(",", pages.Select(p => p.Count))}; restored {probe.Restored}; rows match {actual.SequenceEqual(expected)}; faults {row.Fault}; pending {store.Messages.Values.Count(m => !m.Done)}; kept {store.Messages.Values.Count(m => m.KeptBy is not null)}; recovery {row.ParkRecovery?.Cursor}, {row.ParkRecovery?.Control})");
 
         if (aboveHighWater)
             check(observedPressure && probe.LateOffers == 6 && !probe.OfferedLateDuringRecovery,
                 "M3-11 the partition remains above high water with unreleased arrivals while recovery advances, then offers those arrivals after Complete");
+        if (arrival is not null)
+            check(complete && probe.EndAfterRestored == firstBoundary && !probe.EndDuringRecovery &&
+                probe.RestoredIds.SetEquals(restorable) &&
+                row.Status == InstanceStatus.Finished,
+                $"E-1–E-3 {arrival}: the late arrival ends the model after Complete and every restored row " +
+                $"(ended after {probe.EndAfterRestored}; open at end {probe.EndDuringRecovery}; distinct {probe.RestoredIds.Count}; status {row.Status})");
+
+        async Task AdmitEarlier(ParkPageCursor cursor)
+        {
+            var accepted = await ingress.SendAsync(scope, new Contract.Target.Ref(actor), "late-finisher", "finish");
+            var message = store.Messages.Values.Single(item => item.Message.Kind == "finish");
+            if (arrival == LateArrival.Tied)
+            {
+                store.Messages.Remove(message.Message.InboxKey);
+                message.Message = message.Message with { StorageId = "!" + cursor.Key.Id };
+                store.Messages.Add(message.Message.InboxKey, message);
+                message.Seq = cursor.Seq;
+            }
+            else message.Seq = cursor.Seq - 1;
+            check(accepted.Outcome == Contract.AdmissionOutcome.Accepted && message is { Seen: 0, ReleasedBy: null, KeptBy: null } &&
+                new ParkPageCursor(message.Seq, message.Message.InboxKey).CompareTo(cursor) < 0,
+                $"E-1–E-3 {arrival}: the admitted unseen row orders below the cursor");
+        }
 
         InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
 
@@ -152,6 +194,9 @@ internal static class ParkPageBoundsChecks
     {
         public string Type => "park-page-limits";
         public int Restored { get; private set; }
+        public HashSet<string> RestoredIds { get; } = [];
+        public int? EndAfterRestored { get; private set; }
+        public bool EndDuringRecovery { get; private set; }
         public int LateOffers { get; private set; }
         public bool OfferedLateDuringRecovery { get; private set; }
 
@@ -161,10 +206,17 @@ internal static class ParkPageBoundsChecks
             {
                 if (input.Payload == "poison") throw new InvalidOperationException("retain the first maximal input");
                 Restored++;
+                RestoredIds.Add(input.Id);
             }
             var late = turn.Inbox.Count(input => input.Kind == "late");
             LateOffers += late;
             OfferedLateDuringRecovery |= late != 0 && recoveryOpen();
+            if (turn.Inbox.Any(input => input.Kind == "finish"))
+            {
+                EndAfterRestored = Restored;
+                EndDuringRecovery = recoveryOpen();
+                turn.End(Contract.ActorStatus.Finished);
+            }
             turn.State = "{}";
             return default;
         }
