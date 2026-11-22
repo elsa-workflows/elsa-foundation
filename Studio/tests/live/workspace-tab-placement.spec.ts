@@ -61,10 +61,14 @@ for (const mode of ["light", "dark"] as const) {
     expect(growing.plusLeft).toBeGreaterThan(sparse.plusLeft);
     expect(growing.menuLeft).toBeCloseTo(sparse.menuLeft, 0);
 
+    // Keep the named tab available for the switcher while clean Home tabs age out.
+    await tabs.first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: /Pin tab/ }).click();
     for (let count = 4; count <= 20; count++) {
       await add.click();
-      await expect(tabs).toHaveCount(count);
+      await expect(tabs).toHaveCount(Math.min(count, 12));
     }
+    await page.setViewportSize({ width: 900, height: 900 });
     await expect.poll(async () => {
       const geometry = await stripGeometry(page);
       return geometry.scrollWidth > geometry.clientWidth;
@@ -93,7 +97,7 @@ for (const mode of ["light", "dark"] as const) {
     expect(narrow.rightGap).toBeLessThanOrEqual(12);
     expect(narrow.pageScroll).toBeLessThanOrEqual(narrow.pageWidth + 1);
     await add.click();
-    await expect(tabs).toHaveCount(21);
+    await expect(tabs).toHaveCount(12);
     await expect.poll(() => new URL(page.url()).pathname).toBe("/");
   });
 }
