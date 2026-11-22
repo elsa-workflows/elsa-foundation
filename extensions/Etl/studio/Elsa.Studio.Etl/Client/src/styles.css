@@ -91,7 +91,6 @@
 .etl-shell .etl-run-select { display: flex; flex-direction: column; align-items: flex-start; width: 100%; gap: 0.35rem; text-align: left; }
 .etl-run-select small { display: block; overflow-wrap: anywhere; }
 .etl-shell .etl-run-select[aria-pressed="true"] { border-color: var(--studio-accent); background: var(--studio-material-panel-bg-soft); }
-.etl-run-status { font-weight: 600; }
 .etl-run-counts { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .etl-run-error,
 .etl-run-notice { border-inline-start: 3px solid var(--studio-accent); padding-inline-start: 0.75rem; margin-block: 1rem; }

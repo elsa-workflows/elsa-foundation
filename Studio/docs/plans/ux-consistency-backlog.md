@@ -60,6 +60,21 @@ Treat these as unaudited. Follow-up audit tasks are listed under [Follow-up audi
   `FormDesigner.tsx`, `PropertyEditors.tsx`, `TableEditor.tsx`, the host Diagnostics page and
   `propertyEditors.tsx`.
 
+### Extension audit follow-up
+
+The table records the source paths inspected for A1. PR #5326 carries the screenshots and executed journeys for the A5 composition. The five optional surfaces ran against a disposable Studio host and Workbench with ETL persistence, external authentication, the Extension Builder bridge, and the Weather sample assembly and shell feature enabled.
+
+| Surface | Audit findings |
+|---|---|
+| ETL | Followed file and connector collection selection through draft creation, editing, validation, publication and artifact inspection. Reviewed runtime selection, paging, cancellation and status presentation. The collection and editor now have separate views. |
+| Extension Builder | Followed managed workspace creation through the solution explorer, editor, source control, build, promotion and runtime dock. The dock uses shared keyboard navigation and disclosures. Disabled operation descriptions explain the required permission. The live host also exposed a case mismatch between the backend’s enum serialization and Studio that kept New extension from finding project templates. |
+| External sign-in and User access | Reviewed read-only configuration, editable database-backed connections, provider test and preview return, directory search, identity links, sessions and revoke confirmation. User access now shares the Studio timestamp format in the detail view and confirmation. |
+| Feature management | Inspected host selection, capability gates, the feature list and relationship inspector, cascading draft changes, settings fields, secret handling, save and restart notices. Related migrations and the file-structure issue remain tracked under Feature management. |
+| Console stream, Structured logs and OpenTelemetry | Reviewed the full pages and dock contributions, including buffering, connection status, filter and pause behavior, trace detail and compact layouts. The resulting changes and composed captures are in PRs #5280, #5292, #5294 and #5298. |
+| Weather sample | Inspected route registration, host-backed refresh, retry, loading, tabular results and the result count. The sample requires a host assembly reference and module catalog registration as well as enabling its shell feature. |
+| Weaver workflows | Inspected the metadata, workflow-definition and executable prompt registrations and contextual attachments. Confirmed provider-off and menu states separately in PR #5310. |
+| JavaScript and Liquid expression editors | Inspected both inline and expanded registrations, source renderers, read-only state, source insertion and shared code editor bindings. JavaScript also supplies result checks, variable-addition preservation and language tooling. |
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -436,7 +451,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
   (`EXT/Connections/connectionPresentation.tsx:12–16`).
 - [x] **X7.7** (#5113) [source] `.decision-draft-status` pill (`EXT/Decisions/styles.css:22`). (PR #5320)
-- [ ] **X7.8** (#5114) [check] `.etl-run-status` in ETL.
+- [x] **X7.8** (#5114) [check] `.etl-run-status` in ETL. (PR #5326)
 
 ### X8. Tabs and view switches
 
@@ -447,7 +462,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [x] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`. (PR #5328)
 - [x] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist. (PR #5310)
 - [x] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`. (PR #5298)
-- [ ] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`.
+- [x] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`. (PR #5326)
 - [x] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`, (PR #5328)
   `WorkflowEditor.tsx:1283`, `graph-authoring/GraphAuthoringWorkbench.tsx:148`. Check whether
   `StudioTabs` has a dense mode before migrating.
@@ -503,8 +518,8 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
 - [x] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
   `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`. (PR #5325)
-- [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
-- [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
+- [x] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`. (PR #5326)
+- [x] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`. (PR #5326)
 - [x] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
   "Nov 21, 2026". (PR #5311)
 - [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
@@ -551,7 +566,7 @@ the designer header is a documented exception.
 - [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
-- [ ] **X11.19** (#5168) [check] ETL draft toolbar.
+- [x] **X11.19** (#5168) [check] ETL draft toolbar. (PR #5326)
 - [x] **X11.20** (#5169) [source] Icon-only buttons named by `title` only: `H/modules/PackageFeedsPage.tsx:172,
   175`, `H/modules/ModuleManagementPage.tsx:440`. `needs: K3` (PR #5304)
 
@@ -568,8 +583,8 @@ the designer header is a documented exception.
 - [x] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
   `OverflowMenu`. (PR #5311)
 - [x] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`. (PR #5304)
-- [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
-  about `:193`).
+- [x] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
+  about `:193`). (PR #5326)
 - [x] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles. (PR #5316)
 - [x] **X12.10** (#5180) [source] `WF/ActivityDefinitionContractProposalChangeList.tsx:52` ("Technical (PR #5316)
   comparison") and `ActivityDefinitionContractProposalReview.tsx:166` ("Technical details"): one label,
@@ -603,7 +618,7 @@ Uppercase labels (`needs: D3`):
 - [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
 - [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
-- [ ] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules).
+- [x] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules). (PR #5326)
 
 Raw font sizes, weights, radii and colours:
 
@@ -626,7 +641,7 @@ Raw font sizes, weights, radii and colours:
 
 - [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
   Many raw radii are `999px` pills; check each one before changing it.
-  Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294).
+  Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294). Extension Builder completed in PR #5326.
 - [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
 - [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
@@ -666,7 +681,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
   `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`). (PR #5311)
 - [x] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected". (PR #5329)
-- [ ] **X14.10** (#5211) [check] Extension Builder tooltip "Requires canBuild".
+- [x] **X14.10** (#5211) [check] Extension Builder tooltip "Requires canBuild". (PR #5326)
 
 ## Phase 2: per-screen items
 
@@ -724,8 +739,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   reads "1 loaded questions". (PR #5313)
 - [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
   secondary ones into an overflow menu. (PR #5292)
-- [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
-  page.
+- [x] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
+  page. (PR #5326)
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
 - [x] **E9** (#5239) [source] Agent review: "Deny" is a default-styled button beside primary "Approve" (PR #5329)
   (`HumanReviewPage.tsx:121–122`). `needs: K2`
@@ -796,13 +811,13 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 
 ## Follow-up audits
 
-- [ ] **A1** (#5261) Source audit of the extensions with no completed report: ETL, Extension Builder, Feature
+- [x] **A1** (#5261) Source audit of the extensions with no completed report: ETL, Extension Builder, Feature
   management, Identity, Console stream, OpenTelemetry, Structured logs, Weather sample, Weaver
-  workflows, JavaScript and Liquid expression editors.
+  workflows, JavaScript and Liquid expression editors. (PR #5326)
 - [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
   [Coverage gaps](#coverage-gaps).
 - [ ] **A3** (#5263) Review dark mode, including dialogs.
 - [ ] **A4** (#5264) Review narrow viewports.
-- [ ] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
-  host that enables them, and review them visually.
+- [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
+  host that enables them, and review them visually. (PR #5326)
 - [ ] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps).
