@@ -631,12 +631,18 @@ public sealed class DurableTurn
     {
         var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
         var id = store?.MessageHandle("event:" + wire) ?? wire;
-        var publication = new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant };
-        if (tenant is null) SendNext(Actor, Kinds.Publish, publication);
+        if (tenant is null)
+            SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)));
         else
         {
+            ArgumentOutOfRangeException.ThrowIfLessThan(keep, TimeSpan.Zero);
             FoundationMetadataLimits.RequireContent(payload, nameof(payload), FoundationMetadataLimits.EventContentBytes);
-            Send(IssuedAt(_ordinal++), Actor, Kinds.Publish, FoundationEventTicket.Encode(publication), encodedPayload: true);
+            var duration = (long)keep.TotalMilliseconds;
+            var ticket = new Message(id[1..], Actor, Kinds.Publish, FoundationEventTicket.Encode(key, id, payload, duration), Id,
+                TargetCreation: _input.Creation, SenderCreation: _input.Creation)
+                { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
+            _sent.Add(ticket.AsIssued().AsKernelTicket());
+            _ordinal++;
         }
         return id;
     }

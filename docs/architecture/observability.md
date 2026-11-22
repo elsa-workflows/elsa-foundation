@@ -1179,6 +1179,13 @@ Park decision.
       run (g)). Since the kernel generates the incarnation before any row is written, the `pub:` id and its
       placement are known up front, and the partition high-water check before any row is written holds unchanged (a
       condition, qualified at K4).
+      The built-in K3 author uses the digest portion of the existing opaque public event id as its issued
+      ticket id. The returned event id is still the ticket id prefixed with `~`. Typed ticket metadata carries
+      the author commit's acceptance time and distinguishes the duration in the new frame from the absolute
+      expiry in older frames. Its first fenced step inserts the event row and rewrites the ticket without the
+      payload. [The in-memory fixture](../../prototypes/kernel-model/sim/EventIdentityChecks.cs) exercises the
+      Native and direct payload boundaries, restored waits, lost insert and match answers, and recovery of
+      a Park-kept ticket. Provider frame and key-width evidence stays at K4.
       - **A generated event id counts inside `C`.** A turn's `Publish` takes no event id from the model: the event id
         is `~` followed by the ticket's own issued id, `~{origin}#{revision}.{ordinal}` (seventh review R7-M1, "Turn
         and caller event ids are disjoint" below; today the bare issued id, `Turns.cs` 429–433, the ordinal

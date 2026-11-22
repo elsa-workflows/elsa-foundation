@@ -1421,7 +1421,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             item.Ticket = true;
             _meets.Add(item);
-            if (message.ParkCatchUp is not null && attempts >= _options.MaxAttempts)
+            if (CanParkOnEventFailure(message) && attempts >= _options.MaxAttempts)
                 _exhaustedCatchUps.Add(item);
             return;
         }
@@ -1670,7 +1670,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (_exhaustedCatchUps.Count != 0 && slot.CurrentRow is { Status: InstanceStatus.Running } row &&
             _exhaustedCatchUps.Any(ticket => ticket.Message.Target.Id == instance &&
-                _type.OwnsParkCatchUp(row, ticket.Message)))
+                OwnsFailedEventStep(row, ticket.Message)))
             return [];
         var due = new List<Delivery>();
         var suspended = Withheld(slot);
@@ -2445,7 +2445,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var step = new TurnOutcome(instance) { Consumed = [ticket], FoundationPublicationSequence = publicationSequence };
         if (ticket.Attempts >= _options.MaxAttempts)
         {
-            if (publicationSequence is null)
+            if (CanParkOnEventFailure(ticket.Message))
             {
                 if (!_slots.TryGetValue(instance, out var slot))
                 {
@@ -2455,11 +2455,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 }
                 if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
                 if (slot.CurrentRow is { Status: InstanceStatus.Running, Retired: false } row &&
-                    _type.OwnsParkCatchUp(row, ticket.Message))
+                    OwnsFailedEventStep(row, ticket.Message))
                 {
                     slot.Busy = true;
+                    var work = publicationSequence is null ? "the kept-event catch-up" : "the authored publication";
                     step = Bound(MarkPark(_type.Park(row, instance, [ticket], null,
-                        "the kept-event catch-up reached its failed step limit"), row), slot);
+                        work + " reached its failed step limit"), row), slot);
+                    step.FoundationPublicationSequence = publicationSequence;
                 }
             }
             step.FoundationCatchUpFailed = failure;
@@ -2497,11 +2499,17 @@ public sealed class Worker : IScopeActivation, ITurnServices
         else if (outcome == Outcome.Landed)
         {
             ticket.Attempts++;
-            if (publicationSequence is null && ticket.Attempts >= _options.MaxAttempts) _exhaustedCatchUps.Add(ticket);
+            if (CanParkOnEventFailure(ticket.Message) && ticket.Attempts >= _options.MaxAttempts) _exhaustedCatchUps.Add(ticket);
             ticket.Taken = false;
             _woken = true;
         }
     }
+
+    private static bool CanParkOnEventFailure(Message message) =>
+        message.ParkCatchUp is not null || message.FoundationPublish?.Authored is not null;
+
+    private bool OwnsFailedEventStep(InstanceRow row, Message message) =>
+        message.FoundationPublish?.Owns(row, message) == true || _type.OwnsParkCatchUp(row, message);
 
     private TimeSpan? ParkCatchUpBudget()
     {
@@ -2889,8 +2897,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var conversions = unit.HeldJobResults;
         var kept = PrepareKeptInputs(unit);
         var durable = unit.Consumed.Where(i => i.Durable);
-        var consumed = durable.Where(i => i.Message.KeepUntil is null && kept?.ContainsKey(i.Message.InboxKey) != true).Select(i => i.Message.InboxKey);
-        var done = durable.Where(i => i.Message.KeepUntil is not null || kept?.ContainsKey(i.Message.InboxKey) == true).Select(i => i.Message.InboxKey);
+        bool Retained(Delivery item) => item.Message.KeepUntil is not null || kept?.ContainsKey(item.Message.InboxKey) == true ||
+            unit.FoundationPublicationSequence is not null && unit.FoundationCatchUpFailed is { } failed &&
+            failed.Attempts >= failed.Limit && failed.Key == item.Message.InboxKey;
+        var consumed = durable.Where(i => !Retained(i)).Select(i => i.Message.InboxKey);
+        var done = durable.Where(Retained).Select(i => i.Message.InboxKey);
         var settled = conversions?.Keys.Where(i => i.Durable).Select(i => i.Message.InboxKey) ?? [];
         var cancelled = Has(Flaw.VolatileJobTicket) ? [] : unit.Cancelled.Where(id => !InMemoryOnly(id));
         var promotions = conversions?.Values.Select(result => result.InboxKey).ToHashSet();
