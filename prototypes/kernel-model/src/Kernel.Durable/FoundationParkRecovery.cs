@@ -84,8 +84,7 @@ public sealed partial class InMemoryStore
             !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
             throw InvalidDrain();
         var expiry = _foundationParkExpiries.GetValueOrDefault(address);
-        var recalled = expiry?.Armed is { } armed ? turn.Consumed is [var key] && key == armed : turn.Consumed.Count == 0;
-        if (!recalled || recovery.Serial != checked((expiry?.Serial ?? 0) + 1) ||
+        if (recovery.Serial != checked((expiry?.Serial ?? 0) + 1) ||
             !ParkDrainEnvelope.For(next, park).MatchesIssued(control, next, recovery.Serial, recovery.Control))
             throw InvalidDrain();
         var timers = turn.FoundationRecoveryTimers;
@@ -99,11 +98,14 @@ public sealed partial class InMemoryStore
         if (jobs is null || jobs.Registry != next.Jobs || jobs.NextGeneration != next.NextJobGeneration || jobs.Restarts != next.ParkRestartedJobs ||
             (long)timers.Recipes.Count + jobs.Recipes.Count > MaxRestoreWaits)
             throw InvalidDrain();
-        var checkedJobs = PlanFoundationJobs(previous, jobs.Recipes, checkedTimers.Bytes);
+        var checkedJobs = PlanFoundationJobs(previous, mode, jobs.Recipes, checkedTimers.Bytes);
         if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
             checkedJobs.Restarts != jobs.Restarts || !checkedJobs.Pending.SequenceEqual(jobs.Pending) ||
+            !checkedJobs.Retained.SequenceEqual(jobs.Retained) || !checkedJobs.RecalledDeadlines.SequenceEqual(jobs.RecalledDeadlines) ||
             !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
             throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
+        var recalls = expiry?.Armed is { } armed ? jobs.RecalledDeadlines.Append(armed) : jobs.RecalledDeadlines;
+        if (!turn.Consumed.SequenceEqual(recalls)) throw InvalidDrain();
         foreach (var message in jobs.Writes)
             if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
         if (expiry is null) return null;

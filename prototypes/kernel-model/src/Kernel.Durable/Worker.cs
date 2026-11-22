@@ -101,7 +101,7 @@ public sealed record WorkerOptions
 /// </summary>
 public sealed class Worker : IScopeActivation, ITurnServices
 {
-    private sealed record JobPublication(Delivery Ticket, Slot Slot, Message? Result, long At, long Order, bool SchedulerRejected = false);
+    private sealed record JobPublication(Delivery Ticket, Slot Slot, CancellationToken Attempt, Message? Result, long At, long Order, bool SchedulerRejected = false);
     // Each ownership generation has its own handoff. A callback that outlives reset can only post to its old queue.
     private ConcurrentQueue<JobPublication> _jobPublications = new();
     private readonly HashSet<Delivery> _schedulerRetries = [];
@@ -2201,7 +2201,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             {
                 var at = Now;
                 if (ticket.WithdrawingJob || ticket.JobDeadlineClosed || job.Deadline is { } deadline && at >= deadline) return;
-                publications.Enqueue(new(ticket, slot, completed, at, Interlocked.Increment(ref _observed)));
+                publications.Enqueue(new(ticket, slot, token, completed, at, Interlocked.Increment(ref _observed)));
             }
         }
         // Publish a synchronous body's outcome before this scheduled callback returns. An asynchronous
@@ -2218,7 +2218,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             catch (TaskSchedulerException)
             {
                 // The scheduler refused the callback before the model entered. Only the owner may retry its ticket.
-                publications.Enqueue(new(ticket, slot, null, 0, 0, SchedulerRejected: true));
+                publications.Enqueue(new(ticket, slot, token, null, 0, 0, SchedulerRejected: true));
                 return;
             }
             try { await scheduled.Unwrap().ConfigureAwait(false); }
@@ -2256,8 +2256,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             while (_jobPublications.TryDequeue(out var observation))
             {
-                var (ticket, slot, result, at, order, schedulerRejected) = observation;
-                if (ticket.Cancel?.IsCancellationRequested != false ||
+                var (ticket, slot, attempt, result, at, order, schedulerRejected) = observation;
+                if (ticket.Cancel?.Token != attempt || attempt.IsCancellationRequested ||
                     _items.GetValueOrDefault(ticket.Message.InboxKey) != ticket ||
                     slot.ActiveCreation != (ticket.Message.TargetCreation ?? 0)) continue;
                 if (result is null)
@@ -2988,6 +2988,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (!_items.TryGetValue(key, out var waiting) || waiting.Key is not null || waiting.Message.Kind != Kinds.Job ||
                     waiting.Attempts >= _options.MaxAttempts || waiting.Taken) continue;
                 var ticket = waiting.Message.Read<JobTicket>();
+                if (waiting.Cancel is { IsCancellationRequested: true } cancelled)
+                {
+                    cancelled.Dispose();
+                    waiting.Cancel = null;
+                }
                 (waiting.Ticket, waiting.Key, waiting.JobDeadline) = (true, ticket.Key, ticket.Deadline);
                 if (ticket.Deadline is not null) _timedJobs.Add(waiting);
             }

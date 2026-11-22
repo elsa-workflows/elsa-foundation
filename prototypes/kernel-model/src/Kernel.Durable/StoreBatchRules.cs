@@ -74,6 +74,11 @@ public static class StoreBatchRules
         {
             if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observed)
                 (preserved ??= []).UnionWith(observed.Preserved);
+            if (turn.FoundationRecoveryJobs is { } observedJobs && (observedJobs.Pending.Count != 0 || observedJobs.Retained.Count != 0))
+            {
+                (preserved ??= []).UnionWith(observedJobs.Pending);
+                preserved.UnionWith(observedJobs.Retained);
+            }
             if (turn.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
             {
                 changed ??= [];

@@ -38,7 +38,7 @@ internal sealed partial class ActorAdapter
         if (timerRecipes.Length + jobRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
         var timers = store.PlanFoundationTimers(row, mode, timerRecipes);
         if (timers is null) return InvalidPlan();
-        var jobs = store.PlanFoundationJobs(row, jobRecipes, timers.Bytes);
+        var jobs = store.PlanFoundationJobs(row, mode, jobRecipes, timers.Bytes);
         if (jobs is null) return InvalidPlan();
 
         Durable.TurnOutcome InvalidPlan() => Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
@@ -62,6 +62,7 @@ internal sealed partial class ActorAdapter
         outcome.FoundationRecoveryJobs = jobs;
         outcome.FoundationWithholds = withholds;
         outcome.Sent.Add(control);
+        outcome.Cancelled.AddRange(jobs.RecalledDeadlines);
         if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
         outcome.ReplyTo(delivery, "started");
         return outcome;

@@ -6,28 +6,31 @@ namespace Kernel.Durable;
 
 internal sealed record ParkJobRecipe(string Key, string? Arguments, long? Deadline);
 internal sealed record ParkJobOpen(IReadOnlyList<ParkJobRecipe> Recipes, string? Registry, long? NextGeneration,
-    string? Restarts, IReadOnlyList<InboxKey> Pending, IReadOnlyList<Message> Writes);
+    string? Restarts, IReadOnlyList<InboxKey> Pending, IReadOnlyList<InboxKey> Retained,
+    IReadOnlyList<InboxKey> RecalledDeadlines, IReadOnlyList<Message> Writes, long Bytes);
 
 public sealed partial class InMemoryStore
 {
     private const int JobDispositionEntryBytes = 40;
 
-    internal ParkJobOpen? PlanFoundationJobs(InstanceRow row, IReadOnlyList<ParkJobRecipe> recipes, long timerBytes)
+    internal ParkJobOpen? PlanFoundationJobs(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkJobRecipe> recipes, long timerBytes)
     {
         var registered = JobRegistry.Read(row.Jobs);
-        if (registered.Count != recipes.Count || recipes.Count > 0 && row.Creation <= 0) return null;
-        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], []);
+        if (registered.Count > recipes.Count || registered.Count > 0 && row.Creation <= 0) return null;
 
         var byKey = new Dictionary<string, ParkJobRecipe>(StringComparer.Ordinal);
         foreach (var recipe in recipes)
             if (recipe.Key is null || !FoundationMetadataLimits.FitsName(recipe.Key, preservesCodeUnits: true) ||
                 !FoundationMetadataLimits.FitsContent(recipe.Arguments) || !byKey.TryAdd(recipe.Key, recipe))
                 return null;
+        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], timerBytes);
+        var discardedResults = new HashSet<string>(StringComparer.Ordinal);
         var pending = new List<InboxKey>();
+        var retained = new List<InboxKey>();
+        var recalls = new List<InboxKey>();
         var writes = new List<Message>();
         var previousRestarts = ReadJobRestarts(row.ParkRestartedJobs);
         var restarts = new SortedDictionary<string, long>(StringComparer.Ordinal);
-        var origin = CreationProtocol.Origin(row.Id, row.Creation);
         var bytes = timerBytes;
         var nextGeneration = row.NextJobGeneration ?? 1;
         lock (_gate)
@@ -43,9 +46,17 @@ public sealed partial class InMemoryStore
                 var result = ticket is { Done: false } ? null : Messages.GetValueOrDefault(resultKey);
                 if (result is not null && (!result.Message.FoundationJobResult || !IsJobEnvelope(result.Message, row, Kinds.JobFinished, generation))) return null;
                 var digest = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(key)));
-                var restart = ticket is not { Done: false } && result is not ({ Done: false } or { KeptBy: ParkKeepReason.Arrived });
+                if (mode == ParkRecoveryMode.Resume && result is { KeptBy: ParkKeepReason.Consumed })
+                {
+                    retained.Add(resultKey);
+                    discardedResults.Add(key);
+                    continue;
+                }
+                var keepsResult = result is { Done: false } or { KeptBy: not null };
+                var retriesTicket = !keepsResult && mode == ParkRecoveryMode.RetryAll && ticket is { KeptBy: ParkKeepReason.Consumed };
+                var restart = ticket is not { Done: false } && !keepsResult && !retriesTicket;
                 var deadline = recipe.Deadline;
-                var timerId = deadline is null ? null : FormattableString.Invariant($"{origin}#recover-job:{nextGeneration}");
+                var timerId = deadline is null ? null : DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, nextGeneration);
                 var payload = Json.Write(new JobTicket(row.Model, key, recipe.Arguments, deadline, timerId));
                 bytes += RestoreWaitAllowance + Encoding.UTF8.GetByteCount(payload);
                 if (bytes > MaxRestoreBytes || !FoundationMetadataLimits.FitsContent(payload)) return null;
@@ -53,11 +64,18 @@ public sealed partial class InMemoryStore
                 if (!restart)
                 {
                     if (ticket is { Done: false }) pending.Add(ticketKey);
+                    else retained.Add(keepsResult ? resultKey : ticketKey);
                     if (previousRestarts.TryGetValue(digest, out var restarted) && restarted == generation)
                         restarts.Add(digest, generation);
                     continue;
                 }
 
+                var oldTimer = ticket?.Message.Payload is not null ? ticket.Message.Read<JobTicket>().Timer : null;
+                oldTimer ??= DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
+                var oldDeadline = InboxKey.Issued(oldTimer);
+                if (Messages.GetValueOrDefault(oldDeadline) is { Done: false, Message: { Kind: Kinds.JobDeadline } expiry } &&
+                    expiry.Target.Id == row.Id && expiry.TargetCreation == row.Creation && expiry.Read<JobDeadline>().Key == key)
+                    recalls.Add(oldDeadline);
                 var newKey = InboxKey.Ticket(row.Id, key, row.Creation, nextGeneration);
                 var job = new Message(newKey.Id, new(row.Id), Kinds.Job, payload, row.Id,
                     TargetCreation: row.Creation, SenderCreation: row.Creation) { JobGeneration = nextGeneration };
@@ -74,8 +92,9 @@ public sealed partial class InMemoryStore
                 restarts.Add(digest, nextGeneration++);
             }
         }
+        registered.RemoveAll(job => discardedResults.Contains(job.Key));
         return writes.Any(message => !FoundationMetadataLimits.FitsComposed(message)) ? null :
-            new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, writes);
+            new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, retained, recalls, writes, bytes);
     }
 
     private static bool IsJobEnvelope(Message message, InstanceRow row, string kind, long generation) =>
