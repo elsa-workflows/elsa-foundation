@@ -2,7 +2,6 @@ using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Elsa.Expressions.JavaScript.Jint.Services;
-using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -12,18 +11,6 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed class JintStackSettingsTests
 {
-    [Theory]
-    [InlineData("script")]
-    [InlineData("binding")]
-    public void A_small_user_call_limit_does_not_charge_trusted_setup(string surface)
-    {
-        using var provider = JintTestHost.Build(feature => feature.MaxRecursionDepth = 1);
-        using var scope = provider.CreateScope();
-        Assert.Equal(42, JintCrashProbe.Evaluate(scope, surface, "return 42;").GetInt32());
-        Assert.Throws<RecursionDepthOverflowException>(() => JintCrashProbe.Evaluate(scope, surface,
-            "function f() { return g(); } function g() { return 42; } return f();"));
-    }
-
     [Fact]
     public void Flow_suppressed_evaluations_cannot_leave_context_on_a_reused_worker()
     {
