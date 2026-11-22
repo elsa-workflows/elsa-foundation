@@ -490,3 +490,28 @@ it("shows one pending batch without enabling continuous Follow latest or moving 
     expect(scrollIntoView).not.toHaveBeenCalled();
   } finally { vi.useRealTimers(); }
 });
+
+it.each(["event", "bookmark"] as const)("does not reclaim newer manual focus when an exact %s read completes", async kind => {
+  let complete!: (value: unknown) => void;
+  const read = kind === "bookmark" ? api.getWorkflowHistoryBookmark : api.getWorkflowHistoryEvent;
+  read.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  render(<><input aria-label="Other history control" /><HistoryInspection context={context} workflowExecutionId="run"
+    selection={{ kind, id: `${kind}-1` }} onSelect={vi.fn()} onBack={vi.fn()} /></>);
+  await vi.waitFor(() => expect(read).toHaveBeenCalled());
+  const other = container.querySelector<HTMLInputElement>("input")!;
+  other.focus(); expect(document.activeElement).toBe(other);
+  complete(kind === "bookmark" ? { coverage: historyCoverage, bookmark: historyBookmark(), readAt: "now" }
+    : { coverage: historyCoverage, event: historyEvent(), readAt: "now" });
+  await vi.waitFor(() => expect(container.textContent).toContain(kind === "bookmark" ? "Inspect creation event" : "Recorded position"));
+  expect(document.activeElement).toBe(other);
+  expect(scrollIntoView).not.toHaveBeenCalled();
+});
+it("focuses the loaded exact bookmark when the original navigation intent is unchanged", async () => {
+  let complete!: (value: unknown) => void;
+  api.getWorkflowHistoryBookmark.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} onSelect={vi.fn()} onBack={vi.fn()} />);
+  await vi.waitFor(() => expect(api.getWorkflowHistoryBookmark).toHaveBeenCalled());
+  complete({ coverage: historyCoverage, bookmark: historyBookmark(), readAt: "now" });
+  await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector("h3")));
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", inline: "nearest" });
+});

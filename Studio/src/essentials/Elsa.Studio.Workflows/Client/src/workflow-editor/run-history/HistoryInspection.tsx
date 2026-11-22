@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, BookmarkCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StudioButton } from "@elsa-workflows/studio-ui";
@@ -6,6 +6,7 @@ import { getWorkflowHistoryBookmark, getWorkflowHistoryEvent, listWorkflowHistor
 import type { RunHistorySelection, RuntimeHistoryBookmark, RuntimeHistoryBookmarkPage, RuntimeHistoryEventDetails } from "../../runtimeHistoryTypes";
 import { formatDuration, humanizeTypeName } from "../../workflowFormatting";
 import { CopyValueButton } from "../executableShared";
+import { clearExecutionFocus, requestExecutionFocus, useExecutionFocusRequest } from "../executionFocus";
 import { HistoryCoverage, HistoryEventList, historyAuthorityLabel, historyEventExplanation, historyEventLabel, historyInstant, isKnownHistoryEvent } from "./historyPresentation";
 import { ActivityHistoryJournal } from "./RunHistoryTimeline";
 import { useHistoryResource } from "./useHistoryResource";
@@ -27,17 +28,28 @@ export function HistoryInspection({ context, workflowExecutionId, selection, onS
 }) {
   const container = useRef<HTMLDivElement>(null);
   const focusedSelection = useRef<string | null>(null);
+  const focusRequest = useExecutionFocusRequest();
   const focusKey = JSON.stringify([runtimeValueContextId(context), workflowExecutionId, selection.kind, selection.id]);
+  useLayoutEffect(() => {
+    requestExecutionFocus(focusRequest, focusOnSelection && focusedSelection.current !== focusKey ? focusKey : null, {
+      scope: focusKey, identity: focusKey,
+      origin: document.activeElement instanceof HTMLElement ? document.activeElement : null
+    });
+    const intent = focusRequest.intent;
+    return () => clearExecutionFocus(focusRequest, intent);
+  }, [focusKey, focusOnSelection, focusRequest]);
   const focusReady = useCallback(() => {
-    if (!focusOnSelection || focusedSelection.current === focusKey) return;
+    const intent = focusRequest.intent;
+    if (!focusOnSelection || focusedSelection.current === focusKey || intent?.targetId !== focusKey) return;
     const heading = container.current?.querySelector<HTMLElement>("[data-history-heading]");
     if (!heading) return;
     focusedSelection.current = focusKey;
+    clearExecutionFocus(focusRequest, intent);
     // Navigate only once the exact recorded target has rendered. Bring its inspection
     // context to the start of the usable pane, including stacked narrow layouts.
     heading.focus({ preventScroll: true });
     heading.closest<HTMLElement>(".wf-history-inspection")?.scrollIntoView?.({ block: "start", inline: "nearest" });
-  }, [focusKey, focusOnSelection]);
+  }, [focusKey, focusOnSelection, focusRequest]);
   const prepared = preparedEvent?.contextIdentity === runtimeValueContextId(context) && preparedEvent.workflowExecutionId === workflowExecutionId
     && preparedEvent.historyEventId === selection.id && preparedEvent.value.event.workflowExecutionId === workflowExecutionId
     && preparedEvent.value.event.historyEventId === selection.id ? preparedEvent : undefined;
