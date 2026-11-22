@@ -488,7 +488,7 @@ test("Activity Definitions stays usable without viewport overflow at 360, 768, a
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/?mode=activity-definitions");
     await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh activity definitions", exact: true })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   }
@@ -1534,7 +1534,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await selectSequenceStep(page, "Write line");
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   const removeConfirmation = page.getByRole("dialog");
-  await expect(removeConfirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await expect(removeConfirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
   await expect(removeConfirmation.getByRole("button", { name: "Remove", exact: true })).toHaveAttribute("data-tone", "danger");
   await removeConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
@@ -1570,7 +1570,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await deleteSequenceStep.focus();
   await deleteSequenceStep.press("Enter");
   let confirmation = page.getByRole("dialog");
-  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await expect(confirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
   await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await expectSavedRevision(page, 2);
@@ -1588,7 +1588,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await removeInspectorActivity.focus();
   await removeInspectorActivity.press("Enter");
   confirmation = page.getByRole("dialog");
-  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await expect(confirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
   await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(0);
   await expectSavedRevision(page, 4);
@@ -1601,7 +1601,7 @@ test("Activity Definition provider contract proposals require review and apply a
 
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
-  await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
+  await expect(suggestions.getByRole("button", { name: "Technical details", exact: true }).first()).toBeAttached();
   await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
   await page.locator("details.ad-interface-suggestions > summary").click();
   await expect(page.getByText("Add input Currency")).toBeVisible();
