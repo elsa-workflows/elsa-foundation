@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.History;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -28,12 +29,13 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
     private readonly InMemoryActivityExecutionStateStore _activityStore = new();
     private readonly PayloadStore _payloadStore = new();
     private readonly InMemoryDurableValueStateStore _durableStore = new();
+    private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly WorkflowIntrinsicExecutor _executor;
 
     public WorkflowIntrinsicAssignmentConversionTests() =>
         _executor = new WorkflowIntrinsicExecutor(_workflowStore, _activityStore, new RuntimeInputBindingResolver(),
             _durableStore,
-            new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()), new FakeTimeProvider(Now),
+            new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore, _workflowStore, new RuntimeHistoryOptions()), new FakeTimeProvider(Now),
             externalPayloadStore: _payloadStore, valueConversionExecutor: new RuntimeValueConversionExecutor(new IntRegistry()),
             inputValidator: new WorkflowExecutableInputValidator(new IntRegistry()));
 
@@ -184,7 +186,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         public bool TryGetTypeOrDefault(string alias, out Type type) => TryGetType(alias, out type);
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external)
+    private async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(ExecutableNode node, object payloadValue, bool external, bool captureHistory = false)
     {
         var scheduled = ActivityState(IntrinsicExecutionId, node.ExecutableNodeId, ActivityExecutionStatus.Scheduled) with { Attempts = [] };
         var isProjection = node.InputBindings["value"].WorkflowRequest?.Path is not null || node.InputBindings["value"].Selection is not null;
@@ -201,6 +203,7 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
             new Dictionary<string, string> { [RuntimeMetadataKeys.InputName] = "source" }));
         await _workflowStore.SaveAsync(new WorkflowExecutionState(WorkflowExecutionId, Identity, WorkflowExecutionStatus.Running, null, Now, Now, Now, null, null, null, null, new Dictionary<string, string>())
         {
+            HistoryCapturePolicy = captureHistory ? new("runtime-history-v3", 3, true, ["ValueCaptured"]) : null,
             RootVariableFrame = new VariableFrameFactory().CreateRoot(WorkflowExecutionId, VariableReference.WorkflowScopeId,
                 new Dictionary<string, ValueEnvelope> { ["source"] = source, ["counter"] = node.InputBindings["value"].TargetType == IntType ? ValueEnvelope.Inline(IntType, JsonSerializer.SerializeToElement(0), ValueProtectionPolicy.InstanceInline) : ValueEnvelope.Null(node.InputBindings["value"].TargetType, ValueProtectionPolicy.InstanceInline) })
         });

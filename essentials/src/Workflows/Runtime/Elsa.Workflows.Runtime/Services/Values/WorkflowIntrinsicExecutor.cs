@@ -473,10 +473,11 @@ public sealed class WorkflowIntrinsicExecutor(
                 _payloadCapturePolicy, startWorkItem.WorkflowExecutionId, intrinsicState.InvocationId, node.ExecutableNodeId,
                 item.Record, item.Frame!.Values[item.Record.VariableKey], occurredAt))
             .ToArray();
-        var inspection = await inspectionAccumulator.BuildProjectionAsync(
+        var inspection = await inspectionAccumulator.BuildProjectionWithSourceAsync(
             completedState,
             checkpointId,
             occurredAt,
+            () => ActivityValueCaptureOrigin.FromWorkItem(startWorkItem),
             outcomeNames,
             valueSnapshots: writeSnapshots.Length == 0 ? null : writeSnapshots,
             metadata: metadata,
