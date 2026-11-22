@@ -1889,18 +1889,30 @@ public sealed partial class EfRuntimeArtifactScopeTests
     [Fact]
     public async Task Corrupt_coordination_payloads_fail_closed_as_invalid_data()
     {
+        static string E(string value) => Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(value);
+        var keyMismatch = $$"""{"leases":{"{{E("key")}}":{"id":"{{E("other")}}","token":"{{E("token")}}","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyTokens = $$"""{"leases":{"{{E("one")}}":{"id":"{{E("one")}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"},"{{E("two")}}":{"id":"{{E("two")}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var defaultExpiry = $$"""{"leases":{"{{E("one")}}":{"id":"{{E("one")}}","token":"{{E("token")}}","expiresAt":"0001-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyGuard = $$"""{"leases":{},"guard":{"operationId":"","token":"{{E("token")}}","expiresAt":"2030-01-01T00:00:00+00:00"}}""";
+        var semanticReasons = new Dictionary<string, string>
+        {
+            [keyMismatch] = "The persisted workflow executable coordination contains an invalid lease.",
+            [emptyTokens] = "The persisted workflow executable coordination contains an invalid lease.",
+            [defaultExpiry] = "The persisted workflow executable coordination contains an invalid lease.",
+            [emptyGuard] = "The persisted workflow executable coordination contains an invalid deletion guard."
+        };
         var payloads = new[]
         {
             "null",
             "{",
             "{\"leases\":null,\"guard\":null}",
-            "{\"leases\":{\"key\":{\"id\":\"other\",\"token\":\"token\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
-            "{\"leases\":{\"one\":{\"id\":\"one\",\"token\":\"\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"},\"two\":{\"id\":\"two\",\"token\":\"\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
+            keyMismatch,
+            emptyTokens,
             "{\"leases\":{\"one\":{\"Id\":\"one\",\"id\":\"one\",\"token\":\"token\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
             "{\"leases\":{\"one\":{\"Token\":\"token\",\"token\":\"token-duplicate\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"guard\":null}",
             "{\"leases\":{\"one\":{\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\",\"expiresAt\":\"2030-01-02T00:00:00+00:00\",\"id\":\"one\",\"token\":\"token\"}},\"guard\":null}",
-            "{\"leases\":{\"one\":{\"id\":\"one\",\"token\":\"token\",\"expiresAt\":\"0001-01-01T00:00:00+00:00\"}},\"guard\":null}",
-            "{\"leases\":{},\"guard\":{\"operationId\":\"\",\"token\":\"token\",\"expiresAt\":\"2030-01-01T00:00:00+00:00\"}}",
+            defaultExpiry,
+            emptyGuard,
             "{\"Leases\":{},\"leases\":{},\"guard\":null}"
         };
 
@@ -1919,6 +1931,7 @@ public sealed partial class EfRuntimeArtifactScopeTests
                 .AsTask());
             Assert.IsNotType<JsonException>(exception);
             Assert.IsNotType<NullReferenceException>(exception);
+            if (semanticReasons.TryGetValue(payload, out var reason)) Assert.Equal(reason, exception.Message);
         }
     }
 

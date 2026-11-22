@@ -2558,7 +2558,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         UserId = userId,
         UserLookupKey = $"{tenantId}\u001f{userId}",
         Status = (int)TenantMembershipStatus.Active,
-        RoleIdsJson = $"[\"{roleId}\"]",
+        RoleIdsJson = EfIdentityStoreSupport.SerializeSet(new HashSet<string>(StringComparer.Ordinal) { roleId }),
         DirectPermissionsJson = "[]",
         Revision = 1,
         SchemaVersion = IdentityIamEfModule.SchemaVersion

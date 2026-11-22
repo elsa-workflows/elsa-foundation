@@ -6,8 +6,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "a7926a224b97c845424a649df6b21c1495f8486c06220c8f0514b16b06dceca3",
-  "compressedSha256": "c296765120f95dac63800a556aafde1a772b47ccee0874426792bb73da866f99",
+  "databaseSha256": "df993836dfec582828b54de7370ed06056e6948f385c14f92d507fb2d783786c",
+  "compressedSha256": "ef30e6a280cb1f7c6ea8488c3a656229ed0a2ec27f76b2c172431504fdb3645a",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -74,8 +74,15 @@
     "changedDescriptors": 4,
     "changedFields": [
       "workflow_executable.ContentJson/activityContract/schemaFingerprint",
-      "workflow_executable.ContentJson/descriptorPayload/typeAlias"
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias",
+      "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
+      "activity_execution_state.ContentJson/completion/contractFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint"
     ],
-    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation"
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
+    "statePinsRegenerated": true,
+    "changedStateContractReferences": 8,
+    "changedBindingFingerprints": 4
   }
 }

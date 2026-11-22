@@ -2,9 +2,11 @@
 
 The checked-in databases are S-9's pre-stable fixture regeneration of the historical captures described below.
 Spec 1207 changes only CLR descriptor member spelling (`TypeAlias` to `typeAlias`) and the corresponding pinned
-activity-contract fingerprints inside the stored executable. Every other database column, including all BPMN
-private state, queue/outbox items, bookmarks, incidents and execution identities, was compared before and after
-and retained exactly. No historical hash verifier or runtime migration was added.
+activity-contract fingerprints inside the stored executable. Activity execution rows carry matching regenerated
+contract-identity, input-snapshot and completion pins, plus binding fingerprints from the current materializer.
+All other database fields, including raw BPMN private state, queue/outbox items, bookmarks, incidents and execution
+identities, are retained exactly. The historical Scheduled probe without an input snapshot keeps its `sha256:test`
+identity. No historical hash verifier or runtime migration was added.
 
 Each receipt's `s9Regeneration` records the original database/compressed digests and the transformation extent;
 its top-level digests identify the current transformed fixture. The capture revisions, old-host controls and

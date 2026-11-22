@@ -987,7 +987,7 @@ public sealed class WorkflowIntrinsicExecutor(
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
         left.CollectionKind == right.CollectionKind &&
         left.SchemaVersion == right.SchemaVersion &&
-        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Schema, right.Schema);
 
     private static RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,

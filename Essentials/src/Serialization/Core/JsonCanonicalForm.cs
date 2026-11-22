@@ -12,6 +12,10 @@ public static class JsonCanonicalForm
     /// <summary>Compares JSON values without narrowing numbers or conflating an absent member with null.</summary>
     public static bool Equals(JsonElement left, JsonElement right) => GetBytes(left).AsSpan().SequenceEqual(GetBytes(right));
 
+    /// <summary>Compares optional JSON values while retaining the distinction between omission and explicit null.</summary>
+    public static bool Equals(JsonElement? left, JsonElement? right) =>
+        left.HasValue == right.HasValue && (!left.HasValue || Equals(left.Value, right!.Value));
+
     internal static byte[] GetBytes(JsonElement value)
     {
         using var stream = new MemoryStream();

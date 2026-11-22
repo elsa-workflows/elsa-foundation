@@ -689,7 +689,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         StringComparer.Ordinal.Equals(left.Alias, right.Alias) &&
         left.CollectionKind == right.CollectionKind &&
         left.SchemaVersion == right.SchemaVersion &&
-        StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
+        JsonCanonicalForm.Equals(left.Schema, right.Schema);
 
     private static string ComputeBindingFingerprint(ExecutableNode node)
     {

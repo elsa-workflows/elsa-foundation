@@ -263,7 +263,7 @@ public static class EfIdentityStoreSupport
         Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(values, _ => null));
 
     internal static System.Text.Json.JsonElement SetProjection(IReadOnlySet<string> values) =>
-        Elsa.Serialization.Core.JsonHashInput.SerializeToElement(values.Order(StringComparer.Ordinal).ToArray());
+        Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(values.Order(StringComparer.Ordinal).ToArray(), _ => null);
 
     /// <summary>Returns the reservation unit implicated by a provider-reported unique violation.</summary>
     public static string? UniqueConflictUnit(Exception exception)

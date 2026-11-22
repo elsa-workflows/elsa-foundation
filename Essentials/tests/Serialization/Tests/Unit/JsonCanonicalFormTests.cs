@@ -6,6 +6,18 @@ namespace Elsa.Serialization.Tests.Unit;
 
 public sealed class JsonCanonicalFormTests
 {
+    [Fact]
+    public void Optional_values_keep_omission_distinct_from_explicit_null()
+    {
+        using var nil = JsonDocument.Parse("null");
+        using var schema = JsonDocument.Parse("{\"maximum\":1.0,\"title\":\"\\u0061\"}");
+        using var same = JsonDocument.Parse("{\"title\":\"a\",\"maximum\":1e0}");
+        Assert.True(JsonCanonicalForm.Equals((JsonElement?)null, null));
+        Assert.False(JsonCanonicalForm.Equals((JsonElement?)null, nil.RootElement));
+        Assert.True(JsonCanonicalForm.Equals((JsonElement?)nil.RootElement, nil.RootElement));
+        Assert.True(JsonCanonicalForm.Equals((JsonElement?)schema.RootElement, same.RootElement));
+    }
+
     [Theory]
     [InlineData("{\"total\":1.0,\"name\":\"Ren\\u00e9\"}", "{\"name\":\"René\",\"total\":1}", true)]
     [InlineData("9007199254740993", "9007199254740992", false)]

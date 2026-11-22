@@ -7,8 +7,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "65b6a8e4419eba42c68c3714fa4796b7badd1ee7fd498deb1da31284d65e65c4",
-  "compressedSha256": "b62a3362c753e491803e5bd820dbdcfe2c16ffcef335f2e2ad16b6c22ca95bb6",
+  "databaseSha256": "990554eed705ba2e5249e20990214b8c27ae48707326fdc687e7792c1e6f5513",
+  "compressedSha256": "b11939c9f2151a780a175522da427d928496c0573dbae81fd72c6505e8bdbfd5",
   "oldHostControl": "fresh old provider ignores canceled-token fault but leaves original incident blocking, workflow Faulted and BPMN/final catch parked; known legacy incident-absorption gap",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -90,8 +90,15 @@
     "changedDescriptors": 8,
     "changedFields": [
       "workflow_executable.ContentJson/activityContract/schemaFingerprint",
-      "workflow_executable.ContentJson/descriptorPayload/typeAlias"
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias",
+      "activity_execution_state.ContentJson/contractIdentity/schemaFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/contractFingerprint",
+      "activity_execution_state.ContentJson/completion/contractFingerprint",
+      "activity_execution_state.ContentJson/inputSnapshot/bindingFingerprint"
     ],
-    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation"
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation",
+    "statePinsRegenerated": true,
+    "changedStateContractReferences": 7,
+    "changedBindingFingerprints": 3
   }
 }
