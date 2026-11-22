@@ -47,7 +47,7 @@ public sealed class DispatchWorkflowHistoryOptionalSourceTests
         else
         {
             var result = await owner.EnrichAsync(commit);
-            Assert.Same(commit, result); Assert.Null(result.HistorySourceFacts); Assert.Null(result.PostCommitIntents.Single().HistoryCausation);
+            Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(commit), RuntimeCheckpointCommitFingerprint.Compute(result)); Assert.Null(result.HistorySourceFacts); Assert.Null(result.PostCommitIntents.Single().HistoryCausation);
         }
     }
 }

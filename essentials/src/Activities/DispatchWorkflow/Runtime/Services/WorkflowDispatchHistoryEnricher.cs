@@ -21,16 +21,16 @@ internal sealed class WorkflowDispatchHistoryEnricher(IPersistenceAccessContextA
         if (source is null || commit.HistoryBatches is { Count: > 0 } ||
             commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush) || commit.StateChanges.WorkflowDispatches.Count == 0)
             return commit;
-        var context = AccessContext;
+        var context = access?.Current;
         PersistenceScope? scope = null;
         var owned = new Dictionary<string, RuntimeHistoryCausation>(StringComparer.Ordinal);
         var enriched = await source.AddFactsAsync(commit, policy =>
         {
             if (policy is not { PolicyId: "runtime-history-v5", Version: 5 }) return [];
-            if (AccessContext != context) throw new InvalidOperationException("Dispatch history access changed.");
             var facts = Facts(commit, policy).ToArray();
             if (facts.Length == 0) return [];
-            scope = context.RequireScope();
+            if (AccessContext != context) throw new InvalidOperationException("Dispatch history access changed.");
+            scope = AccessContext.RequireScope();
             foreach (var fact in facts)
             {
                 var dispatch = commit.StateChanges.WorkflowDispatches.Single(change => change.StateId == fact.SubjectId).State;

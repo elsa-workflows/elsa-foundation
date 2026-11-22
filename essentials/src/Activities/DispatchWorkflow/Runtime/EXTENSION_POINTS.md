@@ -63,3 +63,5 @@ Failed admission has no called root: the pre-resume validator permits ordinary `
 This module contribution does not itself qualify composed Studio UX or all providers; the exact owning evidence remains in Spec1211.
 
 The default start and bookmark-resume transports must explicitly implement `CanDispatchChildHistorySource` and carry the non-serialized in-process source handle through awaited preparation. Each revalidates actual physical responsibility after actor activation and before enqueue; legacy/custom transports default to refusal. This does not serialize claim/owner/fence data into a command or grant native execution authority. Required parent receipt/disposition history failures likewise leave their source owed without spending delivery budget.
+
+Optional source composition resolves access only for actual retained v5 child facts. An absent policy or retained v3/v4 source extension leaves the original semantic checkpoint fingerprint unchanged even when no access service is installed. Captured v5 responsibility still requires explicit ordinary scope and unchanged access across the source read.
