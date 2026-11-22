@@ -797,7 +797,7 @@ def host(directory, dll, url, ready_path, log, env, *, cancelled=None):
             # an actual zero exit code, so a forced kill never qualifies a host restart.
             _base.stop_group(process, graceful_timeout=45)
 
-def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
+def run(output, suite='standalone-triggers', journey=None, studio_shape='coordinated-sdk'):
     output.mkdir(parents=True, exist_ok=False)
     execution_suite = ('existing' if journey in JOURNEYS else 'standalone-triggers') if journey else suite
     sha = subprocess.check_output(['git', '-c', 'core.fsmonitor=false', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
@@ -924,7 +924,7 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
                                        ELSA_WORKBENCH_URL=backend_url, UX_BACKEND_URL=backend_url,
                                        UX_HOST_CONTROL=str(owned_backend.mailbox), UX_HOST_CONTROL_TOKEN=owned_backend.token,
                                        UX_ACCEPTANCE_OUT=str(output), UX_SOURCE_SHA=sha, UX_ACCEPTANCE_SUITE=execution_suite)
-                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', str(FIXTURES_ROOT / 'Studio/tests/acceptance/playwright.config.ts')]
+                    browser_command = ['pnpm', 'exec', 'playwright', 'test', '--max-failures=1', '--config', str(FIXTURES_ROOT / 'Studio/tests/acceptance/playwright.config.ts')]
                     if journey:
                         browser_command.extend(['--grep', re.escape(journey).replace(r'\ ', ' ')])
                     command(browser_command, output / 'journeys.log', cwd=ROOT / 'Studio', env=browser_env)
@@ -954,7 +954,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True, help='New evidence directory outside disposable stores')
     parser.add_argument('--suite', choices=['standalone-triggers'], default='standalone-triggers',
                         help='Finite required inventory; a selected feature suite never certifies the other journeys')
-    parser.add_argument('--journey', choices=sorted(JOURNEYS | set(TRIGGER_CAPTURES)),
+    parser.add_argument('--journey', choices=sorted(TRIGGER_CAPTURES),
                         help='Run one complete journey across its required projects; the report certifies only that selected journey')
     parser.add_argument('--studio-shape', choices=['application', 'coordinated-sdk'], default='coordinated-sdk',
                         help='Owned SDK composition explicitly enrolls its fresh native store for protected optional editor assets')

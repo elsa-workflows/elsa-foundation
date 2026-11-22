@@ -128,6 +128,7 @@ async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView,
     await expect(journey.page.getByRole("region", { name: "Current BPMN work", exact: true })).toBeVisible();
   } else {
     await expect(journey.page.getByRole("group", { name: "Run workspace actions", exact: true })).toContainText(inspection.instance.status);
+    await journey.page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Diagram", exact: true }).click();
     await expect(journey.page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
     await expect(journey.page.getByRole("tabpanel").getByText("Loading workflow run...", { exact: true })).toHaveCount(0);
     await expect(journey.page.getByRole("tabpanel").getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
