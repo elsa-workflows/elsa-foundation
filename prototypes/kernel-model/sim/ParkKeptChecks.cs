@@ -273,6 +273,8 @@ internal static class ParkKeptChecks
         await CheckTerminalCohort(takeover: false, check, cutAfter: true);
         await CheckTerminalChildNotice(keptBeforeResume: false, check);
         await CheckTerminalChildNotice(keptBeforeResume: true, check);
+        await CheckTerminalChildNotice(keptBeforeResume: true, check, holdNotices: true);
+        await CheckTerminalChildNotice(keptBeforeResume: false, check, ordinaryEnd: true);
     }
 
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
@@ -495,12 +497,16 @@ internal static class ParkKeptChecks
 
     private sealed record RecoveryTally(long Restored, long Cleared);
 
-    private static async Task CheckTerminalChildNotice(bool keptBeforeResume, Action<bool, string> check)
+    private static async Task CheckTerminalChildNotice(bool keptBeforeResume, Action<bool, string> check,
+        bool holdNotices = false, bool ordinaryEnd = false)
     {
         const long initial = 1_701_400_040_000L;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = true };
+        var probe = new Probe(withholdFaulted: !holdNotices && !ordinaryEnd)
+        {
+            FaultOnAdvance = !ordinaryEnd, HoldTerminalNotices = holdNotices
+        };
         var scope = new Contract.BoundScope("terminal-child");
         var worker = new Worker("terminal-parent", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
@@ -510,35 +516,67 @@ internal static class ParkKeptChecks
         var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "parent", Contract.Kinds.Start);
         var parent = new Contract.Target.Ref(birth.Actor!.Value);
         await Pump(owner);
-        await ingress.SendAsync(scope, parent, "spawn", "spawn");
-        await Pump(owner);
-        var child = new Contract.Target.Ref(probe.Child!.Value);
+        var children = new List<Contract.Target.Ref>();
+        if (!ordinaryEnd) await Spawn();
+        if (holdNotices) await Spawn();
         await ingress.SendAsync(scope, parent, "park", "poison");
         await Pump(owner);
+        if (holdNotices) await FinishChildren();
         await ingress.SendAsync(scope, parent, "end", "advance");
         if (keptBeforeResume)
         {
-            await FinishChild();
-            check(store.Messages.Values.Any(row => row.Message.Kind == Contract.Kinds.ChildFinished && row.KeptBy == ParkKeepReason.Arrived),
+            if (!holdNotices) await FinishChildren();
+            await Pump(owner);
+            check(store.Messages.Values.Count(row => row.Message.Kind == Contract.Kinds.ChildFinished && row.KeptBy == ParkKeepReason.Arrived) == children.Count,
                 "the authentic final child notice is kept before Resume");
         }
         else await Pump(owner);
         var reader = new ActorList(store, 10);
         var parked = (await reader.GetAsync(scope, parent.Actor))!;
         await ingress.SendAsync(scope, parent, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(parked.Selection!)));
+        if (holdNotices)
+        {
+            var id = store.ReadFoundationActor(scope.Tenant, parent.Actor.Id).Actor!.Row.Id;
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+            await ingress.SendAsync(scope, parent, "query", "terminal-query");
+        }
         for (var pass = 0; pass < 8; pass++) { now += 11; await Pump(owner); }
-        if (!keptBeforeResume) await FinishChild();
+        if (ordinaryEnd)
+        {
+            await Spawn();
+            await ingress.SendAsync(scope, parent, "end-outside-recovery", "finish-child");
+            await Pump(owner);
+        }
+        if (!keptBeforeResume) await FinishChildren();
         var terminal = store.ReadFoundationActor(scope.Tenant, parent.Actor.Id).Actor!;
-        check(terminal is { Park: null, Row: { ParkRecovery: null, Children: null, Status: InstanceStatus.Faulted } } &&
-            probe.Notices.Count == 0, "an authentic final child notice settles a recovered terminal registry without model entry");
+        check(terminal is { Park: null, Row: { ParkRecovery: null, Children: null } } &&
+            terminal.Row.Status == (ordinaryEnd ? InstanceStatus.Finished : InstanceStatus.Faulted) &&
+            terminal.Row.EndedDuringParkRecovery != ordinaryEnd && probe.Notices.Count == (ordinaryEnd ? 1 : 0),
+            ordinaryEnd ? "an actor that ends after a running recovery still receives its child's notice in the model" :
+                "authentic final child notices settle the terminal registry without model entry");
+        if (holdNotices)
+            check(probe.HeldChildOffers >= 2 && probe.TerminalQueryOffer.SequenceEqual(["terminal-query"]),
+                "two held child notices settle alone and do not consume the queued terminal query");
         var selected = (await reader.GetAsync(scope, parent.Actor))!.Selection!;
         await ingress.SendAsync(scope, parent, "delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selected)));
         await Pump(owner);
         check(store.Instances[terminal.Row.Id].Retired, "the settled child no longer protects the parent from a qualified delete");
 
-        async Task FinishChild()
+        async Task Spawn()
         {
-            await ingress.SendAsync(scope, child, "finish-child", "finish-child");
+            await ingress.SendAsync(scope, parent, $"spawn-{children.Count}", "spawn");
+            await Pump(owner);
+            children.Add(new(probe.Child!.Value));
+        }
+
+        async Task FinishChildren()
+        {
+            for (var index = 0; index < children.Count; index++)
+                await ingress.SendAsync(scope, children[index], $"finish-{index}", "finish-child");
             await Pump(owner);
         }
     }
@@ -1147,6 +1185,8 @@ internal static class ParkKeptChecks
         public int RecoveredArrivals { get; private set; }
         public bool FaultOnAdvance { get; init; }
         public bool HoldTerminalInput { get; init; }
+        public bool HoldTerminalNotices { get; init; }
+        public int HeldChildOffers { get; private set; }
         public string[] TerminalQueryOffer { get; private set; } = [];
         public bool ThrowOnRunningWithholds { get; set; }
         public bool HoldAdvance { get; init; }
@@ -1179,6 +1219,11 @@ internal static class ParkKeptChecks
             }
             foreach (var message in turn.Inbox)
                 if (message.Kind == "spawn") Child = turn.Start(new(Type, "child", null));
+                else if (message.Kind == Contract.Kinds.ChildFinished && HoldTerminalNotices)
+                {
+                    HeldChildOffers++;
+                    turn.Hold(message);
+                }
                 else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
                 else if (message.Kind == "finish-child") turn.End(Contract.ActorStatus.Finished);
             if (turn.Inbox.Any(message => message.Kind == "advance"))

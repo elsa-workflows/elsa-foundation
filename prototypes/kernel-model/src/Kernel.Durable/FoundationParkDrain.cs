@@ -72,6 +72,8 @@ public sealed partial class InMemoryStore
         }
         if (previous?.ParkRecovery is null && next is { ParkRecovery: not null })
             return ValidateRecoveryOpen(turn, previous, epochs, now);
+        if (!turn.Delete && next is not null && next.EndedDuringParkRecovery != (previous?.EndedDuringParkRecovery ?? false))
+            throw InvalidDrain();
         if (next is not null && next.ParkRecovery != previous?.ParkRecovery || previous?.ParkRecovery is not null &&
             (turn.Delete || turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain)))
             throw InvalidDrain();

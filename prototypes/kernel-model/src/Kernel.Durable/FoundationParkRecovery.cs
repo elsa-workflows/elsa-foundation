@@ -150,7 +150,10 @@ public sealed partial class InMemoryStore
         {
             ParkRelease? remaining = running && FirstUnheldRecoveryInput(previous, release, _ => false) is not null ? release : null;
             if (page is not null || turn.Sent.Count != 0 || suspended ||
-                next != (previous with { Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining }) ||
+                next != (previous with
+                {
+                    Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
+                }) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
                 !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();

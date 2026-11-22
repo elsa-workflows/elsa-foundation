@@ -80,7 +80,10 @@ internal sealed partial class ActorAdapter
             }
             var cohort = running && store.FirstUnheldRecoveryInput(row, release, _ => false) is not null
                 ? release : (Durable.ParkRelease?)null;
-            var completed = ParkCheckpoint(input, row, row with { ParkRecovery = null, ParkCohort = cohort });
+            var completed = ParkCheckpoint(input, row, row with
+            {
+                ParkRecovery = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
+            });
             completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
             return completed;
         }

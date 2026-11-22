@@ -56,16 +56,16 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             : SettlesEndedChildNotice(row, delivery.Message) ||
                 delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
 
-    private bool SettlesEndedChildNotice(Durable.InstanceRow row, Durable.Message message) =>
-        message.Kind == Contract.Kinds.ChildFinished && row.Status != Durable.InstanceStatus.Running &&
-        row.ParkResolutionGeneration > 0 && row.ParkRecovery is null && !row.ParkDiscarded &&
-        store.FoundationTurnHeader(row).Park is null;
+    private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
+        message.Kind == Contract.Kinds.ChildFinished && row is
+            { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
+        SettlesEndedChildNotice(row, delivery.Message) ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || IsParked(row)));
 
