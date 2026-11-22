@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Models;
 using Elsa.Activities.Testing;
@@ -125,6 +126,7 @@ public sealed class SwitchLifecycleTests
         var bookmarks = await Bookmarks(harness);
         Assert.Equal(2, bookmarks.Count);
         var run = await Resume(harness, executable.Identity, Assert.Single(bookmarks, item => item.ExecutableNodeId == "c"), @break: true);
+        run.AssertOutcomes("c", ActivityOutcomes.Break);
         run.AssertOutcomes("switch", ActivityOutcomes.Break);
         Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("a").Status);
         Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("nested-wait").Status);
@@ -276,6 +278,8 @@ public sealed class SwitchLifecycleTests
 public sealed record SwitchWaitState(string Marker);
 public sealed record SwitchWaitTrigger(bool Released, bool Break = false);
 
+[ActivityOutcome(ActivityOutcomes.Done)]
+[ActivityOutcome(ActivityOutcomes.Break)]
 public sealed class SwitchWaitActivity : StatefulActivity<ActivityUnit, SwitchWaitState, SwitchWaitTrigger>
 {
     protected override ValueTask<ActivityTransition<ActivityUnit, SwitchWaitState>> ExecuteAsync(ActivityExecutionContext context) =>

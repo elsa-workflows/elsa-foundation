@@ -480,6 +480,7 @@ public sealed class Elsa3NodeRewriteTests
     [Theory]
     [InlineData("expression")]
     [InlineData("variable")]
+    [InlineData("variable-syntax")]
     [InlineData("memory")]
     public async Task Parallel_cannot_make_an_unanalyzed_dynamic_script_body_proven_safe(string form)
     {
@@ -488,6 +489,8 @@ public sealed class Elsa3NodeRewriteTests
         {
             "expression" => Expression("JavaScript", JsonSerializer.Serialize(source)),
             "variable" => Expression("JavaScript", "getVariable('code')"),
+            "variable-syntax" => JsonSerializer.SerializeToElement(new { typeName = "String",
+                expression = new { type = "Variable", value = new { id = "code-memory", name = "code", typeName = "String" } } }),
             _ => Captured("code-memory", "String")
         }));
         var parallel = Activity("parallel", "Elsa.Parallel");
