@@ -268,7 +268,8 @@ test("the independent move dialog contains Tab and Shift+Tab", async ({ page }) 
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
   await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
   const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
-  const first = move.getByRole("radio", { name: "Unfiled", exact: true });
+  await expect(move.getByRole("radio", { name: "Unfiled", exact: true })).toBeFocused();
+  const first = move.getByRole("button", { name: "Close dialog", exact: true });
   const last = move.getByRole("button", { name: "Move", exact: true });
   await last.focus();
   await page.keyboard.press("Tab");
