@@ -54,32 +54,28 @@
      where the former literal #fff had no theme-aware token backing it. */
   --wf-switch-knob: oklch(0.99 0 0);
 
-  /* Radii — reuse the host scale, fall back to standalone values when bundled alone. */
-  --wf-radius-sm: var(--radius-sm, 4px);
-  --wf-radius: var(--radius, 6px);
-  --wf-radius-md: var(--radius-md, 8px);
-  --wf-radius-lg: var(--radius-lg, 8px);
-  --wf-radius-xl: var(--radius-xl, 10px);
+  /* Shared control and panel radii. */
+  --wf-radius-sm: var(--studio-radius-sm);
+  --wf-radius: var(--studio-radius);
+  --wf-radius-md: var(--studio-radius-md);
+  --wf-radius-lg: var(--studio-radius-lg);
+  --wf-radius-xl: var(--studio-radius-lg);
 
-  /* Elevation — derived from the host shadow scale so it adapts per theme. */
-  --wf-shadow-sm: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
-  --wf-shadow-node: var(--shadow-md, 0 10px 24px rgba(15, 23, 42, 0.10));
-  --wf-shadow-menu: var(--shadow-lg, 0 12px 24px rgba(15, 23, 42, 0.12));
-  --wf-shadow-overlay: var(--shadow-xl, 0 24px 60px rgba(15, 23, 42, 0.20));
+  --wf-shadow-sm: var(--studio-shadow-sm);
+  --wf-shadow-node: var(--studio-shadow-md);
+  --wf-shadow-menu: var(--studio-shadow-lg);
+  --wf-shadow-overlay: var(--studio-shadow-xl);
 
-  /* Focus/selection ambient drop-shadow tint (foreground-derived so it tracks the theme)
-     and the modal backdrop scrim (literal anchor, same pattern as --secrets-scrim). */
   --wf-drop-tint: color-mix(in srgb, var(--wf-text) 14%, transparent);
   --wf-drop-tint-strong: color-mix(in srgb, var(--wf-text) 16%, transparent);
-  --wf-modal-scrim: rgba(2, 6, 23, 0.58);
+  --wf-modal-scrim: color-mix(in srgb, var(--studio-text) 58%, transparent);
 
-  /* Bounded type scale (mirrors the host typography tokens). */
-  --wf-text-2xs: 10px;
-  --wf-text-xs: 11px;
-  --wf-text-sm: 12px;
-  --wf-text-base: var(--studio-body-size, 13px);
-  --wf-text-title: var(--studio-section-title-size, 16px);
-  --wf-text-page: var(--studio-page-title-size, 20px);
+  --wf-text-2xs: var(--studio-label-size);
+  --wf-text-xs: var(--studio-label-size);
+  --wf-text-sm: var(--studio-label-size);
+  --wf-text-base: var(--studio-body-size);
+  --wf-text-title: var(--studio-section-title-size);
+  --wf-text-page: var(--studio-page-title-size);
 
   /* Eyebrow / label recipe — softened from the former uppercase + 800 texture.
      Flip --wf-label-transform to `none` for fully sentence-case labels. */
