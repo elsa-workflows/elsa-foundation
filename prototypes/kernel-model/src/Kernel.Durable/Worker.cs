@@ -1265,7 +1265,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 _options.OnObservedDelivery?.Invoke(row);
             }
             Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
-                suspect: !row.PersistedHold && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
+                // A released hold is local to the owner that made it. A cold owner requalifies it by trial.
+                suspect: (!row.PersistedHold || row.ReleasedBy is not null) && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
                 cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy);
             if (!LeaseUsable()) return;
         }
@@ -1480,9 +1481,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
-    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) && (WithheldByRecovery(suspect, slot) ||
-        !CohortInput(suspect, slot) && slot.CurrentRow?.ParkCohort is not null && FirstUnheldRecoveryInput(slot) is not null ||
-        Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) && CreationError(slot, suspect.Message) is null;
+    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) &&
+        (WithheldByRecovery(suspect, slot) || WaitsForCohortHead(suspect, slot) || Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) &&
+        CreationError(slot, suspect.Message) is null;
+
+    private bool WaitsForCohortHead(Delivery item, Slot slot)
+    {
+        var cohort = CohortInput(item, slot);
+        return (cohort || slot.CurrentRow?.ParkCohort is not null) && FirstUnheldRecoveryInput(slot) is { } head &&
+            (!cohort || RecoveryOrder(item) != head);
+    }
 
     // Exhausted input blocks new physical jobs and job trials. Ordinary predecessor suspects may
     // still be fenced so an earlier due timer cannot strand the pending Park.
@@ -1711,6 +1719,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 continue;
             }
             if (item.UncheckedReference is not null || Awaits(item)) break;
+            if (CohortInput(item, slot) && PoisonInput(item, slot))
+            {
+                // Resolve the prefix first. Only already-held predecessors can join the poison turn.
+                if (due.TrueForAll(predecessor => predecessor.Held)) due.Add(item);
+                break;
+            }
             var command = item.Message.IsControl;
             var identityReply = CreationError(slot, item.Message) is not null;
             var continuingStart = !identityReply && slot.Row?.PendingStart == item.Message.InboxKey;

@@ -186,7 +186,7 @@ test("Activity Definition input bindings select a public input directly from Lit
   await bindingTool.click();
   const bindings = page.locator(".wf-js-input-bindings");
   await expect(bindings).toBeVisible();
-  const picker = bindings.getByLabel("Add activity input");
+  const picker = bindings.getByLabel("Use input directly");
   await expect(picker).toBeVisible();
   await expect(syntax).toBeVisible();
   await expect(bindingTool).toHaveAttribute("aria-expanded", "true");
@@ -212,6 +212,109 @@ test("Activity Definition input bindings select a public input directly from Lit
   await page.screenshot({ path: test.info().outputPath("activity-input-bindings-narrow.png"), fullPage: true });
 });
 
+test("Activity Definition empty JavaScript inputs bind directly and restore the selected key after reopening", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockGraphAuthoring(page);
+  await page.goto("/?mode=activity-definition-graph-authoring&theme=dark&bindings=empty-javascript");
+
+  const node = page.locator("[data-graph-node-id='write-line-1']");
+  await node.click();
+  const syntax = page.getByRole("button", { name: "Message expression syntax: JavaScript", exact: true });
+  await expect(syntax).toBeVisible();
+  const bindingTool = page.locator(".wf-input-bindings-toggle");
+  await bindingTool.click();
+
+  const bindings = page.locator(".wf-js-input-bindings");
+  const picker = bindings.getByLabel("Use input directly");
+  await expect(bindings.getByLabel("Bind as JavaScript argument")).toBeVisible();
+  await picker.selectOption("customer-id");
+  await expect(page.getByRole("button", { name: "Message expression syntax: Request input", exact: true })).toBeVisible();
+  await expect(picker).toHaveValue("customer-id");
+
+  await page.getByRole("tab", { name: "Code" }).click();
+  const code = page.getByRole("textbox", { name: "Activity Definition JSON" });
+  const draft = JSON.parse(await code.inputValue()) as {
+    implementation: {
+      payload: {
+        rootActivity: {
+          structure: {
+            payload: {
+              activities: Array<{ inputs?: Array<{ referenceKey: string; value?: unknown }> }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  expect(draft.implementation.payload.rootActivity.structure.payload.activities[0]?.inputs?.find(input => input.referenceKey === "message")?.value).toMatchObject({
+    expressionType: "WorkflowRequest",
+    value: { memberKey: "customer-id" }
+  });
+
+  await page.getByRole("tab", { name: "Designer" }).click();
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await expect(page.locator(".wf-input-bindings-toggle")).toHaveCount(0);
+  await node.click();
+  await expect(page.getByRole("button", { name: "Message expression syntax: Request input", exact: true })).toBeVisible();
+  await page.locator(".wf-input-bindings-toggle").click();
+  await expect(page.locator(".wf-js-input-bindings").getByLabel("Use input directly")).toHaveValue("customer-id");
+});
+
+test("Activity Definition empty JavaScript inputs can bind as an argument before entering the expression", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockGraphAuthoring(page);
+  await page.goto("/?mode=activity-definition-graph-authoring&theme=dark&bindings=empty-javascript");
+
+  const node = page.locator("[data-graph-node-id='write-line-1']");
+  await node.click();
+  const bindingTool = page.locator(".wf-input-bindings-toggle");
+  await bindingTool.click();
+
+  const bindings = page.locator(".wf-js-input-bindings");
+  const argumentPicker = bindings.getByLabel("Bind as JavaScript argument");
+  await expect(bindings.getByLabel("Use input directly")).toBeVisible();
+  await argumentPicker.selectOption("CustomerId");
+  await expect(page.getByRole("button", { name: "Message expression syntax: JavaScript", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
+  const source = page.locator(".cm-content[contenteditable='true']");
+  await expect(source).toBeVisible();
+  await expect(source).toHaveText("");
+  await source.fill("args.CustomerId");
+
+  await page.getByRole("tab", { name: "Code" }).click();
+  const code = page.getByRole("textbox", { name: "Activity Definition JSON" });
+  const draft = JSON.parse(await code.inputValue()) as {
+    implementation: {
+      payload: {
+        rootActivity: {
+          structure: {
+            payload: {
+              activities: Array<{ inputs?: Array<{ referenceKey: string; value?: unknown }> }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  expect(draft.implementation.payload.rootActivity.structure.payload.activities[0]?.inputs?.find(input => input.referenceKey === "message")?.value).toMatchObject({
+    expressionType: "JavaScript",
+    value: {
+      language: "JavaScript",
+      source: "args.CustomerId",
+      parameters: { CustomerId: { kind: "WorkflowRequest", memberKey: "customer-id" } }
+    }
+  });
+
+  await page.getByRole("tab", { name: "Designer" }).click();
+  await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
+  await node.click();
+  await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
+  const reopenedSource = page.locator(".cm-content[contenteditable='true']");
+  await expect(reopenedSource).toHaveText("args.CustomerId");
+  await page.locator(".wf-input-bindings-toggle").click();
+  await expect(page.locator(".wf-js-input-binding-list")).toContainText("CustomerId → args.CustomerId");
+});
+
 test("Activity Definition input bindings use a compact inspector tool beside conversion", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await mockGraphAuthoring(page);
@@ -231,7 +334,7 @@ test("Activity Definition input bindings use a compact inspector tool beside con
   await expect(bindingTool).toHaveAttribute("aria-expanded", "true");
   await expect(bindings).toBeVisible();
   await expect(bindings.locator(".wf-js-input-binding-list")).toContainText("CustomerId → args.customer");
-  await bindings.getByLabel("Add activity input").focus();
+  await bindings.getByLabel("Bind as JavaScript argument").focus();
   await page.keyboard.press("Escape");
   await expect(bindingTool).toHaveAttribute("aria-expanded", "false");
   await expect(bindingTool).toBeFocused();

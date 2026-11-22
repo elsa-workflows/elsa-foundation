@@ -49,6 +49,7 @@ internal abstract class ActivitiesDesignDomainSeamsBase :
     public Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDefinitionMutationView>(command, cancellationToken);
     public Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(UpdateReusableActivityDefinition command, CancellationToken cancellationToken) => CommandAsync<ActivityDefinitionIdentityView>(command, cancellationToken);
     public Task ArchiveDefinitionAsync(ArchiveReusableActivityDefinition command, CancellationToken cancellationToken) => OnVoidCommandAsync(command, cancellationToken);
+    public Task RestoreDefinitionAsync(RestoreReusableActivityDefinition command, CancellationToken cancellationToken) => OnVoidCommandAsync(command, cancellationToken);
     public Task<ReusableActivityDraftView> CreateDraftAsync(CreateReusableActivityDraft command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDraftView>(command, cancellationToken);
     public Task<ReusableActivityDraftView> ReplaceDraftAsync(ReplaceReusableActivityDraft command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDraftView>(command, cancellationToken);
     public Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken) => CommandAsync<ReusableActivityDraftView>(command, cancellationToken);

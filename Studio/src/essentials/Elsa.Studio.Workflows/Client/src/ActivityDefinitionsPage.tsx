@@ -19,7 +19,7 @@ import {
   type ActivityDefinitionManagementView
 } from "./activityDefinitionTypes";
 import { isActivityDefinitionTimestamp, formatActivityVersion, resolveActivityDefinitionTitle } from "./workflowFormatting";
-import { activityDesignKeys, archiveActivityDefinition, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityAuthoringCapabilities, useActivityDefinitions } from "./api/activityDesign";
+import { activityDesignKeys, archiveActivityDefinition, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, restoreActivityDefinition, useActivityAuthoringCapabilities, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { WorkflowListIdentifiers } from "./workflow-editor/WorkflowListIdentifiers";
@@ -56,6 +56,7 @@ type ActivityCollectionHistoryContext = {
   providerInput: string;
   providerKey: string;
   authority: ActivityDefinitionCollectionRequest["authority"];
+  archivedOnly: boolean;
   pageSize: PageSize;
   cursorStack: (string | null)[];
   cursorIndex: number;
@@ -259,6 +260,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const search = useDebouncedValue(searchInput, 250, restoredContext?.search);
   const providerKey = selectedProviderKey || "";
   const [authority, setAuthority] = useState<ActivityDefinitionCollectionRequest["authority"]>(restoredContext?.authority ?? "Design");
+  const [archivedOnly, setArchivedOnly] = useState(restoredContext?.archivedOnly ?? false);
   const [pageSize, setPageSize] = useState<PageSize>(restoredContext?.pageSize ?? 25);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>(restoredScopeMatches ? restoredContext?.cursorStack ?? [null] : [null]);
   const [cursorIndex, setCursorIndex] = useState(restoredScopeMatches ? restoredContext?.cursorIndex ?? 0 : 0);
@@ -270,18 +272,21 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const [refreshPending, setRefreshPending] = useState(false);
   const [archivingDefinitionId, setArchivingDefinitionId] = useState<string | null>(null);
   const [archiveFailure, setArchiveFailure] = useState<{ definition: ActivityDefinitionManagementView; message: string } | null>(null);
+  const [restoringDefinitionId, setRestoringDefinitionId] = useState<string | null>(null);
+  const [restoreFailure, setRestoreFailure] = useState<{ definition: ActivityDefinitionManagementView; message: string } | null>(null);
   const refreshPendingRef = useRef(false);
   const archiveInFlightRef = useRef(false);
+  const restoreInFlightRef = useRef(false);
   const observation = useRef({ fetching: false, startedAt: 0 });
   const entryId = useRef(restoredContext?.entryId ?? createActivityHistoryEntryId());
   const scopeRef = useRef({ baseUrl: restoredContext?.baseUrl ?? baseUrl, authorityRevision: restoredContext?.authorityRevision ?? authorityRevision });
   const scopeChanged = authorizationInvalidating || scopeRef.current.baseUrl !== baseUrl || scopeRef.current.authorityRevision !== authorityRevision;
-  const previousFilters = useRef({ authority, pageSize, providerKey, search });
-  const filtersChanged = previousFilters.current.authority !== authority || previousFilters.current.pageSize !== pageSize || previousFilters.current.providerKey !== providerKey || previousFilters.current.search !== search;
+  const previousFilters = useRef({ authority, archivedOnly, pageSize, providerKey, search });
+  const filtersChanged = previousFilters.current.authority !== authority || previousFilters.current.archivedOnly !== archivedOnly || previousFilters.current.pageSize !== pageSize || previousFilters.current.providerKey !== providerKey || previousFilters.current.search !== search;
   const effectiveCursorStack = useMemo(() => scopeChanged || filtersChanged ? [null] : cursorStack, [cursorStack, filtersChanged, scopeChanged]);
   const effectiveCursorIndex = scopeChanged || filtersChanged ? 0 : cursorIndex;
   const cursor = effectiveCursorStack[effectiveCursorIndex];
-  const request = useMemo(() => ({ limit: pageSize, cursor, search, authority, providerKey }), [authority, cursor, pageSize, providerKey, search]);
+  const request = useMemo(() => ({ limit: pageSize, cursor, search, authority, providerKey, archivedOnly }), [archivedOnly, authority, cursor, pageSize, providerKey, search]);
   const historyContext = useMemo<ActivityCollectionHistoryContext>(() => ({
     entryId: entryId.current,
     runtimeScopeId: activityRuntimeScopeId,
@@ -292,10 +297,11 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     providerInput: selectedProviderKey,
     providerKey,
     authority,
+    archivedOnly,
     pageSize,
     cursorStack: effectiveCursorStack,
     cursorIndex: effectiveCursorIndex
-  }), [authority, authorityRevision, baseUrl, effectiveCursorIndex, effectiveCursorStack, pageSize, selectedProviderKey, providerKey, search, searchInput]);
+  }), [archivedOnly, authority, authorityRevision, baseUrl, effectiveCursorIndex, effectiveCursorStack, pageSize, selectedProviderKey, providerKey, search, searchInput]);
   const authorityScope = `${baseUrl}\u0000${authorityRevision}`;
   const query = useActivityDefinitions(context, request, authorityScope);
   const directFailure = query.error ? classifyActivityDefinitionReadFailure(query.error) : null;
@@ -305,8 +311,8 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   const rejectedContinuation = failure === "expired" || invalidCursor;
   const data = authorizationInvalidating || scopeChanged || mustDiscardData || rejectedContinuation || freshPageRequired ? undefined : query.data;
   const canOpenRowActions = Boolean(data && query.isSuccess && !query.isError && !query.isPlaceholderData && !authorizationInvalidating && !scopeChanged && !mustDiscardData && !rejectedContinuation && !freshPageRequired);
-  const defaultDesignedView = authority === "Design" && !searchInput.trim() && !selectedProviderKey;
-  const filtersActive = Boolean(searchInput.trim() || selectedProviderKey || authority !== "Design");
+  const defaultDesignedView = !archivedOnly && authority === "Design" && !searchInput.trim() && !selectedProviderKey;
+  const filtersActive = Boolean(archivedOnly || searchInput.trim() || selectedProviderKey || authority !== "Design");
 
   useEffect(() => {
     if (!scopeChanged) return;
@@ -324,13 +330,24 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
   }, [freshPageRequired, query.isFetching, query.isPlaceholderData, query.isSuccess]);
 
   useEffect(() => {
+    if (!restoreFailure || !data || freshPageRequired || query.isError || query.isFetching || query.isPlaceholderData) return;
+    const refreshedDefinition = data.items.find(item => item.definition.definitionId === restoreFailure.definition.definition.definitionId);
+    if (!refreshedDefinition || !refreshedDefinition.actions.some(action => action.action === "restore-definition" && action.allowed)) {
+      setRestoreFailure(null);
+      return;
+    }
+    if (refreshedDefinition !== restoreFailure.definition)
+      setRestoreFailure({ ...restoreFailure, definition: refreshedDefinition });
+  }, [data, freshPageRequired, query.isError, query.isFetching, query.isPlaceholderData, restoreFailure]);
+
+  useEffect(() => {
     const previous = previousFilters.current;
-    if (previous.authority === authority && previous.pageSize === pageSize && previous.providerKey === providerKey && previous.search === search) return;
-    previousFilters.current = { authority, pageSize, providerKey, search };
+    if (previous.authority === authority && previous.archivedOnly === archivedOnly && previous.pageSize === pageSize && previous.providerKey === providerKey && previous.search === search) return;
+    previousFilters.current = { authority, archivedOnly, pageSize, providerKey, search };
     setCursorStack([null]);
     setCursorIndex(0);
     setScopeRecoveryNotice(false);
-  }, [authority, pageSize, providerKey, search]);
+  }, [archivedOnly, authority, pageSize, providerKey, search]);
 
   useEffect(() => {
     onHistoryContextChange(historyContext);
@@ -402,7 +419,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
     try {
       if (confirm && !(await getDialogs().confirm({
         title: "Archive Activity Definition",
-        message: `Archive "${resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey)}"? It will disappear from new authoring and activity selection. Existing drafts, published versions, and workflow references will remain intact; archived definitions cannot currently be restored from Studio.`,
+        message: `Archive "${resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey)}"? It will disappear from new authoring and activity selection. Existing drafts, published versions, and workflow references will remain intact. You can restore it later from the Archived collection.`,
         confirmLabel: "Archive",
         tone: "danger"
       }))) return;
@@ -427,6 +444,35 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       setArchivingDefinitionId(null);
     }
   };
+  const restoreDefinition = async (definition: ActivityDefinitionManagementView) => {
+    if (restoreInFlightRef.current || !definition.actions.some(action => action.action === "restore-definition" && action.allowed)) return;
+    restoreInFlightRef.current = true;
+    setRestoringDefinitionId(definition.definition.definitionId);
+    try {
+      setRestoreFailure(null);
+      await restoreActivityDefinition(context, definition.definition.definitionId);
+      getNotifications().notify({ level: "success", title: `Restored ${resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey)}` });
+      setPrivacyFailure(null);
+      setFreshPageRequired(true);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionCollections, refetchType: "none" }),
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources }),
+        queryClient.invalidateQueries({ queryKey: activityDesignKeys.recommendedDefinitions })
+      ]);
+      setCursorStack([null]);
+      setCursorIndex(0);
+      if (cursorIndex === 0) void query.refetch();
+    } catch {
+      setRestoreFailure({ definition, message: "The restore request could not be confirmed; refresh the collection before retrying." });
+      setFreshPageRequired(true);
+      setCursorStack([null]);
+      setCursorIndex(0);
+      if (cursorIndex === 0) void query.refetch();
+    } finally {
+      restoreInFlightRef.current = false;
+      setRestoringDefinitionId(null);
+    }
+  };
   const nextPage = () => {
     const continuation = data?.continuation;
     if (!continuation) return;
@@ -436,14 +482,15 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
   return (
     <main className="studio-page ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
-      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." refresh={{ id: "activity-definitions", label: "Refresh activity definitions", onRefresh: refresh, refreshing: refreshPending, keepButtonStable: true, autoRefresh: true }} actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><StudioButton type="button" onClick={onImport}>Import from Elsa 3</StudioButton><StudioButton type="button" onClick={onPlanUpgrade}>Plan broad upgrade</StudioButton></div></details></div>} />
+      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description={archivedOnly ? "Archived definitions are hidden from new authoring and activity selection until restored." : "Design reusable activities here. Drafts stay editable, while published versions remain in history."} refresh={{ id: "activity-definitions", label: "Refresh activity definitions", onRefresh: refresh, refreshing: refreshPending, keepButtonStable: true, autoRefresh: true }} actions={<div className="studio-page-actions">{!archivedOnly ? <StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton> : null}<details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><StudioButton type="button" onClick={onImport}>Import from Elsa 3</StudioButton><StudioButton type="button" onClick={onPlanUpgrade}>Plan broad upgrade</StudioButton></div></details></div>} />
 
       <section className="studio-collection-toolbar ad-collection-filters" aria-label="Activity Definition filters">
         <StudioSearchInput aria-label="Search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" />
         <div className="studio-filter-group" role="group" aria-label="Activity definition collection">
-          <StudioButton type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</StudioButton>
-          <StudioButton type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</StudioButton>
-          <StudioButton type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</StudioButton>
+          <StudioButton type="button" aria-pressed={!archivedOnly && authority === "Design"} onClick={() => { setArchivedOnly(false); setAuthority("Design"); }}>Designed</StudioButton>
+          <StudioButton type="button" aria-pressed={!archivedOnly && authority === "ProviderSource"} onClick={() => { setArchivedOnly(false); setAuthority("ProviderSource"); }}>Built-in</StudioButton>
+          <StudioButton type="button" aria-pressed={!archivedOnly && authority === ""} onClick={() => { setArchivedOnly(false); setAuthority(""); }}>All</StudioButton>
+          <StudioButton type="button" aria-pressed={archivedOnly} onClick={() => { setArchivedOnly(true); setAuthority("Design"); }}>Archived</StudioButton>
         </div>
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
@@ -459,11 +506,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       {!data && !authorizationInvalidating && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && !authorizationInvalidating && failure ? <ActivityDefinitionFailure kind={failure} cursorInvalid={invalidCursor} onRetry={failure === "expired" || invalidCursor ? restartPaging : refresh} /> : null}
       {archiveFailure ? <p className="ad-inline-status" role="alert">Couldn’t archive this Activity Definition: {archiveFailure.message} <StudioButton type="button" disabled={archivingDefinitionId !== null} onClick={() => void archiveDefinition(archiveFailure.definition, false)}>Retry archive</StudioButton></p> : null}
+      {restoreFailure ? <p className="ad-inline-status" role="alert">Couldn’t restore this Activity Definition: {restoreFailure.message} {canOpenRowActions && restoreFailure.definition.actions.some(action => action.action === "restore-definition" && action.allowed) ? <StudioButton type="button" disabled={restoringDefinitionId !== null} onClick={() => void restoreDefinition(restoreFailure.definition)}>Retry restore</StudioButton> : null}</p> : null}
       {data && !query.isError && !authorizationInvalidating && data.items.length === 0 ? <StudioCollectionEmptyState
         icon={<Database size={24} aria-hidden />}
-        title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
-        description={defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
-        actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton><StudioButton onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setSelectedProviderKey(""); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
+        title={archivedOnly ? "No archived Activity Definitions" : defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}
+        description={archivedOnly ? "Definitions appear here after they are archived." : defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}
+        actions={defaultDesignedView ? <><StudioButton variant="primary" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton><StudioButton onClick={() => { setArchivedOnly(false); setAuthority("ProviderSource"); }}>Browse built-in activities</StudioButton></> : filtersActive ? <StudioButton onClick={() => { setSearchInput(""); setSelectedProviderKey(""); setArchivedOnly(false); setAuthority("Design"); }}>Clear filters</StudioButton> : null}
       /> : null}
       {data && data.items.length > 0 ? <>
         <StudioDataGrid className="studio-table-container studio-collection-table ad-collection" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
@@ -487,13 +535,17 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               { label: "Recommended Version ID", value: definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? "" }
             ].filter(identifier => identifier.value);
             const menuItems: OverflowMenuItem[] = canOpenRowActions ? [
-              ...(designOwned ? [
-                { id: "edit", label: "Edit", onSelect: () => openDefinition(definition) },
-                ...(definition.lifecycle.draftCount > 0 ? [{ id: "publish", label: "Publish", onSelect: () => openDefinition(definition, "drafts", true) }] : []),
-                ...(definition.actions.some(action => action.action === "archive-definition" && action.allowed)
-                  ? [{ id: "archive", label: "Archive", onSelect: () => void archiveDefinition(definition) }]
+              ...(designOwned && archivedOnly
+                ? (definition.actions.some(action => action.action === "restore-definition" && action.allowed)
+                  ? [{ id: "restore", label: "Restore", onSelect: () => void restoreDefinition(definition) }]
                   : [])
-              ] : []),
+                : designOwned ? [
+                  { id: "edit", label: "Edit", onSelect: () => openDefinition(definition) },
+                  ...(definition.lifecycle.draftCount > 0 ? [{ id: "publish", label: "Publish", onSelect: () => openDefinition(definition, "drafts", true) }] : []),
+                  ...(definition.actions.some(action => action.action === "archive-definition" && action.allowed)
+                    ? [{ id: "archive", label: "Archive", onSelect: () => void archiveDefinition(definition) }]
+                    : [])
+                ] : []),
               { id: "versions", label: "Version history", onSelect: () => openDefinition(definition, "versions") },
               { id: "usage", label: "Usage", onSelect: () => openDefinition(definition, "relationships") }
             ] : [];
@@ -527,7 +579,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           <StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={16} aria-hidden /></StudioButton>
         </div> : null}
       </StudioCollectionFooter>
-      {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
+      {createOpen && !archivedOnly ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>
   );
 }
@@ -579,6 +631,7 @@ function isActivityCollectionHistoryContext(value: unknown): value is ActivityCo
     && typeof context.search === "string"
     && typeof context.providerInput === "string"
     && typeof context.providerKey === "string"
+    && (context.archivedOnly === undefined || typeof context.archivedOnly === "boolean")
     && (context.authority === "" || context.authority === "Design" || context.authority === "ProviderSource")
     && isPageSize(context.pageSize)
     && Array.isArray(context.cursorStack)

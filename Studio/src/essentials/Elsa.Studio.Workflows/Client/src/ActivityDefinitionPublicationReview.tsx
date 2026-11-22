@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { activityDesignKeys, getActivityDefinition } from "./api/activityDesign";
 import { compareSemVer, parseSemVer } from "./semver";
+import { PublishActionButton, type WorkflowPublishMode } from "./workflow-editor/PublishActionButton";
 import {
   getActivityPublicationReceipt,
   preflightActivityDraftPublication,
@@ -74,6 +75,7 @@ export function ActivityDefinitionPublicationReview({
   const [dialogOpen, setDialogOpen] = useState(false);
   const localTriggerRef = useRef<HTMLButtonElement | null>(null);
   const reviewTriggerRef = triggerRef ?? localTriggerRef;
+  const directPublishRequestedRef = useRef(false);
   const operationKeyRef = useRef<string | null>(null);
   const reviewedRecommendationRef = useRef<string | null>(null);
   const recommendationVerificationRef = useRef(0);
@@ -259,6 +261,16 @@ export function ActivityDefinitionPublicationReview({
     ? `Enter an exact semantic version at or above ${preflight.minimumVersion}.`
     : null;
   const diagnosticSource = uniquePublicationDiagnostics(receipt?.diagnostics?.length ? receipt.diagnostics : preflight?.diagnostics ?? rejectedDiagnostics);
+  useEffect(() => {
+    if (!directPublishRequestedRef.current || phase === "preparing") return;
+    directPublishRequestedRef.current = false;
+    const exactBindingIsCurrent = binding?.revision === currentRevision && binding.signature === currentSignature;
+    if (phase === "review" && preflight?.isPublishable && exactBindingIsCurrent && diagnosticSource.length === 0 && !versionError) {
+      void publish();
+      return;
+    }
+    setDialogOpen(true);
+  }, [binding, currentRevision, currentSignature, diagnosticSource.length, phase, preflight, versionError]);
   const hasBlockingDiagnostics = diagnosticSource.some(item => diagnosticSeverity(item.severity) === "Error");
   const diagnosticCounts = ["Error", "Warning", "Info"].flatMap(severity => {
     const count = diagnosticSource.filter(item => diagnosticSeverity(item.severity) === severity).length;
@@ -284,6 +296,26 @@ export function ActivityDefinitionPublicationReview({
       });
     }
     return onFocusDiagnostic(diagnostic, trigger);
+  };
+
+  const publishFromToolbar = (selectedMode: WorkflowPublishMode) => {
+    if (selectedMode === "review") {
+      setDialogOpen(true);
+      if (phase === "idle") void prepare();
+      return;
+    }
+
+    const exactBindingIsCurrent = binding?.revision === currentRevision && binding.signature === currentSignature;
+    if (phase === "review" && preflight?.isPublishable && exactBindingIsCurrent && diagnosticSource.length === 0 && !versionError) {
+      void publish();
+      return;
+    }
+    if (phase === "idle") {
+      directPublishRequestedRef.current = true;
+      void prepare();
+      return;
+    }
+    setDialogOpen(true);
   };
 
   const blockerPanel = publicationBlocked ? <div className="ad-publication-blockers" id={blockedReasonId} role="alert">
@@ -363,14 +395,18 @@ export function ActivityDefinitionPublicationReview({
   </section>;
 
   if (mode === "full") return reviewPanel;
+  if (phase === "success") return null;
   return <div className="ad-publication-toolbar">
-    <StudioButton ref={reviewTriggerRef} className="ad-publication-toolbar-trigger" variant="primary" onClick={() => {
-      setDialogOpen(true);
-      if (phase === "idle") void prepare();
-    }} disabled={disabled && phase === "idle"} aria-haspopup="dialog" aria-expanded={dialogOpen}>
-      <GitCompareArrows size={16} aria-hidden /> {publicationTriggerLabel(phase, Boolean(preflight))}
-    </StudioButton>
-    {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className="ad-publication-toolbar-status is-attention" role={needsAttention ? "alert" : "status"}>
+    <PublishActionButton
+      ariaLabel="Activity Definition publication actions"
+      preferenceKey="elsa-studio-activity-definition-publish-mode"
+      primaryButtonRef={reviewTriggerRef}
+      busy={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}
+      saving={phase === "preparing"}
+      unavailableReason={disabled ? "This Activity Definition cannot be published in its current state." : undefined}
+      onPublish={publishFromToolbar}
+    />
+    {phase !== "idle" && !dialogOpen ? actionableStatus ? <div className={`ad-publication-toolbar-status${needsAttention ? " is-attention" : ""}`} role={needsAttention ? "alert" : "status"}>
       <AlertTriangle size={18} aria-hidden />
       <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
       <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
@@ -380,8 +416,8 @@ export function ActivityDefinitionPublicationReview({
       closeLabel="Close publication review" dismissDisabled={!closeAllowed} onClose={() => setDialogOpen(false)}
       onCloseAutoFocus={event => { event.preventDefault(); reviewTriggerRef.current?.focus(); }}
       footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialogOpen(false)} cancelDisabled={!closeAllowed}
-        cancelLabel={phase === "success" ? "Close" : "Cancel"}
-        confirmLabel={preflight ? phase === "success" ? `Published ${selectedVersion}` : phase === "publishing" ? "Publishing atomically…" : `Publish ${selectedVersion || "exact version"}` : undefined}
+        cancelLabel="Cancel"
+        confirmLabel={preflight ? phase === "publishing" ? "Publishing atomically…" : `Publish ${selectedVersion || "exact version"}` : undefined}
         confirmDisabled={disabled || phase !== "review" || !preflight?.isPublishable || Boolean(versionError)}
         confirmProps={{ "aria-describedby": publicationBlocked ? blockedReasonId : undefined }} onConfirm={() => void publish()} />}
     >{reviewPanel}{preflight ? <p>Existing workflows keep the activity version they already use.</p> : null}</StudioDialog> : null}
@@ -455,12 +491,6 @@ function uniquePublicationDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
     seen.add(key);
     return true;
   }).sort((left, right) => ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(left.severity)) - ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(right.severity)));
-}
-
-function publicationTriggerLabel(phase: ReviewPhase, hasPreflight: boolean) {
-  if (phase === "success") return "View publication";
-  if (phase === "preparing") return "Review in progress";
-  return hasPreflight ? "Continue publication review" : "Review & publish";
 }
 
 function publicationStatusLabel(phase: ReviewPhase, publishable?: boolean) {

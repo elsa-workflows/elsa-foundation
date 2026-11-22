@@ -78,7 +78,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
 
   let reviews = 0;
   page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/publication-preflight")) reviews++; });
-  await page.locator(".ad-publication-toolbar-trigger").click();
+  await page.locator(".studio-split-button-primary").click();
   const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
   await expect(dialog.getByRole("button", { name: "Edit output value source", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Close publication review", exact: true }).click();
@@ -92,7 +92,7 @@ export async function activityValidationReportingJourney(page: Page, info: TestI
   expect(reviews).toBe(existingReviews);
   await capture(page, info, "review-retained");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".ad-publication-toolbar-trigger")).toBeFocused();
+  await expect(page.locator(".studio-split-button-primary")).toBeFocused();
   expect(reviews).toBe(existingReviews);
   await capture(page, info, "review-focus-return");
 }
