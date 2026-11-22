@@ -644,7 +644,7 @@ it("opens published content without writing a draft and enters edit mode directl
   const post = vi.fn();
   await act(async () => root.render(<FormLifecyclePage api={api(get, post)} />));
   loadingDefinition = true; await editFirstForm();
-  expect(post).not.toHaveBeenCalled(); expect(container.textContent).toContain("Loading form…");
+  expect(post).not.toHaveBeenCalled(); expect(container.querySelector('[role="status"][aria-label="Loading form"]')).not.toBeNull();
   await act(async () => release(definition));
   const formId = [...container.querySelectorAll("label")].find(label => label.textContent?.startsWith("Form ID"))!.control as HTMLInputElement;
   expect(formId.value).toBe("purchase");

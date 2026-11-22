@@ -1,5 +1,5 @@
 import React from "react";
-import { StudioTableContainer, TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { StudioResultState, StudioTableContainer, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import type { FailingDefinition, RunBucket, RunHealthSettings, WorkflowRunHealthSnapshot } from "./workflowDashboardApi";
@@ -64,11 +64,8 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
               totalStarted={snapshot.startedCount}
             />
           ) : (
-            <p className="workflow-run-health__empty" role="status">
-              {hasStarts
-                ? "Activity totals are available, but time-bucket details are unavailable."
-                : "No workflow starts in this window. “Running now” is a separate current-state count across all start times."}
-            </p>
+            <StudioResultState headingLevel={3} title={hasStarts ? "Time-bucket details unavailable" : "No workflow starts in this window."}
+              description={hasStarts ? "Activity totals are available, but time-bucket details are unavailable." : "Running now counts active workflows across all start times."} />
           )}
 
           <BucketDetails buckets={snapshot.buckets} timeZone={snapshot.timeZone} />
@@ -80,9 +77,9 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
           {snapshot.highestFailureDefinitions.length > 0 ? (
             <FailingDefinitionList definitions={snapshot.highestFailureDefinitions} includeTestRuns={snapshot.includeTestRuns} />
           ) : snapshot.failedCount > 0 ? (
-            <p className="workflow-run-health__empty">Failed runs were recorded, but a definition ranking is unavailable.</p>
+            <StudioResultState headingLevel={3} title="Definition ranking unavailable" description="Failed runs were recorded in this window." />
           ) : (
-            <p className="workflow-run-health__empty">No failed runs in this window.</p>
+            <StudioResultState headingLevel={3} title="No failed runs in this window." />
           )}
         </section>
       </div>

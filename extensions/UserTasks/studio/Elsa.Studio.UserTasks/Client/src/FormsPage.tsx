@@ -50,7 +50,7 @@ export function FormsPage({ api }: { api: ElsaStudioModuleApi }) {
   return <StudioPage className="user-tasks" aria-label="Reusable task forms management">
     <StudioPageHeader title="Task forms" description="Manage reusable task forms and their published versions."
       actions={<a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>} />
-    {mode === "loading" ? <div role="status">Loading forms…</div> : <StudioResultState tone="danger" title="Forms unavailable"
+    {mode === "loading" ? <SkeletonRows rows={3} label="Loading forms" /> : <StudioResultState tone="danger" title="Forms unavailable"
       description={error || "This backend does not advertise the required User Task operation."}
       actions={<StudioButton onClick={() => setAttempt(value => value + 1)}>Retry</StudioButton>} />}
   </StudioPage>;

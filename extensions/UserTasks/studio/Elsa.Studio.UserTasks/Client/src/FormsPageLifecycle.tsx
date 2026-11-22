@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
@@ -428,7 +428,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   const selectedHistory = history.find(item => item.form.version === selectedHistoryVersion)
     ?? history.find(item => item.form.version === currentDefinition?.latestPublished?.form.version)
     ?? history[0];
-  const versionsPanel = !historyLoaded ? historyLoading ? <p role="status">Loading published versions…</p> : historyError ? <div><StudioAlert tone="danger">{historyError}</StudioAlert><StudioButton onClick={() => currentId && void loadHistory(currentId)}>Retry version history</StudioButton></div> : <p role="status">Published versions have not been loaded.</p> : <StudioVersionHistory label="Published form versions"
+  const versionsPanel = !historyLoaded ? historyLoading ? <SkeletonRows rows={3} label="Loading published versions" /> : historyError ? <div><StudioAlert tone="danger">{historyError}</StudioAlert><StudioButton onClick={() => currentId && void loadHistory(currentId)}>Retry version history</StudioButton></div> : <p role="status">Published versions have not been loaded.</p> : <StudioVersionHistory label="Published form versions"
     items={history.map(version => ({
       id: version.form.version, ariaLabel: `Select version ${version.form.version}`, title: `Version ${version.form.version}`,
       subtitle: <StudioTimestamp value={version.createdAt} />,
@@ -482,7 +482,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     {!editing ? <>
       {!loading && !error && !hasFormAccess ? <StudioResultState tone="danger" title="Form access unavailable" description="Your account does not have permission to view reusable forms." /> : null}
       {deleteError ? <StudioAlert tone="danger">{deleteError}</StudioAlert> : null}
-      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><div role="status">Loading forms…</div></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
+      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><SkeletonRows rows={3} label="Loading forms" /></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
           <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Published version</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
           <tbody>{definitions.map(definition => {
             const name = definition.draft?.form?.name || definition.latestPublished?.form.name || definition.id;
@@ -506,7 +506,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     </> : null}
 
     {editing ? <section ref={editorElement} className="user-task-form-editor" aria-label="Form editor">
-      {editorLoading ? <div role="status">Loading form…</div> : null}
+      {editorLoading ? <SkeletonRows rows={3} label="Loading form" /> : null}
       {formError ? <StudioAlert tone="danger">{formError}{conflict && currentId ? <StudioButton disabled={busy} onClick={() => void openDefinition(currentId)}>Reload latest draft</StudioButton> : null}</StudioAlert> : null}
       {showValidation && validation.length ? <StudioAlert tone="danger">{validation.join(" ")}</StudioAlert> : null}
       {!editorLoading && (!readOnly || identity?.canReadForms) ? <>
