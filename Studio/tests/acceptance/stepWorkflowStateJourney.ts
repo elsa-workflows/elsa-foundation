@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -49,6 +49,16 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     await node.press("Enter");
   }
   const inspector = () => page.getByRole("complementary", { name: "Run details panel", exact: true });
+  async function fullyVisibleText(locator: Locator) {
+    await locator.scrollIntoViewIfNeeded();
+    await expect.poll(() => locator.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const range = document.createRange(); range.selectNodeContents(element);
+      const lines = [...range.getClientRects()];
+      return lines.length > 0 && lines.every(line => line.left >= bounds.left - 1 && line.right <= bounds.right + 1 &&
+        line.top >= bounds.top - 1 && line.bottom <= bounds.bottom + 1);
+    }), { message: "The complete activity name or state summary must be readable without ellipsis" }).toBe(true);
+  }
   async function run(versionId: string, expected: string, nodeId = "body") {
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${versionId}/publish`, "POST", {});
     const result = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${published.artifactId}/execute`, "POST", { sourceReferenceId: published.sourceReferenceId });
@@ -105,6 +115,8 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await capture(page, info, "current-outputs");
   await inspector().getByRole("tab", { name: "Timeline", exact: true }).press("Enter");
   await expect(inspector()).toContainText("Completion accepted");
+  await fullyVisibleText(inspector().getByText(/^Committed changes:/).first());
+  await fullyVisibleText(inspector().getByText(/^Completion accepted/).first());
   await capture(page, info, "accepted-timeline");
   const clearDefinition = await seed("Cleared state", native, [literal("Mode", "clear")], { activityVersionId: native, inputs: [literal("Mode", "complete")] });
   const cleared = await run(clearDefinition.version.id, "Completed");
@@ -149,6 +161,7 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
     expect(failed.details.instance.correlationId).toBeNull(); expect(failed.details.instance.instanceName).toBeNull();
     expect(failed.details.outputs).not.toHaveProperty("Count");
     await expect(inspector().getByRole("region", { name: "Committed workflow changes", exact: true })).toHaveCount(0);
+    await fullyVisibleText(inspector().getByRole("heading", { level: 4 }).first());
     await capture(page, info, name);
   }
   const secret = "s13-protected-sentinel";
