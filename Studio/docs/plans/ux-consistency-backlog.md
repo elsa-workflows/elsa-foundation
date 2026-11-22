@@ -186,6 +186,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
+- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 - [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
@@ -442,8 +443,6 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 - [x] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
   "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`). (PR #5305)
 
-- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:68` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
-
 ### X6. Refresh
 
 Definitions and Runs use the header split-button with an interval menu [seen]. Move every other
@@ -635,7 +634,7 @@ the designer header is a documented exception.
 
 - [ ] **X12.13** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
-- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:260`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
+- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
 
 ### X13. CSS texture
 
@@ -767,7 +766,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 
-- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:302` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
+- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
 ### Extensions
 
