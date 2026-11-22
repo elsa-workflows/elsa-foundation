@@ -2108,15 +2108,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         async Task ExecuteAndPublish(bool scheduled)
         {
+            var unbounded = Has(Flaw.UnboundedJobResult);
             string? result = null, error = null;
             try
             {
                 if (scheduled) _options.BeforeScheduledJobCheck?.Invoke();
-                result = Json.Write(await Enter().ConfigureAwait(false));
+                var value = await Enter().ConfigureAwait(false);
+                result = unbounded ? Json.Write(value) : JobResultEncoding.Value(value);
             }
+            catch (JobResultEncoding.LimitExceeded) { error = JobResultEncoding.Error; }
             catch (Exception e) { error = e.Message; }
             if (!MayReturn() || token.IsCancellationRequested) return;
-            var completed = entered ? original with { Kind = Kinds.JobFinished, Payload = Json.Write(new JobFinished(job.Key, result, error)) } : null;
+            var outcome = new JobFinished(job.Key, result, error);
+            var completed = entered ? original with { Kind = Kinds.JobFinished,
+                Payload = unbounded ? Json.Write(outcome) : JobResultEncoding.Payload(outcome) } : null;
             // Timestamp and enqueue together so simultaneous callbacks retain their observation order. The owner
             // may receive this after a command matures. Its later clock cannot replace the original readiness time.
             lock (publications)
