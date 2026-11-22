@@ -81,7 +81,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
       <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime diagnostics</>} description={<>Choose what run data to retain for new events. Previously captured run data is unchanged.</>} actions={<><div className="studio-page-actions">
           <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
-            {saving ? "Saving..." : "Save changes"}
+            {saving ? "Saving..." : "Save"}
           </StudioButton>
         </div></>} />
 

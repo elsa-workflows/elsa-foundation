@@ -22,7 +22,7 @@ function render(kind: "rename" | "move", mode: "visible" | "hidden" = "visible",
     ? <RenameWorkflowFolderDialog context={endpoint} folder={target} onRenamed={onSaved} onClose={onClose} />
     : <MoveWorkflowFolderDialog context={endpoint} folder={target} onMoved={onSaved} onClose={onClose} />}</React.Activity>));
 }
-function submit() { flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); }
+function submit() { flushSync(() => document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); }
 it.each(["rename", "move"] as const)("reconciles an accepted %s after hiding and showing without reviving toast or focus", async kind => {
   let finish!: () => void;
   const work = new Promise<void>(resolve => { finish = resolve; });
@@ -31,7 +31,7 @@ it.each(["rename", "move"] as const)("reconciles an accepted %s after hiding and
   render(kind); submit();
   expect(mutation).toHaveBeenCalledTimes(1);
   render(kind, "hidden"); render(kind);
-  expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
   finish(); await work;
   await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
   expect(onClose).toHaveBeenCalledWith(false);
@@ -53,7 +53,7 @@ it.each(["rename", "move"] as const)("keeps a current %s failure inline and comp
   const mutation = kind === "rename" ? vi.mocked(renameWorkflowFolder) : vi.mocked(moveWorkflowFolder);
   mutation.mockRejectedValueOnce(new Error("Mutation unavailable")).mockResolvedValue(undefined);
   render(kind); submit();
-  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Mutation unavailable"));
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain("Mutation unavailable"));
   expect(onSaved).not.toHaveBeenCalled();
   submit();
   await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));

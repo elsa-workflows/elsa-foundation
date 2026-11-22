@@ -114,7 +114,7 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
 
   return <div className="ad-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !submitting) onClose(); }}>
     <section ref={dialogRef} className="ad-dialog ad-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-activity-definition-title" tabIndex={-1}>
-      <header><div><span className="ad-kicker">Design-owned reusable activity</span><h2 id="create-activity-definition-title">Create Activity Definition</h2></div><button type="button" className="ad-icon-button" aria-label="Close" onClick={onClose} disabled={submitting}><X size={18} /></button></header>
+      <header><div><span className="ad-kicker">Design-owned reusable activity</span><h2 id="create-activity-definition-title">New activity definition</h2></div><button type="button" className="ad-icon-button" aria-label="Close" onClick={onClose} disabled={submitting}><X size={18} /></button></header>
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized authoring providers…</div> : null}
       {capabilitiesQuery.isError ? <div className="ad-inline-error" role="alert">Authoring capabilities are unavailable. Studio will not guess a provider or contract.</div> : null}
       {capabilitiesQuery.data && choices.length === 0 ? <div className="ad-inline-error" role="alert">No authorable implementation provider is currently advertised.</div> : null}
@@ -134,7 +134,7 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
         </details>
       </div> : null}
       {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-      <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Creating…" : "Create definition"}</button></footer>
+      <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Creating…" : "Create"}</button></footer>
     </section>
   </div>;
 }

@@ -58,7 +58,7 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
 
   if (!loaded || loaded.context !== context || loaded.identity !== identity) return <SkeletonRows label="Loading workflow tags" />;
   if (loaded.error || loaded.unsupported || (view !== "list" && loaded.page?.permissions?.canManageTags !== true)) {
-    return <StudioPage><StudioPageHeader title="Workflow tags" breadcrumbs={<WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "Create tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />} />
+    return <StudioPage><StudioPageHeader title="Workflow tags" breadcrumbs={<WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "New tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />} />
       <StudioResultState tone={loaded.error ? "danger" : undefined}
         title={loaded.error ? "Could not load workflow tags" : loaded.unsupported ? "Workflow tags unavailable" : "Tag management is not allowed"}
         description={loaded.error ?? (loaded.unsupported ? "This backend does not support workflow tags." : "You do not have permission to manage workflow tags.")}
@@ -95,7 +95,7 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
   return <StudioPage className="wf-tag-page" aria-labelledby="workflow-tags-title">
     <StudioPageHeader title="Workflow tags" titleId="workflow-tags-title" breadcrumbs={<WorkflowTagBreadcrumbs view="list" current="Workflow tags" navigate={navigate} />} description="Manage reusable labels and controlled classifications for workflows."
       actions={<>
-        {canManage ? <StudioButton variant="primary" onClick={() => navigate(`${tagsPath}/new`)}>Create tag</StudioButton> : null}
+        {canManage ? <StudioButton variant="primary" onClick={() => navigate(`${tagsPath}/new`)}>New tag</StudioButton> : null}
         <StudioButton disabled={busy} onClick={() => void load(term)}>Refresh</StudioButton>
       </>} />
     <form onSubmit={event => { event.preventDefault(); void load(search.trim()); }}>

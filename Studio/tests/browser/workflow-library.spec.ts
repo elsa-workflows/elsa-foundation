@@ -268,7 +268,8 @@ test("the independent move dialog contains Tab and Shift+Tab", async ({ page }) 
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
   await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
   const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
-  const first = move.getByRole("radio", { name: "Unfiled", exact: true });
+  await expect(move.getByRole("radio", { name: "Unfiled", exact: true })).toBeFocused();
+  const first = move.getByRole("button", { name: "Close dialog", exact: true });
   const last = move.getByRole("button", { name: "Move", exact: true });
   await last.focus();
   await page.keyboard.press("Tab");
@@ -329,14 +330,14 @@ test("Escape cancels a row move without opening a second dialog", async ({ page 
 test("catalog management creates controlled values and retires their stable tag identity", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("link", { name: "Manage tags", exact: true }).click();
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await page.getByRole("button", { name: "New tag", exact: true }).click();
   const dialog = page.locator(".wf-tag-page");
   await dialog.getByRole("textbox", { name: "Tag name", exact: true }).fill("Region");
   await dialog.getByRole("combobox", { name: "Tag kind" }).selectOption("controlled");
   await dialog.getByRole("combobox", { name: "Tag cardinality" }).selectOption("multiple");
   await dialog.getByRole("button", { name: "Add controlled value" }).click();
   await dialog.getByRole("textbox", { name: "Value name 1" }).fill("Europe");
-  await dialog.getByRole("button", { name: "Create tag", exact: true }).click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Tag kind" })).toBeDisabled();
   const retirement = dialog.getByRole("checkbox", { name: "Retire this tag" });

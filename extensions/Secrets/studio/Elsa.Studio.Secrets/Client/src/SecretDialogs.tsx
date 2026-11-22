@@ -27,8 +27,8 @@ export function CreateSecretDialog(props: CreateSecretFormProps) {
   useDialogFocus(dialogRef, busy ? null : props.onCancel);
   const { onStateChange } = props;
   const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
-  return <div className="secrets-modal secrets-create-backdrop"><section ref={dialogRef} className="secrets-create-dialog" role="dialog" aria-modal="true" aria-label="Create secret" tabIndex={-1}>
-    <header className="secrets-create-header"><h3>Create secret</h3></header>
+  return <div className="secrets-modal secrets-create-backdrop"><section ref={dialogRef} className="secrets-create-dialog" role="dialog" aria-modal="true" aria-label="New secret" tabIndex={-1}>
+    <header className="secrets-create-header"><h3>New secret</h3></header>
     <CreateSecretForm {...props} onStateChange={report} />
   </section></div>;
 }

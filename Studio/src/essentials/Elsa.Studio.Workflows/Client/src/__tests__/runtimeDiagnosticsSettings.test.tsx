@@ -68,7 +68,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
     const controls = Array.from(container.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select"));
     expect(controls.length).toBeGreaterThan(0);
     expect(controls.every(control => control.matches(":disabled"))).toBe(true);
-    const save = findButton(container, "Save changes");
+    const save = findButton(container, "Save");
     expect(save.disabled).toBe(true);
 
     for (const control of controls) {
@@ -142,7 +142,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
       expect(findLevelInput(container, "DiagnosticSnapshot").checked).toBe(true);
       expect(findLevelInput(container, "Off").disabled).toBe(false);
       expect(Array.from(container.querySelectorAll("select")).some(select => select.value === "Metadata")).toBe(true);
-      expect(findButton(container, "Save changes").hasAttribute("disabled")).toBe(true);
+      expect(findButton(container, "Save").hasAttribute("disabled")).toBe(true);
     });
 
     const off = findLevelInput(container, "Off");
@@ -161,7 +161,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
       expect(metadata.checked).toBe(true);
       expect(container.textContent).toContain("Unsaved request: Metadata only");
       expect(container.textContent).toContain("Save changes to apply this request to new capture events.");
-      expect(findButton(container, "Save changes").hasAttribute("disabled")).toBe(false);
+      expect(findButton(container, "Save").hasAttribute("disabled")).toBe(false);
     });
 
     findButton(container, "Save").click();

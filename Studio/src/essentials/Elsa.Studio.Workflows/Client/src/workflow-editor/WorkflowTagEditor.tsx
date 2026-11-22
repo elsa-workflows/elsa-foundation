@@ -54,8 +54,8 @@ export function WorkflowTagEditor({ context, tag, onBack, navigate, onCreated }:
     <StudioPageHeader breadcrumbs={<StudioBreadcrumbs items={[
       { href: "/workflows/definitions", label: "Definitions" },
       { href: "/workflows/tags", label: "Workflow tags" }
-    ]} current={editingId ? tag!.name : "Create tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />}
-      title={editingId ? "Edit workflow tag" : "Create workflow tag"} titleId="workflow-tag-title"
+    ]} current={editingId ? tag!.name : "New tag"} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />}
+      title={editingId ? "Edit workflow tag" : "New workflow tag"} titleId="workflow-tag-title"
       description={editingId ? "Update this tag and its values." : "Create a reusable label or controlled classification for workflows."}
     />
     <form className="wf-tag-form" onSubmit={event => { event.preventDefault(); void save(); }}>
@@ -79,7 +79,7 @@ export function WorkflowTagEditor({ context, tag, onBack, navigate, onCreated }:
         {status ? <p role="status">{status}</p> : null}
       <div className="studio-page-actions">
         <StudioButton type="button" onClick={onBack} disabled={busy}>Cancel</StudioButton>
-        <StudioButton variant="primary" type="submit" disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : editingId ? "Save tag" : "Create tag"}</StudioButton>
+        <StudioButton variant="primary" type="submit" disabled={busy || !draft.name.trim()}>{busy ? "Saving…" : editingId ? "Save tag" : "Create"}</StudioButton>
       </div>
     </form>
   </StudioPage>;
