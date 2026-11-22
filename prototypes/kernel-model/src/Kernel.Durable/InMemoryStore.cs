@@ -9,7 +9,7 @@ namespace Kernel.Durable;
 /// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
 /// seen from the one place that sees every write.
 /// </summary>
-public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore, IFoundationSchedulingStore
+public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
 {
     private readonly StringComparer _foundationEventEquality = StringComparer.Ordinal;
 
@@ -36,6 +36,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         public string? Owner;
         public long Epoch, Position;
+        internal int DueBacklog;
     }
 
     public sealed class MessageRow(Message message, long seq, long seen)
@@ -232,7 +233,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear,
-            supportsFoundationParkResolution: true, supportsFoundationValues: true);
+            supportsFoundationParkResolution: true, supportsFoundationValues: true, supportsDueBacklog: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -446,7 +447,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 foreach (var fence in fences)
                 {
-                    Partitions[fence.Partition].Position = fence.Position + batch.PositionsIn(fence.Partition);
+                    var partition = Partitions[fence.Partition];
+                    partition.Position = fence.Position + batch.PositionsIn(fence.Partition);
+                    if (batch.DueBacklog?.TryGetValue(fence.Partition, out var estimate) == true)
+                        partition.DueBacklog = estimate;
                 }
             }
 
@@ -690,6 +694,29 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }).ToList();
             return new(new Polled(rows, now));
         }
+    }
+
+    ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cap);
+        ArgumentOutOfRangeException.ThrowIfNegative(partition);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(partition, Partitions.Length);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_gate)
+        {
+            var now = clock();
+            return new(Messages.Values.Where(row => !row.Done && row.Message.Target.Partition == partition &&
+                (row.Message.Due is null || row.Message.Due <= now)).Take(cap).Count());
+        }
+    }
+
+    internal IReadOnlyDictionary<int, int> ReadBacklogPressure(int lowWater)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(lowWater);
+        lock (_gate)
+            return Enumerable.Range(0, Partitions.Length)
+                .Where(id => Partitions[id].DueBacklog >= lowWater)
+                .ToDictionary(id => id, id => Partitions[id].DueBacklog);
     }
 
     private static Message Materialize(Message stored)

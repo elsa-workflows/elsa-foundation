@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false,bool supportsFoundationValues=false,bool supportsDueBacklog=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -17,6 +17,10 @@ public static class StoreBatchRules
             batch.ClearJobTrials.Count != 0))
             throw new StoreException(Failure.Definite, "A publication reservation requires its own fenced commit.");
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
+        if (batch.DueBacklog is { Count: > 0 } backlog &&
+            (!supportsDueBacklog || backlog.Any(estimate => estimate.Value < 0 ||
+                (batch.Fences?.Any(fence => fence.Partition == estimate.Key) ?? (batch.Partition == estimate.Key)) == false)))
+            throw new StoreException(Failure.Definite, "A due-backlog estimate requires its partition's fence and a supported store.");
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
         HashSet<InboxKey>? consumedControls = null;
