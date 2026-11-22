@@ -56,7 +56,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(formRow).toContainText("Published · v1");
     const createForm = page.getByRole("button", { name: "New form", exact: true });
     await expect(createForm).toBeVisible();
-    expect((await createForm.boundingBox())!.width).toBeGreaterThan(90);
+    expect(await createForm.evaluate(button => button.scrollWidth <= button.clientWidth)).toBe(true);
     expect((await createForm.boundingBox())!.height).toBeLessThan(48);
     const formActions = formRow.getByRole("button", { name: "Actions for Purchase response", exact: true });
     await expect(formActions).toBeVisible();
