@@ -27,8 +27,8 @@ internal sealed class TriggerInputMapper(IWorkflowExecutableInputValidator valid
         {
             if (mapping.Binding is TriggerExpressionBinding expression &&
                 (expressions is null || !expressionLanguages.Contains(expression.Language) ||
-                 !ExpressionEvaluationCapabilities.Resolve(expression.CapabilityProfile).IsBindingPure))
-                findings.Add(new("triggers.mapping.expression-unavailable", "The selected pure expression language, evaluator or profile is unavailable.", mapping.InputName));
+                 !ExpressionEvaluationCapabilities.Resolve(expression.CapabilityProfile).IsBindingReadonly))
+                findings.Add(new("triggers.mapping.expression-unavailable", "The selected expression language, evaluator or capability profile is unavailable.", mapping.InputName));
         }
         if (findings.Count > 0) return WorkflowExecutableInputValidation.Failure(findings);
         var known = validator.ValidateKnownInputs(contract, mappings.Where(mapping => mapping.Binding is TriggerLiteralBinding)
@@ -86,7 +86,7 @@ internal sealed class TriggerInputMapper(IWorkflowExecutableInputValidator valid
                     catch (OperationCanceledException) { throw; }
                     catch (NotSupportedException)
                     {
-                        return Failure("triggers.mapping.expression-unavailable", "The selected pure expression evaluator is unavailable.", mapping.InputName);
+                        return Failure("triggers.mapping.expression-unavailable", "The selected expression evaluator is unavailable.", mapping.InputName);
                     }
                     catch (Exception)
                     {

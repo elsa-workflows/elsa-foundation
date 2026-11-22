@@ -438,7 +438,7 @@ it("invalidates tooling on a parameters-only owner replacement with unchanged so
   const portable = (producerNodeId: string) => {
     const node = activity("args.customer");
     node.text = { typeName: "System.String", expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.customer",
-      resultType: { alias: "String", collectionKind: "Single" }, parameters: { customer: { kind: "ActivityResult", producerNodeId, projectionKey: "$result" } }, options: {}, capabilityProfile: "binding-pure-v1" } } };
+      resultType: { alias: "String", collectionKind: "Single" }, parameters: { customer: { kind: "ActivityResult", producerNodeId, projectionKey: "$result" } }, options: {}, capabilityProfile: "binding-readonly-v1" } } };
     return node;
   };
   renderPanel(portable("fetch-a"), tooling);

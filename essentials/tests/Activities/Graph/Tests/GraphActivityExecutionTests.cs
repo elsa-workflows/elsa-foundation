@@ -946,11 +946,21 @@ public sealed class GraphActivityExecutionTests : IDisposable
                 "count-distinct-inputs" => parameters["numbers"].GetInt32() +
                     parameters.Values.Single(value => value.ValueKind == JsonValueKind.String).GetString()!.Length + parameters.Count,
                 "constant" when parameters.Count == 0 => 42,
-                "read-variable" => request.AmbientVariables["RunningTotal"].GetInt32() + 2,
+                "read-variable" => ReadVariable(request, "RunningTotal").GetInt32() + 2,
                 "wrong-type" => "not-an-int",
                 _ => throw new InvalidOperationException("Unexpected expression source.")
             };
             return ValueTask.FromResult(JsonSerializer.SerializeToElement(result));
+        }
+
+        private static JsonElement ReadVariable(ExpressionEvaluationRequest request, string name)
+        {
+            // The test language's opaque variable access uses the host-side lookup.
+            var reader = Assert.IsAssignableFrom<IExpressionVariableReader>(request.VariableReader);
+            Assert.Contains(name, reader.CandidateNames);
+            var read = reader.Read(name);
+            Assert.Equal(ExpressionVariableReadOutcome.Present, read.Outcome);
+            return read.Value;
         }
     }
 

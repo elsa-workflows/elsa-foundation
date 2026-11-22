@@ -152,7 +152,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             {
                 ["A"] = new WorkflowRequestExpressionParameterBinding("a"),
                 ["B"] = new WorkflowRequestExpressionParameterBinding("b")
-            }, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            }, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var value = new WorkflowArgumentState("value", new ArgumentValue(
             JsonSerializer.SerializeToElement(sum, new JsonSerializerOptions(JsonSerializerDefaults.Web)), "JavaScript"), null, null, null, null);
         var executable = await PublishPlacedBodyAsync(value, assignOutput: true, rootSetter: true, sumInputs: true);

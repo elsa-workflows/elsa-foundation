@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -188,7 +189,7 @@ public sealed class RuntimeHistoryCandidateTests
         var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
         using var fixture = await Fixture.Create(Policy("ActivityCompleted", "ActivityContinuationCompleted"), coalescing: accessor);
         ActivityCompletion Completion(string outcome) => new("activity", "attempt",
-            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), outcome, At.AddSeconds(5), "contract");
+            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), OutcomeSelection.Named(outcome), At.AddSeconds(5), "contract");
         var state = Activity(ActivityExecutionStatus.Completed) with { Completion = Completion(original) };
         var logical = await fixture.Capture.EnrichAsync(Commit("buffered-exact", RuntimeCheckpointNames.ActivityCompleted, activity: state) with
         {
@@ -221,7 +222,7 @@ public sealed class RuntimeHistoryCandidateTests
         var replacement = new string((char)0xd801, 1);
         using var fixture = await Fixture.Create(Policy("ActivityCompleted", "ActivityContinuationCompleted"));
         ActivityCompletion Completion(string outcome) => new("activity", "attempt",
-            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), outcome, At.AddSeconds(5), "contract");
+            ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), OutcomeSelection.Named(outcome), At.AddSeconds(5), "contract");
         var state = Activity(ActivityExecutionStatus.Completed) with { Completion = Completion(original) };
         var captured = await fixture.Capture.EnrichAsync(Commit("logical-exact", RuntimeCheckpointNames.ActivityCompleted, activity: state) with
         {

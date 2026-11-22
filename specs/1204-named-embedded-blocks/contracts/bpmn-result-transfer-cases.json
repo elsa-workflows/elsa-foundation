@@ -1105,7 +1105,7 @@
                               "collectionKind": "single"
                             },
                             "options": {},
-                            "capabilityProfile": "binding-pure-v1",
+                            "capabilityProfile": "binding-readonly-v1",
                             "parameters": {
                               "prior": {
                                 "kind": "ActivityResult",
@@ -1416,7 +1416,7 @@
                             "collectionKind": "single"
                           },
                           "options": {},
-                          "capabilityProfile": "binding-pure-v1",
+                          "capabilityProfile": "binding-readonly-v1",
                           "parameters": {
                             "prior": {
                               "kind": "Variable",
@@ -1644,7 +1644,7 @@
                             "collectionKind": "single"
                           },
                           "options": {},
-                          "capabilityProfile": "binding-pure-v1",
+                          "capabilityProfile": "binding-readonly-v1",
                           "parameters": {
                             "prior": {
                               "kind": "Variable",
@@ -1894,7 +1894,7 @@
                                             "collectionKind": "single"
                                           },
                                           "options": {},
-                                          "capabilityProfile": "binding-pure-v1",
+                                          "capabilityProfile": "binding-readonly-v1",
                                           "parameters": {
                                             "counter": {
                                               "kind": "Variable",
@@ -2156,7 +2156,7 @@
                                                   "collectionKind": "single"
                                                 },
                                                 "options": {},
-                                                "capabilityProfile": "binding-pure-v1",
+                                                "capabilityProfile": "binding-readonly-v1",
                                                 "parameters": {
                                                   "counter": {
                                                     "kind": "Variable",
@@ -2567,7 +2567,7 @@
                                           "collectionKind": "single"
                                         },
                                         "options": {},
-                                        "capabilityProfile": "binding-pure-v1",
+                                        "capabilityProfile": "binding-readonly-v1",
                                         "parameters": {
                                           "counter": {
                                             "kind": "Variable",
@@ -3605,7 +3605,7 @@
                               "collectionKind": "single"
                             },
                             "options": {},
-                            "capabilityProfile": "binding-pure-v1",
+                            "capabilityProfile": "binding-readonly-v1",
                             "parameters": {
                               "prior": {
                                 "kind": "ActivityResult",
@@ -3779,7 +3779,7 @@
                                     "collectionKind": "single"
                                   },
                                   "options": {},
-                                  "capabilityProfile": "binding-pure-v1",
+                                  "capabilityProfile": "binding-readonly-v1",
                                   "parameters": {
                                     "prior": {
                                       "kind": "ActivityResult",
@@ -4116,7 +4116,7 @@
                             "collectionKind": "single"
                           },
                           "options": {},
-                          "capabilityProfile": "binding-pure-v1",
+                          "capabilityProfile": "binding-readonly-v1",
                           "parameters": {
                             "prior": {
                               "kind": "ActivityResult",
@@ -4394,7 +4394,7 @@
                                             "collectionKind": "single"
                                           },
                                           "options": {},
-                                          "capabilityProfile": "binding-pure-v1",
+                                          "capabilityProfile": "binding-readonly-v1",
                                           "parameters": {
                                             "counter": {
                                               "kind": "Variable",
@@ -4637,7 +4637,7 @@
                                           "collectionKind": "single"
                                         },
                                         "options": {},
-                                        "capabilityProfile": "binding-pure-v1",
+                                        "capabilityProfile": "binding-readonly-v1",
                                         "parameters": {
                                           "counter": {
                                             "kind": "Variable",
@@ -4976,7 +4976,7 @@
                                           "collectionKind": "single"
                                         },
                                         "options": {},
-                                        "capabilityProfile": "binding-pure-v1",
+                                        "capabilityProfile": "binding-readonly-v1",
                                         "parameters": {
                                           "counter": {
                                             "kind": "Variable",

@@ -300,7 +300,7 @@ describe("activity property organization", () => {
             resultType: { alias: "String", collectionKind: "Single" },
             parameters: { OrderId: binding },
             options: {},
-            capabilityProfile: "binding-pure-v1"
+            capabilityProfile: "binding-readonly-v1"
           }
         }
       } }),
@@ -340,7 +340,7 @@ describe("activity property organization", () => {
             resultType: { alias: "String", collectionKind: "Single" },
             parameters: { OrderId: binding },
             options: {},
-            capabilityProfile: "binding-pure-v1"
+            capabilityProfile: "binding-readonly-v1"
           }
         }
       } }),

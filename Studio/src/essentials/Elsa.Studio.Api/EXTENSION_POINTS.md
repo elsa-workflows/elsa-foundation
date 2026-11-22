@@ -49,7 +49,7 @@ Studio API is the composition root for Studio.Core contracts. Frontend lifecycle
 - Kind: Contributor; optional `StudioExpressionEditorContribution.variableAdditionPreservation` on `api.expressionEditors`.
 - Signature: `{ language, revision, allows(expression: Readonly<Record<string, unknown>>): boolean }`.
 - The language owner proves whether introducing an unrelated variable preserves an authored expression. The shared native-block planner receives the verdict through the composing host; Workflows does not parse another module's source language. Missing, duplicate or faulting language support refuses the rewrite. Replacing support or its revision invalidates a preview.
-- Known implementation: JavaScript expression editor (`extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-pure-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
+- Known implementation: JavaScript expression editor (`extensions/ExpressionEditors.JavaScript`, cross-domain), admitting only its bounded `binding-readonly-v1` numeric/declared-argument forms. This support does not validate or execute arbitrary source.
 
 ### Workflow canvas editor contributions (SDK — Elsa.Studio.Hosting)
 

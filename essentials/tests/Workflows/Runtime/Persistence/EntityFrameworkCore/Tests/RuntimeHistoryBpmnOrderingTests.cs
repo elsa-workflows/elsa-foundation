@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn;
 using System.Reflection;
@@ -38,7 +39,7 @@ public sealed class RuntimeHistoryBpmnOrderingTests
         var root = new ActivityExecutionState(new("root", "worker-run", "history-root", "root-authored", "test", "1"),
             ActivityExecutionStatus.Completed, null, 1, at, at, at, null, null, null, null,
             ActivitySchedulingProvenance.From("worker-run", null, null, null, null, null, null, "test"), null, [], [], 0, 0, new Dictionary<string, string>())
-        { Completion = new("root", "root-attempt", ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), "Done", at, "contract") };
+        { Completion = new("root", "root-attempt", ValueEnvelope.Null(new ValueTypeDescriptor("test/result"), ValueProtectionPolicy.InstanceInline), OutcomeSelection.Named("Done"), at, "contract") };
         var executions = Fake<IWorkflowExecutionStateStore>((method, _) => method.Name == "FindAsync"
             ? ValueTask.FromResult<WorkflowExecutionState?>(prior) : throw new InvalidOperationException(method.Name));
         var activities = Fake<IActivityExecutionStateStore>((method, args) => method.Name == "ListPageAsync"

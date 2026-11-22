@@ -47,8 +47,11 @@ public sealed class TriggerInputMapperTests
     {
         var evaluator = new RecordingEvaluator(request =>
         {
-            Assert.True(request.Capabilities.IsBindingPure);
-            Assert.Empty(request.AmbientVariables);
+            Assert.True(request.Capabilities.IsBindingReadonly);
+            Assert.True(request.Capabilities.AllowsNondeterminism);
+            Assert.False(request.Capabilities.AllowsAmbientWorkflowState);
+            Assert.False(request.Capabilities.AllowsMutation);
+            Assert.Null(request.VariableReader);
             Assert.Equal(new[] { "factor", "sourceValue" }, request.ParameterValues.Keys);
             Assert.All(request.Definition.Parameters.Values, binding => Assert.IsType<LiteralExpressionParameterBinding>(binding));
             Assert.Equal(4, request.ParameterValues["sourceValue"].GetInt32());
@@ -57,7 +60,7 @@ public sealed class TriggerInputMapperTests
         });
         var mapper = Mapper(evaluator, "JavaScript");
         var expression = new TriggerExpressionBinding("JavaScript", "sourceValue * factor", new("Int32"), Json("{}"),
-            ExpressionCapabilityProfiles.BindingPureV1,
+            ExpressionCapabilityProfiles.BindingReadonlyV1,
             new Dictionary<string, TriggerValueBinding>
             {
                 ["sourceValue"] = new TriggerSourceBinding(["payload", "value"]),
@@ -77,7 +80,7 @@ public sealed class TriggerInputMapperTests
     {
         var evaluator = new RecordingEvaluator(_ => throw new InvalidOperationException("must not evaluate"));
         var expression = new TriggerExpressionBinding("JavaScript", "sourceValue", new("String"), Json("{}"),
-            ExpressionCapabilityProfiles.BindingPureV1,
+            ExpressionCapabilityProfiles.BindingReadonlyV1,
             new Dictionary<string, TriggerValueBinding> { ["sourceValue"] = new TriggerSourceBinding(["payload", "absent"]) });
 
         var result = await Mapper(evaluator, "JavaScript").MapAsync(Contract(new WorkflowDeclaredInput("result", new("String"), true)),
@@ -108,7 +111,7 @@ public sealed class TriggerInputMapperTests
         const string secret = "private-source-value";
         var evaluator = new RecordingEvaluator(_ => throw new InvalidOperationException(secret));
         var expression = new TriggerExpressionBinding("JavaScript", "x", new("String"), Json("{}"),
-            ExpressionCapabilityProfiles.BindingPureV1,
+            ExpressionCapabilityProfiles.BindingReadonlyV1,
             new Dictionary<string, TriggerValueBinding> { ["x"] = new TriggerLiteralBinding(Json($"\"{secret}\"")) });
 
         var result = await Mapper(evaluator, "JavaScript").MapAsync(Contract(new WorkflowDeclaredInput("result", new("String"), true)),
@@ -163,10 +166,11 @@ public sealed class TriggerInputMapperTests
     }
 
     [Theory]
-    [InlineData(false, "binding-pure-v1")]
+    [InlineData(false, "binding-readonly-v1")]
     [InlineData(true, "unknown-profile")]
-    [InlineData(true, "Binding-Pure-V1")]
-    public async Task Missing_evaluator_or_non_pure_profile_is_unavailable_with_an_installed_language(bool evaluatorAvailable, string profile)
+    [InlineData(true, "Binding-Readonly-V1")]
+    [InlineData(true, "binding-pure-v1")]
+    public async Task Missing_evaluator_or_non_readonly_profile_is_unavailable_with_an_installed_language(bool evaluatorAvailable, string profile)
     {
         var evaluator = new RecordingEvaluator(_ => throw new InvalidOperationException("must not evaluate"));
         var mapper = Mapper(evaluatorAvailable ? evaluator : null, "JavaScript");
@@ -195,7 +199,7 @@ public sealed class TriggerInputMapperTests
 
     private static TriggerInputMapper Mapper(IPortableExpressionEvaluator? expressions = null, params string[] installedLanguages) =>
         new(new WorkflowExecutableInputValidator(new Types()), expressions, installedLanguages.Select(language => new InstalledLanguage(language)));
-    private static TriggerExpressionBinding Expression(string language, string profile = ExpressionCapabilityProfiles.BindingPureV1) =>
+    private static TriggerExpressionBinding Expression(string language, string profile = ExpressionCapabilityProfiles.BindingReadonlyV1) =>
         new(language, "42", new("Int32"), Json("{}"), profile, new Dictionary<string, TriggerValueBinding>());
     private static WorkflowExecutableInputContract Contract(params WorkflowDeclaredInput[] inputs) => new(1, inputs);
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();

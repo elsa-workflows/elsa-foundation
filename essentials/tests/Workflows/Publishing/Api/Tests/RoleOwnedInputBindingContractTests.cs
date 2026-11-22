@@ -256,7 +256,7 @@ public sealed class RoleOwnedInputBindingContractTests
         var type = new TypeReference("String", collectionKind);
         var input = new InputDefinition("message", "Text", type, null, "Text", null, false);
         var portable = new ExpressionDefinition(language, "42", type, new Dictionary<string, ExpressionParameterBinding>(),
-            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+            JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
         var raw = compiler.Compile("node", input, new ArgumentValue("42", language));
         var promoted = compiler.Compile("node", input, new ArgumentValue(JsonSerializer.SerializeToElement(portable), language));
         Assert.Equal(raw.Source, promoted.Source); Assert.Equal(raw.TargetType, promoted.TargetType);

@@ -204,7 +204,7 @@ public sealed partial class StandaloneTriggerAdmissionTests
         new("grant-" + id, "trigger", id, id, "Published", "old-model-hint", type, 1, TriggerGrantStatus.Granted, "departed-creator", Now));
     private static TriggerSubscription ExpressionSubscription(string id) => new(id, "trigger", id, "Published", "native",
         1, 1, true, [new("account", new TriggerExpressionBinding("JavaScript", "account", new("String"), Json("{}"),
-            ExpressionCapabilityProfiles.BindingPureV1, new Dictionary<string, TriggerValueBinding>
+            ExpressionCapabilityProfiles.BindingReadonlyV1, new Dictionary<string, TriggerValueBinding>
             { ["account"] = new TriggerSourceBinding(["payload", "account"]) }))], new(TriggerManagementKind.Studio),
         new("grant-" + id, "trigger", id, id, "Published", "native", "http", 1, TriggerGrantStatus.Granted, "departed-creator", Now));
     private static TriggerInputMapper InputMapper(IPortableExpressionEvaluator evaluator, IEnumerable<IPortableExpressionHandler> handlers) =>

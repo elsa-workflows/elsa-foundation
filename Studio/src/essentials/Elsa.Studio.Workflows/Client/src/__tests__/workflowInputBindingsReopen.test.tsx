@@ -41,7 +41,7 @@ const reopened: ActivityNode = {
           data3: { kind: "Variable", declaringScopeNodeId: "workflow", variableKey: "escaped-payload" }
         },
         options: {},
-        capabilityProfile: "binding-pure-v1"
+        capabilityProfile: "binding-readonly-v1"
       }
     }
   }

@@ -10,7 +10,7 @@ const record = (value: unknown): value is Fields => value !== null && typeof val
 export function preservesJavaScriptWithAddedVariable(expression: Fields): boolean {
   if (typeof expression.language !== "string" || expression.language.toLowerCase() !== "javascript"
     || typeof expression.source !== "string" || !record(expression.parameters)
-    || expression.capabilityProfile !== "binding-pure-v1") return false;
+    || expression.capabilityProfile !== "binding-readonly-v1") return false;
   const parameters = expression.parameters;
   const number = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/;
   const operand = (source: string) => {

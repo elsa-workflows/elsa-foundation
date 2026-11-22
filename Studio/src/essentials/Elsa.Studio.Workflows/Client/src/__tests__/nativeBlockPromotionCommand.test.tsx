@@ -66,6 +66,7 @@ it("opens the review dialog for the selected block", async () => {
   render();
   expect(promote()!.disabled).toBe(false);
   flushSync(() => promote()!.click());
-  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] .studio-dialog-title')?.textContent).toBe("Promote to reusable activity"));
+  // Promotion is action-loaded; the cold import may outlast waitFor's one-second default on the shared machine.
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] .studio-dialog-title')?.textContent).toBe("Promote to reusable activity"), { timeout: 5_000 });
   expect(document.body.textContent).toContain("Proposed reusable activity");
 });

@@ -475,7 +475,7 @@ function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
                       resultType: { alias: "String", collectionKind: "Single" },
                       parameters: { customer: { kind: "WorkflowRequest", memberKey: "customer-id", path: null } },
                       options: {},
-                      capabilityProfile: "binding-pure-v1"
+                      capabilityProfile: "binding-readonly-v1"
                     }
                   }
                 } } : {}),

@@ -110,10 +110,10 @@ public sealed class WorkflowExecutableInputValidatorTests
 
     [Theory]
     [InlineData(true, false, false)]
-    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
     [InlineData(false, false, false)]
     [InlineData(false, true, true)]
-    public void Explicit_null_is_accepted_only_for_nullable_optional_inputs(bool isRequired, bool isNullable, bool isValid)
+    public void Explicit_null_is_accepted_for_nullable_inputs_independently_of_requiredness(bool isRequired, bool isNullable, bool isValid)
     {
         var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));
         var result = validator.Validate(
@@ -131,6 +131,18 @@ public sealed class WorkflowExecutableInputValidatorTests
         Assert.Equal(WorkflowExecutableInputValidationReasonCodes.IncompatibleValue, finding.ReasonCode);
         Assert.Equal("value", finding.InputName);
         Assert.Empty(result.NormalizedInputs);
+    }
+
+    [Fact]
+    public void Required_nullable_input_without_a_default_accepts_supplied_null()
+    {
+        var validator = new WorkflowExecutableInputValidator(Registry(("String", typeof(string))));
+        var result = validator.Validate(
+            Contract(new WorkflowDeclaredInput("value", new TypeReference("String"), true, isNullable: true)),
+            [Pair("value", Json("null"))]);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(JsonValueKind.Null, result.NormalizedInputs["value"].ValueKind);
     }
 
     [Theory]

@@ -23,12 +23,12 @@ export function register(api: ElsaStudioModuleApi) {
     order: 100,
     variableAdditionPreservation: {
       language: javaScriptSyntax,
-      revision: "binding-pure-v1.1",
+      revision: "explicit-args-variable-addition-v2",
       allows: preservesJavaScriptWithAddedVariable
     },
     reusableBoundaryPreservation: {
       language: javaScriptSyntax,
-      revision: "explicit-args-closed-boundary-v1",
+      revision: "explicit-args-closed-boundary-v2",
       allows: preservesJavaScriptWithAddedVariable
     },
     supports: context => context.syntax === javaScriptSyntax,

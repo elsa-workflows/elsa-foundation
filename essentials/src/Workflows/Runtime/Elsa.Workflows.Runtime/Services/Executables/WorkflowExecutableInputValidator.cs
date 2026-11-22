@@ -116,7 +116,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             {
                 if (input.Value.ValueKind == JsonValueKind.Null)
                 {
-                    if (!declaration.IsRequired && declaration.IsNullable)
+                    if (declaration.IsNullable)
                         continue;
 
                     return WorkflowExecutableInputValidation.Failure(

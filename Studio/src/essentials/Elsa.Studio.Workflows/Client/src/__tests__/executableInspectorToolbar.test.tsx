@@ -16,6 +16,8 @@ describe("Executable Inspector toolbar", () => {
       return response(null, 404);
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+    // The registered inspector route is lazy; wait for its toolbar before judging request ordering.
+    await vi.waitFor(() => expect(toolbarButton(container, "Refresh")).not.toBeNull(), { timeout: 5_000 });
     await vi.waitFor(() => expect(requests).toBe(1));
     toolbarButton(container, "Refresh")!.click();
     await vi.waitFor(() => expect(container.textContent).toContain("sha256:current"));

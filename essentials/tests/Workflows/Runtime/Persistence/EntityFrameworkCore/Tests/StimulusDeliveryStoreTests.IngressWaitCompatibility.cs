@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Models;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Testing;
@@ -204,7 +205,7 @@ public sealed partial class StimulusDeliveryStoreTests
             "document-version" => state with { DocumentVersion = ActivityExecutionValueFlowDocumentVersions.Legacy },
             "document-incompatible" => state with { ValueFlowCompatibility = ActivityExecutionValueFlowDocumentVersionGuard.Incompatible(
                 ActivityExecutionValueFlowDocumentVersions.Current, ActivityExecutionValueFlowDocumentVersions.Current, "incompatible-test", "Constructed incompatible document.") },
-            "completion-present" => state with { Completion = new(state.InvocationId, "earlier-attempt", state.PrivateState!.Value, "Done", Now, "earlier-contract") },
+            "completion-present" => state with { Completion = new(state.InvocationId, "earlier-attempt", state.PrivateState!.Value, OutcomeSelection.Named("Done"), Now, "earlier-contract") },
             _ => throw new ArgumentOutOfRangeException(nameof(defect))
         };
     }

@@ -1518,7 +1518,9 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Revoke");
     click(buttonByText(rendered.container, "Revoke"));
     await waitForText(rendered.container, "Visible inbound uses");
-    expect(rendered.container.textContent).toContain("7/18/2026");
+    const asOfLabel = [...rendered.container.querySelectorAll(".ad-review-facts dt")]
+      .find(label => label.textContent === "Usage snapshot as of");
+    expect(asOfLabel?.nextElementSibling?.textContent).toBe(new Date("2026-07-18T12:00:00Z").toLocaleString());
     expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and run data are preserved");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Type semantic version"), "1.0.0");
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Security response");
