@@ -6,26 +6,28 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>The native dispatch owner contributes its exact edge before logical history capture.</summary>
-internal sealed class WorkflowDispatchHistoryEnricher(IPersistenceAccessContextAccessor access,
+internal sealed class WorkflowDispatchHistoryEnricher(IPersistenceAccessContextAccessor? access = null,
     IRuntimeHistorySourceExtension? source = null) : IRuntimeCheckpointCommitEnricher
 {
+    private PersistenceAccessContext AccessContext => access?.Current ??
+        throw new NotSupportedException("Captured native dispatch requires explicit persistence access.");
     public int Order => 1900;
     public bool CanSupplyHistorySource(string kind, IRuntimeHistorySourceExtension selected) =>
         kind is WorkflowDispatchLifecycle.StartChildIntentKind or WorkflowDispatchLifecycle.ResumeParentIntentKind &&
-        source is not null && ReferenceEquals(source, selected);
+        source is not null && access is not null && ReferenceEquals(source, selected);
 
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
         if (source is null || commit.HistoryBatches is { Count: > 0 } ||
             commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush) || commit.StateChanges.WorkflowDispatches.Count == 0)
             return commit;
-        var context = access.Current;
+        var context = AccessContext;
         PersistenceScope? scope = null;
         var owned = new Dictionary<string, RuntimeHistoryCausation>(StringComparer.Ordinal);
         var enriched = await source.AddFactsAsync(commit, policy =>
         {
             if (policy is not { PolicyId: "runtime-history-v5", Version: 5 }) return [];
-            if (access.Current != context) throw new InvalidOperationException("Dispatch history access changed.");
+            if (AccessContext != context) throw new InvalidOperationException("Dispatch history access changed.");
             var facts = Facts(commit, policy).ToArray();
             if (facts.Length == 0) return [];
             scope = context.RequireScope();
@@ -40,7 +42,7 @@ internal sealed class WorkflowDispatchHistoryEnricher(IPersistenceAccessContextA
             return facts;
         }, cancellationToken);
         if (scope is null) return enriched;
-        if (access.Current != context) throw new InvalidOperationException("Dispatch history access changed.");
+        if (AccessContext != context) throw new InvalidOperationException("Dispatch history access changed.");
         return RuntimeHistorySourceFacts.WithPostCommitCausation(enriched,
             intent => owned.GetValueOrDefault(intent.IntentId), scope);
     }
@@ -50,7 +52,7 @@ internal sealed class WorkflowDispatchHistoryEnricher(IPersistenceAccessContextA
         cancellationToken.ThrowIfCancellationRequested();
         var batches = (commit.HistoryBatches ?? []).Where(batch => batch.Policy is { PolicyId: "runtime-history-v5", Version: 5 }).ToArray();
         if (batches.Length == 0) return ValueTask.CompletedTask;
-        var scope = access.Current.RequireScope();
+        var scope = AccessContext.RequireScope();
         if (commit.Checkpoint.Metadata.ContainsKey(RuntimeMetadataKeys.CoalescedFlush))
         {
             var events = batches.SelectMany(batch => batch.Candidates).Select(candidate => candidate.Event).ToArray();

@@ -953,6 +953,8 @@ internal sealed class RecordingWorkflowExecutionActorProvider(
         get { lock (_gate) return _envelopes.ToArray(); }
     }
 
+    internal Func<WorkflowExecutionActorActivationRequest, Task>? BeforeAgentReturned { get; set; }
+
     public WorkflowExecutionActorCapabilities Capabilities => inner.Capabilities;
 
     public async ValueTask<IWorkflowExecutionActor> GetAgentAsync(
@@ -962,6 +964,7 @@ internal sealed class RecordingWorkflowExecutionActorProvider(
         lock (_gate)
             _activations.Add(request);
         var actor = await inner.GetAgentAsync(request, cancellationToken);
+        if (BeforeAgentReturned is { } hook) await hook(request);
         return new RecordingWorkflowExecutionActor(actor, Record);
     }
 
