@@ -55,7 +55,8 @@ test("Theme builder keeps a real inventory selection after deleting a managed th
   await expect(page.getByTestId("selectable-ids")).toHaveText("[]");
   await page.locator(".theme-builder-list button").filter({ hasText: "Managed Theme" }).click();
   await expect(page.locator(".theme-builder-detail h3")).toHaveText("Managed Theme");
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete theme", exact: true }).click();
   await expect(page.locator(".studio-toast").getByText("Theme deleted.", { exact: true })).toBeVisible();
   await expect(page.locator(".theme-builder-detail h3")).toHaveText("Linen");
   await expect(page.locator(".theme-builder-list button.active")).toHaveCount(1);

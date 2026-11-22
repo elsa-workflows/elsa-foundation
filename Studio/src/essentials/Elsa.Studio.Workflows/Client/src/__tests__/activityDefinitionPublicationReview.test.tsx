@@ -34,7 +34,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
     expect(postJson).toHaveBeenCalledTimes(1);
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(buttonByText(harness.container, "Review & publish"));
     click(buttonByText(harness.container, "Review & publish"));
@@ -195,7 +195,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).not.toContain("Other impact · additive");
     expect(harness.container.querySelector('[role="dialog"]')?.textContent).toContain("Ready to publish");
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("");
@@ -255,10 +255,10 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(buttonByText(harness.container, "Publishing atomically…")).toBeTruthy());
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!.focus();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(harness.container.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
     expect(publicationPending).toHaveBeenCalledWith(true);
     expect(publicationPending).not.toHaveBeenCalledWith(false);
@@ -293,7 +293,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(harness.container.textContent).toContain("Reconcile authoritative status"));
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(harness.container.textContent).not.toContain("private transport detail");
     expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true]);
@@ -342,7 +342,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount, onFocusDiagnostic, render };
+  return { container: document.body, unmount, onFocusDiagnostic, render };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {

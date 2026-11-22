@@ -285,15 +285,15 @@ Workflows:
 
 Activity definitions:
 
-- [ ] **X3.16** (#5052) [source] `WF/ActivityDefinitionCreateDialog.tsx:116` (`.ad-create-dialog`).
-- [ ] **X3.17** (#5053) [source] `WF/ActivityDefinitionTestRunDialog.tsx:289`; text "Close" button at `:402`.
-- [ ] **X3.18** (#5054) [source] `WF/ActivityDefinitionPublicationReview.tsx:491`.
-- [ ] **X3.19** (#5055) [source] `WF/ActivityDefinitionManagementDialogShell.tsx:21`, shared by the Draft, Fork,
-  Provider migration and Version lifecycle dialogs. Cancel sits on the left at `:41`.
-- [ ] **X3.20** (#5056) [source] Remove dialog kickers: "Design-owned mutable work"
+- [x] **X3.16** (#5052) [source] `WF/ActivityDefinitionCreateDialog.tsx:116` (`.ad-create-dialog`). (PR #5306)
+- [x] **X3.17** (#5053) [source] `WF/ActivityDefinitionTestRunDialog.tsx:289`; text "Close" button at `:402`. (PR #5306)
+- [x] **X3.18** (#5054) [source] `WF/ActivityDefinitionPublicationReview.tsx:491`. (PR #5306)
+- [x] **X3.19** (#5055) [source] `WF/ActivityDefinitionManagementDialogShell.tsx:21`, shared by the Draft, Fork,
+  Provider migration and Version lifecycle dialogs. Cancel sits on the left at `:41`. (PR #5306)
+- [x] **X3.20** (#5056) [source] Remove dialog kickers: "Design-owned mutable work"
   (`ActivityDefinitionDraftDialog.tsx:76`), "Atomic parallel draft"
   (`ActivityDefinitionProviderMigrationDialog.tsx:64`), "Immutable publication"
-  (`ActivityDefinitionPublicationReview.tsx:376`). `needs: D3`
+  (`ActivityDefinitionPublicationReview.tsx:376`). `needs: D3` (PR #5306)
 
 Host and Dashboard:
 
@@ -429,7 +429,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
 - [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
-- [ ] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance.
+- [x] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance. (PR #5304)
 - [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
@@ -544,22 +544,22 @@ the designer header is a documented exception.
   `BpmnInterchangeCommands.tsx` (6).
 - [ ] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
   `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`.
-- [ ] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
+- [x] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
-  `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`.
+  `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
 - [ ] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`.
 - [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
 - [ ] **X11.19** (#5168) [check] ETL draft toolbar.
-- [ ] **X11.20** (#5169) [source] Icon-only buttons named by `title` only: `H/modules/PackageFeedsPage.tsx:172,
-  175`, `H/modules/ModuleManagementPage.tsx:440`. `needs: K3`
+- [x] **X11.20** (#5169) [source] Icon-only buttons named by `title` only: `H/modules/PackageFeedsPage.tsx:172,
+  175`, `H/modules/ModuleManagementPage.tsx:440`. `needs: K3` (PR #5304)
 
 ### X12. Native `<details>` instead of `AdvancedSection` / `TechnicalDetails`
 
 - [ ] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567`
   [source]). "Advanced" appears three times with three class names.
-- [ ] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`.
+- [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
   `closest("details")`; keep that focus behaviour working.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
@@ -567,7 +567,7 @@ the designer header is a documented exception.
   `DecisionInputsEditor.tsx:182` [source].
 - [ ] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
   `OverflowMenu`.
-- [ ] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`.
+- [x] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`. (PR #5304)
 - [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
   about `:193`).
 - [ ] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles.
@@ -591,12 +591,12 @@ Uppercase labels (`needs: D3`):
 - [x] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`, (PR #5309)
   `:275`; `WF/activityContractEditor.css:280–281`; `WF/activityDefinitionDependencyExplorer.css:29`;
   `WF/activityUpgradeWorkbench.css:578–580`.
-- [ ] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`.
+- [x] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`. (PR #5304)
 - [ ] **X13.4** (#5187) [verified] `H/weaver/weaver.css:37`; [source] `H/weaver/weaverControls.css:191, 251`.
 - [ ] **X13.5** (#5188) [verified] `BACK/backends.css:39`.
-- [ ] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
+- [x] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
   `H/components/ThemeSwitcher.css:167`, `H/themes/layouts.css:76`, `H/themes/signal.css:26`,
-  `H/themes/elsaCloud.css:24`.
+  `H/themes/elsaCloud.css:24`. (PR #5304)
 - [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
@@ -763,23 +763,23 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Host
 
-- [ ] **H1** (#5252) [seen] Sign-in error screen uses a blue button, red title and a different font from the
-  rest of Studio (`H/auth/studioAuth.tsx:114` `studio-auth-retry` [verified]).
-- [ ] **H2** (#5253) [seen] Theme builder has five header buttons and none is primary
+- [x] **H1** (#5252) [seen] Sign-in error screen uses a blue button, red title and a different font from the
+  rest of Studio (`H/auth/studioAuth.tsx:114` `studio-auth-retry` [verified]). (PR #5304)
+- [x] **H2** (#5253) [seen] Theme builder has five header buttons and none is primary
   (`H/modules/ThemeBuilderPage.tsx:375–379` [source]). Make Save the primary and move the rest into an
-  `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`.
-- [ ] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance.
+  `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`. (PR #5304)
+- [x] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance. (PR #5304)
 - [x] **H4** (#5255) Workspace tabs reuse transient create routes and evict the least recently visited clean background tab beyond 12. Unsaved and pinned tabs are protected. (PR #5302)
-- [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
-  **[check]** how it behaves at narrow widths.
+- [x] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
+  **[check]** how it behaves at narrow widths. (PR #5304)
 - [ ] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
   `H/components/ThemeSwitcher.tsx:57, 105`, `H/workspace/WorkspaceTabStrip.tsx:295–317`,
   `H/weaver/WeaverSurface.tsx:305–323`, the Backends switcher popover → `OverflowMenu` /
   `AnchoredPopover`. None of these was captured in the running app.
-- [ ] **H7** (#5258) [source] Redundant `label={<><span>…</span></>}` wrappers and duplicate `aria-label` on
-  `StudioField`: `H/modules/PackageFeedsPage.tsx:351–354`, `H/modules/ThemeBuilderPage.tsx:403–431`.
-- [ ] **H8** (#5259) [source] `H/modules/ThemeBuilderPage.tsx:479–491` deletes an asset from a button.
-  **[check]** that it goes through `api.dialogs.confirm`.
+- [x] **H7** (#5258) [source] Redundant `label={<><span>…</span></>}` wrappers and duplicate `aria-label` on
+  `StudioField`: `H/modules/PackageFeedsPage.tsx:351–354`, `H/modules/ThemeBuilderPage.tsx:403–431`. (PR #5304)
+- [x] **H8** (#5259) [source] `H/modules/ThemeBuilderPage.tsx:479–491` deletes an asset from a button.
+  **[check]** that it goes through `api.dialogs.confirm`. (PR #5304)
 
 ## Documentation changes the decisions require
 
