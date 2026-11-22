@@ -43,7 +43,7 @@
 .otel-muted {
   margin: 4px 0 0;
   color: var(--otel-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .otel-header-summary {
@@ -60,11 +60,11 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--otel-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--otel-surface-subtle);
   color: var(--otel-text-muted);
-  font-size: 11px;
-  font-weight: 760;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 4px 7px;
 }
 
@@ -79,7 +79,7 @@
   justify-content: space-between;
   gap: 12px;
   border: 1px solid var(--otel-border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: var(--otel-surface-subtle);
   padding: 10px 12px;
 }
@@ -88,15 +88,15 @@
   flex: 1 1 15rem;
   margin: 0;
   color: var(--otel-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.5;
 }
 
 .otel-capability-note a {
   flex: none;
   color: var(--otel-accent-text);
-  font-size: 12px;
-  font-weight: 760;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -106,7 +106,6 @@
   outline-offset: 2px;
 }
 
-.otel-tabs,
 .otel-toolbar,
 .otel-trace-detail-header {
   display: flex;
@@ -115,27 +114,26 @@
   flex-wrap: wrap;
 }
 
-.otel-tabs {
-  padding: 10px 0;
+.otel-signal-panel:not([hidden]) {
+  display: grid;
+  min-height: 0;
+  min-width: 0;
 }
 
-.otel-tabs button,
 .otel-toolbar button,
 .otel-trace-detail-header button {
   height: 30px;
   border: 1px solid var(--otel-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--otel-surface);
   color: var(--otel-text);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
-  font-weight: 760;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 0 10px;
 }
 
-.otel-tabs button:hover,
-.otel-tabs button.active,
 .otel-toolbar button:hover,
 .otel-trace-detail-header button:hover {
   border-color: var(--otel-accent);
@@ -153,11 +151,11 @@
   height: 30px;
   min-width: 120px;
   border: 1px solid var(--otel-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--otel-input);
   color: var(--otel-text);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   padding: 0 8px;
 }
 
@@ -184,10 +182,10 @@
 .otel-placeholder {
   min-height: 0;
   border: 1px solid var(--otel-border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: var(--otel-surface);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--studio-shadow-sm);
 }
 
 .otel-panel .otel-trace-list,
@@ -227,7 +225,7 @@
   color: var(--otel-text);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   padding: 8px;
   text-align: left;
 }
@@ -239,9 +237,8 @@
   background: var(--otel-surface-subtle);
   color: var(--otel-text-muted);
   cursor: default;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
 }
 
 .otel-trace-row:not(.header):hover,
@@ -266,7 +263,7 @@
 .otel-trace-row small {
   display: block;
   color: var(--otel-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 400;
 }
 
@@ -306,9 +303,8 @@
 .otel-trace-detail-header span,
 .otel-span-inspector header span {
   color: var(--otel-text-muted);
-  font-size: 11px;
-  font-weight: 760;
-  text-transform: uppercase;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
 }
 
 .otel-waterfall {
@@ -327,7 +323,7 @@
 
 .otel-waterfall-scale {
   color: var(--otel-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   padding: 0 0 6px;
 }
 
@@ -340,12 +336,12 @@
   width: 100%;
   min-height: 28px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--studio-radius-sm);
   background: transparent;
   color: var(--otel-text);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   padding: 2px 4px;
   text-align: left;
 }
@@ -397,9 +393,8 @@
 
 .otel-span-inspector dt {
   color: var(--otel-text-muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-size: var(--studio-label-size);
+  font-weight: 600;
 }
 
 .otel-span-inspector dd {
@@ -414,7 +409,7 @@
 .otel-span-inspector pre {
   overflow: auto;
   border: 1px solid var(--otel-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--otel-surface-subtle);
   color: var(--otel-text);
   padding: 8px;
@@ -445,7 +440,7 @@
 
 .otel-signal-card {
   border: 1px solid var(--otel-border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: var(--otel-surface-subtle);
   padding: 10px;
 }
@@ -454,7 +449,7 @@
   display: block;
   margin-top: 10px;
   color: var(--otel-text);
-  font-size: 24px;
+  font-size: var(--studio-page-title-size);
 }
 
 .otel-signal-card h4 {
@@ -465,7 +460,7 @@
 .otel-signal-card p {
   margin: 0;
   color: var(--otel-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .otel-source-list {
@@ -476,7 +471,7 @@
 
 .otel-source-row {
   border: 1px solid var(--otel-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--otel-surface-subtle);
   padding: 8px;
 }
@@ -490,7 +485,7 @@
 .otel-source-row span {
   margin-top: 3px;
   color: var(--otel-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .otel-empty,
