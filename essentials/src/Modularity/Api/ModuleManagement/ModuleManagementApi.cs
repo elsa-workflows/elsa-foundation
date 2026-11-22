@@ -26,6 +26,13 @@ public static class ModuleManagementApiEndpoints
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
+    // Host settings files are read by ASP.NET Core's JSON configuration provider, which accepts comments and trailing commas.
+    private static readonly JsonDocumentOptions ConfigurationDocumentOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     public static IEndpointRouteBuilder MapElsaModuleManagement(this IEndpointRouteBuilder endpoints)
     {
         var managementOptions = endpoints.ServiceProvider.GetRequiredService<IOptions<ModuleManagementApiOptions>>().Value;
@@ -414,7 +421,7 @@ public static class ModuleManagementApiEndpoints
             return new(path, new JsonObject { ["Nuplane"] = new JsonObject { ["Setup"] = new JsonObject { ["Feeds"] = new JsonArray() } } });
 
         var json = await File.ReadAllTextAsync(path, cancellationToken);
-        return new(path, JsonNode.Parse(json)?.AsObject() ?? new JsonObject());
+        return new(path, JsonNode.Parse(json, documentOptions: ConfigurationDocumentOptions)?.AsObject() ?? new JsonObject());
     }
 
     private static async Task WriteManagementConfigurationAsync(

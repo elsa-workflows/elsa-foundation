@@ -24,7 +24,31 @@ public sealed class ModuleManagementApiTests
     [Fact]
     public async Task Custom_host_can_read_registry_and_routes_use_configured_owner()
     {
-        var builder = WebApplication.CreateBuilder();
+        // Host settings files commonly carry comments (Foundation.Host's does); the registry must read them as ASP.NET Core does.
+        var contentRoot = Directory.CreateTempSubdirectory("elsa-module-management-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(contentRoot, "appsettings.json"), """
+                {
+                  // A commented host settings file.
+                  "Nuplane": {
+                    "Setup": {
+                      "Feeds": [],
+                    },
+                  },
+                }
+                """);
+            await AssertCustomHostAsync(contentRoot);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    private static async Task AssertCustomHostAsync(string contentRoot)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = contentRoot });
         builder.WebHost.UseTestServer();
         builder.Configuration[ManagementApiKeyAuthentication.ConfigurationKey] = ApiKey;
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog());
