@@ -1,7 +1,7 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, createForm, forms, formsPageMode, formsPageModeFromSession, message, statusOf, type FormVersion, type FormsPageMode, type TaskActor, type TaskForm } from "./taskApi";
@@ -158,10 +158,10 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
     setOpened(null); setWorkspaceTab("form");
     requestAnimationFrame(() => returnButtons.current.get(returnKey.current)?.focus());
   };
-  return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management"><StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? "Design the form" : opened ? opened.form.name : "Reusable task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
+  return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
+    {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
+    <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : opened ? "user-task-form-page-header--workspace" : undefined} title={editing ? "Design the form" : opened ? opened.form.name : "Reusable task forms"} description={editing || opened ? undefined : "Manage published task forms. Selecting a form in a workflow pins its current version automatically."} actions={<>
       {!editing && !opened && identity?.canManageForms && <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => { returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false); setForm(initial()); setEditing(true); }}>Create form version</StudioButton>}
-      {!editing && opened && <StudioButton disabled={busy} onClick={backToForms}>Back to forms</StudioButton>}
-      {editing && <StudioButton disabled={busy} onClick={() => closeEditor()}>Back to forms</StudioButton>}
       <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a></>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
     {formError && editing ? <StudioAlert tone="danger">{formError}{versionConflict && <StudioButton disabled={busy} onClick={() => void recoverVersion()}>Use next available version</StudioButton>}</StudioAlert> : null}

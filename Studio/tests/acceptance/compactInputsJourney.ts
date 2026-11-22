@@ -135,7 +135,7 @@ export async function compactInputsJourney(page: Page, info: TestInfo, capture: 
   await expect(technical.getByRole("heading", { name: "Authored source", exact: true })).toBeInViewport();
   await expect(technical.getByRole("heading", { name: "Capture details", exact: true })).toBeInViewport();
   await capture(page, info, "technical-details");
-  expect(valueRequests, "Opening presentation-only technical details does not re-read captured value evidence").toHaveLength(valueReadsBeforeDetails);
+  expect(valueRequests, "Opening presentation-only technical details does not re-read captured value data").toHaveLength(valueReadsBeforeDetails);
   await page.keyboard.press("Escape");
   await expect(technical).toBeHidden();
   await expect(details).toBeFocused();

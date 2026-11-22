@@ -54,7 +54,7 @@ export async function prepareAttachedExecution(context: StudioEndpointContext, w
   const [inspection, canvas, executionPage, scopePage] = await Promise.all([inspectionPromise, canvasPromise, pagePromise, scopePagePromise]);
   if (execution && (inspection?.activityExecutionId !== execution.activityExecutionId || inspection.workflowExecutionId !== workflowExecutionId
     || inspection.executableNodeId !== execution.executableNodeId || execution.workflowExecutionId !== workflowExecutionId)) {
-    throw Object.assign(new Error("Execution evidence identity did not match the requested occurrence."), { status: 404 });
+    throw Object.assign(new Error("Run identity did not match the requested occurrence."), { status: 404 });
   }
   if (canvas?.failed) throw Object.assign(new Error("Execution overlays could not be loaded. Retry the selection."), { status: canvas.denied ? 403 : 0 });
   const values = new Map<string, PreparedRuntimeValue>();

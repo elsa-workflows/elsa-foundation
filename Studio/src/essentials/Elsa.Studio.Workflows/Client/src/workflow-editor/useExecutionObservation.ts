@@ -22,7 +22,7 @@ export function isTerminalExecution(status?: string) {
 export async function readObservedExecution(context: StudioEndpointContext, executionId: string, artifactId?: string | null, signal?: AbortSignal) {
   const details = await getWorkflowInstance(context, executionId, signal);
   if (details.instance.workflowExecutionId !== executionId || artifactId && details.instance.artifactId !== artifactId)
-    throw new ExecutionObservationIdentityError("Runtime evidence identity did not match this execution.");
+    throw new ExecutionObservationIdentityError("Run identity did not match this execution.");
   return details;
 }
 

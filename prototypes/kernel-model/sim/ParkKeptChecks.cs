@@ -96,17 +96,226 @@ internal static class ParkKeptChecks
             Retained(exhausted.Message, "exhausted payload", ParkKeepReason.Consumed) && Retained(refused, "refused payload", ParkKeepReason.Consumed),
             "the sweep deletes expired ordinary markers and preserves expired kept rows");
         await owner.DisposeAsync();
-        await using var successor = (await new DurableHost([MakeOwner("park-next")]).ActivateAsync(0))!;
+        var successorWorker = MakeOwner("park-next");
+        await using var successor = (await new DurableHost([successorWorker]).ActivateAsync(0))!;
         await Pump(successor);
         check(actor.PoisonOffers == 1 && actor.Offers == priorOffers && Retained(poison, "private payload", ParkKeepReason.Consumed) &&
             Retained(twin, "ordinary payload", ParkKeepReason.Consumed) && Retained(late, "late payload", ParkKeepReason.Arrived),
             "takeover does not offer done kept rows to the parked actor");
+
+        await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
+        await CheckDiscardDrain(check);
 
         foreach (var timed in new[] { false, true })
             await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
 
         bool Retained(Message message, string payload, ParkKeepReason reason) => store.Messages.GetValueOrDefault(message.InboxKey) is
             { Done: true, Held: false, Trial: 0, KeptBy: var actualReason, Message.Payload: var actual } && actual == payload && actualReason == reason;
+    }
+
+    private static async Task CheckDiscardDrain(Action<bool, string> check)
+    {
+        const long openedAt = 1_701_400_020_000;
+        var now = openedAt;
+        var store = new InMemoryStore(1, () => now);
+        var actor = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("discard");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => now - openedAt });
+        var first = Owner("discard-first");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node);
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var activation = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Pump(activation);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(activation);
+
+        const int keptCount = InMemoryStore.ParkPageLimit + 3;
+        var widePayload = new string('p', 5 * 1024 * 1024);
+        for (var index = 0; index < keptCount - 2; index++)
+            await ingress.SendAsync(scope, target, $"arrived-{index}", "update", index == 0 ? widePayload : null);
+        await Pump(activation);
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var id = parked.Row.Id;
+        var publication = Json.Write(new EventRow("key", "event", "undelivered", now + 1));
+        // Seed the result of a failed publish step. The paged publisher itself has its own K3 cases.
+        var ticket = new Message("parked-publication", new(id), Kinds.Publish, publication, id,
+            TargetCreation: parked.Row.Creation, SenderCreation: parked.Row.Creation).AsIssued().AsKernelTicket();
+        var fence = first.Fences.Single();
+        var staged = new TurnCommit(id, null, null, [], [], [ticket], [], [], null);
+        await Commit(staged);
+        var keep = new TurnCommit(id, parked.Row with { Revision = parked.Row.Revision + 1 }, parked.Row.Revision,
+            [], [ticket.InboxKey], [], [], [], null)
+        { FoundationKept = new Dictionary<InboxKey, ParkKeepReason> { [ticket.InboxKey] = ParkKeepReason.Consumed } };
+        await Commit(keep);
+        await activation.DisposeAsync();
+        var drainer = Owner("discard-open");
+        await using var drainingActivation = (await new DurableHost([drainer]).ActivateAsync(0))!;
+        await Pump(drainingActivation);
+        var selection = store.SealFoundationSelection(scope.Tenant, parked);
+        var admission = store.AdmitFoundationOperator(scope.Tenant, target.Actor.Id, null, "op", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selection)), null, null, selection, null);
+        await Step(drainer);
+        var open = store.Instances[id];
+        var opened = admission.Outcome == InMemoryStore.OperatorAdmission.Accepted && open.ParkResolutionGeneration == 1 &&
+            open.ParkDiscard is { Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
+            store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount;
+        check(opened, "discard Open commits its first private control without clearing any input");
+        if (!opened) return;
+        var firstControl = store.Messages[open.ParkDiscard!.Control];
+        if (!await CheckDiscardPageAuthority(store, drainer.Fences.Single(), open, parked.Park!, check)) return;
+
+        await Step(drainer);
+        var firstPage = store.Instances[id].ParkDiscard;
+        var paged = firstPage is { Cursor: not null, Serial: 2, Cleared: InMemoryStore.ParkPageLimit } advanced &&
+            OnlyOutstanding(advanced.Control) && store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount - InMemoryStore.ParkPageLimit;
+        check(paged, "one real drain turn clears one page and commits the cursor with its successor control");
+        if (!paged) return;
+
+        // Replay a known earlier control below admission to model a delayed delivery from this generation.
+        store.Messages.Add(firstControl.Message.InboxKey, new(firstControl.Message, firstControl.Seq, 0));
+        await Step(drainer);
+        check(store.Instances[id].ParkDiscard == firstPage && OnlyOutstanding(firstPage!.Control) &&
+            !store.Messages.ContainsKey(firstControl.Message.InboxKey),
+            "a late control from an earlier page cannot advance the current drain");
+
+        await drainingActivation.DisposeAsync();
+        now += 100;
+        await ingress.SendAsync(scope, target, "after-open", "update");
+        var next = Owner("discard-next");
+        await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+        await Pump(successor);
+        var finished = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(finished is { Park: null, EndedAt: var end, Row: { ParkDiscard: null, ParkDiscarded: true, ParkResolutionGeneration: 1 } }
+            && end == now && finished.Row.Status == InstanceStatus.Faulted && finished.Row.State == parked.Row.State,
+            "a successor completes from the committed cursor and writes the terminal mark without changing the saved state");
+        check(store.Messages.Values.All(item => item.KeptBy is null && item.Message.Kind != Kinds.Drain) &&
+            store.Messages.Values.Count(item => item.Message.Id == "after-open" && item.Done) == 1 && actor.PoisonOffers == 1 &&
+            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal)) == 1,
+            "Complete removes the outstanding control and journals once, and the late input is dropped without replay");
+        await ingress.SendAsync(scope, target, "after-complete", "update");
+        await Pump(successor);
+        check(store.Messages.Values.Count(item => item.Message.Id == "after-complete" && item.Done) == 1,
+            "author withholding cannot leave ordinary input pending after Park discards");
+        now += (long)store.IngressDeduplicationWindow.TotalMilliseconds + 1;
+        await store.SweepAsync();
+        check(store.Messages.GetValueOrDefault(ticket.InboxKey) is
+            { Done: true, KeptBy: null, ParkDeadLetter: true, Message.Payload: var remaining } && remaining == publication &&
+            store.Messages.Values.All(item => item.Message.Id != "arrived-0"),
+            "discard preserves the publish ticket's undelivered payload as a dead letter after the normal markers expire");
+
+        ValueTask<Committed> Commit(TurnCommit turn) =>
+            store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [turn], [], []));
+
+        bool OnlyOutstanding(InboxKey key) => store.Messages.Values.Where(item => item.Message.Kind == Kinds.Drain && !item.Done)
+            .Select(item => item.Message.InboxKey).SequenceEqual([key]);
+
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task<bool> CheckDiscardPageAuthority(InMemoryStore store, PartitionFence fence, InstanceRow open,
+        InMemoryStore.FoundationParkMark park, Action<bool, string> check)
+    {
+        var drain = open.ParkDiscard!;
+        var page = store.ReadFoundationKeptPage(new(open.Id, open.Creation), park, drain.Cursor)!;
+        var envelope = ParkDrainEnvelope.For(open, park);
+        var nextControl = envelope.Issue(open, drain.Serial + 1);
+        var next = open with { Revision = open.Revision + 1,
+            ParkDiscard = new(page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
+        var clear = new TurnCommit(open.Id, next, open.Revision, [drain.Control], [], [nextControl], [], [], null)
+        { FoundationParkClear = new(park, page) };
+        var rowless = new TurnCommit(open.Id, null, null, [drain.Control], [], [], [], [], null);
+        var recovered = await DefiniteRejection(() => Commit(fence, rowless));
+        check(recovered && store.Messages.ContainsKey(drain.Control) && store.Instances[open.Id] == open,
+            "a rowless commit cannot consume the outstanding control");
+        if (!recovered) return false;
+
+        var skippedPrefix = clear with { Row = next with { ParkDiscard = next.ParkDiscard! with { Cleared = 1 } },
+            FoundationParkClear = new(park, [page[^1]]) };
+        var refusedGap = await DefiniteRejection(() => Commit(fence, skippedPrefix));
+        check(refusedGap && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control),
+            "the fenced writer refuses a page that would skip rows below its cursor");
+        if (!refusedGap) return false;
+
+        var altered = page.ToArray();
+        altered[^1] = altered[^1] with { Reason = ParkKeepReason.Consumed };
+        var divergent = false;
+        try { await Commit(fence, clear with { FoundationParkClear = new(park, altered) }); }
+        catch (StoreException error) when (error.Failure == Failure.Unknown) { divergent = true; }
+        var rolledBack = divergent && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control)
+            && !store.Messages.ContainsKey(nextControl.InboxKey) && page.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason);
+        check(rolledBack, "one mismatched kept reason rolls back the entire page and checkpoint");
+        if (!rolledBack) return false;
+
+        var stale = await Commit(fence with { Epoch = fence.Epoch - 1 }, clear);
+        check(!stale.Landed && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control),
+            "a stale fence cannot clear kept inputs");
+        return true;
+
+        ValueTask<Committed> Commit(PartitionFence authority, TurnCommit turn) =>
+            store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
+    }
+
+    private static async Task<bool> DefiniteRejection(Func<ValueTask<Committed>> commit)
+    {
+        try { await commit(); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { return true; }
+        return false;
+    }
+
+    private static async Task CheckKeptPages(InMemoryStore store, PartitionFence fence, string id, long creation, Action<bool, string> check)
+    {
+        var address = new CreationAddress(id, creation);
+        var identity = store.FoundationIdentity(id, creation);
+        var park = store.ReadFoundationActor(identity.Tenant, identity.Reference).Actor!.Park!;
+        const int wideBytes = 5 * 1024 * 1024;
+        var widePayload = new string('x', wideBytes);
+        var input = Enumerable.Range(0, InMemoryStore.ParkPageLimit + 2).Reverse().Select(index =>
+            new Message("page-tie", new(id), "update", index == 0 ? widePayload : null, TargetCreation: creation)
+                .WithInboxScope(index / 2, index % 2 == 0 ? null : "match"))
+            .ToArray();
+        var keys = input.Select(message => message.InboxKey).ToArray();
+        var add = new TurnCommit(id, null, null, [], [], input, [], [], null);
+        var added = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [add], [], []));
+        var checkpoint = store.Instances[id];
+        var keep = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 1 }, checkpoint.Revision,
+            [], keys, [], [], [], null)
+        { FoundationKept = keys.ToDictionary(key => key, _ => ParkKeepReason.Arrived) };
+        var kept = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [keep], [], []));
+        check(added.Landed && kept.Landed, "the fenced store retains the complete paging fixture");
+
+        // Model an allowed provider order-key collision without depending on the in-memory counter to generate one.
+        var sharedSeq = store.Messages[keys[0]].Seq;
+        foreach (var key in keys) store.Messages[key].Seq = sharedSeq;
+        var after = new ParkPageCursor(sharedSeq - 1, new InboxKey("\uffff"));
+        var front = store.ReadFoundationKeptPage(address, park, after)!;
+        var start = keys[^1];
+        check(front.Count == InMemoryStore.ParkPageLimit && front[0] == new ParkPageRow(new(sharedSeq, start), "update", null, ParkKeepReason.Arrived, wideBytes),
+            "the page starts with an oversized payload's metadata and enforces its row limit");
+        var tail = store.ReadFoundationKeptPage(address, park, front[^1].Cursor)!;
+        check(front.Concat(tail).Select(item => item.Cursor.Key).SequenceEqual(keys.Reverse()) &&
+            tail.Count == 2 && store.ReadFoundationKeptPage(address, park, tail[^1].Cursor) is { Count: 0 },
+            "the full tuple advances through scope and match ties without skipping or repeating a kept input");
+        check(store.ReadFoundationKeptPage(address, park with { Revision = park.Revision + 1 }, null) is null &&
+            store.ReadFoundationKeptPage(address with { Creation = creation + 1 }, park, null) is null,
+            "a mismatched Park mark or creation is distinguishable from an empty page");
+
+        var clearWithoutDrain = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 2 },
+            checkpoint.Revision + 1, [], [], [], [], [], null) { FoundationParkClear = new(park, front) };
+        var refused = await DefiniteRejection(() => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+            false, [clearWithoutDrain], [], [])));
+        check(refused && front.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason),
+            "a parked row cannot clear inputs without an open drain");
+
     }
 
     private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
@@ -165,12 +374,12 @@ internal static class ParkKeptChecks
         }
     }
 
-    private sealed class Probe : Contract.IActorType
+    private sealed class Probe(bool withholdFaulted = false) : Contract.IActorType
     {
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {

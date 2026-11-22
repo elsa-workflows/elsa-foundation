@@ -211,7 +211,7 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await expect(page.locator(".wf-instance-meta")).toContainText("Inspection detail");
   await expect(page.locator(".wf-instance-meta")).toContainText("Activity-level");
   await expect(page.locator(".wf-instance-meta")).toContainText("checkpoints after every activity");
-  await expect(page.locator(".wf-instance-meta")).toContainText("Per-activity evidence is exact");
+  await expect(page.locator(".wf-instance-meta")).toContainText("Per-activity data is exact");
   await expect(page.getByRole("note")).toHaveCount(0);
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-01");
@@ -261,7 +261,7 @@ for (const mode of ["light", "dark"] as const) for (const width of [1280, 1440, 
     await trigger.click();
     const dialog = page.getByRole("dialog", { name: `Workflow run identifiers for ${executionId}`, exact: true });
     const identifiers = [
-      ["Artifact ID", "artifact-quarterly-regional-reconciliation-release-2026-10-20"],
+      ["Executable ID", "artifact-quarterly-regional-reconciliation-release-2026-10-20"],
       ["Definition ID", "definition-quarterly-regional-reconciliation-with-a-long-stable-identity"],
       ["Definition version ID", "billing-definition-very-long-version-2026-10-20-regional-partner-settlement-v14"]
     ] as const;

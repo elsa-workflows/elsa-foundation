@@ -1,3 +1,4 @@
+import { StudioPage, StudioResultState, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import React from "react";
 import { ClipboardList, FileText } from "lucide-react";
 import { useStudioRouteLocation } from "@elsa-workflows/studio-sdk";
@@ -13,7 +14,10 @@ import "./styles.css";
 function DetailRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
   let id: string;
-  try { id = decodeURIComponent(location.pathname.split("/").at(-1) ?? ""); } catch { return <p role="alert">Invalid task address.</p>; }
+  try { id = decodeURIComponent(location.pathname.split("/").at(-1) ?? ""); } catch {
+    return <StudioPage><StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: () => navigate("/user-tasks") }]} current="Invalid task address" />
+      <StudioResultState tone="danger" title="Invalid task address" description="Open the collection and select a record to continue." /></StudioPage>;
+  }
   return <TaskDetailPage key={id} api={api} id={id} navigate={navigate} />;
 }
 export function register(api: ElsaStudioModuleApi) {

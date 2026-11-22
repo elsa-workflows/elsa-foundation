@@ -217,7 +217,7 @@ export function RuntimeValueEvidenceContent({
           <RuntimeInputPayload payload={snapshot.payload} />
         ) : (
           <p>{invalidResolutionMetadata
-            ? "Captured value resolution is unavailable because the Runtime evidence reference is incomplete."
+            ? "Captured value resolution is unavailable because the run data reference is incomplete."
             : formatEvidenceMessage(snapshot)}</p>
         )}
         {!snapshot.isSensitive && !protectedAccess && currentResolution?.status === "loading" ? <p role="status">Resolving captured value...</p> : null}
@@ -228,7 +228,7 @@ export function RuntimeValueEvidenceContent({
           </p>
         ) : null}
       </div>
-      {snapshot.isSensitive && presentation === "card" ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
+      {snapshot.isSensitive && presentation === "card" ? <p className="wf-instance-note">Marked sensitive by run data.</p> : null}
     </>
   );
 }
@@ -375,7 +375,7 @@ export function formatSnapshotKind(kind: string) {
 function formatEvidenceMessage(snapshot: ActivityExecutionInspectionValueSnapshot) {
   const access = (snapshot.accessState ?? snapshot.access)?.toLowerCase();
   const captureState = (snapshot.captureState ?? snapshot.state)?.replace(/[^a-z]/gi, "").toLowerCase();
-  if (access === "redacted") return "Runtime value evidence is redacted.";
+  if (access === "redacted") return "Captured run data is redacted.";
   if (access === "resolutionpermissionrequired") return "Additional permission is required to resolve this captured value.";
   if (access === "unavailable") {
     if (captureState === "metadataonly" || captureState === "notcaptured") {
@@ -385,10 +385,10 @@ function formatEvidenceMessage(snapshot: ActivityExecutionInspectionValueSnapsho
       ? snapshot.failure?.message || snapshot.captureReason || "Runtime value capture failed."
       : "No captured value is available.";
   }
-  if (access === "permissionhidden" || access === "permission-hidden") return "Runtime value evidence is hidden by permissions.";
-  if (snapshot.state === "permissionHidden") return "Runtime value evidence is hidden by permissions.";
-  if (captureState === "metadataonly" || snapshot.state === "metadataOnly") return snapshot.captureReason || "Runtime value evidence is metadata-only.";
-  if (captureState === "notcaptured" || snapshot.state === "notCaptured") return snapshot.captureReason || "Runtime value evidence was not captured.";
+  if (access === "permissionhidden" || access === "permission-hidden") return "Captured run data is hidden by permissions.";
+  if (snapshot.state === "permissionHidden") return "Captured run data is hidden by permissions.";
+  if (captureState === "metadataonly" || snapshot.state === "metadataOnly") return snapshot.captureReason || "Captured run data is metadata-only.";
+  if (captureState === "notcaptured" || snapshot.state === "notCaptured") return snapshot.captureReason || "Captured run data was not captured.";
   if (captureState === "capturefailed") return snapshot.captureReason || snapshot.failure?.message || "Runtime value capture failed.";
   return snapshot.captureReason || "The runtime capture policy did not include this value.";
 }
