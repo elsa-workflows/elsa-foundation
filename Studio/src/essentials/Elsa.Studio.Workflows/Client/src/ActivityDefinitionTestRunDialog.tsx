@@ -285,7 +285,7 @@ export function ActivityDefinitionTestRunDialog({
     <StudioDialog open className="ad-test-run-dialog" title={definitionLabel} onClose={onClose}
       closeLabel="Close Test Run" dismissDisabled={busy}
       onCloseAutoFocus={restoreFocus ? event => { event.preventDefault(); restoreFocus(); } : undefined}
-      description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable Runtime Evidence without publishing this Activity Definition.</>}>
+      description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable run data without publishing this Activity Definition.</>}>
 
         {preparation !== "ready" ? (
           <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
@@ -392,10 +392,10 @@ export function ActivityDefinitionTestRunDialog({
           leading={<>
             {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
               <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}
-            {activityUrl ? <StudioButton onClick={() => onOpenRun(activityUrl)}><ExternalLink size={16} aria-hidden /> Open focused Runtime Evidence</StudioButton> : null}
+            {activityUrl ? <StudioButton onClick={() => onOpenRun(activityUrl)}><ExternalLink size={16} aria-hidden /> Open focused run data</StudioButton> : null}
           </>}
           onCancel={onClose} cancelDisabled={busy} cancelLabel={currentRun ? "Close" : "Cancel"}
-          confirmLabel={canRerun ? "Rerun as new evidence" : !currentRun && validation?.isValid ?
+          confirmLabel={canRerun ? "Rerun as new run data" : !currentRun && validation?.isValid ?
             (dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run") : undefined}
           confirmDisabled={busy} onConfirm={() => void dispatch()}
         />
