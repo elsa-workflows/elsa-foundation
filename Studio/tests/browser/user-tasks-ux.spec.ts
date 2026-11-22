@@ -340,8 +340,8 @@ for (const width of [360, 1280]) {
 
 test("reassignment stays permission-gated and reports errors before closing on success", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?task=purchase");
-  await page.getByRole("button", { name: "Task actions" }).click();
-  await expect(page.getByRole("menuitem", { name: "Reassign task", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh task", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Task actions", exact: true })).toHaveCount(0);
 
   await page.goto("/user-tasks-ux.html?manage&reassign-error&task=purchase");
   await page.getByRole("button", { name: "Task actions" }).click();
