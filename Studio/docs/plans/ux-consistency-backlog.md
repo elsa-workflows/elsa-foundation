@@ -131,8 +131,8 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `backend-remove`, `connections-danger`, `external-auth-danger-action`, `data-tone`. (PR #5268)
 - [x] **K3. Icon-only button.** (#4994) [source] Add a kit icon button that requires `aria-label`.
   Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`. (PR #5270)
-- [ ] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use
-  `StudioButton className="active"`.
+- [x] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use
+  `StudioButton className="active"`. (PR #5280)
 - [ ] **K5. Richer menu and split button.** (#4996) [source] The designer "More workflow actions" menu
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:214`) and `PublishActionButton.tsx` duplicate the same
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
@@ -270,11 +270,11 @@ Workflows:
 - [ ] **X3.5** (#5041) [source] `HttpTestRequestDialog.tsx:240–247`.
 - [ ] **X3.6** (#5042) [source] `ActivityVersionChangeDialog.tsx:94–226`.
 - [ ] **X3.7** (#5043) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
-- [ ] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
-  footer is raw with `.wf-primary-button`.
+- [x] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
+  footer is raw with `.wf-primary-button`. (PR #5287)
 - [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
-- [ ] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
-  `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2).
+- [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
+  `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
 - [ ] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`.
 - [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
   `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
@@ -354,22 +354,22 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 
 ### X5. Labels and capitalisation
 
-- [ ] **X5.1** (#5083) [seen] Rename to "New …" (D1): "Create workflow", "Create secret", "Create connection",
-  "Create form", "Create tag", "Create dashboard". Apply “New …” to dialog titles as well. Keep “Create” for confirmations and version actions. `needs: D1`
-- [ ] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
+- [x] **X5.1** (#5083) [seen] Rename to "New …" (D1): "Create workflow", "Create secret", "Create connection",
+  "Create form", "Create tag", "Create dashboard". Apply “New …” to dialog titles as well. Keep “Create” for confirmations and version actions. `needs: D1` (PR #5297)
+- [x] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
   draft" (Forms, ETL, Feature management), "Update view". Activity availability, Decisions and Theme
-  builder already say "Save". `needs: D2`
-- [ ] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
+  builder already say "Save". `needs: D2` (PR #5297)
+- [x] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
   "Activity definition upgrades" (D8); `:180` "Activity Definitions" → "Activity definitions", matching
-  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14).
-- [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
+  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14). (PR #5291)
+- [x] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
-  (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
-- [ ] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
-  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14`
-- [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
-  title "Create Activity Definition". Use one string.
+  (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14). (PR #5297)
+- [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
+  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
+- [x] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
+  title "Create Activity Definition". Use one string. (PR #5297)
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
   443, 489`, Backends `BACK/BackendsPage.tsx:121`, `WF/ActivityGraphImplementationEditor.tsx:270, 1363`.
   `needs: D7`

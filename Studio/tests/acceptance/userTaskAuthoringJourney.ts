@@ -88,7 +88,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
 
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.goto("/workflows/definitions");
-  await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
+  await page.getByRole("button", { name: "New workflow" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await dialog.getByLabel("Display name").fill(title);
   const rootKind = dialog.getByRole("radio", { name: "Flowchart", exact: true });

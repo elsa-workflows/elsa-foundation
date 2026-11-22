@@ -117,6 +117,16 @@ test("a workflow keeps its identity while tags, saved views and favorites organi
   const write = observations.find(request => request.method === "PUT" && request.url.includes("organization/collect-payment"));
   expect(write?.body).toMatchObject({ revision: "1", tags: [{ tagId: "team", valueId: "value-billing" }, { tagId: "critical" }] });
   expect(observations.some(request => /draft|version|publish/.test(request.url))).toBe(false);
+
+  await page.getByRole("link", { name: "Manage views", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: "Critical workflows" }).getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit view" });
+  const name = edit.getByRole("textbox", { name: "View name" });
+  await expect(name).toBeFocused();
+  await name.fill("Priority workflows");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Priority workflows", exact: true })).toBeVisible();
 });
 
 test("Saved views identify Definitions as their parent", async ({ page }) => {
