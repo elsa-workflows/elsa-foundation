@@ -448,7 +448,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
-            <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
+            <StudioField label={<><span>Provider</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
           </div>
         </details>
       </section>
@@ -539,7 +539,7 @@ function ActivityDefinitionSkeleton() {
 function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: ReturnType<typeof classifyActivityDefinitionReadFailure>; cursorInvalid: boolean; onRetry(): void }) {
   if (cursorInvalid) return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title="Collection continuation is no longer valid" description="Restart paging to request a fresh authorized snapshot while keeping your filters and page size." actions={<StudioButton onClick={onRetry}>Restart paging</StudioButton>} />;
   const copy = {
-    unavailable: ["Unavailable contribution", "This backend does not advertise the Activity Definition management capability supported by Studio. No legacy activity fallback is used."],
+    unavailable: ["Activity definitions unavailable", "This backend does not support activity definition management."],
     forbidden: ["Activity Definitions unavailable", "This account cannot open the Activity Definitions collection. No identities or counts were loaded."],
     "not-found": ["Activity Definitions unavailable", "The requested collection is not available."],
     expired: ["Collection snapshot expired", "Restart paging to request a fresh authorized snapshot."],

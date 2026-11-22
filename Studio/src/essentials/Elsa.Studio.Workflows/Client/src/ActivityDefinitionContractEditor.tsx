@@ -299,7 +299,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
     {memberKind !== "output" ? <header className="ad-contract-header"><div><h2 id="activity-contract-title">{title}</h2><p>{description}</p></div></header> : null}
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
-    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Published baseline unavailable.</strong> Existing-member changes are conservatively guarded as potentially breaking until the exact immutable baseline can be loaded.</span></div> : null}
+    {sourceVersionId && baselineUnavailable ? <div className="ad-contract-baseline-warning" role="alert"><AlertTriangle size={16} aria-hidden /><span><strong>Could not load the published version.</strong> Until Studio can compare versions, changes to existing members may affect callers.</span></div> : null}
     <div className={`ad-contract-workbench${activeEntry ? "" : " is-empty"}`}>
       <nav className="ad-contract-workbench-list" aria-label={`${title} members`}>
         <ContractMemberGroup
@@ -606,7 +606,7 @@ function DurabilityFields<T extends ActivityInputContract | ActivityOutputContra
   const drivers = activatedStorageDrivers(type, capabilities);
   const available = drivers.includes(member.storageDriverKey);
   const helpId = useId();
-  return <StudioField label={<><span>Durable storage driver</span></>}><select data-contract-field="storageDriverKey" aria-label="Durable storage driver" aria-describedby={helpId} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
+  return <StudioField label={<><span>Storage provider</span></>}><select data-contract-field="storageDriverKey" aria-label="Storage provider" aria-describedby={helpId} value={member.storageDriverKey} onChange={event => onChange({ ...member, storageDriverKey: event.target.value })} disabled={readOnly || drivers.length === 0}>
     {!available ? <option value={member.storageDriverKey} disabled>{member.storageDriverKey || "No driver"} · unavailable</option> : null}
     {drivers.map(driver => <option key={driver} value={driver}>{driver}</option>)}
   </select><small id={helpId} data-contract-field="durability" tabIndex={-1}>{drivers.length === 0 ? "No compatible storage driver is active." : drivers.length === 1 ? "Only one compatible storage driver is active. Activate another compatible driver on the server to choose it here." : "Choose where this value is stored durably."}</small></StudioField>;

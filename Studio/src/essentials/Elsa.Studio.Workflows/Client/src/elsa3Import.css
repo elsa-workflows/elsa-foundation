@@ -1,0 +1,253 @@
+.elsa3-import-pending {
+  padding-block-end: 5.5rem;
+}
+
+.elsa3-import-panel {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-surface);
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.elsa3-import-callout {
+  border-inline-start: 4px solid var(--studio-accent);
+  background: var(--studio-surface-raised);
+  padding: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.elsa3-import-split {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.elsa3-import-responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.elsa3-import-field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.elsa3-import-or {
+  align-self: center;
+  justify-self: center;
+  color: var(--studio-text-muted);
+}
+
+.elsa3-import-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.elsa3-import-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+}
+
+.elsa3-import-group-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.elsa3-import-group {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  overflow: hidden;
+}
+
+.elsa3-import-group-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--studio-surface-raised);
+}
+
+.elsa3-import-row {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-block-start: 1px solid var(--studio-border);
+}
+
+.elsa3-import-row-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.elsa3-import-row-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem;
+}
+
+.elsa3-import-technical-ids {
+  display: grid;
+  grid-template-columns: minmax(10rem, auto) 1fr;
+  gap: 0.5rem;
+}
+
+.elsa3-import-warning {
+  border: 1px solid var(--studio-warning);
+  background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
+  border-radius: var(--studio-radius-md);
+  padding: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.elsa3-import-diagnostics {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-lg);
+  padding: 1.25rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.elsa3-import-compact-diagnostics {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.elsa3-import-diagnostic {
+  border-inline-start: 3px solid var(--studio-warning);
+  background: var(--studio-surface-raised);
+  padding: 0.75rem;
+}
+
+.elsa3-import-path {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.elsa3-import-selection-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0.5rem;
+}
+
+.elsa3-import-receipt {
+  border: 1px solid var(--studio-success);
+  border-radius: var(--studio-radius-lg);
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.elsa3-import-partial-receipt {
+  border: 1px solid var(--studio-warning);
+  border-radius: var(--studio-radius-lg);
+  background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface));
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.elsa3-import-receipt-sources {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.elsa3-import-publication {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.elsa3-import-unpublished-publication {
+  display: grid;
+  gap: 0.5rem;
+  border-inline-start: 3px solid var(--studio-warning);
+  background: var(--studio-surface-raised);
+  padding: 0.75rem;
+}
+
+.elsa3-import-resume {
+  margin: 0;
+}
+
+.elsa3-import-receipt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.elsa3-import-receipt-title {
+  margin: 0;
+}
+
+.elsa3-import-status {
+  position: sticky;
+  inset-block-end: 0.75rem;
+  z-index: 1;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface-raised);
+  padding: 0.75rem;
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.elsa3-import-status-static {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface-raised);
+  padding: 0.75rem;
+}
+
+.elsa3-import-success-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--studio-success-fg);
+}
+
+.elsa3-import-warning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--studio-warning-fg);
+}
+
+.elsa3-import-safety-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+}
+
+.elsa3-import-progress {
+  color: var(--studio-text-muted);
+}
+
+.elsa3-import-complete {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--studio-success-fg);
+}
+
+.elsa3-import-required {
+  color: var(--studio-text);
+}
+
+.elsa3-import-requested {
+  color: var(--studio-text-muted);
+}
