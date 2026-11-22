@@ -30,10 +30,11 @@ for (const width of [320, 360, 1280]) {
     await expect(runKind).not.toBeChecked();
     await expect(page.getByLabel("Selected grouping fields")).toHaveText("status");
 
-    const filters = page.locator('.named-query-controls details[data-query-path="query.filters"]');
-    await expect(filters).not.toHaveAttribute("open", "");
-    await filters.locator("summary").focus(); await page.keyboard.press("Enter");
-    await expect(filters).toHaveAttribute("open", "");
+    const filters = page.locator('.named-query-controls [data-query-path="query.filters"]');
+    const trigger = filters.getByRole("button", { name: "Source filters", exact: true });
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await trigger.focus(); await page.keyboard.press("Enter");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(filters.getByRole("button", { name: "Add condition", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Open tile settings", exact: true }).click();

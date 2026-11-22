@@ -173,8 +173,8 @@ describe("Activity Definitions experience", () => {
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice"))).toBe(true));
     await waitForText(rendered.container, "Invoice evaluator");
 
+    await waitFor(() => expect(rendered.container.querySelector("[role='columnheader']:last-child")?.textContent).toBe("Actions"));
     const row = rendered.container.querySelector<HTMLElement>(".ad-collection-row")!;
-    expect(rendered.container.querySelector("[role='columnheader']:last-child")?.textContent).toBe("Actions");
     const trigger = row.querySelector<HTMLButtonElement>('button[aria-label="Actions for Invoice evaluator"]')!;
     click(trigger);
     expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);

@@ -252,7 +252,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
     <StudioPage className="secrets-shell">
       <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked."
         refresh={{ id: "secrets", label: "Refresh secrets", refreshing: loading || descriptorsLoading, autoRefresh: true, onRefresh: () => load(attemptedSearch.current) }}
-        actions={<StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> New secret</StudioButton>} />
+        actions={<StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={16} aria-hidden /> New secret</StudioButton>} />
 
       <StudioCollectionToolbar className="secrets-toolbar" aria-label="Secret filters">
         <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => event.preventDefault()}>
@@ -304,7 +304,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
               ) : null}
               {!loading && loadError ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
+                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={16} aria-hidden /> Retry</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
@@ -339,7 +339,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
               ))}
             </tbody>
           </table>
-        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> New secret</StudioButton>} />}
+        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={16} aria-hidden /> New secret</StudioButton>} />}
 
       </section>
 

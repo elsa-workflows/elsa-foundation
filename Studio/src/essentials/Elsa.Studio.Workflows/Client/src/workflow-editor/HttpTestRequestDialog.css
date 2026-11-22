@@ -1,56 +1,23 @@
-.wf-dialog.wf-http-test-dialog {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(960px, 100%);
-  max-height: min(900px, calc(100vh - 40px));
-  overflow: hidden;
+.studio-dialog.wf-http-test-dialog {
+  width: min(60rem, calc(100vw - 2rem));
 }
 
-.wf-http-test-heading,
 .wf-http-test-body,
 .wf-http-test-request-line,
 .wf-http-test-result header {
   display: flex;
 }
 
-.wf-http-test-heading {
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 22px 14px;
-  border-bottom: 1px solid var(--studio-border);
-}
-
-.wf-http-test-heading > div {
-  min-width: 0;
-}
-
-.wf-http-test-heading > div > span,
 .wf-http-test-result header > span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 600;
 }
 
-.wf-http-test-heading h3 {
-  margin: 4px 0;
-  font-family: var(--studio-font-display);
-  font-size: var(--studio-section-title-size);
-  font-weight: var(--studio-title-weight, 700);
-}
-
-.wf-http-test-heading p {
-  max-width: 62ch;
-  margin: 0;
-  color: var(--studio-text-muted);
-}
-
 .wf-http-test-body {
   min-height: 0;
   flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
-  padding: 18px 22px 22px;
 }
 
 .wf-http-test-body form {
@@ -157,11 +124,6 @@
 
 .wf-http-test-dialog .studio-result-state > .studio-page-actions {
   justify-content: start;
-}
-
-.wf-http-test-send {
-  flex: 0 0 auto;
-  align-self: end;
 }
 
 .wf-http-test-state,
@@ -296,11 +258,6 @@
 @media (max-width: 600px) {
   .wf-http-test-dialog {
     max-height: calc(100vh - 20px);
-  }
-
-  .wf-http-test-heading,
-  .wf-http-test-body {
-    padding-inline: 14px;
   }
 
   .wf-http-test-request-line {
