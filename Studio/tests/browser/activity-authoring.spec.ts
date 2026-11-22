@@ -15,8 +15,11 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     await expect(saved).toHaveText("Saved");
     const titleBox = (await title.boundingBox())!;
     const statusBox = (await saved.boundingBox())!;
-    expect(statusBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
-    const back = page.getByRole("button", { name: "Back to Activity Definition", exact: true });
+    // The toolbar can place metadata beside the title or wrap it onto the following line.
+    expect(statusBox.x >= titleBox.x + titleBox.width || statusBox.y >= titleBox.y + titleBox.height).toBe(true);
+    expect(await saved.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeLessThan(await title.evaluate(element => parseFloat(getComputedStyle(element).fontSize)));
+    const back = page.getByRole("link", { name: "Activity Definition", exact: true });
+    await expect(back).toHaveAttribute("href", "/workflows/activity-definitions");
     await back.focus();
     await expect(back).toBeFocused();
     await title.click();
