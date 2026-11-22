@@ -2637,7 +2637,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
                 if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null &&
-                    (unit.FoundationCascade is null || unit.Row?.Retired != true) && unit.Slot is { } slot)
+                    (unit.FoundationCascade is null || !unit.CreationRefused) && unit.Slot is { } slot)
                 {
                     slot.RollbackTurn?.Invoke();
                     var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;

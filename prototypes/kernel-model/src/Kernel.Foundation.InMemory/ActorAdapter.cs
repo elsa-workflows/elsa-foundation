@@ -28,7 +28,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 start.Model == actor.Type && creator.Target == message.Target && creator.TargetCreation == creation &&
                 message.TargetCreation == creation && message.Operator is null && message.InboxKey.HasIssuedOrigin &&
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
-        if (!SupportsFoundationOperator(row) || store.FoundationTurnHeader(row).Park is not null) return false;
+        if (!SupportsFoundationOperator(row)) return false;
+        if (store.FoundationTurnHeader(row).Park is not null)
+            return row.ParkDiscard is not null && store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
             if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
@@ -81,7 +83,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind == Durable.Kinds.Drain)
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
         if (input.Row is { ParkDiscard: not null } draining)
-            return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "ResolutionOpen");
+            return RefuseDuringDiscard(input, draining);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
