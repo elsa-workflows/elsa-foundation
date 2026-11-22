@@ -307,12 +307,12 @@ Host and Dashboard:
 
 Extensions:
 
-- [ ] **X3.26** (#5062) [source] `EXT/Connections/ConnectionDetailDialog.tsx:25–31`. Raw footer buttons at
+- [x] **X3.26** (#5062, PR #5327) [source] `EXT/Connections/ConnectionDetailDialog.tsx:25–31`. Raw footer buttons at
   `:59–63`; no Close or Cancel in the footer. `needs: K2`
-- [ ] **X3.27** (#5063) [source] `EXT/Connections/ConnectionCreateDialog.tsx:448–483`. Uppercase eyebrow
+- [x] **X3.27** (#5063, PR #5327) [source] `EXT/Connections/ConnectionCreateDialog.tsx:448–483`. Uppercase eyebrow
   (`EXT/Connections/styles.css:31` [verified]). **[check]** the footer was not read.
-- [ ] **X3.28** (#5064) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
-- [ ] **X3.29** (#5065) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
+- [x] **X3.28** (#5064, PR #5327) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
+- [x] **X3.29** (#5065, PR #5327) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
 - [ ] **X3.30** (#5066) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
   and a raw `primary` class. Locate them in `EXT/FeatureManagement/module.tsx`.
 - [ ] **X3.31** (#5067) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
@@ -329,7 +329,7 @@ Browser dialogs and busy labels (no kit prerequisite):
   `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`. (PR #5324)
 - [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
   `title` or `confirmLabel`; Secrets passes both (`SecretsPage.tsx:187, 202`).
-- [ ] **X3.37** (#5073) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
+- [x] **X3.37** (#5073, PR #5327) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
