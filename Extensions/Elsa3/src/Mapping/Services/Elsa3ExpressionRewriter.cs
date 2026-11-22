@@ -873,6 +873,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             HasComputedOutcome = true;
         }
 
+        private static readonly HashSet<string> StateSetters = new(StringComparer.Ordinal)
+            { "setOutput", "setCorrelationId", "setWorkflowInstanceName" };
+        private static readonly HashSet<string> StateGetters = new(StringComparer.Ordinal)
+            { "getCorrelationId", "getWorkflowInstanceName" };
+
         private static readonly HashSet<string> SetterCalls = new(StringComparer.Ordinal)
         {
             "setVariable", "setOutput", "setInput", "setResult",
@@ -1253,6 +1258,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
+                if (StateSetters.Contains(callee.Name) || ConvertsVariableWrites && StateGetters.Contains(callee.Name))
+                {
+                    ConvertWorkflowState(call, callee);
+                    return;
+                }
+
                 if (callee.Name == "setVariable")
                 {
                     ConvertSetVariable(call);
@@ -1579,6 +1590,13 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 return;
             }
 
+            if (node is Identifier stateHelper && !IsDeclared(stateHelper.Name) &&
+                (StateSetters.Contains(stateHelper.Name) || StateGetters.Contains(stateHelper.Name)))
+            {
+                Issues.Add(DynamicIssue($"JavaScript uses workflow-state helper '{stateHelper.Name}' as a value instead of a direct call."));
+                return;
+            }
+
             if (node is Identifier { Name: "args" } && !IsDeclared("args"))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -1651,6 +1669,53 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// <c>variables[name] = value</c> (FR-033 as amended). Refused with guidance (FR-033): an undeclared variable, an
         /// input expression (which only reads) and a reusable workflow's script.
         /// </summary>
+        private void ConvertWorkflowState(CallExpression call, Identifier callee)
+        {
+            const string guidance = "Use a direct setOutput(name, value), setCorrelationId(value) or setWorkflowInstanceName(value) call in a Run JavaScript body. Inputs only read; closed reusable graph bodies cannot change running-workflow state (#3023, #4805).";
+            if (!ConvertsVariableWrites)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    $"JavaScript helper '{callee.Name}' requires a supported inline workflow body.", guidance));
+                return;
+            }
+            var getter = StateGetters.Contains(callee.Name);
+            var count = getter ? 0 : callee.Name == "setOutput" ? 2 : 1;
+            if (call.Arguments.Count != count || call.Arguments.Any(argument => argument is SpreadElement))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                    $"JavaScript helper '{callee.Name}' has unsupported arity or spread arguments.", guidance));
+                return;
+            }
+            if (!EnsureRootFree("workflowState", call)) return;
+            if (getter && resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, callee.Name[3..])).Succeeded)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"JavaScript helper '{callee.Name}' collides with a generated accessor.", "Rename the variable or input before import."));
+                return;
+            }
+            var target = callee.Name switch
+            {
+                "setWorkflowInstanceName" => "setInstanceName",
+                "getWorkflowInstanceName" => "getInstanceName",
+                _ => callee.Name
+            };
+            if (!getter && callee.Name != "setOutput")
+            {
+                var value = call.Arguments[0];
+                if (value is Literal { Value: string literal } && string.IsNullOrWhiteSpace(literal))
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.IdentityNormalization,
+                        $"JavaScript helper '{callee.Name}' would change a blank identity under native normalization.",
+                        "Use explicit null or a nonblank identity before import. Computed identities use the generic runtime VF-STATE-005 guard."));
+                    return;
+                }
+                Edits.Add(new SourceEdit(value.Start, value.Start, "workflowState.requireExactIdentity(("));
+                Edits.Add(new SourceEdit(value.End, value.End, "))"));
+            }
+            Edits.Add(new SourceEdit(callee.Start, callee.End, $"workflowState.{target}"));
+            foreach (var argument in call.Arguments) Visit(argument);
+        }
+
         private void ConvertSetVariable(CallExpression call)
         {
             if (!ConvertsVariableWrites)
@@ -2725,6 +2790,7 @@ public static class Elsa3ImportDiagnosticCodes
     public const string CrossFrameReference = "VF-IMP-003";
     public const string UnresolvableReferenceShape = "VF-IMP-004";
     public const string ForbiddenCapability = "VF-IMP-005";
+    public const string IdentityNormalization = "ELS3-STATE-IDENTITY-NORMALIZATION";
     public const string DynamicAccessor = "VF-IMP-006";
     public const string UnsupportedShape = "VF-IMP-007";
     public const string IncompatibleValue = "VF-IMP-008";

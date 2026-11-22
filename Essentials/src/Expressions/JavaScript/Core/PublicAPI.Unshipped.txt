@@ -271,3 +271,16 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.War
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.init -> void
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptValueReplacementContractAttribute
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptValueReplacementContractAttribute.JavaScriptValueReplacementContractAttribute() -> void
+
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.CorrelationId.get -> string?
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.CorrelationId.set -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.HasReadProtectedValue.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.InstanceName.get -> string?
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.InstanceName.set -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.Refuse(string! code, string! reason) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.SetOutput(string! name, System.Text.Json.JsonElement value) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.ThrowIfRefused() -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState.TryGetOutput(string! name, out System.Text.Json.JsonElement value) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.WorkflowState.get -> Elsa.Expressions.JavaScript.Core.Contracts.IScriptWorkflowState?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.WorkflowState.init -> void

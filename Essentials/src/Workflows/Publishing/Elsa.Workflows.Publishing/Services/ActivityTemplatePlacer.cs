@@ -317,6 +317,14 @@ public sealed class ActivityTemplatePlacer(
         var closedScopeId = IsClosedScope(frame.Template.Root.Descriptor)
             ? nodeIds[frame.Template.Root.ExecutableNodeId]
             : null;
+        if (frame.InClosedScope || closedScopeId is not null)
+        {
+            foreach (var node in frame.Template.NodesById.Values)
+                if (node.ActivityContract?.AccessesWorkflowState == true &&
+                    (!node.Metadata.TryGetValue("accessesWorkflowState", out var access) || access != "false"))
+                    throw Rejected(node.AuthoredActivityId, "VF-STATE-002",
+                        "Workflow outputs and identity require an inline leaf outside a closed reusable graph. Known read-only scripts remain supported.");
+        }
         var placedNodes = new Dictionary<string, ExecutableNode>(StringComparer.Ordinal);
         var pending = new Stack<(ExecutableNode Node, bool Visited)>();
         pending.Push((frame.Template.Root, false));
@@ -660,7 +668,7 @@ public sealed class ActivityTemplatePlacer(
             contract.SideEffectProfile,
             // Spec 1230: keep the type's background declaration, or a background leaf placed as an occurrence root
             // would be pinned as not background-safe and refused at admission.
-            contract.SupportsBackgroundExecution);
+            contract.SupportsBackgroundExecution, contract.AccessesUndeclaredVariables, contract.AccessesWorkflowState);
     }
 
     private static ExecutableNode CloneWithChildSlots(

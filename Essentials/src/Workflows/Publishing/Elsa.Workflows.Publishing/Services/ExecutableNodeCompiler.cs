@@ -187,6 +187,9 @@ public sealed class ExecutableNodeCompiler(
         EnsureConnectedOutcomesDeclared(activity, childSlots);
         EnsureOutcomeSelectionGuaranteed(activity, clrActivityType, activityType, activityContract, outcomeProjection);
 
+        if (activityContract?.AccessesWorkflowState == true && structure is not null && (bodyWritePlan?.WorkflowState.AccessesState ?? true))
+            throw new ArgumentException($"VF-STATE-002: Structural node '{activity.NodeId}' cannot access workflow state from its body.");
+
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
 
         return new ExecutableNode(
@@ -334,6 +337,8 @@ public sealed class ExecutableNodeCompiler(
     /// </summary>
     private static void EnsureReadOnly(string nodeId, string inputKey, ScriptVariableReadPlan plan)
     {
+        if (plan.WorkflowState.AccessesState)
+            throw new ArgumentException($"VF-STATE-002: Input '{inputKey}' on node '{nodeId}' cannot access body workflow state. Use an inline leaf body.");
         if (plan.Writes.Count == 0)
             return;
         var write = plan.Writes[0];
@@ -794,7 +799,8 @@ public sealed class ExecutableNodeCompiler(
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
             ResolveSideEffectProfile(activityType),
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true),
-            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType));
+            accessesUndeclaredVariables: VariableReferenceTypes.AccessesUndeclaredVariables(activityType),
+            accessesWorkflowState: AccessesWorkflowStateAttribute.IsAccessedBy(activityType));
     }
 
     /// <summary>

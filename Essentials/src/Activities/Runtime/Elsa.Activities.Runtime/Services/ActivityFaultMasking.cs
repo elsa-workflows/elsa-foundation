@@ -30,6 +30,17 @@ namespace Elsa.Activities.Runtime.Services;
 public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activityExecutionId) : IDisposable
 {
     private static readonly ActivityActivationFailureHandler ActivationFailures = new();
+    private Func<bool>? _protectedStateReads;
+    internal void ProtectWorkflowStateReads(Func<bool> reads) => _protectedStateReads = reads;
+    private const string WithheldStateFailure = "Failure details are withheld because the body read protected workflow state.";
+    private static string ValueFree(string text)
+    {
+        var separator = text.IndexOf(':');
+        return text.StartsWith("VF-", StringComparison.Ordinal) && separator is > 0 and < 24 &&
+               text[..separator].All(character => char.IsAsciiLetterUpper(character) || char.IsAsciiDigit(character) || character == '-')
+            ? text[..separator] + ": " + WithheldStateFailure : WithheldStateFailure;
+    }
+
 
     /// <summary>The masking of <paramref name="activityExecutionId"/>'s failure text with the scope's <see cref="IRuntimeSecretMask"/>.</summary>
     public static ActivityFaultMasking For(IServiceProvider services, string activityExecutionId) =>
@@ -47,6 +58,7 @@ public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activit
     /// itself bypasses masking (a recorded limit, contracts/withheld-values-and-masking.md).
     /// </summary>
     public Exception Mask(Exception exception) =>
+        _protectedStateReads?.Invoke() == true ? new SecretMaskedException(exception, ValueFree) :
         !mask.HasRegistrations(activityExecutionId) || ActivationFailures.Classify(exception) is not null
             ? exception
             : new SecretMaskedException(exception, text => mask.Mask(activityExecutionId, text));
@@ -57,7 +69,9 @@ public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activit
     /// kept as the activity set them, unmasked.
     /// </summary>
     public ActivityFault Mask(ActivityFault fault) =>
-        mask.HasRegistrations(activityExecutionId)
+        _protectedStateReads?.Invoke() == true
+            ? new ActivityFault(fault.Code, WithheldStateFailure, fault.IsRetryable, fault.Category, fault.FaultType)
+            : mask.HasRegistrations(activityExecutionId)
             ? new ActivityFault(fault.Code, mask.Mask(activityExecutionId, fault.Message), fault.IsRetryable, fault.Category, fault.FaultType)
             : fault;
 

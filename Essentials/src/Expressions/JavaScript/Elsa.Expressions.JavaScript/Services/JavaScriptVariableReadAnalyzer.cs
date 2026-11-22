@@ -1,3 +1,4 @@
+using Elsa.Expressions.Core.Models;
 using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
@@ -55,7 +56,7 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         // setVariable exists only in a script body, so only there is it a root (an input expression's own local of that
         // name is an ordinary local).
         if (DeclaresRoot(parsed, scriptBody))
-            return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true };
+            return new ScriptVariableReadAnalysis([], hasComputedRead: true) { HasComputedWrite = true, WorkflowState = AnalyzeState(parsed) };
 
         var walker = new Walker(_readingFunctions, scriptBody);
         walker.Visit(parsed);
@@ -63,9 +64,70 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
         {
             Writes = walker.Writes,
             Escapes = walker.Escapes.Distinct(StringComparer.Ordinal).ToArray(),
+            WorkflowState = AnalyzeState(parsed),
             HasComputedWrite = walker.HasComputedWrite
         };
     }
+
+    private static ScriptWorkflowStateEffects AnalyzeState(Node parsed)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var access = false;
+        var opaque = false;
+        var correlation = false;
+        var instanceName = false;
+        void Visit(Node node, Node? parent)
+        {
+            if (node is Identifier { Name: "workflowState" })
+            {
+                access = true;
+                if (parent is not MemberExpression { Object: Identifier { Name: "workflowState" }, Computed: false })
+                    opaque = true;
+            }
+            if (node is Identifier { Name: "eval" or "Function" or "globalThis" } || node is ThisExpression)
+            { access = true; opaque = true; }
+            if (node is MemberExpression dynamicMember &&
+                dynamicMember.Object is not Identifier { Name: "variables" or "args" } &&
+                dynamicMember.Object is not CallExpression { Callee: Identifier { Name: "getVariable" } } &&
+                (IsOpaqueStateMember(dynamicMember.Property, dynamicMember.Computed) || dynamicMember.Object is Identifier { Name: "Reflect" }))
+            { access = true; opaque = true; }
+            if (node is Identifier { Name: "Object" or "Reflect" } intrinsic &&
+                !(parent is MemberExpression accessMember && ReferenceEquals(accessMember.Object, intrinsic) ||
+                  parent is CallExpression invocation && ReferenceEquals(invocation.Callee, intrinsic) || parent is NewExpression))
+            { access = true; opaque = true; }
+            if (node is MemberExpression { Object: Identifier { Name: "workflowState" } } member)
+            {
+                if (member.Computed || member.Property is not Identifier method || parent is not CallExpression call || !ReferenceEquals(call.Callee, member))
+                    opaque = true;
+                else
+                {
+                    switch (method.Name)
+                    {
+                        case "setOutput":
+                            if (call.Arguments.Count == 2 && call.Arguments[0] is Literal { Value: string name } && !string.IsNullOrWhiteSpace(name)) names.Add(name);
+                            else opaque = true;
+                            break;
+                        case "setCorrelationId": correlation = true; break;
+                        case "setInstanceName": instanceName = true; break;
+                        case "getOutput" or "getCorrelationId" or "getInstanceName" or "requireExactIdentity": break;
+                        default: opaque = true; break;
+                    }
+                }
+            }
+            foreach (var child in node.ChildNodes) Visit(child, node);
+        }
+        Visit(parsed, null);
+        return new ScriptWorkflowStateEffects { AccessesState = access, OutputNames = names.Order(StringComparer.Ordinal).ToArray(),
+            WritesCorrelationId = correlation, WritesInstanceName = instanceName, Conservative = opaque };
+    }
+
+    private static bool IsOpaqueStateMember(Node key, bool computed) => key switch
+    {
+        Identifier name when !computed => name.Name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+        Literal { Value: string name } => name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+        Literal => false,
+        _ => computed
+    };
 
     private static bool DeclaresRoot(Node node, bool scriptBody)
     {

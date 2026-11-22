@@ -103,14 +103,11 @@ public sealed class Elsa3VariableWriteConversionTests
     }
 
     [Theory]
-    [InlineData("setOutput('x', 1);")]
     [InlineData("setInput('x', 1);")]
     [InlineData("setResult(1);")]
-    [InlineData("setCorrelationId('c');")]
-    [InlineData("setWorkflowInstanceName('n');")]
     public async Task The_other_elsa3_setters_stay_refused_in_a_script(string source)
     {
-        // FR-034 (Q1): workflow outputs, inputs, correlation and instance name are not variables.
+        // S-13 replaces the output/identity refusal; input and result mutation remain unsupported.
         var issue = await RefusedScriptAsync(source, Total);
 
         Assert.Equal(Elsa3ImportDiagnosticCodes.ForbiddenCapability, issue.Code);

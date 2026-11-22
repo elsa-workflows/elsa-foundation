@@ -63,6 +63,8 @@ internal static class StepVariableWriteValidation
                 continue;
 
             var everyVisible = VariableAccessDesignFacet.AccessesUndeclaredVariables(version.DesignFacets);
+            var stateFacet = version.DesignFacets.FirstOrDefault(facet => facet.Kind == WorkflowStateDesignFacet.Kind);
+            var usesState = stateFacet is not null;
             var targets = new List<StepVariableWriteTarget>();
             foreach (var input in version.Inputs.Where(input => !string.IsNullOrWhiteSpace(input.VariableAccess)))
             {
@@ -117,6 +119,9 @@ internal static class StepVariableWriteValidation
                     // its analyzed body says which it may write: every visible variable only for a computed or opaque write.
                     // A type that declares the marker itself may write any visible variable from its C# code too (FR-028).
                     everyVisible = VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(version.DesignFacets) || plan.HasComputedWrite;
+                    var declaredState = stateFacet?.Payload is { ValueKind: JsonValueKind.Object } statePayload &&
+                        statePayload.TryGetProperty("declared", out var declared) && declared.ValueKind == JsonValueKind.True;
+                    usesState = declaredState || plan.WorkflowState.AccessesState;
                     foreach (var write in plan.MayWrite())
                     {
                         var scopeId = UnorderedVariableWriteAnalyzer.NormalizeScopeId(write.ScopeId);
@@ -125,6 +130,11 @@ internal static class StepVariableWriteValidation
                     }
                 }
             }
+
+            if (usesState && (node.ExecutionPlacement == Elsa.Primitives.Models.ActivityExecutionPlacement.Background ||
+                              structures.ProjectChildren(node).Count > 0 || structures.CompileExecutableStructure(node) is not null))
+                errors.Add(new ValidationError(node.NodeId, "VF-STATE-002",
+                    "Workflow output and identity access requires an inline leaf body outside a closed reusable graph."));
 
             if (targets.Count == 0 && !everyVisible)
                 continue;

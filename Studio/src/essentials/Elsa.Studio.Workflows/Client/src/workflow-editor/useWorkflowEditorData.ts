@@ -210,6 +210,7 @@ export function toActivityDescriptor(activity: ActivityCatalogItem): StudioActiv
     ports: (activity.ports ?? []) as StudioActivityDescriptor["ports"],
     isContainer: Boolean(activity.containerStructure),
     isBrowsable: activity.available !== false,
+    ...readWorkflowStateCapability(activity),
     ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {}),
     ...(readDeclaresAccessesUndeclaredVariables(activity) ? { declaresAccessesUndeclaredVariables: true } : {})
   };
@@ -234,4 +235,16 @@ function readDeclaresAccessesUndeclaredVariables(activity: ActivityCatalogItem) 
     const access = payload as { accessesUndeclaredVariables?: unknown; declared?: unknown };
     return access.accessesUndeclaredVariables === true && access.declared === true;
   });
+}
+
+function readWorkflowStateCapability(activity: ActivityCatalogItem) {
+  for (const value of activity.designFacets ?? []) {
+    if (!value || typeof value !== "object") continue;
+    const facet = value as { kind?: unknown; payload?: { declared?: unknown } };
+    if (facet.kind === "elsa.workflow-state") return {
+      accessesWorkflowState: true,
+      declaresAccessesWorkflowState: facet.payload?.declared === true
+    };
+  }
+  return {};
 }

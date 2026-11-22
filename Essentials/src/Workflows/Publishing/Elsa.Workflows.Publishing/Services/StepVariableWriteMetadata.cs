@@ -56,6 +56,13 @@ internal static class StepVariableWriteMetadata
         // [AccessesUndeclaredVariables] itself may write any visible variable from its C# code too (FR-028).
         if (explicitlyMarked || (scriptBody is not null ? scriptBody.HasComputedWrite : contract?.AccessesUndeclaredVariables == true))
             metadata[RuntimeMetadataKeys.MayWriteEveryVisibleVariable] = "true";
+        if (contract?.AccessesWorkflowState == true)
+        {
+            var effects = scriptBody?.WorkflowState;
+            metadata["accessesWorkflowState"] = (effects?.AccessesState ?? true) ? "true" : "false";
+            metadata["workflowStateEffects"] = JsonSerializer.Serialize(effects ?? new Elsa.Expressions.Core.Models.ScriptWorkflowStateEffects
+                { AccessesState = true, Conservative = true }, SerializerOptions);
+        }
         return metadata;
     }
 

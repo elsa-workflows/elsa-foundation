@@ -1,3 +1,4 @@
+import { workflowStateEffectLabels } from "./workflowInstanceInspection";
 import { useMemo } from "react";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "./runtimeActivityDisplay";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
@@ -49,6 +50,8 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
               <span className="wf-timeline-body">
                 <strong title={label}>{label}</strong>
                 <small title={typeName}>{typeName}</small>
+                {workflowStateEffectLabels(activity.workflowStateEffects).length > 0
+                  ? <small>Committed changes: {workflowStateEffectLabels(activity.workflowStateEffects).join(", ")}</small> : null}
                 {compensation ? <small className="wf-timeline-tag"><Undo2 size={11} aria-hidden="true" /> Compensation</small> : null}
               </span>
               <span className="wf-timeline-meta">

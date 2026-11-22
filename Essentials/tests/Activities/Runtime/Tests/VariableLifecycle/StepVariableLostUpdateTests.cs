@@ -191,7 +191,7 @@ public sealed class StepVariableLostUpdateTests
             capture => Assert.Equal((VariableWriteSource.Capture, VariableCommitOutcome.Current, 2L), (capture.Writer.Source, capture.Outcome, capture.NewVersion)));
     }
 
-    private static async Task<WorkflowExecutionRun> RunAndResumeAsync(
+    internal static async Task<WorkflowExecutionRun> RunAndResumeAsync(
         WorkflowExecutionHarness harness,
         Type waitingActivity,
         string resumeTargetKey,

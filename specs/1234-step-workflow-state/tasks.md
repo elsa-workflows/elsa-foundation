@@ -6,9 +6,9 @@ All tasks below are implementation work and remain unchecked until executed. Con
 
 ## Phase 1 — Setup
 
-- [ ] T001 Re-read the approved `specs/1234-step-workflow-state/spec.md` and exact merged initiative head; record approved scope/source on the existing PR and take exclusive ownership of its isolated checkout/branch without editing the shared root.
-- [ ] T002 Inventory current commit/replay/protection call sites against `specs/1234-step-workflow-state/research.md`, checking incoming initiative changes before implementing the named paths.
-- [ ] T003 Define exact affected suites and owned composed-host journeys from `specs/1234-step-workflow-state/quickstart.md`; record baseline failures/not-run states on the implementation PR.
+- [X] T001 Re-read the approved `specs/1234-step-workflow-state/spec.md` and exact merged initiative head; record approved scope/source on the existing PR and take exclusive ownership of its isolated checkout/branch without editing the shared root.
+- [X] T002 Inventory current commit/replay/protection call sites against `specs/1234-step-workflow-state/research.md`, checking incoming initiative changes before implementing the named paths.
+- [X] T003 Define exact affected suites and owned composed-host journeys from `specs/1234-step-workflow-state/quickstart.md`; record baseline failures/not-run states on the implementation PR.
 
 ## Phase 2 — Shared capability and placement foundation
 

@@ -1,0 +1,67 @@
+using System.Text.Json;
+using Elsa.Activities.Runtime.Services.StepVariables;
+using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
+
+namespace Elsa.Activities.Runtime.Services.StepState;
+
+/// <summary>Prepares the state and variable changes as one immutable checkpoint candidate.</summary>
+internal static class StepStateCommit
+{
+    internal static async ValueTask<StepVariableCommitResult> PrepareAsync(StepWorkflowState? session,
+        StepVariableCommitResult writes, IWorkflowExecutionStateStore workflows, IWorkflowStateChangePreparer? preparer,
+        string executionId, ActivityExecutionState invocation, DateTimeOffset occurredAt, CancellationToken cancellationToken)
+    {
+        if (session is null || writes.Failure is not null || writes.LostUpdateFault is not null)
+            return writes;
+        session.ValidateCompletion();
+        if (!session.HasEffects)
+            return writes;
+        var changes = new List<RuntimeStateChange<DurableValueState>>();
+        var source = session.SourcePolicy();
+        foreach (var (name, json) in session.Assignments)
+        {
+            var policy = source;
+            if (session.Outputs.TryGetValue(name, out var destination))
+                policy = ValuePolicyCombiner.Combine(policy, destination.Policy, "Step workflow output");
+            var value = ValueEnvelope.Inline(new ValueTypeDescriptor(TypeAliasConvention.AnyAlias), json, policy);
+            if (preparer is null)
+                throw new InvalidOperationException("VF-STATE-003: Workflow output encoding is unavailable.");
+            changes.Add(await preparer.PrepareOutputAsync(executionId, invocation.InvocationId, name, value, occurredAt, cancellationToken));
+        }
+
+        var workflow = writes.Workflow;
+        if (session.HasCorrelationAssignment || session.HasNameAssignment)
+        {
+            workflow ??= await workflows.FindAsync(executionId, cancellationToken)
+                ?? throw new InvalidOperationException("VF-STATE-002: Workflow working state is unavailable.");
+            var metadata = workflow.SystemMetadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            if (session.HasNameAssignment)
+            {
+                if (session.AssignedName is null) metadata.Remove(RuntimeMetadataKeys.InstanceName);
+                else metadata[RuntimeMetadataKeys.InstanceName] = session.AssignedName;
+            }
+            workflow = workflow with
+            {
+                CorrelationId = session.HasCorrelationAssignment ? session.AssignedCorrelation : workflow.CorrelationId,
+                SystemMetadata = RuntimeModelMetadata.Snapshot(metadata)
+            };
+            changes.AddRange(RuntimeWorkflowStateSeed.BuildIdentityChanges(executionId, session.HasCorrelationAssignment,
+                session.AssignedCorrelation, session.HasNameAssignment, session.AssignedName, occurredAt));
+        }
+        var kinds = new List<string>();
+        if (session.Assignments.Count > 0) kinds.Add("outputs");
+        if (session.HasCorrelationAssignment) kinds.Add("correlationId");
+        if (session.HasNameAssignment) kinds.Add("instanceName");
+        var accepted = writes.Apply(invocation);
+        var attribution = accepted.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        attribution["workflowStateEffects"] = JsonSerializer.Serialize(kinds);
+        attribution["workflowStateEffectsAttemptId"] = invocation.Attempts?.LastOrDefault()?.AttemptId ?? string.Empty;
+        attribution["workflowStateEffectsAt"] = occurredAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        return writes with { Workflow = workflow, StateValues = changes, HasStateEffects = true,
+            Invocation = accepted with { Metadata = RuntimeModelMetadata.Snapshot(attribution) } };
+    }
+}

@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Services.StepState;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -26,13 +27,18 @@ internal static class StepVariableCommit
         ExecutableNode node,
         ActivityExecutionState invocation,
         DateTimeOffset occurredAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StepWorkflowState? workflowState = null,
+        IWorkflowStateChangePreparer? preparer = null)
     {
         try
         {
-            return await ApplyAsync(session, workflowExecutionStateStore, activityExecutionStateStore, workflowExecutionId, node, invocation, occurredAt, cancellationToken);
+            var sourcePolicy = workflowState?.ReadPolicies.Any() == true ? workflowState.SourcePolicy() : null;
+            var variables = await ApplyAsync(session, workflowExecutionStateStore, activityExecutionStateStore, workflowExecutionId, node, invocation, occurredAt, cancellationToken, sourcePolicy);
+            return await StepStateCommit.PrepareAsync(workflowState, variables, workflowExecutionStateStore, preparer,
+                workflowExecutionId, invocation, occurredAt, cancellationToken);
         }
-        catch (StepVariableCommitRefusedException exception)
+        catch (InvalidOperationException exception)
         {
             return StepVariableCommitResult.None with { Failure = exception };
         }
@@ -46,7 +52,8 @@ internal static class StepVariableCommit
         ExecutableNode node,
         ActivityExecutionState invocation,
         DateTimeOffset occurredAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ValueProtectionPolicy? sourcePolicy = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -69,6 +76,15 @@ internal static class StepVariableCommit
 
         foreach (var intent in intents)
         {
+            var intentValue = intent.Value;
+            if (sourcePolicy is not null)
+            {
+                var policy = ValuePolicyCombiner.Combine(intentValue.Policy, sourcePolicy, "Step variable after workflow-state reads");
+                if (policy.RequiresEncryption || policy.Storage != DurableValueStorage.Inline)
+                    throw new StepVariableCommitRefusedException("VF-STATE-003: The variable destination cannot encode the workflow-state source protection.");
+                intentValue = new ValueEnvelope(intentValue.Type, intentValue.Presence, intentValue.InlineValue,
+                    intentValue.ExternalReference, policy, intentValue.WithheldValue);
+            }
             VariableFrameState frame;
             if (intent.OwnerInvocationId is null)
             {
@@ -97,7 +113,7 @@ internal static class StepVariableCommit
             if (!frame.Values.ContainsKey(intent.VariableKey))
                 throw new StepVariableCommitRefusedException(
                     $"Node '{node.ExecutableNodeId}' writes variable '{intent.Name}', which scope '{intent.ScopeId}' no longer declares.");
-            var write = frame.Commit(intent.VariableKey, intent.Value, frame.Revision, intent.Base, mode, writer);
+            var write = frame.Commit(intent.VariableKey, intentValue, frame.Revision, intent.Base, mode, writer);
             if (VariableWriteRecord.IsRecorded(write.Decision))
             {
                 var record = VariableWriteRecord.From(frame, write, intent.VariableKey, writer, occurredAt) with
@@ -107,7 +123,7 @@ internal static class StepVariableCommit
                 if (write.Decision.Outcome == VariableCommitOutcome.LostUpdateFault)
                 {
                     // Nothing the step staged applies; only the refused write is kept, on the faulted invocation.
-                    var refused = record with { RejectedValue = intent.Value };
+                    var refused = record with { RejectedValue = intentValue };
                     return new StepVariableCommitResult(null, [], [refused], refused, [])
                     {
                         Invocation = invocation.WithSessionReads(reads).WithVariableWrites([refused])
@@ -116,7 +132,7 @@ internal static class StepVariableCommit
 
                 records.Add(record);
                 if (write.Decision.ChangesValue)
-                    written.Add(new RecordedVariableWrite(intent.VariableKey, intent.Value));
+                    written.Add(new RecordedVariableWrite(intent.VariableKey, intentValue));
             }
 
             if (intent.OwnerInvocationId is null)
@@ -149,6 +165,10 @@ internal sealed record StepVariableCommitResult(
 
     /// <summary>A commit the step's state no longer allows; the step faults with it and nothing applies.</summary>
     public Exception? Failure { get; init; }
+
+    public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> StateValues { get; init; } = [];
+    public bool HasStateEffects { get; init; }
+
 
     /// <summary>The invocation after the commit; null when there was no session.</summary>
     public ActivityExecutionState? Invocation { get; init; }

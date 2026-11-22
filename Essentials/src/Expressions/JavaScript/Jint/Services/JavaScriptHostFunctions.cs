@@ -284,7 +284,7 @@ internal sealed class JavaScriptHostFunctions
 
     private static readonly HashSet<string> EngineGlobals = new(StringComparer.Ordinal)
     {
-        JavaScriptScriptBuiltIns.Complete, "getVariable",
+        JavaScriptScriptBuiltIns.Complete, "getVariable", "workflowState",
         "globalThis", "undefined", "NaN", "Infinity", "eval", "isFinite", "isNaN", "parseFloat", "parseInt",
         "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent", "escape", "unescape",
         "String", "Number", "Boolean", "Array", "Object", "Date", "Math", "JSON", "Intl", "Temporal", "RegExp", "Map", "Set",

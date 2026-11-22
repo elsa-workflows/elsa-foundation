@@ -46,6 +46,10 @@ public sealed class JavaScriptScriptEvaluationRequest
     /// <see langword="null"/> when the step has no variable session, and the script then has no <c>variables</c> root.
     /// </summary>
     public IScriptVariableSession? Variables { get; init; }
+
+    /// <summary>The bounded workflow-state capability; never supplied to an input expression evaluator.</summary>
+    public IScriptWorkflowState? WorkflowState { get; init; }
+
 }
 
 /// <summary>

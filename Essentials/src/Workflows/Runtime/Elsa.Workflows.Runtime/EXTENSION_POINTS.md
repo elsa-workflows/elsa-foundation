@@ -1244,3 +1244,8 @@ The human-work model and public contracts live in `Runtime.Core/UserTasks`. The 
 
 
 User Task inbox cursors use `UserTaskOptions.CursorEncryptionKey` (Base64, 32 bytes shared by API replicas), falling back to a domain-separated configured `RuntimeRecoveryContinuationOptions.SigningKey`. Only development composition may use ephemeral keys. Key rotation expires existing pages; task state and accepted responses are independent of the cursor key.
+
+### IWorkflowStateChangePreparer *(Core — Elsa.Workflows.Runtime.Core)*
+
+- **Kind:** single-implementation replacement seam for canonical step-output encoding and projection. The default is the existing scoped `WorkflowIntrinsicExecutor` instance.
+- **Usage:** `PrepareOutputAsync` encodes one Any JSON output under its effective policy and returns its immutable durable-value change. It does not accept a checkpoint or persist workflow headers. The caller combines source/destination policy through `ValuePolicyCombiner` and accepts every evaluation effect together.
