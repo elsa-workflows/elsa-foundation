@@ -162,23 +162,30 @@ public sealed class Elsa3VariableExpressionImportTests
     private static Elsa3MemoryReferenceImportFixture Fixture() => new(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"]));
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task The_selected_declarations_type_must_fit_the_consumer(bool container)
+    [InlineData(false, "Int32", "String", "42")]
+    [InlineData(true, "Int32", "String", "42")]
+    [InlineData(false, "String", "Boolean", "true")]
+    [InlineData(true, "String", "Boolean", "true")]
+    [InlineData(false, "String", "Int32", "42")]
+    [InlineData(true, "String", "Int32", "42")]
+    [InlineData(false, "Object", "Boolean", "true")]
+    [InlineData(true, "Object", "Boolean", "true")]
+    public async Task The_selected_declarations_type_must_fit_the_consumer(bool container, string variableType, string targetType, string initial)
     {
-        var variable = new Elsa3Variable { Id = "count", Name = "count", TypeName = "Int32", Value = "42" };
-        var consumer = Consumer("read", "count");
+        var variable = new Elsa3Variable { Id = "count", Name = "count", TypeName = variableType, Value = initial };
+        var consumer = Consumer("read", "count", typeName: targetType);
         var definition = container
             ? Workflow("container-type-mismatch", Container("scope", [variable], consumer))
             : Workflow("workflow-type-mismatch", consumer, variables: [variable]);
 
-        var result = await Fixture().ImportAsync(definition, "type-mismatch.json");
+        var fixture = new Elsa3MemoryReferenceImportFixture(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: targetType));
+        var result = await fixture.ImportAsync(definition, "type-mismatch.json");
 
         Assert.False(result.Succeeded);
         Assert.Null(result.Value);
         var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == "VF-IMP-008");
-        Assert.Contains("Int32", diagnostic.Message);
-        Assert.Contains("String", diagnostic.Message);
+        Assert.Contains(variableType == "Object" ? "Any" : variableType, diagnostic.Message);
+        Assert.Contains(targetType, diagnostic.Message);
         Assert.EndsWith(".Value.expression.value.id", diagnostic.Path, StringComparison.Ordinal);
     }
 
@@ -203,17 +210,42 @@ public sealed class Elsa3VariableExpressionImportTests
 
         Assert.False(result.Succeeded);
         Assert.Null(result.Value);
-        Assert.Contains(result.Diagnostics, item => item.Code == "VF-IMP-002" && item.Path.EndsWith(".Value.expression.value.id", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics, item => item.Code == "VF-IMP-002" && item.Path?.EndsWith(".Value.expression.value.id", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task A_loop_capture_also_set_explicitly_is_refused_instead_of_ignoring_the_write()
+    {
+        var variable = new Elsa3Variable { Id = "captured", Name = "captured", TypeName = "Int32", Value = "0" };
+        var set = Activity("set", "Elsa.SetVariable", new Dictionary<string, JsonElement>
+        {
+            ["Variable"] = JsonSerializer.SerializeToElement(variable, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            ["Value"] = Argument("Literal", "99")
+        });
+        var body = Activity("body", "Elsa.Sequence", children: [set, Consumer("read", "captured")]);
+        var loop = Activity("loop", "Elsa.For", new Dictionary<string, JsonElement>
+        {
+            ["Start"] = Argument("Literal", "0"), ["End"] = Argument("Literal", "1"),
+            ["CurrentValue"] = MemoryReference("captured"),
+            ["Body"] = JsonSerializer.SerializeToElement(body, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        });
+        var fixture = new Elsa3MemoryReferenceImportFixture(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "Object"));
+
+        var result = await fixture.ImportAsync(Workflow("explicit-loop-write", loop, variables: [variable]), "explicit-loop-write.json");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Value);
+        Assert.Contains(result.Diagnostics, item => item.Code == "VF-IMP-002" && item.Path?.EndsWith(".Value.expression.value.id", StringComparison.Ordinal) == true);
     }
 
     private static Elsa3Variable Variable(string id, string name) => new() { Id = id, Name = name, TypeName = "String", Value = "hello" };
 
-    private static Elsa3Activity Consumer(string nodeId, string variableId, string name = "local") => Activity(nodeId, "Elsa.Consumer",
+    private static Elsa3Activity Consumer(string nodeId, string variableId, string name = "local", string typeName = "String") => Activity(nodeId, "Elsa.Consumer",
         new Dictionary<string, JsonElement>
         {
             ["Value"] = JsonSerializer.SerializeToElement(new
             {
-                typeName = "String",
+                typeName,
                 expression = new { type = "Variable", value = new { id = variableId, name, typeName = "String" } }
             })
         });

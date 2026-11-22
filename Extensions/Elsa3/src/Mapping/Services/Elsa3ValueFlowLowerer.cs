@@ -394,7 +394,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         {
             var producers = outputs.Where(output => StringComparer.Ordinal.Equals(output.MemoryReferenceId, id)).ToArray();
             var loop = producers.FirstOrDefault(IsLoopVariable);
-            if (loop is not null && producers.Length > 1)
+            var hasExplicitWrite = plan?.Nodes.Values.Any(node => node.Intrinsic?.Variable is { IsWorkflowScope: true } reference &&
+                StringComparer.Ordinal.Equals(reference.ReferenceKey, id)) == true;
+            if (loop is not null && (producers.Length > 1 || hasExplicitWrite))
             {
                 Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
                     $"Variable expression '{id}' reads a loop capture also written by another activity; no single loop value represents it faithfully.",
@@ -411,7 +413,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 LowerLoopVariableRead(input, property with { MemoryReferenceId = id }, loop, diagnostics, path);
             else
             {
-                if (plan?.WorkflowVariableTypes.GetValueOrDefault(workflowMatches[0]) is { } variableType && !CheckVariableType(variableType))
+                if (plan?.WorkflowVariableTypes.GetValueOrDefault(workflowMatches[0]) is { } variableType &&
+                    !CheckVariableType(variableType, producers.Length > 0))
                     return;
                 Bind(VariableReference.WorkflowScopeId, id);
             }
@@ -430,15 +433,39 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         void Refuse(string code, string message, string guidance, string? id = null) =>
             diagnostics.Add(CreateDiagnostic(input, property, code, message, guidance, path, id));
 
-        bool CheckVariableType(TypeReference variableType)
+        bool CheckVariableType(TypeReference variableType, bool capturedKindChecked = false)
         {
-            if (property.InputContract?.Type is not { } target || TypesMatch(variableType, target))
+            if (property.InputContract?.Type is not { } target || VariableTypeFits(variableType, target, capturedKindChecked))
                 return true;
             Refuse(Elsa3ImportDiagnosticCodes.IncompatibleValue,
                 $"Variable expression '{id}' reads a declaration of type '{variableType.Alias}', but input '{property.PropertyName}' requires '{target.Alias}'.",
                 "Use a variable whose declared type matches this input, or convert its value explicitly in a JavaScript expression before import.", id);
             return false;
         }
+    }
+
+    // A variable read carries its existing JSON envelope, without the literal/script path's text conversion.
+    private static bool VariableTypeFits(TypeReference value, TypeReference target, bool capturedKindChecked)
+    {
+        var sourceName = SimpleName(value.Alias);
+        var targetName = SimpleName(target.Alias);
+        if (IsUntyped(target, targetName))
+            return true;
+        if (value.CollectionKind != target.CollectionKind)
+            return false;
+        if (IsUntypedName(targetName) || sourceName.Equals(targetName, StringComparison.OrdinalIgnoreCase) && ElementsMatch(value.Element, target.Element))
+            return true;
+        if (value.CollectionKind != CollectionKind.Single)
+            return false;
+        if (capturedKindChecked && IsUntyped(value, sourceName))
+            return true;
+        return sourceName switch
+        {
+            "Byte" or "Int16" => targetName is "Int32" or "Int64" or "Decimal",
+            "Int32" => targetName is "Int64" or "Decimal",
+            "Int64" => targetName == "Decimal",
+            _ => false
+        };
     }
 
     private static bool TryReadVariableExpression(JsonElement value, out JsonElement declaration)
