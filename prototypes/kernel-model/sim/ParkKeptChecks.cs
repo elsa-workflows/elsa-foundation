@@ -1909,6 +1909,7 @@ internal static class ParkKeptChecks
         await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
+        await CheckRestartedJob(timed: true, check, sweepDuringOpen: true);
         await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
@@ -1933,15 +1934,28 @@ internal static class ParkKeptChecks
             alterTicket: (ticket, _) => ticket with { Key = "earlier-job" });
     }
 
-    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
+    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check, bool sweepDuringOpen = false)
     {
         var now = 1_701_400_012_000L;
         const string key = "background";
         const string recipe = "captured arguments and effect key";
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = sweepDuringOpen ? TimeSpan.FromMilliseconds(100) : null
+        };
         var actor = new ParkedJobProbe("result", timed, arguments: recipe);
         var scope = new Contract.BoundScope("job-restart");
-        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        InboxKey? ticketToSweep = null;
+        var survivedOpenSweep = false;
+        var wire = new CountingStore(store, () => { }, beforeCommit: async batch =>
+        {
+            if (ticketToSweep is not { } selected || !batch.Turns.Any(turn => turn.FoundationRecoveryJobs is not null))
+                return;
+            ticketToSweep = null;
+            await store.SweepAsync();
+            survivedOpenSweep = store.Messages.GetValueOrDefault(selected) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        });
+        Worker MakeOwner(string node) => new(node, 0, wire, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
         var first = MakeOwner("before-restart");
         var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
         var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -1968,6 +1982,12 @@ internal static class ParkKeptChecks
 
         // Restart takes the model's recipe, even if the old ticket contains different arguments.
         old!.Message = old.Message with { Payload = Json.Write(old.Message.Read<JobTicket>() with { Arguments = "stale" }) };
+        if (sweepDuringOpen)
+        {
+            // Give the retained ticket a past ordinary sweep deadline while the Park window is still open.
+            old.Message = old.Message with { KeepUntil = now - 1 };
+            ticketToSweep = oldKey;
+        }
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var admitted = await edge.SendAsync(scope, target, "restart-operation", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(selection)));
@@ -1984,6 +2004,15 @@ internal static class ParkKeptChecks
             store.Messages.GetValueOrDefault(currentKey) is { Done: false, Seen: 0, ReleasedBy: null } job &&
             job.Message.Read<JobTicket>().Arguments == recipe && actor.Entries == 1;
         check(restarted, "the fenced Open writes a new job generation from the captured recipe while the older ticket stays inert");
+        if (sweepDuringOpen)
+        {
+            await store.SweepAsync();
+            check(survivedOpenSweep && restarted && store.FoundationExpiry(open)?.Armed is null &&
+                store.Messages.GetValueOrDefault(currentKey) is { Done: false } &&
+                store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.Job }) == 1 &&
+                store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.JobDeadline }) == 1,
+                "M1-2 a sweep after planning and after Open preserves the kept ticket and its single timed replacement");
+        }
         if (!restarted) return;
         if (timed)
         {
