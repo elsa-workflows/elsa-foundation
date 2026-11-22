@@ -182,7 +182,8 @@ belongs to the existing coordinator/S-2 lane; do not create a competing main-syn
 Use `Elsa3.Mapping.Tests` and the existing HTTP/SQLite import integration project. Matrix controls cover both HTTP
 variants; missing/bare-null/supported-empty/Literal-null/blank/empty-list shapes; Literal-without-value; malformed
 metadata; literal `"null"`; valid and invalid boundary values; case-insensitive keys; duplicate bindings; caller
-immutability; original member paths; and one refusal per failed node.
+immutability; original member paths; and no duplicate required-input refusal on an already refused node. Distinct
+member-specific errors are not suppressed by a new first-error policy.
 
 Owned disposable hosts and a local HTTP receiver prove For iteration counts, zero Delay due time, effective GET,
 ContentType/request-body differences (including empty string Content), and default `[200]` paths on 200/404/500.

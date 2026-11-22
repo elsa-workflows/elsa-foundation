@@ -200,7 +200,7 @@ Sources: [request execution](https://github.com/elsa-workflows/elsa-core/blob/7e
 [JSON writer](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/ContentWriters/JsonContentFactory.cs#L20),
 [response status assignment](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/Activities/WriteHttpResponse.cs#L111).
 Target checks: `Essentials/src/Activities/Http/Activities/SendHttpRequest.cs`, `WriteHttpResponse.cs`,
-`Elsa3BuiltInActivityMap.Entries.cs` and `Conversion/Elsa3GraphBuilder.cs`.
+`Elsa3BuiltInActivityMap.Entries.cs` and `Conversion/Elsa3FlowchartGraphBuilder.cs`.
 
 ### Scheduling and scripts
 

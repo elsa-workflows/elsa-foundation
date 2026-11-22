@@ -328,8 +328,9 @@ to set, or that the activity can be removed.
   above; follow-up research also records Cron and source-layout differences rather than claiming identical runtimes.
 - The JTest corpus's tool version is 3.5. No corpus definition has a `null` `For.OuterBoundInclusive`.
 - The measurement method matches specs 247, 248, 262 and 264: throwaway tests, deleted before the commit.
-- Out of scope: Elsa 4 changes (#3280), absent and blank members (#3281), #3195 (RunJavaScript `arguments`), #3201,
-  #3202, ExecuteWorkflow's mapping (spec 236), engine-start reconciliation (spec 235).
+- Original delivery exclusions: Elsa 4 changes (#3280), absent and blank members (#3281), #3195 (RunJavaScript
+  `arguments`), #3201, #3202, ExecuteWorkflow's mapping (spec 236), engine-start reconciliation (spec 235).
+  The #3281 amendment below brings only its named converter cases into the new follow-up scope.
 
 ## Converter default follow-up — #3281
 

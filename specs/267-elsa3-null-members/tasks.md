@@ -123,7 +123,8 @@ implementation or runtime qualification is implied by this proposal.
 - [x] T024 Recheck exact 3.6.3/3.5.3 sources in `specs/267-elsa3-null-members/research.md`: wrapper loading/default
   evaluation, ContentType non-null guard, cleared-list Done routing, Timer nonpositive/invalid values, raw HTTP
   response statuses, For defaults and Cron/RunJavaScript differences. Distinguish source inspection from runtime proof.
-- [ ] T025 [US4] Add real converter/catalog controls in `Extensions/Elsa3/tests/Mapping/Tests` for the full shape/member
+- [ ] T025 [US4] Add real converter/catalog controls in
+  `Extensions/Elsa3/tests/Mapping/Tests/Elsa3MemberDefaultParityTests.cs`, retaining `Elsa3NullMemberTests.cs`, for the full shape/member
   matrix, including supported empty wrappers versus Literal-without-value, explicit empty collections, literal
   `"null"`, nonempty values, 0/negative/invalid literals, unproven computed status values, original paths, duplicate
   bindings, case-insensitive keys, unchanged caller JSON and unchanged bare-null/custom-map behavior.
@@ -132,11 +133,12 @@ implementation or runtime qualification is implied by this proposal.
   generic custom-map contracts. Apply actions in `Conversion/Elsa3ActivityNormalizer.cs` before source distinctions
   disappear; never default an explicit empty status list or invalid interval/status.
 - [ ] T027 [US4] Add truthful per-use refusals through existing diagnostic families in
-  `Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs`; preserve one refusal per failed node. Update
+  `Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs`; avoid a duplicate required-input refusal on
+  an already refused node, without suppressing distinct member errors. Update
   `Extensions/Elsa3/src/Mapping/README.md`, the owning extension description and
   `specs/236-elsa3-activity-map/member-map.md` with the named conversions/refusals.
 - [ ] T028 [US4] Add actual import/publication/execution and no-write refusal controls in
-  `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests`, using owned disposable stores/local HTTP.
+  `Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/MemberDefaultParityTests.cs`, using owned disposable stores/local HTTP.
   Prove For/Delay/GET/body behavior, default `[200]` paths for 200/404/500, and cleared-list refusal without HTTP calls.
 - [ ] T029 Freeze exact source and commands in the implementation PR evidence; run three independent source lenses
   against the initiative base, verify every finding and commit all surviving fixes. Continue fresh rounds until no
