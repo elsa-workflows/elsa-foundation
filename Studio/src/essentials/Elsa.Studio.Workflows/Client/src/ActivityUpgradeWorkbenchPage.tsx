@@ -293,8 +293,8 @@ export function ActivityUpgradeWorkbenchPage({
 
   return <main className="studio-page ad-page au-page" aria-labelledby="activity-upgrade-title">
     <StudioShellBreadcrumbs items={[{ href: "/workflows/activity-definitions", label: "Activity definitions" }]}
-      current="Staged dependency upgrades" renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigateToStudioPath}>{item.label}</StudioLink>} />
-    <StudioPageHeader headingLevel={2} title={<>Staged dependency upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
+      current="Activity definition upgrades" renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigateToStudioPath}>{item.label}</StudioLink>} />
+    <StudioPageHeader headingLevel={2} title={<>Activity definition upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
 
     <div className="au-scope-note" role="note">
       <strong>Broad planning is deliberate</strong>

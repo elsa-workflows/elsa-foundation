@@ -204,7 +204,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.postJson.mockImplementation(async path => { if (path.endsWith("/recycle")) recycled = true; return { id: asset.id, revision: "r2" } as never; });
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/recycle"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
@@ -218,21 +218,21 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
     api.dialogs.confirm.mockResolvedValue(false);
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     expect(api.backend.http.postJson).not.toHaveBeenCalled();
     expect(host.querySelector("tbody tr")).not.toBeNull();
 
     const readOnly = stubApi(["read"]), view = mount(<DecisionsPage api={readOnly} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(view.host.textContent).toContain("Purchase approval"));
-    expect(collectionMenuItem(view.host, "Approval", "Delete").disabled).toBe(true);
+    expect(collectionMenuItem(view.host, "Approval", "Move to recycle bin").disabled).toBe(true);
   });
   it("ignores a row-delete confirmation after leaving the active collection", async () => {
     const api = stubApi(); let confirmDelete!: (confirmed: boolean) => void;
     api.dialogs.confirm.mockImplementation(() => new Promise(resolve => { confirmDelete = resolve; }));
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     click(button(host, "Recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("Recycle bin is empty"));
@@ -245,7 +245,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.postJson.mockRejectedValue(conflict);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("The decision changed. Refresh and try again."));
     expect(host.querySelector("tbody tr")).not.toBeNull();
     expect(host.querySelector(".decision-conflict")).toBeNull();
