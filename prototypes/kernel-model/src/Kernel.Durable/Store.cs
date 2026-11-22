@@ -468,6 +468,9 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
     internal StringComparer? FoundationKeyEquality { get; init; }
 
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
+        => Delivery(partitions, replyTo, null);
+
+    internal EventDelivery Delivery(int partitions, string? replyTo, InboxKey? scopedKey)
     {
         if (Event.FoundationTenant != Wait.FoundationTenant ||
             !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
@@ -475,12 +478,14 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
         var delivery = Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo };
         if (Event is { FoundationTenant: not null, FoundationIncarnation: { } incarnation })
         {
+            var key = scopedKey ?? new InboxKey(FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                InboxKey.EventDeliveryScope, FoundationEventIdentity.Match(Event, incarnation));
             delivery = delivery with
             {
-                Id = FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                Id = key.Id,
                 Payload = FoundationEventDelivery.Encode(Event, Wait, incarnation)
             };
-            return new(delivery, FoundationEventIdentity.Match(Event, incarnation), Wait.FoundationTenant);
+            return new(delivery, key.Match!, Wait.FoundationTenant);
         }
         var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
         {

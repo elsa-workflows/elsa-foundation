@@ -135,6 +135,7 @@ internal static class FoundationEventSendChecks
         await CheckPage(check, byteCut: false, loseAfter: false);
         await CheckPage(check, byteCut: false, loseAfter: true);
         await CheckDeadLetter(check);
+        await CheckAlreadyDeliveredPage(check);
     }
 
     private static async Task CheckConcurrentAdmission(Action<bool, string> check)
@@ -305,6 +306,40 @@ internal static class FoundationEventSendChecks
         await store.SweepAsync();
         check(!store.FoundationEvents.ContainsKey((scope.Tenant + "_live", "stalled")) && !store.Messages.ContainsKey(failedKey),
             "outside dead-letter retention ends at the receipt window when the keep window was shorter");
+    }
+
+    private static async Task CheckAlreadyDeliveredPage(Action<bool, string> check)
+    {
+        const long now = 1_702_200_030_000;
+        const int count = 12;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("prior-deliveries");
+        var edge = new EventIngress(store, new Requests("publisher"), "publisher");
+        await edge.SendAsync(scope, new("live"), "kept", new string('x', 1_024 * 1_024), new(KeepFor: TimeSpan.FromMinutes(1)));
+        for (var i = 0; i < count; i++)
+            await edge.SetStartAsync(scope, "live", $"late-{i:D2}", new("event-send", "receiver"));
+
+        var published = store.FoundationEvents.Values.Single().FoundationPublishTicket!.Value;
+        var allocatedAt = 0L;
+        var allocation = -1L;
+        var thread = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is not [{ FoundationCatchUpStep: { } key }] || key != published) return;
+            if (!landed)
+            {
+                thread = Environment.CurrentManagedThreadId;
+                allocatedAt = GC.GetAllocatedBytesForCurrentThread();
+            }
+            else if (thread == Environment.CurrentManagedThreadId)
+                allocation = GC.GetAllocatedBytesForCurrentThread() - allocatedAt;
+        });
+        var worker = new Worker("publisher", 0, wire, new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Step(worker);
+        check(allocation is >= 0 and < 1_024 * 1_024 && store.Messages[published].Done &&
+            store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == count,
+            "a page advances past existing deliveries without copying their megabyte payloads");
     }
 
     private static async Task Step(Worker worker)

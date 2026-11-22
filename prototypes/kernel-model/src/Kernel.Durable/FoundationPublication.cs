@@ -97,12 +97,14 @@ public sealed partial class InMemoryStore
         var matched = 0;
         var after = work.After;
         var cut = false;
+        var match = FoundationEventIdentity.Match(publication, work.Incarnation);
         foreach (var wait in FoundationWaits(tenant, publication.Key, work.After).Take(ParkPageLimit))
         {
-            var delivery = MatchRoute(publication, wait).Delivery(partitions);
-            ValidateEventIdentity(delivery);
-            if (!Messages.ContainsKey(delivery.Message.InboxKey) && !keys.Contains(delivery.Message.InboxKey))
+            var deliveryKey = new InboxKey(FoundationEventIdentity.DeliveryId(publication, wait, work.Incarnation), InboxKey.EventDeliveryScope, match);
+            if (!Messages.ContainsKey(deliveryKey) && !keys.Contains(deliveryKey))
             {
+                var delivery = MatchRoute(publication, wait).Delivery(partitions, null, deliveryKey);
+                ValidateEventIdentity(delivery);
                 var candidateSerial = serial;
                 var write = PrepareEventWrite(delivery, ref candidateSerial);
                 var size = PublicationWriteBytes(write);
@@ -112,7 +114,7 @@ public sealed partial class InMemoryStore
                     break;
                 }
                 serial = candidateSerial;
-                keys.Add(delivery.Message.InboxKey);
+                keys.Add(deliveryKey);
                 writes.Add(write);
                 bytes += size;
             }
