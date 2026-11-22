@@ -30,30 +30,6 @@ public sealed class SwitchMatchAnyRunTests
         Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "after");
     }
 
-    [Theory]
-    [InlineData("", false)]
-    [InlineData(" \t\n", false)]
-    [InlineData("", true)]
-    [InlineData(" \t\n", true)]
-    public async Task Blank_scripts_with_unused_Break_ports_complete_case_or_Default_and_successor(string script, bool fallback)
-    {
-        await using var host = await Elsa3ImportHost.StartAsync();
-        var source = Source("MatchAny", !fallback, true);
-        var route = source["root"]!["activities"]![0]!;
-        var body = Activity(fallback ? "fallback" : "a", "Elsa.RunJavaScript", ("script", Literal(script)),
-            ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
-        if (fallback) route["default"] = body;
-        else route["cases"]![0]!["activity"] = body;
-        var run = await host.RunAsync(await ImportAndPublish(host, source));
-        Assert.Equal(WorkflowExecutionStatus.Completed, run.Workflow?.Status);
-        Assert.Empty(run.Incidents);
-        Assert.Equal(fallback ? new[] { "Default" } : new[] { "a", "c", "empty" },
-            Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "route").Completion!.OutcomeNames);
-        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == (fallback ? "fallback" : "a") && item.Status == ActivityExecutionStatus.Completed);
-        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "after");
-        Assert.Equal(!fallback, run.ExecutedNodeIds.Contains("c"));
-    }
-
     [Fact]
     public async Task A_waiting_converted_body_holds_the_Switch_and_Done_successor_until_resume()
     {

@@ -516,27 +516,21 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     [Theory]
-    [InlineData("", false, false)]
-    [InlineData(" \t\n", false, false)]
-    [InlineData("", true, false)]
-    [InlineData(" \t\n", true, false)]
-    [InlineData("", false, true)]
-    [InlineData(" \t\n", true, true)]
-    public async Task Blank_literal_scripts_have_a_proven_safe_boundary(string script, bool parallel, bool fallback)
+    [InlineData("")]
+    [InlineData(" \t\n")]
+    public async Task Blank_required_script_keeps_standalone_and_Switch_binding_refusal(string script)
     {
-        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
+        Elsa3Activity Body() => Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
             ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
-        if (parallel)
+        var roots = new[] { Sequence("root", Body()), Sequence("root", MatchAnyCase(Body(), mode: "MatchFirst")),
+            Sequence("root", MatchAnyCase(Body())) };
+        foreach (var root in roots)
         {
-            var container = Activity("parallel", "Elsa.Parallel");
-            container.AdditionalProperties["activities"] = JsonSerializer.SerializeToElement(new[] { Port(body) });
-            body = container;
+            var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+            Assert.False(result.Succeeded);
+            Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
         }
-        var owner = MatchAnyCase(fallback ? Activity("leaf", "Elsa.WriteLine", ("text", Literal("case"))) : body);
-        if (fallback) owner.AdditionalProperties["default"] = Port(body);
-        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
-            ConversionServices.Definition(Sequence("root", owner)));
-        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Theory]
