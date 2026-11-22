@@ -22,7 +22,7 @@ export function RuntimeVersionRow({
         <strong>{version.version}</strong>
         <small>{version.available ? formatDate(version.promotedAt) : "Rollback target unavailable"}</small>
       </span>
-      <button type="button" className="studio-button" disabled={disabled} title={!canRollback ? "Requires canRollback" : !version.available ? "Rollback target is unavailable" : undefined} onClick={() => onRollback(version.version)}>
+      <button type="button" className="studio-button" disabled={disabled} title={!canRollback ? "Rolling back requires rollback permission" : !version.available ? "Rollback target is unavailable" : undefined} onClick={() => onRollback(version.version)}>
         <RotateCcw size={15} />
         Rollback
       </button>
