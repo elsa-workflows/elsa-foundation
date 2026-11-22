@@ -275,7 +275,7 @@ Workflows:
 - [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
 - [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
   `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
-- [ ] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`.
+- [x] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`. (PR #5296)
 - [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
   `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
 - [ ] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`).
