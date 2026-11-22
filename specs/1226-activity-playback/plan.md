@@ -1,5 +1,7 @@
 # Implementation Plan: Activity-by-activity execution playback
 
+**Current delivery record**: the final delivery receipt supersedes dated preparation/pending statements below. Runtime history, timers and all four provider migrations are landed; the coherent Studio contribution is #4368. The selected acceptance corpus is54 cases across desktop/320/390 and light/dark, with420 PNG/ARIA pairs,48 native oracles and54 traces, preserving each original source head. Owner-authorized CI skipping does not waive exact-source independent review, actual local qualification, sanitized immutable download verification or resulting-main checks.
+
 **Branch**: `agent/codex/4366-activity-playback-implementation` | **Date**: 2026-11-13 | **Spec**: [spec.md](spec.md)
 
 **Input**: #4366; the owner now authorizes Spec Kit planning, tasks and end-to-end implementation. This supersedes the original capture-only instruction.
@@ -10,7 +12,7 @@
 
 Add Previous/Next, Play/Pause, four presentation speeds and ordinal scrubbing to recorded run inspection. Reuse the workbench's exact occurrence selection, pinned scope resolution, permission context and conservative transition evidence. Keep playback transport separate from live observation.
 
-**Local dependency readiness: satisfied.** Research R11 records complete corrected backend qualification and current composed/independent local visual passes. The [explicit6185 handoff](https://github.com/elsa-workflows/elsa-foundation/issues/4366#issuecomment-6873192940) permits T004–T020 local authoring and releases four named existing UI files. The private adapter consumes the qualified capability-discovered occurrence facet; the legacy live activity browser remains unsuitable for frozen traversal. Final dependency publication/current-head downloadable CI and the full feature acceptance remain delivery gates. The owner's14November continuation resolves the previous generated-size/publication hold for the coordinator's coherent unit (research R14); publication and CI results are still pending.
+**Dependency readiness: integrated and qualified.** The native history/read/provider/migration stack is on main through #5364, including all four timer providers and actual restart proof. The coherent Studio implementation consumes the qualified occurrence facet; frozen playback remains separate from the legacy live activity browser. The final delivery receipt records the exact54-case composed corpus, immutable sanitized download and current owner CI waiver. Research R6/R11/R14 retain their earlier preparation results as history.
 
 ## Technical Context
 

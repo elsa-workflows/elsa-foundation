@@ -1,5 +1,7 @@
 # Implementation Plan: Timeline workspace and durable run history
 
+**Current delivery record**: the final delivery receipt supersedes dated preparation/pending statements below. Runtime history, timers and all four provider migrations are landed; the coherent Studio contribution is #4368. The selected acceptance corpus is54 cases across desktop/320/390 and light/dark, with420 PNG/ARIA pairs,48 native oracles and54 traces, preserving each original source head. Owner-authorized CI skipping does not waive exact-source independent review, actual local qualification, sanitized immutable download verification or resulting-main checks.
+
 **Branch**: `agent/codex/3849-history-slice-*` | **Updated**: 2026-11-12 | **Spec**: [spec.md](spec.md)
 
 **Authority**: End-to-end owner instruction on [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6645438505), amended by the [9 November re-slicing decision](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6739905865). #3850 is closed without merge and remains a prototype/evidence reference. Deliver small stacked PRs in the [slice order](slices.md), each with its own qualification and review. This explicit owner instruction supersedes the former single-PR plan; it does not reduce the parent acceptance criteria.

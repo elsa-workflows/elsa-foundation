@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-13
 
-**Status**: In progress — implementation and local composed assertion qualification are complete at `60a0e7848d16a0c5fe94d038e489e919cebfa2fe`: all16 playback cases and8 affected prerequisite cases pass (research R34). Final independent complete UX acceptance, coherent prerequisite publication, implementation PR/downloadable shared evidence, CI or authorized disposition, exact-head merge and resulting-main verification remain open. This is not Implemented or delivered.
+**Status**: Implemented. See the final delivery receipt for source-bound functional/visual qualification and immutable evidence; exact-head merge and resulting-main completion are recorded by the final integration tasks.
 
 **Tracking**: [Feature #4366](https://github.com/elsa-workflows/elsa-foundation/issues/4366).
 

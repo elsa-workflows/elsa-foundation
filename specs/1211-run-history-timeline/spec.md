@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: In progress — resumed on 2026-11-12; the closed prototype has not landed and each replacement slice needs current-source qualification.
+**Status**: Implemented. See the final delivery receipt for source-bound functional/visual qualification and immutable evidence; exact-head merge and resulting-main completion are recorded by the final integration tasks.
 
 **Tracking**: [Feature #3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849).
 

@@ -76,9 +76,11 @@ Delivery-owner inspection uses the existing indexed native-source kind queries (
 
 Pin profile on actual new admitted start payload and run state before durable admission. Legacy absent profile remains uncaptured on replay after upgrade. Host options apply to new admissions only. A retained Required profile makes a later new checkpoint without its batch refuse, including after module removal. An explicit supported quiescent policy change has its own new boundary; do not reinterpret old queued logical commits. Unsupported active changes remain explicit.
 
-## Final admitted profile3 source contribution
+## Current admitted profile and retained source contribution
 
-New admissions use runtime-history-v3/version3. Existing main absent-policy bytes and native markers remain unchanged. Private unmerged v1/v2 event rows remain readable; their future capture support is reported honestly rather than retrofitted.
+New admissions use `runtime-history-v5`/version5. Retained v3 and v4 capture policies keep their original meaning; legacy absent-policy replays remain uncaptured. Readable older records are not retrofitted into newly supported sources. History event/storage schema `1.0.0`, capture profile version5 and timer operational format `1.2.0` are distinct contracts.
+
+The current native catalog includes source-owned timer scheduling/dispatch/retirement, child start and settlement/control, retries and the nine compensation decisions. `TimerCancellationRequested` is not advertised without an actual native owner; terminal `TimerRetired` remains distinct. Passive expiry is eligibility at the server observation time, never an invented consumption, timeout or wake-up event. An optional Event match deadline is taken from the actual suspension and staged in the existing durable CreateBookmark payload on initial and replacement waits; it adds no retained-registration field or schema-family upgrade.
 
 ActivityExecutionInspectionProjection.CheckpointValueCapture is an optional immutable RuntimeCheckpointValueCapture with exact CheckpointId, actual nullable SchedulerWorkItemId and ordered unique EvidenceIds. A known-empty contribution records reprojection. A truly empty raw ValueSnapshots list can omit it; a nonempty list requires the exact bound contribution. Actual source owners stamp invocation/resume/evaluation provenance before merge. History consumes this raw contribution and never queries a later projection to choose an earlier delta. When a new raw value contribution is present, its replay fingerprint preserves opaque UTF-16 owner/evidence identifiers before ordinary JSON conversion, using a versioned conditional encoding. With no contribution the historical fingerprint path remains unchanged.
 
