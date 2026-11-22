@@ -100,7 +100,8 @@ sealed class Po1(string variant, PoRules rules)
         var timerF = start.Sent.Single(m => m.Due == 1050);
         _r = timerF.InboxKey;
         _j = Real.Ticket(Self.Id, "hang", 1);
-        var j = new Message(_j.Id, Self, Kinds.Job, Json.Write(new JobTicketPayload(NativeModel.ModelKey, "hang", null)), Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_j.Scope);
+        var j = ModeledTicket.Issue(new Message(_j.Id, Self, Kinds.Job, Json.Write(new JobTicketPayload(NativeModel.ModelKey, "hang", null)),
+            Self.Id, TargetCreation: 1, SenderCreation: 1).WithInboxScope(_j.Scope));
         _row = new InstanceRow(Self.Id, NativeModel.ModelKey, "two", InstanceStatus.Running, Json.Write(state), 1, null,
             Jobs: DurableKeyJson.WriteKeys(["hang"]), StateVersion: _model.StateVersion, Creation: 1, StartIntent: "harness-intent");
         await Commit([new TurnCommit(Self.Id, _row, null, [], [], [j, .. start.Sent], [], [], null)]);
@@ -119,7 +120,8 @@ sealed class Po1(string variant, PoRules rules)
             _releasedBy[_j] = (1, 1); _releasedBy[_r] = (1, 1);
             if (variant == "open")
             {
-                var c = new Message($"{CreationProtocol.Origin(Self.Id, 1)}#drain.950", Self, Fr2.DrainKind, Json.Write(new { Generation = 1 }), Self.Id, TargetCreation: 1, SenderCreation: 1).AsIssued();
+                var c = ModeledTicket.Issue(new Message($"{CreationProtocol.Origin(Self.Id, 1)}#drain.950", Self, Fr2.DrainKind,
+                    Json.Write(new { Generation = 1 }), Self.Id, TargetCreation: 1, SenderCreation: 1).AsIssued());
                 await Commit([new TurnCommit(Self.Id, null, null, [], [], [c], [], [], null)]);
                 _store.Messages[c.InboxKey].Seq = 950;
                 _c = c.InboxKey;
