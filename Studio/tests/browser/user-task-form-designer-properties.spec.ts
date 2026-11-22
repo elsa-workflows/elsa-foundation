@@ -137,7 +137,7 @@ test("primary Forms editor previews, publishes immutably, and starts the next dr
   await expect(page.getByRole("table", { name: "Task forms" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "new-contact" });
   await expect(row).toContainText("Published · v1");
-  await row.getByRole("button", { name: "New contact", exact: true }).click();
+  await row.press("Enter");
   await expect(page.getByRole("textbox", { name: "Form ID" })).toBeDisabled();
   await page.getByRole("textbox", { name: "Name" }).fill("New contact revision");
   await page.getByRole("button", { name: "Save", exact: true }).click();
