@@ -352,7 +352,7 @@ internal static class StructuralCallbackEvaluation
         {
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter, inspectionAccumulator, timeProvider, workItem,
-                currentParentState, resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken,
+                currentParentState.WithWarnings(conversionWarnings.Warnings), resolvedContinuation.CancellationReason!, valueSnapshots, cancellationToken: cancellationToken,
                 childControlContribution: definition.ChildControlContribution);
             return;
         }

@@ -592,7 +592,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 checkpointCommitter,
                 workItem,
                 payload,
-                faultedParentState,
+                faultedParentState.WithWarnings(conversionWarnings.Warnings),
                 exception,
                 "ActivityReturnedFault",
                 valueSnapshots);
@@ -625,7 +625,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 inspectionAccumulator,
                 TimeProvider,
                 workItem,
-                currentParentState,
+                currentParentState.WithWarnings(conversionWarnings.Warnings),
                 resolvedContinuation.CancellationReason!,
                 valueSnapshots,
                 cancellationToken: cancellationToken);

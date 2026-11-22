@@ -112,7 +112,13 @@ public sealed class ActivityInputHydrator
         try
         {
             return Elsa.Serialization.Core.JsonConversionContract.For(plan.Property.PropertyType, plan.Property).Read(inline, plan.Property.PropertyType,
-                diagnostic => warnings?.Report(Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}")));
+                diagnostic =>
+                {
+                    var warning = Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"args.{input.Key}");
+                    var policy = envelope.Policy;
+                    warnings?.Report(policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode)
+                        ? warning.ProtectedForm! : warning);
+                });
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
