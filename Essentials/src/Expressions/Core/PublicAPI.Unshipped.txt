@@ -799,8 +799,6 @@ Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Information = 0 -> Elsa.Ex
 Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning = 1 -> Elsa.Expressions.Core.Models.ExecutionWarningSeverity
 Elsa.Expressions.Core.Contracts.IExecutionWarningSink
 Elsa.Expressions.Core.Models.ExecutionWarningSeverity
-Elsa.Expressions.Core.Models.ExecutionWarningCollector
-Elsa.Expressions.Core.Models.ExecutionWarningCollector.ExecutionWarningCollector(bool protect = false) -> void
 Elsa.Expressions.Core.Models.ExecutionWarning.ProtectedForm.get -> Elsa.Expressions.Core.Models.ExecutionWarning?
 Elsa.Expressions.Core.Models.ExecutionWarning.ProtectedForm.init -> void
 Elsa.Expressions.Core.Models.ExecutionWarning.Code.get -> string!
@@ -821,9 +819,7 @@ Elsa.Expressions.Core.Models.ExecutionWarning.Equals(Elsa.Expressions.Core.Model
 Elsa.Expressions.Core.Models.ExecutionWarning.<Clone>$() -> Elsa.Expressions.Core.Models.ExecutionWarning!
 Elsa.Expressions.Core.Models.ExecutionWarning.Deconstruct(out string! Code, out string! Message, out Elsa.Expressions.Core.Models.ExecutionWarningSeverity Severity, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Details) -> void
 Elsa.Expressions.Core.Contracts.IExecutionWarningSink.Report(Elsa.Expressions.Core.Models.ExecutionWarning! warning) -> void
-Elsa.Expressions.Core.Models.ExecutionWarningCollector.Report(Elsa.Expressions.Core.Models.ExecutionWarning! warning) -> void
 Elsa.Expressions.Core.Models.ExecutionWarning.ExecutionWarning(string! Code, string! Message, Elsa.Expressions.Core.Models.ExecutionWarningSeverity Severity = Elsa.Expressions.Core.Models.ExecutionWarningSeverity.Warning, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? Details = null) -> void
-Elsa.Expressions.Core.Models.ExecutionWarningCollector.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
 Elsa.Expressions.Core.Models.ExecutionWarning.WithDetail(string! key, string! value) -> Elsa.Expressions.Core.Models.ExecutionWarning!
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
 Elsa.Expressions.Core.Models.ExpressionEvaluationRequest.Warnings.init -> void

@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
-const jsonAlias = "System.Text.Json.JsonElement";
+// Spec 1228 (S-8): the type list offers the dynamic kind as "JSON", stored under the Any alias.
+const jsonAlias = "Any";
 
 // Real Studio authoring and autosave, followed by real publication, response and result reads.
 // Forms/tasks, run navigation and results use the project's viewport. Multi-pane graph wiring

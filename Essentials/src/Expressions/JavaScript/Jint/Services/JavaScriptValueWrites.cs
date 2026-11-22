@@ -1,7 +1,7 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Expressions.JavaScript.Core.Services;
+using Elsa.Expressions.JavaScript.Jint.Services;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Contracts;

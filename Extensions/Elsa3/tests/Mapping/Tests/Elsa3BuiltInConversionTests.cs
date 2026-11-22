@@ -81,11 +81,12 @@ public sealed class Elsa3BuiltInConversionTests
     public async Task A_captured_event_result_is_read_from_the_elsa4_payload_output()
     {
         var wait = Activity("wait", "Elsa.Event", ("eventName", Literal("order.approved")), ("result", Captured("approval")));
-        var write = Activity("write", "Elsa.WriteLine", ("text", Captured("approval")));
+        // A dynamic input: an event payload into a typed one is refused (#4898).
+        var write = Activity("write", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("approval")));
 
         var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", wait, write));
 
-        var text = Input(Node(state, "write"), "text");
+        var text = Input(Node(state, "write"), "Payload");
         Assert.Equal("ActivityResult", text.Value.ExpressionType);
         var reference = Assert.IsType<JsonElement>(text.Value.Value);
         Assert.Equal("wait", reference.GetProperty("producerNodeId").GetString());

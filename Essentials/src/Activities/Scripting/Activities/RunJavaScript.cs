@@ -141,7 +141,7 @@ public sealed class RunJavaScript(IJavaScriptScriptEvaluator evaluator) : Activi
         if (variables is not null)
         {
             foreach (var warning in variables.MissingNameWarnings())
-                context.Warnings.Report(session!.HasReadProtectedValue ? warning.ProtectedForm ?? warning : warning);
+                context.Warnings?.Report(session!.HasReadProtectedValue ? warning.ProtectedForm ?? warning : warning);
         }
 
         // The selection travels next to the result; whether its names are in this node's pinned outcome set is checked

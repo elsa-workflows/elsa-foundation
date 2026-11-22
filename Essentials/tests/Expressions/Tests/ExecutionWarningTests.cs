@@ -20,17 +20,4 @@ public class ExecutionWarningTests
         Assert.Equal("text", withInput.ProtectedForm!.Details!["input"]);
         Assert.Equal("variables.order", withInput.ProtectedForm.Details["paths"]);
     }
-
-    [Fact]
-    public void A_protecting_collector_keeps_the_protected_form_and_an_unprotecting_one_keeps_the_warning()
-    {
-        var protecting = new ExecutionWarningCollector(protect: true);
-        var unprotecting = new ExecutionWarningCollector();
-
-        protecting.Report(Warning);
-        unprotecting.Report(Warning);
-
-        Assert.Equal("variables.order", Assert.Single(protecting.Warnings).Details!["paths"]);
-        Assert.Same(Warning, Assert.Single(unprotecting.Warnings));
-    }
 }

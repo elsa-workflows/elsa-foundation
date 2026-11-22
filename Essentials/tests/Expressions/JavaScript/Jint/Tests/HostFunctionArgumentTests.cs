@@ -312,7 +312,7 @@ public sealed class HostFunctionArgumentTests
         Assert.Equal(10.5, result!.Value.GetDouble());
     }
 
-    private static async Task<(JsonElement? Result, ExecutionWarningCollector Warnings)> RunAsync(
+    private static async Task<(JsonElement? Result, RecordingWarningSink Warnings)> RunAsync(
         string source, bool protectedRead = false, Session? session = null, Action<JintFeature>? configure = null)
     {
         var services = new ServiceCollection();
@@ -343,7 +343,7 @@ public sealed class HostFunctionArgumentTests
         feature.ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
-        var warnings = new ExecutionWarningCollector();
+        var warnings = new RecordingWarningSink();
         var result = await scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>().EvaluateAsync(
             new JavaScriptScriptEvaluationRequest(source, JsonSerializer.SerializeToElement(new { }), CancellationToken.None)
             {

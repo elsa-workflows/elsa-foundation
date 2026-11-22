@@ -185,7 +185,8 @@ with portable expression evaluation.
   refuse with one `JavaScriptPrecisionDiagnostic` per loss. A refusal faults the step with `VF-PREC-001`
   (`JavaScriptPrecisionException`); nothing of the step is written. Only writes that carry a loss reach the policy;
   computing with a lossy value warns (`VF-PREC-002`), and so does passing one to a host function (spec 1223 FR-028): the warning names the function and the argument path, and the call runs.
-- **Implementation:** `RefusingPrecisionPolicy` (public, no options), registered with `TryAddSingleton` by `JintFeature`.
+- **Implementation:** `RefusingPrecisionPolicy` in `Elsa.Expressions.JavaScript.Jint` (public, no options), registered
+  with `TryAddSingleton` by `JintFeature`.
 - **Consumer:** `JavaScriptValueWrites.Apply`, called by `JintJavaScriptScriptEvaluator` and
   `JintPortableJavaScriptEvaluator` for each write that carries a loss.
 - **Override when:** a host wants other handling of a loss. Replace the registration from a host feature
