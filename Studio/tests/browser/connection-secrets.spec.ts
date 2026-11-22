@@ -17,8 +17,9 @@ async function openCreate(page: import("@playwright/test").Page, scenario = "def
 async function measureRenderedTextContrast(
   page: import("@playwright/test").Page,
   selector: string,
-  backgroundOwnerSelector = ".connections-modal"
+  backgroundOwnerSelector = ".connections-create-shell"
 ) {
+  await page.getByRole("dialog").evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)); });
   const screenshot = await page.screenshot({ fullPage: true, scale: "css" });
   return page.evaluate(async ({ selector, backgroundOwnerSelector, screenshotBase64 }) => {
     const target = document.querySelector<HTMLElement>(selector);
@@ -64,7 +65,7 @@ async function measureRenderedTextContrast(
       && y <= rect.bottom + window.scrollY + 4
     );
     let backgroundPoint: { x: number; y: number } | null = null;
-    if (backgroundOwnerSelector === ".connections-modal") {
+    if (backgroundOwnerSelector === ".connections-create-shell") {
       const x = Math.floor(ownerBounds.left + window.scrollX + 4);
       const y = Math.floor(ownerBounds.top + window.scrollY + 4);
       if (!overlapsText(x, y)) backgroundPoint = { x, y };
@@ -148,8 +149,8 @@ for (const mode of ["light", "dark"] as const) {
     const alert = dialog.locator(".connection-secret-picker-status.error[role=alert]");
     await expect(alert).toContainText("Existing secrets could not be loaded.");
     await expect(alert).not.toContainText("Fixture provider diagnostic");
-    const contrast = await measureRenderedTextContrast(page, ".connection-secret-picker-status.error[role=alert]", ".connections-modal");
-    expect(contrast.backgroundOwner).toBe(".connections-modal");
+    const contrast = await measureRenderedTextContrast(page, ".connection-secret-picker-status.error[role=alert]", ".connections-create-shell");
+    expect(contrast.backgroundOwner).toBe(".connections-create-shell");
     expectAccessibleTextContrast(contrast);
   });
 
@@ -168,8 +169,8 @@ for (const mode of ["light", "dark"] as const) {
     const alert = dialog.locator(".connection-credential-error[role=alert]");
     await expect(select).toHaveAttribute("aria-invalid", "true");
     await expect(alert).toContainText("Select an available active text secret");
-    const contrast = await measureRenderedTextContrast(page, ".connection-credential-error[role=alert]", ".connections-modal");
-    expect(contrast.backgroundOwner).toBe(".connections-modal");
+    const contrast = await measureRenderedTextContrast(page, ".connection-credential-error[role=alert]", ".connections-create-shell");
+    expect(contrast.backgroundOwner).toBe(".connections-create-shell");
     expectAccessibleTextContrast(contrast);
   });
 

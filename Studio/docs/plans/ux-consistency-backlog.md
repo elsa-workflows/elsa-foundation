@@ -307,12 +307,12 @@ Host and Dashboard:
 
 Extensions:
 
-- [ ] **X3.26** (#5062) [source] `EXT/Connections/ConnectionDetailDialog.tsx:25–31`. Raw footer buttons at
+- [x] **X3.26** (#5062, PR #5327) [source] `EXT/Connections/ConnectionDetailDialog.tsx:25–31`. Raw footer buttons at
   `:59–63`; no Close or Cancel in the footer. `needs: K2`
-- [ ] **X3.27** (#5063) [source] `EXT/Connections/ConnectionCreateDialog.tsx:448–483`. Uppercase eyebrow
+- [x] **X3.27** (#5063, PR #5327) [source] `EXT/Connections/ConnectionCreateDialog.tsx:448–483`. Uppercase eyebrow
   (`EXT/Connections/styles.css:31` [verified]). **[check]** the footer was not read.
-- [ ] **X3.28** (#5064) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
-- [ ] **X3.29** (#5065) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
+- [x] **X3.28** (#5064, PR #5327) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
+- [x] **X3.29** (#5065, PR #5327) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
 - [ ] **X3.30** (#5066) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
   and a raw `primary` class. Locate them in `EXT/FeatureManagement/module.tsx`.
 - [ ] **X3.31** (#5067) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
@@ -329,7 +329,7 @@ Browser dialogs and busy labels (no kit prerequisite):
   `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`. (PR #5324)
 - [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
   `title` or `confirmLabel`; Secrets passes both (`SecretsPage.tsx:187, 202`).
-- [ ] **X3.37** (#5073) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
+- [x] **X3.37** (#5073, PR #5327) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
@@ -440,15 +440,15 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 ### X8. Tabs and view switches
 
-- [ ] **X8.1** (#5116) [verified] `WF/ActivityDefinitionWorkbench.tsx:276` hand-rolled boxed `.ad-tabs` with its
+- [x] **X8.1** (#5116) [verified] `WF/ActivityDefinitionWorkbench.tsx:276` hand-rolled boxed `.ad-tabs` with its (PR #5328)
   own key handler → `StudioTabs` (the draft editor already uses it at
   `ActivityDefinitionDraftEditor.tsx:777`).
-- [ ] **X8.2** (#5117) [verified] `WF/ActivityDefinitionContractEditor.tsx:785` `.ad-member-tabs` → `StudioTabs`.
-- [ ] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`.
+- [x] **X8.2** (#5117) [verified] `WF/ActivityDefinitionContractEditor.tsx:785` `.ad-member-tabs` → `StudioTabs`. (PR #5328)
+- [x] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`. (PR #5328)
 - [x] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist. (PR #5310)
 - [x] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`. (PR #5298)
 - [ ] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`.
-- [ ] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`,
+- [x] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`, (PR #5328)
   `WorkflowEditor.tsx:1283`, `graph-authoring/GraphAuthoringWorkbench.tsx:148`. Check whether
   `StudioTabs` has a dense mode before migrating.
 - [x] **X8.8** (#5123) [seen] Dashboards and Questions "Mine / Shared with me": square 30px buttons with
@@ -695,7 +695,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `WF/workflow-editor/WorkflowDefinitions.tsx:867` `.wf-grid` → `StudioDataGrid`.
 - [x] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit (PR #5322)
   components; use the kit components directly.
-- [ ] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying
+- [x] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying (PR #5328)
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
 - [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
