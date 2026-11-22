@@ -2618,3 +2618,5 @@ const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.AccessesUndec
 const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.Kind = "elsa.variable-access" -> string!
 const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.SchemaVersion = "1" -> string!
 static Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.AccessesUndeclaredVariables(System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDesignFacet!>? facets) -> bool
+const Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.DeclaredMember = "declared" -> string!
+static Elsa.Activities.Design.Core.Models.VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(System.Collections.Generic.IEnumerable<Elsa.Activities.Design.Core.Models.ActivityDesignFacet!>? facets) -> bool

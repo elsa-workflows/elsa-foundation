@@ -305,6 +305,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
+            typeof(Elsa.Activities.Scripting.ActivitiesScriptingFeature).Assembly,
 
             // The persistence modules the shells select are discovered from this host's project
             // references by WithHostAssemblies(); only assemblies with no reference edge are listed here.

@@ -47,6 +47,22 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
     private const string MutationGuidance =
         "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
 
+    /// <summary>
+    /// What to change when an input expression writes a variable (spec 1231 FR-033): Elsa 4 input expressions only read,
+    /// and a Run JavaScript script is where a step writes variables (its setters convert there).
+    /// </summary>
+    private const string VariableWriteGuidance =
+        "Move the assignment into a Set Variable activity, or into a Run JavaScript activity, whose script can set variables, in the Elsa 3 workflow. " +
+        "In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
+
+    /// <summary>
+    /// A Run JavaScript script in a reusable workflow cannot write the workflow's variables in Elsa 4 yet: a graph activity's
+    /// variables are a closed scope a step cannot write (#4805), so the converted script would fail every run.
+    /// </summary>
+    private const string ReusableVariableWriteGuidance =
+        "Elsa 4 cannot set a reusable workflow's variables from a script yet. Return the value from the script and capture the result, " +
+        "or keep the workflow non-reusable, before import.";
+
     public Elsa3ExpressionRewriteResult Rewrite(
         string language,
         string source,
@@ -71,7 +87,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         TypeReference resultType,
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
         Elsa3JavaScriptMode mode,
-        Elsa3ScriptOutcomeContext? scriptOutcomes = null)
+        Elsa3ScriptOutcomeContext? scriptOutcomes = null,
+        bool scriptWritesVariables = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
@@ -81,7 +98,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         return language switch
         {
             var value when value.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) =>
-                RewriteCheckedJavaScript(source, resultType, resolve, mode, scriptOutcomes),
+                RewriteCheckedJavaScript(source, resultType, resolve, mode, scriptOutcomes, scriptWritesVariables),
             var value when value.Equals("Liquid", StringComparison.OrdinalIgnoreCase) =>
                 RewriteLiquid(source, resultType, resolve),
             _ => Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
@@ -96,9 +113,10 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         TypeReference resultType,
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
         Elsa3JavaScriptMode mode,
-        Elsa3ScriptOutcomeContext? scriptOutcomes)
+        Elsa3ScriptOutcomeContext? scriptOutcomes,
+        bool scriptWritesVariables)
     {
-        var result = CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes, out var analyzer), mode);
+        var result = CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode, scriptOutcomes, scriptWritesVariables, out var analyzer), mode);
         if (!result.Succeeded || analyzer is null)
             return result;
 
@@ -124,6 +142,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
         Elsa3JavaScriptMode mode,
         Elsa3ScriptOutcomeContext? scriptOutcomes,
+        bool scriptWritesVariables,
         out JavaScriptAnalyzer? analyzerUsed)
     {
         analyzerUsed = null;
@@ -145,12 +164,19 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         {
             AllowsOutcomeSetters = mode == Elsa3JavaScriptMode.Script && scriptOutcomes is not null,
             Mode = mode,
+            WritesVariables = scriptWritesVariables,
+            TrailingStatement = script.Body.Count > 0 ? script.Body[^1] : null,
             Source = source,
             DateInterpretation = _options.DateInterpretation,
             SourceTimeZone = _options.SourceTimeZone,
         };
         analyzerUsed = analyzer;
         analyzer.CollectReassignedNames(script);
+        if (mode == Elsa3JavaScriptMode.Script && !scriptWritesVariables && analyzer.ReusableScriptMayWrite(script))
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                "JavaScript mutates, or passes a variable to an opaque helper in, a reusable workflow's script.",
+                ReusableVariableWriteGuidance));
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
@@ -659,6 +685,24 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// </summary>
         public Elsa3JavaScriptMode Mode { get; init; }
 
+        /// <summary>
+        /// Whether a Run JavaScript body may write variables: everywhere but in a reusable workflow, whose variables a step
+        /// cannot write yet (#4805). Input expressions never write.
+        /// </summary>
+        public bool WritesVariables { get; init; }
+
+        /// <summary>
+        /// Spec 1231 FR-032: a Run JavaScript body converts Elsa 3's variable setters and member changes to writes through
+        /// <c>variables</c>.
+        /// </summary>
+        private bool ConvertsVariableWrites => Mode == Elsa3JavaScriptMode.Script && WritesVariables;
+
+        /// <summary>The script's last top-level statement, which becomes its <c>return</c>: a converted setter there keeps returning nothing.</summary>
+        public Node? TrailingStatement { get; init; }
+
+        // Setter calls that stand alone as a statement (not the trailing one), whose value nothing reads.
+        private readonly HashSet<CallExpression> _statementCalls = new(ReferenceEqualityComparer.Instance);
+
         /// <summary>The source being converted, for quoting the offending expression in a diagnostic.</summary>
         public string Source { get; init; } = string.Empty;
 
@@ -745,6 +789,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                             if (!seen.Add(name))
                                 Mark(name);
                         }
+
 
                         break;
                 }
@@ -1180,12 +1225,24 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
                 node is UpdateExpression update && ContainsAmbientRoot(update.Argument))
             {
-                Issues.Add(new Elsa3ExpressionRewriteIssue(
-                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                    "JavaScript mutates an Elsa 3 ambient value.",
-                    MutationGuidance));
-                return;
+                // Spec 1231 FR-032: in a Run JavaScript body, a change to a member of a variable's value
+                // (getVariable('order').status = 'Paid') is a member change through variables, written with the step.
+                var target = node is AssignmentExpression changed ? changed.Left : ((UpdateExpression)node).Argument;
+                if (!ConvertsVariableWrites || !IsVariableMemberTarget(target))
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        "JavaScript mutates an Elsa 3 ambient value.",
+                        Mode != Elsa3JavaScriptMode.Script ? VariableWriteGuidance
+                        : !WritesVariables ? ReusableVariableWriteGuidance
+                        : "Change a variable with setVariable('name', value), or a member of its value through getVariable('name'), in the Elsa 3 script before import; " +
+                          "a loop's current value and workflow inputs are read-only in Elsa 4."));
+                    return;
+                }
             }
+
+            if (node is ExpressionStatement { Expression: CallExpression statementCall } statement && !ReferenceEquals(statement, TrailingStatement))
+                _statementCalls.Add(statementCall);
 
             // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
             // (spec 262 R-4). The parse cannot see it, so the scopes decide.
@@ -1196,6 +1253,12 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
+                if (callee.Name == "setVariable")
+                {
+                    ConvertSetVariable(call);
+                    return;
+                }
+
                 if (SetterCalls.Contains(callee.Name))
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -1322,10 +1385,25 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 if (TryGetAccessorName(callee.Name, "set", out var setter) &&
                     resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)).Succeeded)
                 {
-                    Issues.Add(new Elsa3ExpressionRewriteIssue(
-                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                        $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
-                        "Use a Set Variable activity instead of the setter before import."));
+                    if (!ConvertsVariableWrites)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
+                            Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
+                        return;
+                    }
+
+                    if (call.Arguments.Count != 1 || call.Arguments[0] is SpreadElement)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                            $"JavaScript calls generated setter '{callee.Name}' with other than one value.",
+                            "Call the setter with exactly the value to set before import."));
+                        return;
+                    }
+
+                    ConvertSetter(call, Elsa3AmbientReferenceKind.GeneratedAccessor, setter, callee.Name, call.Arguments[0]);
                     return;
                 }
 
@@ -1436,7 +1514,6 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     ZoneDependent(assignmentToName, DateUse.LocalFormat, null);
                 return;
             }
-
             if (node is TemplateLiteral template)
             {
                 foreach (var expression in template.Expressions)
@@ -1569,6 +1646,177 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         }
 
         /// <summary>
+        /// Elsa 3's <c>setVariable(name, value)</c>. In a Run JavaScript body a literal name of a declared variable becomes a
+        /// whole assignment, <c>variables.name = value</c> (spec 1231 FR-032, Q6), and a computed name becomes
+        /// <c>variables[name] = value</c> (FR-033 as amended). Refused with guidance (FR-033): an undeclared variable, an
+        /// input expression (which only reads) and a reusable workflow's script.
+        /// </summary>
+        private void ConvertSetVariable(CallExpression call)
+        {
+            if (!ConvertsVariableWrites)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    Mode == Elsa3JavaScriptMode.Script
+                        ? "JavaScript calls 'setVariable' in a reusable workflow's script, whose variables Elsa 4 cannot set from a script yet."
+                        : "JavaScript calls 'setVariable', which writes a workflow variable; an Elsa 4 input expression only reads.",
+                    Mode == Elsa3JavaScriptMode.Script ? ReusableVariableWriteGuidance : VariableWriteGuidance));
+                return;
+            }
+
+            if (call.Arguments.Count != 2 || call.Arguments.Any(argument => argument is SpreadElement))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                    "JavaScript calls 'setVariable' with other than a name and a value.",
+                    "Call setVariable('name', value) with exactly a variable name and a value before import."));
+                return;
+            }
+
+            if (call.Arguments[0] is not Literal { Value: string name })
+            {
+                ConvertComputedSetVariable(call);
+                return;
+            }
+
+            ConvertSetter(call, Elsa3AmbientReferenceKind.Variable, name, "setVariable", call.Arguments[1]);
+        }
+
+        /// <summary>
+        /// <c>setVariable(k, v)</c> with a computed name becomes <c>variables[k] = v</c> (spec 1231 FR-033 as amended on
+        /// 2026-11-20, #4899): the name resolves when the script runs, nearest scope first; a declared variable is written,
+        /// and an undeclared name faults the step (FR-020a) where Elsa 3 created the variable. It is marked as a computed
+        /// read too, so the conversion reports it as a script that reaches variables by computed names.
+        /// </summary>
+        private void ConvertComputedSetVariable(CallExpression call)
+        {
+            if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, call))
+                return;
+
+            HasComputedVariableRead = true;
+            var name = call.Arguments[0];
+            var value = call.Arguments[1];
+            var standsAlone = _statementCalls.Contains(call);
+            var grouped = value is SequenceExpression;
+            Edits.Add(new SourceEdit(call.Start, name.Start, (standsAlone ? "" : "void (") + "variables["));
+            Edits.Add(new SourceEdit(name.End, value.Start, "] = " + (grouped ? "(" : "")));
+            Edits.Add(new SourceEdit(value.End, call.End, (grouped ? ")" : "") + (standsAlone ? "" : ")")));
+            Visit(name);
+            Visit(value);
+        }
+
+        /// <summary>
+        /// Rewrites a setter call to a whole assignment through <c>variables</c>. A call that stands alone as a statement
+        /// becomes <c>variables.x = v</c>; anywhere its value could be read (the trailing statement, which becomes the
+        /// script's return, or inside an expression) it becomes <c>void (variables.x = v)</c>, since Elsa 3's setters
+        /// returned nothing.
+        /// </summary>
+        private void ConvertSetter(CallExpression call, Elsa3AmbientReferenceKind kind, string name, string calleeName, Node value)
+        {
+            var resolution = resolve(new Elsa3AmbientReference(kind, name));
+            if (!resolution.Succeeded)
+            {
+                Issues.Add(resolution.Issue!.Code == Elsa3ImportDiagnosticCodes.DanglingReference
+                    ? new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.SetterOfUndeclaredVariable,
+                        $"JavaScript calls '{calleeName}' for variable '{name}', which the workflow does not declare. Elsa 3 created the variable on its first write; Elsa 4 never creates a variable from a script.",
+                        $"Declare variable '{name}' in the Elsa 3 workflow before import.")
+                    : resolution.Issue);
+                return;
+            }
+
+            if (resolution.VariableName is not { } variableName || resolution.Binding is not VariableExpressionParameterBinding variable)
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    $"JavaScript calls '{calleeName}', which writes '{name}', a value an Elsa 4 script cannot write (a workflow input or an activity result).",
+                    "Copy the value into a declared variable and set that variable in the Elsa 3 workflow before import."));
+                return;
+            }
+
+            if (IsReadAsCopy(variable))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    $"JavaScript calls '{calleeName}' for '{name}', a loop's current value, which is read-only in Elsa 4.",
+                    "Copy the loop's current value into another variable and set that variable in the Elsa 3 workflow before import."));
+                return;
+            }
+
+            if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, call))
+                return;
+
+            var pinned = new VariableExpressionParameterBinding(variable.DeclaringScopeNodeId, variable.VariableKey, ExpressionParameterSurfaces.Variables);
+            if (!TryAddParameter(Parameters, ExpressionParameterSurfaces.VariablesKey(variableName), pinned, out var collision))
+            {
+                Issues.Add(collision!);
+                return;
+            }
+
+            var standsAlone = _statementCalls.Contains(call);
+            // A comma expression is parenthesized in the source; it keeps its parentheses as the assigned value.
+            var grouped = value is SequenceExpression;
+            var prefix = (standsAlone ? "" : "void (") + FormatVariableAccess(variableName) + " = " + (grouped ? "(" : "");
+            var suffix = (grouped ? ")" : "") + (standsAlone ? "" : ")");
+            Edits.Add(new SourceEdit(call.Start, value.Start, prefix));
+            Edits.Add(new SourceEdit(value.End, call.End, suffix));
+            Visit(value);
+        }
+
+        /// <summary>
+        /// Whether an assignment target changes a member of a variable's value, read through <c>getVariable('name')</c>, a
+        /// generated <c>get{Name}()</c> or <c>variables.name</c>, where that read becomes <c>variables.name</c> over the
+        /// step's session (spec 1231 FR-032). A whole assignment of <c>variables.name</c>, a computed name, a loop's current
+        /// value (read as a copy) and a workflow input are not.
+        /// </summary>
+        private bool IsVariableMemberTarget(Node target)
+        {
+            if (target is not MemberExpression)
+                return false;
+
+            Node current = target;
+            while (current is MemberExpression member)
+            {
+                if (member.Object is Identifier { Name: "variables" } && !IsDeclared("variables"))
+                {
+                    if (ReferenceEquals(member, target))
+                        return false;
+                    var name = !member.Computed && member.Property is Identifier property ? property.Name
+                        : member.Computed && member.Property is Literal { Value: string literal } ? literal
+                        : null;
+                    return name is not null && IsSessionVariable(Elsa3AmbientReferenceKind.Variable, name);
+                }
+
+                current = member.Object;
+            }
+
+            if (current is not CallExpression { Callee: Identifier reader } read || IsDeclared(reader.Name))
+                return false;
+            if (reader.Name == "getVariable")
+                return read.Arguments.Count == 1 && read.Arguments[0] is Literal { Value: string variable } &&
+                       IsSessionVariable(Elsa3AmbientReferenceKind.Variable, variable);
+            return read.Arguments.Count == 0 && TryGetAccessorName(reader.Name, "get", out var accessor) &&
+                   IsSessionVariable(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor);
+        }
+
+        private bool IsSessionVariable(Elsa3AmbientReferenceKind kind, string name) =>
+            resolve(new Elsa3AmbientReference(kind, name)) is { Succeeded: true, VariableName: not null, Binding: VariableExpressionParameterBinding variable } &&
+            !IsReadAsCopy(variable);
+
+        public bool ReusableScriptMayWrite(Script script) =>
+            new Elsa3ReusableVariableWriteAnalyzer(CachedScope, IsSessionVariable,
+                name => TryGetAccessorName(name, "get", out var accessor) ? accessor : null).MayWrite(script);
+
+        /// <summary>
+        /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
+        /// (spec 1231 FR-006), and an Elsa 3 body that changed its item would fault where Elsa 3 ran.
+        /// </summary>
+        private bool IsReadAsCopy(VariableExpressionParameterBinding variable) =>
+            Mode == Elsa3JavaScriptMode.Script &&
+            !StringComparer.Ordinal.Equals(variable.DeclaringScopeNodeId, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) &&
+            Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey);
+
+        /// <summary>
         /// The names a node writes as a plain binding: an assignment or destructuring target, an update, or the head of a
         /// <c>for…in</c>/<c>for…of</c> that declares nothing. Member targets are not names.
         /// </summary>
@@ -1611,13 +1859,10 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             // Spec 1222 FR-026: a variable read becomes variables.<name>, spelled as the variable is declared, and is
             // pinned at publish to its nearest declaring scope. The parameter added here is what the converter resolved;
             // publish derives the pins again.
-            // A RunJavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a
-            // body (spec 1231 FR-006), and an Elsa 3 body that changed its item would fault where Elsa 3 ran.
+            // A RunJavaScript body reads a loop's item or index through args, as a copy (IsReadAsCopy).
             if (resolution.VariableName is { } variableName &&
                 resolution.Binding is VariableExpressionParameterBinding variable &&
-                !(Mode == Elsa3JavaScriptMode.Script &&
-                  !StringComparer.Ordinal.Equals(variable.DeclaringScopeNodeId, Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId) &&
-                  Elsa3.Mapping.ActivityMap.Rewrites.Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(variable.VariableKey)))
+                !IsReadAsCopy(variable))
             {
                 if (!EnsureRootFree(ExpressionParameterSurfaces.Variables, node))
                     return;
@@ -2514,4 +2759,10 @@ public static class Elsa3ImportDiagnosticCodes
     /// gives the value Elsa 3 did (spec 1228 FR-023, FR-024): refused, with guidance.
     /// </summary>
     public const string UntypedResultIntoTypedInput = "ELS3-UNTYPED-RESULT";
+
+    /// <summary>
+    /// A Run JavaScript script sets a variable the workflow does not declare; Elsa 3 created it on its first write, Elsa 4
+    /// never creates a variable (spec 1231 FR-033): refused, with guidance to declare it.
+    /// </summary>
+    public const string SetterOfUndeclaredVariable = "ELS3-SETTER-UNDECLARED-VARIABLE";
 }

@@ -45,7 +45,8 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - **Implementations:** `RuntimeVariableReadFallback` (`Elsa.Workflows.Runtime`, the recorded run-time lookup for
   expressions publish marked with a `VariableReadFallback`) and `GraphVariableReader` (`Elsa.Activities.Graph.Runtime`,
   a graph expression's own variables).
-- **Consumers:** the Jint evaluator's `variables` root and `getVariable`, and the Liquid handler's `variables` root.
+- **Consumers:** the Jint evaluator's `variables` root, `getVariable` and, in a script body, `setVariable`, and the
+  Liquid handler's `variables` root.
 
 ### `IScriptVariableReadAnalyzer` *(Core — `Elsa.Expressions.Core`)*
 

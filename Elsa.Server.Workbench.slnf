@@ -26,6 +26,7 @@
       "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
       "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
       "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
+      "Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj",
       "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj",
       "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
       "Essentials/src/Api/Capabilities/Core/Elsa.Api.Capabilities.Core.csproj",

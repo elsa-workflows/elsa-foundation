@@ -19,6 +19,10 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <item><c>VF-READ-004</c> (warning): a script reads variables by a computed or opaque name; the message lists the
 /// variables it could read, nearest scope first (FR-009). Each actual read is looked up, checked and recorded at run
 /// time.</item>
+/// <item><c>VF-WRITE-002</c>, <c>VF-WRITE-004</c> (error): a script body writes, by a literal name, an undeclared variable,
+/// or a loop item or index (spec 1231 FR-020). Publication refuses them too, and a transient target (<c>VF-WRITE-003</c>).</item>
+/// <item><c>VF-WRITE-005</c> (warning): a script body writes by a computed or opaque name, so it may write every visible
+/// variable (spec 1231 FR-020a).</item>
 /// </list>
 /// Input expressions and the script of a script activity (the <c>elsa.outcomes</c> facet's <c>scriptInput</c>) are
 /// checked. Without a read resolver (no expression language that reads variables by name) nothing is checked.
@@ -32,6 +36,8 @@ public sealed class ScriptVariableReadValidator(
 {
     public const string UnresolvedReadType = "Scripts/UnresolvedVariableRead";
     public const string ComputedReadType = "Scripts/ComputedVariableRead";
+    public const string RefusedWriteType = "Scripts/RefusedVariableWrite";
+    public const string ComputedWriteType = "Scripts/ComputedVariableWrite";
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
@@ -58,8 +64,9 @@ public sealed class ScriptVariableReadValidator(
                 var path = $"{node.NodeId}/{bag}/{input.ReferenceKey}";
                 ScriptVariableReadPlan? plan;
                 var isBody = scriptInput is not null && StringComparer.Ordinal.Equals(input.ReferenceKey, scriptInput);
+                string? body = null;
                 if (isBody)
-                    plan = LiteralText(input) is { Length: > 0 } script ? readResolver.Resolve("JavaScript", script, scopes, scriptBody: true) : null;
+                    plan = (body = LiteralText(input)) is { Length: > 0 } script ? readResolver.Resolve("JavaScript", script, scopes, scriptBody: true) : null;
                 else if (input.Value?.ExpressionType is { } language && readResolver.Supports(language) && TryGetSource(input.Value.Value, out var source))
                     plan = readResolver.Resolve(language, source, scopes);
                 else
@@ -68,7 +75,10 @@ public sealed class ScriptVariableReadValidator(
                 if (plan is null)
                     continue;
 
-                foreach (var name in plan.Unresolved)
+                if (body is not null)
+                    AddWriteFindings(errors, path, input.ReferenceKey, node.NodeId, body, plan);
+
+                foreach (var name in plan.Unresolved.Where(name => body is null || !plan.Writes.Any(write => StringComparer.Ordinal.Equals(write.Name, name))))
                 {
                     errors.Add(new ValidationError(path, UnresolvedReadType,
                         $"{ScriptVariableReadDiagnostics.UnresolvedLiteralRead}: The script of input '{input.ReferenceKey}' on activity '{node.NodeId}' reads variable '{name}', " +
@@ -90,6 +100,22 @@ public sealed class ScriptVariableReadValidator(
         }
 
         return errors;
+    }
+
+    // Spec 1231 FR-020, FR-020a: the refusals publish makes for a body's literal writes (an undeclared target, a loop item
+    // or index; a transient target is decided by the runtime storage profile, so publication alone refuses it), and the
+    // warning for a computed one.
+    private static void AddWriteFindings(List<ValidationError> errors, string path, string inputKey, string nodeId, string body, ScriptVariableReadPlan plan)
+    {
+        foreach (var (write, code) in plan.RefusedLiteralWrites())
+            errors.Add(new ValidationError(path, RefusedWriteType,
+                ScriptVariableReadDiagnostics.DescribeLiteralWriteRefusal(code, inputKey, nodeId, body, write)));
+
+        if (plan.HasComputedWrite)
+            errors.Add(new ValidationError(path, ComputedWriteType, ScriptVariableReadDiagnostics.DescribeComputedWrite(inputKey, nodeId))
+            {
+                Severity = ValidationSeverities.Warning
+            });
     }
 
     private async ValueTask<string?> ScriptInputKeyAsync(ActivityNode node, CancellationToken cancellationToken)

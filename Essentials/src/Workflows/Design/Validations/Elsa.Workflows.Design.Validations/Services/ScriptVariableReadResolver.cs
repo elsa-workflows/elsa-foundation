@@ -51,7 +51,7 @@ public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAn
         if (!_analyzers.TryGetValue(language, out var analyzer) || analyzer.Analyze(source, scriptBody) is not { } analysis)
             return null;
         if (!analysis.ReadsVariables)
-            return ScriptVariableReadPlan.Empty with { Writes = analysis.Writes };
+            return ScriptVariableReadPlan.Empty with { Writes = analysis.Writes, HasComputedWrite = analysis.HasComputedWrite };
 
         var reachable = Reachable(visibleScopes);
         var pinned = new List<ResolvedScriptVariableRead>();
@@ -64,7 +64,12 @@ public sealed class ScriptVariableReadResolver(IEnumerable<IScriptVariableReadAn
                 unresolved.Add(name);
         }
 
-        return new ScriptVariableReadPlan(pinned, unresolved, analysis.HasComputedRead ? reachable : null) { Writes = analysis.Writes };
+        return new ScriptVariableReadPlan(pinned, unresolved, analysis.HasComputedRead ? reachable : null)
+        {
+            Writes = analysis.Writes,
+            Escapes = analysis.Escapes,
+            HasComputedWrite = analysis.HasComputedWrite
+        };
     }
 
     /// <summary>Every variable a name can reach from the node: nearest scope first, each name once (the innermost declaration).</summary>

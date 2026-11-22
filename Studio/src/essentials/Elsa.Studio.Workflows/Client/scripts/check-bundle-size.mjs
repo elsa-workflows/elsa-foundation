@@ -90,10 +90,13 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // Explicit outcomes (spec 1208, #4314): the shared graph adapter now flags connections on ports that are gone and
 // reads the Done rule from the outcomes facet; CI measured the definitions path at 402.64 kB, so its budget gains
 // 1 kB. No deferred surface moved eager.
+// Script may-write sets (spec 1231 FR-036, #4912): the shared scoped-variable analysis hook reads the selected script
+// node's `scriptWrites` and refetches when that node changes; the definitions path measures 403.34 kB, so its budget
+// gains 1 kB. No deferred surface moved eager.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 403_000,
+  definitionsLandingTotal: 404_000,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };

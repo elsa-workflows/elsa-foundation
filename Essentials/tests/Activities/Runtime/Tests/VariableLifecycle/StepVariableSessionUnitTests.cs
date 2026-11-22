@@ -128,6 +128,17 @@ public sealed class StepVariableSessionUnitTests
         Assert.NotNull(session.PendingFault);
     }
 
+    [Fact]
+    public void The_engine_surface_refuses_a_write_to_a_transient_variable_on_the_host_side()
+    {
+        // Spec 1231 FR-020a (T029a): a computed script write that resolves to a transient variable faults the step.
+        var session = Session(Root(("var-handle", ValueEnvelope.Transient(new ValueTypeDescriptor("Object"), new object()))), engineConsumer: true);
+
+        Assert.True(session.TryResolve("handle", out var target));
+        Assert.Throws<InvalidOperationException>(() => session.WriteJson(target, null));
+        Assert.NotNull(session.PendingFault);
+    }
+
     // FR-025, FR-026: the marker (also inherited) and the engine-consumer interface are one pinned fact, so the engine
     // surface is never a way around publication, the concurrent-write rule or background eligibility.
     [Theory]
@@ -139,6 +150,19 @@ public sealed class StepVariableSessionUnitTests
     {
         Assert.Equal(expected, VariableReferenceTypes.AccessesUndeclaredVariables(activityType));
         Assert.Equal(expected, ClrActivityContractTestBuilder.BuildContract(activityType).AccessesUndeclaredVariables);
+    }
+
+    // FR-028: only a declared marker counts as one; an engine script activity's implied marker never does, so its
+    // analyzed body keeps deciding its may-write set (and its catalog facet carries no `declared`).
+    [Theory]
+    [InlineData(typeof(FreeNameSetActivity), true)]
+    [InlineData(typeof(InheritedMarkerActivity), true)]
+    [InlineData(typeof(EngineConsumerActivity), false)]
+    [InlineData(typeof(Elsa.Activities.Scripting.Activities.RunJavaScript), false)]
+    [InlineData(typeof(SessionIncrementActivity), false)]
+    public void Only_a_declared_marker_counts_as_declared(Type activityType, bool expected)
+    {
+        Assert.Equal(expected, VariableReferenceTypes.DeclaresAccessesUndeclaredVariables(activityType));
     }
 
     [Fact]
