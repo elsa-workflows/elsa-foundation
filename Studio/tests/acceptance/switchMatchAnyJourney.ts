@@ -3,7 +3,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 type Node = { nodeId: string; structure?: { payload: { mode?: string; cases: { match: string; caseId: string; activity?: Node; condition: unknown }[]; default?: Node } } };
 type Draft = { state: { rootActivity: { structure: { payload: { activities: Node[] } } } } };
-type Published = { artifactId: string; sourceReferenceId: string };
+type Published = { artifactId: string; sourceReferenceId: string; definitionVersionId: string };
 
 /** Actual shared editor, persisted draft, publication and runtime; no intercepted requests or Code view. */
 export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture: Capture, cleanup: (action: () => Promise<void>) => void) {
@@ -93,10 +93,18 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     expect(executions.items.map(item => item.execution.authoredActivityId).sort()).toEqual(["root", "switch", "after", ...expected].sort());
     expect(executions.items.every(item => item.status === "Completed")).toBe(true);
     await info.attach(`run-${expected.length}.json`, { body: JSON.stringify({ published, run, executions }, null, 2), contentType: "application/json" });
+    return published;
   }
   await open();
   await capture(page, info, "reference");
-  await cases().getByRole("combobox", { name: "Match mode", exact: true }).selectOption("MatchAny");
+  const mode = cases().getByRole("combobox", { name: "Match mode", exact: true });
+  await mode.focus(); await mode.press("End"); await mode.press("Enter");
+  await expect(mode).toHaveValue("MatchAny");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await selectOwner(); await expect(mode).toHaveValue("MatchFirst");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await selectOwner(); await expect(mode).toHaveValue("MatchAny");
+  await capture(page, info, "mode-history");
   for (const [index, label] of ["Approved", "Notify"].entries()) {
     await cases().getByRole("button", { name: "Add case", exact: true }).click();
     const name = cases().getByRole("textbox", { name: `Case ${index + 1} label`, exact: true });
@@ -139,5 +147,11 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await returnToOwner();
   const fallback = (await save()).structure!.payload.default!.nodeId;
   await capture(page, info, "default");
-  await publishAndRun([fallback]);
+  const published = await publishAndRun([fallback]);
+  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&version=${published.definitionVersionId}&backend=legacy`);
+  await selectOwner();
+  await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeDisabled();
+  await expect(cases()).toContainText("All matching cases run");
+  await expect(cases().getByRole("textbox", { name: "Case 1 label", exact: true })).toHaveAttribute("readonly", "");
+  await capture(page, info, "read-only");
 }

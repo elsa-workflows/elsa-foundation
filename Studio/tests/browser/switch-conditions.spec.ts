@@ -44,6 +44,12 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(mode).toHaveValue("MatchFirst");
     await mode.selectOption("MatchAny");
     await expect(cases(page)).toContainText("completes after all selected activities finish");
+    await page.getByRole("button", { name: /^Undo(?: Activity Graph edit)?$/ }).click();
+    if (host === "workflow") await owner(page).click();
+    await expect(mode).toHaveValue("MatchFirst");
+    await page.getByRole("button", { name: /^Redo(?: Activity Graph edit)?$/ }).click();
+    if (host === "workflow") await owner(page).click();
+    await expect(mode).toHaveValue("MatchAny");
     if (host === "workflow") {
       expect(await navigationAllowed(page)).toEqual({ studio: false, unload: false });
       await page.getByRole("button", { name: "Save", exact: true }).click();

@@ -264,7 +264,7 @@ public sealed class SwitchMatchAnyTests
         literal: ValueEnvelope.Inline(new ValueTypeDescriptor("Boolean"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 }
 
-public sealed class EmptySelectionCaseActivity : Elsa.Activities.Runtime.Core.Abstractions.Activity<ActivityUnit>
+public sealed class EmptySelectionCaseActivity : Activity<ActivityUnit>
 {
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, OutcomeSelection.Empty));
