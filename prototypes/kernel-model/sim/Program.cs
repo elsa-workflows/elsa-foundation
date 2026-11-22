@@ -158,6 +158,18 @@ if (args.Contains("--paged-publication-check"))
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, args.Contains("--tree-stall"));
+if (args.Contains("--foundation-tenant-check"))
+{
+    var failed = false;
+    await FoundationTenantChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--foundation-migration-dispatch-check"))
+{
+    var failed = false;
+    await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--public-owner-check"))
 {
     var failed = false;

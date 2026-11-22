@@ -4,6 +4,7 @@ namespace Kernel.Durable;
 
 internal static class FoundationMetadataLimits
 {
+    internal const int MaxTurnSends = 10_000;
     internal const int NameBytes = 1_024;
     internal const int KindBytes = 256;
     internal const int TargetBytes = NameBytes + 70;

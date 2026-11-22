@@ -9,7 +9,6 @@ namespace Kernel.Foundation.InMemory;
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
-    private const int MaxTurnSends = 10_000;
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
     private const int MaxFaultTextBytes = 4_096;
@@ -28,15 +27,17 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 start.Model == actor.Type && creator.Target == message.Target && creator.TargetCreation == creation &&
                 message.TargetCreation == creation && message.Operator is null && message.InboxKey.HasIssuedOrigin &&
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
-        if (!SupportsFoundationOperator(row)) return false;
+        if (!SupportsFoundationOperator(row) || row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
-            return row.ParkDiscard is not null && store.AuthorizesDrainingTerminate(row, message);
+            return (row.ParkRecovery is null || row.Status == Durable.InstanceStatus.Running) &&
+                store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
             if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
             var identity = store.FoundationIdentity(row.Id, row.Creation);
             return store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection);
         }
+        if (message.Operator is not null) return row.Status == Durable.InstanceStatus.Running;
         if (row.Status != Durable.InstanceStatus.Running && (row.Children is null || message.ActorAuthored)) return false;
         return row.Parent is not null && message.InboxKey.HasIssuedOrigin &&
             message.Sender == row.Parent && message.SenderCreation == row.ParentCreation;
@@ -44,6 +45,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
+        if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
             return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
@@ -51,10 +53,11 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
+        row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
+        (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
             : SettlesEndedChildNotice(row, delivery.Message) ||
-                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null);
 
     private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
         message.Kind == Contract.Kinds.ChildFinished && row is
@@ -84,6 +87,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
         if (input.Row is { ParkDiscard: not null } draining)
             return RefuseDuringDiscard(input, draining);
+        if (message.Kind == Contract.Kinds.Terminate &&
+            input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
+            store.FoundationTurnHeader(liveRecovery).Park is { } recoveryPark)
+            return OpenParkTerminate(input, liveRecovery, recoveryPark);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
@@ -99,7 +106,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
             try
             {
-                if (message.Read<Completion>() is not { Final: true })
+                if (message.Read<Durable.FoundationChildNotice>() is not { Final: true })
                     return new(input.Actor) { Consumed = [.. input.Taken], Status = terminalParent.Status };
             }
             catch (System.Text.Json.JsonException)
@@ -159,8 +166,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 Consumed = [.. input.Taken], Journal = Durable.Json.Write(new[] { "delete" }), Delete = true, Unsubscribe = true
             };
         }
-        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
-            message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
+        if (message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is { } park)
+            return OpenParkTerminate(input, row, park);
+        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
         if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
         {
@@ -237,8 +245,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var outcome = turn.Seal();
-        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > MaxTurnSends)
-            throw new InvalidOperationException($"A turn may send at most {MaxTurnSends:N0} messages.");
+        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
+            throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
         if (outcome.Row is { } nextRow)
         {
             var nextHeader = header with
@@ -388,12 +396,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private static Durable.FoundationHeaderChange InitialHeader(string typeData) =>
         new(typeData, System.Collections.Frozen.FrozenDictionary<string, string>.Empty);
 
-    private sealed record Completion(string Child, Durable.InstanceStatus Status, string? Output, long Creation, bool Final);
-
     private static Durable.Message Notice(Durable.InstanceRow row, string? output, bool final) =>
-        new Durable.Message(Durable.CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision),
-            new(row.Parent!), Contract.Kinds.ChildFinished, Durable.Json.Write(new Completion(row.Id, row.Status, output, row.Creation, final)),
-            row.Id, TargetCreation: row.ParentCreation, SenderCreation: row.Creation).AsIssued();
+        Durable.FoundationChildNotice.Create(row, output, final);
 
     private sealed class Job(Contract.ActorRef actor, Durable.IJob job) : Contract.IJob
     {

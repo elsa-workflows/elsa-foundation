@@ -183,7 +183,6 @@ internal static class ContractEventWorkload
             await Register("live-birth");
             await PublishEvent("live-birth", "first", "trigger", keep: 1_000);
             await PublishEvent("live-birth", "first", "changed", keep: 1_000, duplicate: true);
-            await _driver.MatchPendingPublications();
             await _driver.StartPendingEventCreators();
             await _driver.LoseTurnCommit(landed: true, stopAfterLoss: true);
             await _driver.TakeOver();
@@ -201,7 +200,7 @@ internal static class ContractEventWorkload
             await _driver.Pass(20);
             await Birth("late-birth", "kept", "earlier");
 
-            // A repeated registration still matches the retained publication after its first actor finished.
+            // Repeating the registration cannot start a second actor for the retained publication.
             await Register("live-birth");
             await Register("late-birth");
             await _driver.Ingress.SetStartAsync(_scope, "live-birth", "live-birth", null);

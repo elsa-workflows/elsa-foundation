@@ -29,6 +29,7 @@ public static class LeaseChecks
         await FoundationJobDeadlineChecks.Run(Check);
         await OperatorIngressChecks.Run(Check);
         await OperatorIngressChecks.Fallback(Check);
+        await FoundationMigrationDispatchChecks.Run(Check);
         await ContractStatechartChecks.Run(Check);
         await ContractNativeChecks.Run(Check);
         await ContractHeldRequestChecks.Run(Check, flaw);
@@ -38,6 +39,7 @@ public static class LeaseChecks
         await EventRequestChecks.Run(Check);
         await EventRequestChecks.Provenance(Check);
         await FoundationEventReferences.Run(Check);
+        await FoundationTenantChecks.Run(Check);
         await CommandAuthorityChecks.Run(Check);
         await CommandAuthorityChecks.RunActor(Check);
         await CommandAuthorityChecks.RunCascade(Check);

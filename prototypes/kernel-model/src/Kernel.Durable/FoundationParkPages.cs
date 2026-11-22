@@ -204,8 +204,9 @@ public sealed partial class InMemoryStore
     private ParkPageRow? ChangedFoundationParkInput(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs)
     {
         if (turn.FoundationParkClear is not { } page) return null;
-        if (turn.Row is not { Retired: false, Status: InstanceStatus.Faulted } checkpoint ||
-            previous is not { Retired: false, Status: InstanceStatus.Faulted } || previous.Creation != checkpoint.Creation ||
+        if (turn.Row is not { Retired: false } checkpoint || previous is not { Retired: false } ||
+            previous is not ({ Status: InstanceStatus.Faulted } or { Status: InstanceStatus.Running, ParkDiscard.Kind: ParkClearKind.Terminate }) ||
+            previous.Status != checkpoint.Status || previous.Creation != checkpoint.Creation ||
             StoreBatchRules.AddressPartition(checkpoint.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             _foundationParks.GetValueOrDefault(new(checkpoint.Id, checkpoint.Creation)) != page.Park)
             throw new StoreException(Failure.Definite, "A Park clear requires its current checkpoint and its own fence.");
@@ -228,15 +229,20 @@ public sealed partial class InMemoryStore
         foreach (var row in page.Writes())
         {
             var stored = Messages[row.Cursor.Key];
-            stored.Message = stored.Message with { KeepUntil = until };
+            var restores = !page.TerminalInputs && drain.Restores(row, checkpoint.Status);
+            var authored = stored.Message.FoundationPublish?.Authored is not null;
+            if (authored && restores)
+                stored.Message = (stored.Message with { KeepUntil = null }).AsKernelTicket();
+            else stored.Message = stored.Message with { KeepUntil = until };
             stored.KeptBy = null;
+            if (authored && !restores) stored.ParkDeadLetter = true;
             if (page.TerminalInputs)
             {
                 // The new Done marker removes this input from the next terminal page.
                 (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
                 continue;
             }
-            if (!drain.Restores(row, checkpoint.Status))
+            if (!restores)
             {
                 (stored.Done, stored.Held, stored.Trial) = (true, false, 0);
                 continue;

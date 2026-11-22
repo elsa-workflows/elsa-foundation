@@ -5,8 +5,14 @@ using System.Xml.Linq;
 using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nuplane;
 using Nuplane.Abstractions;
@@ -14,22 +20,31 @@ using Nuplane.Admin;
 using Nuplane.Reconciliation;
 using Nuplane.Store.Cleanup;
 
-namespace Elsa.Workbench;
+namespace Elsa.Modularity.Api.ModuleManagement;
 
-internal static class ElsaModuleManagementApi
+public static class ModuleManagementApiEndpoints
 {
-    private const string ManagementFileName = "appsettings.json";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
+    // Host settings files are read by ASP.NET Core's JSON configuration provider, which accepts comments and trailing commas.
+    private static readonly JsonDocumentOptions ConfigurationDocumentOptions = new()
     {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
+    public static IEndpointRouteBuilder MapElsaModuleManagement(this IEndpointRouteBuilder endpoints)
+    {
+        var managementOptions = endpoints.ServiceProvider.GetRequiredService<IOptions<ModuleManagementApiOptions>>().Value;
+        var environment = endpoints.ServiceProvider.GetRequiredService<IWebHostEnvironment>();
+        var hostOwner = ModuleManagementApiOptions.ResolveHostOwner(managementOptions, environment);
         var group = endpoints.MapGroup("/_elsa/module-management");
-        group.WithHostOwner("Elsa.Workbench")
+        group.WithHostOwner(hostOwner)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
                 ManagementApiKeyAuthentication.HeaderName,
-                "Elsa.Workbench"))
-            .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench");
+                hostOwner))
+            .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, hostOwner);
         group.AddEndpointFilter(RequireManagementApiKeyAsync);
 
         // Every route that triggers, waits for, or reads the outcome of a Nuplane reconcile takes the operations from the
@@ -41,18 +56,18 @@ internal static class ElsaModuleManagementApi
         // catalog comes from the operations the composition shares with every shell (ShareWithShells in Program.cs).
         var host = endpoints.ServiceProvider;
         INuplaneAdminOperations HostOperations() => host.GetRequiredService<INuplaneAdminOperations>();
-        var reconcileLogger = host.GetRequiredService<ILoggerFactory>().CreateLogger("Elsa.Workbench.ModuleManagementReconcile");
+        var reconcileLogger = host.GetRequiredService<ILoggerFactory>().CreateLogger($"{hostOwner}.ModuleManagementReconcile");
 
         group.MapGet("/registry", GetRegistryAsync);
-        group.MapPost("/packages/upload", (HttpRequest request, [FromServices] IWebHostEnvironment environment, CancellationToken cancellationToken) =>
-                UploadPackageAsync(request, HostOperations(), environment, reconcileLogger, cancellationToken))
+        group.MapPost("/packages/upload", (HttpRequest request, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<ModuleManagementApiOptions> options, CancellationToken cancellationToken) =>
+                UploadPackageAsync(request, HostOperations(), environment, options.Value, reconcileLogger, cancellationToken))
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
-        group.MapDelete("/packages/drop-folder/{fileName}", (string fileName, [FromServices] IWebHostEnvironment environment, [FromServices] IHostApplicationLifetime applicationLifetime, [FromServices] ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
-            DeleteDropFolderPackageAsync(fileName, HostOperations(), environment, applicationLifetime, loggerFactory, cancellationToken));
-        group.MapPost("/reconcile", (CancellationToken cancellationToken) => TriggerReconcileAsync(HostOperations(), reconcileLogger, cancellationToken));
-        group.MapPost("/prune", (ModuleManagementPruneRequest request, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions, CancellationToken cancellationToken) =>
-            PrunePackagesAsync(request, HostOperations(), environment, cleanupOptions, cancellationToken));
+        group.MapDelete("/packages/drop-folder/{fileName}", (string fileName, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<ModuleManagementApiOptions> options, [FromServices] IHostApplicationLifetime applicationLifetime, [FromServices] ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+            DeleteDropFolderPackageAsync(fileName, HostOperations(), environment, options.Value, applicationLifetime, loggerFactory, hostOwner, cancellationToken));
+        group.MapPost("/reconcile", (CancellationToken cancellationToken) => TriggerReconcileAsync(HostOperations(), reconcileLogger, managementOptions.HostDisplayName, cancellationToken));
+        group.MapPost("/prune", (ModuleManagementPruneRequest request, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<ModuleManagementApiOptions> options, [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions, CancellationToken cancellationToken) =>
+            PrunePackagesAsync(request, HostOperations(), environment, options.Value, cleanupOptions, cancellationToken));
         group.MapPost("/feeds", AddFeedAsync);
         group.MapPut("/feeds/{name}", UpdateFeedAsync);
         group.MapDelete("/feeds/{name}", DeleteFeedAsync);
@@ -64,15 +79,16 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> GetRegistryAsync(
         [FromServices] IModuleRegistryService moduleRegistry,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IOptions<ModuleManagementApiOptions> options,
         [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
         var modules = await moduleRegistry.ListModulesAsync(cancellationToken);
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
 
         return Results.Ok(new ModuleManagementRegistryResponse(
-            new("server", "Server", "Elsa.Workbench", environment.ContentRootPath),
+            new(options.Value.HostId, options.Value.HostDisplayName, ModuleManagementApiOptions.ResolveHostOwner(options.Value, environment), environment.ContentRootPath),
             DateTimeOffset.UtcNow,
             modules,
             ListDropFolderPackages(dropFolder),
@@ -91,6 +107,7 @@ internal static class ElsaModuleManagementApi
         HttpRequest request,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
+        ModuleManagementApiOptions options,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -106,7 +123,7 @@ internal static class ElsaModuleManagementApi
         if (!StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(fileName), ".nupkg"))
             return Results.BadRequest(new ModuleManagementErrorResponse("Only .nupkg files can be uploaded."));
 
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
         Directory.CreateDirectory(dropFolder);
 
@@ -131,15 +148,17 @@ internal static class ElsaModuleManagementApi
         string fileName,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
+        ModuleManagementApiOptions options,
         IHostApplicationLifetime applicationLifetime,
         ILoggerFactory loggerFactory,
+        string hostOwner,
         CancellationToken cancellationToken)
     {
         var safeFileName = Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(safeFileName) || !StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(safeFileName), ".nupkg"))
             return Results.BadRequest(new ModuleManagementErrorResponse("A .nupkg file name is required."));
 
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
         var path = EnsureChildPath(dropFolder, safeFileName);
         if (!File.Exists(path))
@@ -149,7 +168,7 @@ internal static class ElsaModuleManagementApi
         QueueReconciliation(
             nuplaneAdmin,
             applicationLifetime,
-            loggerFactory.CreateLogger("Elsa.Workbench.ModuleManagementDelete"),
+            loggerFactory.CreateLogger($"{hostOwner}.ModuleManagementDelete"),
             "package deletion");
 
         return Results.Ok(new ModuleManagementDeleteResponse(
@@ -194,7 +213,11 @@ internal static class ElsaModuleManagementApi
         });
     }
 
-    private static async Task<IResult> TriggerReconcileAsync(INuplaneAdminOperations nuplaneAdmin, ILogger logger, CancellationToken cancellationToken)
+    private static async Task<IResult> TriggerReconcileAsync(
+        INuplaneAdminOperations nuplaneAdmin,
+        ILogger logger,
+        string hostDisplayName,
+        CancellationToken cancellationToken)
     {
         var outcome = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
         return Results.Ok(new ModuleManagementOperationResponse(
@@ -202,18 +225,19 @@ internal static class ElsaModuleManagementApi
             ModuleManagementReconcileResponse.FromOutcome(outcome, logger),
             RequiresReload: true,
             RequiresRestart: false,
-            "Reconciliation completed for the Server host."));
+            $"Reconciliation completed for the {hostDisplayName} host."));
     }
 
     private static async Task<IResult> PrunePackagesAsync(
         ModuleManagementPruneRequest request,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
+        ModuleManagementApiOptions options,
         IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options, cancellationToken);
         var policy = ReadRetentionPolicy(config, cleanupOptions.Value).ToCleanupPolicyOptions();
         var decisions = PrunePackageInstallDirectories(packages.Packages, policy, request.DryRun, cancellationToken);
 
@@ -223,18 +247,19 @@ internal static class ElsaModuleManagementApi
     private static async Task<IResult> AddFeedAsync(
         ModuleManagementFeed feed,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IOptions<ModuleManagementApiOptions> options,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(feed.Name))
             return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
 
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var feeds = ReadFeedsArray(config);
         if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
             return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
 
         feeds.Add(ToJson(feed));
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+        await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate feed registration changes."));
     }
 
@@ -242,44 +267,47 @@ internal static class ElsaModuleManagementApi
         string name,
         ModuleManagementFeed feed,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IOptions<ModuleManagementApiOptions> options,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var feeds = ReadFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
 
         feeds[index] = ToJson(feed with { Name = name });
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+        await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."));
     }
 
     private static async Task<IResult> DeleteFeedAsync(
         string name,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IOptions<ModuleManagementApiOptions> options,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var feeds = ReadFeedsArray(config);
         var index = FindFeedIndex(feeds, name);
         if (index < 0)
             return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
 
         feeds.RemoveAt(index);
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+        await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
     }
 
     private static async Task<IResult> UpdateRetentionPolicyAsync(
         ModuleManagementRetentionPolicy policy,
         [FromServices] IWebHostEnvironment environment,
+        [FromServices] IOptions<ModuleManagementApiOptions> options,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+        var config = await ReadManagementConfigurationAsync(environment, options.Value, cancellationToken);
         var nuplane = GetOrCreateObject(config.Document, "Nuplane");
         nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+        await WriteManagementConfigurationAsync(environment, options.Value, config, cancellationToken);
         return Results.Ok(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."));
     }
 
@@ -383,19 +411,26 @@ internal static class ElsaModuleManagementApi
         return Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path));
     }
 
-    private static async Task<ManagementConfiguration> ReadManagementConfigurationAsync(IWebHostEnvironment environment, CancellationToken cancellationToken)
+    private static async Task<ManagementConfiguration> ReadManagementConfigurationAsync(
+        IWebHostEnvironment environment,
+        ModuleManagementApiOptions options,
+        CancellationToken cancellationToken)
     {
-        var path = GetManagementFilePath(environment);
+        var path = GetManagementFilePath(environment, options);
         if (!File.Exists(path))
             return new(path, new JsonObject { ["Nuplane"] = new JsonObject { ["Setup"] = new JsonObject { ["Feeds"] = new JsonArray() } } });
 
         var json = await File.ReadAllTextAsync(path, cancellationToken);
-        return new(path, JsonNode.Parse(json)?.AsObject() ?? new JsonObject());
+        return new(path, JsonNode.Parse(json, documentOptions: ConfigurationDocumentOptions)?.AsObject() ?? new JsonObject());
     }
 
-    private static async Task WriteManagementConfigurationAsync(IWebHostEnvironment environment, ManagementConfiguration config, CancellationToken cancellationToken)
+    private static async Task WriteManagementConfigurationAsync(
+        IWebHostEnvironment environment,
+        ModuleManagementApiOptions options,
+        ManagementConfiguration config,
+        CancellationToken cancellationToken)
     {
-        var path = GetManagementFilePath(environment);
+        var path = GetManagementFilePath(environment, options);
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
@@ -403,8 +438,8 @@ internal static class ElsaModuleManagementApi
         await File.WriteAllTextAsync(path, config.Document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
     }
 
-    private static string GetManagementFilePath(IWebHostEnvironment environment) =>
-        Path.Combine(environment.ContentRootPath, ManagementFileName);
+    private static string GetManagementFilePath(IWebHostEnvironment environment, ModuleManagementApiOptions options) =>
+        Path.Combine(environment.ContentRootPath, options.ConfigurationFileName);
 
     private static JsonArray ReadFeedsArray(ManagementConfiguration config)
     {
@@ -511,13 +546,18 @@ internal interface IModuleRegistryService
 
 internal sealed class ModuleRegistryService(
     IFeatureManagementService featureManagement,
-    INuplaneAdminOperations nuplaneAdmin) : IModuleRegistryService
+    INuplaneAdminOperations nuplaneAdmin,
+    IOptions<ModuleManagementApiOptions> options,
+    IWebHostEnvironment environment) : IModuleRegistryService
 {
     public async Task<IReadOnlyList<ModuleManagementModule>> ListModulesAsync(CancellationToken cancellationToken = default)
     {
         var features = await featureManagement.GetCatalogAsync(cancellationToken);
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
-        return ModuleManagementRegistryBuilder.BuildModules(features.Features, packages.Packages);
+        return ModuleManagementRegistryBuilder.BuildModules(
+            features.Features,
+            packages.Packages,
+            ModuleManagementApiOptions.ResolveHostOwner(options.Value, environment));
     }
 }
 
@@ -556,7 +596,8 @@ internal static class ModuleManagementRegistryBuilder
 {
     public static IReadOnlyList<ModuleManagementModule> BuildModules(
         IReadOnlyList<FeatureCatalogItem> features,
-        IReadOnlyList<ActivePackage> packages)
+        IReadOnlyList<ActivePackage> packages,
+        string hostOwner)
     {
         var modules = new List<ModuleManagementModule>();
         var packageFeatures = features
@@ -574,7 +615,7 @@ internal static class ModuleManagementRegistryBuilder
             .ToArray();
 
         if (serverFeatures.Length > 0)
-            modules.Insert(0, BuildServerModule(serverFeatures));
+            modules.Insert(0, BuildServerModule(serverFeatures, hostOwner));
 
         return modules;
     }
@@ -608,11 +649,11 @@ internal static class ModuleManagementRegistryBuilder
             diagnostics);
     }
 
-    private static ModuleManagementModule BuildServerModule(IReadOnlyList<FeatureCatalogItem> features) =>
+    private static ModuleManagementModule BuildServerModule(IReadOnlyList<FeatureCatalogItem> features, string hostOwner) =>
         new(
-            "Elsa.Workbench",
-            "Elsa.Workbench",
-            "Elsa.Workbench",
+            hostOwner,
+            hostOwner,
+            hostOwner,
             "",
             "server",
             "",

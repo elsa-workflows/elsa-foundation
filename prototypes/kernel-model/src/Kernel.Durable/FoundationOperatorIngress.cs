@@ -29,6 +29,9 @@ public sealed partial class InMemoryStore
             // The receipt is scoped to the operation, and keeps the first target after the Park's mark changes.
             if (_foundationOperatorReceipts.TryGetValue(FoundationOperatorKey(tenant, id), out var prior) && prior.Until >= clock())
                 return (OperatorAdmission.Duplicate, prior.Reference);
+            if (kind == Kinds.Terminate && selection is null &&
+                BoundActor(tenant, reference)?.Row.Status != InstanceStatus.Running)
+                return (OperatorAdmission.StaleSelection, null);
             if (resolvesPark && !MatchesFoundationSelection(tenant, reference, selection))
                 return (OperatorAdmission.StaleSelection, null);
 

@@ -616,8 +616,12 @@ public sealed class DurableTurn
 
     internal void Subscribe(string key, string wait, bool keep, string? foundationTenant)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = foundationTenant });
-        if (keep) _kept.Add(_subscribed[^1]);
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation)
+        {
+            FoundationTenant = foundationTenant,
+            FoundationKeepsEvents = keep && foundationTenant is not null
+        });
+        if (keep && foundationTenant is null) _kept.Add(_subscribed[^1]);
     }
     public void Unsubscribe(string key, string wait) => Unsubscribe(key, wait, null);
 
@@ -631,12 +635,18 @@ public sealed class DurableTurn
     {
         var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
         var id = store?.MessageHandle("event:" + wire) ?? wire;
-        var publication = new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant };
-        if (tenant is null) SendNext(Actor, Kinds.Publish, publication);
+        if (tenant is null)
+            SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)));
         else
         {
+            ArgumentOutOfRangeException.ThrowIfLessThan(keep, TimeSpan.Zero);
             FoundationMetadataLimits.RequireContent(payload, nameof(payload), FoundationMetadataLimits.EventContentBytes);
-            Send(IssuedAt(_ordinal++), Actor, Kinds.Publish, FoundationEventTicket.Encode(publication), encodedPayload: true);
+            var duration = (long)keep.TotalMilliseconds;
+            var ticket = new Message(id[1..], Actor, Kinds.Publish, FoundationEventTicket.Encode(key, id, payload, duration), Id,
+                TargetCreation: _input.Creation, SenderCreation: _input.Creation)
+                { FoundationPublish = new(key, id, Guid.Empty, Authored: new(tenant, duration)) };
+            _sent.Add(ticket.AsIssued().AsKernelTicket());
+            _ordinal++;
         }
         return id;
     }

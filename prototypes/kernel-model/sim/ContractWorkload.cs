@@ -339,6 +339,7 @@ internal static class ContractWorkload
         // uses these pending scopes to schedule the pass. The workload sees births through public reads.
         internal async Task StartPendingEventCreators()
         {
+            await MatchPendingEventWork();
             var pending = _store.Messages.Values.Where(row => !row.Done && row.Message.InboxScope == InboxKey.EventCreatorScope)
                 .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
             foreach (var partition in pending)
@@ -393,17 +394,20 @@ internal static class ContractWorkload
             Require(_loseAt is null, "the scheduled commit loss was not reached");
         }
 
-        private async Task StartPendingPublications()
+        private async Task StartPendingEventWork()
         {
-            var publishers = _store.Messages.Values.Where(row => !row.Done && row.Message.FoundationPublish is not null)
+            var placements = _store.Messages.Values.Where(row => !row.Done && IsEventWork(row.Message))
                 .Select(row => row.Message.Target.Partition).Distinct().Order().ToArray();
-            foreach (var partition in publishers)
+            foreach (var partition in placements)
                 if (_placementOwners.TryAdd(partition, 0)) await Take(partition, 0);
         }
 
-        internal async Task MatchPendingPublications()
+        private static bool IsEventWork(Message message) =>
+            message.FoundationPublish is not null || message.ParkCatchUp is { Starts: true };
+
+        private async Task MatchPendingEventWork()
         {
-            await StartPendingPublications();
+            await StartPendingEventWork();
             // Stage the durable creator rows before arming the actor-turn fault. A publisher may
             // share its virtual partition with a creator, so a normal scope pass could run the birth.
             for (var pass = 0; pass < 4; pass++)
@@ -413,13 +417,13 @@ internal static class ContractWorkload
                 await worker.PollAsync();
                 await worker.MeetAsync();
             }
-            Require(_store.Messages.Values.All(row => row.Done || row.Message.FoundationPublish is null),
-                "the driver did not settle pending publication pages before the birth fault");
+            Require(_store.Messages.Values.All(row => row.Done || !IsEventWork(row.Message)),
+                "the driver did not settle pending event work before the birth fault");
         }
 
         public async Task Pass(int count)
         {
-            await StartPendingPublications();
+            await StartPendingEventWork();
             // Renewal is a separate node heartbeat. A quiet scope can own a future timer without writing a turn.
             foreach (var owner in _owners)
                 await owner.Host.HeartbeatAsync(TimeSpan.FromMilliseconds(2 * Lease));

@@ -7,11 +7,12 @@ public sealed partial class InMemoryStore
 {
     private const int SelectionBytes = 1 + sizeof(long) * 2;
 
-    internal string SealFoundationSelection(string tenant, ActorCheckpoint actor)
+    internal string? SealFoundationSelection(string tenant, ActorCheckpoint actor)
     {
         Span<byte> mark = stackalloc byte[SelectionBytes];
-        EncodeSelectionMark(actor, mark);
-        return SealReadCursor(SelectionContext(tenant, actor.Reference), mark);
+        return TryEncodeSelectionMark(actor, mark)
+            ? SealReadCursor(SelectionContext(tenant, actor.Reference), mark)
+            : null;
     }
 
     internal bool MatchesFoundationSelection(string tenant, string? reference, string? token)
@@ -22,8 +23,7 @@ public sealed partial class InMemoryStore
             Span<byte> presented = stackalloc byte[SelectionBytes];
             if (!TryOpenReadCursor(SelectionContext(tenant, actor.Binding.Reference), token, presented)) return false;
             Span<byte> committed = stackalloc byte[SelectionBytes];
-            EncodeSelectionMark(Checkpoint(actor.Row, actor.Binding), committed);
-            return presented.SequenceEqual(committed);
+            return TryEncodeSelectionMark(Checkpoint(actor.Row, actor.Binding), committed) && presented.SequenceEqual(committed);
         }
     }
 
@@ -36,18 +36,26 @@ public sealed partial class InMemoryStore
     private static byte[] SelectionContext(string tenant, string reference) =>
         JsonSerializer.SerializeToUtf8Bytes(new { Read = "operator-selection", Tenant = tenant, Actor = reference });
 
-    private static void EncodeSelectionMark(ActorCheckpoint actor, Span<byte> mark)
+    private static bool TryEncodeSelectionMark(ActorCheckpoint actor, Span<byte> mark)
     {
-        if (actor.Park is { } park)
+        if (actor.Park is { } park && (actor.Row.Status == InstanceStatus.Running || actor.Row.ParkRecovery is null))
         {
             mark[0] = 1;
             BinaryPrimitives.WriteInt64LittleEndian(mark[1..], park.Revision);
             BinaryPrimitives.WriteInt64LittleEndian(mark[(1 + sizeof(long))..], park.At);
-            return;
+            return true;
         }
 
-        mark[0] = actor.Row.Status == InstanceStatus.Running ? (byte)0 : (byte)2;
-        BinaryPrimitives.WriteInt64LittleEndian(mark[1..], 0);
-        BinaryPrimitives.WriteInt64LittleEndian(mark[(1 + sizeof(long))..], actor.EndedAt ?? 0);
+        if (actor.Row.Status == InstanceStatus.Running)
+        {
+            mark.Clear();
+            return true;
+        }
+        if (actor.Terminal is not { Revision: > 0 } terminal) return false;
+
+        mark[0] = 2;
+        BinaryPrimitives.WriteInt64LittleEndian(mark[1..], terminal.Revision);
+        BinaryPrimitives.WriteInt64LittleEndian(mark[(1 + sizeof(long))..], terminal.At);
+        return true;
     }
 }

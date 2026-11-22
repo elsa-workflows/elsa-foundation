@@ -48,7 +48,7 @@ public sealed record RequestOptions(object? Ambient, long Deadline, bool Release
 
 public enum AdmissionOutcome { Accepted, Duplicate, Refused }
 
-public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection, ObligationOutstanding }
+public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection, ObligationOutstanding, Conflict }
 
 public enum PublicationStatus { Pending, Matched, DeadLettered }
 /// <summary>Acceptance and matching status. Each wait receives its broadcasts in match commit order.</summary>

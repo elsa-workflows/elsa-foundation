@@ -14,11 +14,17 @@ internal static class FoundationEventReferences
         var spec = new Contract.StartSpec("event-refs", "start");
         var scope = new Contract.BoundScope(tenant);
         var ingress = new EventIngress(store, new Requests("event-reference-requests"), "caller");
+        Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
+            new WorkerOptions { Monotonic = () => 0 });
+        var worker = Owner("event-ref-first");
+        await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
         await Events.PublishAsync(store, new EventRow("acme_late", "published-first", "kept", now + 60_000) { FoundationTenant = "acme" });
         check(store.Messages.Count == 0, "a kept event remains without a creator before the start subscription");
 
         await ingress.SetStartAsync(scope, "late", "start", spec);
         await ingress.SetStartAsync(scope, "late", "start", spec);
+        await worker.PollAsync();
+        await worker.MeetAsync();
         var late = store.Messages.Values.Single(row => row.Message.Start is not null).Message;
         var lateRef = store.ReferenceFor(tenant, new(late.Target.Id, 1));
         check(store.Messages.Count == 2 && late is { TargetCreation: 1, Start.Creation.Generation: 1 } &&
@@ -35,9 +41,6 @@ internal static class FoundationEventReferences
             "a request matching a live start subscription creates its own exact life");
         var liveRef = store.ReferenceFor(tenant, new(target.Id!, 1));
 
-        Worker Owner(string node) => new(node, 0, store, new WorkflowInstance([new Probe()]),
-            new WorkerOptions { Monotonic = () => 0 });
-        var first = (await new DurableHost([Owner("event-ref-first")]).ActivateAsync(0))!;
         await Pump(first);
         check(store.ReadFoundationActor(tenant, lateRef).Actor?.Row.State == "[\"kept\",\"follows-kept\"]" &&
               store.ReadFoundationActor(tenant, liveRef).Actor?.Row.State == "[\"live\"]",

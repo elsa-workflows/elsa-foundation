@@ -1,6 +1,6 @@
 using System.Text.Json;
+using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Modularity.Core.Models;
-using Elsa.Workbench;
 using Nuplane.Abstractions;
 using Xunit;
 
@@ -21,7 +21,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
         var installPath = CreatePackageDirectory("Elsa.PackageA", "1.0.0");
         var feature = NewFeature("FeatureA", "Feature A", "Elsa.PackageA", "1.0.0");
 
-        var modules = ModuleManagementRegistryBuilder.BuildModules([feature], [NewPackage("Elsa.PackageA", "1.0.0", installPath)]);
+        var modules = ModuleManagementRegistryBuilder.BuildModules([feature], [NewPackage("Elsa.PackageA", "1.0.0", installPath)], "Elsa.Workbench");
 
         var module = Assert.Single(modules);
         Assert.Equal("Elsa.PackageA@1.0.0", module.Id);
@@ -39,7 +39,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
     {
         var feature = NewFeature("RuntimeFeature", "Runtime Feature", null, null, FeatureSourceKinds.Runtime);
 
-        var modules = ModuleManagementRegistryBuilder.BuildModules([feature], []);
+        var modules = ModuleManagementRegistryBuilder.BuildModules([feature], [], "Elsa.Workbench");
 
         var module = Assert.Single(modules);
         Assert.Equal("Elsa.Workbench", module.Id);
@@ -61,7 +61,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
             FeatureSourceKinds.ManifestError,
             readError: "Package manifest not found.");
 
-        var module = Assert.Single(ModuleManagementRegistryBuilder.BuildModules([error], [NewPackage("Elsa.Missing", "1.0.0", installPath)]));
+        var module = Assert.Single(ModuleManagementRegistryBuilder.BuildModules([error], [NewPackage("Elsa.Missing", "1.0.0", installPath)], "Elsa.Workbench"));
 
         Assert.Empty(module.Features);
         Assert.Equal("failed", module.Status);
@@ -74,7 +74,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
         var installPath = CreatePackageDirectory("Elsa.ManifestIdentity", "2.0.0");
         var feature = NewFeature("FeatureA", "Feature A", "Elsa.ActiveIdentity", "1.0.0");
 
-        var module = Assert.Single(ModuleManagementRegistryBuilder.BuildModules([feature], [NewPackage("Elsa.ActiveIdentity", "1.0.0", installPath)]));
+        var module = Assert.Single(ModuleManagementRegistryBuilder.BuildModules([feature], [NewPackage("Elsa.ActiveIdentity", "1.0.0", installPath)], "Elsa.Workbench"));
 
         Assert.Equal("warning", module.Compatibility);
         Assert.Contains(module.Diagnostics, x => x.Source == "manifest" && x.Status == "warning" && x.Reason.Contains("differs", StringComparison.OrdinalIgnoreCase));
