@@ -1,3 +1,5 @@
+using System.Data.Common;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -74,41 +76,76 @@ internal static class ChildDispatchHistory
                 recorded.Metadata.GetValueOrDefault("history.sourceDeliveryId") != current.OutboxItemId ||
                 recorded.Metadata.GetValueOrDefault("history.relatedWorkflowExecutionId") != (start ? dispatch.ChildWorkflowExecutionId : dispatch.ParentWorkflowExecutionId))
                 throw new InvalidDataException("The physical child source disagrees with its committed history origin.");
-            if (access.Current != context) throw new InvalidDataException("Persistence access changed during child origin verification.");
+            // Native edge/origin reads can outlive or lose the source claim. Reopen the physical
+            // row after every other awaited read, then check trusted time before recipient handoff.
+            var final = await lookup.FindDurableAsync(supplied.SourceOutboxItemId, token)
+                ?? throw new InvalidDataException("The child source disappeared during verification.");
+            if (final.SourceKind != RuntimeDeliverySourceKind.WorkflowCheckpoint || final.OutboxItemId != supplied.SourceOutboxItemId ||
+                RuntimeCheckpointCommitFingerprint.ComputeIntent(final.Intent) != supplied.IntentFingerprint ||
+                final.StimulusDeliverySourceScope != supplied.Scope)
+                throw new InvalidDataException("The native child source changed during verification.");
+            if (final.Status != RuntimePostCommitOutboxStatus.Delivering || final.DeliveringOwnerId != supplied.Claim.OwnerId ||
+                final.DeliveryFencingToken != supplied.Claim.FencingToken || final.DeliveryStartedAt != supplied.Claim.ClaimedAt ||
+                final.DeliveryVisibleAfter is not { } finalDeadline || finalDeadline <= clock.GetUtcNow())
+                throw new RuntimePostCommitOutboxStaleClaimException(final.OutboxItemId, supplied.Claim.OwnerId, supplied.Claim.FencingToken,
+                    final.DeliveringOwnerId, final.DeliveryFencingToken, final.Status);
+            if (access.Current != context || context.RequireScope() != supplied.Scope)
+                throw new InvalidDataException("Persistence access changed during child origin verification.");
             return policy;
         }
         catch (RuntimePostCommitSourceBoundaryException) { throw; }
         catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
-        catch (Exception failure)
-        {
-            throw new RuntimePostCommitSourceBoundaryException(supplied.SourceOutboxItemId, supplied.Intent.Kind, failure,
-                failure is IOException or TimeoutException or NotSupportedException or RuntimeHistoryUnavailableException or RuntimeSchedulerWorkUnavailableException);
-        }
+        catch (Exception failure) { throw Boundary(supplied, failure); }
     }
 
     internal static async ValueTask ObserveAsync(IServiceProvider services, TimeProvider clock, PostCommitDeliveryContext source,
         RuntimeHistoryCapturePolicy policy, string receiptId, bool disposition, string reason, CancellationToken token)
     {
-        var access = services.GetRequiredService<IPersistenceAccessContextAccessor>();
-        var context = access.Current;
-        if (context.RequireScope() != source.Scope) throw new InvalidDataException("Child observation scope changed.");
-        var name = disposition ? "ChildStartDispositionObserved" : "ChildStartAttemptObserved";
-        string Id(string kind) => "child-source-history:" + RuntimeHistoryIdentity.CreateBinding([source.Intent.WorkflowExecutionId, receiptId, kind]);
-        var cause = source.Intent.HistoryCausation!;
-        var e = new RuntimeHistoryEvent(Id(name), source.Intent.WorkflowExecutionId, 0, RuntimeHistoryEventCategory.DeliveryObservation,
-            name, clock.GetUtcNow(), source.Intent.ActivityExecutionId, metadata: new Dictionary<string, string> { ["history.reasonCode"] = reason })
+        try
         {
-            Authority = RuntimeHistoryAuthority.DeliveryObservation,
-            Causation = disposition ? cause with { HistoryEventId = Id("ChildStartAttemptObserved") } : cause,
-            AttemptId = "outbox-attempt:" + ((long)source.Claim.Item.DeliveryAttemptCount + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                ":fence:" + source.Claim.FencingToken.ToString(System.Globalization.CultureInfo.InvariantCulture)
-        };
-        var observation = new RuntimeHistoryObservation(policy, e);
-        RuntimeHistorySafety.ValidateObservation(observation);
-        if (!(await services.GetRequiredService<IRuntimeHistoryObservationWriter>().RecordAsync(observation, token)).Recorded)
-            throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
-                new NotSupportedException("The original child history head is unavailable."), true);
-        if (access.Current != context) throw new InvalidDataException("Child observation access changed during persistence.");
+            var access = services.GetRequiredService<IPersistenceAccessContextAccessor>();
+            var context = access.Current;
+            if (context.RequireScope() != source.Scope) throw new InvalidDataException("Child observation scope changed.");
+            var name = disposition ? "ChildStartDispositionObserved" : "ChildStartAttemptObserved";
+            string Id(string kind) => "child-source-history:" + RuntimeHistoryIdentity.CreateBinding([source.Intent.WorkflowExecutionId, receiptId, kind]);
+            var cause = source.Intent.HistoryCausation!;
+            var e = new RuntimeHistoryEvent(Id(name), source.Intent.WorkflowExecutionId, 0, RuntimeHistoryEventCategory.DeliveryObservation,
+                name, clock.GetUtcNow(), source.Intent.ActivityExecutionId, metadata: new Dictionary<string, string> { ["history.reasonCode"] = reason })
+            {
+                Authority = RuntimeHistoryAuthority.DeliveryObservation,
+                Causation = disposition ? cause with { HistoryEventId = Id("ChildStartAttemptObserved") } : cause,
+                AttemptId = "outbox-attempt:" + ((long)source.Claim.Item.DeliveryAttemptCount + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                    ":fence:" + source.Claim.FencingToken.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            var observation = new RuntimeHistoryObservation(policy, e);
+            RuntimeHistorySafety.ValidateObservation(observation);
+            if (!(await services.GetRequiredService<IRuntimeHistoryObservationWriter>().RecordAsync(observation, token)).Recorded)
+                throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+                    new NotSupportedException("The original child history head is unavailable."), true);
+            if (access.Current != context) throw new InvalidDataException("Child observation access changed during persistence.");
+        }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception failure) { throw Boundary(source, failure); }
     }
+    private static RuntimePostCommitSourceBoundaryException Boundary(PostCommitDeliveryContext source, Exception failure) =>
+        new(source.SourceOutboxItemId, source.Intent.Kind, failure, IsUnavailable(failure));
+
+    private static bool IsUnavailable(Exception failure)
+    {
+        if (failure is RuntimePostCommitSourceBoundaryException boundary) return boundary.IsUnavailable;
+        if (failure is AggregateException aggregate) return aggregate.InnerExceptions.Count > 0 && aggregate.InnerExceptions.All(IsUnavailable);
+        if (RuntimeCheckpointCommitValidationException.IsCauseOf(failure)) return false;
+        var unavailable = false;
+        for (Exception? cause = failure; cause is not null; cause = cause.InnerException)
+        {
+            if (cause is InvalidDataException or JsonException or ArgumentException or RuntimeHistoryIntegrityException) return false;
+            unavailable |= cause is IOException or DbException or TimeoutException or NotSupportedException or OperationCanceledException or
+                RuntimeHistoryUnavailableException or RuntimeSchedulerWorkUnavailableException;
+        }
+        return unavailable;
+    }
+
 }

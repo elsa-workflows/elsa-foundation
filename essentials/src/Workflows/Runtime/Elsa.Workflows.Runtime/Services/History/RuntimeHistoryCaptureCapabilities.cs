@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.History;
@@ -21,7 +22,9 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
     internal bool SourceOwner(RuntimeHistorySourceSupport owner) => owner.TimerOwner
         ? services.GetService<IRuntimeHistoryTimerSupport>()?.CanCapture == true
         : owner.SourceIntentKind is not { } kind ?
-        (!ReferenceEquals(owner, RuntimeHistoryRegistration.AlterationSources) ||
+        (ReferenceEquals(owner, RuntimeHistoryRegistration.BoundaryRetrySources)
+            ? services.GetServices<IWorkflowSchedulerWorkHandler>().Any(handler => handler is WorkflowRetryActivityBoundarySchedulerWorkHandler)
+            : !ReferenceEquals(owner, RuntimeHistoryRegistration.AlterationSources) ||
          services.GetService<IWorkflowAlterationCheckpointWriter>() is RuntimeWorkflowAlterationCheckpointWriter alteration &&
          services.GetService<RuntimeCheckpointCommitter>() is { } committer && alteration.OwnsHistoryCommitter(committer)) :
         services.GetService<IRuntimeHistorySourceExtension>() is { } source &&

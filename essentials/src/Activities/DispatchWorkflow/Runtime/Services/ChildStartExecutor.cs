@@ -236,6 +236,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHa
         {
             throw;
         }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (Exception exception) when (RuntimeCheckpointCommitValidationException.IsCauseOf(exception))
         {
             // The child's runtime faults a child a checkpoint rule refused, which ends its dispatch and queues the parent's

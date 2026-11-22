@@ -25,7 +25,9 @@ internal static class RuntimeHistoryRegistration
         RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
         RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
         RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
-        RuntimeHistorySourceFactKind.ControlApplied, RuntimeHistorySourceFactKind.ActivityRetryScheduled]);
+        RuntimeHistorySourceFactKind.ControlApplied]);
+
+    internal static readonly RuntimeHistorySourceSupport BoundaryRetrySources = new([RuntimeHistorySourceFactKind.ActivityRetryScheduled]);
 
     internal static readonly RuntimeHistorySourceSupport AlterationSources = new([
         RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.AlterationApplied]);
@@ -41,6 +43,7 @@ internal static class RuntimeHistoryRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, AlterationSources))) services.AddSingleton(AlterationSources);
+        if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, BoundaryRetrySources))) services.AddSingleton(BoundaryRetrySources);
     }
 
     internal static (RuntimeHistoryCapturePolicy? Policy, bool? Enabled) ResolveAdmission(IServiceProvider provider, string workflowExecutionId)

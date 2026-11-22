@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -20,6 +21,14 @@ internal sealed class StructuralChildControlContribution(ActivityExecutionState 
             yield return Fact(RuntimeHistorySourceFactKind.ChildControlAccepted, incoming, acceptedChild.InvocationId, incoming.ConsumerActivityExecutionId);
         foreach (var item in ready)
             yield return Fact(RuntimeHistorySourceFactKind.ChildControlApplied, item, item.ConsumerActivityExecutionId, acceptedChild.InvocationId);
+    }
+
+    internal async ValueTask<RuntimeCheckpointCommit> ApplyAsync(RuntimeCheckpointCommit commit,
+        RuntimeCheckpointCommitter committer, CancellationToken cancellationToken)
+    {
+        var applied = Apply(commit);
+        return await committer.AddHistorySourceFactsAsync(applied,
+            policy => policy is { PolicyId: "runtime-history-v5", Version: 5 } ? HistoryFacts(applied) : [], cancellationToken);
     }
 
     internal RuntimeCheckpointCommit Apply(RuntimeCheckpointCommit commit)

@@ -219,8 +219,9 @@ public sealed class RuntimeHistoryCompositionTests
     }
 
     [Theory]
-    [InlineData("default")] [InlineData("foreign")] [InlineData("other-committer")]
-    public void Alteration_vocabulary_requires_the_selected_default_writer_and_same_history_committer(string owner)
+    [InlineData("default", true)] [InlineData("foreign", true)] [InlineData("other-committer", true)]
+    [InlineData("default", false)] [InlineData("foreign", false)] [InlineData("other-committer", false)]
+    public void Retry_and_alteration_vocabulary_require_their_actual_selected_native_owners(string owner, bool nativeRetry)
     {
         var services = Services(new Access());
         RuntimeHistoryRegistration.AddServices(services);
@@ -229,10 +230,11 @@ public sealed class RuntimeHistoryCompositionTests
             new RuntimeWorkflowAlterationCheckpointWriter(new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(),
                 new LegacyWriter(), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
                 provider.GetRequiredService<IWorkflowAlterationStore>(), provider.GetRequiredService<TimeProvider>()));
+        if (!nativeRetry) services.RemoveAll<IWorkflowSchedulerWorkHandler>();
         using var provider = services.BuildServiceProvider(validateScopes: true);
         using var scope = provider.CreateScope();
         var policy = RuntimeHistoryRegistration.ResolvePolicy(scope.ServiceProvider, "alteration-admission")!;
-        Assert.Equal(owner == "default", policy.SupportedKinds.Contains("ActivityRetryScheduled"));
+        Assert.Equal(owner == "default" || nativeRetry, policy.SupportedKinds.Contains("ActivityRetryScheduled"));
         Assert.Equal(owner == "default", policy.SupportedKinds.Contains("AlterationApplied"));
     }
 
