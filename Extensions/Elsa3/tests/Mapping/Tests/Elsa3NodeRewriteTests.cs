@@ -487,7 +487,7 @@ public sealed class Elsa3NodeRewriteTests
         var script = Activity("body", "Elsa.RunJavaScript", ("script", form switch
         {
             "expression" => Expression("JavaScript", JsonSerializer.Serialize(source)),
-            "variable" => Expression("Variable", "code"),
+            "variable" => Expression("JavaScript", "getVariable('code')"),
             _ => Captured("code-memory", "String")
         }));
         var parallel = Activity("parallel", "Elsa.Parallel");

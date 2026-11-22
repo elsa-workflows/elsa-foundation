@@ -107,8 +107,31 @@ public sealed class SwitchLifecycleTests
     }
 
     private static WorkflowExecutionHarness Harness() => WorkflowExecutionHarness.Create()
-        .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+        .WithFeature(services => { new ActivitiesControlFlowFeature().ConfigureServices(services); new ActivitiesSequenceFeature().ConfigureServices(services); })
         .WithProbeLeaf().WithFaultingLeaf().Build(Enumerable.Range(1, 30).Select(value => $"switch-lifecycle-{value}"));
+
+    [Fact]
+    public async Task A_resumed_Break_cancels_a_selected_body_subtree_with_an_existing_nested_bookmark()
+    {
+        await using var harness = Harness();
+        var nested = Wait("nested-wait");
+        var after = WorkflowExecutionHarness.NewProbeNode("must-not-start");
+        var sequence = new ExecutableNode("a", "a", typeof(Elsa.Activities.Sequence.Activities.Sequence).FullName!, "1.0.0", "test/sequence", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), childSlots: [new("Sequence.Activities", [nested, after])],
+            structure: new("elsa.sequence.structure", "1.0.0", JsonSerializer.SerializeToElement(new { activities = new[] { "nested-wait", "must-not-start" } })));
+        var executable = Executable(sequence, Wait("c"));
+        var waiting = await harness.RunAsync(executable);
+        Assert.Equal(ActivityExecutionStatus.Suspended, waiting.State("nested-wait").Status);
+        var bookmarks = await Bookmarks(harness);
+        Assert.Equal(2, bookmarks.Count);
+        var run = await Resume(harness, executable.Identity, Assert.Single(bookmarks, item => item.ExecutableNodeId == "c"), @break: true);
+        run.AssertOutcomes("switch", ActivityOutcomes.Break);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("a").Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, run.State("nested-wait").Status);
+        run.AssertDidNotRun("must-not-start");
+        Assert.Empty(await Bookmarks(harness));
+        run.AssertWorkflowCompleted();
+    }
 
     [Fact]
     public async Task Break_suppresses_a_selected_sibling_that_has_not_started()
@@ -235,7 +258,7 @@ public sealed class SwitchLifecycleTests
     {
         var root = SwitchMatchAnyTests.Executable(SwitchModes.MatchAny, true, false, true,
             new Dictionary<string, ExecutableNode> { ["a"] = first, ["c"] = last }).RootActivity;
-        var waiting = new[] { first, last }.Where(node => node.ActivityType == typeof(SwitchWaitActivity).FullName!);
+        var waiting = new[] { first, last }.SelectMany(node => node.DescendantsAndSelf()).Where(node => node.ActivityType == typeof(SwitchWaitActivity).FullName!);
         return new(WorkflowExecutionHarness.Identity, root,
             waiting.ToDictionary(node => $"resume:{node.ExecutableNodeId}:wait", node => new WorkflowExecutableResumeTarget(
                 $"resume:{node.ExecutableNodeId}:wait", node.ExecutableNodeId, "ResumeAsync", new Dictionary<string, string>(), LocalResumeTargetId: "wait")),
@@ -245,13 +268,13 @@ public sealed class SwitchLifecycleTests
     private static async Task<IReadOnlyCollection<BookmarkState>> Bookmarks(WorkflowExecutionHarness harness) =>
         await harness.Services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(WorkflowExecutionHarness.WorkflowExecutionId);
 
-    private static Task<WorkflowExecutionRun> Resume(WorkflowExecutionHarness harness, WorkflowExecutableIdentity identity, BookmarkState bookmark) =>
+    private static Task<WorkflowExecutionRun> Resume(WorkflowExecutionHarness harness, WorkflowExecutableIdentity identity, BookmarkState bookmark, bool @break = false) =>
         harness.ResumeAsync(identity, bookmark.BookmarkId, bookmark.ActivityExecutionId, bookmark.ExecutableNodeId,
-            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, JsonSerializer.SerializeToElement(new SwitchWaitTrigger(true)));
+            bookmark.ResumeTargetId, bookmark.StimulusType, bookmark.StimulusHash, JsonSerializer.SerializeToElement(new SwitchWaitTrigger(true, @break)));
 }
 
 public sealed record SwitchWaitState(string Marker);
-public sealed record SwitchWaitTrigger(bool Released);
+public sealed record SwitchWaitTrigger(bool Released, bool Break = false);
 
 public sealed class SwitchWaitActivity : StatefulActivity<ActivityUnit, SwitchWaitState, SwitchWaitTrigger>
 {
@@ -259,5 +282,5 @@ public sealed class SwitchWaitActivity : StatefulActivity<ActivityUnit, SwitchWa
         ValueTask.FromResult(Suspend(new SwitchWaitState("waiting"), [new ActivityTriggerRegistration<SwitchWaitTrigger>("wait", "SwitchWait", "switch-wait")]));
 
     protected override ValueTask<ActivityTransition<ActivityUnit, SwitchWaitState>> ResumeAsync(ActivityResumeContext<SwitchWaitState, SwitchWaitTrigger> context) =>
-        ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+        ValueTask.FromResult(Complete(ActivityUnit.Value, context.Trigger.Break ? ActivityOutcomes.Break : ActivityOutcomes.Done));
 }
