@@ -130,10 +130,23 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
       await expect(page.getByText(text, { exact: true })).toHaveCount(0, { timeout: 30_000 });
     }
     await waitCapturedPlaybackReady(page);
+    // The real scoped journal must contain this exact native event before acting
+    // on its owner's tabs; a shared Event label or an updated URL is insufficient.
+    await expect(page.getByRole("region", { name: "Activity journal", exact: true })
+      .locator(`[data-history-event-id="${eventId}"]`)).toBeVisible({ timeout: 30_000 });
     const target = views.getByRole("tab", { name: tab, exact: true });
     await frame(target);
     await target.click({ timeout: 30_000 });
     await expect(target).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
+    if (tab === "Bookmarks") {
+      const records = page.getByRole("region", { name: "Activity bookmark history", exact: true });
+      const expected = (await bookmarks(id)).items.filter(item => item.bookmark.identity.activityExecutionId === ownerId);
+      expect(expected.length).toBeGreaterThan(0);
+      for (const item of expected) {
+        await expect(records.getByText(item.bookmark.identity.bookmarkId, { exact: true })).toBeVisible({ timeout: 30_000 });
+      }
+      await expect(target).toHaveAttribute("aria-selected", "true");
+    }
   };
   const openLifecycle = async (id: string, eventId: string) => {
     await openOwner(id, eventId, "Bookmarks");
