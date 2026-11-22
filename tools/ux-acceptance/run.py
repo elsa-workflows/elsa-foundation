@@ -84,7 +84,7 @@ CAPTURES = {
     'recorded activity playback live bounds and waits': ['reference', 'playback-live-waiting', 'playback-live-frozen', 'playback-live-refreshed', 'playback-live-recorded-wait'],
     'recorded activity playback coverage and access': ['reference', 'playback-access-metadata-only', 'playback-access-pending', 'playback-access-revoked', 'playback-coverage-invalidated', 'playback-coverage-retained', 'playback-coverage-pin-unavailable', 'playback-coverage-disabled', 'playback-coverage-uncaptured', 'playback-coverage-unsupported'],
     'variable lifecycle warnings and refusals': ['reference', 'lost-update-warning', 'fault-refusal', 'run-lost-update-badge', 'write-history-lost-updates', 'commit-journal', 'compare-refused', 'diagnostics-variable-writes'],
-    'variable rename updates script reads and lists the rest': ['reference', 'validation-collapsed', 'validation-expanded', 'validation-input-focused', 'rename-notice', 'flagged-reference'],
+    'variable rename updates script reads and lists the rest': ['reference', 'rename-notice', 'flagged-reference', 'validation-collapsed', 'validation-expanded', 'validation-input-focused'],
     'script variable may-write analysis survives editing and reopening': ['reference', 'literal-writes', 'computed-writes', 'reopened-computed', 'no-writes', 'nearest-scope'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')

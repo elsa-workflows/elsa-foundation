@@ -60,54 +60,6 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
     if (await collapse.isVisible()) await collapse.click();
   }
   const views = page.getByRole("tablist", { name: "Editor view tabs", exact: true });
-  const validation = page.locator(".wf-validation");
-  const validationToggle = validation.locator(".wf-validation-toggle");
-  const validationDetails = validation.locator("#wf-validation-details");
-  await expect(validationToggle).toContainText("1 error · 1 warning");
-  await expect(validationToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(validationDetails).toBeHidden();
-  await validationToggle.focus();
-  await expect(validationToggle).toBeFocused();
-  await capture(page, info, "validation-collapsed");
-
-  await validationToggle.press("Enter");
-  await expect(validationToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(validationDetails).toBeVisible();
-  const findings = validation.getByRole("list", { name: "Validation findings", exact: true }).getByRole("listitem");
-  await expect(findings).toHaveCount(2);
-  const missingRead = findings.filter({ hasText: "VF-READ-002" });
-  await expect(missingRead).toHaveCount(1);
-  await expect(missingRead.locator('.wf-validation-severity[data-severity="error"]')).toHaveText("Error");
-  await expect(missingRead.locator(".wf-validation-location")).toHaveText("Write Line → Inputs → Text");
-  await expect(missingRead).toContainText("reads variable 'missingForValidation'");
-  await expect(findings.filter({ hasText: "VF-READ-004" })).toContainText("It could read: 'order'.");
-  const goToValidationInput = missingRead.getByRole("button", { name: "Go to input", exact: true });
-  await goToValidationInput.scrollIntoViewIfNeeded();
-  await capture(page, info, "validation-expanded");
-
-  await goToValidationInput.focus();
-  await goToValidationInput.press("Enter");
-  await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
-  const validationInput = page.getByRole("group", { name: "Text property", exact: true });
-  await expect(validationInput).toBeVisible();
-  const validationEditor = validationInput.locator('[data-studio-code-editor-surface="codemirror"] .cm-content');
-  await expect(validationEditor).toBeVisible();
-  await expect(validationEditor).toContainText(script);
-  await expect(validationEditor).toBeFocused();
-  await expect(validationInput.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
-  await capture(page, info, "validation-input-focused");
-
-  // Restore the original canvas/Outputs state before exercising rename's own navigation back to Inputs.
-  await validationToggle.focus();
-  await validationToggle.press("Enter");
-  await expect(validationToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(validationDetails).toBeHidden();
-  await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
-  if (info.project.name.startsWith("narrow")) {
-    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
-  }
-  await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
   await views.getByRole("tab", { name: "Variables", exact: true }).click();
   const name = page.getByRole("textbox", { name: "Variable name", exact: true });
   await expect(name).toHaveValue("order");
@@ -138,4 +90,49 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   // Go to moves focus into the flagged input's editor.
   await expect(text.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
   await capture(page, info, "flagged-reference");
+
+  // Keep validation navigation after rename's focus proof: a retained validation request must never supply rename focus.
+  // Move to Outputs and focus the footer controls so this second action must itself reopen/focus Inputs.
+  await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
+  if (info.project.name.startsWith("narrow")) {
+    await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
+  }
+  const validation = page.locator(".wf-validation");
+  const validationToggle = validation.locator(".wf-validation-toggle");
+  const validationDetails = validation.locator("#wf-validation-details");
+  await expect(validationToggle).toContainText("1 error · 1 warning");
+  await expect(validationToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(validationDetails).toBeHidden();
+  await validationToggle.focus();
+  await expect(validationToggle).toBeFocused();
+  await capture(page, info, "validation-collapsed");
+
+  await validationToggle.press("Enter");
+  await expect(validationToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(validationDetails).toBeVisible();
+  const findings = validation.getByRole("list", { name: "Validation findings", exact: true }).getByRole("listitem");
+  await expect(findings).toHaveCount(2);
+  const missingRead = findings.filter({ hasText: "VF-READ-002" });
+  await expect(missingRead).toHaveCount(1);
+  await expect(missingRead.locator('.wf-validation-severity[data-severity="error"]')).toHaveText("Error");
+  await expect(missingRead.locator(".wf-validation-location")).toHaveText("Write Line → Inputs → Text");
+  await expect(missingRead).toContainText("reads variable 'missingForValidation'");
+  await expect(findings.filter({ hasText: "VF-READ-004" })).toContainText("It could read: 'purchase'.");
+  const goToValidationInput = missingRead.getByRole("button", { name: "Go to input", exact: true });
+  await goToValidationInput.scrollIntoViewIfNeeded();
+  await capture(page, info, "validation-expanded");
+
+  await goToValidationInput.focus();
+  await goToValidationInput.press("Enter");
+  await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
+  const validationInput = page.getByRole("group", { name: "Text property", exact: true });
+  await expect(validationInput).toBeVisible();
+  const validationEditor = validationInput.locator('[data-studio-code-editor-surface="codemirror"] .cm-content');
+  await expect(validationEditor).toBeVisible();
+  await expect(validationEditor).toContainText(script.replace("variables.order.total", "variables.purchase.total"));
+  await expect(validationEditor).toBeFocused();
+  await expect(validationInput.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
+  await capture(page, info, "validation-input-focused");
+
 }
