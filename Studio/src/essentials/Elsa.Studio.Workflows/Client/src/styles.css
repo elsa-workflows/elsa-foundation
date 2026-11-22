@@ -3606,35 +3606,6 @@
   padding: 0 12px;
 }
 
-.wf-breadcrumb > svg {
-  flex: 0 0 auto;
-  color: var(--wf-muted-text);
-  opacity: 0.6;
-}
-
-.wf-breadcrumb button {
-  border: 0;
-  border-radius: var(--wf-radius-sm);
-  background: transparent;
-  color: var(--wf-accent);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 2px 4px;
-  transition: background var(--transition-fast, 0.15s ease);
-}
-
-.wf-breadcrumb button:hover {
-  background: var(--wf-accent-soft);
-  text-decoration: underline;
-}
-
-.wf-breadcrumb button:last-of-type {
-  color: var(--wf-text);
-  font-weight: 650;
-}
-
 .wf-instance-breadcrumb {
   border-top: 0;
 }

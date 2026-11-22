@@ -142,9 +142,9 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
   footers still use `.wf-page-size`, so their "Rows" select now looks different from Definitions.)
-- [ ] **K7. Breadcrumbs for callback navigation.** (#4999) [verified] `StudioBreadcrumbs` takes
+- [x] **K7. Breadcrumbs for callback navigation.** (#4999) [verified] `StudioBreadcrumbs` takes
   `items[{ href, label }]`, `current` and `renderLink`. Try porting `ScopeBreadcrumb`
-  (`.wf-breadcrumb`) with `renderLink` first; change the kit only if href-less items are required.
+  (`.wf-breadcrumb`) with `renderLink` first; change the kit only if href-less items are required. (PR #5281)
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
