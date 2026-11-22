@@ -249,10 +249,9 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
       if (!cannotSave) void save(false);
     }}
     footer={<StudioDialogFooter
-      extra={<>
-        {error ? <StudioButton disabled={busy} onClick={onSaved}>Reload view list</StudioButton> : null}
-        {existing?.canDelete ? <StudioButton variant="danger" disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
-        {existing?.canEdit ? <StudioButton disabled={cannotSave} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
+      leading={existing && <>
+        {existing?.canDelete ? <StudioButton size="sm" variant="danger" disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
+        {existing?.canEdit ? <StudioButton size="sm" disabled={cannotSave} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
       </>}
       onCancel={onClose}
       cancelDisabled={busy}
@@ -268,7 +267,9 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
       Share within this tenant
     </label>
     {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
-    {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+    {error ? <StudioAlert tone="danger">
+      {error}{" "}<StudioButton size="sm" disabled={busy} onClick={onSaved}>Reload view list</StudioButton>
+    </StudioAlert> : null}
   </StudioDialog>;
 }
 
