@@ -46,6 +46,7 @@ public static class LeaseChecks
         await CascadePageChecks.Run(Check);
         await RetirementCascadeChecks.Run(Check);
         await ParkDrainCascadeChecks.Run(Check);
+        await ParkCohortTupleChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
