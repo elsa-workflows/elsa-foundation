@@ -118,6 +118,10 @@ The audit reviewed the following composed Studio states at 360–390px widths. T
 | Decisions Tests and Settings | [Saved decision at both widths](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/3d6c772650353cea14f07f8800303da448dfd68a/Studio/qa-evidence/5340-273b42af20-visual.zip) |
 | Dark dialogs | [Form and Decision creation](https://github.com/elsa-workflows/elsa-foundation/pull/5331#issuecomment-7072854830), [dashboard discard confirmation](https://github.com/elsa-workflows/elsa-foundation/pull/5319) |
 
+### Visual coverage follow-up
+
+The narrow viewport table above also records the A2 menu, dock, activity authoring and Decisions evidence. The run detail review exercised Timeline, Activity, Issues and Details on a published workflow at both widths. See the [run tab evidence on #5262](https://github.com/elsa-workflows/elsa-foundation/issues/5262#issuecomment-7072982431) and the [five optional extension captures](https://github.com/elsa-workflows/elsa-foundation/pull/5326#issuecomment-7072814127).
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -196,7 +200,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
-- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
+- [x] **A6 graph commands** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 - [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
@@ -392,7 +396,7 @@ Browser dialogs and busy labels (no kit prerequisite):
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
-- [ ] **A6 graph dialogs** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
+- [x] **A6 graph dialogs** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
 
 ### X4. Create flows
 
@@ -577,7 +581,7 @@ Replace local date formatting with `StudioTimestamp`.
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
   `EXT/Secrets/CopySecretNameButton.tsx:37` (custom copy button). See also E2.
 
-- [ ] **X10.11** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` uses `formatDate(detail.createdAt)`. `ReusableBoundaryInspector.tsx` displays `selectedInspection.lastCommittedAt` and `bookmark.createdAt` directly. Use the shared timestamp for all three.
+- [x] **X10.11** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` uses `formatDate(detail.createdAt)`. `ReusableBoundaryInspector.tsx` displays `selectedInspection.lastCommittedAt` and `bookmark.createdAt` directly. Use the shared timestamp for all three.
 
 ### X11. Raw buttons instead of `StudioButton`
 
@@ -646,7 +650,7 @@ the designer header is a documented exception.
 
 - [x] **X12.13** (#5266, #5353) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
-- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
+- [x] **A6 graph previews** (PR #5360) [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
 
 ### X13. CSS texture
 
@@ -693,7 +697,7 @@ Raw font sizes, weights, radii and colours:
 | `WF/workflow-editor/boundaryInspector.css` | 20 | 0 | 0 | 0 | [source] |
 | `WF/activityDataChooser.css` | 17 | 0 | 1 | 0 | [source] |
 
-- [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
+- [x] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens. (PR #5347)
   Many raw radii are `999px` pills; check each one before changing it.
   Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294). Extension Builder completed in PR #5326.
 - [x] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`, (PR #5337)
@@ -778,11 +782,11 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 
-- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
+- [x] **A6 compensation reorder focus** (PR #5360) [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
-- [ ] **W18** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
-- [ ] **W19** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
-- [ ] **W20** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
+- [x] **W18** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
+- [x] **W19** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
+- [x] **W20** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
 
 ### Extensions
 
@@ -878,7 +882,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [x] **A1** (#5261) Source audit of the extensions with no completed report: ETL, Extension Builder, Feature
   management, Identity, Console stream, OpenTelemetry, Structured logs, Weather sample, Weaver
   workflows, JavaScript and Liquid expression editors. (PR #5326)
-- [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
+- [x] **A2** (#5262) Capture and review the surfaces listed as not captured under (PR #5347)
   [Coverage gaps](#coverage-gaps).
 - [x] **A3** (#5263) Review dark mode, including dialogs. (PR #5350)
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)

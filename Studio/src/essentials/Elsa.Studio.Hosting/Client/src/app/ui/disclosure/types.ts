@@ -38,6 +38,7 @@ export interface OverflowMenuAction {
   destructive?: boolean;
   group?: string;
   title?: string;
+  describedBy?: string;
   icon?: ReactNode;
   detail?: ReactNode;
   selection?: { type: "checkbox" | "radio"; checked: boolean };

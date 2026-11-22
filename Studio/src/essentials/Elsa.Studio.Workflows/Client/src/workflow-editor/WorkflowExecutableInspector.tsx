@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
 import { AlertCircle, Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -36,7 +36,6 @@ import {
 } from "../workflowAdapter";
 import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { ConversionPlanCaption } from "../ConversionPlanCaption";
-import { formatDate } from "../workflowFormatting";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
@@ -82,6 +81,7 @@ import {
 // The Inspector never mutates the executable; Run dispatches it, everything else reads.
 
 interface ExecutableInspectionData {
+  context: StudioEndpointContext;
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   inputSources: WorkflowExecutableInputSources | null;
@@ -117,7 +117,9 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   const sidePanelLayout = useSidePanelLayout(undefined, { palettePresent: false });
   const explainAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
+  const loadId = useRef(0);
   const load = useCallback(async () => {
+    const requestId = ++loadId.current;
     if (!artifactId) {
       setError("No executable artifact id was provided.");
       setState("failed");
@@ -134,16 +136,19 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       // The summary tree redacts binding source details (literals, pinned conversion plans); the
       // compiled bindings live behind the input-sources endpoint. Best effort — inspection still
       // renders from the summary tree when the endpoint or permission is unavailable.
+      if (requestId !== loadId.current) return;
       const chosenReferenceId = detail.chosenReference?.sourceReferenceId ?? null;
       const inputSources = chosenReferenceId
         ? await getExecutableInputSources(context, detail.artifactId, chosenReferenceId).catch(() => null)
         : null;
-      setData({ detail, activityCatalog: activityCatalog.activities, inputSources, requestedSourceReferenceId: sourceReferenceId });
+      if (requestId !== loadId.current) return;
+      setData({ context, detail, activityCatalog: activityCatalog.activities, inputSources, requestedSourceReferenceId: sourceReferenceId });
       setFrames([]);
       setSelectedNodeId(null);
       setActiveInspectorTab("identity");
       setState("ready");
     } catch (e) {
+      if (requestId !== loadId.current) return;
       setData(null);
       setError(formatExecutableLoadError(e, artifactId));
       setState("failed");
@@ -152,9 +157,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
 
   useEffect(() => {
     void load();
+    return () => { loadId.current++; };
   }, [load]);
 
-  const currentData = state === "ready" && data?.detail.artifactId === artifactId
+  const currentData = state === "ready" && data?.context === context && data.detail.artifactId === artifactId
     && data.requestedSourceReferenceId === sourceReferenceId ? data : null;
   const chosenReference = useMemo(() => findChosenReference(currentData?.detail ?? null), [currentData]);
   const requestedDefinitionId = chosenReference?.definitionId?.trim() || null;
@@ -554,7 +560,7 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
               <dt>Resume targets</dt>
               <dd>{detail.resumeTargetCount}</dd>
               <dt>Created</dt>
-              <dd>{formatDate(detail.createdAt)}</dd>
+              <dd><StudioTimestamp value={detail.createdAt} format="date-time" fallback="—" /></dd>
             </dl>
           </section>
           <section className="wf-instance-section">

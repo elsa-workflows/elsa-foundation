@@ -1,5 +1,5 @@
 import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
-import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
 import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Timer, Trash2, Undo2, UserCheck, X } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
@@ -168,6 +168,24 @@ export function CompensationScopeDesigner({
   const scopeName = runtime?.scopeLabel || "this scope";
 
   const change = (edit: (current: CompensationStep[]) => CompensationStep[], status: string) => onChangeSteps?.(edit, status);
+  const moveFocus = useRef<{ target: number; direction: "up" | "down"; step: CompensationStep; opener: Element | null } | null>(null);
+  useLayoutEffect(() => {
+    const move = moveFocus.current;
+    if (!move) return;
+    const step = steps[move.target];
+    if (!step || step.name !== move.step.name || step.activity?.nodeId !== move.step.activity?.nodeId ||
+      step.compensation?.nodeId !== move.step.compensation?.nodeId) return;
+    moveFocus.current = null;
+    if (document.activeElement !== document.body && document.activeElement !== move.opener) return;
+    const row = rootRef.current?.querySelector<HTMLElement>(`[data-step-index="${move.target}"]`);
+    const sameDirection = row?.querySelector<HTMLButtonElement>(`[data-move="${move.direction}"]:enabled`);
+    (sameDirection ?? row?.querySelector<HTMLButtonElement>("[data-move]:enabled"))?.focus();
+  });
+  const moveStep = (index: number, direction: "up" | "down", name: string) => {
+    const target = direction === "up" ? index - 1 : index + 1;
+    moveFocus.current = { target, direction, step: steps[index], opener: document.activeElement };
+    change(current => moveCompensationStep(current, index, target), `Moved ${name} ${direction}`);
+  };
   const removeActivity = (step: CompensationStep, index: number, cell: "step" | "compensation") => {
     const property = cell === "step" ? "activity" : "compensation";
     const activity = step[property];
@@ -305,7 +323,7 @@ export function CompensationScopeDesigner({
                   {readOnly ? (
                     <span className="wf-compensation-name">{name}</span>
                   ) : (
-                    <StudioField label={`Name of step ${index + 1}`}><input
+                    <StudioField className="wf-compensation-row-name" label={`Name of step ${index + 1}`}><input
                       className="wf-compensation-name-input"
                       aria-label={`Name of step ${index + 1}`}
                       aria-describedby={problemId}
@@ -320,11 +338,11 @@ export function CompensationScopeDesigner({
                   {!readOnly ? (
                     <div className="wf-compensation-actions" aria-label={`${name} actions`}>
                       <StudioButton type="button" aria-label={`Move ${name} up`} title="Move up" disabled={index === 0}
-                        onClick={() => change(current => moveCompensationStep(current, index, index - 1), `Moved ${name} up`)}>
+                        data-move="up" onClick={() => moveStep(index, "up", name)}>
                         <ArrowUp size={14} aria-hidden="true" />
                       </StudioButton>
                       <StudioButton type="button" aria-label={`Move ${name} down`} title="Move down" disabled={index === steps.length - 1}
-                        onClick={() => change(current => moveCompensationStep(current, index, index + 1), `Moved ${name} down`)}>
+                        data-move="down" onClick={() => moveStep(index, "down", name)}>
                         <ArrowDown size={14} aria-hidden="true" />
                       </StudioButton>
                       <StudioButton type="button" aria-label={`Delete step ${name}`} title="Delete step"

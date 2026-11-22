@@ -27,15 +27,15 @@ beforeEach(() => {
   flushSync(() => root.render(<BlockPromotionDialog endpoint={{} as StudioEndpointContext} context={nativeContext} createPosition={{ x: 0, y: 0 }} host={host} blockNodeId="block" onClose={vi.fn()} onReplaced={vi.fn()} />));
 });
 afterEach(() => { flushSync(() => root.unmount()); container.remove(); });
-const buttons = () => [...container.querySelectorAll<HTMLButtonElement>("button")].map(button => button.textContent);
+const buttons = () => [...globalThis.document.body.querySelectorAll<HTMLButtonElement>("button")].map(button => button.textContent);
 
 it("offers no replacement when publication is rejected and keeps the document and draft", async () => {
   const before = JSON.stringify(nativeContext.document);
-  flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Create reusable activity draft")!.click());
-  await vi.waitFor(() => expect(container.textContent).toContain("Draft created"));
-  flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Publish (rejected)")!.click());
+  flushSync(() => [...globalThis.document.body.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Create reusable activity draft")!.click());
+  await vi.waitFor(() => expect(globalThis.document.body.textContent).toContain("Draft created"));
+  flushSync(() => [...globalThis.document.body.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Publish (rejected)")!.click());
   expect(buttons()).not.toContain("Replace block with this version");
-  expect(container.textContent).toContain("Closing this dialog keeps the draft; your document has not changed.");
+  expect(globalThis.document.body.textContent).toContain("Closing this dialog keeps the draft; your document has not changed.");
   expect(host.apply).not.toHaveBeenCalled();
   expect(api.getActivityDefinitionVersion).not.toHaveBeenCalled();
   expect(JSON.stringify(nativeContext.document)).toBe(before);
