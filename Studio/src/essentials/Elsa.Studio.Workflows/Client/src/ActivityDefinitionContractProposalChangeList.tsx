@@ -49,7 +49,7 @@ function ProposalChange({
     {review.supported ? <StudioFactList aria-label={`${title} structured comparison`}>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(isCommonFact)} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(isCommonFact)} />
-    </StudioFactList> : <div className="ad-unavailable-note"><strong>Unknown structured kind</strong><span>The opaque provider payload is intentionally not rendered. This change cannot be selected.</span></div>}
+    </StudioFactList> : <div className="ad-unavailable-note"><strong>Unsupported change</strong><span>Studio cannot display or apply this type of change.</span></div>}
     {review.supported ? <TechnicalDetails><StudioFactList>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(fact => !isCommonFact(fact))} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(fact => !isCommonFact(fact))} />

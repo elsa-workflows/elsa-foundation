@@ -104,7 +104,7 @@ export function ActivityUpgradePlanReview({
         <span>{nextStage ? "Only this returned stage will be submitted." : "Resolve publication or blocking diagnostics before another Apply."}</span>
       </div>
       {nextStage ? <button type="button" className="ad-primary-action" onClick={() => onApply(nextStage)} disabled={stale || applying}>
-        {applying ? "Applying atomically…" : `Apply stage ${stages.indexOf(nextStage) + 1} atomically`}
+        {applying ? "Applying changes…" : `Apply stage ${stages.indexOf(nextStage) + 1} atomically`}
       </button> : null}
     </footer>
   </section>;

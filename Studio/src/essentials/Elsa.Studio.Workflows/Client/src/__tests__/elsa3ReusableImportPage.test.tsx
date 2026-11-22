@@ -92,7 +92,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={navigate} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     expect(checkbox(container, "Select invalid-cycle exact source version 1").disabled).toBe(true);
 
@@ -104,7 +104,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(container.textContent).toContain("Exact reusable rewrites1");
 
     click(button(container, "Apply reviewed import"));
-    await waitFor(() => expect(container.textContent).toContain("Durable import receipt"));
+    await waitFor(() => expect(container.textContent).toContain("Import results"));
     expect(applyElsa3ReusableImport).toHaveBeenCalledTimes(1);
     expect(getElsa3ReusableImportReceipt).toHaveBeenCalledTimes(1);
     expect(vi.mocked(applyElsa3ReusableImport).mock.calls[0]?.[3]).toEqual([
@@ -142,7 +142,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
     await waitFor(() => expect(container.textContent).toContain("ready for final review"));
@@ -168,7 +168,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("protected-owner-v1"));
     click(checkbox(container, "Select protected-owner exact source version 1"));
 
@@ -178,7 +178,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect((container.querySelector("input[placeholder='Authorized collection handle']") as HTMLInputElement).value).toBe("");
   });
 
-  it("cancels side-effect-free analysis and ignores a late response", async () => {
+  it("cancels preview and ignores a late response", async () => {
     let resolveAnalysis!: (value: Elsa3ReusableImportAnalysisPage) => void;
     vi.mocked(analyzeElsa3ReusableCollection).mockImplementation(() =>
       new Promise(resolve => {
@@ -188,7 +188,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     click(button(container, "Cancel analysis"));
     resolveAnalysis(page([item("late-owner", "late-owner-v1")]));
 
@@ -216,7 +216,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     await waitFor(() => expect(container.textContent).toContain("Upload cancelled"));
     expect(container.textContent).not.toContain("late-handle");
-    expect(container.textContent).not.toContain("Handle accepted");
+    expect(container.textContent).not.toContain("Upload complete");
   });
 
   it("freezes reviewed inputs and ignores an old Apply receipt after forced input invalidation", async () => {
@@ -240,7 +240,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
     await waitFor(() => expect(container.textContent).toContain("ready for final review"));
@@ -260,7 +260,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     await waitFor(() => expect(handleInput.value).toBe("fresh-collection"));
     expect(container.textContent).toContain("Fresh analysis is required");
-    expect(container.textContent).not.toContain("Durable import receipt");
+    expect(container.textContent).not.toContain("Import results");
   });
 
   it.each([
@@ -287,7 +287,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
     input(container, "Authorized collection handle", "collection");
-    click(button(container, "Analyze immutable collection"));
+    click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
     await waitFor(() => expect(container.textContent).toContain("ready for final review"));
@@ -314,7 +314,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(container.textContent).not.toContain("None of the imported reusable versions were published.");
     expect(container.textContent).toContain("1 of 2 imported reusable versions are published.");
     expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
-    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
+    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new request ID.")).toBe(1);
     expect(stickyApplyStatus(container)).toBeUndefined();
     expect(container.querySelector('[data-status="Published"] strong')?.textContent).toBe("Published");
     expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
@@ -345,7 +345,7 @@ describe("Elsa 3 reusable import workbench", () => {
           diagnostics: [{
             code: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
             message: "Version 'activity-owner-v1' was not published because the version it uses was not published.",
-            remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new idempotency key."
+            remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new request ID."
           }]
         }
       ]
@@ -357,7 +357,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(container.textContent).toContain("None of the imported reusable versions were published.");
     expect(container.textContent).not.toContain("are published");
     expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
-    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
+    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new request ID.")).toBe(1);
     expect(stickyApplyStatus(container)).toBeUndefined();
     expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
     expect(container.querySelector('[data-status="NotPublishedDependency"] strong')?.textContent)
@@ -562,13 +562,13 @@ async function applyReviewedImport(applied: Elsa3ReusableImportReceipt) {
   vi.mocked(applyElsa3ReusableImport).mockResolvedValue(applied);
   const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
   input(container, "Authorized collection handle", "collection");
-  click(button(container, "Analyze immutable collection"));
+  click(button(container, "Analyze collection"));
   await waitFor(() => expect(container.textContent).toContain("owner-v1"));
   click(checkbox(container, "Select owner exact source version 1"));
   await waitFor(() => expect(container.textContent).toContain("Required dependency"));
   click(button(container, "Review exact import"));
   click(button(container, "Apply reviewed import"));
-  await waitFor(() => expect(container.textContent).toContain("Durable import receipt"));
+  await waitFor(() => expect(container.textContent).toContain("Import results"));
   return container;
 }
 

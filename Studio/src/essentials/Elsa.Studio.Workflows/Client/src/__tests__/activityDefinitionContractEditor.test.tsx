@@ -35,7 +35,7 @@ describe("ActivityDefinitionContractEditor", () => {
       readOnly={readOnly} capabilitiesUnavailable={false} onChange={() => undefined}
       onLocalValidityChange={() => undefined} />));
     click(buttonByText(container, "Advanced"));
-    const driver = controlByLabel<HTMLSelectElement>(container, "Durable storage driver");
+    const driver = controlByLabel<HTMLSelectElement>(container, "Storage provider");
     expect(driver.value).toBe(stored);
     expect(driver.disabled).toBe(disabled);
     expect([...driver.options].map(option => option.value)).toEqual([...new Set([stored, ...active])]);
@@ -135,7 +135,7 @@ describe("ActivityDefinitionContractEditor", () => {
     expect(input.querySelector("datalist option")?.getAttribute("value")).toBe("Customer");
     click(buttonByText(input, "Advanced"));
     expect(advanced.hidden).toBe(false);
-    changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Durable storage driver"), "elsa.memory");
+    changeSelect(controlByLabel<HTMLSelectElement>(advanced, "Storage provider"), "elsa.memory");
     click(buttonByText(input, "General"));
     const keyInput = basicFields.querySelector<HTMLInputElement>("[data-contract-field='referenceKey']")!;
     changeInput(keyInput, "custom_reference");

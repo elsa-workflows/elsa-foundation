@@ -38,14 +38,14 @@ describe("Activity Definitions experience", () => {
     });
     const rendered = renderPage(getJson);
     await waitForText(rendered.container, "Visual graph");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => url.includes("providerKey=visual-graph"))).toBe(true));
     changedScope = true;
     getJson.mockClear();
     if (scope === "authentication") window.dispatchEvent(new Event(authSessionStartedEvent));
     else rendered.setBaseUrl(`${rendered.baseUrl}-changed`);
     await waitForText(rendered.container, "New provider");
-    const select = controlByLabel<HTMLSelectElement>(rendered.container, "Provider key");
+    const select = controlByLabel<HTMLSelectElement>(rendered.container, "Provider");
     expect(select.value).toBe("visual-graph");
     expect(select.selectedOptions[0].textContent).toBe("visual-graph");
     expect([...select.options].map(option => option.value)).toEqual(["", "visual-graph", "new-provider"]);
@@ -53,7 +53,7 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
     const restored = renderPage(getJson, undefined, undefined, undefined, [], undefined, undefined, { preserveHistoryState: true });
     await waitForText(restored.container, "New provider");
-    expect(controlByLabel<HTMLSelectElement>(restored.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(restored.container, "Provider").value).toBe("visual-graph");
     await restored.unmount();
   });
 
@@ -605,7 +605,7 @@ describe("Activity Definitions experience", () => {
 
     const search = rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!;
     change(search, "invoice");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
     click(buttonByText(rendered.container, "All"));
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => {
@@ -617,7 +617,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Second evaluator");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("cursor=activity-cursor-2"))).toBe(true));
     change(search, "invoice pending");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     window.history.replaceState({ ...window.history.state, unrelatedHostState: "keep-me" }, "");
     const pushState = vi.spyOn(window.history, "pushState");
 
@@ -633,7 +633,7 @@ describe("Activity Definitions experience", () => {
     expect(window.history.state.unrelatedHostState).toBe("keep-me");
 
     expect.soft(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice pending");
-    expect.soft(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key").value).toBe("visual-graph");
+    expect.soft(controlByLabel<HTMLSelectElement>(rendered.container, "Provider").value).toBe("visual-graph");
     expect.soft(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("10");
     click(buttonByText(rendered.container, "Refresh"));
     await waitFor(() => expect(getJson.mock.calls.length).toBeGreaterThan(requestCountBeforeReturn));
@@ -671,7 +671,7 @@ describe("Activity Definitions experience", () => {
       expect(entryId).not.toBe(firstOrigin.elsaActivityDefinitions.collection.entryId);
     });
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "second origin");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "50");
     click(buttonByText(rendered.container, "Built-in"));
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => {
@@ -688,7 +688,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Invoice evaluator");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin"));
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin");
-    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider").value).toBe("visual-graph");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("50");
     expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Built-in");
 
@@ -697,7 +697,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Invoice evaluator");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin"));
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin");
-    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key").value).toBe("");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider").value).toBe("");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
     expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Designed");
     await rendered.unmount();
@@ -829,7 +829,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [graphContribution()]);
     await waitForText(rendered.container, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("providerKey=visual-graph") && String(url).includes("limit=10"))).toBe(true));
     click(buttonByText(rendered.container, "Next"));
@@ -853,7 +853,7 @@ describe("Activity Definitions experience", () => {
     expect(remounted.container.textContent).not.toContain("Second evaluator");
     expect(remounted.container.textContent).toContain("scope changed");
     expect(remounted.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
-    expect(controlByLabel<HTMLSelectElement>(remounted.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(remounted.container, "Provider").value).toBe("visual-graph");
     expect(controlByLabel<HTMLSelectElement>(remounted.container, "Rows per page").value).toBe("10");
     await waitFor(() => expect(getJson.mock.calls.slice(requestStart).map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=unmounted-auth-cursor")).some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10"))).toBe(true));
 
@@ -908,7 +908,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson, queryClient, "/workflows/activity-definitions", undefined, [graphContribution()]);
     await waitForText(rendered.container, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
     click(buttonByText(rendered.container, "All"));
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("providerKey=visual-graph") && String(url).includes("limit=10"))).toBe(true));
@@ -930,7 +930,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.textContent).not.toContain("Second evaluator");
     expect(rendered.container.textContent).toContain("scope changed");
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
-    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key").value).toBe("visual-graph");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Provider").value).toBe("visual-graph");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("10");
     const newScopeRequests = getJson.mock.calls.map(([url]) => String(url)).filter(url => url.startsWith("/design/activities/definitions?") && !url.includes("cursor=scope-cursor-2"));
     expect(newScopeRequests.some(url => url.includes("search=invoice") && url.includes("providerKey=visual-graph") && url.includes("limit=10") && !url.includes("authority="))).toBe(true);
@@ -1016,7 +1016,7 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
-  it("starts editing the authorized published head when only historical draft records remain", async () => {
+  it("starts editing the authorized latest published version when only historical draft records remain", async () => {
     const postJson = vi.fn(async () => draftDetail());
     const rendered = renderOverview({
       drafts: page([draft({ status: "Published" })]),
@@ -1234,7 +1234,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Inputs, outputs & outcomes");
     expect([...rendered.container.querySelectorAll("[role=tab]")].map(tab => tab.textContent)).toEqual(["Overview", "Versions", "Usage"]);
     expect(rendered.container.querySelector("[role=tab][aria-selected=true]")?.textContent).toBe("Overview");
-    expect(rendered.container.textContent).not.toContain("Mutable work");
+    expect(rendered.container.textContent).not.toContain("Drafts");
     expect(rendered.container.textContent).not.toContain("View drafts");
     expect(rendered.container.textContent).not.toContain("Fork recommended version");
     const details = rendered.container.querySelector<HTMLDetailsElement>("details.ad-technical-details")!;
@@ -1387,7 +1387,7 @@ describe("Activity Definitions experience", () => {
       if (url.endsWith("/fork-previews")) return forkPreview();
       if (url.includes("/fork-candidates/")) throw new StudioHttpError(
         500,
-        "Outcome unknown",
+        "Upgrade status unconfirmed",
         null,
         { errorCode: "activity.fork.outcome-unknown" }
       );
@@ -1689,7 +1689,7 @@ describe("Activity Definitions experience", () => {
     advancedFilters.open = true;
 
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("authority=Design") && String(url).includes("providerKey=visual-graph"))).toBe(true));
 
     await waitFor(() => expect(buttonByText(rendered.container, "Next").disabled).toBe(false));
@@ -1915,7 +1915,7 @@ describe("Activity Definitions experience", () => {
 
     await waitForText(rendered.container, "Cached first page");
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "recovery search");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
     click(buttonByText(rendered.container, "Built-in"));
     await waitFor(() => expect(collectionRequests.some(request => request.searchParams.get("search") === "recovery search"
@@ -1971,7 +1971,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Invoice evaluator");
 
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider key"), "visual-graph");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Provider"), "visual-graph");
     change(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page"), "10");
     click(buttonByText(rendered.container, "Built-in"));
     await waitFor(() => {
@@ -2019,7 +2019,7 @@ describe("Activity Definitions experience", () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? { capabilities: [] } : Promise.reject(new Error(`Unexpected domain request ${url}`)));
     const rendered = renderPage(getJson);
 
-    await waitForText(rendered.container, "Unavailable contribution");
+    await waitForText(rendered.container, "Activity definitions unavailable");
     expect(rendered.container.textContent).toContain("No legacy activity fallback is used");
     expect(getJson).toHaveBeenCalledTimes(1);
     expect(getJson).toHaveBeenCalledWith("/capabilities");
