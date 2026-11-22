@@ -429,7 +429,7 @@ test("collections and connection creation", async ({ page }, info) => {
   const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Secrets", exact: true }).click();
   await page.getByRole("button", { name: "New secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
@@ -654,10 +654,10 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   const settingsDocument = await page.evaluate(() => performance.timeOrigin);
   if (compactSettings) {
     const backendBefore = new URL(page.url()).searchParams.get("backend");
-    await settingsSelect.selectOption({ label: "Runtime evidence settings" });
+    await settingsSelect.selectOption({ label: "Runtime diagnostics" });
     await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
-    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime diagnostics");
     await settingsSelect.selectOption({ label: "Activity availability" });
     await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
     await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
@@ -665,10 +665,10 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
     await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
   } else {
-    await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
+    await settingsSections.getByRole("link", { name: "Runtime diagnostics", exact: true }).click({ modifiers: ["Alt"] });
     await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
     await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
-    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
     const originalSettingsUrl = page.url();
     const nativeSectionPage = page.context().waitForEvent("page");
@@ -688,8 +688,8 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   }
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
-  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
+  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime diagnostics");
   else await expect(settingsSections).toContainText("Runtime");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "runtime-settings");

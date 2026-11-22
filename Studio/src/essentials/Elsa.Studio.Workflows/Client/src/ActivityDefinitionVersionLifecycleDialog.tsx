@@ -189,7 +189,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
       {evidenceQuery.data ? evidenceQuery.data.directDependencies.consistency.isAuthoritative && evidenceQuery.data.inboundUsage.consistency.asOf
         ? <><dl className="ad-review-facts"><div><dt>Direct dependency authority</dt><dd>{evidenceQuery.data.directDependencies.consistency.kind}</dd></div><div><dt>Exact direct dependencies</dt><dd>{evidenceQuery.data.directDependencies.items.length}</dd></div><div><dt>Usage snapshot as of</dt><dd>{formatTimestamp(evidenceQuery.data.inboundUsage.consistency.asOf)}</dd></div><div><dt>Visible inbound uses</dt><dd>{evidenceQuery.data.inboundUsage.items.length}</dd></div><div><dt>Usage evidence kind</dt><dd>{evidenceQuery.data.inboundUsage.consistency.kind}</dd></div><div><dt>Usage sequence</dt><dd>{evidenceQuery.data.inboundUsage.consistency.asOfSequence ?? "Not supplied"}</dd></div></dl><p>The API distinguishes authoritative immutable direct dependencies from the rebuildable inbound/transitive usage projection. Counts are bounded to the exact visible as-of snapshot.</p></>
         : <div className="ad-inline-error" role="alert">The API did not return authoritative direct dependencies plus an as-of usage snapshot. Revocation remains disabled.</div> : null}
-      <div className="ad-inline-error" role="alert"><strong>Terminal Host Policy consequence</strong><span> Revoked versions cannot be selected for new placements or used as closed dependencies. Immutable artifacts, identities, dependency evidence, and Runtime Evidence are preserved; no occurrence is upgraded automatically.</span></div>
+      <div className="ad-inline-error" role="alert"><strong>Terminal Host Policy consequence</strong><span> Revoked versions cannot be selected for new placements or used as closed dependencies. Immutable artifacts, identities, dependency evidence, and run data are preserved; no occurrence is upgraded automatically.</span></div>
       <StudioField className="ad-dialog-field" label={<><span>Type semantic version <code>{version.version.version}</code> to confirm</span></>}><input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></StudioField>
     </section> : null}
 
@@ -255,7 +255,7 @@ function consequences(action: ActivityDefinitionVersionLifecycleAction) {
   ];
   return [
     "Revocation is terminal and removes the version from direct selection and closed-dependency use.",
-    "Immutable artifacts and Runtime Evidence remain preserved.",
+    "Immutable artifacts and run data remain preserved.",
     "No occurrence is upgraded automatically."
   ];
 }

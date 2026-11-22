@@ -165,7 +165,7 @@ describe("incident next-step state guidance", () => {
     });
 
     expect(container.textContent).toContain("This incident is historical.");
-    expect(container.textContent).not.toContain("Review the run evidence and any available actions below");
+    expect(container.textContent).not.toContain("Review the run data and any available actions below");
   });
 
   it("gives an active non-waiting blocker a useful inspection and operator handoff", () => {
@@ -182,7 +182,7 @@ describe("incident next-step state guidance", () => {
     });
 
     expect(container.querySelector(".wf-incident-next-step-copy")?.textContent)
-      .toBe("This blocking incident is not waiting for an operator action. Inspect its evidence or share it with an operator.");
+      .toBe("This blocking incident is not waiting for an operator action. Inspect its run data or share it with an operator.");
     expect(container.textContent).not.toContain("any available actions below");
   });
 
@@ -197,7 +197,7 @@ describe("incident next-step state guidance", () => {
     });
 
     expect(container.textContent).toContain(`This run has ended (${runStatus}).`);
-    expect(container.textContent).not.toContain("Review the run evidence and any available actions below");
+    expect(container.textContent).not.toContain("Review the run data and any available actions below");
   });
 
   it("does not turn unknown or partial retry evidence into a claim that no retry is scheduled", () => {

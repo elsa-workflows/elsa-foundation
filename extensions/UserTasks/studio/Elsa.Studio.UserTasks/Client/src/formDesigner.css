@@ -77,7 +77,7 @@
 
 @media (width <= 700px) {
   .user-task-designer__header { align-items: flex-start; flex-wrap: wrap; }
-  .user-task-designer__toolbar-actions { justify-content: flex-start; }
+  .user-task-designer__toolbar-actions { width: 100%; min-width: 0; justify-content: flex-start; }
   .user-task-designer__source-toolbar { align-items: flex-start; flex-direction: column; }
   .user-task-designer__source-actions { justify-content: flex-end; width: 100%; }
   .user-task-designer__field-heading { grid-template-columns: auto minmax(0, 1fr); }

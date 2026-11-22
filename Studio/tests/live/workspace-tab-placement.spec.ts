@@ -35,7 +35,7 @@ for (const mode of ["light", "dark"] as const) {
   test(`new tab follows the last tab and stays visible on overflow in ${mode}`, async ({ page }, info) => {
     await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
     await signIn(page);
-    await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+    await page.getByRole("link", { name: "Decisions", exact: true }).first().click();
     const list = page.getByRole("tablist", { name: "Open screens", exact: true });
     const tabs = list.getByRole("tab");
     const add = page.getByRole("button", { name: "New tab", exact: true });
@@ -61,10 +61,14 @@ for (const mode of ["light", "dark"] as const) {
     expect(growing.plusLeft).toBeGreaterThan(sparse.plusLeft);
     expect(growing.menuLeft).toBeCloseTo(sparse.menuLeft, 0);
 
+    // Keep the named tab available for the switcher while clean Home tabs age out.
+    await tabs.first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: /Pin tab/ }).click();
     for (let count = 4; count <= 20; count++) {
       await add.click();
-      await expect(tabs).toHaveCount(count);
+      await expect(tabs).toHaveCount(Math.min(count, 12));
     }
+    await page.setViewportSize({ width: 900, height: 900 });
     await expect.poll(async () => {
       const geometry = await stripGeometry(page);
       return geometry.scrollWidth > geometry.clientWidth;
@@ -80,7 +84,7 @@ for (const mode of ["light", "dark"] as const) {
     await expect.poll(async () => (await stripGeometry(page)).plusVisible).toBe(true);
     await capture(page, info, "overflow-start");
     await switcher.click();
-    await page.getByRole("menuitemradio", { name: "Workflows", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Decisions", exact: true }).click();
     await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
 
     await page.setViewportSize({ width: 360, height: 900 });
@@ -93,7 +97,7 @@ for (const mode of ["light", "dark"] as const) {
     expect(narrow.rightGap).toBeLessThanOrEqual(12);
     expect(narrow.pageScroll).toBeLessThanOrEqual(narrow.pageWidth + 1);
     await add.click();
-    await expect(tabs).toHaveCount(21);
+    await expect(tabs).toHaveCount(12);
     await expect.poll(() => new URL(page.url()).pathname).toBe("/");
   });
 }

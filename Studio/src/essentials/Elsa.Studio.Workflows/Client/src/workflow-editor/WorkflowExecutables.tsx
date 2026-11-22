@@ -282,7 +282,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                     </span>
                     <span className="wf-executable-identifiers" role="cell">
                       <span className="wf-list-primary-id">
-                        <CopyableIdentifier label="Artifact ID" value={executable.artifactId} />
+                        <CopyableIdentifier label="Executable ID" value={executable.artifactId} />
                       </span>
                       <WorkflowListIdentifiers kind="Workflow executable" name={primaryName} identifiers={identifiers}>
                         {retired ? <p>Retired · Retained for inspection</p> : null}
@@ -379,7 +379,7 @@ function openExecutablePublicationManagement(definitionId: string) {
 function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): WorkflowListIdentifier[] {
   const definitionIds = getExecutableDefinitionIds(executable);
   const items: WorkflowListIdentifier[] = [
-    { label: "Artifact hash", value: executable.artifactHash },
+    { label: "Executable hash", value: executable.artifactHash },
     { label: "Source ID", value: executable.sourceId || executable.definitionVersionId },
     { label: "Definition version ID", value: executable.definitionVersionId },
     ...definitionIds.map((id, index) => ({
@@ -607,11 +607,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
               <div className="wf-artifact-card-values">
                 <span className="wf-cell-line">
                   <code title={artifact.artifactId}>{artifact.artifactId}</code>
-                  <CopyValueButton scope={context} value={artifact.artifactId} ariaLabel={`Copy artifact ID ${artifact.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactId} ariaLabel={`Copy executable ID ${artifact.artifactId}`} copiedLabel="executable ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
                 <span className="wf-cell-line wf-cell-line-muted">
                   <code title={artifact.artifactHash}>{artifact.artifactHash}</code>
-                  <CopyValueButton scope={context} value={artifact.artifactHash} ariaLabel={`Copy artifact hash ${artifact.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <CopyValueButton scope={context} value={artifact.artifactHash} ariaLabel={`Copy executable hash ${artifact.artifactHash}`} copiedLabel="executable hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                 </span>
               </div>
               <dl>

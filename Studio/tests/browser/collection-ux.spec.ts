@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"]) {
     await identifiers.hover();
     expect(await background()).toBe(hovered);
     await page.screenshot({ path: info.outputPath("identifiers-hover.png"), fullPage: true });
-    await row.getByRole("button", { name: "Copy Artifact ID", exact: true }).click();
+    await row.getByRole("button", { name: "Copy Executable ID", exact: true }).click();
     await expect(page).toHaveURL(/collection-ux\.html/);
     await row.getByRole("button", { name: "Identifiers for Hello World", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Workflow executable identifiers for Hello World", exact: true })).toBeVisible();
@@ -184,7 +184,7 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
       fieldWidths.push(...positions.map(position => position.width));
     }
     expect(Math.max(...fieldWidths) - Math.min(...fieldWidths)).toBeLessThanOrEqual(1);
-    for (const label of ["Workflow run execution id", "Workflow run artifact", "Workflow run correlation", "Workflow run from", "Workflow run to"]) {
+    for (const label of ["Workflow run execution id", "Workflow run executable", "Workflow run correlation", "Workflow run from", "Workflow run to"]) {
       const control = advancedFilters.getByLabel(label);
       await expect(control).toBeVisible();
       expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
