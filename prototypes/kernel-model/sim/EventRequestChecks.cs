@@ -149,7 +149,10 @@ internal static class EventRequestChecks
         var publication = new EventRow(key, "same-id", "legacy", now + 60_000);
         await Events.SubscribeAsync(store, old, 1);
         var legacy = await store.AddEventAsync(new EventRoute(publication, old).Delivery());
-        store.Subscriptions.Remove(old);
+        var lease = (await store.TakeAsync(0, "event-shape", Defaults.Lease))!;
+        var remove = new TurnCommit("", null, null, [], [], [], [], [old], null);
+        var removed = await store.CommitAsync(new(0, lease.Epoch, lease.Position, Defaults.Lease, false, [remove], [], []));
+        if (!removed.Landed) throw new InvalidOperationException("The legacy start subscription was not removed.");
         store.SetFoundationEventStart("acme", "signal", "start", start);
         var bound = store.Subscriptions.Single();
 
@@ -161,7 +164,6 @@ internal static class EventRequestChecks
             "the legacy discovery and direct route cannot borrow a bound start subscription's authority");
         var request = publication with { FoundationTenant = "acme", Payload = "tenant" };
         var receipt = store.PublishRequest(request, "local-registration");
-        var lease = (await store.TakeAsync(0, "event-shape", Defaults.Lease))!;
         var polled = await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 50);
         check(receipt is [{ Added: true, Target: var started }] && started != legacy.Target &&
             polled.Messages.Any(row => row.Message.Target == started && row.Message.Payload == "tenant") &&

@@ -78,6 +78,8 @@ public sealed record EventRow(
     internal Guid? FoundationIncarnation { get; init; }
 
     internal InboxKey? FoundationPublishTicket { get; init; }
+    internal long? FoundationAcceptedAt { get; init; }
+    internal bool FoundationPublishFailed { get; init; }
 }
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
@@ -174,6 +176,7 @@ public sealed record TurnCommit(
     internal long? FoundationCatchUpBefore { get; init; }
     internal int? FoundationCatchUpExpected { get; init; }
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
+    internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
 }
 
@@ -186,6 +189,8 @@ public sealed record CommitBatch(
 {
     /// <summary>Counted clears of pending job trials at this batch's exact fence epochs.</summary>
     public IReadOnlyList<InboxKey> ClearJobTrials { get; init; } = [];
+
+    internal FoundationPublicationReservation? PublicationReservation { get; init; }
 
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
@@ -469,6 +474,9 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
     internal StringComparer? FoundationKeyEquality { get; init; }
 
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
+        => Delivery(partitions, replyTo, null);
+
+    internal EventDelivery Delivery(int partitions, string? replyTo, InboxKey? scopedKey)
     {
         if (Event.FoundationTenant != Wait.FoundationTenant ||
             !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
@@ -476,12 +484,14 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
         var delivery = Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo };
         if (Event is { FoundationTenant: not null, FoundationIncarnation: { } incarnation })
         {
+            var key = scopedKey ?? new InboxKey(FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                InboxKey.EventDeliveryScope, FoundationEventIdentity.Match(Event, incarnation));
             delivery = delivery with
             {
-                Id = FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                Id = key.Id,
                 Payload = FoundationEventDelivery.Encode(Event, Wait, incarnation)
             };
-            return new(delivery, FoundationEventIdentity.Match(Event, incarnation), Wait.FoundationTenant);
+            return new(delivery, key.Match!, Wait.FoundationTenant);
         }
         var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
         {

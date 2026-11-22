@@ -47,7 +47,7 @@ public sealed partial class InMemoryStore
         foreach (var subscription in turn.Subscribed)
         {
             var registered = subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now };
-            Subscriptions.Add(registered);
+            AddRegisteredSubscription(registered);
             if (registered.FoundationKeepsEvents)
                 _foundationCatchUpCoverage.Add(registered.FoundationIncarnation!.Value, new(registered, message!.ParkCatchUp!));
         }
@@ -64,7 +64,7 @@ public sealed partial class InMemoryStore
         if (turn.FoundationCatchUpStep is not { } key)
         {
             if (turn.FoundationCatchUpBefore is not null || turn.FoundationCatchUpExpected is not null) throw InvalidCatchUpFailure();
-            if (turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
+            if (turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(key => Messages.GetValueOrDefault(key)?.Message.HasFencedEventStep == true))
                 throw new StoreException(Failure.Definite, "A recovery catch-up ticket requires its own fenced step.");
             return null;
         }
@@ -160,12 +160,17 @@ public sealed partial class InMemoryStore
 
     private void ValidateParkCatchUpMarks(CommitBatch batch, IReadOnlyDictionary<int, long> epochs)
     {
-        if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
+        if (batch.PublicationReservation is { } reserved && Messages.GetValueOrDefault(reserved.Key) is not
+                { Done: false, Message: { FoundationPublish: not null, HasIssuedTicket: true } })
+            throw InvalidPublicationPage();
+        if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.HasFencedEventStep == true))
             throw new StoreException(Failure.Definite, "A catch-up ticket is marked only when its step begins.");
         foreach (var key in batch.Trial)
-            if (Messages.GetValueOrDefault(key) is { Message.ParkCatchUp: not null } ticket &&
+            if (Messages.GetValueOrDefault(key) is { Message.HasFencedEventStep: true } ticket &&
                 (ticket.Done || !epochs.ContainsKey(ticket.Message.Target.Partition) || batch.Trial.Count != 1 ||
-                    batch.Turns.Count != 0 || batch.Seen.Count != 0))
+                    batch.Turns.Count != 0 || batch.Seen.Count != 0 || ticket.Message.FoundationPublish is not null &&
+                    (batch.PublicationReservation is not { } expected || expected.Sequence != ticket.Seq ||
+                        expected.Attempts != ticket.Attempts)))
                 throw new StoreException(Failure.Definite, "A catch-up reservation requires its own pending ticket and partition fence.");
     }
 
@@ -281,12 +286,6 @@ public sealed partial class InMemoryStore
     private bool OwedToCatchUp(EventRow publication) => _foundationCatchUpCoverage.Values.Any(entry =>
         entry.Wait.FoundationTenant == publication.FoundationTenant && _foundationEventEquality.Equals(entry.Wait.Key, publication.Key) &&
         entry.Ticket.Entitlement <= publication.KeepUntil);
-
-    private bool RemoveRegisteredSubscription(SubscriptionRow subscription)
-    {
-        RemoveCatchUpCoverage(subscription);
-        return Subscriptions.Remove(subscription);
-    }
 
     private void RemoveCatchUpCoverage(SubscriptionRow subscription)
     {

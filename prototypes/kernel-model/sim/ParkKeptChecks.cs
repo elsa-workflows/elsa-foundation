@@ -714,8 +714,7 @@ internal static class ParkKeptChecks
         var id = store.Instances.Values.Single().Id;
         var count = landedBeforeLoss ? InMemoryStore.ParkPageLimit + 1 : 1;
         for (var index = 0; index < count; index++)
-            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"owed-{index:D3}", Contract.Kinds.Event, "payload",
-                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+            await StoreMatchedEvent(store, scope, "approval", $"owed-{index:D3}", "payload", now + 20);
         var mark = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(mark)));
         await worker.PollAsync();
@@ -815,8 +814,7 @@ internal static class ParkKeptChecks
         var before = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var count = recoverAfterFailure ? 171 : 1;
         for (var index = 0; index < count; index++)
-            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"kept-{index:D4}", Contract.Kinds.Event, "owed",
-                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+            await StoreMatchedEvent(store, scope, "approval", $"kept-{index:D4}", "owed", now + 20);
         await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(before)));
         await worker.PollAsync();
         await worker.LoadAsync();
@@ -900,6 +898,11 @@ internal static class ParkKeptChecks
         }
     }
 
+    // These fixtures start with the publisher already settled so an injected step failure targets recovery.
+    private static ValueTask StoreMatchedEvent(InMemoryStore store, Contract.BoundScope scope, string correlation,
+        string id, string payload, long keepUntil) => store.PublishAsync(new EventRow(scope.Tenant + "_" + correlation, id, payload, keepUntil)
+            { FoundationTenant = scope.Tenant });
+
     private static async Task CheckRecoverKeptEvents(int count, bool revoke, Action<bool, string> check, bool byteCut = false,
         bool sweepBackstep = false, bool repeatPublication = false, bool probePageWork = false,
         bool retryBeforeOpen = false, bool zeroWindow = false)
@@ -939,12 +942,9 @@ internal static class ParkKeptChecks
         var publisher = new Contract.Target.Event(probePageWork ? "Approval" : "approval");
         string[] expected = [.. Enumerable.Range(0, count).Select(index => $"owed-{index:D4}")];
         foreach (var eventId in expected)
-            await ingress.SendAsync(scope, publisher, eventId, Contract.Kinds.Event,
+            await StoreMatchedEvent(store, scope, publisher.CorrelationKey, eventId,
                 byteCut && eventId == expected[0] ? new string('x', ParkRecoveryCredit.LimitBytes) : "payload",
-                new Contract.AddOptions(KeepFor: zeroWindow ? TimeSpan.Zero : TimeSpan.FromMilliseconds(20)));
-        if (zeroWindow)
-            check(store.FoundationEvents.Values.Single().KeepUntil == now,
-                "an explicit zero keep window includes its own acceptance timestamp");
+                now + (zeroWindow ? 0 : 20));
         if (retryBeforeOpen)
         {
             var key = (scope.Tenant + "_approval", expected[0]);
@@ -956,8 +956,7 @@ internal static class ParkKeptChecks
                 "a retry after the window leaves the unswept publication intact before there is any coverage");
             now = initial;
         }
-        await ingress.SendAsync(scope, publisher, "expired-before-open", Contract.Kinds.Event, "too old",
-            zeroWindow ? null : new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await StoreMatchedEvent(store, scope, publisher.CorrelationKey, "expired-before-open", "too old", now + (zeroWindow ? -1 : 1));
         await Pump(owner);
         if (!zeroWindow) now += 2;
         var fixture = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
