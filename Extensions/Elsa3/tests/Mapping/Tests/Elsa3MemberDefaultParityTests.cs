@@ -181,12 +181,12 @@ public sealed class Elsa3MemberDefaultParityTests
     }
 
     [Theory]
-    [InlineData("\"extra\":1,\"extra\":2")]
-    [InlineData("\"memoryReference\":{\"id\":\"another-ignored-reference\"}")]
-    [InlineData("\"expression\":{\"type\":\"Literal\",\"value\":true},\"expression\":{\"type\":\"Literal\",\"value\":false}")]
-    public async Task Removing_ignored_memory_metadata_keeps_last_property_semantics_without_throwing(string extra)
+    [InlineData("\"extra\":1,\"extra\":2", false)]
+    [InlineData("\"memoryReference\":{\"id\":\"another-ignored-reference\"}", false)]
+    [InlineData("\"expression\":{\"type\":\"Literal\",\"value\":false}", true)]
+    public async Task Removing_ignored_memory_metadata_keeps_last_property_semantics_without_throwing(string extra, bool first)
     {
-        var shape = "{\"typeName\":\"Boolean\",\"expression\":{\"type\":\"Literal\",\"value\":false},\"memoryReference\":{\"id\":\"ignored\"}," + extra + "}";
+        var shape = "{\"typeName\":\"Boolean\",\"expression\":{\"type\":\"Literal\",\"value\":" + (first ? "true" : "false") + "},\"memoryReference\":{\"id\":\"ignored\"}," + extra + "}";
         var result = await Convert("Elsa.For", "outerBoundInclusive", shape);
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var input = Input(Node(result.Value!.State, "subject"), "EndInclusive");
