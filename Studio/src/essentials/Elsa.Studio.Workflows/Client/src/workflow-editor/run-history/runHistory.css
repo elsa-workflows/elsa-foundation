@@ -52,13 +52,13 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 16px;
+  font-size: var(--studio-section-title-size);
 }
 
 .wf-history-heading p,
 .wf-history-eyebrow {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   color: var(--studio-text-muted);
 }
 
@@ -89,7 +89,7 @@
 .wf-history-reading-controls {
   align-items: center;
   padding-bottom: 10px;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-reading-controls > button[aria-pressed="true"] {
@@ -104,7 +104,7 @@
   gap: 6px;
   margin: 8px 0;
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-checkbox input {
@@ -119,7 +119,7 @@
   border-radius: var(--studio-radius-sm);
   background: var(--studio-surface-muted);
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-coverage p {
@@ -140,7 +140,7 @@
 .wf-history-note {
   margin: 10px 16px;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
 }
 
@@ -198,7 +198,7 @@
 .wf-history-position {
   padding-top: 2px;
   color: var(--studio-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-variant-numeric: tabular-nums;
 }
 
@@ -224,14 +224,14 @@
 }
 
 .wf-history-event-body strong {
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 600;
 }
 
 .wf-history-event-body small {
   margin-top: 3px;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-event-body small svg {
@@ -250,7 +250,7 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 8px 16px;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-more {
@@ -295,7 +295,7 @@
   align-items: start;
   gap: 10px;
   margin: 14px 0;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-facts dt {
@@ -341,7 +341,7 @@
 .wf-history-bookmark-record p {
   margin: 6px 0;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-badge {
@@ -349,7 +349,7 @@
   padding: 2px 7px;
   border-radius: var(--studio-radius-sm);
   background: var(--studio-surface-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-badge[data-status="Active"] {
@@ -549,18 +549,18 @@
 .wf-history-run-summary h2,
 .wf-history-run-summary h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--studio-section-title-size);
 }
 
 .wf-history-run-summary p {
   margin: 6px 0 0;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-history-run-summary h3 {
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--studio-section-title-size);
 }
 
 .wf-history-waits {
@@ -595,7 +595,7 @@
 .wf-history-waits span,
 .wf-history-date,
 .wf-history-range-gap {
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   color: var(--studio-text-muted);
 }
 

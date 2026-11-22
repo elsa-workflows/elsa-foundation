@@ -124,3 +124,17 @@ for (const theme of ["light", "dark"] as const) {
     expect(Math.abs(Number(await range.inputValue()) - index)).toBeLessThanOrEqual(2);
   });
 }
+
+for (const width of [320, 1440]) {
+  test(`playback respects the public typography scale (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/activity-playback.html");
+    const playback = page.getByRole("region", { name: "Activity playback", exact: true });
+    await expect(playback).toBeVisible();
+    await page.evaluate(() => document.documentElement.style.setProperty("--studio-label-size", "19px"));
+    await expect(playback.locator(".wf-playback-note").first()).toHaveCSS("font-size", "19px");
+    await expect(playback.locator(".wf-playback-position")).toHaveCSS("font-size", "19px");
+    await expect.poll(() => playback.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath("playback-typography.png"), fullPage: true });
+  });
+}

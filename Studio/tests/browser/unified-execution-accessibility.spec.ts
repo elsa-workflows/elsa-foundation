@@ -2,12 +2,6 @@ import { expect, test, type Page } from "@playwright/test";
 import { openExecutionInputs, openExecutionOutputs } from "./executionDetails";
 import axe from "axe-core";
 
-async function showRunData(page: Page, host: string) {
-  if (host !== "instance") return;
-  const data = page.getByRole("complementary", { name: "Run details panel", exact: true }).getByRole("tab", { name: "Data", exact: true });
-  if (await data.getAttribute("aria-selected") !== "true") await data.press("Enter");
-}
-
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`keeps live inspection keyboard accessible in the ${host} (${theme}, ${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });

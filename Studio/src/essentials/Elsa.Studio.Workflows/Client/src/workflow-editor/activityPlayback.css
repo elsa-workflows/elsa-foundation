@@ -24,7 +24,7 @@
 .wf-playback-heading > span,
 .wf-playback-note {
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-playback-state {
@@ -47,7 +47,7 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-playback-position span {
@@ -70,7 +70,7 @@
   align-items: center;
   gap: 10px;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-playback-scrubber input {
@@ -109,7 +109,7 @@
 
 .wf-playback-details {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-playback-details dl {

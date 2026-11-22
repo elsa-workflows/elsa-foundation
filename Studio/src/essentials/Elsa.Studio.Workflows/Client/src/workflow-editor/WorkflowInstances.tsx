@@ -45,8 +45,7 @@ import {
 import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
-import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
-import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
+import { WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
