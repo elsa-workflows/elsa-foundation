@@ -3,8 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-// Nullable<JsonElement> normally reads JSON null as no value. Inline storage requires a present payload,
-// including JSON null; external/none storage's legacy inlineValue:null means no inline payload.
+// Nullable<JsonElement> normally reads JSON null as no value. Only Inline storage requires that null
+// to remain a present payload. Delegate the ordinary shape to STJ so host options/converters still apply.
 internal sealed class DurableValueStateJsonConverter : JsonConverter<DurableValueState>
 {
     public DurableValueStateJsonConverter() { }
@@ -12,56 +12,54 @@ internal sealed class DurableValueStateJsonConverter : JsonConverter<DurableValu
     public override DurableValueState Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         using var document = JsonDocument.ParseValue(ref reader);
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object) throw new JsonException("Durable value state must be an object.");
-        JsonElement? Property(string name)
+        var shape = document.RootElement.Deserialize<SerializationShape>(options)
+            ?? throw new JsonException("Durable value state must be an object.");
+        var inline = shape.InlineValue;
+        if (inline is null && shape.Storage == DurableValueStorage.Inline)
         {
-            var jsonName = options.PropertyNamingPolicy?.ConvertName(name) ?? name;
-            JsonElement? result = null;
-            foreach (var property in root.EnumerateObject())
-                if (string.Equals(property.Name, jsonName, options.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                    result = property.Value;
-            return result;
+            var name = options.PropertyNamingPolicy?.ConvertName(nameof(DurableValueState.InlineValue)) ?? nameof(DurableValueState.InlineValue);
+            JsonElement? raw = null;
+            foreach (var property in document.RootElement.EnumerateObject())
+                if (string.Equals(property.Name, name, options.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    raw = property.Value;
+            if (raw is { ValueKind: JsonValueKind.Null } value) inline = value.Clone();
         }
-        T? ReadProperty<T>(string name) => Property(name) is { } property ? property.Deserialize<T>(options) : default;
-        var storage = ReadProperty<DurableValueStorage>(nameof(DurableValueState.Storage));
-        var payload = Property(nameof(DurableValueState.InlineValue));
-        var inline = payload is { } value && (value.ValueKind != JsonValueKind.Null || storage == DurableValueStorage.Inline)
-            ? value.Clone() : (JsonElement?)null;
-        return new DurableValueState(
-            ReadProperty<string>(nameof(DurableValueState.DurableValueId))!,
-            ReadProperty<string>(nameof(DurableValueState.WorkflowExecutionId))!,
-            ReadProperty<string>(nameof(DurableValueState.ValueId))!,
-            ReadProperty<RuntimeValueTypeDescriptor>(nameof(DurableValueState.Type))!,
-            ReadProperty<DurableValueLifecycle>(nameof(DurableValueState.Lifecycle)), storage, inline,
-            ReadProperty<DurableValueExternalReference>(nameof(DurableValueState.ExternalReference)),
-            ReadProperty<string>(nameof(DurableValueState.SourceActivityExecutionId)),
-            ReadProperty<DateTimeOffset>(nameof(DurableValueState.CapturedAt)),
-            ReadProperty<IReadOnlyDictionary<string, string>>(nameof(DurableValueState.Metadata))!);
+        return new DurableValueState(shape.DurableValueId, shape.WorkflowExecutionId, shape.ValueId, shape.Type,
+            shape.Lifecycle, shape.Storage, inline, shape.ExternalReference, shape.SourceActivityExecutionId, shape.CapturedAt, shape.Metadata);
     }
 
-    public override void Write(Utf8JsonWriter writer, DurableValueState value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, DurableValueState value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, new SerializationShape(value), options);
+
+    // Match the model's constructor nullability/required parameters and get-only properties. The serializer
+    // enforces required/null/unknown-member rules and its scalar/collection ignore behavior on this shape.
+    private sealed class SerializationShape
     {
-        void WriteProperty<T>(string name, T item)
+        [JsonConstructor]
+        public SerializationShape(string durableValueId, string workflowExecutionId, string valueId, RuntimeValueTypeDescriptor type,
+            DurableValueLifecycle lifecycle, DurableValueStorage storage, JsonElement? inlineValue,
+            DurableValueExternalReference? externalReference, string? sourceActivityExecutionId, DateTimeOffset capturedAt,
+            IReadOnlyDictionary<string, string> metadata)
         {
-            if (options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingNull && item is null ||
-                options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingDefault && EqualityComparer<T>.Default.Equals(item, default))
-                return;
-            writer.WritePropertyName(options.PropertyNamingPolicy?.ConvertName(name) ?? name);
-            JsonSerializer.Serialize(writer, item, options);
+            DurableValueId = durableValueId; WorkflowExecutionId = workflowExecutionId; ValueId = valueId; Type = type;
+            Lifecycle = lifecycle; Storage = storage; InlineValue = inlineValue; ExternalReference = externalReference;
+            SourceActivityExecutionId = sourceActivityExecutionId; CapturedAt = capturedAt; Metadata = metadata;
         }
-        writer.WriteStartObject();
-        WriteProperty(nameof(value.DurableValueId), value.DurableValueId);
-        WriteProperty(nameof(value.WorkflowExecutionId), value.WorkflowExecutionId);
-        WriteProperty(nameof(value.ValueId), value.ValueId);
-        WriteProperty(nameof(value.Type), value.Type);
-        WriteProperty(nameof(value.Lifecycle), value.Lifecycle);
-        WriteProperty(nameof(value.Storage), value.Storage);
-        WriteProperty(nameof(value.InlineValue), value.InlineValue);
-        WriteProperty(nameof(value.ExternalReference), value.ExternalReference);
-        WriteProperty(nameof(value.SourceActivityExecutionId), value.SourceActivityExecutionId);
-        WriteProperty(nameof(value.CapturedAt), value.CapturedAt);
-        WriteProperty(nameof(value.Metadata), value.Metadata);
-        writer.WriteEndObject();
+
+        public SerializationShape(DurableValueState value) : this(value.DurableValueId, value.WorkflowExecutionId, value.ValueId,
+            value.Type, value.Lifecycle, value.Storage, value.InlineValue, value.ExternalReference, value.SourceActivityExecutionId,
+            value.CapturedAt, value.Metadata) { }
+
+        public string DurableValueId { get; }
+        public string WorkflowExecutionId { get; }
+        public string ValueId { get; }
+        public RuntimeValueTypeDescriptor Type { get; }
+        public DurableValueLifecycle Lifecycle { get; }
+        public DurableValueStorage Storage { get; }
+        public JsonElement? InlineValue { get; }
+        public DurableValueExternalReference? ExternalReference { get; }
+        public string? SourceActivityExecutionId { get; }
+        public DateTimeOffset CapturedAt { get; }
+        public IReadOnlyDictionary<string, string> Metadata { get; }
     }
 }

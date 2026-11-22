@@ -125,7 +125,16 @@ export async function stepWorkflowStateJourney(page: Page, info: TestInfo, captu
   await api(`${route}/collections/${uploaded.collectionHandle}/selection`, "POST", selection);
   const applied = await api<{ sources: { workflowVersionId: string; workflowDefinitionId: string }[] }>(`${route}/collections/${uploaded.collectionHandle}/apply`, "POST", { ...selection, idempotencyKey: `state-${stamp}` });
   const imported = applied.sources[0]; tracked.push(imported.workflowDefinitionId);
-  await author(imported.workflowDefinitionId, "seed");
+  // Import materializes an immutable version. Inspect its exact body through a supported editable copy;
+  // the runtime proof below still publishes and executes the original imported version.
+  const importedVersion = await api<{ state: unknown }>(`/design/workflows/versions/${imported.workflowVersionId}`);
+  const editableImport = await api<Definition>("/design/workflows/definitions/submit", "POST", { name: `Imported body draft ${stamp}`, state: importedVersion.state });
+  tracked.push(editableImport.definition.id);
+  const copiedVersion = await api<{ state: unknown }>(`/design/workflows/versions/${editableImport.version.id}`);
+  expect(copiedVersion.state).toEqual(importedVersion.state);
+  await info.attach("imported-body-provenance.json", { body: JSON.stringify({ original: imported, editableDefinitionId: editableImport.definition.id,
+    editableVersionId: editableImport.version.id, state: importedVersion.state }, null, 2), contentType: "application/json" });
+  await author(editableImport.definition.id, "seed");
   await expect(page.getByRole("note").filter({ hasText: /May change: output Total/ })).toBeVisible();
   await capture(page, info, "imported-effects");
   const importedRun = await run(imported.workflowVersionId, "Completed", "seed");
