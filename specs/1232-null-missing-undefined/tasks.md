@@ -37,7 +37,7 @@ red without the change. xUnit only.
   `GraphActivity`'s ambient variable read), `null` for a
   type that accepts it; publication refuses a date, time, `TimeSpan` or `Guid` variable without a declared default
   (`VF-ACT-003`). Update S-4's test for spec 1222 US1 scenario 6 for a value-type variable
-- [ ] T005 [P] Add public `NullPolicyDefaults` in `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
+- [ ] T005 [P] Add public `NullPolicyDefaults` in `essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
   (FR-001b) with two lookups: `TryGetTypeDefault(alias)` for authored members (registry aliases) and
   `TryGetTypeDefault(Type)` for .NET activity inputs (`bool`, every numeric primitive including `float`, `short`,
   `byte` and `uint`, and any enum). A default for `Boolean`, the number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
@@ -45,8 +45,8 @@ red without the change. xUnit only.
   .NET enum and `float` having one. This is the shared domain API consumed by Runtime, Publishing and Elsa3;
   track its public shape in `PublicAPI.Unshipped.txt`, with no cross-domain InternalsVisibleTo grant
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
-  `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
-  `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
+  `essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
+  `essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
   `WorkflowExecutableCompiler.cs` (data-model.md)
 - [ ] T007 Reuse `IsNullable` on `WorkflowDeclaredInput` after main sync (add it only if absent on the reconciled
   tree), preserving `HasExplicitNullDefault`, and fill it in
@@ -101,13 +101,13 @@ red without the change. xUnit only.
   check a `null` captured into a variable or workflow output against the target's nullability: `VF-ACT-004` for a
   non-nullable target, the type default under `DefaultOnNull` with `VF-NULL-001` on the invocation. Tests: a
   `Run JavaScript` result of `null` bound to an `Int32` variable, with and without the policy
-- [ ] T010d [US1] Variable declared defaults: `ExecutableNodeCompiler.CompileVariableDeclaration` compiles a
+- [ ] T010d [US1] Variable declared defaults: `RuntimeInputBindingCompiler.CompileVariableDeclaration` compiles a
   variable's default against the variable's type-derived nullability (T004) instead of `IsNullable: true`, so a
   declared default of `null` on an `Int32` variable fails publication with `VF-ACT-004`. Default-on-null does not
   apply to an authored default: the author fixes it. Test
 - [ ] T010e [US1] Operator alteration: `ModifyVariableAlterationHandler.IsCompatible` refuses JSON `null` for a
   non-nullable variable (`VariableValueTypeMismatch`). Default-on-null does not apply to operator writes. Test
-- [ ] T011 [US1] Tests in `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
+- [ ] T011 [US1] Tests in `essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`: null
   literal into a nullable variable and a nullable output publishes; into an `Int32` variable fails with `VF-ACT-004`
 - [ ] T012 [US1] Run test: the variable holds `ExplicitNull` and a workflow output persists an explicit JSON `null`
   for every output storage kind (`WorkflowIntrinsicExecutor.NewWorkflowOutputChange` writes it only for Inline and
@@ -130,6 +130,17 @@ red without the change. xUnit only.
   Known-inputs mode allows unresolved required inputs and adds no null/type-default completion, but applies the same
   substitution to supplied values and materialized declared defaults. Track the required interface overloads and
   implementation shape in PublicAPI.Unshipped (Major API shape under framework §4.2)
+  Retain required-and-nullable supplied-null acceptance and its existing no-default regression.
+  Cover current trigger callers too: policy-aware `ITriggerInputMapper.ValidateMappings` / `MapAsync` overloads
+  with existing policies-off overloads retained; target discovery's native-policy projection; trigger save,
+  preview and eligibility checks; `StandaloneTriggerAdmission`, `WorkflowStimulusSubscriptionSelector`,
+  `NativeStandaloneTriggerRuntimeTarget`, and `SavedStimulusStartSeal`. Resolve policies from the selected or
+  retained target executable, never caller overrides; preserve model-only target semantics and reuse captured
+  normalized inputs on retry. Keep trigger-owned expression evaluation's existing undefined boundary (R-3).
+  Track the mapper's required interface additions and target projection in PublicAPI.Unshipped (Major API shape).
+  Audit `BpmnInputSupport` and `BpmnDirectExecutionDriver` native-worker mapping preflight/realization: carry the
+  exact pinned native worker's policies using existing worker-material resolution, never model/source policies;
+  model-owned inputs retain model semantics.
 - [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
   `VF-ACT-014` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
   `!DefaultValue.HasValue` exemption, which can then never apply. Audit built-in activity descriptors for inputs
@@ -143,8 +154,12 @@ red without the change. xUnit only.
   both required and optional nullable inputs: presence satisfies requiredness and the declared default is not used
   Include an omitted optional Int32 input with an explicit-null declared default: under DefaultOnNull it becomes 0
   in both validator modes, and without the policy its non-nullable null is refused; nullable defaults remain null
+  Cover trigger save/preview and admission with a literal-null Int32 mapping under each target policy setting;
+  captured normalized inputs survive retry and a later target publication. Cover the physical saved-start seal's
+  optional Int32 explicit-null default and the exact pinned native-worker policy on BPMN worker mapping. Verify
+  trigger-owned undefined expression results keep their existing refusal independently of target policies.
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
-  (`Essentials/tests/Activities/Behavioral/Tests`)
+  (`essentials/tests/Activities/Behavioral/Tests`)
 
 ## Phase 5: User Story 7 - Null and absent survive storage (P1)
 
@@ -209,7 +224,7 @@ input, and one workflow input supplied as `null`.
 **Independent test**: convert, export, import on a host without the converter, run: same outputs.
 
 - [ ] T027 [US5] Add `Elsa3MappingOptions.ApplyElsa3NullPolicies` (default `true`) in
-  `Extensions/Elsa3/src/Mapping/Elsa3MappingOptions.cs`, bind it in `Elsa3MappingFeature`, with a feature
+  `extensions/Elsa3/src/Mapping/Elsa3MappingOptions.cs`, bind it in `Elsa3MappingFeature`, with a feature
   registration test (options binding carries logic)
 - [ ] T028 [US5] Set `StrategyOptions.NullHandling` in `Elsa3WorkflowDefinitionToState.Map` when the option is on, and
   list the policies in the conversion report; say the stricter Elsa 4 rules apply when it is off. Test both converter
@@ -269,8 +284,9 @@ Built by S-4 (spec 1222 FR-011, FR-012; `VF-READ-001`).
   state, for the option and each policy, what it changes at run time with a before/after example, that converted
   workflows record it and native workflows keep it off; glossary rows for *default-on-null* and
   *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections), and the
-  `IWorkflowExecutableInputValidator` signature and both contracts' *Usage* lines in the Runtime `EXTENSION_POINTS.md`
-  (completion, `null` refusal, default-on-null at admission)
+  `IWorkflowExecutableInputValidator` and `ITriggerInputMapper` signatures and their *Usage* lines, plus
+  `IWorkflowStartDispatcher` usage, in the Runtime `EXTENSION_POINTS.md` (completion, `null` refusal,
+  default-on-null at admission and target-policy propagation through trigger/worker normalization)
 - [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
   accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the
   Elsa 3 migration readiness guide

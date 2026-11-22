@@ -33,7 +33,7 @@ TypeScript) under `Studio/`. Builds on S-8's `CopyComparePatchValueBridge` and `
 **Storage**: `ValueEnvelope` in every runtime store (EF Core providers, in-memory). No schema change: `Presence` is
 already stored.
 
-**Testing**: xUnit (no FluentAssertions), behavioural drives in `Essentials/tests/Activities/Behavioral`, Studio's
+**Testing**: xUnit (no FluentAssertions), behavioural drives in `essentials/tests/Activities/Behavioral`, Studio's
 client tests, the JTest measurement of #3052.
 
 **Target Platform**: Elsa 4 server hosts.
@@ -43,7 +43,7 @@ client tests, the JTest measurement of #3052.
 **Performance Goals**: the Jint replacer adds no more than one pass over the result; no extra store round trip at
 admission.
 
-**Constraints**: Elsa 3 knowledge stays in `Extensions/Elsa3` (§E2.7). No compatibility path for executables or
+**Constraints**: Elsa 3 knowledge stays in `extensions/Elsa3` (§E2.7). No compatibility path for executables or
 fixtures from before this change: compatibility is owed from the first stable release, and fixtures whose hashes move
 are regenerated in place. The policies are hashed only when on, and an input's nullability only when it is
 non-nullable, so most fixtures do not move.
@@ -61,11 +61,11 @@ in research R-6 and their tests. Reconcile source paths with the initiative's re
 | §E2.2 Runtime takes no Design reference | PASS | Policies are compiled from `WorkflowStrategyOptions` in Publishing, which already references both sides. Runtime reads only `WorkflowExecutable`. |
 | §E2.1 domain boundaries | PASS | Value rules stay in `Workflows.Runtime.Core` (`NullPolicyDefaults`); JavaScript boundary changes stay in S-8's bridge in `Expressions/JavaScript/Jint`. |
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | Elsa 4 gains general policies, usable by any workflow. The converter only selects them (D-11: no "converted from Elsa 3" marker). |
-| §E5 versioning / §2.23.3 visibility | PASS | Public surface: `WorkflowStrategyOptions.NullHandling`, `WorkflowExecutable.ValuePolicies`, `WorkflowDeclaredInput.IsNullable`, `Elsa3MappingOptions`, and `NullPolicyDefaults` (shared domain API for runtime, Publishing and converter consumers). New policy-aware `IWorkflowExecutableInputValidator` overloads are required interface members: Major API shape under §4.2, tracked in PublicAPI.Unshipped; existing two-argument overloads retain native policies-off behavior. Removal: internal `Elsa3ExpressionRewriter.AddNullCoalescing` and Studio's authored `isNullable` flags (pre-GA, ADR 0080). All other new services are internal. |
-| §2.6.2 replacement contracts | PASS | No new replacement contract. The existing validator gains policy-aware overloads; both modes apply policy after declared-default completion and before null/type validation (R-3). The catalog's signature and *Usage* lines change together (T037). |
+| §E5 versioning / §2.23.3 visibility | PASS | Public surface: `WorkflowStrategyOptions.NullHandling`, `WorkflowExecutable.ValuePolicies`, `WorkflowDeclaredInput.IsNullable`, `Elsa3MappingOptions`, and `NullPolicyDefaults` (shared domain API for runtime, Publishing and converter consumers). Policy-aware validator and trigger-mapper overloads are required interface members: Major API shape under §4.2, tracked with the target-policy projection in PublicAPI.Unshipped; existing overloads retain native policies-off behavior. Removal: internal `Elsa3ExpressionRewriter.AddNullCoalescing` and Studio's authored `isNullable` flags (pre-GA, ADR 0080). All other new services are internal. |
+| §2.6.2 replacement contracts | PASS | No new replacement contract. The existing validator and trigger mapper gain policy-aware overloads; both validator modes apply policy after declared-default completion and before null/type validation (R-3). Catalog signatures and *Usage* lines change together (T037). |
 | §2.17 duplication beats dependency | PASS | The type-default table is one helper in `Runtime.Core`, which every caller already references. |
 | §2.24.2 sanctioned patterns (draft; advisory) | PASS | Feature options bound from configuration; hashed strategy options. No new extension point; this provisional catalog is not a ratified gate. |
-| §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*, and the *Usage* line of `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` in the Runtime extension-point catalog. No contributor or replacement contract is added. |
+| §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*, and the signatures/usage of `IWorkflowExecutableInputValidator`, `ITriggerInputMapper` and `IWorkflowStartDispatcher` in the Runtime extension-point catalog. No contributor or replacement contract is added. |
 | §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for T033 to T035 and composed-host acceptance in T035a. |
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
@@ -81,7 +81,7 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 | P-1 | Intrinsic `value` takes the target's nullability | R-5, Q8. From the target's type (P-2); `name` / `outcome` stay non-nullable strings. The intrinsic executor checks a run-time `null` too (R-6). |
 | P-2 | Nullability from the type | R-5, Q8, Q10: variables, workflow inputs and outputs and authored activity definitions, by the type registry's `supportsNull`; a type default only for `Boolean`, the number types and enums (FR-001b); an unassigned variable reads that default (Q11). T004, T004a. |
 | P-3 | Workflow input nullability pinned | R-4. From the type (P-2); hashed only when non-nullable. |
-| P-4 | Extend #3731's admission | R-3. Requiredness first, declared-default completion, complete-bag optional completion, policy substitution, then null/type validation in the same validator normalization. All admission and early-validation callers pass the executable's policies through the new overloads. No new admission step. |
+| P-4 | Extend #3731's admission | R-3. Requiredness first, declared-default completion, complete-bag optional completion, policy substitution, then null/type validation in the same validator normalization. All admission and early-validation callers, including current trigger mapping/discovery and physical saved-start validation, pass the selected or retained executable's policies through the new overloads. No new admission step. |
 | P-5 | Policies on `WorkflowStrategyOptions.NullHandling` | R-2. Compiled to `WorkflowExecutable.ValuePolicies`; each JavaScript evaluation gets the undefined policy from the executable. |
 | P-6 | Default-on-null = type default | R-6, Q2, Q10. `Boolean`, the number types and enums only (FR-001b); every other type keeps `VF-ACT-004`. |
 | P-7 | In S-8's bridge writer | R-7. `VF-UNDEF-002` (property dropped), `VF-UNDEF-003` (array element or hole as a `null` placeholder, either policy), `VF-NUM-001` (computed `NaN`/`Infinity`); the policy keeps `undefined` properties as `null`. |
@@ -113,28 +113,28 @@ specs/1232-null-missing-undefined/
 ### Source Code (repository root)
 
 ```text
-Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs           # NullHandling
-Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs               # ValuePolicies
-Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutableInputContract.cs  # IsNullable
-Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs             # new
-Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/
+essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs           # NullHandling
+essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs               # ValuePolicies
+essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutableInputContract.cs  # IsNullable
+essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs             # new
+essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/
   ├── ExecutableNodeCompiler.cs        # intrinsic nullability
   ├── RuntimeInputBindingCompiler.cs   # ValidateNull + policy
   └── WorkflowExecutableCompiler.cs    # input contract, policies
-Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/
+essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/
   ├── Executables/WorkflowExecutableHasher.cs
   ├── Executables/WorkflowExecutableInputValidator.cs     # completion, null refusal (not the L119 conversion)
-  ├── Executions/WorkflowStartDispatcher.cs               # default-on-null before validation
+  ├── Executions/WorkflowStartDispatcher.cs               # pass policies to validator normalization
   └── Values/RuntimeActivityInputMaterializer.cs
-Essentials/src/Workflows/Publishing/Api/Handlers/StartWorkflowTestRunRequestHandler.cs  # same substitution
-Essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs       # same substitution
-Essentials/src/Expressions/JavaScript/Jint/Services/          # S-8's bridge (#4838, merged)
+essentials/src/Workflows/Publishing/Api/Handlers/StartWorkflowTestRunRequestHandler.cs  # same validator policies
+essentials/src/Activities/DispatchWorkflow/Runtime/Activities/DispatchWorkflow.cs       # same validator policies
+essentials/src/Expressions/JavaScript/Jint/Services/          # S-8's bridge (#4838, merged)
   ├── CopyComparePatchValueBridge.cs       # undefined, holes, NaN/Infinity, the policy
   ├── JintPortableJavaScriptEvaluator.cs   # undefined binding result under the policy
   └── JintJavaScriptScriptEvaluator.cs     # Run JavaScript result
-Essentials/src/Expressions/JavaScript/Core/Exceptions/JavaScriptValueExceptions.cs  # VF-UNDEF-*, VF-NUM-001
+essentials/src/Expressions/JavaScript/Core/Exceptions/JavaScriptValueExceptions.cs  # VF-UNDEF-*, VF-NUM-001
 docs: Elsa 3 converter feature README, workflow definition reference
-Extensions/Elsa3/src/Mapping/
+extensions/Elsa3/src/Mapping/
   ├── Elsa3MappingFeature.cs, Elsa3MappingOptions.cs (new)
   ├── Mappings/Elsa3WorkflowDefinitionToState.cs
   ├── Services/Elsa3ExpressionRewriter.cs
@@ -143,11 +143,11 @@ Extensions/Elsa3/src/Mapping/
 
 **Structure Decision**: existing projects only. New policy/default helpers stay in the owning projects shown above.
 
-**Main-sync reconciliation**: the source inventory above describes the initiative baseline. Main already contains
-`WorkflowDeclaredInput.IsNullable` and `HasExplicitNullDefault`. Reuse them after the required sync: derive authored
+**Main-sync reconciliation**: the source inventory above uses the reconciled repository paths. The main-sync tree
+already contains `WorkflowDeclaredInput.IsNullable` and `HasExplicitNullDefault`. Reuse them: derive authored
 nullability from the type, preserve the explicit-null-default marker, and reconcile the hash encoding with P-3 and
-T009. Main's validator currently accepts supplied null only for an optional nullable input; T013 must also accept a
-required nullable input, because requiredness concerns presence. Its regression covers both requiredness values.
+T009. The reconciled validator accepts supplied null for nullable inputs independently of requiredness; retain that
+behavior and its no-default regression while extending normalization in T013. Requiredness concerns presence.
 Recheck S-7's script-write integration and every R-6 write path on the reconciled tree before implementation.
 
 ## Complexity Tracking

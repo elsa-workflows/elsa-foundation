@@ -3,31 +3,33 @@
 **Spec**: [spec.md](spec.md) · **Date**: 2026-11-03, rechecked against #3731 and, on 2026-11-20, against the
 initiative branch at `771ba6679f` (S-4, S-6, S-7 part 1, S-10, S-11 merged) and S-8's implementation (#4838, since
 merged as `8bf168f3e2` with the same bridge code).
-Line numbers are from that initiative head.
+The source inventory is reconciled against the main-sync tree `f172bc17c4`. Legacy line references below identify
+the original investigation; use the named methods on the reconciled tree. This is a source reconciliation, not
+spec approval or implementation.
 
 ## R-1 What the code does today
 
 | Area | Where | Today |
 |---|---|---|
-| Value states | `Essentials/src/Workflows/Runtime/Core/Models/ValueEnvelope.cs` (`ValuePresence`, L128–139) | `Absent`, `ExplicitNull`, `Present`, `Withheld`. `Presence` is hashed (runtime `WorkflowExecutableHasher.FormatEnvelope`, L175–190). |
+| Value states | `essentials/src/Workflows/Runtime/Core/Models/ValueEnvelope.cs` (`ValuePresence`, L128–139) | `Absent`, `ExplicitNull`, `Present`, `Withheld`. `Presence` is hashed (runtime `WorkflowExecutableHasher.FormatEnvelope`, L175–190). |
 | Intrinsic inputs | `ExecutableNodeCompiler.CompileIntrinsicNode` (L460; synthetic definition L515–528) | Every intrinsic input compiles against `InputDefinition(IsNullable: false, IsRequired: true)`, so a null literal on `Set` / `SetOutput` fails with `VF-ACT-004` (#3280). |
 | Literal null check | `RuntimeInputBindingCompiler.ValidateNull` (L1186–1192) | `VF-ACT-004` when the input is not nullable. |
 | Omitted activity inputs | `RuntimeInputBindingCompiler.CompileOmitted` (L344–380) | Optional non-nullable value types pin their CLR default; a non-nullable reference type throws `VF-ACT-003`; optional nullable pins an `Absent` literal. |
 | Run-time presence | `RuntimeActivityInputMaterializer.ValidatePresence` (L676–682); `ActivityInputHydrator.Materialize` (L83–100) | `Absent` or `ExplicitNull` for a non-nullable contract fails with `VF-ACT-004` (#3172). The hydrator repeats the guard. |
 | Intrinsic execution | `WorkflowIntrinsicExecutor` (L663–665, L679–680) | An expression null or `undefined` becomes `ExplicitNull`; an `Absent` source fails. A null literal never reaches it. S-7 did not change it. |
-| Workflow inputs | `WorkflowDeclaredInput` (`WorkflowExecutableInputContract.cs` L51–57); `WorkflowExecutableCompiler.BuildInputContract` (L598–612) | `Name`, `Type`, `IsRequired`, `DefaultValue`. **No nullability**: the compiler drops `InputDefinition.IsNullable`. Studio already authors `isNullable` on workflow inputs but shows no column for it. |
-| Admission | `WorkflowStartDispatcher.ApplyInputContract` (L465–481, called at L212); `WorkflowExecutableInputValidator` (L80–89 required, L95–99 defaults, L119 type check); `RuntimeWorkflowStateSeed.BuildSeedChanges` (L63–77) | Since #3731 every new start runs the validator in complete-bag mode before enqueue. An optional input with no declared default is still left out of the bag, so it gets no envelope and the first read fails (#3288). An explicit `null` passes for a `String` input and fails as `incompatible-value` for an `Int32` one: the outcome comes from the L119 conversion, not from a declared nullability. Reason codes: `WorkflowExecutableInputValidation.cs` L67–75 (`runtime.input.*`). |
+| Workflow inputs | `WorkflowDeclaredInput` (`WorkflowExecutableInputContract.cs`); `WorkflowExecutableCompiler.BuildInputContract` | Already carries `Name`, `Type`, `IsRequired`, `DefaultValue`, `IsNullable` and the serialized `HasExplicitNullDefault` marker. The compiler currently copies `InputDefinition.IsNullable`; S-2 derives it from the type and preserves explicit-null defaults. Studio authors `isNullable` on workflow inputs but shows no column for it. |
+| Admission | `WorkflowStartDispatcher.ApplyInputContract`; `WorkflowExecutableInputValidator`; `RuntimeWorkflowStateSeed.BuildSeedChanges` | Every new start validates the complete bag before enqueue. Optional inputs without a declared default are still omitted (#3288). The reconciled null guard accepts supplied null when `IsNullable`, including required nullable inputs without a default; otherwise it returns `runtime.input.incompatible-value`. It does not derive nullability from the type or apply either S-2 policy. Required-with-default still bypasses the missing-required check. |
 | JavaScript results (initiative head) | `JintResultMaterializer.Materialize` (L32–73) | The intrinsic `JSON.stringify`: `undefined` properties dropped, `undefined` array elements and holes become `null`, `NaN` / `Infinity` become `null`, all without a diagnostic (#3170). |
 | JavaScript results (S-8, #4838, merged) | `CopyComparePatchValueBridge.cs`; `JintResultMaterializer` split into `Stringify(engine, value, replacer?)` and `ParseResult` | Every value leaving a script (binding result, script result, variable change) goes through the bridge's writer with a marker replacer. A top-level `undefined` becomes `ScriptValueWrite(null)`. Only an `Infinity` that came from an entered too-large number is tracked, as a precision loss (`VF-PREC-001`); computed `NaN` / `Infinity`, `undefined` properties and holes stay silent. Warnings go through `IExecutionWarningSink` (`ExecutionWarning`). |
 | `undefined` result | `JintPortableJavaScriptEvaluator` L71–72 (S-8: after the write check); `JintJavaScriptScriptEvaluator` L79–80 (S-8: `Write` L123–124) | Bindings throw (ADR 0083). `Run JavaScript` returns no value (C# `null` / `ScriptValueWrite(null)`). |
 | Script forms | `PreparedJavaScript.cs` L21–29 (bindings), L46 (`Run JavaScript`) | Bindings are programs: an expression, or a statement body whose value is its completion value or a top-level `return`. `Run JavaScript` is a function body (`"use strict"; (() => { source })()`): its result is only what `return` gives. It is the only built-in script activity. ADR 0083 keeps this "function-body contract". |
-| Spec 262 lowering | `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`AddNullCoalescing`, L481–484; called at L142, 153, 214, 221) | The converter wraps each top-level expression result as `(...) ?? null`. |
+| Spec 262 lowering | `extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` (`AddNullCoalescing`, L481–484; called at L142, 153, 214, 221) | The converter wraps each top-level expression result as `(...) ?? null`. |
 | Capability profile | `RuntimeExpressionBinding.CapabilityProfile` (`RuntimeInputBinding.cs` L336–337), hashed in `FormatExpression` (L202–221) | Pinned per binding. S-1 has since delivered `binding-readonly-v1`; S-2 reuses it. |
 | Workflow settings | `WorkflowStrategyOptions` (`ActivationStrategyType`, `IncidentStrategy`, `PersistenceMode`) → `WorkflowExecutableCompiler` L301–310 → hashed in `WriteBehavioralPayload` (L279–368) | The place for workflow-level, hashed settings. No null-handling setting exists. Studio shows the strategy settings in `WorkflowPropertiesView.tsx` (`IncidentStrategySection`, `PersistenceModeSection`). |
 | Converter | `Elsa3MappingFeature` (L25); `Elsa3WorkflowDefinitionToState.Map` (L30) | No options class. `StrategyOptions: null`, so nothing workflow-level is recorded. |
 | Spec 267 refusals | `Elsa3BuiltInActivityMap.Entries.cs` L104, L113 (`NullRefused`) | SetVariable `Value` and SetOutput `OutputValue` refuse null with `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`. |
 | Computed reads | S-4: `IsolatedJintEngine` L94–190, `RuntimeVariableReadFallback` L77–83, `RuntimeVariableReadRecorder` L45, L119 (`VF-READ-001`); Liquid `LiquidVariablesValue` L42–59 | Delivered: a missing computed name reads `undefined` (JavaScript) or nil (Liquid), records `VF-READ-001` and marks the read absent. |
-| Variable nullability | `VariableDefinition` (`Expressions/Core/Models/VariableDefinition.cs` L5–10) | Type only, no `IsNullable`. A variable default compiles with a synthetic `IsNullable: true` (`ExecutableNodeCompiler.cs` L1103–1110). |
+| Variable nullability | `VariableDefinition` (`Expressions/Core/Models/VariableDefinition.cs`); `RuntimeInputBindingCompiler.CompileVariableDeclaration` | Type only, no `IsNullable`. A variable default compiles with a synthetic `IsNullable: true`; `ExecutableNodeCompiler.CompileVariableDeclaration` delegates to that compiler. |
 | Diagnostic codes | `VF-ACT-003/004` inline in the compiler and materializer; `VF-READ-*` constants; S-8's `JavaScriptValueDiagnostics` (`VF-PREC-001/002`, `VF-BIND-001`, `VF-WRITE-001`) | Pattern `VF-<AREA>-NNN`. No code exists for `undefined` or non-finite values. |
 
 ## R-2 Where the two policies live
@@ -64,17 +66,32 @@ Line numbers are from that initiative head.
      with none of these was refused at publication (FR-006, T007). Known-inputs mode (Design-time `DispatchWorkflow`
      and `DispatchPinSource`) fills declared defaults as today but adds no `null` or type-default completion, and
      applies steps 2 and 3 to supplied values and the declared defaults it materializes;
-  2. the validator refuses an explicit `null` for a non-nullable input with a new reason code,
-     `runtime.input.null-not-allowed` (R-4). An explicit
-     `null` for a nullable input is accepted without the L119 conversion, which a `null` for a nullable value type
-     would otherwise fail. The conversion itself is unchanged (S-9 moves it);
-  3. after default completion and before the null/type checks in step 2, the validator replaces null for a
+  2. after default completion and before null/type checks, the validator replaces null for a
      non-nullable input that has a supported type default when pinned `DefaultOnNull` is on (R-6). This includes null
      introduced by a declared workflow-input default. `ApplyInputContract`, the early checks in the test-run handler
      and `DispatchWorkflow`, and Design's `DispatchPinSource` pass the executable's `WorkflowValuePolicies` to new
      policy-aware validator overloads, so both modes use one normalization. The old two-argument overloads remain
      policies-off; the new required interface overloads are tracked as a Major API shape change, not an untracked
-     signature replacement. A variable's authored-null-default refusal remains distinct (T010d).
+     signature replacement. A variable's authored-null-default refusal remains distinct (T010d);
+  3. refuse a remaining null for a non-nullable input with `runtime.input.null-not-allowed` (R-4), or accept a
+     nullable null without deserializing it as a value type. Other type conversion is unchanged (S-9 moves it).
+  **Current trigger callers.** The reconciled tree also validates before ordinary start admission in
+  `TriggerInputMapper.ValidateMappings` / `MapAsync`, the trigger save/preview/eligibility paths,
+  `StandaloneTriggerAdmission`, `WorkflowStimulusSubscriptionSelector`, `NativeStandaloneTriggerRuntimeTarget`
+  and `SavedStimulusStartSeal`. T013 carries the selected target executable's policies through destination
+  normalization in this pipeline, including the target-discovery projection used by authoring preflight. Extend
+  the existing `ITriggerInputMapper` with policy-aware overloads, retaining its current policies-off entry points
+  and tracking required interface additions as Major API shape. Native callers use resolved or retained native
+  material, never current workspace settings or a caller-supplied policy override. Model-only targets retain their
+  owning model's input contract; they do not acquire native workflow policy semantics. Trigger-owned expression
+  evaluation keeps its existing undefined-result boundary; the destination policy handoff does not apply the
+  target workflow's `UndefinedAsNull` to those expressions. Accepted inputs remain captured normalized values and
+  retries never remap expressions. The physical saved-start seal must compute the same defaults from its retained
+  executable, including a non-nullable input's declared-null default under default-on-null.
+  **BPMN boundary.** Model-owned input validation keeps model semantics. Native workers started by BPMN are
+  different: audit `BpmnInputSupport` worker preflight/realization and `BpmnDirectExecutionDriver` before dispatch,
+  and carry the policies from the exact pinned native worker artifact through destination normalization. Do not
+  inherit a model's or source workflow's policies. Reuse the existing worker-material resolution.
   The seed already writes every member of the normalized bag; T014 checks that a completed `null` is stored as an
   explicit null.
 - **Rationale**: #3731 put the contract on every start path. Completion and the null refusal belong in the same
@@ -84,10 +101,10 @@ Line numbers are from that initiative head.
 
 ## R-4 Workflow input nullability
 
-- **Decision**: add `IsNullable` to `WorkflowDeclaredInput`, fill it in `BuildInputContract` from the input's type
+- **Decision**: reuse `WorkflowDeclaredInput.IsNullable` and `HasExplicitNullDefault` from the reconciled tree; fill nullability in `BuildInputContract` from the input's type
   (R-5, Q8; the stored `InputDefinition.IsNullable` flag is not read for workflow inputs), and hash it in
   `inputContract` only when the input is non-nullable. The validator refuses an explicit JSON `null` for a non-nullable input unless default-on-null
-  applies (R-3 step 2 and 3).
+  applies (R-3 steps 2 and 3).
 - **Rationale**: FR-005, FR-001a. Studio stores `isNullable: false` on every new workflow input and output, so
   trusting the flag would refuse `null` for a `String` input; the type gives the same answer .NET would.
 - **Alternatives**: trust the stored `isNullable` flag (rejected: Studio stores `false` for every new member).
