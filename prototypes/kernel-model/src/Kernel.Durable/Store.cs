@@ -178,6 +178,7 @@ public sealed record TurnCommit(
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
     internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
+    internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

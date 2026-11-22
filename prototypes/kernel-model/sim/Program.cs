@@ -142,6 +142,12 @@ if (args.Contains("--park-drain-cascade-check"))
     await ParkDrainCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--foundation-value-check"))
+{
+    var failed = false;
+    await FoundationValueChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--retention-delete-check"))
 {
     var failed = false;
