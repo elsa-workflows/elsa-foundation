@@ -271,14 +271,14 @@ for (const theme of ["light", "dark"]) {
       }));
       await page.setViewportSize({ width: viewport.width, height: 900 });
       await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
-      const header = page.locator(".ad-definition-header");
+      const header = page.locator(".ad-workbench .studio-page-header");
       await expect(header.getByRole("heading", { name: detail.definition.displayName })).toBeVisible();
       await expect(header.getByRole("button", { name: "Edit draft", exact: true })).toBeEnabled();
       await expect(header.locator(".ad-kicker")).toHaveCount(0);
       const geometry = await page.evaluate(() => {
         const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-        const header = bounds(".ad-definition-header"), heading = bounds("#activity-definition-title"),
-          actions = bounds(".ad-definition-header .ad-header-actions"), tabs = bounds(".ad-tabs");
+        const header = bounds(".ad-workbench .studio-page-header"), heading = bounds("#activity-definition-title"),
+          actions = bounds(".ad-workbench .studio-page-actions"), tabs = bounds(".ad-tabs");
         return { height: header.height, gap: tabs.top - header.bottom, titleCenter: heading.top + heading.height / 2,
           actionCenter: actions.top + actions.height / 2, actionsTop: actions.top, headingBottom: heading.bottom,
           overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
@@ -295,7 +295,7 @@ for (const theme of ["light", "dark"]) {
       await page.screenshot({ path: testInfo.outputPath(`header-${theme}-${viewport.width}.png`) });
       await page.getByText("Advanced", { exact: true }).click();
       await expect(page.getByText("Finance", { exact: true })).toBeVisible();
-      const back = header.getByRole("button", { name: "Activity Definitions", exact: true });
+      const back = page.getByRole("link", { name: "Activity definitions", exact: true });
       await back.focus();
       await back.press("Enter");
       await expect(page.getByRole("heading", { name: "Activity definitions", exact: true })).toBeVisible();
@@ -305,7 +305,7 @@ for (const theme of ["light", "dark"]) {
   test(`Activity Definition header preserves source-owned read-only controls (${theme})`, async ({ page }) => {
     await mockActivityDraftManagement(page, { sourceOwned: true });
     await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
-    const header = page.locator(".ad-definition-header");
+    const header = page.locator(".ad-workbench .studio-page-header");
     await expect(header.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
     await expect(header.locator(".ad-primary-action")).toHaveCount(0);
     await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
@@ -861,7 +861,7 @@ for (const width of [1440, 390]) {
     await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions");
 
     const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
-    await expect(page.getByRole("link", { name: "Back to designer", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Designer", exact: true })).toHaveCount(0);
     await expect(breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true })).toHaveAttribute("href", "/workflows/activity-definitions");
     await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Invoice evaluator");
     const versionRow = page.getByRole("button", { name: /1\.0\.0/ });
@@ -905,7 +905,7 @@ test("Activity Definition draft History returns to the exact editor and preserve
   await expect(page).toHaveURL(/section=versions.*originDraft=activity-draft-browser.*returnPlan=plan-exact/);
 
   await page.reload();
-  const returnLink = page.getByRole("link", { name: "Back to designer", exact: true });
+  const returnLink = page.getByRole("link", { name: "Designer", exact: true });
   await expect(returnLink).toHaveAttribute("href", /section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
   await returnLink.click();
   await expect(page).toHaveURL(/section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
@@ -924,7 +924,7 @@ test("Activity Definition published-version History returns to its origin after 
   await expect(page).toHaveURL(/version=version-2.*originVersion=version-1/);
   await page.reload();
 
-  const backToDesigner = page.getByRole("link", { name: "Back to designer", exact: true });
+  const backToDesigner = page.getByRole("link", { name: "Designer", exact: true });
   await expect(backToDesigner).toHaveAttribute("href", /section=editor.*version=version-1/);
   await page.getByRole("tab", { name: "Drafts", exact: true }).click();
   await expect(page).toHaveURL(/section=drafts.*originVersion=version-1/);

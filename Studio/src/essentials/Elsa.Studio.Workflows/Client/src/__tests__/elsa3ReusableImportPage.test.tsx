@@ -251,7 +251,7 @@ describe("Elsa 3 reusable import workbench", () => {
     expect(handleInput.disabled).toBe(true);
     expect(checkbox(container, "Select owner exact source version 1").disabled).toBe(true);
     expect((button(container, "Review exact import") as HTMLButtonElement).disabled).toBe(true);
-    expect((button(container, "Activity Definitions") as HTMLButtonElement).disabled).toBe(true);
+    expect((button(container, "Activity definitions") as HTMLButtonElement).disabled).toBe(true);
 
     // Simulate an external host invalidating the controlled field despite the UI freeze.
     handleInput.disabled = false;
