@@ -40,7 +40,7 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
-            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
+            if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
                 turn.FoundationCatchUpExpected is not null ||
@@ -85,10 +85,17 @@ public static class StoreBatchRules
     {
         HashSet<InboxKey>? changed = null;
         HashSet<InboxKey>? preserved = null;
+        HashSet<InboxKey>? selected = null;
         foreach (var turn in batch.Turns)
         {
-            if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observed)
-                (preserved ??= []).UnionWith(observed.Preserved);
+            if (turn.FoundationRetry is { } retry)
+            {
+                selected ??= [];
+                if (retry.Marked.Count > InMemoryStore.MaxRetryHandles || retry.Marked.Any(row => !selected.Add(row.Key)))
+                    throw new StoreException(Failure.Definite, "A Park retry must mark a bounded set of distinct keys.");
+            }
+            if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observedTimers)
+                (preserved ??= []).UnionWith(observedTimers.Preserved);
             if (turn.FoundationRecoveryJobs is { } observedJobs && (observedJobs.Pending.Count != 0 || observedJobs.Retained.Count != 0))
             {
                 (preserved ??= []).UnionWith(observedJobs.Pending);
@@ -118,6 +125,12 @@ public static class StoreBatchRules
             batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
                 .Concat(turn.FoundationReleasedHolds ?? []).Concat(turn.Sent.Select(message => message.InboxKey))).Any(preserved.Contains)))
             throw new StoreException(Failure.Definite, "Other writes in a batch cannot change a wait that recovery preserves.");
+        if (selected is not null)
+        {
+            changed ??= [];
+            if (selected.Any(key => !changed.Add(key)))
+                throw new StoreException(Failure.Definite, "A selected row cannot also change elsewhere in the recovery batch.");
+        }
         if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
                 turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])
                     .Concat(turn.Sent.Select(message => message.InboxKey))))

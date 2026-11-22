@@ -1688,14 +1688,17 @@ internal static class ParkKeptChecks
         await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
-        await CheckRetryConsumedResult(retry: false, check);
-        await CheckRetryConsumedResult(retry: true, check);
+        await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
+        await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
+        await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
         await CheckPendingJobAfterPark(check);
         await CheckRetryConsumedTicket(check);
         await CheckRetryConsumedTicket(check, timed: true);
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true);
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, releaseTicketBeforeEnd: true);
         await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, restartAtOpen: true);
+        await CheckRetryConsumedTicket(check, mode: Contract.RecoverMode.Retry);
+        await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1779,7 +1782,7 @@ internal static class ParkKeptChecks
             !store.Messages.ContainsKey(currentKey), "the replacement result clears its own registry entry and reaches the actor once");
     }
 
-    private static async Task CheckRetryConsumedResult(bool retry, Action<bool, string> check)
+    private static async Task CheckRetryConsumedResult(Contract.RecoverMode mode, Action<bool, string> check)
     {
         var now = 1_701_400_013_000L;
         var store = new InMemoryStore(1, () => now);
@@ -1803,8 +1806,11 @@ internal static class ParkKeptChecks
         check(kept, "a fault while applying an authenticated timed result keeps the result as Consumed");
         if (!kept) return;
 
+        var handles = mode == Contract.RecoverMode.Retry
+            ? new[] { store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, resultKey)! }
+            : null;
         await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
-            Json.Write(new Contract.OperatorCommand(parked!.Selection!, retry ? Contract.RecoverMode.RetryAll : Contract.RecoverMode.Resume)));
+            Json.Write(new Contract.OperatorCommand(parked!.Selection!, mode, handles)));
         for (var index = 0; index < 3; index++)
         {
             now += 11;
@@ -1812,9 +1818,9 @@ internal static class ParkKeptChecks
         }
         var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
         check(recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && probe.Entries == 1 &&
-            (retry ? probe.Completions == 1 && probe.Result == "original" : probe.Completions == 0),
-            $"{(retry ? "RetryAll replays" : "Resume clears")} the consumed result without executing its job again");
-        if (retry) return;
+            (mode == Contract.RecoverMode.Resume ? probe.Completions == 0 : probe.Completions == 1 && probe.Result == "original"),
+            $"{mode} {(mode == Contract.RecoverMode.Resume ? "clears" : "replays")} the consumed result without executing its job again");
+        if (mode != Contract.RecoverMode.Resume) return;
 
         await ingress.SendAsync(scope, target, "park-again", "fault");
         await Pump(owner);
@@ -1905,7 +1911,7 @@ internal static class ParkKeptChecks
     }
 
     private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
-        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false)
+        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false, Contract.RecoverMode mode = Contract.RecoverMode.RetryAll)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
@@ -1969,9 +1975,12 @@ internal static class ParkKeptChecks
                         InMemoryStore.ParkPageLimit - 1,
                     "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
         }
+        var handles = mode == Contract.RecoverMode.Retry
+            ? new[] { store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, key)! }
+            : null;
         await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(view!.Selection!,
-                restartAtOpen ? Contract.RecoverMode.Resume : Contract.RecoverMode.RetryAll)));
+                restartAtOpen ? Contract.RecoverMode.Resume : mode, handles)));
         await Pump(next);
         if (timed)
         {
@@ -2007,7 +2016,7 @@ internal static class ParkKeptChecks
         var open = store.Instances[row.Id];
         var preserved = JobRegistry.Generation(open, "background") == 0 && open.NextJobGeneration == row.NextJobGeneration &&
             store.Messages[key] is { Done: false, KeptBy: null, ReleasedBy.Generation: 1, Attempts: 0 } && probe.Entries == 1;
-        check(preserved, "RetryAll restores the current consumed ticket and its original generation with a fresh poison budget");
+        check(preserved, $"{mode} restores the current consumed ticket and its original generation with a fresh poison budget");
         if (!preserved) return;
         var driver = successor.JobCompletion(row.Id, "background", row.Creation)!;
         probe.Complete.SetResult();

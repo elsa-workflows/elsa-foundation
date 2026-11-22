@@ -81,6 +81,12 @@ if (args.Contains("--park-recovery-check"))
     await ParkKeptChecks.CheckRecoverArrivals((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-retry-check"))
+{
+    var failed = false;
+    await ParkRetryChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-recovery-native-check"))
 {
     var failed = false;

@@ -30,11 +30,13 @@ public sealed partial class InMemoryStore
     private bool TimerHandleMatches(string origin, string id) => CryptographicOperations.FixedTimeEquals(
         Convert.FromHexString(id.AsSpan(33)), Convert.FromHexString(TimerHandleTag(origin, id[1..33])));
 
-    internal ParkTimerOpen? PlanFoundationTimers(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkTimerRecipe> recipes)
+    internal ParkTimerOpen? PlanFoundationTimers(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkTimerRecipe> recipes, ParkRetryOpen? retry = null)
     {
         if (recipes.Count > MaxRestoreWaits) return null;
         var previous = ReadTimerDispositions(row.ParkTimerDispositions);
         var keys = new HashSet<InboxKey>();
+        var rearmSelection = retry?.TimerRearms.ToHashSet();
+        var markedSelection = retry?.Marked.Select(row => row.Key).ToHashSet();
         var dispositions = new SortedDictionary<string, byte>(StringComparer.Ordinal);
         var rearms = new List<ParkTimerRearm>();
         var preserved = new List<InboxKey>();
@@ -44,8 +46,8 @@ public sealed partial class InMemoryStore
         {
             foreach (var timer in recipes)
             {
-                if (timer.Id is not { Length: 65 } id || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0 ||
-                    timer.Kind is null || timer.Kind.StartsWith("kernel.", StringComparison.Ordinal) ||
+                var id = timer.Id;
+                if (!IsTimerHandleShape(id) || timer.Kind is null || timer.Kind.StartsWith("kernel.", StringComparison.Ordinal) ||
                     timer.Kind is Kinds.Start or Kinds.Event or Kinds.JobFinished or "child-finished")
                     return null;
                 var physical = origin + "#" + id;
@@ -59,14 +61,14 @@ public sealed partial class InMemoryStore
 
                 var stored = Messages.GetValueOrDefault(key);
                 var beforeRearms = rearms.Count;
-                var digest = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(physical)));
+                var digest = FoundationTimerDigest(key);
                 var prior = previous.GetValueOrDefault(digest);
                 if (stored is not null && !SameTimer(stored, envelope) ||
                     stored is null && prior == 0 && !TimerHandleMatches(origin, id)) return null;
                 if (prior == SuppressedTimer)
                 {
                     if (stored is { Done: false }) return null;
-                    if (mode == ParkRecoveryMode.RetryAll) Rearm();
+                    if (mode == ParkRecoveryMode.RetryAll || rearmSelection?.Contains(key) == true) Rearm();
                     else dispositions.Add(digest, SuppressedTimer);
                 }
                 else if (prior == RearmedTimer)
@@ -77,7 +79,8 @@ public sealed partial class InMemoryStore
                 {
                     Rearm();
                 }
-                else if (stored.KeptBy == ParkKeepReason.Consumed && mode != ParkRecoveryMode.RetryAll)
+                else if (stored.KeptBy == ParkKeepReason.Consumed && mode != ParkRecoveryMode.RetryAll &&
+                    markedSelection?.Contains(key) != true)
                 {
                     dispositions.Add(digest, SuppressedTimer);
                 }

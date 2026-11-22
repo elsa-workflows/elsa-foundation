@@ -13,7 +13,7 @@ internal sealed partial class ActorAdapter
     {
         var delivery = input.Taken[input.From];
         if (input.Row is not { Status: Durable.InstanceStatus.Faulted, ParkDiscard: null, ParkRecovery: null } row ||
-            delivery.Message.Operator is not { Selection: { } selection, RecoverMode: { } mode })
+            delivery.Message.Operator is not { Selection: { } selection, RecoverMode: { } mode } request)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "StaleSelection");
         var checkpoint = store.FoundationTurnHeader(row);
         var header = Header(checkpoint);
@@ -38,9 +38,20 @@ internal sealed partial class ActorAdapter
         }
         catch (Exception) { return InvalidPlan(); }
         if (timerRecipes.Length + jobRecipes.Length + subscriptionRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
-        var timers = store.PlanFoundationTimers(row, mode, timerRecipes);
+        Durable.ParkRetryOpen? retry = null;
+        if (mode == Durable.ParkRecoveryMode.Retry)
+        {
+            retry = store.PlanFoundationRetry(row, header.Tenant, header.Ref.Id, park, request.RecoverHandles, timerRecipes);
+            if (retry is null)
+            {
+                var refusal = Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidRetrySelection");
+                refusal.Journal = Durable.Json.Write(new { Outcome = "refused", Operation = delivery.Message.Id, Reason = "selection" });
+                return refusal;
+            }
+        }
+        var timers = store.PlanFoundationTimers(row, mode, timerRecipes, retry);
         if (timers is null) return InvalidPlan();
-        var jobs = store.PlanFoundationJobs(row, mode, jobRecipes, timers.Bytes);
+        var jobs = store.PlanFoundationJobs(row, mode, jobRecipes, timers.Bytes, retry);
         if (jobs is null) return InvalidPlan();
         var subscriptions = store.PlanFoundationSubscriptions(row, header.Tenant, subscriptionRecipes, jobs.Bytes);
         if (subscriptions is null) return InvalidPlan();
@@ -60,8 +71,13 @@ internal sealed partial class ActorAdapter
         };
         var serial = checked((expiry?.Serial ?? 0) + 1);
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
-        next = next with { ParkRecovery = new(delivery.Message.Id, mode, null, serial, control.InboxKey) };
+        next = next with
+        {
+            ParkRecovery = new(delivery.Message.Id, mode, null, serial, control.InboxKey)
+            { AlreadyRearmed = retry?.AlreadyRearmed.Count ?? 0 }
+        };
         var outcome = ParkCheckpoint(input, row, next);
+        outcome.FoundationRetry = retry;
         outcome.FoundationRecoveryTimers = timers;
         outcome.FoundationRecoveryJobs = jobs;
         if (subscriptionRecipes.Length != 0) outcome.FoundationRecoverySubscriptions = subscriptionRecipes;
@@ -107,7 +123,7 @@ internal sealed partial class ActorAdapter
             {
                 ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
             });
-            completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
+            completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared, drain.AlreadyRearmed });
             return completed;
         }
 

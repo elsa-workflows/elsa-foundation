@@ -2870,6 +2870,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationKept = kept,
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
+            FoundationRetry = unit.FoundationRetry,
             FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
             FoundationRecoveryJobs = unit.FoundationRecoveryJobs,
             FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions,

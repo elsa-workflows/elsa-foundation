@@ -163,6 +163,7 @@ public sealed record TurnCommit(
     internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
     internal ParkPageClear? FoundationParkClear { get; init; }
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
+    internal ParkRetryOpen? FoundationRetry { get; init; }
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
     internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions { get; init; }

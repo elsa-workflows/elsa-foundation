@@ -162,6 +162,139 @@ internal static class ContractNativeChecks
         await CheckRearmedTimer(sweep: false, check);
         await CheckRearmedTimer(sweep: true, check);
         await CheckRearmedTimer(sweep: true, check, preserveAfterSweep: true);
+        await CheckRearmedTimer(sweep: false, check, explicitSelection: true);
+        await CheckRearmedTimer(sweep: true, check, explicitSelection: true);
+        await CheckRearmedTimer(sweep: false, check, explicitSelection: true, keepMarker: true);
+        foreach (var variant in Enum.GetValues<RearmedWhenSelected>())
+            await CheckRearmedTimer(sweep: true, check, explicitSelection: true, testRepeat: variant);
+        await CheckRetryAllSuppressedTimers(check);
+    }
+
+    private static async Task CheckRetryAllSuppressedTimers(Action<bool, string> check)
+    {
+        const long initial = 1_701_800_026_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = TimeSpan.FromMinutes(1), IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100)
+        };
+        var scope = new Contract.BoundScope("native-retry-all");
+        Node Branch(string name) => Wf.Sequence("sequence-" + name, Wf.Delay("delay-" + name, 100), Wf.Set("set-" + name, name, true));
+        var model = new NativeExecutionModel(new WorkflowRegistry().Add(Wf.Workflow("timers", Wf.Parallel("pair", null, Branch("one"), Branch("two")))));
+        var faultAt = new HashSet<string>(["timers", "suppress-trip", "retry-all-trip"], StringComparer.Ordinal);
+        var offeredTimers = new List<string>();
+        var offeredTrips = new List<string>();
+        var worker = new Worker("native-retry-all", 0, store, new ActorAdapter(store, new PublicWorkflow([model])), new WorkerOptions
+        {
+            Monotonic = () => now - initial,
+            OnTurn = (_, inbox, _) =>
+            {
+                var timers = inbox.Where(message => message.Kind == NativeKinds.Timer).ToArray();
+                if (timers.Length > 0 && faultAt.Remove("timers")) throw new InvalidOperationException("fail with both due timers");
+                foreach (var trip in new[] { "suppress-trip", "retry-all-trip" })
+                {
+                    if (!inbox.Any(message => message.Id == trip)) continue;
+                    if (faultAt.Remove(trip)) throw new InvalidOperationException("interrupt " + trip);
+                    offeredTrips.Add(trip);
+                }
+                offeredTimers.AddRange(timers.Select(timer => timer.Id));
+            }
+        });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 10);
+        var runtime = new PublicRuntime(ingress, reads);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("timers", Modes.Balanced))).Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        await Pump(owner);
+        var timers = store.Messages.Values.Where(row => row.Message.Kind == NativeKinds.Timer).OrderBy(row => row.Seq).ToArray();
+        if (timers.Length != 2)
+        {
+            check(false, "the real Native workflow arms both waits before Park");
+            return;
+        }
+        var cleared = timers[0];
+        var retained = timers[1];
+        now += 100;
+        await Pump(owner);
+        var parked = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        if (parked.Park is null || timers.Any(row => row is not { Done: true, KeptBy: ParkKeepReason.Consumed }))
+        {
+            check(false, "the first failed turn keeps both timer inputs Consumed");
+            return;
+        }
+        var selection = (await reads.GetAsync(scope, reference))!.Selection!;
+
+        await ingress.SendAsync(scope, target, "suppress-trip", "act", new string('x', ParkRecoveryCredit.LimitBytes));
+        await ingress.SendAsync(scope, target, "page-boundary", "act");
+        await Pump(owner);
+        // The large released row spends the first page's credit. The other arrival cuts its page before the second timer.
+        retained.Seq = store.Messages.Values.Single(row => row.Message.Id == "page-boundary").Seq + 1;
+        await Recover("suppress", Contract.RecoverMode.Resume);
+        await Pump(owner);
+        var suppressed = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var split = suppressed.Park == parked.Park && suppressed.Row is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            cleared is { Done: true, KeptBy: null, Message.KeepUntil: not null } &&
+            retained is { Done: true, KeptBy: ParkKeepReason.Consumed };
+        check(split, "the interrupted Resume suppresses two real timers, with one before and one after its first page boundary");
+        if (!split) return;
+
+        now = cleared.Message.KeepUntil!.Value + 1;
+        await store.SweepAsync();
+        await ingress.SendAsync(scope, target, "retry-all-trip", "act");
+        await Pump(owner);
+        await Recover("retry-all", Contract.RecoverMode.RetryAll);
+        await Step();
+        var current = timers.Select(timer => store.Messages.GetValueOrDefault(timer.Message.InboxKey)).ToArray();
+        var rebuilt = store.Instances[parked.Row.Id].ParkRecovery is { Cursor: null } &&
+            current.Zip(timers).All(pair => pair.First is { Done: false, ReleasedBy: null, KeptBy: null } rebuiltTimer &&
+                rebuiltTimer.Seq > pair.Second.Seq && rebuiltTimer.Message.InboxKey == pair.Second.Message.InboxKey);
+        check(rebuilt, "RetryAll re-arms the still-kept timer and the swept timer in the same fenced Open");
+        if (!rebuilt) return;
+
+        for (var pass = 0; pass < 4 && store.Instances[parked.Row.Id].Status == InstanceStatus.Running; pass++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var interrupted = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        if (interrupted.Park != parked.Park || interrupted.Row is not { Status: InstanceStatus.Faulted, ParkRecovery: null } ||
+            offeredTimers.Count != 0)
+        {
+            check(false, "a second interruption leaves both re-armed timers in the same Park before either reaches its frame");
+            return;
+        }
+
+        await Recover("retry-all-again", Contract.RecoverMode.RetryAll);
+        await Step();
+        check(store.Instances[parked.Row.Id].ParkRecovery is { Cursor: null } &&
+            current.All(timer => ReferenceEquals(timer, store.Messages[timer!.Message.InboxKey])),
+            "a second RetryAll opens without replacing or re-arming either timer again");
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var completed = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var state = Json.Read<NativeState>(completed.Row.State);
+        check(completed is { Park: null, Row.Status: InstanceStatus.Finished } && state.Waits.Count == 0 &&
+            state.Variables.GetValueOrDefault("one")?.GetValue<bool>() == true &&
+            state.Variables.GetValueOrDefault("two")?.GetValue<bool>() == true &&
+            offeredTimers.Order(StringComparer.Ordinal).SequenceEqual(timers.Select(timer => timer.Message.Id).Order(StringComparer.Ordinal)) &&
+            offeredTrips.SequenceEqual(["suppress-trip", "retry-all-trip"]),
+            "both Native frames resume exactly once and each interrupted Consumed input is replayed by RetryAll");
+
+        async Task Recover(string operation, Contract.RecoverMode mode) =>
+            await ingress.SendAsync(scope, target, operation, Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection, mode)));
+
+        async Task Step()
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task CheckRecoveredTimer(Action<bool, string> check)
@@ -229,7 +362,10 @@ internal static class ContractNativeChecks
             "qualified Resume delivers the kept timer under its original key and the Native handler advances its frame once");
     }
 
-    private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check, bool preserveAfterSweep = false)
+    private enum RearmedWhenSelected { Pending, Arrived, Consumed }
+
+    private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check, bool explicitSelection = false,
+        RearmedWhenSelected? testRepeat = null, bool keepMarker = false, bool preserveAfterSweep = false)
     {
         const long initial = 1_701_800_025_000;
         var now = initial;
@@ -243,6 +379,9 @@ internal static class ContractNativeChecks
         var model = new NativeExecutionModel(registry);
         var firstFault = false;
         var secondFault = false;
+        var rearmedFault = false;
+        var failRestoredTimer = false;
+        var retryArrivalOffers = 0;
         var timerOffers = 0;
         var timerOfferedDuringDrain = false;
         Message? siblingTimer = null;
@@ -279,8 +418,22 @@ internal static class ContractNativeChecks
                     secondFault = true;
                     throw new InvalidOperationException("fault after suppression");
                 }
+                if (inbox.Any(message => message.Id is "interrupt-rearm" or "retry-y"))
+                {
+                    if (!rearmedFault)
+                    {
+                        rearmedFault = true;
+                        throw new InvalidOperationException("fault after re-arm");
+                    }
+                    retryArrivalOffers++;
+                }
                 if (inbox.Any(message => message.Kind == NativeKinds.Timer))
                 {
+                    if (failRestoredTimer)
+                    {
+                        failRestoredTimer = false;
+                        throw new InvalidOperationException("fault with a restored timer");
+                    }
                     timerOffers++;
                     timerOfferedDuringDrain |= store.Instances[actor.Id].ParkRecovery is not null;
                 }
@@ -306,19 +459,28 @@ internal static class ContractNativeChecks
         if (!firstPark) return;
 
         var selection = (await reads.GetAsync(scope, reference))!.Selection!;
-        await ingress.SendAsync(scope, target, "fault-recovery", "act");
+        var keptHandle = store.SealFoundationKeptHandle(scope.Tenant, reference.Id, key)!;
+        await ingress.SendAsync(scope, target, "fault-recovery", "act",
+            keepMarker ? new string('x', ParkRecoveryCredit.LimitBytes) : null);
+        if (keepMarker) await ingress.SendAsync(scope, target, "page-boundary", "act");
         await Pump(owner);
+        if (keepMarker)
+        {
+            // Put the timer after a second released candidate, beyond the first page's credit.
+            timer.Seq = store.Messages.Values.Single(row => row.Message.Id == "page-boundary").Seq + 1;
+            seq = timer.Seq;
+        }
         await ingress.SendAsync(scope, target, "suppress", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
         await Pump(owner);
         var interrupted = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
         var suppressed = secondFault && interrupted.Park == parked.Park && interrupted.Row is
             { Status: InstanceStatus.Faulted, ParkRecovery: null, ParkTimerDispositions: not null } &&
-            timer is { Done: true, KeptBy: null } && timerOffers == 0;
-        check(suppressed, "Resume suppresses the consumed timer across a real re-park after clearing its kept row");
+            timer.Done && timer.KeptBy == (keepMarker ? ParkKeepReason.Consumed : null) && timerOffers == 0;
+        check(suppressed, $"Resume suppresses the consumed timer across a real re-park {(keepMarker ? "before" : "after")} clearing its kept row");
         if (!suppressed) return;
 
         // The finished marker is allowed to retain no payload. The invocation recipe must come from the model.
-        timer.Message = timer.Message with { Payload = null };
+        if (!keepMarker) timer.Message = timer.Message with { Payload = null };
         if (sweep)
         {
             now = timer.Message.KeepUntil!.Value + 1;
@@ -328,7 +490,15 @@ internal static class ContractNativeChecks
         check(store.Messages.ContainsKey(key) != sweep &&
             store.PlanFoundationTimers(interrupted.Row, ParkRecoveryMode.Resume, [recipe]) is { Rearms.Count: 0 } &&
             store.PlanFoundationTimers(interrupted.Row with { Creation = interrupted.Row.Creation + 1 }, ParkRecoveryMode.RetryAll, [recipe]) is null,
-            $"the {(sweep ? "swept" : "payload-free")} timer fixture is ready and its handle names only the original creation");
+            $"the {(sweep ? "swept" : keepMarker ? "still-kept" : "payload-free")} timer fixture is ready and its handle names only the original creation");
+        if (testRepeat is not null)
+        {
+            await ingress.SendAsync(scope, target, "interrupt-rearm", "act");
+            await Pump(owner);
+        }
+        var retainedHandle = store.SealFoundationKeptHandle(scope.Tenant, reference.Id, key);
+        var handles = explicitSelection ? new[] { sweep ? retainedHandle! : keptHandle } : null;
+        var mode = explicitSelection ? Contract.RecoverMode.Retry : Contract.RecoverMode.RetryAll;
         if (preserveAfterSweep)
         {
             siblingTimer = envelope;
@@ -352,17 +522,105 @@ internal static class ContractNativeChecks
             return;
         }
         var admitted = await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
-            Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.RetryAll)));
-        await worker.PollAsync();
-        await worker.LoadAsync();
-        await worker.FlushAsync();
-        worker.RunTurn(interrupted.Row.Id);
-        await worker.FlushAsync();
+            Json.Write(new Contract.OperatorCommand(selection, mode, handles)));
+        await Step(worker);
         var opened = admitted.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[interrupted.Row.Id].ParkRecovery is not null &&
             store.Messages.GetValueOrDefault(key) is { Done: false, ReleasedBy: null, KeptBy: null, Seen: 0, Trial: 0, Attempts: 0 } rebuilt &&
             rebuilt.Seq > seq && rebuilt.Message == envelope;
-        check(opened, "RetryAll rebuilds the exact timer envelope with a fresh sequence in the fenced Open");
+        check(opened, $"{mode} rebuilds the exact {(sweep ? "swept" : "present")} timer envelope with a fresh sequence in the fenced Open");
         if (!opened) return;
+
+        var rebuiltTimer = store.Messages[key];
+        if (!sweep && explicitSelection)
+        {
+            await store.SweepAsync();
+            check(ReferenceEquals(rebuiltTimer, store.Messages.GetValueOrDefault(key)) &&
+                store.Messages.Values.All(row => row.KeptBy != ParkKeepReason.Selected),
+                "the sweep after Open preserves the re-armed timer without a Selected marking");
+        }
+        if (testRepeat is { } variant)
+        {
+            await WaitForRepark();
+            var samePark = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+            var retryArrival = store.Messages.Values.Single(row => row.Message.Id == "interrupt-rearm");
+            if (samePark.Park != parked.Park || samePark.Row.Status != InstanceStatus.Faulted ||
+                retryArrival.KeptBy != ParkKeepReason.Consumed || !rearmedFault || rebuiltTimer.Done)
+            {
+                check(false, $"R1 re-parks before its freshly re-armed timer reaches the Native frame ({variant})");
+                return;
+            }
+
+            if (variant != RearmedWhenSelected.Pending)
+            {
+                await Step(worker);
+                if (rebuiltTimer is not { Done: true, KeptBy: ParkKeepReason.Arrived })
+                {
+                    check(false, $"the re-armed timer is kept Arrived before the next {variant} recovery");
+                    return;
+                }
+            }
+
+            if (variant == RearmedWhenSelected.Consumed)
+            {
+                failRestoredTimer = true;
+                await ingress.SendAsync(scope, target, "fail-restored-timer", Contract.Kinds.Recover,
+                    Json.Write(new Contract.OperatorCommand(selection)));
+                await Step(worker);
+                await WaitForRepark();
+                if (store.Instances[interrupted.Row.Id].Status != InstanceStatus.Faulted ||
+                    rebuiltTimer is not { Done: true, KeptBy: ParkKeepReason.Consumed })
+                {
+                    check(false, "a failed Native turn consumes the restored timer under the same Park");
+                    return;
+                }
+
+                await ingress.SendAsync(scope, target, "retry-y", "act");
+                retryArrival = store.Messages.Values.Single(row => row.Message.Id == "retry-y");
+                retryArrival.Attempts = 3;
+                await Step(worker);
+                if (retryArrival.KeptBy != ParkKeepReason.Consumed)
+                {
+                    check(false, "the Worker keeps the exhausted companion input Consumed under the same Park");
+                    return;
+                }
+            }
+
+            var expectedAlreadyRearmed = variant == RearmedWhenSelected.Consumed ? 0 : 1;
+            var repeat = await ingress.SendAsync(scope, target, "retry-again", Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Retry,
+                    [keptHandle, store.SealFoundationKeptHandle(scope.Tenant, reference.Id, retryArrival.Message.InboxKey)!])));
+            if (variant == RearmedWhenSelected.Pending)
+                store.Messages.Values.Single(row => row.Message.Id == "retry-again").Seq = rebuiltTimer.Seq - 1;
+            await Step(worker);
+            var repeated = repeat.Outcome == Contract.AdmissionOutcome.Accepted &&
+                store.Instances[interrupted.Row.Id].ParkRecovery is { Cursor: null } drain &&
+                drain.AlreadyRearmed == expectedAlreadyRearmed &&
+                ReferenceEquals(rebuiltTimer, store.Messages[key]) && retryArrival.KeptBy == ParkKeepReason.Selected &&
+                (variant switch
+                {
+                    RearmedWhenSelected.Pending => rebuiltTimer is { Done: false, KeptBy: null, ReleasedBy: null },
+                    RearmedWhenSelected.Arrived => rebuiltTimer is { Done: true, KeptBy: ParkKeepReason.Arrived },
+                    _ => rebuiltTimer is { Done: true, KeptBy: ParkKeepReason.Selected }
+                });
+            check(repeated, $"R2 accepts the old timer handle and selects the other Consumed row with T {variant}");
+            if (!repeated) return;
+
+            InMemoryStore.MessageRow? late = null;
+            if (variant == RearmedWhenSelected.Pending)
+            {
+                await ingress.SendAsync(scope, target, "unreleased-arrival", "act");
+                late = store.Messages.Values.Single(row => row.Message.Id == "unreleased-arrival");
+            }
+            await Step(worker);
+            var gate = store.Instances[interrupted.Row.Id].ParkRecovery?.Gate;
+            check(variant switch
+                {
+                    RearmedWhenSelected.Pending => gate == retryArrival.Message.InboxKey &&
+                        rebuiltTimer is { Done: false, Seen: > 0, ReleasedBy: null } && late is { Done: false, Seen: > 0, ReleasedBy: null },
+                    RearmedWhenSelected.Arrived => gate == key,
+                    _ => rebuiltTimer is { Done: false, ReleasedBy: not null, KeptBy: null }
+                }, $"the first R2 page waits only on a released input with T {variant}");
+        }
 
         if (sweep)
         {
@@ -377,9 +635,34 @@ internal static class ContractNativeChecks
         var checkpoint = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
         var state = Json.Read<NativeState>(checkpoint.Row.State);
         check(checkpoint is { Park: null, Row: { Status: InstanceStatus.Finished, ParkTimerDispositions: null } } &&
-            !timerOfferedDuringDrain && timerOffers == 1 && state.Waits.Count == 0 &&
-            state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "continued" && !store.Messages.ContainsKey(key),
-            "the re-armed timer waits for Complete and resumes the real Native frame exactly once");
+            timerOfferedDuringDrain == (testRepeat is RearmedWhenSelected.Arrived or RearmedWhenSelected.Consumed) &&
+            timerOffers == 1 && state.Waits.Count == 0 &&
+            state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "continued" &&
+            store.Messages.GetValueOrDefault(key) is null or { Done: true, KeptBy: null },
+            $"{mode} offers the re-armed timer in the expected phase and resumes the real Native frame exactly once");
+        if (testRepeat is { } finalVariant)
+            check(retryArrivalOffers == 1 && store.Journal.Values.Any(entry => entry.Instance == checkpoint.Row.Id &&
+                entry.Entries.Contains("\"Operation\":\"retry-again\"", StringComparison.Ordinal) &&
+                entry.Entries.Contains("\"AlreadyRearmed\":" + (finalVariant == RearmedWhenSelected.Consumed ? 0 : 1), StringComparison.Ordinal)),
+                $"R2 restores the selected Consumed arrival once and records the already re-armed count with T {finalVariant}");
+
+        async Task Step(Worker current)
+        {
+            await current.PollAsync();
+            await current.LoadAsync();
+            await current.FlushAsync();
+            current.RunTurn(interrupted.Row.Id);
+            await current.FlushAsync();
+        }
+
+        async Task WaitForRepark()
+        {
+            for (var pass = 0; pass < 15 && store.Instances[interrupted.Row.Id].Status != InstanceStatus.Faulted; pass++)
+            {
+                if (pass % 5 == 4) now += 11;
+                await Step(worker);
+            }
+        }
 
         async Task Finish(IScopeActivation activation)
         {

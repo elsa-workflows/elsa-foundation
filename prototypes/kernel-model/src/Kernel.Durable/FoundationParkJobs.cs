@@ -26,7 +26,7 @@ public sealed partial class InMemoryStore
         return removed == 0 ? actor.Jobs : JobRegistry.Write(jobs);
     }
 
-    internal ParkJobOpen? PlanFoundationJobs(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkJobRecipe> recipes, long timerBytes)
+    internal ParkJobOpen? PlanFoundationJobs(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkJobRecipe> recipes, long timerBytes, ParkRetryOpen? retry = null)
     {
         var registered = JobRegistry.Read(row.Jobs);
         if (registered.Count > recipes.Count || registered.Count > 0 && row.Creation <= 0) return null;
@@ -43,6 +43,7 @@ public sealed partial class InMemoryStore
             if (!registeredKeys.Contains(recipe.Key) && !Charge(EncodeRecipe(recipe, nextGeneration, out _))) return null;
         }
         if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], bytes);
+        var markedSelection = retry?.Marked.Select(row => row.Key).ToHashSet();
         var discardedResults = new HashSet<string>(StringComparer.Ordinal);
         var pending = new List<InboxKey>();
         var retained = new List<InboxKey>();
@@ -74,14 +75,16 @@ public sealed partial class InMemoryStore
                 var digest = JobRestartDigest(key);
                 var payload = EncodeRecipe(recipe, nextGeneration, out var timerId);
                 if (!Charge(payload)) return null;
-                if (mode == ParkRecoveryMode.Resume && result is { KeptBy: ParkKeepReason.Consumed })
+                if (mode != ParkRecoveryMode.RetryAll && result is { KeptBy: ParkKeepReason.Consumed } &&
+                    markedSelection?.Contains(resultKey) != true)
                 {
                     retained.Add(oldDeadline);
                     discardedResults.Add(key);
                     continue;
                 }
                 var keepsResult = result is { Done: false } or { KeptBy: not null };
-                var retriesTicket = !keepsResult && mode == ParkRecoveryMode.RetryAll && ticket is { KeptBy: ParkKeepReason.Consumed };
+                var retriesTicket = !keepsResult && ticket is { KeptBy: ParkKeepReason.Consumed } &&
+                    (mode == ParkRecoveryMode.RetryAll || markedSelection?.Contains(ticketKey) == true);
                 var restart = ticket is not { Done: false } && !keepsResult && !retriesTicket;
                 if (!restart)
                 {

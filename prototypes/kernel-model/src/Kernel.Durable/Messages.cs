@@ -56,6 +56,7 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
 internal sealed record FoundationOperatorCommand(string? Selection)
 {
     internal ParkRecoveryMode? RecoverMode { get; init; }
+    internal IReadOnlyList<string>? RecoverHandles { get; init; }
 }
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
