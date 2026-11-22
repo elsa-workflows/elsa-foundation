@@ -293,7 +293,7 @@ export function ActivityUpgradeWorkbenchPage({
 
   return <main className="studio-page ad-page au-page" aria-labelledby="activity-upgrade-title">
     <StudioLink className="ad-back" href="/workflows/activity-definitions" navigateToStudioPath={navigateToStudioPath}><ArrowLeft size={16} aria-hidden /> Activity Definitions</StudioLink>
-    <StudioPageHeader headingLevel={1} title={<>Staged dependency upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
+    <StudioPageHeader headingLevel={1} title={<>Activity definition upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
 
     <div className="au-scope-note" role="note">
       <strong>Broad planning is deliberate</strong>

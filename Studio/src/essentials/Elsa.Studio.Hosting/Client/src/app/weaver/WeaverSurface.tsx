@@ -114,7 +114,7 @@ export function WeaverSurface({
         <div className="weaver-mode-status" id={autoApplyStatusId} role="status" aria-label="Auto-apply mode status" data-autonomy-state={session.autoApplyState}>
           <span>{autoApplyStatus}</span>
           {session.autoApplyState === "unresolved" ? (
-            <button type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry mode change</button>
+            <button type="button" className="weaver-mode-retry" onClick={session.retryAutoApplyMode}>Retry</button>
           ) : null}
         </div>
       ) : null}
@@ -183,7 +183,7 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
           <span>{describeRecoveryNotice(notice)}</span>
           {notice.kind === "owned-elsewhere" || notice.kind === "lost" ? (
             // A reread waits while a mode change is unconfirmed, as prompts and recorded actions do.
-            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Try again</button>
+            <button type="button" disabled={session.reopening || session.autoApplyBlocked} onClick={() => session.reopenSession(notice.sessionId)}>Retry</button>
           ) : null}
           {notice.kind === "limit" ? (
             <button type="button" disabled={session.busy || session.pendingProposalIds.has("continue-session")} onClick={session.continueInNewSession}>Continue in a new session</button>

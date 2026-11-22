@@ -157,12 +157,12 @@ Candidates reported by source readers. Confirm the need before building any of t
 
 - [ ] **K9.** (#5002) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
-- [ ] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`,
+- [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).
 - [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
-- [ ] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`).
+- [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
 - [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
   `DASH/native/NamedDashboards.tsx:524`).
 
@@ -370,27 +370,27 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [x] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string. (PR #5297)
-- [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
+- [x] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
   443, 489`, Backends `BACK/BackendsPage.tsx:121`, `WF/ActivityGraphImplementationEditor.tsx:270, 1363`.
-  `needs: D7`
-- [ ] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
+  `needs: D7` (PR #5305)
+- [x] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
   `H/weaver/WeaverSurface.tsx:186`, "Retry mode change" `:117`, and the Definitions list variants
   "Retry current search", "Restart from first page", "Reload workflow support"
-  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7`
+  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7` (PR #5305)
 - [x] **X5.9** Withdrawn on 2026-11-21: not a defect. "Withdraw"
   (`H/weaver/WeaverMessageList.tsx:132`) withdraws the user's own unstarted message; "Deny"
   (`H/weaver/WeaverProposalReview.tsx:107`) rejects a proposal. They are different actions.
-- [ ] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
+- [x] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
   "Activity definition upgrades", "Task forms", "Runtime diagnostics" (D8). **[check]** "Console" /
   "Server console": find where "Server console" is shown before changing anything; it was not found
-  in source. `needs: D8`
-- [ ] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
-  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`.
-- [ ] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
+  in source. `needs: D8` (PR #5305)
+- [x] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
+  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`. (PR #5305)
+- [x] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
   (`DecisionsPage.tsx:144`), "Move to recycle bin" (`:258`), overflow "Delete", "Permanently delete
-  decision" (`:164`).
-- [ ] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
-  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`).
+  decision" (`:164`). (PR #5305)
+- [x] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
+  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`). (PR #5305)
 
 ### X6. Refresh
 
@@ -470,7 +470,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `EXT/Attention/AttentionWidget.tsx:12`; `DASH/WidgetFrame.tsx:88, 92` ([verified] `:88`).
 - [ ] **X9.2** (#5129) [verified] Suspense fallbacks in `WF/workflow-editor/WorkflowDefinitions.tsx:816` and
   `:991` (also `:992`, `:994`, `:1014` [source]).
-- [ ] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and
+- [x] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and (PR #5309)
   `ActivityDefinitionCreateDialog.tsx:126` (`ad-inline-status`);
   `EXT/Connections/ConnectionList.tsx:32` (a `StudioResultState` titled "Loading connections…").
 - [ ] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`:
@@ -585,10 +585,10 @@ Work file by file and run `pnpm lint:css` after each. Counts are grep counts on 
 
 Uppercase labels (`needs: D3`):
 
-- [ ] **X13.1** (#5184) [verified] `WF/styles.css`: the token `--wf-label-transform: uppercase` at `:87` drives
+- [x] **X13.1** (#5184) [verified] `WF/styles.css`: the token `--wf-label-transform: uppercase` at `:87` drives (PR #5309)
   12 `text-transform: var(--wf-label-transform, uppercase)` rules; two literal `uppercase` rules sit at
   `:6061` and near `:7547`.
-- [ ] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`,
+- [x] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`, (PR #5309)
   `:275`; `WF/activityContractEditor.css:280–281`; `WF/activityDefinitionDependencyExplorer.css:29`;
   `WF/activityUpgradeWorkbench.css:578–580`.
 - [ ] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`.
