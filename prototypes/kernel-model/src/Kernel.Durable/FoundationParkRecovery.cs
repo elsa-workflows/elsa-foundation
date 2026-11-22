@@ -62,7 +62,8 @@ public sealed partial class InMemoryStore
             {
                 Revision = checked(previous.Revision + 1), Status = InstanceStatus.Running, Fault = null,
                 ParkResolutionGeneration = checked(previous.ParkResolutionGeneration + 1), ParkRecovery = recovery, ParkCohort = null,
-                ParkTimerDispositions = next.ParkTimerDispositions
+                ParkTimerDispositions = next.ParkTimerDispositions, ParkRestartedJobs = next.ParkRestartedJobs,
+                Jobs = next.Jobs, NextJobGeneration = next.NextJobGeneration
             }) || StoreBatchRules.AddressPartition(previous.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             turn.OpensPark || turn.Delete || turn.FoundationParkClear is not null ||
             turn.FoundationKept is not null || turn.FoundationHeader is not null ||
@@ -94,6 +95,17 @@ public sealed partial class InMemoryStore
         if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions ||
             !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
             throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
+        var jobs = turn.FoundationRecoveryJobs;
+        if (jobs is null || jobs.Registry != next.Jobs || jobs.NextGeneration != next.NextJobGeneration || jobs.Restarts != next.ParkRestartedJobs ||
+            (long)timers.Recipes.Count + jobs.Recipes.Count > MaxRestoreWaits)
+            throw InvalidDrain();
+        var checkedJobs = PlanFoundationJobs(previous, jobs.Recipes, checkedTimers.Bytes);
+        if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
+            checkedJobs.Restarts != jobs.Restarts || !checkedJobs.Pending.SequenceEqual(jobs.Pending) ||
+            !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
+            throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
+        foreach (var message in jobs.Writes)
+            if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
         if (expiry is null) return null;
         if (now >= expiry.At)
             throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
@@ -160,7 +172,7 @@ public sealed partial class InMemoryStore
             if (page is not null || turn.Sent.Count != 0 || suspended ||
                 next != (previous with
                 {
-                    Revision = next.Revision, ParkRecovery = null, ParkTimerDispositions = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
+                    Revision = next.Revision, ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
                 }) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
                 !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })

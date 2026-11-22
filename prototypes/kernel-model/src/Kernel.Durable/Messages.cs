@@ -78,6 +78,7 @@ public sealed record Message(
     internal bool FoundationHeldJobResult { get; init; }
     private WeakReference<Message>? _issuedTicket;
     internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
+    internal Message WithoutTicketAuthority() => this with { _issuedTicket = null };
 
     internal Message AsKernelTicket()
     {

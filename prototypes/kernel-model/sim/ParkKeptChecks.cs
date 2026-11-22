@@ -1183,10 +1183,87 @@ internal static class ParkKeptChecks
             store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
     }
 
-    internal static Task CheckRecoverJobResult(Action<bool, string> check) =>
-        CaptureParkedCompletion(timed: false, check, recover: true);
+    internal static async Task CheckRecoverJobResult(Action<bool, string> check)
+    {
+        await CaptureParkedCompletion(timed: false, check, recover: true);
+        await CaptureParkedCompletion(timed: true, check, recover: true);
+        await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true);
+        await CheckRestartedJob(check);
+    }
 
-    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check, bool recover = false)
+    private static async Task CheckRestartedJob(Action<bool, string> check)
+    {
+        var now = 1_701_400_012_000L;
+        const string key = "background";
+        const string recipe = "captured arguments and effect key";
+        var store = new InMemoryStore(1, () => now);
+        var actor = new ParkedJobProbe("result", timed: false, arguments: recipe);
+        var scope = new Contract.BoundScope("job-restart");
+        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var first = MakeOwner("before-restart");
+        var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var oldGeneration = JobRegistry.Generation(row, key)!.Value;
+        var oldKey = InboxKey.Ticket(row.Id, key, row.Creation, oldGeneration);
+        await edge.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        await owner.DisposeAsync();
+
+        var successor = MakeOwner("restart-open");
+        await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+        await Pump(next);
+        var old = store.Messages.GetValueOrDefault(oldKey);
+        var parked = store.Instances[row.Id];
+        var retained = parked.Status == InstanceStatus.Faulted && old is { Done: true, KeptBy: ParkKeepReason.Arrived } &&
+            actor.Entries == 1 && actor.Completions == 0;
+        check(retained, "the successor keeps the old job ticket before Resume without entering its job code");
+        if (!retained) return;
+
+        // Restart takes the model's recipe, even if the old ticket contains different arguments.
+        old!.Message = old.Message with { Payload = Json.Write(old.Message.Read<JobTicket>() with { Arguments = "stale" }) };
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var admitted = await edge.SendAsync(scope, target, "restart-operation", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection)));
+        await successor.PollAsync();
+        await successor.LoadAsync();
+        await successor.FlushAsync();
+        successor.RunTurn(row.Id);
+        await successor.FlushAsync();
+        var open = store.Instances[row.Id];
+        var generation = oldGeneration + 1;
+        var currentKey = InboxKey.Ticket(row.Id, key, row.Creation, generation);
+        var restarted = admitted.Outcome == Contract.AdmissionOutcome.Accepted && open.ParkRecovery is not null &&
+            open.ParkRestartedJobs is not null && JobRegistry.Generation(open, key) == generation && open.NextJobGeneration == generation + 1 &&
+            store.Messages.GetValueOrDefault(currentKey) is { Done: false, Seen: 0, ReleasedBy: null } job &&
+            job.Message.Read<JobTicket>().Arguments == recipe && actor.Entries == 1;
+        check(restarted, "the fenced Open writes a new job generation from the captured recipe while the older ticket stays inert");
+        if (!restarted) return;
+
+        await next.DisposeAsync();
+        var finisher = MakeOwner("restart-after-take");
+        await using var finalOwner = (await new DurableHost([finisher]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(finalOwner);
+        }
+        check(store.Instances[row.Id] is { ParkRecovery: null, ParkRestartedJobs: null } &&
+            old is { Done: true, KeptBy: null, ReleasedBy: null } && actor.Entries == 2 && actor.Arguments.SequenceEqual([recipe, recipe]),
+            "the next owner clears the obsolete kept ticket and enters the replacement once after Complete");
+        var completion = finisher.JobCompletion(row.Id, key, row.Creation);
+        if (completion is null) return;
+        actor.Complete.SetResult();
+        await completion.WaitAsync(TimeSpan.FromSeconds(5));
+        await Pump(finalOwner);
+        check(actor.Completions == 1 && actor.Entries == 2 && store.Instances[row.Id].Jobs is null &&
+            !store.Messages.ContainsKey(currentKey), "the replacement result clears its own registry entry and reaches the actor once");
+    }
+
+    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check, bool recover = false, bool pendingAtOpen = false)
     {
         var now = 1_701_400_010_000L;
         const string jobKey = "background";
@@ -1227,16 +1304,35 @@ internal static class ParkKeptChecks
             "a fenced standalone conversion stores the bounded authenticated fault without rewriting the actor checkpoint");
 
         await owner.DisposeAsync();
-        await using var successor = (await new DurableHost([MakeOwner("parked-job-next")]).ActivateAsync(0))!;
-        await Pump(successor);
-        var kept = actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
-            store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived };
-        check(kept, "a successor keeps the bounded result as an arrival and does not rerun the job");
-        if (!recover || !kept) return;
+        var nextWorker = MakeOwner("parked-job-next");
+        await using var successor = (await new DurableHost([nextWorker]).ActivateAsync(0))!;
+        if (!pendingAtOpen)
+        {
+            await Pump(successor);
+            var kept = actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
+                store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+            check(kept, "a successor keeps the bounded result as an arrival and does not rerun the job");
+            if (!recover || !kept) return;
+        }
 
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
         var resultAdmission = await edge.SendAsync(scope, target, "recover-job", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(selection)));
+        if (pendingAtOpen)
+        {
+            // A lower order key for the external command models a result behind Open on a provider with separate clocks.
+            var command = store.Messages.Values.Single(item => item.Message.Id == "recover-job");
+            command.Seq = result!.Seq - 1;
+            await nextWorker.PollAsync();
+            await nextWorker.LoadAsync();
+            await nextWorker.FlushAsync();
+            nextWorker.RunTurn(row.Id);
+            await nextWorker.FlushAsync();
+            var preserved = store.Instances[row.Id] is { ParkRecovery: not null, ParkRestartedJobs: null } resumed &&
+                resumed.Jobs == parked.Jobs && result is { Done: false, ReleasedBy: null } && actor.Entries == 1;
+            check(preserved, "Open finds the pending result after its ticket has been removed and preserves the original generation");
+            if (!preserved) return;
+        }
         for (var pass = 0; pass < 4; pass++)
         {
             now += 11;
@@ -1245,7 +1341,7 @@ internal static class ParkKeptChecks
         var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor;
         check(resultAdmission.Outcome == Contract.AdmissionOutcome.Accepted && actor is { Entries: 1, Completions: 1 } &&
             recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && !store.Messages.ContainsKey(ticket),
-            "Resume uses the current-generation kept result once and never restarts the settled job");
+            $"Resume uses the current-generation {(pendingAtOpen ? "pending" : "kept")} result once and never restarts the settled job");
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -1360,12 +1456,13 @@ internal static class ParkKeptChecks
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
-    private sealed class ParkedJobProbe(string value, bool timed) : Contract.IActorType
+    private sealed class ParkedJobProbe(string value, bool timed, string? arguments = null) : Contract.IActorType
     {
         public string Type => "parked-job-check";
         public TaskCompletionSource Complete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Entries { get; private set; }
         public int Completions { get; private set; }
+        public System.Collections.Concurrent.ConcurrentQueue<string?> Arguments { get; } = new();
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -1373,7 +1470,7 @@ internal static class ParkKeptChecks
             foreach (var message in turn.Inbox)
                 switch (message.Kind)
                 {
-                    case Contract.Kinds.Start: turn.StartJob("background", timeout: timed ? TimeSpan.FromSeconds(1) : null); break;
+                    case Contract.Kinds.Start: turn.StartJob("background", arguments, timeout: timed ? TimeSpan.FromSeconds(1) : null); break;
                     case "fault": throw new InvalidOperationException("park with a running job");
                     case Contract.Kinds.JobFinished: Completions++; break;
                 }
@@ -1382,12 +1479,13 @@ internal static class ParkKeptChecks
 
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
+            Arguments.Enqueue(job.Arguments);
             Entries++;
             await Complete.Task.WaitAsync(cancellationToken);
             return value;
         }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new("background", null)], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new("background", arguments)], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

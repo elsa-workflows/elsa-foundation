@@ -59,7 +59,7 @@ public sealed partial class InMemoryStore
     {
         var next = turn.Row;
         var openingRecovery = previous?.ParkRecovery is null && next is { ParkRecovery: not null };
-        if (turn.FoundationRecoveryTimers is not null && !openingRecovery) throw InvalidDrain();
+        if ((turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null) && !openingRecovery) throw InvalidDrain();
         if (previous is { ParkRecovery: not null } && next is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
             turn.FoundationKept is { Count: > 0 })
         {
@@ -88,8 +88,8 @@ public sealed partial class InMemoryStore
 
         var takesOutstanding = turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
             .Any(key => IsOutstandingDrain(key) || IsOutstandingExpiry(key));
-        if (next is not null && previous?.ParkTimerDispositions != next.ParkTimerDispositions &&
-            !(before is not null && after is null && next.ParkDiscarded && next.ParkTimerDispositions is null))
+        if (next is not null && (previous?.ParkTimerDispositions != next.ParkTimerDispositions || previous?.ParkRestartedJobs != next.ParkRestartedJobs) &&
+            !(before is not null && after is null && next.ParkDiscarded && next.ParkTimerDispositions is null && next.ParkRestartedJobs is null))
             throw InvalidDrain();
         if (!takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(ParkDrainEnvelope.IsInDomain) &&
             (next is null || turn.Delete || before == after &&

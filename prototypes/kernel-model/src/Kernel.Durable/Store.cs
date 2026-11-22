@@ -21,6 +21,7 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal ParkDiscardDrain? ParkDiscard { get; init; }
     internal ParkRecoveryDrain? ParkRecovery { get; init; }
     internal string? ParkTimerDispositions { get; init; }
+    internal string? ParkRestartedJobs { get; init; }
     internal ParkRelease? ParkCohort { get; init; }
     internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
@@ -160,6 +161,7 @@ public sealed record TurnCommit(
     internal ParkPageClear? FoundationParkClear { get; init; }
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
     internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
+    internal ParkJobOpen? FoundationRecoveryJobs { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

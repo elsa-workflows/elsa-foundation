@@ -380,6 +380,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
                 ApplyFoundationRecoveryPage(turn, now);
                 ApplyFoundationTimerOpen(turn.FoundationRecoveryTimers);
+                ApplyFoundationJobOpen(turn.FoundationRecoveryJobs);
                 foreach (var id in turn.Done)
                 {
                     if (turn.FoundationKept?.TryGetValue(id, out var reason) == true)

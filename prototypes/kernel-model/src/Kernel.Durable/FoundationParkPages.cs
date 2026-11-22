@@ -18,6 +18,7 @@ internal readonly record struct ParkRelease(long Creation, long Generation);
 internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? Sender, ParkKeepReason? Reason, int PayloadBytes)
 {
     internal ParkRelease? ReleasedBy { get; init; }
+    internal bool ObsoleteJob { get; init; }
 }
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
@@ -33,7 +34,7 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
 
     internal bool Restores(ParkPageRow row, InstanceStatus status) => row.Kind == Kinds.Publish ||
         status != InstanceStatus.Running && row.Kind == Kinds.ChildFinished ||
-        (status == InstanceStatus.Running && row.Kind != Kinds.Meet &&
+        (status == InstanceStatus.Running && row.Kind != Kinds.Meet && !row.ObsoleteJob &&
             (row.Reason is null or ParkKeepReason.Arrived || Mode == ParkRecoveryMode.RetryAll ||
                 Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
 }
@@ -91,13 +92,21 @@ public sealed partial class InMemoryStore
                 else page.Enqueue(row, cursor);
             }
 
+            var currentJobs = recoveryGeneration is null || current.Jobs is null ? null
+                : JobRegistry.Read(current.Jobs).SelectMany(job => new[]
+                {
+                    InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation),
+                    InboxKey.JobResult(current.Id, job.Key, current.Creation, job.Generation)
+                }).ToHashSet();
             var result = new ParkPageRow[page.Count];
             for (var index = result.Length - 1; index >= 0; index--)
             {
                 page.TryDequeue(out var row, out var cursor);
                 result[index] = new(cursor, row!.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
                 {
-                    ReleasedBy = row.ReleasedBy
+                    ReleasedBy = row.ReleasedBy,
+                    ObsoleteJob = recoveryGeneration is not null && (row.Message.Kind == Kinds.Job || row.Message.FoundationJobResult) &&
+                        currentJobs?.Contains(cursor.Key) != true
                 };
             }
             return result;
@@ -139,7 +148,11 @@ public sealed partial class InMemoryStore
                 (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
                 continue;
             }
-            if (!drain.Restores(row, checkpoint.Status)) continue;
+            if (!drain.Restores(row, checkpoint.Status))
+            {
+                (stored.Done, stored.Held, stored.Trial) = (true, false, 0);
+                continue;
+            }
             (stored.Done, stored.Held, stored.ParkDeadLetter) = (false, false, false);
             (stored.Seen, stored.Trial, stored.Attempts) = (0, 0, 0);
             stored.ReleasedBy = release;

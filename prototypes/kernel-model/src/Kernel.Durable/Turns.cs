@@ -242,6 +242,7 @@ public sealed class TurnOutcome(string instance)
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkTimerOpen? FoundationRecoveryTimers;
+    internal ParkJobOpen? FoundationRecoveryJobs;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;

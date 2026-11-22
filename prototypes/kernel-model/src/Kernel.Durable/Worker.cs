@@ -2760,7 +2760,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationKept = kept,
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
-            FoundationRecoveryTimers = unit.FoundationRecoveryTimers
+            FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
+            FoundationRecoveryJobs = unit.FoundationRecoveryJobs
         };
     }
 
@@ -2979,6 +2980,18 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 else if (_polling && !Has(Flaw.PollRace)) _consumed.Add(key);
             }
             _woken = true;
+        }
+        if (unit.FoundationRecoveryJobs is { } jobs)
+        {
+            foreach (var key in jobs.Pending)
+            {
+                if (!_items.TryGetValue(key, out var waiting) || waiting.Key is not null || waiting.Message.Kind != Kinds.Job ||
+                    waiting.Attempts >= _options.MaxAttempts || waiting.Taken) continue;
+                var ticket = waiting.Message.Read<JobTicket>();
+                (waiting.Ticket, waiting.Key, waiting.JobDeadline) = (true, ticket.Key, ticket.Deadline);
+                if (ticket.Deadline is not null) _timedJobs.Add(waiting);
+            }
+            if (jobs.Writes.Count > 0) _woken = true;
         }
         if (!handOver)
             foreach (var message in unit.Sent)

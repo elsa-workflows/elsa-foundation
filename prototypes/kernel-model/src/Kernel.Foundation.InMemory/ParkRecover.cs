@@ -22,20 +22,24 @@ internal sealed partial class ActorAdapter
         if (expiry is not null && input.Services.Now >= expiry.At)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ParkExpired");
 
-        Durable.ParkTimerRecipe[] recipes;
+        Durable.ParkTimerRecipe[] timerRecipes;
+        Durable.ParkJobRecipe[] jobRecipes;
         bool withholds;
         try
         {
             var plan = actor.RestoreWaits(header, row.State);
-            if (plan is not { Jobs.Count: 0, Subscriptions.Count: 0 } || row.Jobs is not null) return InvalidPlan();
             const int sample = Durable.InMemoryStore.MaxRestoreWaits + 1;
-            recipes = plan.Timers.Take(sample).Select(timer => new Durable.ParkTimerRecipe(timer.Id, timer.Kind, timer.Payload, timer.Due)).ToArray();
+            if (plan.Subscriptions.Any()) return InvalidPlan();
+            timerRecipes = plan.Timers.Take(sample).Select(timer => new Durable.ParkTimerRecipe(timer.Id, timer.Kind, timer.Payload, timer.Due)).ToArray();
+            jobRecipes = plan.Jobs.Take(sample).Select(job => new Durable.ParkJobRecipe(job.Key, job.Arguments, job.Deadline)).ToArray();
             withholds = actor.Withholds(header with { Status = Contract.ActorStatus.Running, Fault = null, EndedAt = null });
         }
         catch (Exception) { return InvalidPlan(); }
-        if (recipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
-        var timers = store.PlanFoundationTimers(row, mode, recipes);
+        if (timerRecipes.Length + jobRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
+        var timers = store.PlanFoundationTimers(row, mode, timerRecipes);
         if (timers is null) return InvalidPlan();
+        var jobs = store.PlanFoundationJobs(row, jobRecipes, timers.Bytes);
+        if (jobs is null) return InvalidPlan();
 
         Durable.TurnOutcome InvalidPlan() => Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
 
@@ -45,6 +49,9 @@ internal sealed partial class ActorAdapter
             Fault = null,
             ParkCohort = null,
             ParkTimerDispositions = timers.Dispositions,
+            ParkRestartedJobs = jobs.Restarts,
+            Jobs = jobs.Registry,
+            NextJobGeneration = jobs.NextGeneration,
             ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1)
         };
         var serial = checked((expiry?.Serial ?? 0) + 1);
@@ -52,6 +59,7 @@ internal sealed partial class ActorAdapter
         next = next with { ParkRecovery = new(delivery.Message.Id, mode, null, serial, control.InboxKey) };
         var outcome = ParkCheckpoint(input, row, next);
         outcome.FoundationRecoveryTimers = timers;
+        outcome.FoundationRecoveryJobs = jobs;
         outcome.FoundationWithholds = withholds;
         outcome.Sent.Add(control);
         if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
@@ -90,7 +98,7 @@ internal sealed partial class ActorAdapter
                 ? release : (Durable.ParkRelease?)null;
             var completed = ParkCheckpoint(input, row, row with
             {
-                ParkRecovery = null, ParkTimerDispositions = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
+                ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
             });
             completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
             return completed;
