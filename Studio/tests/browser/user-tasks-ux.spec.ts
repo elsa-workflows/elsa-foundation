@@ -318,8 +318,9 @@ for (const width of [360, 1280]) {
     await expect(note).toHaveCount(0); // Modal history hides the response from assistive technology.
     await page.screenshot({ path: info.outputPath("task-history.png"), fullPage: true });
     const bounds = (await history.boundingBox())!;
-    if (width <= 640) expect(bounds.y + bounds.height).toBeGreaterThanOrEqual(899);
-    else expect(bounds.x).toBeGreaterThan(width - 500);
+    expect(Math.abs(bounds.x + bounds.width / 2 - width / 2)).toBeLessThan(2);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(900);
     await page.keyboard.press("Escape");
     await expect(history).toBeHidden();
     await expect(historyButton).toBeFocused();
