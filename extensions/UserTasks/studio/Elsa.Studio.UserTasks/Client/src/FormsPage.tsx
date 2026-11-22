@@ -68,7 +68,7 @@ export function LegacyFormsPage({ api, formId, navigate }: { api: ElsaStudioModu
   const [formError, setFormError] = useState(""); const [versionConflict, setVersionConflict] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
   const [hasUnappliedSource, setHasUnappliedSource] = useState(false);
-  const returnKey = useRef<string>(""); const returnButtons = useRef(new Map<string, HTMLButtonElement>());
+  const returnKey = useRef<string>(""); const returnButtons = useRef(new Map<string, HTMLTableRowElement>());
   const [opened, setOpened] = useState<FormVersion | null>(null);
   const [workspaceTab, setWorkspaceTab] = useState<FormWorkspaceTab>("form");
   const [historyLoading, setHistoryLoading] = useState(false); const [historyError, setHistoryError] = useState("");
@@ -205,8 +205,10 @@ export function LegacyFormsPage({ api, formId, navigate }: { api: ElsaStudioModu
               setOpened(version);
               setWorkspaceTab("form");
             };
-            return <tr key={key} {...studioRowInteraction<HTMLTableRowElement>(busy ? undefined : open)}>
-              <td data-label="Form"><button type="button" className="user-task-link studio-row-link" aria-label={`Open form ${version.form.id}`} disabled={busy} ref={node => { if (node) returnButtons.current.set(key, node); else returnButtons.current.delete(key); }} onClick={open}>{version.form.name}</button></td>
+            return <tr key={key} aria-label={`Open form ${version.form.name}`}
+              ref={row => { if (row) returnButtons.current.set(key, row); else returnButtons.current.delete(key); }}
+              {...studioRowInteraction<HTMLTableRowElement>(busy ? undefined : open)}>
+              <th scope="row" data-label="Form">{version.form.name}</th>
               <td data-label="Identifier">{version.form.id}</td>
               <td data-label="Latest version">{version.form.version}</td>
               {identity?.canManageForms && <td data-label="Actions" data-empty={!canVersion(version) || undefined}>{canVersion(version) && <StudioButton disabled={busy} onClick={() => { returnKey.current = key; void nextVersion(version); }}>Create next version</StudioButton>}</td>}

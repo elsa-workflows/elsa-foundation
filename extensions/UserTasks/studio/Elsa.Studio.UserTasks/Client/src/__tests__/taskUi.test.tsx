@@ -58,7 +58,7 @@ async function startNewForm() {
   await act(async () => create.click());
 }
 async function editFirstForm() {
-  const button = container.querySelector<HTMLButtonElement>("tbody button.user-task-link");
+  const button = container.querySelector<HTMLTableRowElement>("tbody tr[data-studio-row-interactive]");
   expect(button).toBeTruthy();
   await act(async () => button!.click());
 }
@@ -104,7 +104,7 @@ describe("task form rendering and decision delivery", () => {
 
     await act(async () => root.render(<BasicTaskForm form={form} value={{}} onChange={onChange} readOnly />));
     expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true);
-    expect(container.querySelector(".user-task-field-clear")).toBeNull();
+    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Clear answer")).toBe(false);
   });
   it("uses native radio groups with unique names and preserves Boolean and choice values", async () => {
     const onChange = vi.fn();
@@ -211,8 +211,7 @@ it("loads published forms through the legacy contract when draft relations are n
   await act(async () => root.render(<FormsPage api={api(get, vi.fn(), legacyTaskLinks)} />));
   await vi.waitFor(() => expect(container.textContent).toContain("Contact form"));
   expect(get.mock.calls.map(([path]) => path).sort()).toEqual(["/runtime/user-task-forms?limit=100", "/runtime/user-task-identity"].sort());
-  expect(container.querySelector('button[aria-label="Open form contact"]')).toBeTruthy();
-  await click("Contact form");
+  await editFirstForm();
   expect(container.textContent).toContain("Published version 1");
 });
 
@@ -618,7 +617,7 @@ it("does not steal a form row's keyboard focus when publication restores the lis
     await act(async () => root.render(<FormLifecyclePage api={api(get, post)} />));
     await editFirstForm(); await click("Publish");
     await click("Cancel");
-    const row = container.querySelector<HTMLButtonElement>("tbody button.user-task-link")!;
+    const row = container.querySelector<HTMLTableRowElement>("tbody tr[data-studio-row-interactive]")!;
     expect(row).toBeTruthy(); expect(frames.length).toBeGreaterThan(0);
     row.focus(); frames.splice(0).forEach(callback => callback(0));
     expect(document.activeElement).toBe(row);
@@ -970,7 +969,7 @@ describe("inbox and form polish (#4068)", () => {
     const rows = [...container.querySelectorAll("tbody tr")];
     expect(rows).toHaveLength(2); expect(rows[0].textContent).toContain("purchase"); expect(rows[0].textContent).toContain("Published · v2");
     expect(rows[1].textContent).toContain("expense"); expect([...container.querySelectorAll("tbody tr")].filter(row => row.textContent?.includes("purchase"))).toHaveLength(1);
-    await act(async () => rows[0].querySelector<HTMLButtonElement>("button.user-task-link")!.click());
+    await act(async () => (rows[0] as HTMLTableRowElement).click());
     await click("Publish");
     await click("Cancel");
     await vi.waitFor(() => expect([...container.querySelectorAll("tbody tr")].find(row => row.textContent?.includes("purchase"))?.textContent).toContain("Published · v3"));

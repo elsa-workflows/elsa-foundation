@@ -72,8 +72,7 @@ test("Forms editor switches between canvas, JSON source, and recipient preview",
   await expect(source).toContainText('"label": "Email from JSON"');
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const savedForm = page.getByRole("row").filter({ hasText: "source-contact" });
-  await savedForm.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await savedForm.press("Enter");
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   await expect(source).toContainText('"label": "Email from JSON"');
 });

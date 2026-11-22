@@ -71,7 +71,7 @@ for (const appearance of ["light", "dark"] as const) {
 
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
       const row = page.getByRole("row").filter({ hasText: "presentation-form" });
-      await row.getByRole("button", { name: "Presentation form", exact: true }).click();
+      await row.press("Enter");
       await page.getByRole("tab", { name: "Source", exact: true }).click();
       await expect(source).toContainText('"trueLabel": "I agree"');
       await page.getByRole("button", { name: "Publish", exact: true }).click();
