@@ -1107,7 +1107,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("button", { name: "Close Test Run" })).toBeFocused();
   const modalLayout = await dialog.evaluate(element => {
-    const backdrop = element.parentElement!;
+    const backdrop = document.querySelector<HTMLElement>(".studio-dialog-overlay")!;
     const dialogBounds = element.getBoundingClientRect();
     const backdropBounds = backdrop.getBoundingClientRect();
     return {
@@ -1346,7 +1346,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
   await dialog.getByRole("button", { name: "Restore exact version" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByLabel("Selected exact version")).toContainText("Active");
+  await expect(page.locator('button[aria-controls="activity-version-details-version-2"]')).toContainText("Active");
   expect(state.recommendedVersionId).toBeNull();
 
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
@@ -1355,7 +1355,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await expect(dialog.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(dialog.getByText("DerivedProjection")).toBeVisible();
   await expect(dialog).toContainText("7/18/2026");
-  await expect(dialog).toContainText("Run data are preserved");
+  await expect(dialog).toContainText(/run data are preserved/i);
   await dialog.getByRole("textbox", { name: /Type semantic version/ }).fill("1.0.0");
   await dialog.getByRole("textbox", { name: /Reason/ }).fill("Security response");
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();

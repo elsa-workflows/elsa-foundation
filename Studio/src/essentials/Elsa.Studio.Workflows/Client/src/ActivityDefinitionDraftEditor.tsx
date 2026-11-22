@@ -191,6 +191,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
   const [proposalApplying, setProposalApplying] = useState(false);
   const [publicationPending, setPublicationPending] = useState(false);
   const [migrationOpen, setMigrationOpen] = useState(false);
+  const testRunTriggerRef = useRef<HTMLButtonElement>(null);
   const [testRunOpen, setTestRunOpen] = useState(false);
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
@@ -990,7 +991,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           /> : null}
-          <button type="button" onClick={event => {
+          <button ref={testRunTriggerRef} type="button" onClick={event => {
             event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => {
               disclosure.open = false;
             });
@@ -1046,6 +1047,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       prepareExactRevision={prepareExactTestRunRevision}
       onFocusDiagnostic={focusDiagnostic}
       onClose={() => setTestRunOpen(false)}
+      restoreFocus={() => testRunTriggerRef.current?.focus()}
       onOpenRun={onOpenStudioPath}
     /></Suspense> : null}
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}

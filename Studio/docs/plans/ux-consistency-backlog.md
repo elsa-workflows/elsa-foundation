@@ -285,15 +285,15 @@ Workflows:
 
 Activity definitions:
 
-- [ ] **X3.16** (#5052) [source] `WF/ActivityDefinitionCreateDialog.tsx:116` (`.ad-create-dialog`).
-- [ ] **X3.17** (#5053) [source] `WF/ActivityDefinitionTestRunDialog.tsx:289`; text "Close" button at `:402`.
-- [ ] **X3.18** (#5054) [source] `WF/ActivityDefinitionPublicationReview.tsx:491`.
-- [ ] **X3.19** (#5055) [source] `WF/ActivityDefinitionManagementDialogShell.tsx:21`, shared by the Draft, Fork,
-  Provider migration and Version lifecycle dialogs. Cancel sits on the left at `:41`.
-- [ ] **X3.20** (#5056) [source] Remove dialog kickers: "Design-owned mutable work"
+- [x] **X3.16** (#5052) [source] `WF/ActivityDefinitionCreateDialog.tsx:116` (`.ad-create-dialog`). (PR #5306)
+- [x] **X3.17** (#5053) [source] `WF/ActivityDefinitionTestRunDialog.tsx:289`; text "Close" button at `:402`. (PR #5306)
+- [x] **X3.18** (#5054) [source] `WF/ActivityDefinitionPublicationReview.tsx:491`. (PR #5306)
+- [x] **X3.19** (#5055) [source] `WF/ActivityDefinitionManagementDialogShell.tsx:21`, shared by the Draft, Fork,
+  Provider migration and Version lifecycle dialogs. Cancel sits on the left at `:41`. (PR #5306)
+- [x] **X3.20** (#5056) [source] Remove dialog kickers: "Design-owned mutable work"
   (`ActivityDefinitionDraftDialog.tsx:76`), "Atomic parallel draft"
   (`ActivityDefinitionProviderMigrationDialog.tsx:64`), "Immutable publication"
-  (`ActivityDefinitionPublicationReview.tsx:376`). `needs: D3`
+  (`ActivityDefinitionPublicationReview.tsx:376`). `needs: D3` (PR #5306)
 
 Host and Dashboard:
 
@@ -559,7 +559,7 @@ the designer header is a documented exception.
 
 - [ ] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567`
   [source]). "Advanced" appears three times with three class names.
-- [ ] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`.
+- [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
   `closest("details")`; keep that focus behaviour working.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
