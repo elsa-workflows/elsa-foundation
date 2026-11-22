@@ -79,6 +79,12 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Graph authoring audit
+
+The A6 review covered all 54 files in `WF/graph-authoring/` at `4e593ed012`. The two resource hosts share the workspace, palette, inspector, canvas and block operations. The sequence and compensation renderers provide their own ordered step and occurrence controls. React Flow handles keep their directional placement, keyboard labels and saved viewport. Block and BPMN planners check the selected scope, catalog, connections, bindings and edit authority before a preview can be applied. Their transformations and checkpoints do not render controls. Six stylesheets govern the specific canvas geometry, portal menus, panels, and small-screen layouts.
+
+The specialized canvas add-step and slot controls retain their pointer anchors and keyboard alternatives. The findings below cover the shared commands, their dialogs, structured-data disclosures and compensation reorder focus.
+
 ### Workflow inspector source audit
 
 The A6 review covered all of `WF/workflow-editor/WorkflowExecutableInspector.tsx` and `WF/workflow-editor/ReusableBoundaryInspector.tsx`. The executable review traced route and source identity, Run and Weaver actions, catalog fallback, graph modes, drift, input bindings and output captures. The boundary review traced pinned definitions, nested navigation, historical layout, cursor restart, virtualized keyboard selection, scoped value resolution and incident evidence. W18–W20 and X10.11 record the findings verified in source.
@@ -184,6 +190,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
+- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 - [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
@@ -378,6 +385,8 @@ Browser dialogs and busy labels (no kit prerequisite):
 - [x] **X3.37** (#5073, PR #5327) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
+
+- [ ] **A6 graph dialogs** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
 
 ### X4. Create flows
 
@@ -631,6 +640,8 @@ the designer header is a documented exception.
 
 - [x] **X12.13** (#5266, #5353) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
+- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
+
 ### X13. CSS texture
 
 Work file by file and run `pnpm lint:css` after each. Counts are grep counts on the audit date.
@@ -760,6 +771,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
+
+- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
 - [ ] **W18** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
 - [ ] **W19** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
