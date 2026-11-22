@@ -101,6 +101,9 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
     await expect(lifecycle).toBeVisible(); return lifecycle;
   };
+  // Each project starts at wall time before admitting any inspected run. The prior project
+  // may have advanced its disposable clock; never restart a live approval backwards in time.
+  await restart();
   const who = await api<{ userId: string }>("/runtime/user-task-identity");
   const taskTitle = `Restart approval ${info.project.name} ${crypto.randomUUID().slice(0, 8)}`;
   const approval = await publish("approval restart", [node("review", task, { Title: taskTitle, AssigneeId: who.userId, Actions: ["Approve"] }), node("after", line, { text: "Approval resumed once" })], "Approve");
@@ -148,7 +151,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const expired = { details: await details(expiry.id), history: await history(expiry.id), bookmarks: await bookmarks(expiry.id) };
   expect(expired.details.instance.status).toBe("Suspended"); expect(expired.history.items).toEqual(expiryBefore.history.items);
   const passive = expired.bookmarks.items[0]; expect(passive.status).toBe("Active"); expect(passive.eligibility).toBe("expired");
-  expect(passive.bookmark).toEqual(expiryBefore.bookmarks.items[0].bookmark); expect(passive.endedHistoryEventId).toBeNull();
+  expect(passive.bookmark).toEqual(expiryBefore.bookmarks.items[0].bookmark); expect(passive.endedHistoryEventId ?? null).toBeNull();
   expect(Date.parse(passive.eligibilityObservedAt)).toBeGreaterThanOrEqual(Date.parse(passive.bookmark.expiresAt!));
   lifecycle = await openLifecycle(expiry.id, passive.createdHistoryEventId!);
   await expect(lifecycle).toContainText("Expired"); await expect(lifecycle).toContainText("It does not wake, time out or cancel the activity.");

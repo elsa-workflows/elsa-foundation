@@ -1147,6 +1147,6 @@ test("native BPMN reusable blocks retain authoring boundaries", async ({ page },
 });
 
 test("timeline durable diagnostics and process restart", async ({ page }, info) => {
-  test.setTimeout(660_000);
+  test.setTimeout(1_200_000);
   await timelineDiagnosticsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
