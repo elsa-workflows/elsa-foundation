@@ -132,8 +132,13 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await waitCapturedPlaybackReady(page);
     // The real scoped journal must contain this exact native event before acting
     // on its owner's tabs; a shared Event label or an updated URL is insufficient.
-    await expect(page.getByRole("region", { name: "Activity journal", exact: true })
-      .locator(`[data-history-event-id="${eventId}"]`)).toBeVisible({ timeout: 30_000 });
+    const journal = page.getByRole("region", { name: "Activity journal", exact: true });
+    await expect(journal.locator(`[data-history-event-id="${eventId}"]`)).toBeVisible({ timeout: 30_000 });
+    const identity = journal.getByText("Execution identity", { exact: true });
+    await frame(identity);
+    await identity.click({ timeout: 30_000 });
+    await expect(journal.getByText(ownerId!, { exact: true })).toBeVisible({ timeout: 30_000 });
+    await identity.click({ timeout: 30_000 });
     const target = views.getByRole("tab", { name: tab, exact: true });
     await frame(target);
     await target.click({ timeout: 30_000 });
@@ -150,11 +155,16 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   };
   const openLifecycle = async (id: string, eventId: string) => {
     await openOwner(id, eventId, "Bookmarks");
-    await page.getByRole("region", { name: "Activity bookmark history", exact: true }).getByRole("button", { name: "View lifecycle →", exact: true }).click({ timeout: 30_000 });
+    const expected = (await bookmarks(id)).items.find(item => item.createdHistoryEventId === eventId);
+    expect(expected, "The native created event identifies the physical handle").toBeTruthy();
+    const records = page.getByRole("region", { name: "Activity bookmark history", exact: true });
+    const handle = records.locator("article").filter({ has: records.getByText(expected!.bookmark.identity.bookmarkId, { exact: true }) });
+    await handle.getByRole("button", { name: "View lifecycle →", exact: true }).click({ timeout: 30_000 });
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
     await expect(lifecycle).toBeVisible();
     await expect(lifecycle.getByText("Loading exact bookmark lifecycle…", { exact: true })).toHaveCount(0);
     await expect(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeVisible();
+    await expect(lifecycle.getByText(expected!.bookmark.identity.bookmarkId, { exact: true })).toBeVisible();
     return lifecycle;
   };
   // Each project starts at wall time before admitting any inspected run. The prior project
