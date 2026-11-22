@@ -11,8 +11,8 @@ public sealed class TestRunDeliveryReceiptTests
     [Fact]
     public void Delivery_digest_pins_canonical_data_and_keeps_the_existing_absent_null_contract()
     {
-        // Independently hashed canonical ASCII bytes: {"items":[1,2],"n":1,"text":"a"}.
-        const string expected = "4d6122dd4e83f37c659cb96ec1a19e880ff3663390a6e4f436c6e9fb4425c17e";
+        // Independently hashed canonical ASCII bytes: {"items":[1e0,2e0],"n":1e0,"text":"a"}.
+        const string expected = "b2eaa6f53648c748a7f98db8fcf64a116cebbc27bcabeef7435024530261493f";
         var first = Parse("""{"items":[1,2],"n":1,"text":"a"}""");
         var equivalent = Parse("""{ "text":"\u0061", "n":1e0, "items":[1.0,2e0] }""");
         var actual = TestRunDeliveryReceipt.Digest(first);

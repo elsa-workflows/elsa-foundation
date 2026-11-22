@@ -547,7 +547,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);

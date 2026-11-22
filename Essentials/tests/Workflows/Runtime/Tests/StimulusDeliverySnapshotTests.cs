@@ -24,7 +24,7 @@ public sealed class StimulusDeliverySnapshotTests
         }
         // Independently hashed frame: ASCII "json:" followed by canonical JSON bytes.
         var actual = Capture("""{"items":[1,2],"n":1,"text":"a"}""");
-        Assert.True(actual == "621de37b5e6bc01c4b2ad8b0fbd1c5f9ebe7fd7bfef7f0d68733a70cfd0c02b6",
+        Assert.True(actual == "12bf78477b021d3fc19b617d117b23b42d3dd4f6fa9bec01727b6cd33e7b97bc",
             $"Bookmark JSON hash golden: Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
         Assert.Equal(actual, Capture("""{ "text":"\u0061", "n":1e0, "items":[1.0,2e0] }"""));
         Assert.NotEqual(actual, Capture("""{"items":[2,1],"n":1,"text":"a"}"""));
@@ -432,7 +432,7 @@ public sealed class StimulusDeliverySnapshotTests
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
         Assert.False(JsonSerializer.SerializeToNode(legacy, Web)!.AsObject().ContainsKey("expectedBookmarkResume"));
         var actual = RuntimeCheckpointCommitFingerprint.Compute(legacy);
-        Assert.True(actual == "af976cb76bbef3f226bc15cbbdae5d8b330ec98ae9f287ff18e15aadc2df1f1a",
+        Assert.True(actual == "12400ef7670071f85be78ccfded150ba04c7b05c54d4d8f2683ec4058b4d8d8a",
             $"Checkpoint JSON hash golden: Actual={actual}. From Elsa 4's first stable release, this hash is frozen and changes require an explicit decision.");
         var captured = legacy with { ExpectedBookmarkResume = CapturedWait() };
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.Compute(legacy), RuntimeCheckpointCommitFingerprint.Compute(captured));

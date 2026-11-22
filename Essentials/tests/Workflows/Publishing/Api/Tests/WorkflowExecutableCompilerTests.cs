@@ -3783,7 +3783,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables))));
 
     private static ActivityNode FlowchartNode(string nodeId, IReadOnlyCollection<ActivityNode> activities) =>
         new(
@@ -3794,7 +3794,7 @@ public sealed partial class WorkflowExecutableCompilerTests
             Structure: new ActivityNodeStructure(
                 FlowchartActivity.StructureKind,
                 FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities))));
 
     private static ActivityDefinitionVersionPublication SourceOwnedPublication(
         ActivityDefinitionVersion version,

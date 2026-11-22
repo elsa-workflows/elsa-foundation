@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
 import type { WorkflowDefinitionSummary, WorkflowExecutableSummary } from "../workflowTypes";
@@ -105,8 +106,9 @@ describe("WorkflowExecutables", () => {
 
     const published = container.querySelector<HTMLTimeElement>(".wf-executable-published time");
     const publishedAt = new Date("2026-10-18T00:00:00Z");
-    expect(published?.textContent?.trim()).toBe(publishedAt.toLocaleDateString());
-    expect(published?.getAttribute("title")).toBe(publishedAt.toLocaleString());
+    expect(published?.textContent?.trim()).toBe(formatStudioDate(publishedAt));
+    expect(published?.getAttribute("title")).toBe(formatStudioDate(publishedAt));
+    expect(published?.textContent).toMatch(/UTC[+-]\d{2}:\d{2}/);
   });
 
   it("shows a primary empty-state action and preserves the backend when opening definitions", async () => {

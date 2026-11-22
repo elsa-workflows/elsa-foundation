@@ -7,6 +7,7 @@ import { compensationScopeStructureKind, type CompensationStep } from "../compen
 import type { CompensationScopeRuntime } from "../compensationRuntime";
 import type { WorkflowNodeData } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -223,7 +224,7 @@ describe("CompensationScopeDesigner scheduled retry (spec 261)", () => {
 
     const chip = container.querySelectorAll(".wf-compensation-state")[1];
     expect(chip.getAttribute("data-state")).toBe("RetryScheduled");
-    expect(chip.getAttribute("aria-label")).toMatch(/^Recovery: Retry scheduled \(1st\) · Attempt 2 of 3 · after \d{1,2}:\d{2}:\d{2}.*\. Show this occurrence$/);
+    expect(chip.getAttribute("aria-label")).toBe(`Recovery: Retry scheduled (1st) · Attempt 2 of 3 · after ${formatStudioDate(dueAt)}. Show this occurrence`);
     expect(chip.querySelector("svg")).not.toBeNull();
     expect(container.querySelector(".wf-compensation-actions, [data-operator-action]")).toBeNull();
     expect(button("Show the incident Reserve inventory is waiting on")).toBeNull();

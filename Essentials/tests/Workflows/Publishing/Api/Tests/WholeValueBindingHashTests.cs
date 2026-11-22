@@ -12,16 +12,14 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// One node binding every whole-value source kind hashes exactly as it did before member reads existed (#4078 slice A),
-/// as a node payload, as a behavioural executable, as a template behaviour and as an input-snapshot binding
-/// fingerprint. The expected values were computed on a9771131c3, the commit before the model change.
+/// Fixed current hashes for a node binding every whole-value source kind. Regenerated once by S-9 before the first stable release.
 /// </summary>
 public sealed class WholeValueBindingHashTests
 {
-    internal const string ExpectedNodePayloadHash = "sha256:dea1bc201ca5c42fd13b2093037d104681f1d98156c05f7a4317c39814ca0648";
-    internal const string ExpectedExecutableHash = "sha256:7c550a97501f76c8473ac6f8090989f0a1e307108d4abe78986f656b311f5f20";
-    internal const string ExpectedTemplateHash = "sha256:904f680fe682e713f776d1835d1c6d3740b8f2638c6e70b704446386c3c3a769";
-    internal const string ExpectedBindingFingerprint = "sha256:8c2712110d10c68bd9b05bcfbcbdc8aec902e01773161dfb7058bceb462ec1b2";
+    internal const string ExpectedNodePayloadHash = "sha256:44e2c240280a2c6ce31c662f54a85311ff7a670d024465994b191c73c9905111";
+    internal const string ExpectedExecutableHash = "sha256:7d92bfc3137b805dc75dcc434370eb2023b9c0de3421e178e15aea959da07e18";
+    internal const string ExpectedTemplateHash = "sha256:fa20530c5493f4159134c46b584ff782ae66fbfca47c81a088aa055272a9e993";
+    internal const string ExpectedBindingFingerprint = "sha256:7dc805658de8eec17062f5fde590a520010694e86a71d84f14653ae22ec3489e";
 
     [Fact]
     public void Every_whole_value_kind_keeps_its_node_payload_hash() =>

@@ -119,7 +119,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         // The body: a producer and a reader of one of its members, in a Sequence.
         var body = new ActivityNode("body", _sequenceActivity.Id, [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
-            JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(
                 [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("reader", read)]), new JsonSerializerOptions(JsonSerializerDefaults.Web))));
         var graph = new GraphActivityProvider(_activityStructureService, new ActivityContractAuthoringValidator(new DefaultContractCapabilities()));
         var contract = new DesignContract("1", [], [], [new("done", "Done", true)]);

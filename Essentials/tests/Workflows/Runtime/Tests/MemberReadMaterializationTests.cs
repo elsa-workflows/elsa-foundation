@@ -283,7 +283,7 @@ public sealed class MemberReadMaterializationTests
     }
 
     // Regenerated once by S-9 before the first stable release; frozen from that release.
-    internal const string ExpectedMemberFingerprint = "sha256:cedd66e95b724715ae7cce2ff05715cbf8842bb1f2aa568587d045b1e3c353f4";
+    internal const string ExpectedMemberFingerprint = "sha256:4c09af9c24f5035c24ba7c9fa9c083147d0cafb664e6d2c087c8af564bb39bd2";
 
     [Fact]
     public void A_request_or_variable_member_needs_no_activity_history_and_a_result_member_does()

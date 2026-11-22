@@ -289,7 +289,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         // A graph manifest is read with web defaults, so the body's structure payload is written with them too.
         var body = new ActivityNode("body", "activity-sequence", [], [], new ActivityNodeStructure(
             SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion,
-            JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(
                 [new ActivityNode("producer", CustomerProducerVersion.Id, [], []), Node("consumer", MemberRead("ActivityResultMember"))]),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 

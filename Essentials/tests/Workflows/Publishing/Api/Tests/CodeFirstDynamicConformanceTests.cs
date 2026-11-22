@@ -153,7 +153,7 @@ public sealed class CodeFirstDynamicConformanceTests
             new ActivityNodeStructure(
                 "elsa.sequence.structure",
                 "1.0.0",
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities, variables), JsonOptions)));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities, variables), JsonOptions)));
         return new WorkflowDefinitionState(variables, root, [], [], null);
     }
 

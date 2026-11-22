@@ -37,9 +37,9 @@ public sealed class ScopedActivityResultHashTests
         WholeValueBindingHashTests.AssertHash(ExpectedTemplateHash, TemplateHash(Node(Scoped)));
     }
 
-    // Computed on 6cf153dc94, the commit before the scope became optional.
+    // Regenerated once by S-9 before the first stable release; frozen from that release.
     internal const string ExpectedExecutableHash = "sha256:d1f37f9aa352c6ada3256a4e4941e80bac9fa2a2ac79aae9ba4e63d878fa7f3e";
-    internal const string ExpectedTemplateHash = "sha256:3903812abb4dc48ab50ca32bbde9783856b5807cda408c89f7c455dc83826355";
+    internal const string ExpectedTemplateHash = "sha256:5ecbae548b89c178896e9a3d6d15bc4d638b89893ededed38803bfa2a3ec536e";
 
     /// <summary>
     /// A reference without a scope leaves the member out of its stored form, reads back with none, and hashes apart

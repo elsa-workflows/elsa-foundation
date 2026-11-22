@@ -1944,7 +1944,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             Structure: new ActivityNodeStructure(
                 SequenceActivity.StructureKind,
                 SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new SequenceAuthoredStructure(activities))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new SequenceAuthoredStructure(activities))));
 
     private static ActivityNode FlowchartNode(
         string nodeId,
@@ -1959,7 +1959,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
             Structure: new ActivityNodeStructure(
                 FlowchartActivity.StructureKind,
                 FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, startNodeId))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new FlowchartAuthoredStructure(activities, connections, startNodeId))));
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
