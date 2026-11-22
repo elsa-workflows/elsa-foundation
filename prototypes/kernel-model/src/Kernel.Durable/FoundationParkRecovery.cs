@@ -162,16 +162,64 @@ public sealed partial class InMemoryStore
             throw InvalidDrain();
     }
 
+    private void ValidateRecoveryDeleteTakeover(TurnCommit turn, InstanceRow? previous, InstanceRow next,
+        ParkRecoveryDeletion deletion, IReadOnlyDictionary<int, long> epochs, long now)
+    {
+        if (previous is not { Status: not InstanceStatus.Running, Retired: false, ParkRecovery: { Deletion: null } before } ||
+            turn.Delete || turn.OpensPark || turn.Journal is not null || turn.FoundationParkClear is not null ||
+            turn.FoundationKept is not null || turn.FoundationHeader is not null ||
+            turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
+            turn.Unsubscribe || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
+            StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
+            turn.Consumed.Concat(turn.Done).ToArray() is not [var key] ||
+            Messages.GetValueOrDefault(key) is not { Done: false, Message: { Operator: { } command } input } ||
+            input.Target.Id != next.Id || input.TargetCreation != next.Creation || input.Due > now ||
+            input.Id != deletion.Operation || command.Selection != deletion.Selection)
+            throw InvalidDrain();
+
+        var expected = previous with { Revision = checked(previous.Revision + 1), ParkRecovery = before with { Deletion = deletion } };
+        if (deletion.ThenDelete)
+        {
+            if (!AuthorizesEndedRecoverThenDelete(previous, input))
+                throw InvalidDrain();
+            if (previous.Cascade is null && CascadeRegistry.From(previous).Count != 0)
+            {
+                if (turn.FoundationCascade is null || turn.Sent.Any(message => !message.CascadeOrigin && message.Kind != Kinds.Cascade))
+                    throw InvalidDrain();
+                expected = expected with { Jobs = null, Children = null, Cascade = next.Cascade };
+            }
+            else if (turn.FoundationCascade is not null || turn.Sent.Count != 0) throw InvalidDrain();
+        }
+        else if (input.Kind != Kinds.Delete || turn.FoundationCascade is not null || turn.Sent.Count != 0 ||
+            !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
+            !MatchesFoundationSelection(binding.Tenant, binding.Reference, deletion.Selection, requireTerminal: true))
+            throw InvalidDrain();
+
+        if (next != expected) throw InvalidDrain();
+    }
+
+    internal static string RecoveryCompleteJournal(ParkRecoveryDrain drain, bool retiring)
+    {
+        if (drain.Deletion is { } deletion)
+            return Json.Write(new
+            {
+                Outcome = retiring ? "deleted" : "protected", deletion.Operation,
+                Drain = new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared, drain.AlreadyRearmed }
+            });
+        return Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared, drain.AlreadyRearmed });
+    }
+
     private void ValidateRecoveryStep(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs, long now)
     {
         var page = turn.FoundationRecoveryPage;
+        var retiring = turn.Delete && previous is { Status: not InstanceStatus.Running, ParkRecovery.Deletion: not null };
         if (previous is not { ParkRecovery: { } before, ParkDiscard: null, Retired: false } ||
             turn.Row is not { } next || next.Revision != checked(previous.Revision + 1) ||
             StoreBatchRules.AddressPartition(previous.Id) is not { } partition || !epochs.ContainsKey(partition) ||
-            turn.OpensPark || turn.Delete || turn.FoundationParkClear is not null ||
+            turn.OpensPark || turn.Delete && !retiring || turn.FoundationParkClear is not null ||
             turn.Consumed is not [var key] || key != before.Control || turn.Done.Count != 0 ||
             turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
-            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Unsubscribe ||
+            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Unsubscribe != retiring ||
             turn.FoundationHeader is not null || turn.FoundationKept is not null ||
             turn.FoundationHeldPromotions is { Count: > 0 } ||
             Messages.GetValueOrDefault(key) is not { Done: false } input || input.Message.Due > now)
@@ -190,10 +238,11 @@ public sealed partial class InMemoryStore
         {
             ParkRelease? remaining = running && FirstUnheldRecoveryInput(previous, release, _ => false) is not null ? release : null;
             if (page is not null || turn.Sent.Count != 0 || suspended ||
-                next != (previous with
+                (retiring ? !next.Retired : next != (previous with
                 {
                     Revision = next.Revision, ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
-                }) ||
+                })) ||
+                turn.Journal != RecoveryCompleteJournal(before, retiring) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
                 !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();

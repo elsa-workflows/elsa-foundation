@@ -37,16 +37,18 @@ without this optional operation return `unavailable`.
 |---|---|
 | Authoring catalog | `GET /design/activities/catalog?availability=addable|all` |
 | Availability | `GET/PUT /design/activities/availability/settings`, `GET /design/activities/availability/diagnostics` |
-| Definitions | Definition list/get/create/update/archive, picker, recommendation, drafts, versions, and fork preview under `/design/activities/definitions` |
+| Definitions | Definition list/get/create/update/archive/restore, archived-only listing, picker, recommendation, drafts, versions, and fork preview under `/design/activities/definitions` |
 | Drafts | Draft get/create/replace/presentation/conflict-copy/validate/migrate/discard/diff and contract proposals under `/design/activities/drafts` |
 | Activity data context | `POST /design/activities/drafts/{draftId}/activity-data/context` |
 | Versions | Version get/diff/dependencies and retire/restore/revoke under `/design/activities/versions` |
 | Forks | Candidate apply and idempotency status under `/design/activities/fork-candidates` and `/design/activities/forks` |
 | Upgrade plans | Create/get/apply/receipt/refresh under `/design/activities/upgrade-plans` |
 
-The original management operations retain the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md); the additive activity-data context and definition archive operations are listed above and covered by their owning endpoint/security contracts.
+The original management operations retain the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md); additive activity-data context, definition archive, and definition restore operations are listed above and covered by their owning endpoint/security contracts.
 
-`DELETE /design/activities/definitions/{definitionId}` requires `activities/design:manage` and archives only Design-owned definitions. Archiving is idempotent, hides the definition from current management collections and the recommended picker (including collection pages opened from an earlier snapshot), and blocks further authoring and publication. It preserves drafts, immutable versions, exact-version reads, and existing workflow references; it does not hard-delete records or provide a restore operation in Studio.
+`DELETE /design/activities/definitions/{definitionId}` requires `activities/design:manage` and archives only Design-owned definitions. Archiving is idempotent, hides the definition from the normal management collection and recommended picker (including collection pages opened from an earlier snapshot), and blocks further authoring and publication. It preserves drafts, immutable versions, exact-version reads, and existing workflow references; it does not hard-delete records.
+
+`GET /design/activities/definitions?archivedOnly=true` lists archived definitions for authorized management users. `POST /design/activities/definitions/{definitionId}/restore` requires `activities/design:manage` and idempotently returns a Design-owned definition to the normal collection and, when it still has a recommended version, the recommended picker. Restore does not change drafts, version lifecycle, recommendations, executable artifacts, or workflow references. Collection cursors are bound to the archived-only filter; a restored definition is excluded from archived results even when a caller presents an older archived cursor.
 
 Catalog and read operations declare exactly `activities/design:read`; management operations declare exactly `activities/design:manage`. Foundation Identity owns normalized-principal trust, `manage`-satisfies-`read`, wildcard matching, replaceable evaluation, tenant/resource handlers, and the standard `401`/`403` boundary. Wildcard is evaluator-level grant compatibility and is not endpoint-owned policy metadata. Transport errors preserve the reviewed RFC 7807 contract through the owner-local Minimal API mapping.
 

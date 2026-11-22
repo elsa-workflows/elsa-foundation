@@ -61,7 +61,7 @@ internal static class WorkflowsPublishingJsonOptions
     PropertyNameCaseInsensitive = true,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 
-// Requests accepted by the 23 Publishing registrations.
+// Request and lifecycle command models, including path-bound commands with no JSON body.
 [JsonSerializable(typeof(ConstructActivity))]
 [JsonSerializable(typeof(ListConstructableActivities))]
 [JsonSerializable(typeof(ListIncidentStrategies))]
@@ -75,6 +75,7 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(PreflightWorkflowPublicationSnapshot))]
 [JsonSerializable(typeof(PublishWorkflowRequest))]
 [JsonSerializable(typeof(UnpublishPublicationSlotRequest))]
+[JsonSerializable(typeof(UnpublishPublicationSlotAtRevisionRequest))]
 [JsonSerializable(typeof(RestorePublicationSlotRequest))]
 [JsonSerializable(typeof(UnpublishPublicationSlot))]
 [JsonSerializable(typeof(RestorePublicationSlot))]
@@ -91,6 +92,8 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(GetActivityDraftTestRun))]
 [JsonSerializable(typeof(GetActivityDraftTestRunByIdempotencyKey))]
 [JsonSerializable(typeof(CancelActivityDraftTestRun))]
+[JsonSerializable(typeof(StartActivityVersionTestRun))]
+[JsonSerializable(typeof(GetActivityVersionTestRunByIdempotencyKey))]
 
 // Responses emitted by the owner mapper and explicit roots commonly nested behind collections,
 // dictionaries, nullable values, opaque JsonElement payloads, or shared domain projections.

@@ -269,6 +269,8 @@ public interface IKernelStore : IMembership
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
     bool SupportsCascadePages => false;
+    internal ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) => null;
+
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
     /// <summary>Irreversible empty markers for generated physical addresses, independent of positive generations.</summary>

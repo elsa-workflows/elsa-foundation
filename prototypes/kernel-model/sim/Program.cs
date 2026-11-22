@@ -124,10 +124,34 @@ if (args.Contains("--cascade-pages-check"))
     await CascadePageChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-cohort-tuple-check"))
+{
+    var failed = false;
+    await ParkCohortTupleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-handoff-credit-check"))
+{
+    var failed = false;
+    await ParkHandoffCreditChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-drain-cascade-check"))
 {
     var failed = false;
     await ParkDrainCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--retention-delete-check"))
+{
+    var failed = false;
+    await RetentionDeleteChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-delete-check"))
+{
+    var failed = false;
+    await ParkDeleteChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--retirement-cascade-check"))

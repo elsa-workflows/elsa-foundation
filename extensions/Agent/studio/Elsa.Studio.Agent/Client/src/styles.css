@@ -88,12 +88,14 @@
   color: var(--studio-text-muted);
   overflow-wrap: anywhere;
 }
-.agent-row-status {
+.agent-row-version {
   display: flex;
   flex-wrap: wrap;
   gap: var(--studio-space-1, 4px);
   align-items: center;
+  min-width: 0;
 }
+.agent-row-version small { color: var(--studio-text-muted); }
 .agent-collection-count {
   margin: 0;
   color: var(--studio-text-muted);
@@ -195,4 +197,91 @@
 .agent-playground__diagnostics {
   margin: var(--studio-space-2, 8px) 0 0;
   padding-left: var(--studio-space-4, 16px);
+}
+
+.agent-workspace { min-width: 0; }
+.agent-workspace .ad-draft-editor-body.has-workspace-contribution { display: block; min-width: 0; }
+.agent-workspace .ad-draft-editor-body.has-workspace-test-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(20rem, .7fr);
+  align-items: start;
+  gap: var(--studio-space-4);
+}
+.agent-workspace .ad-draft-editor-content { min-width: 0; }
+.agent-workspace .ad-draft-editor-body.has-workspace-test-host .ad-draft-editor-content {
+  display: contents;
+}
+.agent-workspace .ad-draft-editor-body.has-workspace-test-host .ad-draft-editor-content > .ad-draft-editor-toolbar { grid-column: 1 / -1; }
+.agent-workspace .ad-draft-editor-body.has-workspace-test-host .ad-draft-editor-content > :not(.ad-draft-editor-toolbar) {
+  grid-column: 1;
+  min-width: 0;
+}
+.agent-workspace .ad-workspace-test-host {
+  position: sticky;
+  top: var(--studio-space-4);
+  grid-column: 2;
+  grid-row: 2 / span 20;
+  min-width: 0;
+  max-height: calc(100vh - 8rem);
+  overflow: auto;
+  padding-left: var(--studio-space-4);
+  border-left: 1px solid var(--studio-border);
+}
+.agent-workspace .ad-workspace-test-tabs { display: none; }
+.agent-playground--embedded { min-width: 0; }
+.agent-playground__embedded-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--studio-space-3);
+  padding-bottom: var(--studio-space-3);
+  border-bottom: 1px solid var(--studio-border);
+}
+.agent-playground__embedded-header h2,
+.agent-playground__embedded-header p { margin: 0; }
+.agent-playground__embedded-header p { margin-top: var(--studio-space-1); color: var(--studio-text-muted); }
+.agent-playground--embedded .agent-playground__form { max-width: none; }
+.agent-workspace-choices,
+.agent-workspace-versions { display: grid; gap: var(--studio-space-3); }
+.agent-workspace-choices article,
+.agent-workspace-versions article {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--studio-space-3);
+  padding: var(--studio-space-4);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+}
+.agent-workspace-choices h2,
+.agent-workspace-versions h2,
+.agent-workspace-choices p,
+.agent-workspace-versions p { margin: 0; }
+.agent-workspace-choices article > div,
+.agent-workspace-versions article > div { display: grid; gap: var(--studio-space-1); }
+.agent-workspace-choices article > div p,
+.agent-workspace-versions article > div p { color: var(--studio-text-muted); }
+
+@media (max-width: 800px) {
+  .agent-workspace .ad-draft-editor-body.has-workspace-test-host { grid-template-columns: minmax(0, 1fr); gap: var(--studio-space-3); }
+  .agent-workspace .ad-workspace-test-tabs { display: flex; grid-column: 1; gap: var(--studio-space-2); }
+  .agent-workspace .ad-workspace-test-tabs button {
+    min-height: 2.5rem;
+    padding: var(--studio-space-2) var(--studio-space-3);
+    border: 1px solid var(--studio-border);
+    border-radius: var(--studio-radius);
+    color: var(--studio-text);
+    background: var(--studio-surface);
+    font: inherit;
+    white-space: nowrap;
+  }
+  .agent-workspace .ad-workspace-test-tabs button[aria-selected="true"] { border-color: var(--studio-accent); background: var(--studio-accent-soft); }
+  .agent-workspace .ad-draft-editor-body.has-workspace-test-host[data-active-panel="editor"] .ad-workspace-test-host,
+  .agent-workspace .ad-draft-editor-body.has-workspace-test-host[data-active-panel="test"] .ad-draft-editor-content { display: none; }
+  .agent-workspace .ad-draft-editor-body.has-workspace-test-host .ad-draft-editor-content,
+  .agent-workspace .ad-workspace-test-host { max-height: none; overflow: visible; }
+  .agent-workspace .ad-workspace-test-host { padding: 0; border: 0; }
 }

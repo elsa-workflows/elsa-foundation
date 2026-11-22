@@ -43,7 +43,8 @@ public sealed class ReusableActivityAuthoringService(
     IEnumerable<IActivityAuthoringCatalog>? candidateCatalogs = null,
     IEnumerable<IActivityDataSelectionDocumentProjector>? candidateProjectors = null,
     IActivityStructureService? candidateStructures = null,
-    IArchiveActivityDefinitionCommand? archiveDefinition = null) : IReusableActivityAuthoringService
+    IArchiveActivityDefinitionCommand? archiveDefinition = null,
+    IRestoreActivityDefinitionCommand? restoreDefinition = null) : IReusableActivityAuthoringService
 {
     // Preserve the original public constructor for existing binary consumers. Compositions that do
     // not install the request-only candidate dependencies retain their existing authoring behavior.
@@ -72,7 +73,7 @@ public sealed class ReusableActivityAuthoringService(
         definitions, authoringStore, draftStore, publicationStore, layoutStore, validationStore,
         createDefinition, updateDefinitionPresentation, createDraft, updateDraftPresentation, createConflictCopy,
         replaceDraft, discardDraft, storeValidation, providers, validator, contractAuthoringValidator,
-        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null, null)
+        typeKeyPolicy, identityGenerator, timeProvider, context, null, null, null, null, null)
     {
     }
 
@@ -145,6 +146,26 @@ public sealed class ReusableActivityAuthoringService(
             return;
 
         await archiveDefinition.ExecuteAsync(new(
+            command.DefinitionId,
+            authoring.TenantId,
+            context.TenantId,
+            timeProvider.GetUtcNow()), cancellationToken);
+    }
+
+    public async Task RestoreDefinitionAsync(RestoreReusableActivityDefinition command, CancellationToken cancellationToken)
+    {
+        if (restoreDefinition is null)
+            throw OperationFailed("Activity Definition restore is not supported by the configured persistence backend.");
+
+        var definition = await GetDefinitionEntityAsync(command.DefinitionId, cancellationToken);
+        var authoring = await GetAuthoringAsync(command.DefinitionId, cancellationToken);
+        EnsureVisible(definition.TenantId);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring, allowArchived: true);
+        if (authoring.ArchivedAt is null)
+            return;
+
+        await restoreDefinition.ExecuteAsync(new(
             command.DefinitionId,
             authoring.TenantId,
             context.TenantId,
@@ -476,6 +497,79 @@ public sealed class ReusableActivityAuthoringService(
         EnsureDesignAuthority(afterAuthoring);
         EnsureActiveRevision(after, command.ExpectedRevision);
         if (after.DefinitionId != draft.DefinitionId || ActivityDataSelectionSnapshot.Hash(after.State) != baseline) return Refuse("stale");
+        var afterProvider = await EnsureAuthorableProviderAsync(command.Provider, ct);
+        var afterCatalog = await catalog.ListAsync(ct);
+        if (!afterCatalog.Allowed) return Refuse("denied");
+        if (ActivityDataSelectionSnapshot.Hash(afterCatalog) != catalogRevision || ActivityDataSelectionSnapshot.Hash(afterProvider.AuthoringCapabilities) != manifest)
+            return Refuse("stale");
+        if (projectionRejected && result.IsValid) return Refuse("unavailable");
+        var valid = result.IsValid && result.Diagnostics.All(diagnostic => diagnostic.Severity != ActivityDiagnosticSeverity.Error);
+        return new(valid ? "validated" : "invalid", new(result.DraftId, result.Revision, valid, result.ValidatedAt, result.Diagnostics));
+    }
+
+    public async Task<ActivityCandidateValidationView> ValidateVersionCandidateAsync(ValidateReusableActivityVersionCandidate command, CancellationToken ct)
+    {
+        ActivityCandidateValidationView Refuse(string state) => new(state);
+        var catalogs = candidateCatalogs?.ToArray() ?? [];
+        if (catalogs.Length != 1 || candidateStructures is null) return Refuse("unavailable");
+        var catalog = catalogs[0];
+        if (!await context.CanManageActivityDefinitionsAsync(ct) || !await catalog.CanReadAsync(ct)) return Refuse("denied");
+        var actor = (context.ActorId, context.TenantId, Profile: await context.GetAuthorizationProfileAsync(ct));
+        var version = await publicationStore.FindAsync(command.VersionId, ct);
+        if (version is null || !IsVisible(version.TenantId)) return Refuse("unavailable");
+        var authoring = await GetAuthoringAsync(version.DefinitionId, ct);
+        EnsureVisible(authoring.TenantId);
+        EnsureDesignAuthority(authoring);
+        if (version.Lifecycle != ActivityDefinitionVersionLifecycle.Active) return Refuse("stale");
+        if (!await context.CanReadProviderPayloadAsync(version.Provider.ProviderKey, ct) ||
+            !await context.CanReadProviderPayloadAsync(command.Provider.ProviderKey, ct)) return Refuse("denied");
+
+        var baselineState = new ActivityDefinitionDraftState(version.Contract, version.Provider, new Dictionary<string, string>(StringComparer.Ordinal));
+        var baseline = ActivityDataSelectionSnapshot.Hash(baselineState);
+        var provider = await EnsureAuthorableProviderAsync(command.Provider, ct);
+        var manifest = ActivityDataSelectionSnapshot.Hash(provider.AuthoringCapabilities);
+        var contract = ToDomainContract(command.Contract);
+        EnsureAuthorableContract(contract, new("ActivityVersion", version.DefinitionVersionId, version.DefinitionId, Revision: 0));
+        _ = NormalizePresentation(command.ActivityPresentation?.Records ?? []);
+        var state = new ActivityDefinitionDraftState(contract, command.Provider, new Dictionary<string, string>(StringComparer.Ordinal));
+        var hash = ActivityDataSelectionSnapshot.Hash(state);
+        ActivityDataSelectionDocument? document = null;
+        var projectionRejected = false;
+        foreach (var projector in candidateProjectors ?? [])
+        {
+            ActivityDataSelectionDocument? projected;
+            try { projected = await projector.TryProjectAsync(state.Provider, state.Contract, version.DefinitionVersionId, hash, ct); }
+            catch (ActivityDataSelectionRejectedException rejected)
+            {
+                projectionRejected = true;
+                projected = rejected.Document;
+                if (projected is null) return Refuse("unavailable");
+            }
+            if (projected is null) continue;
+            if (document is not null || projected.ResourceId != version.DefinitionVersionId || projected.ContractRevision != hash) return Refuse("unavailable");
+            document = projected;
+        }
+        if (document is null) return Refuse("unavailable");
+        var visible = await catalog.ListAsync(ct);
+        if (!visible.Allowed || !ActivityDataSelectionContextService.CatalogContains(document.RootActivity,
+                visible.Entries.Select(x => x.ActivityVersionId).ToHashSet(StringComparer.Ordinal), candidateStructures, ct)) return Refuse("denied");
+        var catalogRevision = ActivityDataSelectionSnapshot.Hash(visible);
+        var result = await validator.ValidateAsync(new(version.DefinitionId, version.DefinitionVersionId, 0, state), ct);
+        if (result.DraftId != version.DefinitionVersionId || result.Revision != 0) return Refuse("unavailable");
+        if (actor != (context.ActorId, context.TenantId, await context.GetAuthorizationProfileAsync(ct)) ||
+            !await context.CanManageActivityDefinitionsAsync(ct) || !await catalog.CanReadAsync(ct) ||
+            !await context.CanReadProviderPayloadAsync(version.Provider.ProviderKey, ct) ||
+            !await context.CanReadProviderPayloadAsync(command.Provider.ProviderKey, ct)) return Refuse("denied");
+
+        var after = await publicationStore.FindAsync(command.VersionId, ct);
+        var afterAuthoring = await GetAuthoringAsync(version.DefinitionId, ct);
+        EnsureVisible(afterAuthoring.TenantId);
+        EnsureDesignAuthority(afterAuthoring);
+        if (after is null || after.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+            after.DefinitionVersionId != version.DefinitionVersionId || after.DefinitionId != version.DefinitionId ||
+            !StringComparer.Ordinal.Equals(after.TemplateHash, version.TemplateHash) ||
+            !StringComparer.Ordinal.Equals(ActivityDataSelectionSnapshot.Hash(new ActivityDefinitionDraftState(after.Contract, after.Provider, new Dictionary<string, string>(StringComparer.Ordinal))), baseline))
+            return Refuse("stale");
         var afterProvider = await EnsureAuthorableProviderAsync(command.Provider, ct);
         var afterCatalog = await catalog.ListAsync(ct);
         if (!afterCatalog.Allowed) return Refuse("denied");
@@ -941,6 +1035,8 @@ public interface IReusableActivityAuthoringService
     Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken);
     Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(UpdateReusableActivityDefinition command, CancellationToken cancellationToken);
     Task ArchiveDefinitionAsync(ArchiveReusableActivityDefinition command, CancellationToken cancellationToken);
+    Task RestoreDefinitionAsync(RestoreReusableActivityDefinition command, CancellationToken cancellationToken) =>
+        Task.FromException(new NotSupportedException("Activity Definition restore is not supported by this authoring service."));
     Task<ReusableActivityDraftView> CreateDraftAsync(CreateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> ReplaceDraftAsync(ReplaceReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken);
@@ -948,6 +1044,8 @@ public interface IReusableActivityAuthoringService
     Task<ReusableActivityDraftView> MigrateDraftAsync(MigrateReusableActivityDraft command, CancellationToken cancellationToken);
     Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ActivityCandidateValidationView> ValidateCandidateAsync(ValidateReusableActivityCandidate command, CancellationToken cancellationToken) =>
+        Task.FromResult(new ActivityCandidateValidationView("unavailable"));
+    Task<ActivityCandidateValidationView> ValidateVersionCandidateAsync(ValidateReusableActivityVersionCandidate command, CancellationToken cancellationToken) =>
         Task.FromResult(new ActivityCandidateValidationView("unavailable"));
     Task<ActivityDraftValidationView> ValidateDraftAsync(ValidateReusableActivityDraft command, CancellationToken cancellationToken);
     Task<ReusableActivityDraftView> GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken);

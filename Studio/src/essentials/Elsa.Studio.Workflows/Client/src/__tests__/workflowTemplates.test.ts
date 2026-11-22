@@ -2,7 +2,7 @@ import { resolveCapabilityLink, capabilityIds } from "../api/capabilities";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { templateAvailabilityReason, templateContent, type WorkflowTemplate } from "../workflowTemplates";
-import { getCreateInitialDocument } from "../workflow-editor/editorHelpers";
+import { getCreateInitialDocument } from "../workflow-editor/createWorkflowInitialDocument";
 import { createTemplateDocumentAdapter } from "../workflow-editor/templateDocumentAdapter";
 import { getWorkflowTemplate, saveWorkflowTemplate } from "../workflowTemplates";
 import { sequenceActivity, sequenceNode, leafNode, writeLine } from "./fixtures";
