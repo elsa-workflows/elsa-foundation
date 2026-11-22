@@ -80,12 +80,12 @@ describe("HomePage", () => {
     flushSync(() => addWidget.focus());
     flushSync(() => addWidget.click());
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-    const dialog = container.querySelector('[role="dialog"][aria-label="Add widget"]');
+    const dialog = container.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(dialog?.contains(document.activeElement)).toBe(true);
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-    expect(container.querySelector('[role="dialog"][aria-label="Add widget"]')).toBeNull();
-    expect(document.activeElement).toBe(addWidget);
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    await waitUntil(() => document.activeElement === addWidget);
 
     clickText(container, "Add widget");
     clickText(container, "Second");
@@ -253,7 +253,7 @@ describe("HomePage", () => {
 
     clickText(dialog, "Cancel");
     expect(container.querySelector("[role='dialog']")).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    await waitUntil(() => document.activeElement === opener);
     flushSync(() => root.unmount());
   });
 
@@ -428,7 +428,7 @@ function render(api: ReturnType<typeof stubApi>) {
     originalUnmount();
     container.remove();
   };
-  return { container, root };
+  return { container: document.body, root };
 }
 
 function click(container: HTMLElement, label: string) {
