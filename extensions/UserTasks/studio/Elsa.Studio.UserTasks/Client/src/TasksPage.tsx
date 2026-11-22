@@ -43,8 +43,8 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   const filtered = Boolean(search.trim());
   // The empty state offers its own Clear search; the toolbar repeats it only beside results.
   const clearInToolbar = filtered && !(page && page.items.length === 0);
-  return <StudioPage className="user-tasks" aria-label="User Tasks management">
-    <StudioPageHeader title="User Tasks" description="Your assigned work and available group tasks."
+  return <StudioPage className="user-tasks" aria-label="User tasks management">
+    <StudioPageHeader title="User tasks" description="Your assigned work and available group tasks."
       actions={<><StudioButton onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} aria-hidden="true" />Refresh</StudioButton>
         {identity?.canReadForms || identity?.canManageForms ? <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks/forms")}>Reusable forms</a> : null}</>} />
     <div ref={root} className="user-task-content">
@@ -61,7 +61,7 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
           <StudioCollectionEmptyState aria-label="Task inbox" icon={<Inbox size={32} />} title={filtered ? "No matching tasks" : cursor ? "No more tasks" : view === "queue" ? "No group tasks available" : view === "history" ? "No task history yet" : "No tasks here"}
             description={filtered ? "Try a different search or clear it to see your inbox." : "Choose another inbox or refresh when new work arrives."}
             actions={filtered ? <StudioButton onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton> : cursor ? <StudioButton onClick={() => changeBrowse({ ...browse, cursor: null })}>First page</StudioButton> : undefined} /> : page ?
-            <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><table className="studio-table user-task-table" aria-label="User Tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
+            <StudioTableContainer role="region" aria-label="Task inbox" tabIndex={0}><table className="studio-table user-task-table" aria-label="User tasks"><thead><tr><th scope="col">Task</th><th scope="col">Status</th><th scope="col">Assignment</th></tr></thead>
               <tbody>{page.items.map(task => <tr key={task.id} {...studioRowInteraction<HTMLTableRowElement>(() => { const path = taskDetailPath(task.id, browse); replaceTaskBrowseLocation(browse, task.id); if (navigate) navigate(path); else window.location.assign(path); })}>
                 <td data-label="Task"><a data-task-id={task.id} className="user-task-link studio-row-link" href={taskDetailPath(task.id, browse)} onClick={event => {
                   const path = taskDetailPath(task.id, browse);

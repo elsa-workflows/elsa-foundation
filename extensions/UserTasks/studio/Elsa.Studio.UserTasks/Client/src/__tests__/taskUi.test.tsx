@@ -666,7 +666,7 @@ it("opens the task detail route as a standalone page without loading the inbox",
   await act(async () => root.render(<Route navigate={vi.fn()} />));
   await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
   expect(container.querySelector('input[type="search"]')).toBeNull();
-  expect(container.querySelector('table[aria-label="User Tasks"]')).toBeNull();
+  expect(container.querySelector('table[aria-label="User tasks"]')).toBeNull();
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
   expect(container.textContent).toContain("Back to task list");
 });

@@ -366,8 +366,8 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
-- [ ] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
-  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14`
+- [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
+  `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string.
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
