@@ -2333,6 +2333,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Enqueue(TurnOutcome unit, CancellationToken cancellationToken)
     {
+        if (unit.Slot is { } slot && HasUnissuedPrivateKind(unit))
+        {
+            slot.RollbackTurn?.Invoke();
+            var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
+            var park = ParkRefusedTurn(unit, slot, preserve, Kinds.UnissuedPrivateKind);
+            ReleaseJobRestriction(unit);
+            _queue.Add(park);
+            return;
+        }
         InvalidateAliasMisses(unit);
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true, cancellationToken);
         var writeFree = EndsInMemory(unit) || !unit.Durable;
@@ -2437,7 +2446,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (generation == _generation) _flushing = false;
     }
 
-    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve)
+    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve, string? fault = null)
     {
         var previous = slot.CurrentRow;
         var unwritten = slot.Unwritten;
@@ -2447,9 +2456,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 State = "null",
                 FoundationNullState = previous.FoundationInlineBirth is not null || previous.FoundationNullState
             };
+        var error = fault ?? _refusal;
         var park = unwritten
-            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
-            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
+            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, error, slot.Pending)
+            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, error);
         Bound(MarkPark(park, slot.CurrentRow), slot);
         if (slot.Unwritten) RetireVolatileJobs(park);
         Promote(park);
@@ -2465,6 +2475,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation,
         CancellationToken cancellationToken, bool beat = false, IReadOnlyList<Delivery>? clearedJobs = null)
     {
+        if (units.Exists(HasUnissuedPrivateKind))
+        {
+            _refusal = Kinds.UnissuedPrivateKind;
+            return Outcome.Refused;
+        }
         // Finding F1: until the owner has caught up with the rows it inherited, what it sends to its own partition goes
         // through the table like everything else. Handing it over in memory would let it overtake older rows.
         var handOver = clearedJobs is null && (_caughtUp || Has(Flaw.HandOverWhileBehind));
@@ -2607,6 +2622,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             return Outcome.Landed;
         }
     }
+
+    private static bool HasUnissuedPrivateKind(TurnOutcome unit) =>
+        unit.Sent.Exists(Kinds.IsUnissuedPrivate);
 
     private TurnCommit PrepareCommit(TurnOutcome unit)
     {
