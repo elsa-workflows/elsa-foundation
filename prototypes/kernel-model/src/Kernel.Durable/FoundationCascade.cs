@@ -157,6 +157,14 @@ public sealed partial class InMemoryStore
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)
                 throw InvalidCascade();
+            if (previous is { ParkDiscard: not null } draining &&
+                (turn.Consumed.Concat(turn.Done).ToArray() is not [var input] ||
+                    Messages.GetValueOrDefault(input) is not { Done: false, Message: { } source } ||
+                    !AuthorizesDrainingTerminate(draining, source) ||
+                    next != draining with { Revision = next.Revision, Jobs = null, Children = null, Cascade = next.Cascade } ||
+                    turn.Unsubscribe || turn.Journal is not null || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
+                    turn.Sent.Count != sent.Length || turn.Held is { Count: > 0 }))
+                throw InvalidCascade();
             ValidateCascadeOpen(turn, previous, next, action.Entries, earlier!);
         }
 
