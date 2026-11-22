@@ -7,7 +7,7 @@ import { DashboardApi } from "../api";
 import { NamedDashboardsRoute, QuestionTile } from "../NamedDashboards";
 import { ShareDialog, HistoryDialog } from "../ResourceDialogs";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared data", fields: [], metrics: [] };
 const resource = (): DashboardResource => ({ id: "q1", kind: "question", revision: "r1", name: "Shared question", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canDelete: true, canCopy: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "", updatedAt: "" });
@@ -60,7 +60,7 @@ describe("native product recovery", () => {
     vi.spyOn(DashboardApi.prototype, "revision").mockRejectedValue(Object.assign(new Error("History read revoked"), { status: 403 }));
     await waitUntil(() => view.querySelector(".named-query-controls") !== null);
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("891357") === true);
-    click(view, "History"); await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    selectResourceAction(view, "Question actions", "History"); await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
     expect(view.textContent).not.toContain("PRIVATE-REVISION");
     click(view, "Inspect revision r0"); await waitUntil(() => view.textContent?.includes("History read revoked") === true);
     if (view.querySelector('[role="dialog"]')) click(view, "Close");
