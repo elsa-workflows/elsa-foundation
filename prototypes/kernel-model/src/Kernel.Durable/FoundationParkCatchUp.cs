@@ -53,8 +53,13 @@ public sealed partial class InMemoryStore
         foreach (var subscription in requested)
         {
             var existing = RegisteredSubscription(subscription);
-            if (Reserve(subscription) && (existing is null || removed?.Contains(existing) == true || cleared?.Contains(row.Id) == true))
+            if (Reserve(subscription) && (existing is null || WasRemoved(existing)))
+            {
+                if (_subscriptions.TryGetValue(subscription, out var exact) &&
+                    exact.FoundationTenant != subscription.FoundationTenant && !WasRemoved(exact))
+                    throw ConflictingSubscriptionScope();
                 rows.Add(subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now });
+            }
             else if (restoring)
                 throw new StoreException(Failure.Definite, "A restored subscription must insert a new registration.");
         }
@@ -82,6 +87,9 @@ public sealed partial class InMemoryStore
                 names.Add(subscription.Key, waits = new(_foundationEventEquality));
             return waits.Add(subscription.Wait);
         }
+
+        bool WasRemoved(SubscriptionRow subscription) =>
+            removed?.Contains(subscription) == true || cleared?.Contains(subscription.Instance) == true;
     }
 
     private void InsertFoundationSubscriptions(FoundationSubscriptionInsert insert)
