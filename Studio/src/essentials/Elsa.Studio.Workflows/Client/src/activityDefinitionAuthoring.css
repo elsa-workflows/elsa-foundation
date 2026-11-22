@@ -171,6 +171,7 @@
 }
 
 @media (max-width: 600px) {
+  .ad-draft-editor .wf-editor-title > strong { white-space: normal; overflow-wrap: anywhere; }
   .ad-draft-editor .ad-authoring-toolbar-actions { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .ad-draft-editor .ad-authoring-toolbar-actions:has(.ad-authoring-history) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ad-authoring-toolbar-actions .ad-publication-toolbar-trigger { grid-column: 1 / -1; width: 100%; max-width: none; }
