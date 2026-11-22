@@ -20,18 +20,19 @@ public sealed partial class WorkflowIntrinsicAssignmentConversionTests
         Assert.Equal("counter", snapshot.Name);
         Assert.Equal(write.ScopeId, snapshot.Phase);
         Assert.Equal(write.NewVersion, snapshot.Sequence);
+        Assert.False(string.IsNullOrWhiteSpace(snapshot.EvidenceId));
         Assert.Equal(7, commit.StateChanges.WorkflowExecution!.State.RootVariableFrame!.Values["counter"].InlineValue!.Value.GetInt32());
         if (captureHistory)
         {
             Assert.NotNull(inspection.CheckpointValueCapture);
             Assert.Equal("start-intrinsic", inspection.CheckpointValueCapture.SchedulerWorkItemId);
-            Assert.False(string.IsNullOrWhiteSpace(snapshot.EvidenceId));
             Assert.Equal(snapshot.EvidenceId, Assert.Single(inspection.CheckpointValueCapture.EvidenceIds));
         }
         else
         {
             Assert.Null(inspection.CheckpointValueCapture);
-            Assert.Null(snapshot.EvidenceId);
+            Assert.Null(snapshot.EvaluationId);
+            return;
         }
 
         await _inspectionStore.SaveAsync(inspection);
