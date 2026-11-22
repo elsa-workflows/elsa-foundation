@@ -323,6 +323,17 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("function holder() {} holder.o = getVariable('Order'); holder.o.Status = 'Paid'; return 1;")]
     [InlineData("function holder() {} holder.prototype.o = getVariable('Order'); holder.prototype.o.Status = 'Paid'; return 1;")]
     [InlineData("const input = { [Symbol.iterator]() { return { next() { const o = getVariable('Order'); o.Status = 'Paid'; return { done: true }; } }; } }; return Object.fromEntries(input);")]
+    [InlineData("[getVariable('Order'), {}].reduce((acc, x) => { acc.Status = 'Paid'; return x; }, {}); return 1;")]
+    [InlineData("[{}, getVariable('Order')].reduceRight((acc, x) => { acc.Status = 'Paid'; return x; }, {}); return 1;")]
+    [InlineData("let o = {}; [getVariable('Order'), {}].forEach(x => { o.Status = 'Paid'; o = x; }); return 1;")]
+    [InlineData("let o = {}; Array.from([getVariable('Order'), {}], x => { o.Status = 'Paid'; o = x; return 0; }); return 1;")]
+    [InlineData("let o = {}; [3, 2, 1].sort(() => { o.Status = 'Paid'; o = getVariable('Order'); return 0; }); return 1;")]
+    [InlineData("let o = {}; [3, 2, 1].toSorted(() => { o.Status = 'Paid'; o = getVariable('Order'); return 0; }); return 1;")]
+    [InlineData("let o = {}; 'xx'.replaceAll('x', () => { o.Status = 'Paid'; o = getVariable('Order'); return 'x'; }); return 1;")]
+    [InlineData("let o = {}; 'xx'.replace(/x/g, () => { o.Status = 'Paid'; o = getVariable('Order'); return 'x'; }); return 1;")]
+    [InlineData("let o = {}; const result = { valueOf() { o.Status = 'Paid'; o = getVariable('Order'); return 0; } }; [3, 2, 1].sort(() => result); return 1;")]
+    [InlineData("let o = {}; const result = { toString() { o.Status = 'Paid'; o = getVariable('Order'); return 'x'; } }; 'xx'.replaceAll('x', () => result); return 1;")]
+    [InlineData("let o = {}; const value = { toString() { o.Status = 'Paid'; o = getVariable('Order'); return 'x'; } }; [value, value, value].sort(); return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -486,6 +497,11 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("function holder() {} holder.o = getVariable('Order'); return holder.o.Status;")]
     [InlineData("const o = getVariable('Order'); function holder() {} Object.defineProperty(holder, 'x', { get() { o.Status = 'Paid'; return 1; } }); return JSON.stringify(holder);")]
     [InlineData("const input = { [Symbol.iterator]() { return { next() { return { done: true }; } }; } }; return Object.fromEntries(input);")]
+    [InlineData("[getVariable('Order'), {}].reduce((acc, x) => { const status = acc.Status; return x; }, {}); return 1;")]
+    [InlineData("let o = {}; [getVariable('Order'), {}].forEach(x => { o = {}; o.Status = 'Paid'; o = x; }); return 1;")]
+    [InlineData("let o = {}; Array.from([getVariable('Order'), {}], x => { const status = o.Status; o = x; return 0; }); return 1;")]
+    [InlineData("let o = {}; [3, 2, 1].sort(() => { o = {}; o.Status = 'Paid'; o = getVariable('Order'); return 0; }); return 1;")]
+    [InlineData("let o = {}; 'xx'.replaceAll('x', () => { o = {}; o.Status = 'Paid'; o = getVariable('Order'); return 'x'; }); return 1;")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));

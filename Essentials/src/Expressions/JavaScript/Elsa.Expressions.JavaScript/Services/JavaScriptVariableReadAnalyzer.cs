@@ -391,6 +391,12 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     Visit(bracketed.Object);
                     return;
                 case MemberExpression member:
+                    if (scriptBody && (OpaqueMemberKey(member.Property, member.Computed) ||
+                        member.Object is Identifier { Name: "Reflect" }))
+                    {
+                        HasComputedRead = true;
+                        HasComputedWrite = true;
+                    }
                     Visit(member.Object);
                     if (member.Computed)
                         Visit(member.Property);
@@ -426,6 +432,12 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                         Visit(argument);
                     return;
                 case Property property:
+                    if (scriptBody && _path.Count > 1 && _path[^2] is ObjectPattern &&
+                        OpaqueMemberKey(property.Key, property.Computed))
+                    {
+                        HasComputedRead = true;
+                        HasComputedWrite = true;
+                    }
                     // A non-computed key is a name, not a read; a shorthand { variables } is a value use.
                     if (property.Computed || property.Shorthand)
                         Visit(property.Key);
@@ -466,10 +478,31 @@ internal sealed class JavaScriptVariableReadAnalyzer(IEnumerable<JavaScriptHostF
                     HasComputedRead = true;
                     HasComputedWrite = true;
                     return;
+                case ThisExpression when scriptBody:
+                    HasComputedRead = true;
+                    HasComputedWrite = true;
+                    return;
+                case Identifier { Name: "Object" or "Reflect" } intrinsic when scriptBody:
+                    // A namespace passed around as a value can expose dynamic constructors through reflection.
+                    // Direct member access is classified above; ordinary Object.keys remains a precise read.
+                    if (_path.Count > 1 && (_path[^2] is MemberExpression access && ReferenceEquals(access.Object, intrinsic) ||
+                        _path[^2] is CallExpression invocation && ReferenceEquals(invocation.Callee, intrinsic)))
+                        return;
+                    HasComputedRead = true;
+                    HasComputedWrite = true;
+                    return;
             }
 
             foreach (var child in node.ChildNodes)
                 Visit(child);
         }
+
+        private static bool OpaqueMemberKey(Node key, bool computed) => key switch
+        {
+            Identifier name when !computed => name.Name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+            Literal { Value: string name } => name is "constructor" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors",
+            Literal => false,
+            _ => computed
+        };
     }
 }

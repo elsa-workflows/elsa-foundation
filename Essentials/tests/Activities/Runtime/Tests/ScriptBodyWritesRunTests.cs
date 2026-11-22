@@ -131,6 +131,15 @@ public sealed class ScriptBodyWritesRunTests
     [InlineData("new Function(\"setVariable('total', 7)\")(); return 1;")]
     [InlineData("const engine = globalThis; engine.setVariable('total', 7); return 1;")]
     [InlineData("const engine = globalThis; engine.variables.total = 7; return 1;")]
+    [InlineData("(() => {}).constructor(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("({}).constructor.constructor(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("const root = this; root.setVariable('total', 7); return 1;")]
+    [InlineData("this['set' + 'Variable']('total', 7); return 1;")]
+    [InlineData("const key = 'con' + 'structor'; (() => {})[key](\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("Object.getOwnPropertyDescriptor(Object.getPrototypeOf(() => {}), 'constructor').value(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("const reflect = Reflect; reflect.get(() => {}, 'constructor')(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("const { constructor: build } = () => {}; build(\"setVariable('total', 7)\")(); return 1;")]
+    [InlineData("const key = 'con' + 'structor'; const { [key]: build } = () => {}; build(\"setVariable('total', 7)\")(); return 1;")]
     public async Task A_computed_or_opaque_write_resolves_at_run_time_and_commits_with_the_step(string script)
     {
         // FR-020a (T029a).

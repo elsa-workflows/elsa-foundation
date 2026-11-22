@@ -128,6 +128,15 @@ public sealed class ScriptVariableWriteAnalyzerTests
     [InlineData("const build = Function; build(\"setVariable('x', 1)\")(); return 1;")]
     [InlineData("const engine = globalThis; engine.setVariable('x', 1); return 1;")]
     [InlineData("const engine = globalThis; engine.variables.x = 1; return 1;")]
+    [InlineData("(() => {}).constructor(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("({}).constructor.constructor(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const root = this; root.setVariable('x', 1); return 1;")]
+    [InlineData("this['set' + 'Variable']('x', 1); return 1;")]
+    [InlineData("const key = 'con' + 'structor'; (() => {})[key](\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("Object.getOwnPropertyDescriptor(Object.getPrototypeOf(() => {}), 'constructor').value(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const reflect = Reflect; reflect.get(() => {}, 'constructor')(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const { constructor: build } = () => {}; build(\"setVariable('x', 1)\")(); return 1;")]
+    [InlineData("const key = 'con' + 'structor'; const { [key]: build } = () => {}; build(\"setVariable('x', 1)\")(); return 1;")]
     public void Dynamic_code_and_engine_global_exposure_are_opaque_body_writes(string source)
     {
         var analysis = _analyzer.Analyze(source, scriptBody: true)!;

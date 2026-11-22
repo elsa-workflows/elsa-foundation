@@ -1563,7 +1563,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 var mapped = Allocate(call);
                 _arrays.Add(call);
                 Put(mapped, "*", arguments.Length <= 1 || arguments[1].Functions.Count == 0 ? elements :
-                    Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local));
+                    Repeated(_ => Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local)));
                 return mapped;
             }
             // Only known read-only intrinsics bypass the opaque-call guard. Reflection and callbacks can return or
@@ -1599,23 +1599,31 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         var callbackResult = Value.Local;
         if (method is "sort" or "toSorted")
         {
-            if (arguments.FirstOrDefault()?.Functions.Count > 0)
-                foreach (var callback in arguments[0].Functions)
-                    Coerce([Invoke(callback, [Member(receiver, "*"), Member(receiver, "*")])]);
-            else Coerce([Member(receiver, "*")], stringHint: true);
+            Repeated(_ =>
+            {
+                if (arguments.FirstOrDefault()?.Functions.Count > 0)
+                    Coerce([Apply(arguments[0], [Member(receiver, "*"), Member(receiver, "*")], Value.Local)]);
+                else Coerce([Member(receiver, "*")], stringHint: true);
+                return Value.Local;
+            });
         }
         if (method is "map" or "filter" or "find" or "findIndex" or "findLast" or "findLastIndex" or "some" or "every" or "forEach" or "flatMap" or "reduce" or "reduceRight")
-            foreach (var callback in arguments.FirstOrDefault()?.Functions ?? [])
-                callbackResult = callbackResult.Union(Invoke(callback, method is "reduce" or "reduceRight"
-                    ? [arguments.Length > 1 ? arguments[1] : Member(receiver, "*"), Member(receiver, "*"), Value.Local, receiver]
+            if (arguments.FirstOrDefault()?.Functions.Count > 0)
+                callbackResult = Repeated(accumulator => Apply(arguments[0], method is "reduce" or "reduceRight"
+                    ? [accumulator, Member(receiver, "*"), Value.Local, receiver]
                     : [Member(receiver, "*"), Value.Local, receiver],
-                    method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local));
+                    method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local),
+                    method is "reduce" or "reduceRight" ? arguments.Length > 1 ? arguments[1] : Member(receiver, "*") : null);
         if (method is "replace" or "replaceAll")
         {
             Coerce([receiver], stringHint: true);
             Coerce(arguments.Take(1), stringHint: true);
             if (arguments.Length > 1 && arguments[1].Functions.Count > 0)
-                Coerce([Apply(arguments[1], [Value.Local, Value.Local, Value.Local], Value.Local)], stringHint: true);
+                Repeated(_ =>
+                {
+                    Coerce([Apply(arguments[1], [Value.Local, Value.Local, Value.Local], Value.Local)], stringHint: true);
+                    return Value.Local;
+                });
             else if (arguments.Length > 1) Coerce([arguments[1]], stringHint: true);
             return Value.Local;
         }
@@ -1671,6 +1679,22 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         // change it. Unlike a known local helper, its read-only behavior cannot be established here.
         _writes |= OpaqueOwnership(receiver) || arguments.Any(argument => OpaqueOwnership(argument));
         return FreshContainer(call);
+    }
+
+    private Value Repeated(Func<Value, Value> invoke, Value? initial = null)
+    {
+        // Native iteration can invoke the same callback more than once. Preserve captured-state changes and feed
+        // possible reducer results back into its accumulator until the finite ownership graph stops growing.
+        var result = initial ?? Value.Local;
+        while (!_writes)
+        {
+            var before = _state.Copy();
+            var next = result.Union(invoke(result));
+            _state.Join(before);
+            if (_state.Same(before) && next.Same(result)) return next;
+            result = next;
+        }
+        return result;
     }
 
     private static int? NumericMathArity(string? method) => method switch
