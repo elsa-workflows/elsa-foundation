@@ -478,11 +478,11 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     [Theory]
-    [InlineData("expression")]
-    [InlineData("variable")]
-    [InlineData("variable-syntax")]
-    [InlineData("memory")]
-    public async Task Parallel_cannot_make_an_unanalyzed_dynamic_script_body_proven_safe(string form)
+    [InlineData("expression", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("variable", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("variable-syntax", Elsa3ActivityDiagnosticCodes.UnsupportedMode)]
+    [InlineData("memory", Elsa3ActivityDiagnosticCodes.ValueOutsideContract)]
+    public async Task Parallel_cannot_make_an_unsupported_or_unanalyzed_script_body_safe(string form, string expectedCode)
     {
         const string source = "setOutcomes(['Done','Other']);";
         var script = Activity("body", "Elsa.RunJavaScript", ("script", form switch
@@ -500,7 +500,14 @@ public sealed class Elsa3NodeRewriteTests
             [new Elsa3Variable { Id = "code-memory", Name = "code", TypeName = "String", Value = JsonSerializer.Serialize(source) }]);
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics, item => item.Code == expectedCode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
+        if (form == "memory")
+        {
+            var refusal = Assert.Single(result.Diagnostics, item => item.IsError);
+            Assert.EndsWith(".script", refusal.Path, StringComparison.Ordinal);
+            Assert.Contains("Variable expression", refusal.Guidance, StringComparison.Ordinal);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        }
     }
 
     [Theory]
@@ -518,7 +525,7 @@ public sealed class Elsa3NodeRewriteTests
     [Theory]
     [InlineData("")]
     [InlineData(" \t\n")]
-    public async Task Blank_required_script_keeps_standalone_and_Switch_binding_refusal(string script)
+    public async Task Blank_script_keeps_standalone_and_Switch_source_refusal(string script)
     {
         Elsa3Activity Body() => Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
             ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
@@ -528,7 +535,11 @@ public sealed class Elsa3NodeRewriteTests
         {
             var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
             Assert.False(result.Succeeded);
-            Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound);
+            var refusal = Assert.Single(result.Diagnostics, item => item.IsError);
+            Assert.Equal(Elsa3ActivityDiagnosticCodes.ValueOutsideContract, refusal.Code);
+            Assert.EndsWith(".script", refusal.Path, StringComparison.Ordinal);
+            Assert.Contains("Elsa 3", refusal.Guidance, StringComparison.Ordinal);
+            Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.RequiredInputUnbound);
             Assert.DoesNotContain(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
         }
     }
