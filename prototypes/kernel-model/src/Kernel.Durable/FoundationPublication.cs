@@ -102,7 +102,7 @@ public sealed partial class InMemoryStore
         if (failed is not null)
         {
             var parks = failed.Attempts >= failed.Limit && Instances.GetValueOrDefault(turn.Instance) is
-                { Status: InstanceStatus.Running, Retired: false } actor && work.Owns(actor, source);
+                { Status: InstanceStatus.Running, Retired: false, ParkDiscard: null } actor && work.Owns(actor, source);
             if (failed.Limit <= 0 || stored.Attempts != failed.Attempts || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpBefore is not null || turn.FoundationCatchUpExpected is not null ||
                 turn.Consumed.Count != 0 ||

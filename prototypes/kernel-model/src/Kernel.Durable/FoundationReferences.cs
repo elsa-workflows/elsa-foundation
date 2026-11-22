@@ -282,11 +282,12 @@ public sealed partial class InMemoryStore
         if (row.Status == InstanceStatus.Running)
         {
             _foundationEnds.Remove(address);
-            if (row.ParkRecovery is null) _foundationParks.Remove(address);
+            if (row.ParkRecovery is null && row.ParkDiscard?.Kind != ParkClearKind.Terminate) _foundationParks.Remove(address);
         }
         else
             _foundationEnds.TryAdd(address, now);
-        if (previous?.ParkRecovery is not null && row.ParkRecovery is null && turn.FoundationKept is null)
+        if (previous?.ParkRecovery is not null && row.ParkRecovery is null &&
+            row.ParkDiscard?.Kind != ParkClearKind.Terminate && turn.FoundationKept is null)
         {
             _foundationParks.Remove(address);
             _foundationParkExpiries.Remove(address);
