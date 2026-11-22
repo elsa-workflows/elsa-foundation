@@ -66,7 +66,11 @@ public sealed partial class InMemoryStore
         if (message.Operator is { } command)
         {
             if (command.Selection is null)
-                return row is { Status: InstanceStatus.Running, ParkRecovery: not null };
+                return row.ParkRecovery is not null;
+            if (row is { Status: not InstanceStatus.Running, ParkRecovery: not null })
+            {
+                lock (_gate) return MatchesRecoveryPark(row, command.Selection);
+            }
             var identity = FoundationIdentity(row.Id, row.Creation);
             return MatchesFoundationSelection(identity.Tenant, identity.Reference, command.Selection);
         }

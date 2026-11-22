@@ -12,6 +12,87 @@ internal static class ParkCohortTupleChecks
         await TiedCohort(poisonFirst: false, check, narrow: true);
         await TiedCohort(poisonFirst: true, check, narrow: true);
         await TiedOrdinaryPoison(check);
+        await InterruptedRelease(check);
+    }
+
+    private static async Task InterruptedRelease(Action<bool, string> check)
+    {
+        const long start = 1_702_610_003_000;
+        const int maxAttempts = 3;
+        var now = start;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe { HoldHere = false };
+        var scope = new Contract.BoundScope("interrupted-suffix");
+        var ingress = new InMemoryIngress(store, new Requests("interrupted-suffix"), "interrupted-suffix",
+            (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 5);
+        await using var first = await Activate(Owner("before-interruption"));
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        await Pump(first);
+        await ingress.SendAsync(scope, target, "park", "fault");
+        await Pump(first);
+        var count = InMemoryStore.ParkPageLimit - 2;
+        var expected = Enumerable.Range(0, count).Select(i => $"restored-{i:D3}").ToArray();
+        await ingress.SendAsync(scope, target, "trip", "fault");
+        foreach (var id in expected)
+            await ingress.SendAsync(scope, target, id, "hold", id);
+        await ingress.SendAsync(scope, target, "suffix", "finish-recovery");
+        for (var pass = 0; pass < InMemoryStore.ParkPageLimit + 10 && Delivery("suffix").KeptBy is null; pass++)
+            await Pump(first, passes: 1);
+
+        await Open("release-first");
+        for (var pass = 0; pass < 20 && Row().ParkRecovery?.Cursor is null; pass++)
+            await Pump(first, passes: 1);
+        var released = Row();
+        var releasedBy = Delivery("trip").ReleasedBy;
+        var releasedPage = released.ParkRecovery is { Cursor: not null } && releasedBy is not null &&
+            expected.All(id => Delivery(id) is { Done: false, KeptBy: null } row && row.ReleasedBy == releasedBy) &&
+            Delivery("suffix") is { Done: true, KeptBy: ParkKeepReason.Arrived, ReleasedBy: null };
+        check(releasedPage, "E-6 first recovery releases one page and retains the end input in the suffix");
+        if (!releasedPage) return;
+        await first.DisposeAsync();
+
+        Delivery("trip").Attempts = maxAttempts;
+        now++;
+        await using var successor = await Activate(Owner("after-interruption"));
+        for (var pass = 0; pass < 20 && Row().Status != InstanceStatus.Faulted; pass++)
+            await Pump(successor, passes: 1);
+        var reparks = Row() is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            Delivery("trip") is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+            expected.All(id => Delivery(id) is { Done: false, KeptBy: null } row && row.ReleasedBy == releasedBy);
+        check(reparks, "E-6 the exhausted first input re-parks before the older cohort reaches the actor");
+        if (!reparks) return;
+
+        await Open("release-again");
+        Delivery("release-again").Seq = Delivery(expected[0]).Seq - 1;
+        for (var pass = 0; pass < 3 * count && (Row().Status != InstanceStatus.Finished || Row().ParkRecovery is not null); pass++)
+        {
+            now += 11;
+            await Pump(successor, passes: 1);
+        }
+        var final = Row();
+        var applied = Json.Read<List<string>>(final.State);
+        check(final is { Status: InstanceStatus.Finished, ParkRecovery: null } &&
+            final.ParkResolutionGeneration > released.ParkResolutionGeneration &&
+            applied.SequenceEqual(expected.Append("suffix")) &&
+            store.Messages.Values.All(row => row.KeptBy is null && row.Message.Kind != Kinds.Drain),
+            $"E-6 the later generation applies the older release before the end suffix and completes (applied {applied.Count})");
+
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - start, MaxAttempts = maxAttempts, PassTurnBudget = 1 });
+        static async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
+        InstanceRow Row() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;
+        InMemoryStore.MessageRow Delivery(string id) => store.Messages.Values.Single(row => row.Message.Id == id);
+        async Task Open(string id)
+        {
+            var selection = (await reads.GetAsync(scope, actor))!.Selection;
+            var result = await ingress.SendAsync(scope, target, id, Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume)));
+            if (result.Outcome != Contract.AdmissionOutcome.Accepted)
+                throw new InvalidOperationException($"The recovery fixture could not admit {id}.");
+        }
     }
 
     private static async Task TiedCohort(bool poisonFirst, Action<bool, string> check, bool narrow = false)
@@ -67,6 +148,7 @@ internal static class ParkCohortTupleChecks
         // Model independent allocators producing a tie and one input having already exhausted its trials.
         var poison = cohort[poisonFirst ? 0 : 1];
         var suspect = cohort[poisonFirst ? 1 : 0];
+        var expectedInput = suspect.Message.Payload;
         poison.Seq = suspect.Seq = 42;
         poison.Attempts = maxAttempts;
         probe.HoldHere = false;
@@ -85,7 +167,7 @@ internal static class ParkCohortTupleChecks
         }
         else
         {
-            check(Row().Status == InstanceStatus.Faulted && order is [var tried] && tried == suspect.Message.Payload &&
+            check(Row().Status == InstanceStatus.Faulted && order is [var tried] && tried == expectedInput &&
                   flightsBeforePark == 1 && flights.Count == 1 && flights[0].SequenceEqual([suspect.Message.InboxKey]) &&
                   suspect is { Done: true, KeptBy: null } && poison.KeptBy == ParkKeepReason.Consumed,
                 "TT-1 the earlier full tuple takes the sole trial before the equal-sequence poison parks the actor" + (narrow ? " with a one-row poll" : ""));
@@ -153,9 +235,9 @@ internal static class ParkCohortTupleChecks
         static async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
     }
 
-    private static async Task Pump(IScopeActivation owner)
+    private static async Task Pump(IScopeActivation owner, int passes = 24)
     {
-        for (var pass = 0; pass < 24; pass++)
+        for (var pass = 0; pass < passes; pass++)
         {
             await owner.WokenAsync(null);
             await owner.RunAsync();
@@ -174,6 +256,11 @@ internal static class ParkCohortTupleChecks
             foreach (var message in turn.Inbox)
             {
                 if (message.Kind == "fault") throw new InvalidOperationException("Open the Park fixture.");
+                if (message.Kind == "finish-recovery")
+                {
+                    order.Add("suffix");
+                    turn.End(Contract.ActorStatus.Finished);
+                }
                 if (message.Kind == "arm") turn.StartJob("exhausted");
                 if (message.Kind != "hold" || message.Payload is not { } value) continue;
                 if (HoldHere) turn.Hold(message);

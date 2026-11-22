@@ -5,10 +5,15 @@ namespace Kernel.Foundation.InMemory;
 
 internal sealed partial class ActorAdapter
 {
-    private Durable.TurnOutcome RefuseDuringDiscard(Durable.TurnInput input, Durable.InstanceRow row)
+    private Durable.TurnOutcome RefuseDuringResolution(Durable.TurnInput input, Durable.InstanceRow row)
     {
-        var refusal = Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ResolutionOpen");
-        if (row.Cascade is not null || !store.AuthorizesDrainingTerminate(row, input.Taken[input.From].Message)) return refusal;
+        var message = input.Taken[input.From].Message;
+        var consume = row is { Status: not Durable.InstanceStatus.Running, ParkRecovery: not null } &&
+            message is { Kind: Contract.Kinds.Terminate, Operator: { Selection: null, DeleteTarget: null } };
+        var refusal = consume
+            ? new Durable.TurnOutcome(input.Actor) { Consumed = [.. input.Taken], Status = row.Status }
+            : Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ResolutionOpen");
+        if (row.Cascade is not null || !store.AuthorizesDrainingTerminate(row, message)) return refusal;
         var entries = Durable.CascadeRegistry.From(row);
         if (entries.Count == 0) return refusal;
 

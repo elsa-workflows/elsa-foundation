@@ -43,6 +43,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
     private readonly PartitionRuntime _runtime;
     private readonly LoopOptions _options;
     private readonly long[] _due;        // when each held scope's next pass is due, on the node's clock; long.MaxValue: when woken
+    private readonly long?[] _oldestWaiting; // when the waiting work was first known ready, on the node's clock
     private readonly IScopeActivation?[] _seen;     // the activation each scope had at the last look: a new one gets a pass at once
     private readonly SemaphoreSlim _signal = new(0, 1);
     private readonly CancellationTokenSource _exit = new(), _kill = new();     // leave the loop between passes; stop a pass where it is
@@ -65,6 +66,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         _options = options ?? new LoopOptions();
         _runtime = new PartitionRuntime(node, membership, partitions, _options.Window, wake);
         _due = new long[partitions];
+        _oldestWaiting = new long?[partitions];
         _seen = new IScopeActivation?[partitions];
     }
 
@@ -246,6 +248,7 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
         var (exit, kill) = (_exit.Token, _kill.Token);
         var partitions = _due.Length;
         long pollAt = Now + (long)_options.PollInterval.TotalMilliseconds;
+        var ready = new List<(int Scope, IScopeActivation Activation)>();
         while (!exit.IsCancellationRequested)
         {
             try
@@ -261,22 +264,38 @@ public sealed class RuntimeNode : IActorRuntime, IAsyncDisposable
                             Volatile.Write(ref _due[scope], 0);
                         }
                 }
-                for (var scope = 0; scope < partitions && !exit.IsCancellationRequested; scope++)
+                ready.Clear();
+                for (var scope = 0; scope < partitions; scope++)
                 {
                     var activation = _runtime.Activation(scope);
                     if (activation != _seen[scope])
                     {
                         _seen[scope] = activation;
+                        _oldestWaiting[scope] = null;
                         if (activation is not null) Volatile.Write(ref _due[scope], 0);    // a scope taken (again) gets its first pass at once
                     }
-                    if (activation is null) continue;
-                    if (Volatile.Read(ref _due[scope]) > Now) continue;
-                    Volatile.Write(ref _due[scope], long.MaxValue);
-                    TimeSpan? next = TimeSpan.FromMilliseconds(100);      // what a pass that throws gets: another try soon, not at the next poll
-                    try { next = await _runtime.PassAsync(scope, kill); }
+                    if (activation is not null && Volatile.Read(ref _due[scope]) <= Now)
+                        ready.Add((scope, activation));
+                }
+                ready.Sort((left, right) =>
+                {
+                    var order = (_oldestWaiting[left.Scope] ?? long.MaxValue)
+                        .CompareTo(_oldestWaiting[right.Scope] ?? long.MaxValue);
+                    return order != 0 ? order : left.Scope.CompareTo(right.Scope);
+                });
+                foreach (var (scope, activation) in ready)
+                {
+                    if (exit.IsCancellationRequested) break;
+                    if (_runtime.Activation(scope) != activation) continue;
+                    Interlocked.Exchange(ref _due[scope], long.MaxValue);
+                    ScopePass next = new(TimeSpan.FromMilliseconds(100)); // retry a throwing pass before the next periodic poll
+                    try { next = await _runtime.PassWithAgeAsync(scope, kill); }
                     finally
                     {
-                        if (next is { } delay) Sooner(ref _due[scope], Now + (long)delay.TotalMilliseconds);
+                        var sampledAt = Now;
+                        _oldestWaiting[scope] = next.OldestWaitingAge is { } age && next.Delay == TimeSpan.Zero
+                            ? sampledAt - (long)Math.Max(0, age.TotalMilliseconds) : null;
+                        if (next.Delay is { } delay) Sooner(ref _due[scope], sampledAt + (long)delay.TotalMilliseconds);
                         else if (!_runtime.Owns(scope)) _seen[scope] = null;   // lost: the node gets the same activation back when it takes the scope again
                     }
                 }

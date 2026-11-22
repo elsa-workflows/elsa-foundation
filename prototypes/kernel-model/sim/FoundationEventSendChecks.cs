@@ -200,6 +200,14 @@ internal static class FoundationEventSendChecks
                 check(Actors().ToArray() is [var started] && Json.Read<List<string>>(started.Row.State).SequenceEqual(["owed"]) &&
                     store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
                     "after takeover the start consumes one canonical creator and applies its expired event once");
+                var eventDelivery = store.Messages.Values.SingleOrDefault(row => row is { Done: true, Message.Kind: Kinds.Event });
+                var duplicate = await edge.SendAsync(scope, new Contract.Target.Event(key), "owed", "ignored", "replacement",
+                    new(KeepFor: TimeSpan.FromMilliseconds(100)));
+                await Pump(next);
+                check(eventDelivery is { Message: { Payload: null, StoredEnvelope: null, Start: null } } &&
+                    duplicate is { Outcome: Contract.AdmissionOutcome.Duplicate, Publication.Status: Contract.PublicationStatus.Matched } &&
+                    Actors().Count == 1 && Json.Read<List<string>>(Actors().Single().Row.State).SequenceEqual(["owed"]),
+                    "the consumed event start keeps its duplicate receipt and actor after dropping the delivery payload");
                 return;
             }
             if (outcome == "remove")
