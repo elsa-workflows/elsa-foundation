@@ -1309,6 +1309,9 @@ describe("workflow run workbench incident navigation", () => {
       bookmarks: [bookmarkSummary("current-1"), bookmarkSummary("current-2")]
     }));
     await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed"));
+    const dataTabs = container.querySelector<HTMLElement>('[role="tablist"][aria-label="Activity execution details"]')!;
+    expect(buttonByText(dataTabs, "Inputs")?.getAttribute("aria-selected")).toBe("true");
+    click(buttonByText(dataTabs, "Overview"));
     const metadataValue = (label: string) => [...container.querySelectorAll<HTMLElement>(".wf-activity-meta-item")]
       .find(item => item.querySelector("dt")?.textContent === label)
       ?.querySelector(".wf-activity-meta-value")?.textContent;
@@ -2015,7 +2018,7 @@ it("requires a deliberate repeated-node occurrence choice after automatic playba
   await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3"));
   const node = container.querySelector<HTMLElement>('.wf-run-diagram-view [data-id="target-node"]')!;
   expect(node).toBeTruthy(); click(node);
-  await vi.waitFor(() => expect(container.textContent).toContain("Choose a recorded execution to inspect its evidence."));
+  await vi.waitFor(() => expect(container.textContent).toContain("Choose a recorded execution to inspect its run data."));
   expect(container.querySelector("[aria-label='Activity playback']")?.textContent).toContain("Step 3 of 3");
   expect(container.querySelector(".wf-activity-overview")).toBeNull();
   click(container.querySelector<HTMLElement>(".wf-instance-inspector .wf-execution-choice"));
