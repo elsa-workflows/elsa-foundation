@@ -107,6 +107,37 @@ public sealed partial class InMemoryStore
         public IReadOnlyList<InboxKey> All => [.. Pending, .. Kept];
     }
 
+    // The original timed-ticket encoding gives its deadline an ordinal ID. Once the retired
+    // Worker consumes that ticket there is no independent way to recover the old linkage.
+    private CascadeInputs? PrepareRetiredDeadlines(TurnCommit turn, InstanceRow? previous,
+        IReadOnlyDictionary<int, long> epochs, CommitBatch batch)
+    {
+        if (turn.Row is not null || previous is not { Retired: true, HasCascadeObligation: true } marker ||
+            StoreBatchRules.AddressPartition(marker.Id) is not { } partition || !epochs.ContainsKey(partition)) return null;
+        var entries = marker.HeldCascade ?? marker.Cascade!.Entries;
+        List<InboxKey>? deadlines = null;
+        foreach (var key in turn.Consumed)
+        {
+            if (Messages.GetValueOrDefault(key) is not { Done: false, Message: { Kind: Kinds.Job } job,
+                    JobTiming: ({ } name, { } timer, { } due) } || !Owned(job, marker) ||
+                !entries.Jobs.Contains(new JobRegistration(name, job.JobGeneration)) ||
+                key != InboxKey.Ticket(marker.Id, name, marker.Creation, job.JobGeneration) ||
+                timer == DurableTurn.FoundationJobDeadlineId(marker.Id, marker.Creation, job.JobGeneration)) continue;
+
+            var deadlineKey = InboxKey.Issued(timer);
+            if (Messages.GetValueOrDefault(deadlineKey) is not { Done: false, Message: { Kind: Kinds.JobDeadline } deadline } stored ||
+                !Owned(deadline, marker) || deadline.Due != due || stored.JobTiming.JobKey != name ||
+                batch.Turns.Any(unit => unit.Consumed.Contains(deadlineKey) || unit.Done.Contains(deadlineKey) ||
+                    unit.Held?.Contains(deadlineKey) == true || unit.Sent.Any(message => message.InboxKey == deadlineKey))) continue;
+            (deadlines ??= []).Add(deadlineKey);
+        }
+        return deadlines is null ? null : new(deadlines, []);
+
+        static bool Owned(Message message, InstanceRow marker) => message.HasIssuedTicket &&
+            message.Target.Id == marker.Id && message.TargetCreation == marker.Creation &&
+            message.Sender == marker.Id && message.SenderCreation == marker.Creation;
+    }
+
     private CascadeInputs? PrepareCascade(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs,
         IReadOnlySet<InboxKey>? earlier, IReadOnlySet<InboxKey> competing)
     {

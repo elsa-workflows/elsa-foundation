@@ -10,11 +10,12 @@ internal static class RetirementCascadeChecks
         await CheckTree(check, total: 1);
         await CheckTree(check, total: 1, refuseOpen: true);
         await CheckTree(check, total: 1, timedJob: true);
+        await CheckTree(check, total: 1, timedJob: true, legacyDeadline: true);
         await CheckTree(check, total: CascadeProtocol.PageLimit + 1);
         await CheckRetirementShape(check);
     }
 
-    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false, bool timedJob = false)
+    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false, bool timedJob = false, bool legacyDeadline = false)
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
@@ -56,13 +57,23 @@ internal static class RetirementCascadeChecks
         {
             await Send(child, "arm-job", "arm-job");
             await Step(child);
-            await owner.WokenAsync(null);
-            await owner.RunAsync();
             var running = Row(child);
             var job = JobRegistry.Read(running.Jobs).Single();
-            timed = (InboxKey.Ticket(running.Id, job.Key, running.Creation, job.Generation),
-                InboxKey.Issued(DurableTurn.FoundationJobDeadlineId(running.Id, running.Creation, job.Generation)),
-                await probe.JobEntered.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+            var ticket = InboxKey.Ticket(running.Id, job.Key, running.Creation, job.Generation);
+            var deadline = InboxKey.Issued(DurableTurn.FoundationJobDeadlineId(running.Id, running.Creation, job.Generation));
+            if (legacyDeadline)
+            {
+                var original = store.Messages[deadline];
+                var stored = store.Messages[ticket];
+                store.Messages.Remove(deadline);
+                deadline = InboxKey.Issued($"{CreationProtocol.Origin(running.Id, running.Creation)}#{running.Revision}.0000");
+                store.Messages[deadline] = new((original.Message with { Id = deadline.Id }).AsKernelTicket(), original.Seq, original.Seen);
+                var timing = stored.Message.Read<JobTicket>() with { Timer = deadline.Id };
+                store.Messages[ticket] = new((stored.Message with { Payload = Json.Write(timing) }).AsKernelTicket(), stored.Seq, stored.Seen);
+            }
+            await owner.WokenAsync(null);
+            await owner.RunAsync();
+            timed = (ticket, deadline, await probe.JobEntered.Task.WaitAsync(TimeSpan.FromSeconds(2)));
         }
 
         await Send(child, "end-child", "finish");
@@ -90,8 +101,9 @@ internal static class RetirementCascadeChecks
         {
             for (var pass = 0; pass < 4; pass++) await Step(child);
             check(retiredJob.Driver.IsCancellationRequested && marker.HeldCascade?.Jobs.Length == 1 &&
-                !store.Messages.ContainsKey(retiredJob.Ticket) && store.Messages.ContainsKey(retiredJob.Deadline),
-                "job cleanup can throw during Delete and the Worker still consumes the obsolete job ticket");
+                !store.Messages.ContainsKey(retiredJob.Ticket) && store.Messages.ContainsKey(retiredJob.Deadline) != legacyDeadline,
+                legacyDeadline ? "consuming a legacy retired job ticket also settles its linked ordinal deadline" :
+                    "job cleanup can throw during Delete and the Worker still consumes the obsolete job ticket");
         }
 
         await Send(parent, "end-parent", "cancel");
@@ -128,7 +140,8 @@ internal static class RetirementCascadeChecks
             "takeover opens the held cascade once and clears it while every live descendant cancels");
         if (timed is { } completedJob)
             check(!store.Messages.ContainsKey(completedJob.Deadline),
-                "the recorded parent's cascade removes the exact generation deadline after the job ticket is gone");
+                legacyDeadline ? "the legacy cleanup remains settled after the next owner clears the held obligation" :
+                    "the recorded parent's cascade removes the exact generation deadline after the job ticket is gone");
 
         bool Completed() => store.Instances[finished.Id].Cascade is null && store.Instances[finished.Id].HeldCascade is null &&
             obligation.All(address => store.Instances.GetValueOrDefault(address.Id)?.Status == InstanceStatus.Cancelled) &&

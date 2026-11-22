@@ -363,8 +363,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     two-page schedules check progress across takeover and one send per exact child. The fixture also checks
     the fenced retirement's job-pair and parent checks. A timed job's cancellation callback can fail after
     Delete commits. The Worker finishes applying the commit and the cascade recalls the generation-addressed
-    deadline even if the retired run's job ticket has already been consumed. Park-drain Complete, ThenDelete
-    and physical providers have separate qualification.
+    deadline even if the retired run's job ticket has already been consumed. A legacy job ticket carries the
+    only link to its ordinal deadline, so consuming an obsolete ticket at the marker settles that exact
+    linked deadline in the same fenced commit. Park-drain Complete, ThenDelete and physical providers have
+    separate qualification.
 - **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
   actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends
   `kernel.terminate` through `ITurn.Send`, an application send. Neither carries a Park identity, and requiring one

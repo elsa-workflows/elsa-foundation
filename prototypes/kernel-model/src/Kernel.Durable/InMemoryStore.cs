@@ -265,7 +265,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<string, Message>? catchUpOpens = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
             PublicationPage? publicationPage = null;
-            Dictionary<string, CascadeInputs>? cascades = null;
+            Dictionary<TurnCommit, CascadeInputs>? cascades = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -293,12 +293,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
-                    if (PrepareCascade(turn, previous, epochs, earlier, competing) is { } cascade)
+                    if ((PrepareCascade(turn, previous, epochs, earlier, competing) ??
+                        PrepareRetiredDeadlines(turn, previous, epochs, batch)) is { } cascade)
                     {
                         if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
-                        (cascades ??= new(StringComparer.Ordinal)).Add(turn.Instance, cascade);
-                        earlier!.UnionWith(cascade.Pending);
-                        earlier.UnionWith(cascade.Kept);
+                        (cascades ??= new(ReferenceEqualityComparer.Instance)).Add(turn, cascade);
+                        earlier?.UnionWith(cascade.Pending);
+                        earlier?.UnionWith(cascade.Kept);
                     }
                     earlier?.UnionWith(turn.Consumed);
                     earlier?.UnionWith(turn.Done);
@@ -439,7 +440,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
                 }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
-                if (cascades?.GetValueOrDefault(turn.Instance) is { } cascade && turn.FoundationCascade is not null)
+                if (cascades?.GetValueOrDefault(turn) is { } cascade)
                     ApplyCascade(cascade, now);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
@@ -520,7 +521,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             return new(new Committed(fenced, now, seqs)
             {
                 ParkExpiries = armedExpiries ?? [],
-                CascadeRemovals = cascades?.ToDictionary(page => page.Key, page => page.Value.All, StringComparer.Ordinal)
+                CascadeRemovals = cascades?.GroupBy(page => page.Key.Instance, StringComparer.Ordinal).ToDictionary(
+                    pages => pages.Key, pages => (IReadOnlyList<InboxKey>)pages.SelectMany(page => page.Value.All).Distinct().ToArray(), StringComparer.Ordinal)
             });
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
