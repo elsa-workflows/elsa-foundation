@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
@@ -61,8 +60,12 @@ internal sealed partial class Elsa3ActivityNormalizer
 
         // Tagged Input loading derives its reference from the expression descriptor and ignores this serialized
         // property. Preserve the expression's value instead of letting the generic memory path replace it.
-        var input = JsonNode.Parse(source.GetRawText())!.AsObject();
-        input.Remove("memoryReference");
+        // JsonElement's lookup uses the last duplicate property, as the legacy loader does. JsonNode would throw
+        // while materializing such an object; retain those lookup semantics while dropping the ignored field.
+        var input = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var property in source.EnumerateObject())
+            if (!property.NameEquals("memoryReference"))
+                input[property.Name] = property.Value;
         return JsonSerializer.SerializeToElement(input);
     }
 
