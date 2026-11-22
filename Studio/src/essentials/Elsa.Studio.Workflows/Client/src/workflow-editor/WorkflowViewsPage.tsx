@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SkeletonRows, StudioBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { Bookmark, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { deleteWorkflowView, listWorkflowViews, saveWorkflowView, workflowOrganizationSupport, type WorkflowLibraryView } from "../api/workflowOrganization";
@@ -12,7 +12,7 @@ type Loaded = { context: StudioEndpointContext; views?: WorkflowLibraryView[]; u
 const message = (error: unknown) => error instanceof Error ? error.message : "Check your access and try again.";
 
 function SavedViewsBreadcrumbs({ navigate }: { navigate(path: string): void }) {
-  return <StudioBreadcrumbs items={[{ href: "/workflows/definitions", label: "Definitions" }]} current="Saved views"
+  return <StudioShellBreadcrumbs items={[{ href: "/workflows/definitions", label: "Definitions" }]} current="Saved views"
     renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />;
 }
 
