@@ -120,9 +120,29 @@ internal static class ParkDrainCascadeChecks
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("park-terminate"), "park-terminate", (_, kind) => kind == Contract.Kinds.Terminate);
         var writes = new List<TurnCommit>();
+        var refusedNotices = 0;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (landed) writes.AddRange(batch.Turns);
+        }, beforeCommit: async batch =>
+        {
+            if (parentTerminate || batch.Turns.FirstOrDefault(turn =>
+                    turn.Journal?.Contains("\"terminated\"", StringComparison.Ordinal) == true) is not { Sent: [var notice] } completion)
+                return;
+
+            var invalid = new[]
+            {
+                notice with { Due = long.MaxValue },
+                notice with { Id = "mismatched", StorageId = notice.Id },
+                notice with { Payload = Json.Write(notice.Read<FoundationChildNotice>() with { Final = false }) }
+            };
+            foreach (var bad in invalid)
+            {
+                var attempted = batch with { Turns = batch.Turns.Select(turn =>
+                    ReferenceEquals(turn, completion) ? turn with { Sent = [bad] } : turn).ToArray() };
+                try { await store.CommitAsync(attempted); }
+                catch (StoreException error) when (error.Failure == Failure.Definite) { refusedNotices++; }
+            }
         });
         Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
@@ -205,6 +225,9 @@ internal static class ParkDrainCascadeChecks
         check(probe.UnexpectedOffers == 0 && late is { Done: true } && ending is [var finalTurn] &&
             deliveryCommit > writes.IndexOf(finalTurn),
             $"{source}: after Complete the later input is consumed without any model turn");
+        if (!parentTerminate)
+            check(refusedNotices == 3 && completedCorrectly,
+                "the store refuses delayed, mismatched and non-final notices before the canonical Complete lands");
 
         int Kept() => store.Messages.Values.Count(row => row.KeptBy is not null && row.Message.Target.Id == id);
         int Notices() => writes.SelectMany(turn => turn.Sent).Count(message =>

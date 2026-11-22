@@ -100,7 +100,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
             try
             {
-                if (message.Read<Completion>() is not { Final: true })
+                if (message.Read<Durable.FoundationChildNotice>() is not { Final: true })
                     return new(input.Actor) { Consumed = [.. input.Taken], Status = terminalParent.Status };
             }
             catch (System.Text.Json.JsonException)
@@ -390,12 +390,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private static Durable.FoundationHeaderChange InitialHeader(string typeData) =>
         new(typeData, System.Collections.Frozen.FrozenDictionary<string, string>.Empty);
 
-    private sealed record Completion(string Child, Durable.InstanceStatus Status, string? Output, long Creation, bool Final);
-
     private static Durable.Message Notice(Durable.InstanceRow row, string? output, bool final) =>
-        new Durable.Message(Durable.CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision),
-            new(row.Parent!), Contract.Kinds.ChildFinished, Durable.Json.Write(new Completion(row.Id, row.Status, output, row.Creation, final)),
-            row.Id, TargetCreation: row.ParentCreation, SenderCreation: row.Creation).AsIssued();
+        Durable.FoundationChildNotice.Create(row, output, final);
 
     private sealed class Job(Contract.ActorRef actor, Durable.IJob job) : Contract.IJob
     {
