@@ -43,7 +43,7 @@ Do not weaken a test to make an item pass, and do not widen an item beyond its l
 
 ## Coverage gaps
 
-Treat these as unaudited. Follow-up audit tasks are listed under [Follow-up audits](#follow-up-audits).
+These gaps describe the original 21 November audit. The follow-up reviews below record the additional source reads, inspected screens and resulting fixes.
 
 - **Not captured in the running app:** top-bar menus (theme switcher, notifications, Weaver, user
   menu), the bottom dock, the activity draft editor, the activity publication dialog, run-detail tabs,
@@ -84,6 +84,12 @@ PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives de
 The A6 review covered all 54 files in `WF/graph-authoring/` at `4e593ed012`. The two resource hosts share the workspace, palette, inspector, canvas and block operations. The sequence and compensation renderers provide their own ordered step and occurrence controls. React Flow handles keep their directional placement, keyboard labels and saved viewport. Block and BPMN planners check the selected scope, catalog, connections, bindings and edit authority before a preview can be applied. Their transformations and checkpoints do not render controls. Six stylesheets govern the specific canvas geometry, portal menus, panels, and small-screen layouts.
 
 The specialized canvas add-step and slot controls retain their pointer anchors and keyboard alternatives. The findings below cover the shared commands, their dialogs, structured-data disclosures and compensation reorder focus.
+
+### Run history, agent and connection authoring
+
+The review of `WorkflowInstances.tsx` followed backend changes, search and pagination, selection, deletion, and refresh failures through the Runs collection. In run detail it covered execution identity, journal and incident lookups, read-only canvas selection and the four inspector tabs. PR #5334 updated run controls and status badges. PR #5351 checks selection behavior. The [run and agent audit](https://github.com/elsa-workflows/elsa-foundation/issues/5266#issuecomment-7073063311) links the completed workflow used to inspect the tabs.
+
+In `AgentEditor.tsx` the review covered capability loading, changes to providers and connections, numeric validation, continuity settings and preservation of saved choices. PRs #5329 and #5341 exercised those authoring flows. In `ConnectionCreateDialog.tsx` the review followed credential selection, switching backends, duplicate submission, failure handling and edit requests. PR #5341 corrected the accessible name of the close button in Edit connection. The [connection audit](https://github.com/elsa-workflows/elsa-foundation/issues/5266#issuecomment-7073066064) links the composed create and edit captures.
 
 ### Workflow inspector source audit
 
@@ -878,4 +884,4 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
-- [ ] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps).
+- [x] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps). See the [complete source audit and verification](https://github.com/elsa-workflows/elsa-foundation/issues/5266).
