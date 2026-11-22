@@ -54,7 +54,7 @@ describe("compact workflow toolbar", () => {
 
     expect(parentLink.textContent).toBe("Templates");
     expect(parentLink.getAttribute("href")).toContain("/workflows/templates");
-    expect(container.querySelector(".wf-editor-title .wf-chip")?.textContent).toBe("Template");
+    expect(container.querySelector(".wf-editor-title .studio-status-chip")?.textContent).toBe("Template");
     parentLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     expect(onBack).toHaveBeenCalledOnce();
   });
