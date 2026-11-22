@@ -1834,7 +1834,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
   await page.getByText("Review initial activity contents", { exact: true }).click();
   await expect(changesRegion).toBeVisible();
-  await page.locator(".ad-impact-group details summary").first().click();
+  await changesRegion.getByRole("button", { name: "Show exact values", exact: true }).first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
   const firstVersion = await openPublicationVersion(publicationDialog);
@@ -1874,7 +1874,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with latest published version")).toBeVisible();
   await expect(summarizedVersion).toHaveText("2.1.0");
-  await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
+  await publicationDialog.getByRole("button", { name: "Changes", exact: true }).click();
   await expect(changesRegion).toBeVisible();
   const nextVersion = await openPublicationVersion(publicationDialog);
   await expect(nextVersion).toHaveValue("2.1.0");
