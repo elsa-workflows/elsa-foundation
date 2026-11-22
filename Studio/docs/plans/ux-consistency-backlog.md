@@ -359,9 +359,9 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 - [ ] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
   draft" (Forms, ETL, Feature management), "Update view". Activity availability, Decisions and Theme
   builder already say "Save". `needs: D2`
-- [ ] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
+- [x] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
   "Activity definition upgrades" (D8); `:180` "Activity Definitions" → "Activity definitions", matching
-  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14).
+  the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14). (PR #5291)
 - [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
