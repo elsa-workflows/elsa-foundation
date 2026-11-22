@@ -1,5 +1,5 @@
 import React from "react";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { AlignLeft, CalendarDays, CheckSquare, List, Sigma, Type } from "lucide-react";
 import type { StudioContributionComposition, StudioContributionRegistry, StudioUserTaskFieldControlContribution, StudioUserTaskFieldControlEditorProps, StudioUserTaskFieldControlRenderProps } from "@elsa-workflows/studio-sdk";
 import type { TaskField } from "./taskApi";
@@ -50,14 +50,14 @@ function BooleanControl(props: StudioUserTaskFieldControlRenderProps) {
     <label htmlFor={props.id}>{field.label}{props.required ? " *" : ""}</label>
     <input id={props.id} type="checkbox" checked={current === true} disabled={props.disabled} aria-invalid={Boolean(props.error)} onChange={event => props.onChange(event.target.checked)} />
     <small role="status">{typeof current === "boolean" ? current ? trueLabel : falseLabel : unansweredLabel}</small>
-    {typeof current === "boolean" && !props.disabled ? <button type="button" className="user-task-field-clear" onClick={clear}>Clear answer</button> : null}
+    {typeof current === "boolean" && !props.disabled ? <StudioButton type="button" variant="ghost" size="sm" onClick={clear}>Clear answer</StudioButton> : null}
   </div>;
   if (display === "radio") return <fieldset className="user-task-field-options" disabled={props.disabled} aria-invalid={Boolean(props.error)} aria-required={props.required}>
     <legend>{field.label}{props.required ? " *" : ""}</legend>
     <label><input id={props.id} type="radio" name={`${props.id}-answer`} checked={current === true} onChange={() => props.onChange(true)} />{trueLabel}</label>
     <label><input type="radio" name={`${props.id}-answer`} checked={current === false} onChange={() => props.onChange(false)} />{falseLabel}</label>
     {current === undefined ? <small role="status">{unansweredLabel}</small> : null}
-    {typeof current === "boolean" && !props.disabled ? <button type="button" className="user-task-field-clear" onClick={clear}>Clear answer</button> : null}
+    {typeof current === "boolean" && !props.disabled ? <StudioButton type="button" variant="ghost" size="sm" onClick={clear}>Clear answer</StudioButton> : null}
   </fieldset>;
   return <><label htmlFor={props.id}>{field.label}{props.required ? " *" : ""}</label><select id={props.id} value={typeof current === "boolean" ? String(current) : ""} disabled={props.disabled} aria-invalid={Boolean(props.error)}
     onChange={event => props.onChange(event.target.value === "" ? undefined : event.target.value === "true")}>
@@ -77,7 +77,7 @@ function ChoiceControl(props: StudioUserTaskFieldControlRenderProps) {
     <legend>{field.label}{props.required ? " *" : ""}</legend>
     {choices.map((choice, index) => <label key={`${choice}-${index}`}><input id={index === 0 ? props.id : undefined} type="radio" name={`${props.id}-answer`} value={choice}
       checked={props.value === choice} onChange={() => props.onChange(choice)} />{choice}</label>)}
-    {typeof props.value === "string" && props.value && !props.disabled ? <button type="button" className="user-task-field-clear" onClick={() => props.onChange(undefined)}>Clear answer</button> : null}
+    {typeof props.value === "string" && props.value && !props.disabled ? <StudioButton type="button" variant="ghost" size="sm" onClick={() => props.onChange(undefined)}>Clear answer</StudioButton> : null}
   </fieldset>;
   return <><label htmlFor={props.id}>{field.label}{props.required ? " *" : ""}</label><select id={props.id} value={typeof props.value === "string" ? props.value : ""} disabled={props.disabled} aria-invalid={Boolean(props.error)}
     onChange={event => props.onChange(event.target.value || undefined)}>

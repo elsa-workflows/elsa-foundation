@@ -25,8 +25,7 @@ test("a module-owned field control is authored, previewed, saved, reopened, and 
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "ratings" });
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   await expect(source).toContainText('"controlId": "example.rating/1"');
   await expect(source).toContainText('"max": 7');
@@ -46,8 +45,7 @@ test("missing control modules preserve JSON and block publication", async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/form-designer.html?missing-control");
   const row = page.getByRole("row").filter({ hasText: "contact" });
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   await page.getByRole("button", { name: "Select Rating", exact: true }).click();
 
   await expect(page.locator(".user-task-designer__properties")).toContainText("Field control “example.rating/1” is unavailable");

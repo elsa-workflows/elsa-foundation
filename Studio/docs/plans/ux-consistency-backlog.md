@@ -547,7 +547,7 @@ the designer header is a documented exception.
 - [x] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11). (PR #5334)
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
-- [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
+- [x] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22). (PR #5338)
 - [x] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`, (PR #5316)
   "Fork recommended version", "Create parallel draft" shown twice).
 - [x] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard (PR #5316)
@@ -745,7 +745,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   secondary ones into an overflow menu. (PR #5292)
 - [x] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
   page. (PR #5326)
-- [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
+- [x] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`. (PR #5338)
 - [x] **E9** (#5239) [source] Agent review: "Deny" is a default-styled button beside primary "Approve" (PR #5329)
   (`HumanReviewPage.tsx:121–122`). `needs: K2`
 - [x] **E10** (#5240) [source] Decisions: recycle-bin rows use inline buttons (`DecisionsPage.tsx:208`) while (PR #5320)
