@@ -121,7 +121,8 @@ public sealed class RuntimePostCommitIntentDispatcher : IRuntimePostCommitIntent
         try
         {
             var cause = source.Intent.HistoryCausation!;
-            if (cause.WorkflowExecutionId != source.Intent.WorkflowExecutionId || cause.DeliveryId != source.SourceOutboxItemId ||
+            if (cause.WorkflowExecutionId != source.Intent.WorkflowExecutionId && source.Intent.Kind != WorkflowDispatchLifecycle.ResumeParentIntentKind ||
+                cause.DeliveryId != source.SourceOutboxItemId ||
                 source.Claim.Item.StimulusDeliverySourceScope != source.Scope || string.IsNullOrWhiteSpace(cause.HistoryEventId) ||
                 new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
                     .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)))

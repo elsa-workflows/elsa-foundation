@@ -32,6 +32,22 @@ public sealed class RuntimeCheckpointCommitter
             : ValueTask.FromResult(commit);
     }
 
+    /// <summary>Lets the actual owner preserve older pinned replay shapes before materializing new inputs.</summary>
+    public ValueTask<RuntimeCheckpointCommit> AddHistorySourceFactsAsync(RuntimeCheckpointCommit commit,
+        Func<RuntimeHistoryCapturePolicy, IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commit); ArgumentNullException.ThrowIfNull(facts);
+        return HistorySourceResolver?.Invoke() is { } source
+            ? source.AddFactsAsync(commit, facts, cancellationToken) : ValueTask.FromResult(commit);
+    }
+
+    // Newly admitted semantic owners must not alter a retained v3/v4 checkpoint's replay identity.
+    internal ValueTask<RuntimeCheckpointCommit> AddCompleteHistorySourceFactsAsync(RuntimeCheckpointCommit commit,
+        Func<IEnumerable<RuntimeHistorySourceFact>> facts, CancellationToken cancellationToken) =>
+        HistorySourceResolver?.Invoke() is { } source
+            ? source.AddFactsAsync(commit, policy => policy is { PolicyId: "runtime-history-v5", Version: 5 } ? facts() : [], cancellationToken)
+            : ValueTask.FromResult(commit);
+
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;

@@ -133,7 +133,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         WorkflowRunKind runKind = WorkflowRunKind.BackgroundWeaverRun,
         WorkflowTestScope? testScope = null,
         int? controlConsumerVersion = null,
-        string controlResponse = "auto")
+        string controlResponse = "auto",
+        WorkflowExecutionPartition? parentPartition = null)
     {
         var parentExecutable = NewParentExecutable(
             caseId,
@@ -182,7 +183,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 parentWorkflowExecutionId: null,
                 correlationId: parentCorrelationId,
                 tenantId: "tenant-42",
-                partition: new WorkflowExecutionPartition("partition-eu"),
+                partition: parentPartition ?? new WorkflowExecutionPartition("partition-eu"),
                 authority: authority,
                 startAuthority: null,
                 dispatchNestingDepth: dispatchNestingDepth,
@@ -920,6 +921,9 @@ internal sealed class RecordingRuntimeCheckpointCommitStore(
     CheckpointRecorder recorder,
     bool failDispatchCommit = false) : IRuntimeCheckpointCommitStore
 {
+    public bool SupportsHistory => ((IRuntimeCheckpointCommitStore)inner).SupportsHistory;
+    public bool CanCommitHistory(IRuntimeHistoryStore selectedStore) => ((IRuntimeCheckpointCommitStore)inner).CanCommitHistory(selectedStore);
+
     public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
@@ -949,6 +953,8 @@ internal sealed class RecordingWorkflowExecutionActorProvider(
         get { lock (_gate) return _envelopes.ToArray(); }
     }
 
+    internal Func<WorkflowExecutionActorActivationRequest, Task>? BeforeAgentReturned { get; set; }
+
     public WorkflowExecutionActorCapabilities Capabilities => inner.Capabilities;
 
     public async ValueTask<IWorkflowExecutionActor> GetAgentAsync(
@@ -958,6 +964,7 @@ internal sealed class RecordingWorkflowExecutionActorProvider(
         lock (_gate)
             _activations.Add(request);
         var actor = await inner.GetAgentAsync(request, cancellationToken);
+        if (BeforeAgentReturned is { } hook) await hook(request);
         return new RecordingWorkflowExecutionActor(actor, Record);
     }
 
