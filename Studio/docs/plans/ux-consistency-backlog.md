@@ -888,4 +888,4 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
-- [x] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps). See the [complete source audit and verification](https://github.com/elsa-workflows/elsa-foundation/issues/5266).
+- [x] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps). See the [complete source audit and verification](https://github.com/elsa-workflows/elsa-foundation/issues/5266). (PR #5362)
