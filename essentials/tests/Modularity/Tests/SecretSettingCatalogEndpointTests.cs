@@ -9,11 +9,10 @@ using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Endpoints;
+using Elsa.Modularity.Api.ModuleManagement;
 using Elsa.Modularity.Core.Contracts;
-using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
-using Elsa.Workbench;
 using Elsa.Workflows.Runtime.Api;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -135,7 +134,6 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
         builder.Services.AddPermissionContributor<ModuleManagementPermissionContributor>();
 
         // The production catalog composition, fed by the real runtime and package contributors.
-        builder.Services.AddNuplaneFeatureCatalog();
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(new FakeRuntimeFeatureCatalog(
             Descriptor<RuntimeEntityFrameworkCoreFeature>("WorkflowsRuntimeEntityFrameworkCore"),
             Descriptor<WorkflowsRuntimeApiFeature>("WorkflowsRuntimeApi"),
@@ -143,13 +141,13 @@ public sealed class SecretSettingCatalogEndpointTests : IAsyncDisposable
         builder.Services.AddSingleton<INuplaneAdminOperations>(_nuplane);
         builder.Services.AddSingleton<IShellFeatureConfigurationStore>(_store);
         builder.Services.AddSingleton<IShellReloader, FakeShellReloader>();
-        builder.Services.AddScoped<IModuleRegistryService, ModuleRegistryService>();
+        builder.Services.AddElsaModuleManagement(options => options.HostOwner = "Elsa.Workbench");
 
         _app = builder.Build();
         _app.UseAuthentication();
         _app.UseAuthorization();
         ModularityApi.MapModularityApi(_app);
-        _app.MapElsaModuleManagementApi();
+        _app.MapElsaModuleManagement();
         await _app.StartAsync();
         return _app.GetTestClient();
     }

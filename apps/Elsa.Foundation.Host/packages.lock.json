@@ -136,10 +136,29 @@
         "resolved": "3.35.0",
         "contentHash": "OrUZCUzBXqdSmsQSWp/EPeINjOBcMU+PrZEJegw0aLgOGFHZ9ZI37X/SFrIxo8C9ghKynaKpPr3BVPc4EujWYg=="
       },
+      "Humanizer.Core": {
+        "type": "Transitive",
+        "resolved": "3.0.10",
+        "contentHash": "yZIhtw8sYuvsONzQbZxWpR60tMWYHXoo0DL6nyOqSFiU5POjBTSEyWFpTQtJEZuy+oqiYTXKXY/Mjx7KnqIQFw=="
+      },
       "JetBrains.Annotations": {
         "type": "Transitive",
         "resolved": "2025.2.4",
         "contentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
+      },
+      "Json.More.Net": {
+        "type": "Transitive",
+        "resolved": "3.0.1",
+        "contentHash": "fRctF2J2SILYG6wqP21drmeEODmCVkVQ/b3MndDu2fT1swfySyUgq7ePCk+aENGlDcIm05fyfjh9vcuqDEfv3w=="
+      },
+      "JsonPointer.Net": {
+        "type": "Transitive",
+        "resolved": "7.0.1",
+        "contentHash": "5C497yxfktYFsqxKG+GUQPsMvBqIjzLkqtDEdMGsnBpl3/OB8DOvTo7LEyRX7AVc1kVVj0IX5zhmLrlbvAYEnw==",
+        "dependencies": {
+          "Humanizer.Core": "3.0.10",
+          "Json.More.Net": "3.0.1"
+        }
       },
       "K4os.Compression.LZ4": {
         "type": "Transitive",
@@ -520,6 +539,18 @@
           "Nuplane.Sources.Directory": "[0.0.13, )"
         }
       },
+      "elsa.foundation.identity": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
       "elsa.locking.core": {
         "type": "Project"
       },
@@ -527,6 +558,33 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.modularity.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Elsa.Modularity.Nuplane": "[4.0.0-dev, )",
+          "ValenceWorks.MinimalEndpoints": "[1.0.0, )"
+        }
+      },
+      "elsa.modularity.core": {
+        "type": "Project"
+      },
+      "elsa.modularity.nuplane": {
+        "type": "Project",
+        "dependencies": {
+          "CShells": "[0.0.31, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
+          "Nuplane.Admin": "[0.0.13, )"
         }
       },
       "elsa.persistence.core": {
@@ -615,6 +673,24 @@
           "JetBrains.Annotations": "2025.2.4",
           "Nuplane.Abstractions": "0.0.12",
           "Nuplane.Loading.Abstractions": "0.0.12"
+        }
+      },
+      "Elsa.Specifications.PackageManifests": {
+        "type": "CentralTransitive",
+        "requested": "[0.0.1-preview.8, )",
+        "resolved": "0.0.1-preview.8",
+        "contentHash": "d5Ka7jRMEJ5pzxNXPAWtCmfssmXz2/PtLo5bbXcod7K0ZcuCvUMmDZUEIkF6TlGO00dBBT07kTs3ShuNv58PRQ==",
+        "dependencies": {
+          "JsonSchema.Net": "9.2.0"
+        }
+      },
+      "JsonSchema.Net": {
+        "type": "CentralTransitive",
+        "requested": "[9.2.0, )",
+        "resolved": "9.2.0",
+        "contentHash": "pc1hr16zNQSxVsOSIYWliE3rtl5E4MwRXReflPf60l5tSvzMfl65eJV6M+iPXhZ2Ui5o078LJ2pS9O1o5ZT1zQ==",
+        "dependencies": {
+          "JsonPointer.Net": "7.0.1"
         }
       },
       "Microsoft.Data.SqlClient": {

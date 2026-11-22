@@ -9,6 +9,7 @@ using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Host.Shells;
 using Elsa.Foundation.Hosting;
+using Elsa.Modularity.Api.ModuleManagement;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
 
@@ -81,6 +82,8 @@ builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentio
 var moduleManagement = ModuleManagementOptions.Read(configuration);
 if (moduleManagement.Enabled)
     builder.Services.AddNuplaneAdmin();
+if (moduleManagement.Enabled)
+    builder.Services.AddElsaModuleManagement(options => options.HostOwner = "Elsa.Foundation.Host");
 
 // Admin operations use the same coordinator as the host, not one created in a shell's container (#2159).
 if (moduleManagement.Enabled)
@@ -92,7 +95,10 @@ var app = builder.Build();
 app.MapHostHealth();
 
 if (moduleManagement.Enabled)
+{
+    app.MapElsaModuleManagement();
     app.MapModuleManagementApi(moduleManagement);
+}
 
 // Maps the shell resolution middleware + the dynamic shell endpoint source. Each shell's own middleware and
 // endpoints are composed by CShells on activation and re-composed per generation on reload.

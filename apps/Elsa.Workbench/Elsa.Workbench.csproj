@@ -271,10 +271,8 @@
 
 	<ItemGroup>
 		<!--
-			The one listed exception to §2.23.3: hosts have no domain, so they grant nothing else. The host-only
-			module-management registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised
-			directly by ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a
-			host-private API into the public surface. Checked by
+			Workbench has no domain of its own; its host-integration internals are exercised by the Modularity test assembly.
+			The grant remains narrow to that test assembly and is checked by
 			ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain.
 		-->
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
