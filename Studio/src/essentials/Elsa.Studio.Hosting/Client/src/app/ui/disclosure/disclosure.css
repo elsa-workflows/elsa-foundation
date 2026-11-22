@@ -209,8 +209,13 @@
 }
 
 .studio-add-option-choice:hover,
-.studio-overflow-menu-item:hover {
+.studio-overflow-menu-item:hover:not(:disabled) {
   background: var(--studio-accent-soft);
+}
+
+.studio-overflow-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .studio-add-option-empty {

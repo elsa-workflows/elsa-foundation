@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioPageHeader, StudioField, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext, StudioHostId } from "@elsa-workflows/studio-sdk";
@@ -200,13 +200,13 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   const [lineCount, setLineCount] = useState(0);
   const [connected, setConnected] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [pausedLines, setPausedLines] = useState<ConsoleEntry[] | null>(null);
+  const [pausedLines, setPausedLines] = useState<ConsoleEntry[]>([]);
   const [pausedLineCount, setPausedLineCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(getInitialAutoScroll);
   const seenLineIds = useRef(new Set<string>());
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  const visibleLines = paused ? pausedLines ?? lines : lines;
+  const visibleLines = paused ? pausedLines : lines;
   const queuedLineCount = paused ? Math.max(0, lineCount - pausedLineCount) : 0;
   const target = useMemo(() => createConsoleTarget(hostId), [hostId]);
   const selectedSource = useMemo(
@@ -296,7 +296,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
     seenLineIds.current.clear();
     setLines([]);
     setLineCount(0);
-    setPausedLines(null);
+    setPausedLines([]);
     setPausedLineCount(0);
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(resolveTargetUrl(target, `${target.endpointPrefix}/hub`), createConsoleConnectionOptions(target.context))
@@ -393,7 +393,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   function togglePaused() {
     if (paused) {
       setPaused(false);
-      setPausedLines(null);
+      setPausedLines([]);
       return;
     }
 
@@ -405,7 +405,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   function clear() {
     setLines([]);
     setLineCount(0);
-    setPausedLines(paused ? [] : null);
+    setPausedLines([]);
     setPausedLineCount(0);
     seenLineIds.current.clear();
   }
@@ -419,14 +419,12 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
       <StudioPageHeader className={page ? undefined : "studio-page-header--compact"} headingLevel={2} title={<>{target.label} console</>} description={<>{getConsolePanelDetail(selectedSource, sourcesState, queuedLineCount)}</>} actions={<><div className="console-stream-tools">
           <div className="console-stream-hosts" role="group" aria-label="Console host">
             {Object.values(consoleTargetDefinitions).map(host => (
-              <StudioButton
-                type="button"
-                className={host.id === hostId ? "active" : ""}
-                aria-pressed={host.id === hostId}
+              <StudioToggleButton
+                pressed={host.id === hostId}
                 onClick={() => setHostId(host.id)}
                 key={host.id}>
                 {host.label}
-              </StudioButton>
+              </StudioToggleButton>
             ))}
           </div>
           <StudioField label="Console source"><select
@@ -442,14 +440,16 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>
           <span>stderr</span>
-          <StudioButton type="button" className={paused ? "active" : ""} onClick={togglePaused} aria-pressed={paused}>
-            {paused ? "Resume" : "Pause"}
-          </StudioButton>
-          <StudioButton type="button" className={autoScroll ? "active" : ""} onClick={() => setAutoScroll(current => !current)} aria-pressed={autoScroll}>
+          <StudioToggleButton pressed={paused} onClick={togglePaused}>
+            Pause
+          </StudioToggleButton>
+          <StudioToggleButton pressed={autoScroll} onClick={() => setAutoScroll(current => !current)}>
             Autoscroll
-          </StudioButton>
-          <StudioButton type="button" onClick={download} disabled={visibleLines.length === 0}>Download</StudioButton>
-          <StudioButton type="button" onClick={clear}>Clear</StudioButton>
+          </StudioToggleButton>
+          <OverflowMenu ariaLabel="More console actions" items={[
+            { id: "download", label: "Download", onSelect: download, disabled: visibleLines.length === 0 },
+            { id: "clear", label: "Clear", onSelect: clear }
+          ]} />
         </div></>} />
       <div className="console-stream-lines" ref={viewportRef}>
         {renderedLines.length === 0 ? (

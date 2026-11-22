@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioPageHeader, StudioButton, StudioField, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
@@ -452,28 +452,30 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         <span>{statusLabel}</span>
         {state.upstreamDroppedCount > 0 ? <span>{state.upstreamDroppedCount} dropped upstream</span> : null}
         {state.localDiscardedCount > 0 ? <span>{state.localDiscardedCount} discarded locally</span> : null}
-        <StudioButton type="button" className={state.paused ? "active" : ""} onClick={state.togglePaused} aria-pressed={state.paused}>
-          {state.paused ? "Resume" : "Pause"}
-        </StudioButton>
-        <StudioButton type="button" className={state.autoScroll ? "active" : ""} onClick={() => state.setAutoScroll(current => !current)} aria-pressed={state.autoScroll}>
+        <StudioToggleButton pressed={state.paused} onClick={state.togglePaused}>
+          Pause
+        </StudioToggleButton>
+        <StudioToggleButton pressed={state.autoScroll} onClick={() => state.setAutoScroll(current => !current)}>
           Autoscroll
-        </StudioButton>
+        </StudioToggleButton>
         {!compactControls ? (
           <>
-            <StudioButton type="button" className={state.wrapMessages ? "active" : ""} onClick={() => state.setWrapMessages(current => !current)} aria-pressed={state.wrapMessages}>
+            <StudioToggleButton pressed={state.wrapMessages} onClick={() => state.setWrapMessages(current => !current)}>
               Wrap
-            </StudioButton>
-            <StudioButton type="button" className={state.compact ? "active" : ""} onClick={() => state.setCompact(current => !current)} aria-pressed={state.compact}>
+            </StudioToggleButton>
+            <StudioToggleButton pressed={state.compact} onClick={() => state.setCompact(current => !current)}>
               Compact
-            </StudioButton>
-            <StudioButton type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</StudioButton>
-            <StudioButton type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</StudioButton>
-            <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</StudioButton>
+            </StudioToggleButton>
           </>
-        ) : (
-          <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</StudioButton>
-        )}
-        <StudioButton type="button" onClick={state.clear}>Clear</StudioButton>
+        ) : null}
+        <OverflowMenu ariaLabel="More structured log actions" items={[
+          ...(compactControls ? [] : [
+            { id: "copy-selected", label: "Copy selected", onSelect: () => void state.copyRows(selectedRows), disabled: selectedRows.length === 0 },
+            { id: "copy-visible", label: "Copy visible", onSelect: () => void state.copyRows(state.rows) }
+          ]),
+          { id: "download", label: compactControls ? "Download" : "Download visible", onSelect: () => state.downloadRows(state.rows), disabled: state.rows.length === 0 },
+          { id: "clear", label: "Clear", onSelect: state.clear }
+        ]} />
       </div></>} />
   );
 }

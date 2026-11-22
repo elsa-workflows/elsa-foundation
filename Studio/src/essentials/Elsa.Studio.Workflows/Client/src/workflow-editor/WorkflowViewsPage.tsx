@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { SkeletonRows, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioAlert, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioDialog, StudioDialogFooter, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { Bookmark, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { deleteWorkflowView, listWorkflowViews, saveWorkflowView, workflowOrganizationSupport, type WorkflowLibraryView } from "../api/workflowOrganization";
 import { StudioLink } from "../StudioLink";
-import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
 type View = "list" | "create" | "edit";
@@ -133,12 +132,11 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
 function WorkflowViewEditDialog({ context, view, onClose, onSaved }: {
   context: StudioEndpointContext; view: WorkflowLibraryView; onClose(): void; onSaved(): void;
 }) {
-  const ref = useRef<HTMLElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(view.name);
   const [shared, setShared] = useState(view.shared);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useDialogFocus(ref, busy ? null : onClose);
 
   const save = async () => {
     setBusy(true); setError("");
@@ -149,22 +147,31 @@ function WorkflowViewEditDialog({ context, view, onClose, onSaved }: {
     finally { setBusy(false); }
   };
 
-  return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-label={`Edit ${view.name}`} tabIndex={-1}>
-    <form onSubmit={event => { event.preventDefault(); void save(); }}>
-      <h3>Edit view</h3>
-      <label>
-        <span>View name</span>
-        <input aria-label="View name" required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} />
-      </label>
-      <label className="wf-library-check">
-        <input type="checkbox" checked={shared} disabled={busy} onChange={event => setShared(event.target.checked)} />
-        Share within this tenant
-      </label>
-      {error ? <p role="alert">{error}</p> : null}
-      <div className="wf-dialog-actions">
-        <StudioButton disabled={busy} onClick={onClose}>Cancel</StudioButton>
-        <StudioButton disabled={busy || !name.trim()}>Update view</StudioButton>
-      </div>
-    </form>
-  </section></div>;
+  return <StudioDialog
+    open
+    title="Edit view"
+    onClose={onClose}
+    initialFocusRef={nameRef}
+    dismissDisabled={busy}
+    dismissOnOutsideClick={false}
+    onSubmit={event => {
+      event.preventDefault();
+      if (!busy && name.trim()) void save();
+    }}
+    footer={<StudioDialogFooter
+      onCancel={onClose}
+      cancelDisabled={busy}
+      confirmLabel="Save"
+      confirmDisabled={busy || !name.trim()}
+    />}
+  >
+    <StudioField label="View name">
+      <input ref={nameRef} required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} />
+    </StudioField>
+    <label className="wf-library-check">
+      <input type="checkbox" checked={shared} disabled={busy} onChange={event => setShared(event.target.checked)} />
+      Share within this tenant
+    </label>
+    {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+  </StudioDialog>;
 }

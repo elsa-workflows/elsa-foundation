@@ -139,7 +139,8 @@ were dropped or withheld. FINDINGS 25.9 describes the original Park without a re
 needs two additions, which **extend** the
 13 November decision. The owner adopted them on 17 November (decision 2). The in-memory foundation keeps the durable
 inputs consumed by Park and other durable arrivals while it is unresolved. The in-memory sweep skips these rows.
-`--park-kept-check` exercises both reasons and takeover. In-flight job conversion, the expiry control and the resolution
+An in-flight completion for a parked public actor lands as an authenticated result before a later turn keeps it.
+`--park-kept-check` exercises both reasons, the result conversion and takeover. The expiry control and the resolution
 paths remain proposed.
 
 1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows with a kept reason. A

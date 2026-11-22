@@ -41,9 +41,11 @@ export async function structuredLogsReadabilityJourney(page: Page, info: TestInf
   await capture(page, info, "readability-compact");
   await details.getByText("Category", { exact: true }).scrollIntoViewIfNeeded();
   await expect(details.getByText("Source ID", { exact: true })).toBeVisible();
-  await section.getByRole("button", { name: "Copy selected", exact: true }).click();
+  await section.getByRole("button", { name: "More structured log actions" }).click();
+  await page.getByRole("menuitem", { name: "Copy selected", exact: true }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(message);
-  const [download] = await Promise.all([page.waitForEvent("download"), section.getByRole("button", { name: "Download visible", exact: true }).click()]);
+  await section.getByRole("button", { name: "More structured log actions" }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: "Download visible", exact: true }).click()]);
   expect(await download.failure()).toBeNull();
   await section.getByRole("button", { name: "Close structured log details", exact: true }).click();
   await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
@@ -60,7 +62,7 @@ export async function structuredLogsReadabilityJourney(page: Page, info: TestInf
   await table.getByRole("button", { name: "Reset filters", exact: true }).click();
   await expect(category).toBeFocused();
   await expect(category).toHaveValue("");
-  await expect(section.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+  await expect(section.getByRole("button", { name: "Pause", exact: true, pressed: true })).toBeVisible();
   await expect(row).toBeVisible();
   await capture(page, info, "readability-reset");
   await page.setViewportSize(originalViewport);
