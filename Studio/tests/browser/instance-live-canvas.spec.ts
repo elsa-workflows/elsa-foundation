@@ -76,7 +76,7 @@ test("keeps a deferred hidden Timeline out of the Diagram layout", async ({ page
     await expect(page.getByText("Loading run history workspace…", { exact: true })).toBeHidden();
     const node = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     await node.click();
-    await page.getByRole("tab", { name: "Data", exact: true }).click();
+    await openExecutionInputs(page);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     const viewport = canvas.locator(".react-flow__viewport");
     const transform = await viewport.getAttribute("style");
