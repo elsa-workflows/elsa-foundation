@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft — ready for the coordinator's approval. Every ADR it applies is merged into the initiative branch.
+**Status**: Draft — requires the ADR 0089 variable-initialization amendment and a clean initiative proposal gate.
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-2**.
 
@@ -18,9 +18,10 @@ converted workflows alike, as decisions D-10 and D-11 of #3052 and the ADRs belo
 
 ## Approval
 
-> **Ready for approval.** Every ADR this spec applies is merged into the initiative branch. The approval plan is the
-> coordinator alone (initiatives guide, *Spec approval once the ADRs are agreed*). A later change to an ADR it applies
-> is rechecked here.
+> **Approval dependency.** The ADR baseline below is merged into the initiative branch. FR-001c also requires ADR
+> 0089 decision 8 to distinguish type-default initialization from nullable initialization; that amendment follows
+> the ADR agreement route. The spec's approval plan remains the coordinator alone (initiatives guide, *Spec approval
+> once the ADRs are agreed*). Implementation waits for both the amendment and this spec to be agreed and merged.
 
 | ADR | What this spec takes from it | Text applied |
 |---|---|---|
@@ -28,7 +29,7 @@ converted workflows alike, as decisions D-10 and D-11 of #3052 and the ADRs belo
 | ADR 0083 amendment, `binding-readonly-v1` (D-11 part) | Undefined-as-null at the binding boundary, for both binding forms; array positions kept under either policy | on the initiative branch |
 | ADR 0091, decisions 3 and 8 | Explicit null stays distinct from missing: S-2 chooses the representation, the serializer keeps it; a missing member is not equal to a `null` member | on the initiative branch |
 | ADR 0046 amendment, V8 and the JavaScript adapter rules | `ExplicitNull` and `Absent` are core-model states; `undefined` is a rule of the JavaScript adapter; a lossy conversion is declared with a diagnostic | on the initiative branch |
-| ADR 0089 as amended, R3 | A computed variable name that matches nothing reads `undefined` with a warning | on the initiative branch |
+| ADR 0089 as amended, R3 | A computed variable name that matches nothing reads `undefined` with a warning; unset declared variables follow FR-001c | R3 is on the initiative branch; decision 8 needs the variable-initialization amendment |
 
 **Delivered elsewhere already.** S-4 (spec 1222, its FR-011 and FR-012) built FR-025 to FR-027: a computed name that
 matches nothing reads `undefined` in JavaScript and nil in Liquid, records `VF-READ-001` and marks the read absent; a
@@ -39,7 +40,7 @@ no work for them.
 JavaScript value leaves a script: a binding result, a script result and a script's variable changes. FR-015 to FR-018
 and FR-030 act in that bridge's writer.
 
-**Implementation** starts once this spec is approved (D-18: per spec).
+**Implementation** starts once this spec and every ADR amendment it applies are agreed and merged (D-18: per spec).
 
 ## Rule and boundary
 

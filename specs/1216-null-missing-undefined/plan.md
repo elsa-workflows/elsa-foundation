@@ -2,8 +2,8 @@
 
 **Branch**: `agent/claude/3052-s2-null-missing-undefined` | **Date**: 2026-11-03 | **Spec**: [spec.md](spec.md)
 
-**Status**: ready with the spec. Every ADR it applies is merged into the initiative branch, and S-8's value bridge
-(#4838) is merged. Implementation starts once the spec is approved (D-18).
+**Status**: draft with the spec. The ADR baseline and S-8's value bridge (#4838) are merged. FR-001c requires the
+ADR 0089 decision-8 amendment. Implementation starts once that amendment and the spec are agreed and merged (D-18).
 
 ## Summary
 
@@ -48,7 +48,8 @@ fixtures from before this change: compatibility is owed from the first stable re
 are regenerated in place. The policies are hashed only when on, and an input's nullability only when it is
 non-nullable, so most fixtures do not move.
 
-**Scale/Scope**: about 15 source files in Essentials, 5 in `Extensions/Elsa3`, and their tests.
+**Scale/Scope**: existing workflow, activity, expression, converter and Studio projects, including every write path
+in research R-6 and their tests. Reconcile source paths with the initiative's required main sync before coding.
 
 ## Constitution Check
 
@@ -63,13 +64,13 @@ non-nullable, so most fixtures do not move.
 | §E5 versioning / §2.23.3 visibility | PASS | Additive public surface: `WorkflowStrategyOptions.NullHandling`, `WorkflowExecutable.ValuePolicies`, `WorkflowDeclaredInput.IsNullable`, `Elsa3MappingOptions`. Removal: `Elsa3ExpressionRewriter.AddNullCoalescing` (internal behaviour, pre-GA, ADR 0080); Studio's authored `isNullable` on workflow inputs, outputs and activity definition contracts (the backend `InputDefinition.IsNullable` property stays for .NET descriptors). New services internal. |
 | §2.6.2 replacement contracts | PASS | None added. `IWorkflowExecutableInputValidator`'s signature is unchanged; its complete-bag normalization also completes omitted optional inputs and refuses `null` for non-nullable ones (R-3). The catalog entry's *Usage* line says so (T037). |
 | §2.17 duplication beats dependency | PASS | The type-default table is one helper in `Runtime.Core`, which every caller already references. |
-| §2.24.2 sanctioned patterns | PASS | Feature options bound from configuration; hashed strategy options. No new extension point. |
+| §2.24.2 sanctioned patterns (draft; advisory) | PASS | Feature options bound from configuration; hashed strategy options. No new extension point; this provisional catalog is not a ratified gate. |
 | §2.22 / §2.22.1 docs and extension points | ACTION | Spec 095 contracts (already amended by #3388), the authoring reference for workflow settings, the Elsa 3 Mapping README and migration readiness guide, glossary rows for *default-on-null* and *undefined-as-null*, and the *Usage* line of `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` in the Runtime extension-point catalog. No contributor or replacement contract is added. |
-| §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for T033 to T035. |
+| §2.23.1–§2.23.2 tests | PASS | A test per acceptance scenario; a registration test for `Elsa3MappingOptions`; hash tests for each new field; Studio client tests for T033 to T035 and composed-host acceptance in T035a. |
 | §2.23.5 exception boundaries | PASS | Publication and admission refusals keep their diagnostic exceptions; boundary warnings are diagnostics, not exceptions. |
 | ADR 0038 content-addressed executables | PASS | Policies and input nullability are hashed, written only when set (R-2, R-4). |
-| ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 | PASS | All merged into the initiative branch; applied as merged. |
-| Initiatives guide, *Studio work stays in the initiative* | PASS | Studio gets no controls (Q6); FR-033's diagnostics check is Phase 9. |
+| ADR 0045 §2, ADR 0083, ADR 0091 d. 3 and 8, ADR 0046 V8, ADR 0089 R3 | ACTION | The baseline is merged. FR-001c needs the separate ADR 0089 decision-8 amendment before implementation. |
+| Studio UX acceptance / initiatives guide, *Studio work stays in the initiative* | ACTION | Policy controls remain absent (Q6); changed nullability/default controls and diagnostics follow [ux-acceptance.md](ux-acceptance.md), T033 to T035a, on the composed host with independent inspection. |
 
 ## Decisions
 
@@ -140,8 +141,14 @@ Extensions/Elsa3/src/Mapping/
   └── ActivityMap/Elsa3BuiltInActivityMap.Entries.cs
 ```
 
-**Structure Decision**: existing projects only; one new file in Runtime.Core (`NullPolicyDefaults`), one in the
-Elsa 3 extension.
+**Structure Decision**: existing projects only. New policy/default helpers stay in the owning projects shown above.
+
+**Main-sync reconciliation**: the source inventory above describes the initiative baseline. Main already contains
+`WorkflowDeclaredInput.IsNullable` and `HasExplicitNullDefault`. Reuse them after the required sync: derive authored
+nullability from the type, preserve the explicit-null-default marker, and reconcile the hash encoding with P-3 and
+T009. Main's validator currently accepts supplied null only for an optional nullable input; T013 must also accept a
+required nullable input, because requiredness concerns presence. Its regression covers both requiredness values.
+Recheck S-7's script-write integration and every R-6 write path on the reconciled tree before implementation.
 
 ## Complexity Tracking
 

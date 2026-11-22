@@ -4,8 +4,8 @@
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/null-policies.md, quickstart.md
 
-**Gate**: start once the coordinator has approved and merged this spec (D-18). S-8's value bridge, which Phase 7
-builds on, is merged.
+**Gate**: start once the coordinator has approved and merged this spec and the ADR 0089 decision-8 amendment is
+agreed and merged (D-18). S-8's value bridge, which Phase 7 builds on, is merged.
 
 **Tests**: required by framework §2.23 for every logic-bearing change, and by SC-004 to SC-006. The application
 declares no TDD cadence, so tests follow implementation within each story; the PR's bite-proof shows each new test
@@ -20,6 +20,10 @@ red without the change. xUnit only.
   and the spec applies them as merged
 - [x] T002 Align the proposed diagnostic codes with the existing catalogs (`VF-ACT-*`, `VF-READ-*`, S-8's
   `VF-PREC-*`, `runtime.input.*`). Done: final names in contracts/null-policies.md
+- [ ] T002a Reconcile the implementation baseline after the initiative's required main sync and S-7 integration:
+  refresh the R-6 write-path audit and source paths; reuse main's input-contract nullability and explicit-null-default
+  marker; retain S-1's evaluation/date helpers, S-4's computed misses and S-8's bridge. Record the compared commits on
+  the implementation PR. This recheck does not replace the spec proposal's pre-merge gate
 - [ ] T003 Run the #3052 JTest measurement on the implementation branch before any change and record the baseline in
   the PR
 
@@ -43,7 +47,8 @@ red without the change. xUnit only.
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
   `WorkflowExecutableCompiler.cs` (data-model.md)
-- [ ] T007 Add `IsNullable` to `WorkflowDeclaredInput` in `WorkflowExecutableInputContract.cs` and fill it in
+- [ ] T007 Reuse `IsNullable` on `WorkflowDeclaredInput` after main sync (add it only if absent on the reconciled
+  tree), preserving `HasExplicitNullDefault`, and fill it in
   `WorkflowExecutableCompiler.BuildInputContract` from the input's type (T004, FR-001a; R-4). Publication refuses an
   optional, non-nullable workflow input whose type has no non-null default and that declares no default
   (`VF-ACT-003`, FR-006). The message for a workflow input says to turn *Required* on or declare a default (through
@@ -132,7 +137,8 @@ red without the change. xUnit only.
 - [ ] T015 [US2] Tests for S-2's additions (US2 scenarios 2, 3 and 5, and the `null` refusal) on the API, trigger,
   test-run and child-workflow paths, beside #3731's `WorkflowStartInputContractTests`; scenarios 1 and 4 are covered
   there already. Include a refused start that schedules nothing, and one test per validator mode proving known-inputs
-  mode fills declared defaults but adds no `null` or type-default completion
+  mode fills declared defaults but adds no `null` or type-default completion. Include supplied explicit null for
+  both required and optional nullable inputs: presence satisfies requiredness and the declared default is not used
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
   (`Essentials/tests/Activities/Behavioral/Tests`)
 
@@ -238,6 +244,13 @@ input, and one workflow input supplied as `null`.
 
 - [ ] T035 Check that the `VF-UNDEF-*`, `VF-NUM-001` and `VF-NULL-001` warnings show in Studio's existing activity
   execution warnings with no new surface (FR-033); a Studio client test if a mapping is missing
+- [ ] T035a Complete [ux-acceptance.md](ux-acceptance.md) on an owned composed Workbench/Studio host built from the
+  committed implementation head. Extend the feature-specific composed journeys for contract edit/save/reopen,
+  Required/default recovery, type-derived nullability in workflow and activity-definition test drives, and warning
+  presentation. Retain downloadable exact-head Actions artifacts with screenshots, traces and accessibility
+  snapshots; an independent reviewer opens the screenshots and inspects keyboard/focus, narrow and theme states.
+  Record passed, failed or incomplete acceptance, unverified states and retest in the existing PR evidence; fix and
+  rerun affected whole suites/journeys before claiming completion
 
 ## Phase 10: User Story 6 - A computed variable name that matches nothing (P3)
 

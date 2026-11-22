@@ -24,12 +24,17 @@ as JSON `null` is stored as `ExplicitNull`.
 
 Same two fields. Written in the hash payload as `valuePolicies` only when at least one is `true`.
 
-## `WorkflowDeclaredInput.IsNullable` (new, pinned)
+## `WorkflowDeclaredInput.IsNullable` (pinned, type-derived)
 
 From the input's type (Q8: value types not nullable, every other type and every collection nullable). The shared
 `InputDefinition.IsNullable` property stays, because .NET activity descriptors carry it (derived from the C# type);
 for authored members Studio no longer sends it and the backend derives it from the type. Written in `inputContract`
 only when `false` (non-nullable), since most workflow inputs are nullable.
+
+Main already carries this property and `HasExplicitNullDefault`; reconcile them after main sync rather than adding
+a second field. Preserve the marker distinguishing an explicit-null declared default from no declared default.
+Main's current hash writes `isNullable` when true; S-2's canonical representation writes it only when false, so
+T009 must cover that encoding change and regenerate affected fixtures in place.
 
 ## Undefined policy at evaluation (no new pinned field)
 
