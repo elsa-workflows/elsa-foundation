@@ -297,8 +297,8 @@ Activity definitions:
 
 Host and Dashboard:
 
-- [ ] **X3.21** (#5057) [source] `H/modules/PackageFeedsPage.tsx:339` (`modules-upload-dialog`). Footer at
-  `:367–368` has no primary submit.
+- [x] **X3.21** (#5057) [source] `H/modules/PackageFeedsPage.tsx:339` (`modules-upload-dialog`). Footer at
+  `:367–368` has no primary submit. (PR #5314)
 - [x] **X3.22** (#5058, PR #5312) [source] `DASH/native/ResourceDialogs.tsx:15` (`named-dialog`).
 - [x] **X3.23** (#5059, PR #5312) [source] `DASH/HomeTaskGroup.tsx:166`; footer at `:197` is a lone raw "Cancel".
 - [x] **X3.24** (#5060, PR #5312) [source] `DASH/WidgetFrame.tsx:178`; footer at `:192–193` uses raw buttons with
