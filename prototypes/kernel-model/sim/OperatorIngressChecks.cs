@@ -85,7 +85,65 @@ internal static class OperatorIngressChecks
         check(await reads.GetAsync(scope, reference) is null && store.Instances.Values.Single().Retired,
             "an authorized fresh selection retires the ended life through a real fenced delete");
 
+        await CheckTerminalMark(check);
+
         List<string> ReadState() => Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row.State);
+    }
+
+    private static async Task CheckTerminalMark(Action<bool, string> check)
+    {
+        const long initial = 1_701_000_010_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("terminal-mark");
+        var edge = new InMemoryIngress(store, new Requests("terminal-mark"), "terminal-mark");
+        var worker = new Worker("terminal-mark", 0, store, new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => now - initial });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new("operator-probe", "ready")), "start", Contract.Kinds.Start);
+        var actor = started.Actor!.Value;
+        var reads = new ActorList(store, 10);
+        await Pump(owner);
+        var live = (await reads.GetAsync(scope, actor))!.Selection;
+        await edge.SendAsync(scope, new Contract.Target.Ref(actor), "end", "finish");
+        await Pump(owner);
+        var terminal = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        var selection = (await reads.GetAsync(scope, actor))!.Selection;
+        var mark = terminal.Terminal;
+        check(mark == new InMemoryStore.FoundationTerminalMark(terminal.Row.Revision, now) &&
+            store.MatchesFoundationSelection(scope.Tenant, actor.Id, selection) && !store.MatchesFoundationSelection(scope.Tenant, actor.Id, live),
+            "the end commit stamps its revision and clock, and the previous running selection becomes stale");
+        if (mark is null) return;
+
+        var sameTimeWrongRevision = store.SealFoundationSelection(scope.Tenant, terminal with { Terminal = mark with { Revision = mark.Revision + 1 } });
+        var sameRevisionWrongTime = store.SealFoundationSelection(scope.Tenant, terminal with { Terminal = mark with { At = mark.At + 1 } });
+        check(!store.MatchesFoundationSelection(scope.Tenant, actor.Id, sameTimeWrongRevision) &&
+            !store.MatchesFoundationSelection(scope.Tenant, actor.Id, sameRevisionWrongTime),
+            "the selection rejects both a different revision at the same timestamp and a different timestamp at the same revision");
+
+        now++;
+        var fence = worker.Fences.Single();
+        var row = terminal.Row;
+        var metadata = new TurnCommit(row.Id, row with { Revision = row.Revision + 1 }, row.Revision, [], [], [], [], [], null);
+        var saved = await store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [metadata], [], []));
+        var after = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        check(saved.Landed && after.Row.Revision == row.Revision + 1 && after.Terminal == mark &&
+            store.MatchesFoundationSelection(scope.Tenant, actor.Id, selection),
+            "a later fenced bookkeeping commit keeps the original terminal mark and its selection");
+
+        var legacy = (await edge.SendAsync(scope, new Contract.Target.Start(new("operator-probe", "legacy")),
+            "legacy", Contract.Kinds.Start)).Actor!.Value;
+        await Pump(owner);
+        // Seed the old persisted shape. It has creation identity and final status, with no terminal transition stamp.
+        var legacyRow = store.ReadFoundationActor(scope.Tenant, legacy.Id).Actor!.Row with { Status = InstanceStatus.Finished };
+        store.Instances[legacyRow.Id] = legacyRow;
+        var legacyFence = worker.Fences.Single();
+        var legacyUpdate = new TurnCommit(legacyRow.Id, legacyRow with { Revision = legacyRow.Revision + 1 },
+            legacyRow.Revision, [], [], [], [], [], null);
+        var legacySaved = await store.CommitAsync(new(0, legacyFence.Epoch, legacyFence.Position, Defaults.Lease, false, [legacyUpdate], [], []));
+        var legacyRead = await reads.GetAsync(scope, legacy);
+        check(legacySaved.Landed && legacyRead is { Selection: null, Header.EndedAt: null } &&
+            store.ReadFoundationActor(scope.Tenant, legacy.Id).Actor!.Terminal is null,
+            "bookkeeping cannot manufacture a terminal mark or a qualified selection for a legacy ended row");
     }
 
     public static async Task Fallback(Action<bool, string> check)

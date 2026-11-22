@@ -30,7 +30,7 @@ internal static class ParkRetryChecks
         await fixture.Finish(owner);
 
         var read = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
-        var parked = new Parked(scope, target, read.Row, read.Park!, store.SealFoundationSelection(scope.Tenant, read));
+        var parked = new Parked(scope, target, read.Row, read.Park!, store.SealFoundationSelection(scope.Tenant, read)!);
         var handle = fixture.Handle(parked, key);
         check(key.Match is { Length: > 64 } && store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
             handle is { Length: < 128 }, "a retained historical event with a long match gets a bounded Retry handle");
@@ -290,7 +290,7 @@ internal static class ParkRetryChecks
             await Finish(owner);
             var read = Store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor;
             return read is { Park: { } park }
-                ? new(scope, target, read.Row, park, Store.SealFoundationSelection(scope.Tenant, read))
+                ? new(scope, target, read.Row, park, Store.SealFoundationSelection(scope.Tenant, read)!)
                 : null;
         }
 
