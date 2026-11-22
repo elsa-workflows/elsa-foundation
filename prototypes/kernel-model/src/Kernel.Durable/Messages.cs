@@ -59,7 +59,15 @@ public sealed record Message(
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
-    internal bool KernelTicket { get; init; }
+    private WeakReference<Message>? _issuedTicket;
+    internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
+
+    internal Message AsKernelTicket()
+    {
+        // Authority belongs to the final emitted envelope. A record copy cannot carry it to another message.
+        _issuedTicket = new(this);
+        return this;
+    }
     internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
@@ -106,6 +114,7 @@ public static class Kinds
         !IsControl(kind) && kind is not ("kernel.recover" or "kernel.discard" or "kernel.migrate");
 
     internal const string UnissuedPrivateKind = "The outcome includes a private kernel kind with no issuer.";
+    internal static bool IsUnissuedPrivate(Message message) => IsPrivateKernelKind(message.Kind) && !message.HasIssuedTicket;
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
     public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"

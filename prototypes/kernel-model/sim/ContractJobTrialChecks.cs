@@ -277,7 +277,7 @@ internal static partial class ContractActorWorkload
         var owner = await store.TakeAsync(0, "first", lease) ?? throw new InvalidOperationException("first take was refused");
         var actor = InstanceRef.In(0, "accounting");
         var key = InboxKey.Ticket(actor.Id, "work");
-        var message = new Message(key.Id, actor, Kinds.Job).WithInboxScope(key.Scope);
+        var message = new Message(key.Id, actor, Kinds.Job).WithInboxScope(key.Scope).AsKernelTicket();
         var send = new TurnCommit(actor.Id, null, null, [], [], [message], [], [], null);
         var begin = new CommitBatch(0, owner.Epoch, owner.Position, lease, false, [send], [], []);
         Require((await store.CommitAsync(begin)).Landed, "the real store did not commit the test ticket");

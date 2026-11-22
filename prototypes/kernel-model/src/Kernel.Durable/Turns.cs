@@ -392,10 +392,10 @@ public sealed class DurableTurn
         var due = options?.DueAt;
         if (options?.Delay is { } delay) due = Services.Now + (long)delay.TotalMilliseconds;
         var body = actorAuthored ? (string?)payload : payload is null ? null : Json.Write(payload);
-        var message = new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
+        var message = (new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
             due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation)
-            { ActorAuthored = actorAuthored, KernelTicket = kind is Kinds.Job or Kinds.JobDeadline or Kinds.Meet or Kinds.Publish };
-        _sent.Add(message.WithInboxScope(id.Scope));
+            { ActorAuthored = actorAuthored }).WithInboxScope(id.Scope);
+        _sent.Add(kind is Kinds.Job or Kinds.JobDeadline or Kinds.Meet or Kinds.Publish ? message.AsKernelTicket() : message);
         return id.Id;
     }
 

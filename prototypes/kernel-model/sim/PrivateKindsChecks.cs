@@ -54,8 +54,11 @@ internal static class PrivateKindsChecks
         var kernelOutcome = new TurnCommit(actor, null, null, [], [], [job], [], [], null);
         var commit = await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(10), false, [kernelOutcome], [], []));
         check(commit.Landed && store.Messages.ContainsKey(job.InboxKey), "the trusted StartJob ticket still lands");
-        await ComposedVolatile(returnsFromCommand: false, check);
-        await ComposedVolatile(returnsFromCommand: true, check);
+        foreach (var returnsFromCommand in new[] { false, true })
+        {
+            await ComposedVolatile(returnsFromCommand, copiesTicket: false, check);
+            await ComposedVolatile(returnsFromCommand, copiesTicket: true, check);
+        }
 
         async Task Refused(Func<Task> act, string expectation)
         {
@@ -71,11 +74,11 @@ internal static class PrivateKindsChecks
         }
     }
 
-    private static async Task ComposedVolatile(bool returnsFromCommand, Action<bool, string> check)
+    private static async Task ComposedVolatile(bool returnsFromCommand, bool copiesTicket, Action<bool, string> check)
     {
         const string address = "0/volatile";
         var store = new InMemoryStore(1, () => 1_700_000_000_000);
-        var type = new DirectOutcomeProbe(returnsFromCommand);
+        var type = new DirectOutcomeProbe(returnsFromCommand, copiesTicket);
         var worker = new Worker("volatile-kind", 0, store, type);
         await using var active = (await new DurableHost([worker]).ActivateAsync(0))!;
         worker.Post(new("boot", new(address), Kinds.Start, Start: new("probe", "none", Ephemeral: true)), fresh: true);
@@ -83,10 +86,10 @@ internal static class PrivateKindsChecks
         var parked = store.Instances.GetValueOrDefault(address);
         check(type.Outcomes == 1 && parked is { Status: InstanceStatus.Faulted, Fault: "The outcome includes a private kernel kind with no issuer." } &&
             !store.Messages.Values.Any(row => row.Message.Id == "invalid") && !worker.Messages.Any(item => item.Id.Id == "invalid"),
-            $"a directly composed volatile {(returnsFromCommand ? "command" : "authored turn")} parks before local handover");
+            $"a directly composed volatile {(returnsFromCommand ? "command" : "authored turn")} parks before local handover (copied ticket: {copiesTicket})");
     }
 
-    private sealed class DirectOutcomeProbe(bool returnsFromCommand) : IActorType
+    private sealed class DirectOutcomeProbe(bool returnsFromCommand, bool copiesTicket) : IActorType
     {
         internal int Outcomes { get; private set; }
         public bool Withholds(InstanceRow row, ITurnServices services) => false;
@@ -97,6 +100,15 @@ internal static class PrivateKindsChecks
         {
             Outcomes++;
             var message = new Message("invalid", new(input.Actor), "kernel.future-kind", Sender: input.Actor).AsIssued();
+            if (copiesTicket)
+            {
+                var turn = new DurableTurn(input);
+                turn.StartJob("real");
+                var checkpoint = new InstanceRow(input.Actor, "probe", "none", InstanceStatus.Running, "null", 1, null);
+                var outcome = turn.Seal(turn.Outcome(InstanceStatus.Running), checkpoint, null, null);
+                var issued = outcome.Sent.Single();
+                message = issued with { Id = message.Id, Kind = message.Kind };
+            }
             return new(input.Actor) { Consumed = [.. input.Taken], Sent = [message], Volatile = [message.InboxKey] };
         }
 

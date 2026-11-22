@@ -570,10 +570,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **The kinds are reserved.** Every kind under `kernel.` other than the public commands (`kernel.suspend`,
     `kernel.resume`, `kernel.terminate`, `kernel.delete`, `kernel.recover`, `kernel.discard`, and K2's `kernel.migrate`)
     is reserved for layer 2.
-    `Kinds.RequireApplicationSend` refuses a reserved kind with a definite error. Existing prototype behaviour: it
-    refuses the job and event tickets by name ([Messages.cs](../../prototypes/kernel-model/src/Kernel.Durable/Messages.cs)
-    lines 75–79); the proposal replaces the list with the prefix rule, so a later private kind is refused without a
-    new entry. The public list grows only by an explicit amendment of this rule: `kernel.archive`, the outside command
+    `Kinds.RequireApplicationSend` refuses a reserved kind with a definite error. The prototype applies this prefix
+    rule to a future private kind as soon as someone tries to send it.
+    The public list grows only by an explicit amendment of this rule. `kernel.archive`, the outside command
     proposed after release 1 ([data lifecycle](data-lifecycle.md#proposed-archiving-after-release-1)), joins it when
     it is built, and until then the prefix rule refuses it. The producers outside layer 2, and how each meets the rule:
     - **Calls that already run the check** (existing call sites): the stores' public add (`InMemoryStore.cs`
@@ -591,9 +590,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
       commit lands nothing and the sending turn fails by the commit's failure rule.
 
     **Prototype evidence.** `--private-kinds-check` runs the prefix checks for store adds, local posts, both key ingress
-    paths and turn sends, including direct outcomes carrying a kind with no implemented issuer. It also verifies the
-    public commands and an existing trusted job ticket. P-4's issuer, outstanding-key and delayed-control cases still
-    need the private controls themselves.
+    paths and turn sends. It also verifies the public commands, a trusted job ticket, and the refusal of a copied
+    ticket submitted through a directly composed outcome. Issuer authority belongs to the final emitted envelope.
+    P-4's persisted control identity, outstanding-key and delayed-control cases still need the private controls themselves.
   - **They live in a protected identity domain.** Layer 2 writes a private control only in the commit that writes the
     `ParkRecord` field naming it, with the instance itself as `Sender` and `SenderCreation`, its own creation as
     `TargetCreation` when positive and none otherwise, as the built self-send sets it (`Turns.cs` 335), and no `Start`. So the built creation protocol

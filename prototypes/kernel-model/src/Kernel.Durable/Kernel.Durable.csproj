@@ -8,5 +8,6 @@
     <InternalsVisibleTo Include="Kernel.Foundation.InMemory" />
     <InternalsVisibleTo Include="Kernel.Workflows" />
     <InternalsVisibleTo Include="Kernel.Sim" />     <!-- test-only counters, such as Worker.ClaimedLookups -->
+    <InternalsVisibleTo Include="Kernel.Store.Conformance" />
   </ItemGroup>
 </Project>

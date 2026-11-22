@@ -2624,7 +2624,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     private static bool HasUnissuedPrivateKind(TurnOutcome unit) =>
-        unit.Sent.Exists(message => Kinds.IsPrivateKernelKind(message.Kind) && !message.KernelTicket);
+        unit.Sent.Exists(Kinds.IsUnissuedPrivate);
 
     private TurnCommit PrepareCommit(TurnOutcome unit)
     {
