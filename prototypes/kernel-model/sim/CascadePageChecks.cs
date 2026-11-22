@@ -40,16 +40,19 @@ internal static class CascadePageChecks
         var sent = await store.CommitAsync(batch);
 
         var registry = CascadeRegistry.From(before);
-        var next = before with { Parent = foreign.Id, Revision = 2, Children = null };
-        var page = CascadeProtocol.Page(next, registry, 0, next.Revision);
-        var forged = new TurnCommit(branch.Id, next, before.Revision, [command.InboxKey], [], page.Sent, [], [], null)
-            { FoundationCascade = new(registry) };
-        var refused = false;
-        try { await store.CommitAsync(batch with { Turns = [forged] }); }
-        catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
-        check(sent.Landed && refused && store.Instances[branch.Id] == before && store.Messages.ContainsKey(command.InboxKey) &&
-            page.Sent.All(message => !store.Messages.ContainsKey(message.InboxKey)),
-            "a legacy cascade cannot authenticate its terminate by replacing the recorded parent in the same commit");
+        foreach (var status in new[] { InstanceStatus.Running, InstanceStatus.Cancelled })
+        {
+            var next = before with { Parent = foreign.Id, Revision = 2, Children = null, Status = status };
+            var page = CascadeProtocol.Page(next, registry, 0, next.Revision);
+            var proposed = new TurnCommit(branch.Id, next, before.Revision, [command.InboxKey], [], page.Sent, [], [], null)
+                { FoundationCascade = new(registry) };
+            var refused = false;
+            try { await store.CommitAsync(batch with { Turns = [proposed] }); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+            check(sent.Landed && refused && store.Instances[branch.Id] == before && store.Messages.ContainsKey(command.InboxKey) &&
+                page.Sent.All(message => !store.Messages.ContainsKey(message.InboxKey)),
+                $"a legacy cascade cannot authenticate its terminate by replacing the recorded parent and writing {status}");
+        }
     }
 
     private static async Task RunNative(Action<bool, string> check)

@@ -119,10 +119,15 @@ public sealed partial class InMemoryStore
         {
             var birth = previous is null or { Retired: true };
             var cancelled = next.Status == InstanceStatus.Cancelled && (birth || previous!.Status == InstanceStatus.Running);
-            var tookTerminate = turn.Consumed.Concat(turn.Done).Any(key =>
-                Messages.GetValueOrDefault(key)?.Message is { Kind: Kinds.Terminate } command &&
-                command.Target.Id == next.Id && CreationProtocol.TargetError(next, command) is null &&
-                (!command.CascadeOrigin || !birth && CreationProtocol.MatchesCascadeParent(previous, command)));
+            var tookTerminate = false;
+            foreach (var key in turn.Consumed.Concat(turn.Done))
+            {
+                if (Messages.GetValueOrDefault(key)?.Message is not { Kind: Kinds.Terminate } command) continue;
+                var addressed = command.Target.Id == next.Id && CreationProtocol.TargetError(next, command) is null;
+                if (command.CascadeOrigin && (!addressed || birth || !CreationProtocol.MatchesCascadeParent(previous, command)))
+                    throw InvalidCascade();
+                tookTerminate |= addressed;
+            }
             if (next.Retired || (birth ? next.Revision <= 0 : next.Revision != checked(previous!.Revision + 1)) ||
                 !(cancelled || tookTerminate) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
