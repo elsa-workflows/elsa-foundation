@@ -1,7 +1,7 @@
 import "./WorkflowEditorToolbar.css";
-import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
 import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
-import { StatusChip, StudioButton, AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, OverflowMenu, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
@@ -103,37 +103,7 @@ interface WorkflowEditorToolbarProps {
 }
 
 export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const openAtEndRef = useRef(false);
-  const menuId = useId();
   const pending = props.saving || /^(Autosaving|Saving|Preparing|Starting|Exporting|Promoting|Publishing)/.test(props.status);
-
-  const closeMenu = (restoreFocus = true) => {
-    setOpen(false);
-    if (restoreFocus) triggerRef.current?.focus();
-  };
-
-  const focusInitialMenuItem = () => {
-    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
-    items?.[openAtEndRef.current ? items.length - 1 : 0]?.focus();
-  };
-
-  const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape" || event.key === "Tab") {
-      if (event.key === "Escape") event.preventDefault();
-      closeMenu();
-      return;
-    }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
-    const current = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
-      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-    items[next]?.focus();
-  };
 
   return (
     <WorkflowEditorToolbarFrame
@@ -174,50 +144,17 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
         {!props.templateMode ? <StudioButton size="sm" type="button" aria-label="Test Run" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</StudioButton> : null}
-        <StudioButton size="sm"
-          ref={triggerRef}
-          type="button"
-          aria-label="More workflow actions"
-          title="More workflow actions"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-controls={open ? menuId : undefined}
-          onClick={() => {
-            openAtEndRef.current = false;
-            if (open) closeMenu(); else setOpen(true);
-          }}
-          onKeyDown={event => {
-            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-              event.preventDefault();
-              openAtEndRef.current = event.key === "ArrowUp";
-              setOpen(true);
-            }
-          }}
-        ><MoreHorizontal size={18} /></StudioButton>
+        <OverflowMenu ariaLabel="More workflow actions" triggerIcon={<MoreHorizontal size={18} aria-hidden="true" />}
+          popoverClassName="wf-editor-actions-popover" minWidth={240} maxHeight={480}
+          items={[
+            { id: "autosave", group: "Saving", label: "Autosave", detail: props.autosaveEnabled ? "On" : "Off",
+              selection: { type: "checkbox", checked: props.autosaveEnabled },
+              onSelect: () => props.onAutosaveChange(!props.autosaveEnabled) },
+            ...props.moreActions.flatMap(group => group.actions.map(action => ({
+              ...action, id: `${group.label}-${action.label}`, group: group.label
+            })))
+          ]} />
         </>
-      }
-      afterActions={
-      <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)} onPositioned={focusInitialMenuItem}>
-        <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
-          <div role="group" aria-label="Saving">
-            <span className="wf-editor-menu-heading" aria-hidden="true">Saving</span>
-            <button type="button" role="menuitemcheckbox" aria-checked={props.autosaveEnabled} tabIndex={-1} onClick={() => props.onAutosaveChange(!props.autosaveEnabled)}>
-              <Check size={16} aria-hidden="true" style={{ visibility: props.autosaveEnabled ? "visible" : "hidden" }} /> Autosave
-              <span className="wf-editor-menu-value">{props.autosaveEnabled ? "On" : "Off"}</span>
-            </button>
-          </div>
-          {props.moreActions.filter(group => group.actions.length > 0).map(group => (
-            <div key={group.label} role="group" aria-label={group.label}>
-              <span className="wf-editor-menu-heading" aria-hidden="true">{group.label}</span>
-              {group.actions.map(action => (
-                <button key={action.label} type="button" role="menuitem" tabIndex={-1} disabled={action.disabled} title={action.title} onClick={() => { closeMenu(); action.onSelect(); }}>
-                  {action.icon} {action.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </AnchoredPopover>
       }
     />
   );

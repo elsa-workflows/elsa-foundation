@@ -79,6 +79,12 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Graph authoring audit
+
+The A6 review covered all 54 files in `WF/graph-authoring/` at `4e593ed012`. The two resource hosts share the workspace, palette, inspector, canvas and block operations. The sequence and compensation renderers provide their own ordered step and occurrence controls. React Flow handles keep their directional placement, keyboard labels and saved viewport. Block and BPMN planners check the selected scope, catalog, connections, bindings and edit authority before a preview can be applied. Their transformations and checkpoints do not render controls. Six stylesheets govern the specific canvas geometry, portal menus, panels, and small-screen layouts.
+
+The specialized canvas add-step and slot controls retain their pointer anchors and keyboard alternatives. The findings below cover the shared commands, their dialogs, structured-data disclosures and compensation reorder focus.
+
 ### Workflow inspector source audit
 
 The A6 review covered all of `WF/workflow-editor/WorkflowExecutableInspector.tsx` and `WF/workflow-editor/ReusableBoundaryInspector.tsx`. The executable review traced route and source identity, Run and Weaver actions, catalog fallback, graph modes, drift, input bindings and output captures. The boundary review traced pinned definitions, nested navigation, historical layout, cursor restart, virtualized keyboard selection, scoped value resolution and incident evidence. W18–W20 and X10.11 record the findings verified in source.
@@ -179,11 +185,12 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   Workarounds: `.wf-icon-button`, `.studio-icon-button`, `.ad-icon-button`, `.connections-icon-button`. (PR #5270)
 - [x] **K4. Pressed (toggle) button.** (#4995) [seen] Console and Structured logs use
   `StudioButton className="active"`. (PR #5280)
-- [ ] **K5. Richer menu and split button.** (#4996) [source] The designer "More workflow actions" menu
+- [x] **K5. Richer menu and split button.** (#4996, PR #5355) [source] The designer "More workflow actions" menu
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:214`) and `PublishActionButton.tsx` duplicate the same
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
+- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:76` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 - [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
   their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
@@ -379,6 +386,8 @@ Browser dialogs and busy labels (no kit prerequisite):
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
+- [ ] **A6 graph dialogs** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
+
 ### X4. Create flows
 
 Five patterns exist [seen]: modal dialog (workflow, activity definition, connection); inline page with
@@ -508,7 +517,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 ### X9. Loading, empty and error states
 
-- [ ] **X9.1** (#5128) [source] Plain "Loading…" text → `SkeletonRows`:
+- [x] **X9.1** (#5128) [source] Plain "Loading…" text → `SkeletonRows`: (PR #5345)
   `EXT/Agent/AgentPlayground.tsx:107`, `HumanReviewPage.tsx:91`, `AgentInvocationPage.tsx:79`;
   `EXT/Secrets/SecretEditorPage.tsx:81`, `SecretsPage.tsx:305`;
   `EXT/UserTasks/TaskDetailPage.tsx:34, 150`, `FormsPage.tsx:53`;
@@ -519,7 +528,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [x] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and (PR #5309)
   `ActivityDefinitionCreateDialog.tsx:126` (`ad-inline-status`);
   `EXT/Connections/ConnectionList.tsx:32` (a `StudioResultState` titled "Loading connections…").
-- [ ] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`:
+- [x] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`: (PR #5345)
   `.ad-failure` (`WF/ActivityDefinitionWorkbench.tsx:204`),
   recovery and conflict cards (`WF/ActivityDefinitionDraftEditor.tsx:1068, 1069, 1079, 1134`),
   `.connections-notice` (`EXT/Connections/ConnectionsPage.tsx:136–141`),
@@ -539,7 +548,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [x] **X9.9** (#5137, PR #5336) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
   `EXT/Workflows.Dashboard/WorkflowRunHealthWidget.tsx:66`, `WorkflowDashboardUnavailable.tsx:5`.
 
-- [ ] **X9.10** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` uses bare `role="alert"` elements for invalid actions, assignment choices, unavailable versions and form loading errors. The Decisions table parser uses the same pattern in `EXT/Decisions/TableEditor.tsx`. Use the shared alert while retaining the recovery action.
+- [x] **X9.10** (#5266, #5353) [verified] `EXT/UserTasks/PropertyEditors.tsx` uses bare `role="alert"` elements for invalid actions, assignment choices, unavailable versions and form loading errors. The Decisions table parser uses the same pattern in `EXT/Decisions/TableEditor.tsx`. Use the shared alert while retaining the recovery action.
 
 ### X10. Timestamps and identifiers
 
@@ -629,7 +638,9 @@ the designer header is a documented exception.
 - [x] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`. (PR #5321)
 
-- [ ] **X12.13** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
+- [x] **X12.13** (#5266, #5353) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
+
+- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:262`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
 
 ### X13. CSS texture
 
@@ -685,7 +696,7 @@ Raw font sizes, weights, radii and colours:
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
-- [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
+- [x] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`. (PR #5345)
 - [x] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move (PR #5332)
   it to CSS with tokens.
 
@@ -761,6 +772,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 
+- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
+
 - [x] **W18** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
 - [x] **W19** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
 - [x] **W20** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
@@ -817,9 +830,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   "(required)" suffix. **[check]** whether `StudioField` should render the suffix itself.
   `needs: D13`
 
-- [ ] **E21** (#5266) [verified] `EXT/Decisions/TableEditor.tsx` calls `event.preventDefault()` even when `moveTab` reaches the first or last cell. Allow Tab and Shift+Tab to leave the grid at its boundaries, including while editing a cell.
-- [ ] **E22** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` resolves source rows with `rowsByKey.get(field.key) ?? rows[index]`. Inserting a new field before an unchanged field can give both rows the same selection and drag identity.
-- [ ] **E23** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` rejects the reserved action name `"Unmatched"`, while the validation message only describes spaces and uniqueness. Explain the reserved name when it prevents saving.
+- [x] **E21** (#5266, #5353) [verified] `EXT/Decisions/TableEditor.tsx` calls `event.preventDefault()` even when `moveTab` reaches the first or last cell. Allow Tab and Shift+Tab to leave the grid at its boundaries, including while editing a cell.
+- [x] **E22** (#5266, #5353) [verified] `EXT/UserTasks/FormDesigner.tsx` resolves source rows with `rowsByKey.get(field.key) ?? rows[index]`. Inserting a new field before an unchanged field can give both rows the same selection and drag identity.
+- [x] **E23** (#5266, #5353) [verified] `EXT/UserTasks/PropertyEditors.tsx` rejects the reserved action name `"Unmatched"`, while the validation message only describes spaces and uniqueness. Explain the reserved name when it prevents saving.
 
 ### Host
 
