@@ -83,6 +83,7 @@ public sealed partial class InMemoryStore
         {
             var stored = Messages[row.Cursor.Key];
             stored.KeptBy = null;
+            stored.ParkDeadLetter = stored.Message.Kind == Kinds.Publish;
             stored.Message = stored.Message with { KeepUntil = until };
         }
     }

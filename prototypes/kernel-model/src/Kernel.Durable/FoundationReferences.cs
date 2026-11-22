@@ -282,6 +282,8 @@ public sealed partial class InMemoryStore
         }
         else
             _foundationEnds.TryAdd(address, now);
+        if (row.ParkDiscarded && _foundationParks.Remove(address))
+            _foundationEnds[address] = now;
         if (turn.OpensPark)
             _foundationParks[address] = new(row.Revision, now);
     }
@@ -290,6 +292,7 @@ public sealed partial class InMemoryStore
     {
         _foundationEnds.Remove(address);
         _foundationHeaders.Remove(address);
+        _foundationParks.Remove(address);
         _foundationParks.Remove(address);
     }
 

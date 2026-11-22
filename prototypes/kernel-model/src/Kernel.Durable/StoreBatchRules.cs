@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false,bool supportsFoundationParkClear=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -17,7 +17,7 @@ public static class StoreBatchRules
         var rows = new HashSet<string>(StringComparer.Ordinal);
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
-        ValidateParkPageClears(batch, supportsFoundationParkClear);
+        ValidateParkPageClears(batch);
         if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
         {
             var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
@@ -27,6 +27,9 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null ||
+                turn.Row is { ParkResolutionGeneration: > 0 } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
+                throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
                 (turn.Row is null || releases.Distinct().Count() != releases.Count || releases.Any(removed!.Contains) ||
                     releases.Intersect(turn.Held ?? []).Any()))
@@ -55,13 +58,13 @@ public static class StoreBatchRules
         }
     }
 
-    private static void ValidateParkPageClears(CommitBatch batch, bool supported)
+    private static void ValidateParkPageClears(CommitBatch batch)
     {
         if (!batch.Turns.Any(turn => turn.FoundationParkClear is not null)) return;
         var cleared = new HashSet<InboxKey>();
         foreach (var turn in batch.Turns)
             if (turn.FoundationParkClear is { } page &&
-                (!supported || turn.OpensPark || turn.Delete ||
+                (turn.OpensPark || turn.Delete ||
                     page.Rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
                     page.Rows.Any(row => !cleared.Add(row.Cursor.Key))))
                 throw new StoreException(Failure.Definite, "A clear must write one bounded page of distinct kept keys.");

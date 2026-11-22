@@ -70,6 +70,14 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (message.Kind == Durable.Kinds.Drain)
+            return ContinueDiscard(input);
+        if (input.Row is { ParkDiscard: not null } draining)
+            return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "ResolutionOpen");
+        if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
+            return OpenDiscard(input);
+        if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)
+            return Durable.CreationProtocol.Refuse(input.Actor, discarded, input.Taken, "Ended");
         var parked = IsParked(input.Row);
         if (parked && CapturesParkArrival(delivery) &&
             input.Taken.All(item => item.Attempts < input.MaxAttempts || item.Message.Kind == Durable.Kinds.JobFinished))

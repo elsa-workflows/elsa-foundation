@@ -16,6 +16,9 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal bool FoundationNullState { get; init; }
     internal (string Tenant, InboxKey Creator)? FoundationInlineBirth { get; init; }
     internal FoundationHeaderChange? FoundationInlineHeader { get; init; }
+    internal long ParkResolutionGeneration { get; init; }
+    internal ParkDiscardDrain? ParkDiscard { get; init; }
+    internal bool ParkDiscarded { get; init; }
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
         ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };

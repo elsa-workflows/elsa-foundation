@@ -27,6 +27,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     {
         internal ParkKeepReason? KeptBy;
         internal int KeptPayloadBytes;
+        internal bool ParkDeadLetter;
         public Message Message = message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
@@ -167,7 +168,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear,
-            supportsFoundationParkClear: true);
+            supportsFoundationParkResolution: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -226,6 +227,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     CreationProtocol.Validate(turn, previous);
                     StoreBatchRules.ValidateActorSends(turn, previous);
                     ValidateFoundationHeader(turn);
+                    ValidateParkDrain(turn, previous, epochs);
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
@@ -736,7 +738,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var messages = Messages.Values.Where(m => m.Done && m.KeptBy is null && m.Message.KeepUntil < now).Select(m => m.Message.InboxKey).ToList();
+            var messages = Messages.Values.Where(m => m.Done && m.KeptBy is null && !m.ParkDeadLetter && m.Message.KeepUntil < now)
+                .Select(m => m.Message.InboxKey).ToList();
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));

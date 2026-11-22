@@ -104,12 +104,117 @@ internal static class ParkKeptChecks
             "takeover does not offer done kept rows to the parked actor");
 
         await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
+        await CheckDiscardDrain(check);
 
         foreach (var timed in new[] { false, true })
             await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
 
         bool Retained(Message message, string payload, ParkKeepReason reason) => store.Messages.GetValueOrDefault(message.InboxKey) is
             { Done: true, Held: false, Trial: 0, KeptBy: var actualReason, Message.Payload: var actual } && actual == payload && actualReason == reason;
+    }
+
+    private static async Task CheckDiscardDrain(Action<bool, string> check)
+    {
+        const long openedAt = 1_701_400_020_000;
+        var now = openedAt;
+        var store = new InMemoryStore(1, () => now);
+        var actor = new Probe();
+        var scope = new Contract.BoundScope("discard");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => now - openedAt });
+        var first = Owner("discard-first");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node);
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var activation = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Pump(activation);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(activation);
+
+        const int keptCount = InMemoryStore.ParkPageLimit + 3;
+        var widePayload = new string('p', 5 * 1024 * 1024);
+        for (var index = 0; index < keptCount - 2; index++)
+            await ingress.SendAsync(scope, target, $"arrived-{index}", "update", index == 0 ? widePayload : null);
+        await Pump(activation);
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var id = parked.Row.Id;
+        var publication = Json.Write(new EventRow("key", "event", "undelivered", now + 1));
+        // Seed the result of a failed publish step. The paged publisher itself has its own K3 cases.
+        var ticket = new Message("parked-publication", new(id), Kinds.Publish, publication, id,
+            TargetCreation: parked.Row.Creation, SenderCreation: parked.Row.Creation).AsIssued().AsKernelTicket();
+        var fence = first.Fences.Single();
+        var staged = new TurnCommit(id, null, null, [], [], [ticket], [], [], null);
+        await Commit(staged);
+        var keep = new TurnCommit(id, parked.Row with { Revision = parked.Row.Revision + 1 }, parked.Row.Revision,
+            [], [ticket.InboxKey], [], [], [], null)
+        { FoundationKept = new Dictionary<InboxKey, ParkKeepReason> { [ticket.InboxKey] = ParkKeepReason.Consumed } };
+        await Commit(keep);
+        await activation.DisposeAsync();
+        var drainer = Owner("discard-open");
+        await using var drainingActivation = (await new DurableHost([drainer]).ActivateAsync(0))!;
+        await Pump(drainingActivation);
+        var selection = store.SealFoundationSelection(scope.Tenant, parked);
+        var admission = store.AdmitFoundationOperator(scope.Tenant, target.Actor.Id, null, "op", Contract.Kinds.Discard,
+            Json.Write(new Contract.OperatorCommand(selection)), null, null, selection, null);
+        await Step(drainer);
+        var open = store.Instances[id];
+        var opened = admission.Outcome == InMemoryStore.OperatorAdmission.Accepted && open.ParkResolutionGeneration == 1 &&
+            open.ParkDiscard is { Cursor: null, Serial: 1, Cleared: 0 } begun && OnlyOutstanding(begun.Control) &&
+            store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount;
+        check(opened, "discard Open commits its first private control without clearing any input");
+        if (!opened) return;
+        var firstControl = store.Messages[open.ParkDiscard!.Control];
+
+        await Step(drainer);
+        var firstPage = store.Instances[id].ParkDiscard;
+        var paged = firstPage is { Cursor: not null, Serial: 2, Cleared: InMemoryStore.ParkPageLimit } advanced &&
+            OnlyOutstanding(advanced.Control) && store.Messages.Values.Count(item => item.KeptBy is not null) == keptCount - InMemoryStore.ParkPageLimit;
+        check(paged, "one real drain turn clears one page and commits the cursor with its successor control");
+        if (!paged) return;
+
+        // Replay a known earlier control below admission to model a delayed delivery from this generation.
+        store.Messages.Add(firstControl.Message.InboxKey, new(firstControl.Message, firstControl.Seq, 0));
+        await Step(drainer);
+        check(store.Instances[id].ParkDiscard == firstPage && OnlyOutstanding(firstPage!.Control) &&
+            !store.Messages.ContainsKey(firstControl.Message.InboxKey),
+            "a late control from an earlier page cannot advance the current drain");
+
+        await drainingActivation.DisposeAsync();
+        now += 100;
+        await ingress.SendAsync(scope, target, "after-open", "update");
+        var next = Owner("discard-next");
+        await using var successor = (await new DurableHost([next]).ActivateAsync(0))!;
+        await Pump(successor);
+        var finished = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(finished is { Park: null, EndedAt: var end, Row: { ParkDiscard: null, ParkDiscarded: true, ParkResolutionGeneration: 1 } }
+            && end == now && finished.Row.Status == InstanceStatus.Faulted && finished.Row.State == parked.Row.State,
+            "a successor completes from the committed cursor and writes the terminal mark without changing the saved state");
+        check(store.Messages.Values.All(item => item.KeptBy is null && item.Message.Kind != Kinds.Drain) &&
+            store.Messages.Values.Count(item => item.Message.Id == "after-open" && item.Done) == 1 && actor.PoisonOffers == 1 &&
+            store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal)) == 1,
+            "Complete removes the outstanding control and journals once, and the late input is dropped without replay");
+        now += (long)store.IngressDeduplicationWindow.TotalMilliseconds + 1;
+        await store.SweepAsync();
+        check(store.Messages.GetValueOrDefault(ticket.InboxKey) is
+            { Done: true, KeptBy: null, ParkDeadLetter: true, Message.Payload: var remaining } && remaining == publication &&
+            store.Messages.Values.All(item => item.Message.Id != "arrived-0"),
+            "discard preserves the publish ticket's undelivered payload as a dead letter after the normal markers expire");
+
+        ValueTask<Committed> Commit(TurnCommit turn) =>
+            store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [turn], [], []));
+
+        bool OnlyOutstanding(InboxKey key) => store.Messages.Values.Where(item => item.Message.Kind == Kinds.Drain && !item.Done)
+            .Select(item => item.Message.InboxKey).SequenceEqual([key]);
+
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task CheckKeptPages(InMemoryStore store, PartitionFence fence, string id, long creation, Action<bool, string> check)
