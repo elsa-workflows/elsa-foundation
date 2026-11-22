@@ -39,7 +39,7 @@ internal sealed class JintPortableJavaScriptEvaluator(
         var prepared = PreparedJavaScript.Binding(definition.Source);
 
         // Issue #4901: run on a large-stack evaluation thread, so deep calls in an expression cannot overflow the host's stack.
-        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
+        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared), featureOptions.Value));
     }
 
     private JsonElement Evaluate(ExpressionEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)

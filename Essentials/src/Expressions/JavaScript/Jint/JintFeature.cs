@@ -21,6 +21,14 @@ namespace Elsa.Expressions.JavaScript.Jint;
 )]
 public class JintFeature : IShellFeature
 {
+    /// <summary>Requested evaluation-thread stack size, 16–64 MiB. Default 16 MiB.</summary>
+    [ManifestSetting(DisplayName = "Evaluation thread stack bytes", Description = "Thread stack size in bytes, from 16 to 64 MiB. Does not increase the execution stack budget.", Category = "Security", Advanced = true)]
+    public int EvaluationThreadStackBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>Evaluation stack budget, 64–512 KiB. Default 512 KiB.</summary>
+    [ManifestSetting(DisplayName = "Evaluation stack budget bytes", Description = "Stack budget in bytes, from 64 to 512 KiB. A smaller budget aborts deep evaluations earlier; the safety ceiling cannot be increased.", Category = "Security", Advanced = true)]
+    public long EvaluationStackBudgetBytes { get; set; } = 512 * 1024;
+
     /// <summary>
     /// Sandbox limit: wall-clock execution timeout for a single script evaluation. Empty disables it.
     /// </summary>
@@ -67,6 +75,8 @@ public class JintFeature : IShellFeature
     {
         services.Configure<FeatureOptions>(options =>
         {
+            options.EvaluationThreadStackBytes = EvaluationThreadStackBytes;
+            options.EvaluationStackBudgetBytes = EvaluationStackBudgetBytes;
             options.ExecutionTimeout = ExecutionTimeout;
             options.MaxStatements = MaxStatements;
             options.MaxRecursionDepth = MaxRecursionDepth;
@@ -79,6 +89,10 @@ public class JintFeature : IShellFeature
             options.MaxResultDepth = MaxResultDepth;
             options.MaxResultNodes = MaxResultNodes;
         });
+        services.AddOptions<FeatureOptions>()
+            .Validate(JintEvaluationThreads.ValidSettings,
+                "Jint evaluation thread stack must be 16–64 MiB and evaluation stack budget must be 64–512 KiB.")
+            .ValidateOnStart();
 
         // The built-in functions are part of every JavaScript surface (spec 1223 FR-003, FR-006, FR-007, FR-026); host
         // functions are registered beside them. The naming rule is checked at shell activation (FR-027).

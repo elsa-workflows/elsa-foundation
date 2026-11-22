@@ -33,7 +33,7 @@ internal sealed class JintJavaScriptScriptEvaluator(
 
         // Issue #4901: run on a large-stack evaluation thread, so deep script calls cannot overflow the host's stack.
         var prepared = PreparedJavaScript.Script(request.Source);
-        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared)));
+        return ValueTask.FromResult(JintEvaluationThreads.Run(() => Evaluate(request, prepared), featureOptions.Value));
     }
 
     private JavaScriptScriptEvaluationResult Evaluate(JavaScriptScriptEvaluationRequest request, Prepared<Acornima.Ast.Script> prepared)

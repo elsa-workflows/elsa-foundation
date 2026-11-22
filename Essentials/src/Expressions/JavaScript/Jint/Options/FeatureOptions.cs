@@ -3,6 +3,19 @@
 public sealed class FeatureOptions
 {
     /// <summary>
+    /// Requested evaluation-thread stack size in bytes. Default 16 MiB; supported range 16–64 MiB.
+    /// Raising this reserves more address space; it does not raise the execution budget.
+    /// </summary>
+    public int EvaluationThreadStackBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// Stack budget in bytes, checked at statements, calls and host-function entries. Default 512 KiB;
+    /// supported range 64–512 KiB. The Jint adapter enforces the ceiling independently of host configuration
+    /// to preserve its unwind reserve. Native recursion over deep data remains unsupported.
+    /// </summary>
+    public long EvaluationStackBudgetBytes { get; set; } = 512 * 1024;
+
+    /// <summary>
     /// Sandbox limit: the wall-clock execution timeout applied to a single script evaluation via
     /// a Jint timeout constraint. A pathological script (e.g. an infinite loop) is aborted once this
     /// elapses instead of hanging the executing thread. <c>null</c> disables the timeout constraint.

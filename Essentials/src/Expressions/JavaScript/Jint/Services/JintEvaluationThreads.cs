@@ -5,6 +5,7 @@ using System.Runtime.ExceptionServices;
 using Jint;
 using Jint.Native.Error;
 using Jint.Runtime;
+using Elsa.Expressions.JavaScript.Jint.Options;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
@@ -28,9 +29,9 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// next statement fails with a JavaScript <c>RangeError</c>, which Jint unwinds as an ordinary script error (no nested
 /// throws). The same check runs first, before the other limits, and at a host function's entry, so no limit exception
 /// and no host function error is thrown deeper than the budget.</item>
-/// <item>Calls that run no statement (in default parameters) are stopped by Jint's stack guard, also with a
-/// <c>RangeError</c>, once the thread is nearly out of stack. Jint's own recursion limit, which can fire at any depth,
-/// is replaced by the same check on the total call depth.</item>
+/// <item>Calls are checked before parameter initialization too, through <see cref="JintCallBudget"/>. Statement-free
+/// chains therefore cannot escape the budget and throw an expression-level limit near the stack's end. Jint's own
+/// recursion limit is replaced by the same check on total call depth.</item>
 /// <item>The evaluation thread has <see cref="StackSize"/> bytes, enough to unwind a limit exception from anywhere
 /// within the budget with room to spare.</item>
 /// </list>
@@ -39,13 +40,18 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// Jint's native code over deeply nested data (a very deep array or Proxy chain) runs no statement and no call, and is
 /// not bounded here.
 /// </para>
+/// <para>
+/// Host settings may only tighten the 512 KiB budget or increase the 16 MiB stack, up to 64 MiB. These bounds preserve
+/// the tested unwind reserve; they are not a proof of safety for arbitrary native engine code. The feature owns and
+/// enforces the budget ceiling even when a host disables the optional recursion limit.
+/// </para>
 /// </remarks>
 internal static class JintEvaluationThreads
 {
-    /// <summary>The stack size of an evaluation thread. Only touched pages are committed.</summary>
+    /// <summary>Minimum thread stack; hosts may reserve more, never less. Only touched pages are committed.</summary>
     internal const int StackSize = 16 * 1024 * 1024;
 
-    /// <summary>The stack an evaluation may use while running before it fails with a <c>RangeError</c>.</summary>
+    /// <summary>Hard execution-budget ceiling owned by this Jint adapter; hosts may only tighten it.</summary>
     internal const long StackBudget = 512 * 1024;
 
     internal const string StackBudgetExceededMessage = "Maximum call stack size exceeded";
@@ -57,14 +63,33 @@ internal static class JintEvaluationThreads
     [ThreadStatic] private static Worker? _current;
 
     /// <summary>Runs <paramref name="work"/> on an evaluation thread and returns its result or rethrows its exception.</summary>
-    public static T Run<T>(Func<T> work)
+    public static T Run<T>(Func<T> work, FeatureOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(work);
-        if (_current is not null)
-            return work();
+        options ??= new FeatureOptions();
+        if (!ValidSettings(options))
+            throw new ArgumentOutOfRangeException(nameof(options), "Jint thread stack must be 16–64 MiB and stack budget 64–512 KiB.");
 
-        var item = new WorkItem<T>(work, ExecutionContext.Capture());
-        Rent().Execute(item);
+        var budget = options.EvaluationStackBudgetBytes;
+        if (_current is { } current)
+        {
+            var used = UsedStack();
+            if (current.Budget <= used)
+                throw new InsufficientExecutionStackException();
+            if (current.StackSize >= options.EvaluationThreadStackBytes)
+            {
+                var previousBudget = current.Budget;
+                current.Budget = Math.Min(previousBudget, used + budget);
+                try { return work(); }
+                finally { current.Budget = previousBudget; }
+            }
+            // A nested host asking for a larger stack gets a matching worker, but only the outer budget's remainder.
+            // It cannot reset the outer budget by switching hosts or threads.
+            budget = Math.Min(budget, current.Budget - used);
+        }
+
+        var item = new WorkItem<T>(work, ExecutionContext.Capture(), budget);
+        Rent(options.EvaluationThreadStackBytes).Execute(item);
         item.Wait();
         return item.Result();
     }
@@ -78,6 +103,13 @@ internal static class JintEvaluationThreads
     /// <summary>Whether the current thread is an evaluation thread.</summary>
     internal static bool IsEvaluationThread => _current is not null;
 
+    internal static long CurrentBudget => _current?.Budget ?? 0;
+    internal static int CurrentStackSize => _current?.StackSize ?? 0;
+
+    internal static bool ValidSettings(FeatureOptions options) =>
+        options.EvaluationThreadStackBytes is >= StackSize and <= 64 * 1024 * 1024 &&
+        options.EvaluationStackBudgetBytes is >= 64 * 1024 and <= StackBudget;
+
     // The address of a local, as a number: the stack grows down on every platform .NET supports.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static long StackPosition()
@@ -86,19 +118,20 @@ internal static class JintEvaluationThreads
         return Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref marker);
     }
 
-    private static Worker Rent()
+    private static Worker Rent(int stackSize)
     {
         lock (Gate)
         {
-            if (IdleWorkers.Count > 0)
+            var index = IdleWorkers.FindLastIndex(worker => worker.StackSize == stackSize);
+            if (index >= 0)
             {
-                var worker = IdleWorkers[^1];
-                IdleWorkers.RemoveAt(IdleWorkers.Count - 1);
+                var worker = IdleWorkers[index];
+                IdleWorkers.RemoveAt(index);
                 return worker;
             }
         }
 
-        return new Worker();
+        return new Worker(stackSize);
     }
 
     private static void Return(Worker worker)
@@ -144,6 +177,7 @@ internal static class JintEvaluationThreads
         {
             _rangeError = (ErrorConstructor)engine.Global.Get("RangeError");
             _callStack = CallStackField.GetValue(engine);
+            JintCallBudget.Install(_callStack!, this, CallStackCount);
         }
 
         /// <summary>Checks the limits of <paramref name="engine"/> now, outside a statement (a host function's entry).</summary>
@@ -153,7 +187,7 @@ internal static class JintEvaluationThreads
         {
             if (_rangeError is not { } rangeError)
                 return;
-            if (UsedStack() > StackBudget)
+            if (IsEvaluationThread && UsedStack() > CurrentBudget)
                 throw new JavaScriptException(rangeError, StackBudgetExceededMessage);
             if (maxCallDepth is { } max && CallStackCount(_callStack!) > max)
                 throw (Exception)RecursionOverflow.Invoke([_callStack, string.Empty]);
@@ -175,13 +209,15 @@ internal static class JintEvaluationThreads
 
     private abstract class WorkItem
     {
+        public abstract long Budget { get; }
         public abstract void Execute();
 
         public abstract void Complete();
     }
 
-    private sealed class WorkItem<T>(Func<T> work, ExecutionContext? context) : WorkItem
+    private sealed class WorkItem<T>(Func<T> work, ExecutionContext? context, long budget) : WorkItem
     {
+        public override long Budget => budget;
         // Spinning first keeps the hand-off near the cost of running inline for the usual short evaluation.
         private readonly ManualResetEventSlim _done = new(false, 1000);
         private Func<T>? _work = work;
@@ -230,14 +266,17 @@ internal static class JintEvaluationThreads
         private readonly SemaphoreSlim _signal = new(0);
         private WorkItem? _item;
 
-        public Worker()
+        public Worker(int stackSize)
         {
-            var thread = new Thread(Loop, StackSize) { IsBackground = true, Name = "Elsa JavaScript evaluation" };
+            StackSize = stackSize;
+            var thread = new Thread(Loop, stackSize) { IsBackground = true, Name = "Elsa JavaScript evaluation" };
             // The thread outlives the caller that created it: it must not keep that caller's execution context.
             thread.UnsafeStart();
         }
 
         public long Origin { get; private set; }
+        public int StackSize { get; }
+        public long Budget { get; set; }
 
         public void Execute(WorkItem item)
         {
@@ -268,6 +307,7 @@ internal static class JintEvaluationThreads
             var item = _item!;
             _item = null;
             Origin = StackPosition();
+            Budget = item.Budget;
             item.Execute();
             // Idle again before the caller wakes, so its next evaluation reuses this thread instead of starting one.
             Return(this);

@@ -36,11 +36,14 @@ internal static class IsolatedJintEngine
         options.Temporal.TimeZoneProvider = UtcDefaultTimeZoneProvider.Instance;
 
         // Issue #4901: the stack and call-depth limits come first, so no other limit fires deeper than the stack budget
-        // (see JintEvaluationThreads). Code that runs no statement (calls in default parameters) is stopped by Jint's
-        // own guard instead: a RangeError once the thread is nearly out of stack, never a hop to another thread.
+        // (see JintEvaluationThreads). JintCallBudget applies this check to calls before default parameters too.
+        // Jint's own near-exhaustion guard remains a fallback and must never hop to an unbudgeted pool thread.
         var stackBudget = new JintEvaluationThreads.StackBudgetConstraint(
             configured.MaxRecursionDepth is { } maxRecursionDepth && maxRecursionDepth > 0 ? maxRecursionDepth : null);
         options.Constraint(stackBudget);
+        // Enable call statistics for the pre-parameter budget adapter. Total depth is checked there; Jint's
+        // per-function limit must never fire independently at an unguarded depth.
+        options.LimitRecursion(int.MaxValue);
         options.Constraints.MaxExecutionStackCount = 0;
 
         // Counted across the script: Jint's own limits restart on every call from .NET back into the engine, which every
