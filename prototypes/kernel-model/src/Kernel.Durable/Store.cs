@@ -270,6 +270,9 @@ internal interface IFoundationSchedulingStore
 
 internal interface IDueBacklogStore
 {
+    bool MeasuresDueBacklog => true;
+    int PublishedDueBacklog(int partition);
+
     // Count pending due rows using the store's clock, stopping at a positive cap.
     ValueTask<int> CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken = default);
 }

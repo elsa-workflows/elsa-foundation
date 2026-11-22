@@ -183,8 +183,12 @@ When a sampled estimate crosses the low- or high-water mark and the partition ha
 interval, the owner sends a fenced commit with no journal rows that writes it, so a partition whose commits stall
 still publishes its depth within one heartbeat interval; a partition whose estimate stays on one side of the marks
 writes nothing. The K3 store accepts an estimate with ordinary writes or in a fence-only commit and returns
-a snapshot filtered at the low-water mark. The Worker's estimate sampling and publication policy requires its
-own qualification.
+a snapshot filtered at the low-water mark. The opt-in K3 Worker samples the capped depth from the in-memory store,
+carries a changed estimate on the next ordinary commit, and writes a pressure-only commit after one heartbeat of
+inactivity when the sample crosses a mark. A successor starts from the published depth for its new epoch.
+`--backlog-worker-check` covers both writes, the high and low crossings, and the same-band no-write case.
+The short-poll estimate and the behind-partition sample optimisation qualify with the provider poll path at K4.
+Release configuration, refusal policy and the production pressure list stay with K11.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:

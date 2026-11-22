@@ -17,6 +17,7 @@ public sealed record WorkerOptions
     public int MaxBatch { get; init; } = 500;
     public int PassTurnBudget { get; init; } = 500;
     public IReadOnlyDictionary<string, int>? TenantTurnWeights { get; init; }
+    internal BacklogOptions? Backlog { get; init; }
 
     /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
     public int MaxInstances { get; init; } = int.MaxValue;
@@ -121,6 +122,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
     private readonly PassTurnSchedule _passTurns;
+    private readonly BacklogSampling? _backlog;
     private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
     private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
     private readonly HashSet<Delivery> _timedJobs = [];
@@ -209,6 +211,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (weights.Values.Any(weight => weight < 1))
             throw new ArgumentOutOfRangeException(nameof(WorkerOptions.TenantTurnWeights), "Turn weights must be positive.");
         _passTurns = new(weights);
+        if (_options.Backlog is { } backlog)
+        {
+            if (backlog.LowWater < 1 || backlog.HighWater < backlog.LowWater || backlog.HighWater == int.MaxValue ||
+                backlog.SampleInterval.TotalMilliseconds < 1 || backlog.HeartbeatInterval.TotalMilliseconds < 1)
+                throw new ArgumentOutOfRangeException(nameof(WorkerOptions.Backlog));
+            if (store is not IDueBacklogStore { MeasuresDueBacklog: true } depths)
+                throw new NotSupportedException("This store cannot measure due backlog.");
+            _backlog = new(depths, backlog);
+        }
         _gate = Has(Flaw.TrialPerPartition) ? new TrialGate() : _options.Gate ?? new TrialGate();
     }
 
@@ -494,6 +505,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (!LeaseUsable()) return null;
         if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        if (_backlog is not null)
+        {
+            await _backlog.ReadAsync(Fences, _options.Monotonic(), cancellationToken);
+            if (!LeaseUsable()) return null;
+            if (cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
+        }
         while (_inlineStarts.TryDequeue(out var inline))
         {
             if (inline.Generation != _generation || !Post(inline.Creator, fresh: true))
@@ -523,17 +540,36 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (RotatePassTurn() is not { } id) break;
             RunTurn(id, cancellationToken);
         }
-        if (!cancellationToken.IsCancellationRequested) await FlushAsync(cancellationToken);
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            await FlushAsync(cancellationToken);
+            if (_backlog is not null && LeaseUsable())
+                await PublishBacklogAsync(cancellationToken);
+        }
         if (!Owns) return null;
         Evict();
         if (busy || turns > 0 || cancellationToken.IsCancellationRequested) return TimeSpan.Zero;
         var now = Now;
         var next = _items.Values.Where(i => !i.Taken && i.Message.Due is { } due && due > now).Select(i => i.Message.Due!.Value - now)
             .Concat(_slots.Values.Where(s => s.Unwritten && s.Until > now).Select(s => s.Until - now)).DefaultIfEmpty(long.MaxValue).Min();
+        if (_backlog is not null) next = Math.Min(next, _backlog.NextDelay(Fences, _options.Monotonic()));
         var caller = Callers.Select(to => ReplyTo.Parse(to).Deadline - now).DefaultIfEmpty(long.MaxValue).Min();
         var delay = TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(caller, Math.Min(next, (long)(_options.Lease.TotalMilliseconds / 3)))));
         // Flush can receive a result after the last Ready scan. Give that inbox another pass before advising sleep.
         return _lastReceivedJob != receivedBeforePass || !_jobPublications.IsEmpty || Volatile.Read(ref _jobsDeferredByCancellation) != 0 || _jobsWaitingForTrial && _gate.Idle ? TimeSpan.Zero : delay;
+    }
+
+    private async ValueTask PublishBacklogAsync(CancellationToken cancellationToken)
+    {
+        if (_flushing || cancellationToken.IsCancellationRequested || !Owns) return;
+        var generation = _generation;
+        var pressure = _backlog!.PressureFences(Fences, _options.Monotonic());
+        if (pressure.Count == 0) return;
+
+        _flushing = true;
+        var outcome = await CommitAsync([], [], [], generation, cancellationToken, pressure: pressure);
+        if (outcome == Outcome.Refused && generation == _generation) Reset();
+        if (generation == _generation) _flushing = false;
     }
 
     // A successful response can arrive arbitrarily late. The lease was renewed no earlier than when its request began;
@@ -2798,7 +2834,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation,
-        CancellationToken cancellationToken, bool beat = false, IReadOnlyList<Delivery>? clearedJobs = null)
+        CancellationToken cancellationToken, bool beat = false, IReadOnlyList<Delivery>? clearedJobs = null,
+        IReadOnlyList<PartitionFence>? pressure = null)
     {
         if (units.Exists(HasUnissuedPrivateKind))
         {
@@ -2831,13 +2868,21 @@ public sealed class Worker : IScopeActivation, ITurnServices
         lock (_turnSync)
         {
             if (generation != _generation) return Outcome.Lost;     // a stand-down reset this memory meanwhile
-            if (!_store.OwnedSetsAvailable || _held.Count == 1)
+            if (pressure is not null)
+            {
+                var current = pressure.Where(fence => _held.TryGetValue(fence.Partition, out var held) &&
+                    held.Epoch == fence.Epoch && held.Position == fence.Position).ToList();
+                if (current.Count == 0) return Outcome.Landed;
+                batch = CommitBatch.Owned(current, _options.Lease, false, turns, seen, tried);
+            }
+            else if (!_store.OwnedSetsAvailable || _held.Count == 1)
             {
                 if (_held.Count != 1) throw new InvalidOperationException("A store without owned sets serves one partition per worker.");
                 var (only, held) = _held.First();
                 batch = new CommitBatch(only, held.Epoch, held.Position, _options.Lease, handOver, turns, seen, tried);
             }
             else batch = CommitBatch.Owned(Touched(units, marks.Concat(trial).Concat(clearedJobs ?? []), handOver, beat), _options.Lease, handOver, turns, seen, tried);
+            if (_backlog?.ForCommit(batch.Fenced) is { } estimates) batch = batch with { DueBacklog = estimates };
             if (clearedJobs is not null) batch = batch with { ClearJobTrials = [.. clearedJobs.Select(ticket => ticket.Message.InboxKey)] };
             if (trial is [var ticket] && ticket.Message.FoundationPublish is not null)
                 batch = batch with { PublicationReservation = new(ticket.Message.InboxKey, ticket.Seq, ticket.Attempts) };
@@ -2869,7 +2914,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             try
             {
                 StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
-                    supportsFoundationParkResolution: true);
+                    supportsFoundationParkResolution: true, supportsDueBacklog: _backlog is not null);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -2928,6 +2973,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     moved.Position += batch.PositionsIn(fence.Partition);
                 }
                 Observe(result.Now);
+                _backlog?.Landed(batch, _options.Monotonic());
             }
             if (journaled.Count > 0) _options.OnJournal?.Invoke(journaled);
             if (!LeaseUsable()) return Outcome.Lost; // a late acknowledgement cannot revive the old local deadline
