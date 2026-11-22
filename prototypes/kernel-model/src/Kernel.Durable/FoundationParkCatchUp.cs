@@ -104,7 +104,7 @@ public sealed partial class InMemoryStore
             if (registered.FoundationKeepsEvents)
                 _foundationCatchUpCoverage.Add(registered.FoundationIncarnation!.Value, new(registered, insert.Ticket!.ParkCatchUp!));
         }
-        if (insert.Ticket is { } ticket) Messages.Add(ticket.InboxKey, new(ticket, ++_seq, 0));
+        if (insert.Ticket is { } ticket) Messages.Add(ticket.InboxKey, StoreMessage(ticket, ++_seq, 0));
     }
 
     private CatchUpStep? PrepareParkCatchUp(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, IReadOnlySet<Guid>? revoked, bool isolated)
@@ -371,7 +371,7 @@ public sealed partial class InMemoryStore
     {
         foreach (var write in step.Writes) ApplyEventWrite(write);
         if (step.EventSerial is { } serial) _eventSerial = serial;
-        if (step.Next is { } next) Messages.Add(next.InboxKey, new(next, ++_seq, 0));
+        if (step.Next is { } next) Messages.Add(next.InboxKey, StoreMessage(next, ++_seq, 0));
         if (step.Ticket.Start is { } start)
         {
             if (step.Next is null && StartCoverage(step.Ticket, start) is not null)

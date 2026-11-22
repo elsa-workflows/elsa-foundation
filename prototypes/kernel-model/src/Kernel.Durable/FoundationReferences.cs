@@ -134,8 +134,8 @@ public sealed partial class InMemoryStore
                 return null;
 
             var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey, fingerprint);
-            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
             InsertReference(binding);
+            Messages.Add(creator.InboxKey, StoreMessage(creator, ++_seq, 0));
             return reference;
         }
     }
@@ -237,7 +237,8 @@ public sealed partial class InMemoryStore
     private (ReferenceBinding Binding, InstanceRow Row)? BoundActor(string tenant, string? reference)
     {
         if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
-            Instances.GetValueOrDefault(binding.Address.Id) is not { Retired: false } row || row.Creation != binding.Address.Creation)
+            Instances.GetValueOrDefault(binding.Address.Id) is not { Retired: false } row || row.Creation != binding.Address.Creation ||
+            !HasCheckpointScope(row))
             return null;
         return (binding, row);
     }
@@ -249,7 +250,7 @@ public sealed partial class InMemoryStore
             var asOf = clock();
             var actors = new List<ActorCheckpoint>();
             foreach (var row in Instances.Values)
-                if (!row.Retired && _referenceBirths.TryGetValue(new(row.Id, row.Creation), out var binding) && binding.Tenant == tenant)
+                if (!row.Retired && _referenceBirths.TryGetValue(new(row.Id, row.Creation), out var binding) && binding.Tenant == tenant && HasCheckpointScope(row))
                     actors.Add(Checkpoint(row, binding));
             return new(asOf, actors);
         }
@@ -369,7 +370,7 @@ public sealed partial class InMemoryStore
                 { StorageId = FormattableString.Invariant($"{receipt}/{occurrence}"), Operator = @operator }
                 .WithInboxScope(InboxKey.FoundationOccurrenceScope);
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
-            Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
+            Messages.Add(message.InboxKey, StoreMessage(message, occurrence, 0));
             _seq = occurrence;
             if (operatorKey is null) _foundationSendReceipts[receipt] = until;
             else _foundationOperatorReceipts[operatorKey] = (reference, until);
