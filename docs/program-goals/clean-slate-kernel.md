@@ -406,6 +406,7 @@ retain the milestones above.
 | BA-1, source-limit event pages | `--event-byte-budget-check` follows an outside publication and a turn publication through 170 exact non-keeping waits each, plus a restoring wait meeting three kept events. Every delivery step writes one, the authored insert-only step writes none, and a successor resumes after each first landed answer is lost. All payloads arrive once and a second tenant progresses. | Raise either byte cap enough to admit a second full-sized delivery. The corresponding first step fails the singleton oracle. | Provider byte and timing measurements remain K4 and K12. |
 | E-1 through E-3, late arrivals below a recovery cursor | `--park-page-bounds-check` admits a model-ending input just before or after page one, at an equal position with a lower full key, and on either side of a cold take. The input reaches the model after Complete and all 170 restorable inputs, including the last kept row. Every restored input reaches the model once and no kept rows remain. | Use tuple order as eligibility during the drain. The model ends with 169 restored inputs and clears the undelivered suffix in every schedule. | K4 qualifies provider position allocation and visibility. |
 | S-6, composed metadata and whole-row admission | `--metadata-envelope-check` rejects unpaired units in ordinary ids, kinds, senders, targets and matches at the fenced commit. It preserves an issued identity with an unpaired unit, admits combined start content at its byte cap and refuses one byte over without writing a sibling, checkpoint or journal row. | Accept ordinary unpaired units or count start payload and input individually against the full allowance. The invalid batch lands. | Provider charset, collation and encoded row and index limits remain K4. |
+| E-6(a), model end after an interrupted release | `--park-cohort-tuple-check` releases one recovery page and keeps the final model-ending input in its suffix. An exhausted first input re-parks the actor after a take. The later recovery at a lower injected position applies all 168 earlier releases in order and the end input once, then completes with no kept rows. | Omit older releases from the later recovery page. Only the end input reaches the actor. | Provider allocation and visibility remain K4. The other E-6 schedules retain their own cases. |
 
 ### K3 qualification checkpoints
 
@@ -416,6 +417,9 @@ milestones.
 The local integrated baseline `6d25239c2c856354f05b84c01ed8f2202fa4f815` passed 10,000 kernel seeds and 10,000 Native
 seeds at 1,024 virtual partitions and 28 landed checks. The existing gate accepted the 48 kernel and 15 Native
 mutation reports with their documented exceptions, and all seven node-lease mutations were caught.
+
+The later main tree `8676cf60d300151083d9aba6ef3c2517a45c013a` passed 10,000 kernel and 10,000 Native seeds at each
+of 1,024 and 4,096 virtual partitions, and 28 landed checks. [Integrated receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7085279226).
 
 | Area | Local entry points and receipts |
 |---|---|
