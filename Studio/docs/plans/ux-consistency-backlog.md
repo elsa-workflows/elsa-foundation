@@ -813,13 +813,13 @@ None of these has been made. G1 and G2 change domain language; follow `docs/agen
 - [x] **G1** (#5009) `studio/CONTEXT.md` defines "Artifact Hash" as the identity of an Executable, and D9
   replaces "Artifact …" with "Executable …" in the UI. Change the glossary, or record that the UI
   label differs from the domain term, before X14.7. (PR #5276)
-- [ ] **G2** (#5010) `studio/CONTEXT.md` defines "Runtime Evidence" and calls "Runtime Value Evidence Level"
+- [x] **G2** (#5010) `studio/CONTEXT.md` defines "Runtime Evidence" and calls "Runtime Value Evidence Level"
   user-facing, and D9 replaces "evidence" in the UI. Choose the replacement wording with the owner,
-  then update the glossary, before X14.6.
+  then update the glossary, before X14.6. (PR #5282)
 - [x] **G3** (#5011) `studio/docs/ux/design-spec.md`: record the D14 exception to sentence case, with the list
   of terms it covers once that open point is answered. (PR #5283)
-- [ ] **G4** (#5012) `studio/docs/ux/design-spec.md` or `studio/docs/module-ui.md`: record D1, D2, D7, D11, D12
-  and D13 as label and interaction rules, so they outlive this backlog.
+- [x] **G4** (#5012) `studio/docs/ux/design-spec.md` or `studio/docs/module-ui.md`: record D1, D2, D7, D11, D12
+  and D13 as label and interaction rules, so they outlive this backlog. (PR #5284)
 
 ## Follow-up audits
 

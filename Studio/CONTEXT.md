@@ -346,6 +346,7 @@ _Avoid_: Workflow Test Run, Published Run
 
 **Runtime Evidence**:
 Execution information produced by a dispatched workflow, such as status, instance identity, activity count, incident count, logs, traces, artifact references, timing, and expiration.
+Use “Run data” in Studio labels.
 _Avoid_: Artifact inventory
 
 **Runtime Payload Capture Policy**:
@@ -365,7 +366,7 @@ A Studio-managed Workflows setting that requests a runtime payload capture level
 _Avoid_: Host Policy, runtime payload capture policy
 
 **Runtime Value Evidence Level**:
-The user-facing level of runtime value evidence requested or allowed for workflow diagnostics: Off, Metadata only, Diagnostic snapshots, or Full payloads.
+The level of runtime value evidence requested or allowed for workflow diagnostics. In Studio, label this setting “Run data detail”. Its levels are Off, Metadata only, Diagnostic snapshots, and Full payloads.
 _Avoid_: Capture mode, log level
 
 **Run Kind**:
