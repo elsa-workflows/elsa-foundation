@@ -61,6 +61,7 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
       await capture(page, info, `${prefix}-${host}`);
       if (prefix === "modules" && host === "server") await read("modules-unavailable-content", section.locator(".studio-alert").filter({ hasText: /module registry is unavailable/ }));
       if (prefix === "feeds" && host === "studio") {
+        await checkFeedIconActions(page, section, name => capture(page, info, name));
         await read("feeds-operations-content", section.getByRole("heading", { name: "Operations", exact: true }));
         await read("feeds-retention-content", section.getByRole("heading", { name: "Retention", exact: true }));
         await read("feeds-ledger-content", section.getByRole("heading", { name: "Change ledger", exact: true }));
@@ -171,4 +172,35 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
     return result.violations.map(violation => violation.id);
   });
   expect(violations).toEqual([]);
+}
+
+async function checkFeedIconActions(page: Page, section: Locator, capture: (name: string) => Promise<void>) {
+  const refresh = section.getByRole("button", { name: "Refresh package feeds", exact: true });
+  await expect(refresh).toHaveAttribute("title", "Refresh package feeds");
+  const feeds = section.getByRole("region", { name: "Studio feeds", exact: true });
+  const edit = feeds.getByRole("button", { name: /^Edit / }).first();
+  const deleteButton = feeds.getByRole("button", { name: /^Delete / }).first();
+
+  await edit.press("Enter");
+  const editor = feeds.getByRole("dialog");
+  const close = editor.getByRole("button", { name: "Close edit feed", exact: true });
+  await expect(close).toHaveAttribute("title", "Close edit feed");
+  for (const button of [refresh, edit, deleteButton, close]) {
+    await expect(button).toHaveCSS("width", "28px");
+    await expect(button).toHaveCSS("height", "28px");
+    await expect(button.locator("svg")).toHaveCSS("width", "16px");
+  }
+  await capture("feeds-edit-dialog");
+  await close.press("Enter");
+  await expect(editor).toBeHidden();
+  await expect(edit).toBeFocused();
+
+  await deleteButton.hover();
+  await capture("feeds-delete-hover");
+  await deleteButton.click();
+  const confirmation = page.getByRole("dialog", { name: "Delete feed", exact: true });
+  await expect(confirmation.getByRole("button", { name: "Delete feed", exact: true })).toBeVisible();
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(confirmation).toBeHidden();
+  await expect(deleteButton).toBeVisible();
 }

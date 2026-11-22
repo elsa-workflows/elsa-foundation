@@ -57,6 +57,18 @@ if (args.Contains("--inline-ephemeral-check"))
     await InlineEphemeralChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
     return failed ? 1 : 0;
 }
+if (args.Contains("--job-result-size-check"))
+{
+    var failed = false;
+    await JobResultSizeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
+if (args.Contains("--held-job-result-check"))
+{
+    var failed = false;
+    await HeldJobResultChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
+    return failed ? 1 : 0;
+}
 
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),

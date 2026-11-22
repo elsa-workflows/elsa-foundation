@@ -1,6 +1,6 @@
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
@@ -10,7 +10,6 @@ import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./edi
 import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editorHelpers";
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
-import { useDialogFocus } from "./useDialogFocus";
 import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
 export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
@@ -59,8 +58,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   // Reported when the offered set changes (not on every render), so the page's disclosed revision moves only with it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { onTemplates?.(offered); }, [onTemplates, offeredKey]);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, creating ? null : onClose);
+  const startingPointRef = useRef<HTMLSelectElement>(null);
   const submitErrorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (submitError) submitErrorRef.current?.focus();
@@ -155,118 +153,119 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   };
 
   return (
-    <div className="wf-dialog-backdrop" role="presentation">
-      <section ref={dialogRef} tabIndex={-1} className="wf-dialog wf-create-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
-        <form
-          onSubmit={event => {
-            event.preventDefault();
-            if (canCreate) onSubmit();
-          }}
-        >
-          <div className="wf-dialog-heading">
-            <h3 id="workflow-create-title">{title}</h3>
-            {suggestMetadataAction ? (
-              <button
-                type="button"
-                className="wf-ai-action"
-                aria-expanded={intentOpen}
-                onClick={() => setIntentOpen(open => !open)}
-                title={suggestMetadataAction.description ?? suggestMetadataAction.label}
-              >
-                <Sparkles size={13} /> {suggestMetadataAction.label}
-              </button>
-            ) : null}
+    <StudioDialog
+      open
+      onClose={onClose}
+      title={title}
+      className="wf-tokens"
+      initialFocusRef={startingPointRef}
+      dismissDisabled={creating}
+      dismissOnOutsideClick={false}
+      onSubmit={event => {
+        event.preventDefault();
+        if (canCreate) onSubmit();
+      }}
+      footer={<StudioDialogFooter
+        onCancel={onClose}
+        cancelDisabled={creating}
+        confirmLabel={creating ? "Creating…" : submitLabel}
+        confirmDisabled={creating || !draft.name.trim()}
+        confirmProps={{ "aria-disabled": !canCreate, "aria-describedby": createReadinessDescriptionId }}
+      />}
+    >
+      {suggestMetadataAction ? (
+        <div>
+          <button
+            type="button"
+            className="wf-ai-action"
+            aria-expanded={intentOpen}
+            onClick={() => setIntentOpen(open => !open)}
+            title={suggestMetadataAction.description ?? suggestMetadataAction.label}
+          >
+            <Sparkles size={13} /> {suggestMetadataAction.label}
+          </button>
+        </div>
+      ) : null}
+      {suggestMetadataAction && intentOpen ? (
+        <div className="wf-ai-suggest" role="group" aria-label="Suggest name and description">
+          <StudioField className="wf-form-field" label={<><span>What should this workflow do?</span></>}><textarea
+              autoFocus
+              aria-label="Workflow intent"
+              rows={2}
+              placeholder="e.g. Route incoming support tickets to the right team and notify on SLA breach (optional)"
+              value={intent}
+              disabled={suggesting}
+              onChange={event => setIntent(event.target.value)}
+              onKeyDown={event => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  runSuggest();
+                }
+              }}
+            /></StudioField>
+          <div className="wf-ai-suggest-actions">
+            <button type="button" className="wf-ai-action" onClick={runSuggest} disabled={suggesting}>
+              <Sparkles size={13} /> {suggesting ? "Generating…" : "Generate"}
+            </button>
           </div>
-          {suggestMetadataAction && intentOpen ? (
-            <div className="wf-ai-suggest" role="group" aria-label="Suggest name and description">
-              <StudioField className="wf-form-field" label={<><span>What should this workflow do?</span></>}><textarea
-                  autoFocus
-                  aria-label="Workflow intent"
-                  rows={2}
-                  placeholder="e.g. Route incoming support tickets to the right team and notify on SLA breach (optional)"
-                  value={intent}
-                  disabled={suggesting}
-                  onChange={event => setIntent(event.target.value)}
-                  onKeyDown={event => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                      event.preventDefault();
-                      runSuggest();
-                    }
-                  }}
-                /></StudioField>
+          {suggestError ? <p className="wf-ai-suggest-error" role="alert">{suggestError}</p> : null}
+          {suggestion ? (
+            <div className="wf-ai-suggest-preview">
+              {suggestion.name ? <p><strong>{suggestion.name}</strong></p> : null}
+              {suggestion.description ? <p>{suggestion.description}</p> : null}
               <div className="wf-ai-suggest-actions">
-                <button type="button" className="wf-ai-action" onClick={runSuggest} disabled={suggesting}>
-                  <Sparkles size={13} /> {suggesting ? "Generating…" : "Generate"}
-                </button>
+                <button type="button" onClick={() => applySuggestion(suggestion)}>Apply</button>
+                <button type="button" onClick={() => setSuggestion(null)}>Dismiss</button>
               </div>
-              {suggestError ? <p className="wf-ai-suggest-error" role="alert">{suggestError}</p> : null}
-              {suggestion ? (
-                <div className="wf-ai-suggest-preview">
-                  {suggestion.name ? <p><strong>{suggestion.name}</strong></p> : null}
-                  {suggestion.description ? <p>{suggestion.description}</p> : null}
-                  <div className="wf-ai-suggest-actions">
-                    <button type="button" onClick={() => applySuggestion(suggestion)}>Apply</button>
-                    <button type="button" onClick={() => setSuggestion(null)}>Dismiss</button>
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
-          <StudioField className="wf-form-field" label={<><span>Starting point</span></>}><select
-              data-dialog-initial-focus
-              aria-label="Starting point"
-              aria-busy={!templatesSettled}
-              aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
-              value={draft.templateId ?? draft.starter ?? "blank"}
-              disabled={creating}
-              onChange={event => changeStartingPoint(event.target.value)}
-            >
-              {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
-              {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
-            </select>{draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}{catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}</StudioField>
-          <StudioField className="wf-form-field" label={<><span>Display name</span></>}><input
-              aria-label="Display name"
-              value={draft.name}
-              onChange={event => onChange({ ...draft, name: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), name: true } })}
-            /></StudioField>
-          <StudioField className="wf-form-field" label={<><span>Description</span></>}><textarea
-              aria-label="Description"
-              rows={3}
-              value={draft.description}
-              onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
-            /></StudioField>
-          {catalogState === "failed" ? (
-            <div className="wf-alert" id="wf-activity-catalog-error" role="alert">
-              <span>{catalogError || "Couldn't load starting activities."}</span>
-              <button type="button" onClick={onRetryCatalog}>Retry</button>
-            </div>
-          ) : catalogState !== "ready" ? (
-            <p className="wf-muted" id="wf-activity-catalog-loading" role="status">Loading available starting activities…</p>
-          ) : null}
-          {templateError ? <p role="status" className="wf-muted">{templateError}</p> : null}
-          {draft.starter !== "http" && !draft.templateId ? <fieldset className="wf-form-field wf-root-field">
-            <legend>Root activity</legend>
-            <WorkflowRootRadioCards
-              catalog={catalog}
-              value={draft.rootActivityVersionId}
-              availabilityKnown={catalogState === "ready"}
-              onChange={rootActivityVersionId => onChange({ ...draft, rootActivityVersionId })}
-            />
-          </fieldset> : null}
-          {catalogState === "ready" && draft.starter !== "http" && !starterReady ? (
-            <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
-          ) : null}
-          {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
-          <StudioDialogFooter
-            className="wf-dialog-actions"
-            onCancel={onClose}
-            cancelDisabled={creating}
-            confirmLabel={creating ? "Creating..." : submitLabel}
-            confirmDisabled={creating || !draft.name.trim()}
-            confirmProps={{ "aria-disabled": !canCreate, "aria-describedby": createReadinessDescriptionId }}
-          />
-        </form>
-      </section>
-    </div>
+        </div>
+      ) : null}
+      <StudioField className="wf-form-field" label={<><span>Starting point</span></>}><select
+          ref={startingPointRef}
+          aria-label="Starting point"
+          aria-busy={!templatesSettled}
+          aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
+          value={draft.templateId ?? draft.starter ?? "blank"}
+          disabled={creating}
+          onChange={event => changeStartingPoint(event.target.value)}
+        >
+          {builtInWorkflowTemplates.map(template => <option key={template.id} value={template.id} disabled={template.id === "http" && (catalogState !== "ready" || !httpStarterAvailable)}>{template.name}</option>)}
+          {templates.map(({ template, reason }) => <option key={template.id} value={template.id} disabled={!!reason} title={reason}>{template.name}{reason ? " (unavailable)" : ""}</option>)}
+        </select>{draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}{catalogState === "ready" && httpStarterAvailabilityReason ? <small className="wf-muted" id="wf-http-starter-unavailable">{httpStarterAvailabilityReason}</small> : null}</StudioField>
+      <StudioField className="wf-form-field" label={<><span>Display name</span></>}><input
+          aria-label="Display name"
+          value={draft.name}
+          onChange={event => onChange({ ...draft, name: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), name: true } })}
+        /></StudioField>
+      <StudioField className="wf-form-field" label={<><span>Description</span></>}><textarea
+          aria-label="Description"
+          rows={3}
+          value={draft.description}
+          onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
+        /></StudioField>
+      {catalogState === "failed" ? (
+        <div className="wf-alert" id="wf-activity-catalog-error" role="alert">
+          <span>{catalogError || "Couldn't load starting activities."}</span>
+          <button type="button" onClick={onRetryCatalog}>Retry</button>
+        </div>
+      ) : catalogState !== "ready" ? (
+        <p className="wf-muted" id="wf-activity-catalog-loading" role="status">Loading available starting activities…</p>
+      ) : null}
+      {templateError ? <p role="status" className="wf-muted">{templateError}</p> : null}
+      {draft.starter !== "http" && !draft.templateId ? <fieldset className="wf-form-field wf-root-field">
+        <legend>Root activity</legend>
+        <WorkflowRootRadioCards
+          catalog={catalog}
+          value={draft.rootActivityVersionId}
+          availabilityKnown={catalogState === "ready"}
+          onChange={rootActivityVersionId => onChange({ ...draft, rootActivityVersionId })}
+        />
+      </fieldset> : null}
+      {catalogState === "ready" && draft.starter !== "http" && !starterReady ? (
+        <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
+      ) : null}
+      {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
+    </StudioDialog>
   );
 }
