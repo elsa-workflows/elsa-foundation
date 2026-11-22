@@ -41,7 +41,7 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
         </select>
         <p className="wf-muted">{mode === "MatchAny"
           ? "All matching cases run. Their activities can wait independently; the Switch completes after all selected activities finish. Default runs only when no case matches."
-          : mode === "MatchFirst" ? "Cases run in order. The first true condition wins; otherwise Default runs."
+          : mode === "MatchFirst" ? "Cases run in order. The first matching case wins; otherwise Default runs."
             : "Choose a supported match mode before publishing."}</p>
       </> : null}
       {!items.length ? <p className="wf-muted">No {collection.displayName.toLowerCase()} yet.</p> : null}

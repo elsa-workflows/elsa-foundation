@@ -56,12 +56,12 @@ describe("catalog collection slots", () => {
     expect(node.structure!.payload.mode).toBeUndefined();
   });
 
-  it.each(["", " \t\n", "\u0085", "\u2003"])("presents blank mode %j as the supported MatchFirst default", mode => {
+  it.each(["", " \t\n", "\u0085", "\u2003"])("presents legacy blank mode %j as the supported MatchFirst default", mode => {
     const node = empty();
     node.structure!.payload.mode = mode;
     const view = mount(node);
     expect(view.element.querySelector("select")!.value).toBe("MatchFirst");
-    expect(view.element.textContent).toContain("The first true condition wins");
+    expect(view.element.textContent).toContain("The first matching case wins");
     expect(view.element.textContent).not.toContain("Unknown mode");
     expect(view.current().structure!.payload.mode).toBe(mode);
   });
