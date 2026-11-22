@@ -73,7 +73,8 @@ public sealed class Elsa3LiteralConversionTests
         await using var provider = ConversionServices.Create(RealActivityCatalog.CreateWith(typeof(JsonOrderImportActivity).Assembly));
         var registry = provider.GetRequiredService<IWellKnownTypeRegistry>();
         foreach (var type in new[] { typeof(JsonImportOrder), typeof(JsonOrderImportActivity) }) registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
-        var result = await provider.GetRequiredService<IElsa3DefinitionConverter>().ConvertAsync(new(definition));
+        await using var scope = provider.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>().ConvertAsync(new(definition));
         Assert.Equal(!ambiguous, result.Succeeded);
         if (ambiguous) Assert.Contains(result.Diagnostics, note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralKeyAmbiguous);
         else
