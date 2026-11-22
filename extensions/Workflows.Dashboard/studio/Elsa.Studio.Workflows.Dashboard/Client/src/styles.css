@@ -34,7 +34,6 @@
 .workflow-dashboard-metrics [data-tone="danger"] .studio-stat-tile { border-inline-start-color: var(--studio-danger); }
 
 .workflow-dashboard-note,
-.workflow-dashboard-unavailable p,
 .workflow-run-health__scope,
 .workflow-run-health__panel > p,
 .workflow-run-health__panel-heading p,
@@ -43,34 +42,6 @@
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   line-height: 1.45;
-}
-
-.workflow-dashboard-unavailable {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid var(--studio-border);
-  border-inline-start: 3px solid var(--studio-warning);
-  border-radius: var(--studio-radius-md);
-  background: var(--studio-surface-muted);
-  color: var(--studio-text);
-}
-
-.workflow-dashboard-error-details summary {
-  width: fit-content;
-  color: var(--studio-accent);
-  cursor: pointer;
-  font-size: var(--studio-label-size);
-  font-weight: 500;
-  text-underline-offset: 0.15em;
-}
-
-.workflow-dashboard-error-details code {
-  display: inline-block;
-  margin-top: 0.5rem;
-  color: var(--studio-text-muted);
-  font-family: var(--studio-font-mono);
-  font-size: var(--studio-label-size);
 }
 
 .workflow-run-health__scope {
@@ -223,16 +194,6 @@
 
 .workflow-run-health__chart-caption {
   font-size: var(--studio-label-size);
-}
-
-.workflow-run-health__empty {
-  margin: 0;
-  padding: 1rem 0.75rem;
-  border: 1px dashed var(--studio-border);
-  border-radius: var(--studio-radius-sm);
-  color: var(--studio-text-muted);
-  font-size: var(--studio-body-size);
-  line-height: 1.45;
 }
 
 .workflow-run-health__table-scroll {

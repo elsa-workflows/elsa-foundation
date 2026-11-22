@@ -1,7 +1,7 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History as HistoryIcon } from "lucide-react";
-import { StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { actor, basicProvider, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { resolveTaskFieldControl } from "./fieldControls";
 import { TaskStatus } from "./TaskStatus";
@@ -32,7 +32,7 @@ export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi
   return <StudioPage className="user-tasks" aria-label="User task">
     <StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: () => navigate(backPath) }]} current="User task" />
     <StudioPageHeader title="User task" />
-    {identity ? <StudioResultState title="Task access unavailable" description="You do not have permission to view this task." /> : error ? <StudioResultState tone="danger" title="Task unavailable" description={error} actions={<StudioButton onClick={() => setRevision(value => value + 1)}>Retry</StudioButton>} /> : <p role="status">Loading task…</p>}
+    {identity ? <StudioResultState title="Task access unavailable" description="You do not have permission to view this task." /> : error ? <StudioResultState tone="danger" title="Task unavailable" description={error} actions={<StudioButton onClick={() => setRevision(value => value + 1)}>Retry</StudioButton>} /> : <SkeletonRows rows={3} label="Loading task" />}
   </StudioPage>;
 }
 
@@ -135,7 +135,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const frame = (children: React.ReactNode) => <StudioPage className="user-tasks" aria-label={task?.title ?? "Task details"} aria-busy={busy}>{onClose ? <StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: leave, disabled: busy || Boolean(attempt.current) }]} current={task?.title ?? "User task"} /> : null}<div ref={content} className="user-task-detail">{children}</div></StudioPage>;
   const leave = () => { void canLeave().then(allowed => { if (allowed) onClose?.(); }); };
   if (missing) return frame(<><StudioPageHeader title="User task" /><StudioResultState title="Task not found" description="It may no longer be assigned to you or available to your group." /></>);
-  if (!task) return frame(<><StudioPageHeader title="User task" />{notice ? <p role="alert">{notice}</p> : <p role="status">Loading task…</p>}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></>);
+  if (!task) return frame(<><StudioPageHeader title="User task" />{notice ? <p role="alert">{notice}</p> : <SkeletonRows rows={3} label="Loading task" />}<StudioButton onClick={() => void refresh()}>Retry</StudioButton></>);
   const terminal = task.status === "Completed" || task.status === "Cancelled";
   const pending = task.status === "CompletionPending";
   const own = task.assigneeId === identity.userId || task.claimantId === identity.userId;

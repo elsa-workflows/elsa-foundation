@@ -202,7 +202,11 @@ public sealed record CommitBatch(
 }
 
 /// <summary><c>Landed</c> is false when the fence matched nothing. <c>Seqs</c> are those of the inserted messages, in order.</summary>
-public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs);
+public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
+{
+    // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
+    internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
+}
 
 public sealed record CommitWindow(long FromInclusive, long UntilExclusive)
 {

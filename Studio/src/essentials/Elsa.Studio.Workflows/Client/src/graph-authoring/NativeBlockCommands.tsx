@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, ty
 import { createPortal } from "react-dom";
 import { Boxes, ChevronDown } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { AnchoredPopover, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, AnchoredPopover, StudioField } from "@elsa-workflows/studio-ui";
 import { getChildSlots, resolveScope, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
 import { bpmnStructureKind, type BpmnElement } from "../bpmn/bpmnTypes";
 import { useDialogFocus } from "../workflow-editor/useDialogFocus";
@@ -194,8 +194,8 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
   const label = selected && props.context.document.activityPresentation.find(item => item.nodeId === selected.nodeId)?.displayName;
   const childCount = selected ? getChildSlots(selected, props.context.catalog).reduce((sum, slot) => sum + slot.activities.length, 0) : 0;
   const commandGroup = <div className="wf-block-commands" role="group" aria-label="Named block commands">
-    {canStartEditing ? <button type="button" disabled={authority?.startingEditing} onClick={() => authority?.startEditing?.()}>{authority?.startingEditing ? "Starting…" : "Start editing"}</button> : null}
-    <button ref={commandsTriggerRef} type="button" className="wf-block-menu-trigger" title="Named block commands"
+    {canStartEditing ? <StudioButton type="button" disabled={authority?.startingEditing} onClick={() => authority?.startEditing?.()}>{authority?.startingEditing ? "Starting…" : "Start editing"}</StudioButton> : null}
+    <StudioButton ref={commandsTriggerRef} type="button" className="wf-block-menu-trigger" title="Named block commands"
       aria-haspopup="menu" aria-expanded={commandsOpen} aria-controls={commandsOpen ? commandsMenuId : undefined}
       onClick={() => { commandsOpenAtEndRef.current = false; if (commandsOpen) closeCommands(); else setCommandsOpen(true); }}
       onKeyDown={event => {
@@ -206,7 +206,7 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
         }
       }}>
       <Boxes size={15} aria-hidden="true" /><span>Blocks</span><ChevronDown size={14} aria-hidden="true" />
-    </button>
+    </StudioButton>
     {bpmnScope && props.endpoint ? <Suspense fallback={<span role="status">Loading BPMN interchange…</span>}><BpmnInterchangeCommands {...props} endpoint={props.endpoint} /></Suspense> : null}
   </div>;
   return <>
@@ -215,18 +215,18 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
       onDismiss={() => closeCommands(false)} onPositioned={focusInitialCommand}>
       <div ref={commandsMenuRef} id={commandsMenuId} className="wf-block-menu" role="menu" aria-label="Block commands" onKeyDown={handleCommandsMenuKeyDown}>
         <div role="group" aria-label="Create and organize blocks">
-          {bpmnScope ? <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("bpmn")}>Create BPMN subprocess</button> : <>
-            <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("sequence")}>Create Sequence block</button>
-            <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("flowchart")}>Create Flowchart block</button>
+          {bpmnScope ? <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("bpmn")}>Create BPMN subprocess</StudioButton> : <>
+            <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("sequence")}>Create Sequence block</StudioButton>
+            <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported} onClick={() => beginFromMenu("flowchart")}>Create Flowchart block</StudioButton>
           </>}
-          <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => beginFromMenu("extract")}>Extract block…</button>
-          <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => beginFromMenu("ungroup")}>Ungroup…</button>
+          <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !props.selectedNodeIds.length} onClick={() => beginFromMenu("extract")}>Extract block…</StudioButton>
+          <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || !supported || !isBlock} onClick={() => beginFromMenu("ungroup")}>Ungroup…</StudioButton>
         </div>
         {isBlock && selected ? <div role="group" aria-label="Selected block">
-          <button type="button" role="menuitem" tabIndex={-1} onClick={() => { closeCommands(); props.open(selected.nodeId); }}>Open {label || "block"} ({childCount} steps)</button>
-          {promotion ? <button type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || promotion.capabilitiesState !== "ready"}
+          <StudioButton type="button" role="menuitem" tabIndex={-1} onClick={() => { closeCommands(); props.open(selected.nodeId); }}>Open {label || "block"} ({childCount} steps)</StudioButton>
+          {promotion ? <StudioButton type="button" role="menuitem" tabIndex={-1} disabled={!props.context.canEdit || promotion.capabilitiesState !== "ready"}
             aria-describedby={promotionUnavailable ? promotionReasonId : undefined}
-            onClick={() => { closeCommands(); setPromotionStatus(null); setPromoting(selected.nodeId); }}>Promote to reusable activity…</button> : null}
+            onClick={() => { closeCommands(); setPromotionStatus(null); setPromoting(selected.nodeId); }}>Promote to reusable activity…</StudioButton> : null}
         </div> : null}
         {(unavailable && !authority?.startingEditing) || promotionUnavailable ? <div className="wf-block-menu-notes">
           {unavailable && !authority?.startingEditing ? <p className="wf-muted wf-block-menu-note">{unavailable}</p> : null}
@@ -260,7 +260,7 @@ export function NativeBlockCommands(props: NativeBlockCommandProps) {
           {changes.removedElements.length || changes.addedElements.length ? <details open><summary>Change BPMN elements</summary><ul>{changes.removedElements.map((label, index) => <li key={`old-${index}`}>Remove: {label}</li>)}{changes.addedElements.map((label, index) => <li key={`new-${index}`}>Add: {label}</li>)}</ul></details> : null}
           {changes.removedConnections.length || changes.addedConnections.length ? <details open><summary>Rewire connections</summary><ul>{changes.removedConnections.map((label, index) => <li key={`old-${index}`}>Remove: {label}</li>)}{changes.addedConnections.map((label, index) => <li key={`new-${index}`}>Add: {label}</li>)}</ul></details> : null}
         </> : null}<details><summary>Current graph, layout and names</summary><pre>{JSON.stringify(nativeBlockPlannerContext(props.context, props.createPosition).document, null, 2)}</pre></details><details><summary>Complete proposed graph, connections, bindings, layout and names</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></div> : null}
-      <div className="wf-block-dialog-actions"><button type="button" disabled={committing} onClick={close}>Cancel</button><button ref={previewButton} type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : retryValidation ? "Retry validation" : "Preview change"}</button><button type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</button></div>
+      <div className="wf-block-dialog-actions"><StudioButton type="button" disabled={committing} onClick={close}>Cancel</StudioButton><StudioButton ref={previewButton} type="button" disabled={busy || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : retryValidation ? "Retry validation" : "Preview change"}</StudioButton><StudioButton type="button" disabled={busy || !plan || !!stale || !props.context.canEdit} onClick={() => void apply()}>Apply change</StudioButton></div>
     </NativeBlockDialog> : null}
   </>;
 }

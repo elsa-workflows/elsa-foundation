@@ -185,7 +185,7 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   }
 
   return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" headingLevel={2} description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
-    actions={<StudioButton onClick={() => void refresh()} disabled={Boolean(busy || loadingUsers || reauthenticate)}>Refresh user access</StudioButton>} />
+    refresh={{ id: "user-access", label: "Refresh user access", onRefresh: refresh, refreshing: loadingUsers, disabled: Boolean(busy || reauthenticate), autoRefresh: !selected && !dirty && !needsRefresh }} />
     {directoryError ? <StudioAlert tone="danger">{directoryError}</StudioAlert> : null}
     {error ? <StudioAlert tone="danger" ref={feedback.errorRef} tabIndex={-1}>{error}{needsRefresh ? " Refresh user access before another change." : ""}</StudioAlert> : null}
     {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
