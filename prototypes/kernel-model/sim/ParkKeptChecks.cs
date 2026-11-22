@@ -21,11 +21,19 @@ internal static class ParkKeptChecks
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         await Pump(owner);
 
-        await edge.SendAsync(scope, target, "older", "update", options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await edge.SendAsync(scope, target, "older", "update", "ordinary input to remove",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
         await Pump(owner);
         var row = store.Instances.Values.Single();
         var ordinary = store.Messages.Values.Single(message => message.Message.Id == "older");
-        check(ordinary is { Done: true, KeptBy: null } && row.State == "saved", "ordinary done input has no Park disposition");
+        check(ordinary is { Done: true, KeptBy: null, Message.Payload: null } && row.State == "saved",
+            "ordinary done input retains its receipt without its payload");
+        var offers = actor.Offers;
+        var sameId = await edge.SendAsync(scope, target, "older", "update", "different payload",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await Pump(owner);
+        check(sameId.Outcome == Contract.AdmissionOutcome.Duplicate && sameId.Actor == target.Actor && actor.Offers == offers,
+            "a payload-free outside marker preserves duplicate admission without another actor turn");
 
         var poison = new Message("twin", new(row.Id), "poison", "private payload", TargetCreation: row.Creation).AsIssued();
         var twin = new Message("twin", new(row.Id), "update", "ordinary payload", TargetCreation: row.Creation, KeepUntil: now + 2);
