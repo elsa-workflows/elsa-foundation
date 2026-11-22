@@ -174,7 +174,7 @@ for (const theme of ["light", "dark"]) {
     await node.click();
     const inspector = page.getByLabel("Inspector panel", { exact: true });
     await expect(inspector.getByRole("tab", { name: "Run data", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(inspector.getByText("Choose a recorded execution to inspect its evidence.")).toBeVisible();
+    await expect(inspector.getByText("Choose a recorded execution to inspect its run data.")).toBeVisible();
     await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
     await inspector.getByRole("tablist", { name: "Activity execution details" }).getByRole("tab", { name: "Inputs", exact: true }).click();

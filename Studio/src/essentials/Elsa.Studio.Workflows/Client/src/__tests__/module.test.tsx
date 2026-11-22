@@ -175,7 +175,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", placement: "build", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
-      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined })
     ]);
     expect(api.routes.list()).toEqual([
@@ -193,7 +193,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
       expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
-      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics" })
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
     ]);
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
@@ -699,7 +699,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "No workflows in the Recycle bin");
     expect(container.textContent).toContain("Deleted workflows you can restore will appear here.");
-    expect(buttonByText(container, "Create workflow")).toBeNull();
+    expect(buttonByText(container, "New workflow")).toBeNull();
 
     await unmount();
   });
@@ -1428,10 +1428,10 @@ describe("workflows module", () => {
       expect(unavailableRun.disabled).toBe(true);
       expect(unavailableRun.title).toContain("No live published reference");
 
-      await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
+      await click(buttonByLabel(container, "Copy executable ID artifact-current"));
       expect(writeText).toHaveBeenCalledWith("artifact-current");
-      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied artifact ID" }));
-      expect(container.textContent).not.toContain("Copied artifact ID");
+      expect(getNotifications().notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: "Copied executable ID" }));
+      expect(container.textContent).not.toContain("Copied executable ID");
 
       await click(buttonByLabel(container, "Run executable artifact-current"));
       await waitForText(container, "Provide the workflow inputs for this run.");
@@ -2114,8 +2114,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create workflow"));
-    await waitForText(document.body, "Create Workflow");
+    await click(buttonByText(container, "New workflow"));
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
     expect(rootCards).toHaveLength(3);
     expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence", "BPMN"]);
@@ -2184,8 +2184,8 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute();
 
     await waitForText(container, "Hello World");
-    await click(buttonByText(container, "Create workflow"));
-    await waitForText(document.body, "Create Workflow");
+    await click(buttonByText(container, "New workflow"));
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     await fill(inputByLabel(dialog(container), "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
 
@@ -2612,7 +2612,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("sha256:abc");
     expect(container.textContent).toContain("Resume targets");
     await vi.waitFor(() => expect(container.querySelector("h2")?.textContent).toBe("Hello World · 2.0.0"));
-    expect(container.querySelector('[aria-label="Copy Artifact ID"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Copy Executable ID"]')).toBeTruthy();
     expect(container.querySelector(".wf-executable-toolbar h2")?.textContent).toBe("Hello World · 2.0.0");
     expect(container.querySelector(".wf-executable-canvas > header")).toBeNull();
     await waitForText(container, "Hello World");
@@ -2622,10 +2622,10 @@ describe("workflows module", () => {
     expect(inspector?.textContent).not.toContain("Elsa.Activities.Sequence.Activities.Sequence");
     const identityTerms = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].map(dt => dt.textContent);
     expect(identityTerms).toEqual(expect.arrayContaining([
-      "Artifact ID", "Artifact hash", "Root activity", "Nodes", "Resume targets", "Created", "Kind", "Scope",
+      "Executable ID", "Executable hash", "Root activity", "Nodes", "Resume targets", "Created", "Kind", "Scope",
       "Layout source", "Definition ID", "Definition version ID"
     ]));
-    for (const label of ["Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"]) {
+    for (const label of ["Executable ID", "Executable hash", "Definition ID", "Definition version ID"]) {
       const term = [...inspector?.querySelectorAll(".wf-instance-meta dt") ?? []].find(dt => dt.textContent === label);
       const value = term?.nextElementSibling as HTMLElement | null;
       const identifier = value?.querySelector(".studio-copyable-identifier");
@@ -2778,11 +2778,11 @@ describe("workflows module", () => {
       "artifact-1", "sha256:abc", "definition-1", "version-2"
     ]);
     expect(copyableValues.map(row => row.querySelector("button")?.getAttribute("aria-label"))).toEqual([
-      "Copy Artifact ID", "Copy Artifact hash", "Copy Definition ID", "Copy Definition version ID"
+      "Copy Executable ID", "Copy Executable hash", "Copy Definition ID", "Copy Definition version ID"
     ]);
     expect(copyableValues.every(row => row.querySelector(".studio-copyable-identifier__label") === null)).toBe(true);
     expect([...inspector.querySelectorAll(".wf-instance-meta dt")].map(dt => dt.textContent)).toEqual(expect.arrayContaining([
-      "Artifact ID", "Artifact hash", "Definition ID", "Definition version ID"
+      "Executable ID", "Executable hash", "Definition ID", "Definition version ID"
     ]));
 
     await click(buttonByText(container, "References (2)"));
@@ -3261,10 +3261,10 @@ describe("workflows module", () => {
 
     try {
       await waitForText(container, "artifact-1");
-      await click(buttonByLabel(container, "Copy Artifact ID"));
+      await click(buttonByLabel(container, "Copy Executable ID"));
 
       expect(writeText).toHaveBeenCalledWith("artifact-1");
-      expect(container.textContent).toMatch(/Artifact ID copied/i);
+      expect(container.textContent).toMatch(/Executable ID copied/i);
     } finally {
       await unmount();
       if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
@@ -4082,7 +4082,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("copies incidents and hides normal root runtime evidence from the issues tab", async () => {
+  it("copies incidents and hides normal root run data from the issues tab", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -4151,7 +4151,7 @@ describe("workflows module", () => {
 
       expect(container.textContent).toContain("InputMaterializationFailed");
       expect(container.textContent).toContain("Input 'Collection' failed to evaluate");
-      expect(container.textContent).not.toContain("Unmatched runtime evidence");
+      expect(container.textContent).not.toContain("Unmatched run data");
 
       await click(buttonByLabel(container, "Copy incident InputMaterializationFailed"));
 
@@ -4611,7 +4611,7 @@ describe("workflows module", () => {
     expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/placement/bulk") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
 
     resolveMove?.(new Response(null, { status: 204 }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
       level: "success",
       title: "Moved 2 workflow definitions",
@@ -4848,10 +4848,10 @@ describe("workflows module", () => {
     await click(container.querySelector<HTMLButtonElement>(".wf-folder-breadcrumb button"));
     await waitForText(container, "All workflow");
     await click(buttonByText(container, "Folders"));
-    await vi.waitFor(() => expect(container.querySelector(".wf-folder-drawer [role='tree']")).not.toBeNull());
-    expect(container.querySelector(".wf-folder-drawer button[aria-label='Create folder']")).not.toBeNull();
-    await click(container.querySelector(".wf-folder-drawer button[aria-label='Close folder picker']"));
-    expect(container.querySelector(".wf-folder-drawer")).toBeNull();
+    await vi.waitFor(() => expect(document.querySelector(".wf-folder-picker-dialog [role='tree']")).not.toBeNull());
+    expect(document.querySelector(".wf-folder-picker-dialog button[aria-label='Create folder']")).not.toBeNull();
+    await click(document.querySelector(".wf-folder-picker-dialog button[aria-label='Close folder picker']"));
+    expect(document.querySelector(".wf-folder-picker-dialog")).toBeNull();
     await unmount();
   });
 
@@ -4878,8 +4878,8 @@ describe("workflows module", () => {
     await click(buttonByLabel(container, "Create folder"));
     await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
-    await click(buttonByText(container, "Create workflow"));
-    await waitForText(document.body, "Create Workflow");
+    await click(buttonByText(container, "New workflow"));
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     await fill(inputByLabel(dialog(container), "Display name"), "Placed workflow");
     await click(buttonByText(dialog(container), "Create"));
     await vi.waitFor(() => expect(definitionPost).toMatchObject({ name: "Placed workflow", folderId: "folder-root" }));
@@ -5261,7 +5261,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Rename"));
 
     await vi.waitFor(() => expect(renameRequest).toEqual({ name: "Platform operations" }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform operations"));
     expect(document.activeElement).toBe(rename);
@@ -5414,7 +5414,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Move"));
 
     await vi.waitFor(() => expect(moveRequest).toEqual({ parentId: "folder-destination" }));
-    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform"));
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
     expect(document.activeElement).toBe(move);
@@ -5728,8 +5728,8 @@ async function openCreateDialogWithSuggest() {
   });
 
   await waitForText(rendered.container, "Hello World");
-  await click(buttonByText(rendered.container, "Create workflow"));
-  await waitForText(document.body, "Create Workflow");
+  await click(buttonByText(rendered.container, "New workflow"));
+  await vi.waitFor(() => expect(dialog(rendered.container).querySelector("h2")?.textContent).toBe("New workflow"));
   // The button reveals the intent field rather than firing a context-free prompt.
   await click(buttonByText(dialog(rendered.container), "Suggest name and description"));
 
@@ -6391,14 +6391,13 @@ function selectByLabel(container: HTMLElement, label: string) {
 }
 
 function dialog(container: HTMLElement) {
-  const element = container.querySelector<HTMLElement>(".wf-dialog") ?? document.querySelector<HTMLElement>('form[role="dialog"]');
+  const element = container.querySelector<HTMLElement>(".wf-dialog") ?? document.querySelector<HTMLElement>('[role="dialog"]');
   if (!element) throw new Error("Dialog not found");
   return element;
 }
 
 async function waitForDialog(container: HTMLElement) {
-  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
-  return dialog(container);
+  return vi.waitFor(() => dialog(container));
 }
 
 async function waitForEnabledButton(container: HTMLElement, text: string) {

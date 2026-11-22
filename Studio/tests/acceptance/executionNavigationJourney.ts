@@ -158,7 +158,7 @@ export async function executionNavigationJourney(page: Page, info: TestInfo, cap
   const collapse = page.getByRole("button", { name: "Collapse activities panel", exact: true });
   if (await collapse.isVisible()) await collapse.click();
   // Phone panels are alternative workspaces. Return to the canvas before selecting a step;
-  // selecting the running step must reopen its Inspector with the exact execution evidence.
+  // selecting the running step must reopen its Inspector with the exact run data.
   if ((page.viewportSize()?.width ?? 1000) <= 600) {
     const collapseInspector = page.getByRole("button", { name: "Collapse inspector panel", exact: true });
     if (await collapseInspector.isVisible()) await collapseInspector.click();

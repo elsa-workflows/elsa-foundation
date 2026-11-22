@@ -16,6 +16,9 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal bool FoundationNullState { get; init; }
     internal (string Tenant, InboxKey Creator)? FoundationInlineBirth { get; init; }
     internal FoundationHeaderChange? FoundationInlineHeader { get; init; }
+    internal long ParkResolutionGeneration { get; init; }
+    internal ParkDiscardDrain? ParkDiscard { get; init; }
+    internal bool ParkDiscarded { get; init; }
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
         ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };
@@ -119,6 +122,8 @@ public sealed record OwnedEpoch(int Partition, long Epoch);
 /// </summary>
 public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster Cluster);
 
+internal enum ParkKeepReason { Consumed, Arrived }
+
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
@@ -139,6 +144,8 @@ public sealed record TurnCommit(
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }
+    internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
+    internal ParkPageClear? FoundationParkClear { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

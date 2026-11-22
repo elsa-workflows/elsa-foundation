@@ -45,18 +45,24 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
-        return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
+        return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        (delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null) &&
-        store.FoundationTurnHeader(row).Park is null;
+        store.FoundationTurnHeader(row).Park is not null
+            ? !delivery.Message.IsControl
+            : delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+
+    private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
-            delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null);
+            delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || IsParked(row)));
+
+    private bool IsParked(Durable.InstanceRow? row) => row is { Status: Durable.InstanceStatus.Faulted } &&
+        store.FoundationTurnHeader(row).Park is not null;
 
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
@@ -64,11 +70,31 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (message.Kind == Durable.Kinds.Drain)
+            return ContinueDiscard(input);
+        if (input.Row is { ParkDiscard: not null } draining)
+            return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "ResolutionOpen");
+        if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
+            return OpenDiscard(input);
+        if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)
+            return Durable.CreationProtocol.Refuse(input.Actor, discarded, input.Taken, "Ended");
+        var parked = IsParked(input.Row);
+        if (parked && CapturesParkArrival(delivery) &&
+            input.Taken.All(item => item.Attempts < input.MaxAttempts || item.Message.Kind == Durable.Kinds.JobFinished))
+        {
+            var checkpoint = input.Row!;
+            var revision = checked(checkpoint.Revision + 1);
+            return new(input.Actor)
+            {
+                Expected = checkpoint.Revision, Row = checkpoint with { Revision = revision }, Revision = revision, Status = checkpoint.Status,
+                Consumed = [.. input.Taken], FoundationKeep = Durable.ParkKeepReason.Arrived
+            };
+        }
         if (message.Kind == Durable.Kinds.JobDeadline)
             return TimeoutJob(input, message);
-        if (delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null && input.Row is { } completedRow &&
+        if (delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || parked) && input.Row is { } completedRow &&
             delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
-            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), ticket.Timer, cancel: false);
+            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), ticket.Timer, cancel: false, keepCheckpoint: parked);
         if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
@@ -128,7 +154,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     private Durable.TurnOutcome SettleJob(Durable.TurnInput input, Durable.InstanceRow row, Durable.JobFinished result,
-        string? timer, bool cancel)
+        string? timer, bool cancel, bool keepCheckpoint = false)
     {
         var turn = new Durable.DurableTurn(input);
         if (cancel) turn.CancelJob(result.Key);
@@ -139,7 +165,14 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var checkpoint = row with { Revision = turn.Revision };
         var outcome = turn.Outcome(row.Status);
         outcome.FoundationHeader = row.FoundationInlineHeader;
-        return turn.Seal(outcome, checkpoint, input.State, PendingJournal(input.Pending));
+        turn.Seal(outcome, checkpoint, input.State, PendingJournal(input.Pending));
+        if (keepCheckpoint)
+        {
+            // A parked job's conversion only replaces its counted ticket. A later Park arrival consumes the result.
+            outcome.Row = null;
+            outcome.Expected = null;
+        }
+        return outcome;
     }
 
     private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
@@ -233,6 +266,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
+        if (running || row is not null && store.FoundationTurnHeader(row).Park is not null)
+            result.FoundationKeep = Durable.ParkKeepReason.Consumed;
         result.Journal = pending is List<object> entries
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });

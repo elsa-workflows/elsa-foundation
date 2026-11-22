@@ -117,6 +117,16 @@ test("a workflow keeps its identity while tags, saved views and favorites organi
   const write = observations.find(request => request.method === "PUT" && request.url.includes("organization/collect-payment"));
   expect(write?.body).toMatchObject({ revision: "1", tags: [{ tagId: "team", valueId: "value-billing" }, { tagId: "critical" }] });
   expect(observations.some(request => /draft|version|publish/.test(request.url))).toBe(false);
+
+  await page.getByRole("link", { name: "Manage views", exact: true }).click();
+  await page.getByRole("row").filter({ hasText: "Critical workflows" }).getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit view" });
+  const name = edit.getByRole("textbox", { name: "View name" });
+  await expect(name).toBeFocused();
+  await name.fill("Priority workflows");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Priority workflows", exact: true })).toBeVisible();
 });
 
 test("Saved views identify Definitions as their parent", async ({ page }) => {
@@ -258,7 +268,8 @@ test("the independent move dialog contains Tab and Shift+Tab", async ({ page }) 
   await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
   await page.getByRole("menuitem", { name: "Move to folder…", exact: true }).click();
   const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
-  const first = move.getByRole("radio", { name: "Unfiled", exact: true });
+  await expect(move.getByRole("radio", { name: "Unfiled", exact: true })).toBeFocused();
+  const first = move.getByRole("button", { name: "Close dialog", exact: true });
   const last = move.getByRole("button", { name: "Move", exact: true });
   await last.focus();
   await page.keyboard.press("Tab");
@@ -319,14 +330,14 @@ test("Escape cancels a row move without opening a second dialog", async ({ page 
 test("catalog management creates controlled values and retires their stable tag identity", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("link", { name: "Manage tags", exact: true }).click();
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await page.getByRole("button", { name: "New tag", exact: true }).click();
   const dialog = page.locator(".wf-tag-page");
   await dialog.getByRole("textbox", { name: "Tag name", exact: true }).fill("Region");
   await dialog.getByRole("combobox", { name: "Tag kind" }).selectOption("controlled");
   await dialog.getByRole("combobox", { name: "Tag cardinality" }).selectOption("multiple");
   await dialog.getByRole("button", { name: "Add controlled value" }).click();
   await dialog.getByRole("textbox", { name: "Value name 1" }).fill("Europe");
-  await dialog.getByRole("button", { name: "Create tag", exact: true }).click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Tag kind" })).toBeDisabled();
   const retirement = dialog.getByRole("checkbox", { name: "Retire this tag" });

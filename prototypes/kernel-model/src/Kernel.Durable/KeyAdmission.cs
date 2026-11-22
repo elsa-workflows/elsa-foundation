@@ -26,7 +26,8 @@ public sealed record KeyRequest(string Key, string Operation, string Kind, strin
         if (string.IsNullOrEmpty(Key) || string.IsNullOrEmpty(Operation) || string.IsNullOrEmpty(Kind) ||
             Creates != (Kind == Kinds.Start) || (Creates ? KeepForMillis <= 0 : KeepForMillis != 0))
             throw new ArgumentException("A keyed start needs a start spec and positive reuse window; a command needs its kind.");
-        if (Kind is Kinds.Job or Kinds.JobFinished or Kinds.Meet or Kinds.Publish or Kinds.Event or "child-finished")
+        Kinds.RequireApplicationSend(Kind);
+        if (Kind is Kinds.JobFinished or Kinds.Event or "child-finished")
             throw new ArgumentException("Internal deliveries cannot be admitted as keyed commands.");
         if (Start is { } spec && (spec.Parent is not null || spec.ParentCreation != 0 || spec.Creation is not null))
             throw new ArgumentException("Key admission owns root creation authority.");

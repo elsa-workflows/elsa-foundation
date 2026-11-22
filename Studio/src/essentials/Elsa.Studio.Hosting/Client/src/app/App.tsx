@@ -1,3 +1,4 @@
+import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
 import { StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -749,6 +750,7 @@ export function ShellFrame({
     return () => media.removeEventListener("change", update);
   }, []);
   const [groupChoices, setGroupChoices] = useState(() => readNavigationGroups());
+  const [breadcrumbTarget, setBreadcrumbTarget] = useState<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLElement>(null);
   useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
@@ -967,6 +969,7 @@ export function ShellFrame({
       <div className="main-frame">
         <header ref={topbarRef} className="topbar">
           <div>
+            <div ref={setBreadcrumbTarget} className="studio-shell-breadcrumb-outlet" />
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>
           </div>
@@ -984,7 +987,9 @@ export function ShellFrame({
           </div>
         </header>
         {tabStrip}
-        <main className="content" ref={contentRef}>{children}</main>
+        <main className="content" ref={contentRef}>
+          <StudioShellBreadcrumbTarget.Provider value={breadcrumbTarget}>{children}</StudioShellBreadcrumbTarget.Provider>
+        </main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {toastHost}

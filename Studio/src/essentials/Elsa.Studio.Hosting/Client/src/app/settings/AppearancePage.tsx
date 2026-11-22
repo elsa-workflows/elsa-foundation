@@ -184,7 +184,7 @@ export function AppearancePage({
               onNavigate(themeBuilderHref);
             }}
           >
-            Open Theme Builder
+            Open Theme builder
           </a>
         ) : null}
       </footer>

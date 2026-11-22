@@ -132,12 +132,12 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "build", parentId: "workflows", order: 20 },
         { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "build", parentId: "library", order: 20 },
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "build", parentId: "library", order: 25 },
-        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
+        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
         { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "authoring", order: 50 }
       ]
     },
     routes: [
-      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "Create workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
+      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "New workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
         id: `workflows-tags-${view}`,
         requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],
         path, label,
@@ -170,14 +170,14 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/upgrades",
-        label: "Activity Definition upgrades",
+        label: "Activity definition upgrades",
         workspace: workspaceResource("activity-upgrade-plan", "plan"),
-        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
+        component: ({ navigate }) => deferred("Activity definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions",
-        label: "Activity Definitions",
+        label: "Activity definitions",
         workspace: activityDefinitionWorkspace,
         component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
       },
@@ -221,8 +221,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}],
         path: "/workflows/runtime-diagnostics",
-        label: "Runtime evidence settings",
-        component: () => deferred("Runtime evidence settings", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
+        label: "Runtime diagnostics",
+        component: () => deferred("Runtime diagnostics", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
       }
     ]
   });

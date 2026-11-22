@@ -100,7 +100,7 @@ test.describe("customizable Home", () => {
     await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create a workflow" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "New workflow" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Needs attention" })).toHaveAttribute("href", /\/workflows\/instances\?.*incidentHealth=active/);
     await expect(page.getByRole("link", { name: "Open the designer" })).toBeVisible();
@@ -138,7 +138,7 @@ test.describe("customizable Home", () => {
         await page.setViewportSize(viewport);
         await page.goto(`/?mode=home&theme=${theme}`);
         await expect(page.getByRole("heading", { name: "Workflow tasks" })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "New workflow" })).toBeVisible();
         await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
         await expect(page.getByRole("link", { name: "Needs attention" })).toBeVisible();
         await expect(page.locator(".dashboard-grid")).toBeVisible();
@@ -158,7 +158,7 @@ test.describe("customizable Home", () => {
   test("gates only Needs attention by authenticated runtime read and preserves design actions", async ({ page }) => {
     await page.goto("/?mode=home&runtimeAccess=denied&drafts=multiple&keep=one#home-anchor");
     const tasks = page.getByRole("region", { name: "Workflow tasks" });
-    await expect(tasks.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(tasks.getByRole("link", { name: "New workflow" })).toBeVisible();
     await expect(tasks.getByRole("link", { name: "Needs attention" })).toHaveCount(0);
     await expect(tasks.locator(".home-task-card[aria-disabled='true']")).toContainText("Requires access to read workflow runs.");
     const continueButton = tasks.getByRole("button", { name: /Continue editing/ });
@@ -186,7 +186,7 @@ test.describe("customizable Home", () => {
 
   test("navigates Create once and keeps Browse as the ordinary definitions route", async ({ page }) => {
     await page.goto("/?mode=home&keep=one#home-anchor");
-    await page.getByRole("link", { name: "Create workflow" }).click();
+    await page.getByRole("link", { name: "New workflow" }).click();
 
     let location = new URL(page.url());
     expect(location.pathname).toBe("/workflows/definitions");

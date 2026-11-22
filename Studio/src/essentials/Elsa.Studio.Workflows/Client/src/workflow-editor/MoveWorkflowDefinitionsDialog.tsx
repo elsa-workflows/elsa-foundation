@@ -1,10 +1,9 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { StudioAlert, StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { moveWorkflowDefinitions } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
-import { useDialogFocus } from "./useDialogFocus";
 import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
 export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose, onMoved }: {
@@ -13,8 +12,7 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
   onClose(): void;
   onMoved(folderId: string | null): Promise<void> | void;
 }) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
+  const initialFocusRef = useRef<HTMLInputElement>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [destinationId, setDestinationId] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
@@ -24,7 +22,6 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
     unavailableMessage: "Workflow folders are not available for this server."
   });
 
-  useDialogFocus(dialogRef, moving ? null : onClose);
 
   useEffect(() => {
     void loadPage();
@@ -100,39 +97,38 @@ export function MoveWorkflowDefinitionsDialog({ context, definitionIds, onClose,
     </div>;
   };
 
-  return <div className="wf-dialog-backdrop" role="presentation">
-    <section ref={dialogRef} className="wf-dialog wf-move-definitions-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-      <form onSubmit={submit}>
-        <div className="wf-dialog-heading">
-          <div>
-            <h3 id={titleId}>Move workflow definitions</h3>
-            <p>Choose where to place {definitionIds.length === 1 ? "the selected workflow definition" : `${definitionIds.length} selected workflow definitions`}.</p>
+  return <StudioDialog
+    open
+    title="Move workflow definitions"
+    description={<>Choose where to place {definitionIds.length === 1 ? "the selected workflow definition" : `${definitionIds.length} selected workflow definitions`}.</>}
+    className="wf-tokens"
+    onClose={onClose}
+    initialFocusRef={initialFocusRef}
+    dismissDisabled={moving}
+    dismissOnOutsideClick={false}
+    onSubmit={submit}
+    footer={<StudioDialogFooter
+      onCancel={onClose}
+      cancelDisabled={moving}
+      confirmLabel={moving ? "Moving…" : "Move"}
+      confirmDisabled={moving}
+    />}
+  >
+    <div className="wf-move-dialog-content">
+      {moveError ? <StudioAlert tone="danger">{moveError}</StudioAlert> : null}
+      <fieldset className="wf-move-destination" disabled={moving}>
+        <legend>Destination</legend>
+        <div className="wf-move-folder-list" aria-label="Workflow folder destinations">
+          <div className="wf-move-folder-node">
+            <label className="wf-move-folder-row">
+              <input ref={initialFocusRef} type="radio" name="workflow-folder-destination" data-destination="unfiled" checked={destinationId === null} onChange={() => setDestinationId(null)} />
+              Unfiled
+            </label>
           </div>
+          {roots.map(folder => renderFolder(folder))}
+          {renderPageControls()}
         </div>
-        <div className="wf-move-dialog-content">
-          {moveError ? <p className="wf-dialog-error" role="alert">{moveError}</p> : null}
-          <fieldset className="wf-move-destination" disabled={moving}>
-            <legend>Destination</legend>
-            <div className="wf-move-folder-list" aria-label="Workflow folder destinations">
-              <div className="wf-move-folder-node">
-                <label className="wf-move-folder-row">
-                  <input type="radio" name="workflow-folder-destination" data-destination="unfiled" checked={destinationId === null} onChange={() => setDestinationId(null)} />
-                  Unfiled
-                </label>
-              </div>
-              {roots.map(folder => renderFolder(folder))}
-              {renderPageControls()}
-            </div>
-          </fieldset>
-        </div>
-        <StudioDialogFooter
-          className="wf-dialog-actions"
-          onCancel={onClose}
-          cancelDisabled={moving}
-          confirmLabel={moving ? "Moving…" : "Move"}
-          confirmDisabled={moving}
-        />
-      </form>
-    </section>
-  </div>;
+      </fieldset>
+    </div>
+  </StudioDialog>;
 }

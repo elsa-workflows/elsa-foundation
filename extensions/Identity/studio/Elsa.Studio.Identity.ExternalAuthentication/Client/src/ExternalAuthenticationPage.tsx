@@ -206,7 +206,7 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
   }
   async function save(document: ConnectionDocument) {
     if (!visible) return;
-    await change({ change: creating ? connectionChanges.create : connectionChanges.update, expectedRevision: visible.revision, record: document }, creating ? "Save draft" : "Save changes");
+    await change({ change: creating ? connectionChanges.create : connectionChanges.update, expectedRevision: visible.revision, record: document }, "Save");
   }
   async function testConnection() {
     if (!selected || !visible || dirty || needsRefresh || loading || busyRef.current) return;

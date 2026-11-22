@@ -3,7 +3,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 /** Records live only in the runner-owned disposable Workbench store, which is removed at teardown. */
 export async function activityDefinitionTitleJourney(page: Page, info: TestInfo, capture: (page: Page, info: TestInfo, name: string) => Promise<void>) {
   await page.goto("/workflows/activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   const name = `Activity identity ${info.project.name} ${Date.now()}`;
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(name);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
@@ -12,7 +12,7 @@ export async function activityDefinitionTitleJourney(page: Page, info: TestInfo,
     await provider.selectOption((await graph.first().getAttribute("value"))!);
   }
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
-  await page.getByRole("button", { name: "Create definition", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   const title = page.locator("#activity-draft-title");
   const tab = page.locator('.studio-workspace-tab-button[aria-selected="true"] .studio-workspace-tab-title');
   await expect(title).toHaveText(name);

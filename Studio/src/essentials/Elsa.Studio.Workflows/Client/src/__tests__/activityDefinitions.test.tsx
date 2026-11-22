@@ -73,10 +73,10 @@ describe("Activity Definitions experience", () => {
       navigateToStudioPath
     );
     await waitForText(rendered.container, "No designed activities yet");
-    const createActivity = buttonByText(rendered.container, "Create activity");
-    expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("Create activity");
+    const createActivity = buttonByText(rendered.container, "New activity definition");
+    expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("New activity definition");
     click(createActivity);
-    await waitForText(rendered.container, "Create Activity Definition");
+    await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
     click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!);
     expect(buttonByText(rendered.container, "Browse built-in activities")).toBeTruthy();
 
@@ -171,6 +171,7 @@ describe("Activity Definitions experience", () => {
     const search = rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!;
     change(search, "invoice");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice"))).toBe(true));
+    await waitForText(rendered.container, "Invoice evaluator");
 
     const row = rendered.container.querySelector<HTMLElement>(".ad-collection-row")!;
     expect(rendered.container.querySelector("[role='columnheader']:last-child")?.textContent).toBe("Actions");
@@ -569,10 +570,10 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "No designed activities yet");
     expect(collectionRequests()).toHaveLength(1);
 
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Display name");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Display name"), displayName);
-    click(await enabledButton(rendered.container, "Create definition"));
+    click(await enabledButton(rendered.container, "Create"));
     await waitForText(rendered.container, "Saved revision 1");
     expect(rendered.container.textContent).toContain("Visual graph editor");
     expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-1");
@@ -1517,7 +1518,7 @@ describe("Activity Definitions experience", () => {
     click(buttonByText(rendered.container, "Revoke"));
     await waitForText(rendered.container, "Visible inbound uses");
     expect(rendered.container.textContent).toContain("7/18/2026");
-    expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and Runtime Evidence are preserved");
+    expect(rendered.container.textContent).toContain("Immutable artifacts, identities, dependency evidence, and run data are preserved");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Type semantic version"), "1.0.0");
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Security response");
     click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));

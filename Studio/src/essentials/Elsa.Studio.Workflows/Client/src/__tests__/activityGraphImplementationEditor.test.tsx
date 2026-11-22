@@ -703,7 +703,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     pick(rendered.container, "Sequence");
 
     expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›While / Body");
     expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull();
     await vi.waitFor(() => expect(rendered.container.querySelector("[data-graph-node-id]")).toBeNull());
     click(buttonByText(rendered.container, "Write line"));
@@ -723,7 +723,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
     click(rendered.container.querySelector(".wf-slot-row button")!);
     expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›While / Body");
     await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1));
   });
 
@@ -733,7 +733,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     selectSlot(rendered.container, true);
     pick(rendered.container, activity.displayName!);
     expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("Activities");
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›While / Body");
     await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(0));
   });
 
@@ -743,7 +743,7 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     selectSlot(rendered.container, true);
     pick(rendered.container, "Write line");
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›While / Body");
     expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1);
   });
 
@@ -779,7 +779,7 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
     expect(rendered.container.querySelector(".wf-slot-empty")?.textContent).toContain("Else");
     click([...rendered.container.querySelectorAll(".wf-slot-empty button")].find(button => button.textContent?.includes("Sequence"))!);
     expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull();
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootIf / Else");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›If / Else");
     click(buttonByText(rendered.container, "Write line"));
     const payload = () => rendered.onChange.mock.calls.at(-1)![0].payload.rootActivity.structure.payload;
     expect(payload().then).toEqual(sibling);
@@ -805,7 +805,7 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
     expect(rendered.container.querySelector(".wf-slot-empty")?.textContent).toContain("Else");
     click(buttonByText(rendered.container, "Redo Activity Graph edit", "aria-label"));
     await vi.waitFor(() => expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull());
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootIf / Else");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›If / Else");
   });
 
   it("focuses a diagnostic leaf in a secondary root slot on a read-only graph", async () => {
@@ -818,7 +818,7 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
       cancelable: true, detail: { location: { referenceKey: "else-leaf" }, complete }
     })));
     await vi.waitFor(() => expect(complete).toHaveBeenCalledWith(expect.objectContaining({ kind: "focused" })));
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootIf / Else");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›If / Else");
     expect(document.activeElement?.getAttribute("data-graph-node-id")).toBe("else-leaf");
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -829,7 +829,7 @@ describe("ActivityGraphImplementationEditor secondary root slots", () => {
     click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
     click(buttonByText(rendered.container, "Choose Else activity", "aria-label"));
     click([...rendered.container.querySelectorAll(".wf-connect-menu [role='option']")].find(option => option.querySelector("strong")?.textContent === "Write line")!);
-    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootIf / Else");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("Root›If / Else");
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
     const payload = rendered.onChange.mock.calls.at(-1)![0].payload.rootActivity.structure.payload;
     expect(payload.then).toBeNull();

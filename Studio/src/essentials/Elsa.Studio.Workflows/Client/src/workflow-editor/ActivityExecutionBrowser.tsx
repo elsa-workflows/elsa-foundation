@@ -243,7 +243,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
     </div>
     <PageFeedback state={pageState} />
     {neighbor ? <PageFeedback state={neighborState} /> : null}
-    {pageState.status === "ready" && !selected && !cursor ? <p role="status">{selectedActivityExecutionId ? "This execution is not available in this scope." : page?.totalCount ? "Choose a recorded execution to inspect its evidence." : "No execution recorded in this scope."}</p> : null}
+    {pageState.status === "ready" && !selected && !cursor ? <p role="status">{selectedActivityExecutionId ? "This execution is not available in this scope." : page?.totalCount ? "Choose a recorded execution to inspect its run data." : "No execution recorded in this scope."}</p> : null}
     {expanded && page ? <div ref={listRef} id={listId} className="wf-execution-list-container" style={collapseOnSelect ? { maxHeight: popupHeight } : undefined} onKeyDown={event => {
       if (event.key === "Escape") { event.preventDefault(); setExpanded(false); triggerRef.current?.focus(); }
     }}>
@@ -258,7 +258,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
           selectWithFocus(entry.execution, restoreChoiceFocus?.request.intent);
         }} onIncident={onIncident} />)}</ol>
       <PageNavigation page={page} onPage={value => setCursor({ query: queryIdentity, value })} />
-      <p className="wf-execution-note">Recorded evidence · counts reflect this read</p>
+      <p className="wf-execution-note">Recorded data · counts reflect this read</p>
     </div> : null}
   </section>;
 }

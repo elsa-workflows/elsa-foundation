@@ -742,7 +742,7 @@ function BoundaryEvidencePane({
       {frame.evidenceStatus === "failed" ? (
         <div className="wf-boundary-panel-message" role="alert">
           <p>Activity steps are unavailable. {frame.evidenceError}</p>
-          <button type="button" onClick={onRestart}><RotateCcw size={13} /> Retry evidence</button>
+          <button type="button" onClick={onRestart}><RotateCcw size={13} /> Retry</button>
         </div>
       ) : null}
       {!hasLoadedEvidence && frame.evidenceStatus === "loading"
@@ -1088,7 +1088,7 @@ function SelectedExecutionEvidence({
         <section className="wf-boundary-value-evidence" aria-label="Selected step values">
           <h5>Values</h5>
           {inspection.valueSnapshots.length === 0
-            ? <p>No value evidence was captured for this step.</p>
+            ? <p>No values were captured for this step.</p>
             : inspection.valueSnapshots.map((snapshot, index) => (
               <SelectedValueEvidence
                 key={`${snapshot.subject}:${snapshot.name}:${snapshot.capturedAt}:${index}`}

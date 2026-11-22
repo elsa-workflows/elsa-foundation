@@ -22,9 +22,9 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   const scopeChoiceFocus = useExecutionFocusRequest();
   const graph = canvas.graph;
   const details = canvas.details;
-  if (!canvas.attached) return <p role="status">Attach the unchanged Test Run snapshot to inspect its run data.</p>;
+  if (!canvas.attached) return <p role="status">Attach the version used for this Test Run to inspect its run data.</p>;
   if (canvas.error) return <p role="status">{canvas.error}</p>;
-  if (!graph || !details) return <p role="status">Loading execution evidence…</p>;
+  if (!graph || !details) return <p role="status">Loading run data…</p>;
   const labelFor = (execution: ActivityExecutionStateSummary) => resolveRuntimeActivityLabel(
     findExecutableNodeFacts(graph, execution)?.presentation,
     catalog.find(item => item.activityTypeKey === execution.activityType), execution.activityType);
@@ -33,7 +33,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   // A child inside a pinned reusable boundary may have no node in the outer authored graph.
   const boundaryChild = execution && !findExecutableNodeFacts(graph, execution) ? execution : null;
   const identity = boundaryChild ?? authoredFacts;
-  if (!identity) return <p role="status">This canvas element has no executable activity evidence.</p>;
+  if (!identity) return <p role="status">This canvas element has no executable activity data.</p>;
   const selected = execution?.executableNodeId === identity.executableNodeId ? execution : null;
   const prepared = selection.prepared;
   const inspected = prepared?.execution?.executableNodeId === identity.executableNodeId ? prepared.execution : selected;

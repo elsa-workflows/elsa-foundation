@@ -169,7 +169,7 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
       {Object.keys(connections.config.backends?.authenticationProfiles ?? {}).length ? <StudioField label="Authentication"><select value={authenticationProfile} onChange={event => setAuthenticationProfile(event.target.value)} disabled={saving}><option value="">Discover on connection</option>{Object.keys(connections.config.backends?.authenticationProfiles ?? {}).map(id => <option key={id}>{id}</option>)}</select></StudioField> : null}
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       <p className="backend-note">Credentials are requested when you connect and are never saved in this profile.</p>
-      <div className="backend-actions"><StudioButton type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save changes" : "Create backend"}</StudioButton><StudioButton type="button" onClick={cancel} disabled={saving}>Cancel</StudioButton></div>
+      <div className="backend-actions"><StudioButton type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save" : "Create backend"}</StudioButton><StudioButton type="button" onClick={cancel} disabled={saving}>Cancel</StudioButton></div>
     </form>
   </section>;
 }

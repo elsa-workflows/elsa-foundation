@@ -69,7 +69,7 @@ for (const width of [1440, 390]) for (const theme of ["light", "dark"]) test(`re
   const screenshot = testInfo.outputPath(`user-task-${width}-${theme}.png`);
   await page.screenshot({ path: screenshot });
   await testInfo.attach(`user-task-${width}`, { path: screenshot, contentType: "image/png" });
-  await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
   await expect(page.getByRole("region", { name: receipt.title, exact: true })).toHaveCount(0);
   await expect(row).toHaveCount(0);
 });
@@ -96,8 +96,8 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1. New tasks can use it.` })).toBeVisible();
   await page.goto("/workflows/definitions?backend=legacy");
-  await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await page.getByRole("button", { name: "New workflow" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await dialog.getByLabel("Display name").fill(title); await dialog.getByRole("radio", { name: "Flowchart", exact: true }).check();
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   const palette = page.getByRole("searchbox", { name: "Search activity palette" });

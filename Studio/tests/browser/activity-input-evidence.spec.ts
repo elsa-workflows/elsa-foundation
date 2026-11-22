@@ -59,7 +59,7 @@ test("mixed output provenance keeps names readable in a narrow inspector", async
   const inspector = page.getByRole("complementary", { name: "Run details" });
   await inspector.getByRole("tab", { name: "Outputs", exact: true }).click();
   const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
-  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed evidence");
+  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed capture modes");
   for (const name of ["Total", "Response"]) {
     const row = outputs.locator(".wf-runtime-input").filter({ hasText: name });
     const label = row.locator("header strong");
@@ -203,7 +203,7 @@ for (const theme of ["light", "dark"]) {
 }
 
 for (const theme of ["light", "dark"]) {
-  test(`input evidence wraps within narrow inspectors without horizontal scrolling in ${theme} theme`, async ({ page }) => {
+  test(`input data wraps within narrow inspectors without horizontal scrolling in ${theme} theme`, async ({ page }) => {
     await mockInputEvidence(page);
     for (const width of [320, 390, 700, 1200]) {
       await page.setViewportSize({ width, height: 900 });

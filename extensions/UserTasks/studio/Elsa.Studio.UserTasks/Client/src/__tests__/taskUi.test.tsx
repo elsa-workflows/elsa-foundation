@@ -182,7 +182,7 @@ it("takes forms-only users directly to their permitted form workspace without re
   await act(async () => {});
   expect(container.textContent).toContain("Reusable task forms");
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
-  await click("Create form"); expect(container.textContent).toContain("Design the form");
+  await click("New form"); expect(container.textContent).toContain("Design the form");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
 });
 
@@ -238,7 +238,7 @@ it("keeps recipient preview responses out of the published form definition", asy
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true } : { items: [] });
   const post = vi.fn().mockImplementation(async (_path, request: { form: TaskForm }) => ({ tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }));
   await act(async () => root.render(<FormLifecyclePage api={api(get, post)} />));
-  await click("Create form");
+  await click("New form");
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Text input"); await click("Preview");
@@ -307,7 +307,7 @@ it("publishes a reusable basic form through the structured field editor", async 
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [] });
   const post = vi.fn().mockImplementation(async (_path: string, request: { form: TaskForm }) => ({ tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }));
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
-  await click("Create form");
+  await click("New form");
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Text input"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
@@ -325,7 +325,7 @@ it.each(["hidden", "visible"] as const)("reconciles an accepted form publication
   const post = vi.fn(async (_path: string, request: { form: typeof form }) => { await delayed; published = true; return { tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }; });
   const context = api(get, post);
   const render = (mode: "hidden" | "visible") => act(() => root.render(<React.Activity mode={mode}><FormsPage api={context} /></React.Activity>));
-  await render("visible"); await vi.waitFor(() => expect([...container.querySelectorAll("button")].map(button => button.textContent)).toContain("Create form")); await click("Create form");
+  await render("visible"); await vi.waitFor(() => expect([...container.querySelectorAll("button")].map(button => button.textContent)).toContain("New form")); await click("New form");
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), form.id); await input(field("Name"), form.name); await click("Text input"); await click("Publish");
   expect(post).toHaveBeenCalledTimes(1); expect(published).toBe(false);
@@ -525,7 +525,7 @@ it.each(["form", "task"])("does not toast a delayed %s mutation after leaving it
   const moduleApi = api(get, post);
   if (kind === "form") {
     await act(async () => root.render(<FormsPage api={moduleApi} />));
-    await click("Create form");
+    await click("New form");
     const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
     await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
     await click("Text input"); await click("Publish");
@@ -580,7 +580,7 @@ it("keeps local edits visible when a shared draft save detects a stale revision"
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
   await editFirstForm();
   const name = [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith("Name"))!.control as HTMLInputElement;
-  await input(name, "Edited purchase"); await click("Save draft");
+  await input(name, "Edited purchase"); await click("Save");
   expect(container.textContent).toContain("This form changed elsewhere");
   expect(name.value).toBe("Edited purchase");
   expect(post.mock.calls[0][1]).toMatchObject({ revision: 0, form: { id: "purchase", name: "Edited purchase" } });
@@ -666,9 +666,9 @@ it("opens the task detail route as a standalone page without loading the inbox",
   await act(async () => root.render(<Route navigate={vi.fn()} />));
   await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
   expect(container.querySelector('input[type="search"]')).toBeNull();
-  expect(container.querySelector('table[aria-label="User Tasks"]')).toBeNull();
+  expect(container.querySelector('table[aria-label="User tasks"]')).toBeNull();
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
-  expect(container.textContent).toContain("Back to task list");
+  expect(container.textContent).toContain("User tasks");
 });
 
 it("navigates from the collection to a task instead of mounting its response editor beside the list", async () => {
@@ -725,7 +725,7 @@ it("retains inbox search and opaque paging context through a standalone task and
   window.history.replaceState(null, "", detailPath);
   await act(async () => root.render(<Detail navigate={navigate} />));
   await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
-  await click("Back to task list");
+  await click("User tasks");
   const back = new URL(navigate.mock.calls.at(-1)![0], location.origin);
   expect(back.pathname).toBe("/user-tasks"); expect(back.searchParams.get("view")).toBe("queue");
   expect(back.searchParams.get("search")).toBe("Purchase"); expect(back.searchParams.get("after")).toBe("opaque+/="); expect(back.searchParams.get("focusTask")).toBe("opaque/id");
@@ -750,9 +750,9 @@ it("keeps a response when discard is cancelled and releases the guard only after
   const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
   await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
   await input(container.querySelector("input")!, "Unsent notes");
-  await click("Back to task list"); expect(closed).not.toHaveBeenCalled(); expect(container.querySelector("input")!.value).toBe("Unsent notes");
+  await click("User tasks"); expect(closed).not.toHaveBeenCalled(); expect(container.querySelector("input")!.value).toBe("Unsent notes");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
-  await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+  await click("User tasks"); expect(closed).toHaveBeenCalledTimes(1);
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
 });
 
@@ -774,7 +774,7 @@ it("does not navigate after a discard confirmation outlives the task view", asyn
   const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
   const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
   await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
-  await input(container.querySelector("input")!, "Unsent notes"); await click("Back to task list");
+  await input(container.querySelector("input")!, "Unsent notes"); await click("User tasks");
   await act(async () => root.render(<p>Another view</p>)); await act(async () => finish(true));
   expect(closed).not.toHaveBeenCalled();
 });
@@ -828,8 +828,8 @@ it("allows leaving after an accepted response while runtime delivery is still pe
   await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(task()), vi.fn().mockResolvedValue(receipt))} id="task" identity={identity} onClose={closed} />));
   await click("Approve"); expect(container.textContent).toContain("Your response is recorded");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
-  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "Back to task list")!;
-  expect(back.disabled).toBe(false); await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "User tasks")!;
+  expect(back.disabled).toBe(false); await click("User tasks"); expect(closed).toHaveBeenCalledTimes(1);
 });
 
 it("releases an ambiguous attempt when refresh confirms a durable pending decision", async () => {
@@ -931,12 +931,12 @@ describe("inbox and form polish (#4068)", () => {
     expect(container.querySelector(`label[for="${container.querySelector("textarea")!.id}"]`)!.textContent).toBe("Note *");
     expect(container.querySelector(".user-task-response")!.hasAttribute("data-final")).toBe(false);
   });
-  it("gives a missing task a way back from the page body", async () => {
+  it("gives a missing task a way back from the breadcrumb", async () => {
     const onClose = vi.fn();
     await act(async () => root.render(<TaskDetail api={api(vi.fn().mockRejectedValue(new StudioHttpError(404, "Not found")))} id="gone" identity={identity} onClose={onClose} />));
     await vi.waitFor(() => expect(container.textContent).toContain("Task not found"));
-    const body = container.querySelector(".studio-result-state")!.querySelector("button")!;
-    expect(body.textContent).toBe("Back to task list");
+    const body = container.querySelector("nav")!.querySelector("button")!;
+    expect(body.textContent).toBe("User tasks");
     await act(async () => body.click()); await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
   it("lists one row per form and publishes the next system-managed version", async () => {

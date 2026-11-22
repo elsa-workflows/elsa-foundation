@@ -16,7 +16,7 @@ internal static class IdentityTerminalJobsChecks
                 Jobs=DurableKeyJson.WriteKeys(["job-a","job-b"]),CustomHandles=DurableKeyJson.WriteKeys(["unrelated-handle"]),
                 IdentityOnly=true,IdentityMetadataRequired=true,
                 CommitTimes=c.S.CommitClockAvailable?Json.Write(new Dictionary<string,long?>{{WorkflowCommitClock.Terminal,null},{"turn:retained",null}}):null};
-            Message Ticket(InboxKey key,long? due)=>new Message(key.Id,new(id),Kinds.Job,Json.Write(new {Model=model.Key,Key=key==a?"job-a":"job-b",Arguments=(string?)null}),Due:due).WithInboxScope(key.Scope);
+            Message Ticket(InboxKey key,long? due)=>new Message(key.Id,new(id),Kinds.Job,Json.Write(new {Model=model.Key,Key=key==a?"job-a":"job-b",Arguments=(string?)null}),Due:due).WithInboxScope(key.Scope).AsKernelTicket();
             var lookalike=new Message(a.Id,new(id),"ordinary-lookalike");
             var later=await c.Now()+(long)TimeSpan.FromDays(30).TotalMilliseconds;
             var lease=await c.Take(0,"seed-"+serial);var messages=new List<Message>{Ticket(a,genuine?null:later),Ticket(b,later)};

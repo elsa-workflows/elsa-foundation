@@ -33,8 +33,8 @@ test("normal host defers canvas styles until a real workflow editor opens", asyn
   expect(cssRequests.every(url => /\/module-[A-Za-z0-9_-]+\.css$/.test(url))).toBe(true);
   expect(new Set(cssRequests).size).toBe(cssRequests.length);
 
-  await page.getByRole("button", { name: "Create workflow", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await page.getByRole("button", { name: "New workflow", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await dialog.getByLabel("Display name").fill(`Stylesheet qualification ${Date.now()}`);
   const flowchart = dialog.getByRole("radio", { name: "Flowchart", exact: true });
   await expect(flowchart).toBeEnabled();

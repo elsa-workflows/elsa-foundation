@@ -14,7 +14,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   const name = page.getByRole("textbox", { name: "Name", exact: true });
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeDisabled();
   await name.fill("Contact draft");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
@@ -24,7 +24,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expect(name).toHaveValue("Contact draft");
   await name.fill("Contact version two");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   await expect(page.getByRole("button", { name: "Select version 1", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Published form versions preview" })).toContainText("Published version 1");
@@ -43,7 +43,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await name.fill("Discarded working change");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await expect(page.getByRole("button", { name: "Select Text field 1", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Discard draft", exact: true }).click();
   await expect(name).toHaveValue("Contact version two");
@@ -107,7 +107,7 @@ test("confirmed deletion uses the current revision and removes the row only afte
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
 
   await expect(rows).toHaveCount(0);
-  await expect(page.locator("header").getByRole("button", { name: "Create form", exact: true })).toBeFocused();
+  await expect(page.locator("header").getByRole("button", { name: "New form", exact: true })).toBeFocused();
   const requests = await page.evaluate(() => (window as unknown as { formRequests: { path: string; body: { revision: number } }[] }).formRequests);
   expect(requests).toContainEqual({ path: "/user-tasks/forms/contact/delete", body: { revision: 0 } });
 });
@@ -148,7 +148,7 @@ test("uses the advertised legacy forms contract for published form access and di
 
   await rows.first().getByRole("button", { name: "Open form contact" }).click();
   await expect(page.getByRole("region", { name: "Published form", exact: true })).toContainText("Published version 1");
-  await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
   await page.getByRole("button", { name: "Create form version", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("feedback");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Feedback form");

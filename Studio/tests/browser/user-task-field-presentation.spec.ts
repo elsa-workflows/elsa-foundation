@@ -6,7 +6,7 @@ for (const appearance of ["light", "dark"] as const) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), appearance);
       await page.goto("/form-designer.html");
-      await page.getByRole("button", { name: "Create form", exact: true }).click();
+      await page.getByRole("button", { name: "New form", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
 
       const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
@@ -57,7 +57,7 @@ for (const appearance of ["light", "dark"] as const) {
       await page.screenshot({ path: testInfo.outputPath(`field-presentation-${appearance}-${viewport.name}.png`), animations: "disabled" });
       if (viewport.name === "narrow") expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-      await page.getByRole("button", { name: "Save draft", exact: true }).click();
+      await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
       const requests = () => page.evaluate(() => (window as unknown as { formRequests: { path: string; body: { form?: { fields?: unknown[] } } }[] }).formRequests);
       await expect.poll(async () => (await requests()).some(request => request.path.endsWith("/draft"))).toBe(true);

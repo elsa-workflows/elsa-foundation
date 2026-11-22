@@ -1,30 +1,10 @@
-/* Private chrome alias block — maps the frozen neutral palette that was
-   copy-pasted here (#152024 / #d8e0e4 / #607078 / #f4f7f8 / #ffffff) onto the
-   shared --studio-* tokens so panels, toolbars, borders and muted text follow
-   the active theme. The old hex values remain as the final fallback. See the
-   Diagnostics.OpenTelemetry styles.css for the same pattern. */
-.console-stream-panel,
-.console-stream-page {
-  --cs-surface: var(--studio-surface, var(--card, #ffffff));
-  --cs-surface-muted: var(--studio-surface-muted, var(--muted, #f4f7f8));
-  --cs-input: var(--studio-surface, var(--input, #f8fafb));
-  --cs-border: var(--studio-border, var(--border, #d8e0e4));
-  --cs-text: var(--studio-text, var(--foreground, #152024));
-  --cs-text-muted: var(--studio-text-muted, var(--muted-foreground, #607078));
-  --cs-accent: var(--studio-accent, var(--primary, #0f8a83));
-  --cs-accent-text: var(--studio-accent-text, var(--primary-foreground, #ffffff));
-  --cs-accent-soft: var(--studio-accent-soft, color-mix(in srgb, var(--cs-accent) 10%, transparent));
-  --cs-success: var(--studio-success, var(--success, #1b9a63));
-  --cs-danger: var(--studio-danger, var(--danger, #c13e3a));
-}
-
 .console-stream-panel {
   height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: var(--cs-surface-muted);
-  color: var(--cs-text);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
 }
 
 .console-stream-page {
@@ -32,7 +12,7 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  color: var(--cs-text);
+  color: var(--studio-text);
 }
 
 .console-stream-page {
@@ -45,16 +25,16 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--cs-text-muted);
-  font-size: 11px;
-  font-weight: 720;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
 }
 
 .console-stream-hosts {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--cs-border);
-  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
   overflow: hidden;
 }
 
@@ -63,73 +43,71 @@
   border-radius: 0;
 }
 
+.console-stream-hosts button:focus-visible {
+  outline-offset: -3px;
+}
+
 .console-stream-hosts button + button {
-  border-left: 1px solid var(--cs-border);
+  border-left: 1px solid var(--studio-border);
 }
 
 .console-stream-tools > span:not(.console-stream-status) {
   padding: 3px 7px;
-  border: 1px solid var(--cs-border);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--cs-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
 }
 
 .console-stream-status {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--cs-text-muted);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-text-muted) 14%, transparent);
+  background: var(--studio-text-muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-text-muted) 14%, transparent);
 }
 
 .console-stream-status.online {
-  background: var(--cs-success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-success) 18%, transparent);
+  background: var(--studio-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-success) 18%, transparent);
 }
 
 .console-stream-tools button {
   height: 28px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--cs-border);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--cs-surface);
-  color: var(--cs-text);
-  font-size: 11px;
-  font-weight: 720;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 0 8px;
 }
 
 .console-stream-tools select {
   height: 28px;
   max-width: min(260px, 32vw);
-  border: 1px solid var(--cs-border);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--cs-input);
-  color: var(--cs-text);
-  font-size: 11px;
-  font-weight: 720;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
   padding: 0 28px 0 8px;
 }
 
-.console-stream-tools button:not(.active):hover {
-  border-color: var(--cs-accent);
-  background: var(--cs-accent-soft);
-  color: var(--cs-accent);
-}
-
-.console-stream-tools button.active[aria-pressed="true"] {
-  border-color: var(--cs-accent);
-  background: var(--cs-accent);
-  color: var(--cs-accent-text);
+.console-stream-tools button:where(:not([aria-pressed="true"])):hover {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
 }
 
 .console-stream-lines {
   min-height: 0;
   overflow: auto;
   padding: 10px 16px 16px;
-  font-family: var(--font-mono, "SF Mono", Monaco, Consolas, monospace);
-  font-size: 12px;
+  font-family: var(--studio-font-mono);
+  font-size: var(--studio-label-size);
   line-height: 1.5;
 }
 
@@ -141,33 +119,33 @@
 }
 
 .console-stream-line > span {
-  color: var(--cs-text-muted);
+  color: var(--studio-text-muted);
 }
 
 .console-stream-line small {
   min-width: 0;
   overflow: hidden;
-  color: var(--cs-text-muted);
+  color: var(--studio-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .console-stream-line code {
   overflow-wrap: anywhere;
-  color: var(--cs-text);
+  color: var(--studio-text);
   white-space: pre-wrap;
 }
 
 .console-stream-line.stderr code {
-  color: var(--cs-danger);
+  color: var(--studio-danger);
 }
 
 .console-stream-line.stdout code {
-  color: var(--cs-success);
+  color: var(--studio-success);
 }
 
 .console-stream-ansi-bold {
-  font-weight: 760;
+  font-weight: bold;
 }
 
 .console-stream-ansi-dim {
@@ -213,7 +191,7 @@
 
 .console-stream-ansi-fg-white,
 .console-stream-ansi-fg-bright-white {
-  color: var(--cs-text);
+  color: var(--studio-text);
 }
 
 .console-stream-ansi-fg-bright-red {
@@ -381,6 +359,11 @@ html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-white {
   }
 
   .console-stream-line {
-    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
+    row-gap: var(--studio-space-1);
+  }
+
+  .console-stream-line code {
+    grid-column: 1 / -1;
   }
 }

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("native task form designer communicates field count and capacity", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
   const counter = palette.locator("small");
   await expect(counter).toHaveText("0 fields in form · maximum 100");
@@ -19,7 +19,7 @@ test("native task form designer keeps palette icons compact without shrinking th
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
       await page.goto("/form-designer.html");
-      await page.getByRole("button", { name: "Create form", exact: true }).click();
+      await page.getByRole("button", { name: "New form", exact: true }).click();
       const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
       if (viewport.width <= 600) await page.getByRole("button", { name: "Expand controls panel" }).click();
       const button = palette.getByRole("button", { name: "Text input", exact: true });
@@ -39,7 +39,7 @@ test("native task form designer keeps palette icons compact without shrinking th
 test("native task form designer only shows advanced options supported by the selected type", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
   await palette.getByRole("button", { name: "Text input", exact: true }).click();
   const properties = page.getByRole("complementary", { name: "Field properties", exact: true });
@@ -76,7 +76,7 @@ test("primary Forms editor shares resizable panels while preserving its own save
   await page.addInitScript(() => localStorage.setItem("elsa-studio-workflow-palette-width", "380"));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
 
   const controlsResize = page.getByRole("separator", { name: "Resize controls panel" });
   const originalWidth = Number(await controlsResize.getAttribute("aria-valuenow"));
@@ -109,7 +109,7 @@ test("primary Forms editor shares resizable panels while preserving its own save
 test("primary Forms editor previews, publishes immutably, and starts the next draft from that publication", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toBeVisible();
@@ -134,7 +134,7 @@ test("primary Forms editor previews, publishes immutably, and starts the next dr
   await row.getByRole("button", { name: "New contact", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Form ID" })).toBeDisabled();
   await page.getByRole("textbox", { name: "Name" }).fill("New contact revision");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByText("Published · version 2", { exact: true }).first()).toBeVisible();

@@ -2333,6 +2333,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void Enqueue(TurnOutcome unit, CancellationToken cancellationToken)
     {
+        if (unit.Slot is { } slot && HasUnissuedPrivateKind(unit))
+        {
+            slot.RollbackTurn?.Invoke();
+            var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
+            var park = ParkRefusedTurn(unit, slot, preserve, Kinds.UnissuedPrivateKind);
+            ReleaseJobRestriction(unit);
+            _queue.Add(park);
+            return;
+        }
         InvalidateAliasMisses(unit);
         if (Has(Flaw.DeliverBeforeCommit)) HandOver(unit, null, hold: true, cancellationToken);
         var writeFree = EndsInMemory(unit) || !unit.Durable;
@@ -2437,7 +2446,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (generation == _generation) _flushing = false;
     }
 
-    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve)
+    private TurnOutcome ParkRefusedTurn(TurnOutcome unit, Slot slot, bool preserve, string? fault = null)
     {
         var previous = slot.CurrentRow;
         var unwritten = slot.Unwritten;
@@ -2447,9 +2456,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 State = "null",
                 FoundationNullState = previous.FoundationInlineBirth is not null || previous.FoundationNullState
             };
+        var error = fault ?? _refusal;
         var park = unwritten
-            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, _refusal, slot.Pending)
-            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, _refusal);
+            ? _type.Park(previous, unit.Instance, unit.Consumed, unit.Spec, error, slot.Pending)
+            : _type.Park(previous, unit.Instance, unit.Consumed.Concat(unit.Held).OrderBy(i => i.InboxOrder).ToArray(), unit.Spec, error);
         Bound(MarkPark(park, slot.CurrentRow), slot);
         if (slot.Unwritten) RetireVolatileJobs(park);
         Promote(park);
@@ -2465,6 +2475,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private async Task<Outcome> CommitAsync(List<TurnOutcome> units, List<Delivery> marks, List<Delivery> trial, long generation,
         CancellationToken cancellationToken, bool beat = false, IReadOnlyList<Delivery>? clearedJobs = null)
     {
+        if (units.Exists(HasUnissuedPrivateKind))
+        {
+            _refusal = Kinds.UnissuedPrivateKind;
+            return Outcome.Refused;
+        }
         // Finding F1: until the owner has caught up with the rows it inherited, what it sends to its own partition goes
         // through the table like everything else. Handing it over in memory would let it overtake older rows.
         var handOver = clearedJobs is null && (_caughtUp || Has(Flaw.HandOverWhileBehind));
@@ -2526,7 +2541,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
-                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear);
+                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
+                    supportsFoundationParkResolution: true);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -2608,10 +2624,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
+    private static bool HasUnissuedPrivateKind(TurnOutcome unit) =>
+        unit.Sent.Exists(Kinds.IsUnissuedPrivate);
+
     private TurnCommit PrepareCommit(TurnOutcome unit)
     {
         var conversions = unit.HeldJobResults;
-        var consumed = unit.Consumed.Where(i => i.Durable && i.Message.KeepUntil is null).Select(i => i.Message.InboxKey);
+        var kept = PrepareKeptInputs(unit);
+        var durable = unit.Consumed.Where(i => i.Durable);
+        var consumed = durable.Where(i => i.Message.KeepUntil is null && kept?.ContainsKey(i.Message.InboxKey) != true).Select(i => i.Message.InboxKey);
+        var done = durable.Where(i => i.Message.KeepUntil is not null || kept?.ContainsKey(i.Message.InboxKey) == true).Select(i => i.Message.InboxKey);
         var settled = conversions?.Keys.Where(i => i.Durable).Select(i => i.Message.InboxKey) ?? [];
         var cancelled = Has(Flaw.VolatileJobTicket) ? [] : unit.Cancelled.Where(id => !InMemoryOnly(id));
         var promotions = conversions?.Values.Select(result => result.InboxKey).ToHashSet();
@@ -2626,15 +2648,25 @@ public sealed class Worker : IScopeActivation, ITurnServices
             : null;
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],
-            Has(Flaw.KeepConsumedMessages) ? [] : unit.Consumed.Where(i => i.Durable && i.Message.KeepUntil is not null).Select(i => i.Message.InboxKey).ToList(),
+            Has(Flaw.KeepConsumedMessages) ? [] : done.ToList(),
             unit.Sent.Where(m => !unit.Volatile.Contains(m.InboxKey)).ToList(), unit.Subscribed, unit.Unsubscribed, unit.Journal, unit.Unsubscribe,
             unit.Held.Where(i => i.Durable && conversions?.ContainsKey(i) != true).Select(i => i.Message.InboxKey).ToList(), unit.Delete)
         {
             FoundationHeader = unit.FoundationHeader,
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
-            OpensPark = unit.OpensPark
+            OpensPark = unit.OpensPark,
+            FoundationKept = kept,
+            FoundationParkClear = unit.FoundationParkClear
         };
+    }
+
+    private Dictionary<InboxKey, ParkKeepReason>? PrepareKeptInputs(TurnOutcome unit)
+    {
+        if (unit.FoundationKeep is not { } reason || unit.Row is not { } row || Has(Flaw.KeepConsumedMessages)) return null;
+        return unit.Consumed.Where(item => item.Durable && !item.DiscardedInput &&
+            item.Message.Target.Id == row.Id && item.Message.TargetCreation == row.Creation)
+            .ToDictionary(item => item.Message.InboxKey, _ => reason);
     }
 
     /// <summary>

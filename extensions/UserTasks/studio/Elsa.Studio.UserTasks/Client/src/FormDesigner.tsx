@@ -210,7 +210,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
   return <section className="user-task-designer" aria-label="Form designer" data-field-order={rowFields.map(field => field.key).join(",")}>
     <header className="user-task-designer__header">
       <div className="user-task-designer__heading">
-        {compactHeader && form ? <small>{versionLabel ?? `Version ${form.version}`}</small> : form ? <><span>Forms / {form.name || "Untitled form"}</span><h2>{form.name || "Untitled form"}</h2><small>{versionLabel ?? `Version ${form.version}`}</small><p>{description ?? "Changes apply only to new tasks after this version is published."}</p></> : <><h2>Design the form</h2><p>Add fields, arrange them, then review the recipient experience.</p></>}
+        {compactHeader && form ? <small>{versionLabel ?? `Version ${form.version}`}</small> : form ? <><h2>{form.name || "Untitled form"}</h2><small>{versionLabel ?? `Version ${form.version}`}</small><p>{description ?? "Changes apply only to new tasks after this version is published."}</p></> : <><h2>Design the form</h2><p>Add fields, arrange them, then review the recipient experience.</p></>}
       </div>
       <div className="user-task-designer__toolbar-actions">
         {toolbarActions}
