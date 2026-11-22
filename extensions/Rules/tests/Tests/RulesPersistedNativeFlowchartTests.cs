@@ -581,10 +581,10 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
         {
             [nameof(Event.EventName)] = Literal(holdContract.Inputs[nameof(Event.EventName)], EventName),
             [nameof(Event.CanStartWorkflow)] = Literal(holdContract.Inputs[nameof(Event.CanStartWorkflow)], false),
-            [nameof(Event.CorrelationId)] = Literal(holdContract.Inputs[nameof(Event.CorrelationId)], ""),
-            [nameof(Event.ExpiresAt)] = Literal(holdContract.Inputs[nameof(Event.ExpiresAt)], null)
+            [nameof(Event.CorrelationId)] = Literal(holdContract.Inputs[nameof(Event.CorrelationId)], "")
         };
-        var hold = Node(HoldNodeId, typeof(Event), holdContract, holdBindings);
+        var hold = Node(HoldNodeId, typeof(Event), holdContract,
+            ClrActivityContractTestBuilder.CompleteInputBindings(holdContract, holdBindings));
         var fork = Node<JoinPassActivity>(ForkNodeId);
         var join = Node<JoinPassActivity>(JoinNodeId);
         var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));
@@ -634,7 +634,7 @@ public sealed class RulesPersistedNativeFlowchartTests : IAsyncLifetime
             WellKnownRuntimeActivityConsumers.ClrActivity, contract.DescriptorPayload, bindings,
             new Dictionary<string, string>(StringComparer.Ordinal), activityContract: contract);
 
-    private static RuntimeInputBinding Literal(ActivityInputContract input, object? value) =>
+    private static RuntimeInputBinding Literal(ActivityInputContract input, object value) =>
         new(input.Key, input.Type, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(input.Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
 
