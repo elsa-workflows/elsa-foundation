@@ -29,7 +29,8 @@ public class ActivitiesRuntimeFeature : Elsa.Events.EventsFeature
     private static readonly RuntimeHistorySourceSupport ContinuationSources = new([
         RuntimeHistorySourceFactKind.ActivityContinuationStarted, RuntimeHistorySourceFactKind.ActivityContinuationReturned,
         RuntimeHistorySourceFactKind.ActivityContinuationSuspended, RuntimeHistorySourceFactKind.ActivityContinuationCompleted,
-        RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled]);
+        RuntimeHistorySourceFactKind.ActivityContinuationFaulted, RuntimeHistorySourceFactKind.ActivityContinuationCancelled,
+        RuntimeHistorySourceFactKind.ChildControlAccepted, RuntimeHistorySourceFactKind.ChildControlApplied]);
 
     public override void ConfigureServices(IServiceCollection services)
     {

@@ -12728,3 +12728,5 @@ Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerHistoryStore.ListDuePageAsync
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerScheduler.CanRecordHistory(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.RequiresUnrecordedTimerDischargeAsync(string! workflowExecutionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
 Elsa.Workflows.Runtime.Core.Contracts.IPostCommitOutboxLookupStore.CanInspectHistorySources(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! history) -> bool
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.HistoryCausation.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryCausation?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStartDispatchRequest.HistoryCausation.init -> void

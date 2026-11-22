@@ -32,5 +32,7 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
     internal static IEnumerable<string> Kinds(RuntimeHistorySourceSupport owner) => owner.Kinds.Select(RuntimeHistorySourceFacts.EventName)
         .Concat(owner.TimerOwner ? DurableTimerHistoryFacts.Kinds : [])
         .Concat(owner.SourceIntentKind is not null && owner.Kinds.Contains(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)
-            ? RuntimeHistorySourceFacts.PublicationObservationKinds : []);
+            ? RuntimeHistorySourceFacts.PublicationObservationKinds : [])
+        .Concat(owner.SourceIntentKind == WorkflowDispatchLifecycle.StartChildIntentKind && owner.Kinds.Contains(RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested)
+            ? new[] { "ChildStartAttemptObserved", "ChildStartDispositionObserved" } : []);
 }

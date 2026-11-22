@@ -25,7 +25,7 @@ internal static class RuntimeHistoryRegistration
         RuntimeHistorySourceFactKind.IncidentCreated, RuntimeHistorySourceFactKind.IncidentResolved,
         RuntimeHistorySourceFactKind.IncidentStrategyEvaluated, RuntimeHistorySourceFactKind.IncidentProjectionReconciled,
         RuntimeHistorySourceFactKind.IncidentSuppressed, RuntimeHistorySourceFactKind.IncidentDecisionApplied,
-        RuntimeHistorySourceFactKind.ControlApplied]);
+        RuntimeHistorySourceFactKind.ControlApplied, RuntimeHistorySourceFactKind.ActivityRetryScheduled]);
 
     internal static readonly RuntimeHistorySourceSupport AlterationSources = new([
         RuntimeHistorySourceFactKind.ActivityRetryScheduled, RuntimeHistorySourceFactKind.AlterationApplied]);
@@ -66,8 +66,9 @@ internal static class RuntimeHistoryRegistration
             var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
             var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
                 .SelectMany(RuntimeHistoryCaptureCapabilities.Kinds);
-            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true,
-                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
+            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v5", 5, true,
+                RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds)
+                    .Where(kind => kind != nameof(RuntimeHistorySourceFactKind.TimerCancellationRequested)).ToArray());
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
                 throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");
             return policy;

@@ -20,7 +20,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
         try
         {
-            return HistoryAdmission is not null && _stimulusRequests.Owns(intentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
+            return HistoryAdmission is not null && (_stimulusRequests.Owns(intentKind) || intentKind == WorkflowDispatchLifecycle.StartChildIntentKind) && HistoryProvidersResolver?.Invoke() is { } selected &&
                 ReferenceEquals(writer, selected.Writer) && ReferenceEquals(reader, selected.Reader) && writer.CanRecordHistory(reader);
         }
         catch (RuntimePostCommitSourceBoundaryException) { throw; }
@@ -245,7 +245,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             saved?.Origin,
             dispatchOptions,
             cancellationToken,
-            saved?.HistoryCausation);
+            saved?.HistoryCausation ?? request.HistoryCausation);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(

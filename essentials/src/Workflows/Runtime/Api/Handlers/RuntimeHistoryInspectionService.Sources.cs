@@ -98,6 +98,9 @@ public sealed partial class RuntimeHistoryInspectionService
                     previous = item.Sequence;
                     if (item.SchemaVersion != 1)
                         return await LimitedAsync("A recorded source version is unsupported for settlement inspection.");
+                    // A detached child's terminal decision creates no parent-resume responsibility.
+                    if (group.Origin == "ChildWorkflowSettled" && item.Metadata.GetValueOrDefault("history.reasonCode") == "detached-child-settled")
+                        continue;
                     // Causation identifies the incoming trigger, which can be a different delivery.
                     // Only an explicit outgoing source identity can establish this event's responsibility.
                     if (!item.Metadata.TryGetValue("history.sourceDeliveryId", out var sourceId) || string.IsNullOrWhiteSpace(sourceId))

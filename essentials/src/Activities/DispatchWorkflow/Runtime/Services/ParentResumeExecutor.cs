@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
@@ -16,12 +18,38 @@ public sealed class ParentResumeExecutor(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IBookmarkStateStore bookmarkStateStore,
-    ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitIntentHandler
+    ILogger<ParentResumeExecutor>? logger = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly ILogger<ParentResumeExecutor> _logger = logger ?? NullLogger<ParentResumeExecutor>.Instance;
 
-    public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    private IServiceProvider? _historyServices;
+    private TimeProvider _clock = TimeProvider.System;
+    internal static ParentResumeExecutor Create(IServiceProvider services) => new(services.GetRequiredService<IBookmarkResumeDispatcher>(),
+        services.GetRequiredService<IWorkflowExecutionStateStore>(), services.GetRequiredService<IActivityExecutionStateStore>(),
+        services.GetRequiredService<IBookmarkStateStore>(), services.GetService<ILogger<ParentResumeExecutor>>())
+        { _historyServices = services, _clock = services.GetRequiredService<TimeProvider>() };
+
+    bool IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        ChildDispatchHistory.CanRecord(_historyServices, _clock, writer, reader) &&
+        ReferenceEquals(bookmarkResumeDispatcher, _historyServices?.GetService<IBookmarkResumeDispatcher>()) &&
+        bookmarkResumeDispatcher.CanRecordHistory(writer, reader);
+
+    async ValueTask IRuntimePostCommitDurableSourceIntentHandler.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        _ = await ChildDispatchHistory.VerifyAsync(_historyServices, _clock, source, cancellationToken);
+        await HandleCoreAsync(source.Intent, source, cancellationToken);
+    }
+
+    public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (intent.HistoryCausation is not null)
+            throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind, new InvalidOperationException("Captured parent resumes require their physical source."), false);
+        return HandleCoreAsync(intent, null, cancellationToken);
+    }
+
+    private async ValueTask HandleCoreAsync(RuntimePostCommitIntent intent, PostCommitDeliveryContext? source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(intent);
         if (!StringComparer.Ordinal.Equals(intent.Kind, DispatchWorkflowConstants.ResumeParentIntentKind) ||
@@ -44,6 +72,7 @@ public sealed class ParentResumeExecutor(
         if (ParentResumeHeld())
             throw new ParentResumeDeferredException(payload.DispatchId, payload.ParentWorkflowExecutionId);
 
+        if (source is not null) _ = await ChildDispatchHistory.VerifyAsync(_historyServices, _clock, source, cancellationToken);
         var result = await bookmarkResumeDispatcher.DispatchAsync(
             new BookmarkResumeDispatchRequest(
                 workflowExecutionId: payload.ParentWorkflowExecutionId,
@@ -60,7 +89,7 @@ public sealed class ParentResumeExecutor(
                 payloadType: new ValueTypeDescriptor(
                     TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
                     schemaVersion: 1),
-                providerId: DispatchWorkflowConstants.ParentResumeProviderId),
+                providerId: DispatchWorkflowConstants.ParentResumeProviderId) { HistoryCausation = source?.Intent.HistoryCausation },
             cancellationToken: cancellationToken);
 
         if (result.Bookmark is { } resolvedBookmark)
