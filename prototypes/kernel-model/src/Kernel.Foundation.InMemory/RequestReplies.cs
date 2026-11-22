@@ -29,6 +29,7 @@ internal static class RequestReplies
                 "StaleSelection" => "stale selection",
                 "InvalidRetrySelection" => "invalid retry selection",
                 "ResolutionOpen" => "resolution open",
+                "ResolutionUnavailable" => "resolution unavailable",
                 "Protected" => "protected",
                 "ProtectionUnavailable" => "protection unavailable",
                 "OperatorUnavailable" => "operator unavailable",

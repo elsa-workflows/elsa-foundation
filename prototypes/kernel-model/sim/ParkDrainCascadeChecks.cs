@@ -17,6 +17,8 @@ internal static class ParkDrainCascadeChecks
         await RefusedTerminateDoesNotWithdraw(check, drainAlreadyOpen: true);
         await TerminateRunningRecovery(selected: true, check);
         await TerminateRunningRecovery(selected: false, check);
+        await ColdRecoveryJobSuffix(check);
+        foreach (var cut in Enum.GetValues<OpenCut>()) await RecoverJobAtOpen(cut, check);
     }
 
     private static async Task Run(bool parentTerminate, Action<bool, string> check, bool expiry = false)
@@ -546,7 +548,276 @@ internal static class ParkDrainCascadeChecks
         }
     }
 
-    private sealed class Probe(bool retainOnTerminate = false, bool restoreTrial = false) : Contract.IActorType
+    private static async Task ColdRecoveryJobSuffix(Action<bool, string> check)
+    {
+        const long initial = 1_702_310_073_000;
+        var now = initial;
+        var count = CascadeProtocol.PageLimit + 1;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("cold-job-suffix");
+        var probe = new Probe(restoreMany: true);
+        var scheduler = new HeldScheduler();
+        var edge = new InMemoryIngress(store, new Requests("cold-job-suffix"), "cold-job-suffix",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
+        InboxKey? suffix = null;
+        var observed = false;
+        var pendingAtPage = false;
+        var settledByPage = false;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (suffix is not { } key || !batch.Turns.Any(turn => turn.FoundationCascade is { Input: not null })) return;
+            if (!landed) pendingAtPage = store.Messages.GetValueOrDefault(key) is { Done: false };
+            else settledByPage = !store.Messages.ContainsKey(key);
+        });
+        var birth = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(birth.Actor!.Value);
+        var address = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        var first = Owner("first", 2_048);
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Step(first);
+        await Send("arm-many", "arm-many");
+        await Step(first);
+        await Send("park", "park");
+        await Step(first);
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        await Send("resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.RetryAll)));
+        for (var pass = 0; pass < 4 && store.Instances[address].ParkRecovery is null; pass++) await Step(first);
+        var running = store.Instances[address] is { Status: InstanceStatus.Running, ParkRecovery: not null } &&
+            JobRegistry.Read(store.Instances[address].Jobs).Count == count;
+        check(running && probe.JobTokens.Count == 0, "WJ-1 the live Recover registers 1,001 jobs before Terminate");
+        if (!running) return;
+
+        await Send("terminate", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(selection)));
+        for (var pass = 0; pass < 4 && store.Instances[address].ParkDiscard is null; pass++) await Step(first);
+        var jobs = store.Messages.Where(pair => pair.Value.Message.Kind == Kinds.Job && !pair.Value.Done).ToArray();
+        var paged = store.Instances[address] is { ParkDiscard.Kind: ParkClearKind.Terminate, Cascade.Cursor: CascadeProtocol.PageLimit } &&
+            jobs is [var remaining] && remaining.Value.Message.Read<JobTicket>().Key == "trial-1000";
+        check(paged, "WJ-1 Open clears the first 1,000 tickets and keeps the last for page two");
+        if (!paged) return;
+        suffix = jobs[0].Key;
+        await active.DisposeAsync();
+        scheduler.RunAll();
+
+        now++;
+        var cold = Owner("cold", 1);
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 32 && !observed; pass++) await Prime(cold);
+        scheduler.RunAll();
+        var observedBeforePage = observed && store.Messages.GetValueOrDefault(suffix.Value) is { Done: false } && probe.JobTokens.Count == 0;
+        for (var pass = 0; pass < 32 && store.Instances[address].Status == InstanceStatus.Running; pass++) await Step(cold);
+        check(observedBeforePage && pendingAtPage && settledByPage && probe.JobTokens.Count == 0 &&
+            store.Instances[address] is { Status: InstanceStatus.Cancelled, Cascade: null, ParkDiscard: null },
+            "WJ-1 a cold owner reads the last pending job without entering its body and page two settles it");
+
+        Worker Owner(string node, int pollLimit) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, PollLimit = pollLimit,
+                OnObservedDelivery = delivery => observed |= suffix is { } key && delivery.Message.InboxKey == key });
+        ValueTask<Contract.Admission> Send(string operation, string kind, string? payload = null) =>
+            edge.SendAsync(scope, target, operation, kind, payload);
+        async Task Step(Worker worker)
+        {
+            await Prime(worker);
+            worker.RunTurn(address);
+            await worker.FlushAsync();
+        }
+    }
+
+    private enum OpenCut { NoTerminate, Acknowledgement, Refused, Entered, ParentRefused }
+
+    private static async Task RecoverJobAtOpen(OpenCut cut, Action<bool, string> check)
+    {
+        const long initial = 1_702_310_075_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("recovered-job-open");
+        var probe = new Probe(restoreTrial: true);
+        var scheduler = new HeldScheduler();
+        var requests = new Requests("recovered-job-open");
+        var edge = new InMemoryIngress(store, requests, "recovered-job-open",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Terminate);
+        var reads = new ActorList(store, 10);
+        var refused = 0;
+        var queuedAtBoundary = 0;
+        var entriesAtBoundary = 0;
+        var aliveAtLand = false;
+        InstanceRow? beforeOpen = null;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            var opening = batch.Turns.FirstOrDefault(turn => turn.Row is { Status: InstanceStatus.Running, ParkDiscard.Kind: ParkClearKind.Terminate });
+            if (opening is null) return;
+            if (!landed) beforeOpen ??= store.Instances[opening.Instance];
+            if (landed && cut == OpenCut.Entered)
+                aliveAtLand = probe.JobTokens is [var token] && !token.IsCancellationRequested;
+            if ((landed && cut == OpenCut.Acknowledgement) || (!landed && cut == OpenCut.Refused))
+            {
+                queuedAtBoundary += scheduler.Count;
+                scheduler.RunAll();
+                entriesAtBoundary = probe.JobTokens.Count;
+            }
+            if (landed || cut is not (OpenCut.Refused or OpenCut.ParentRefused) || refused >= 2) return;
+            refused++;
+            throw new StoreException(Failure.Definite, "The fixture refuses Open before any write.");
+        });
+
+        var born = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(born.Actor!.Value);
+        var address = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        var parent = target;
+        var parentAddress = address;
+        var first = Owner("first");
+        await using var original = await Activate(first);
+        await Step(first);
+        if (cut == OpenCut.ParentRefused)
+        {
+            await Send("spawn", "spawn");
+            await Step(first);
+            target = new Contract.Target.Ref(new(Row().State));
+            address = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+            await Step(first);
+        }
+        await Send("arm", "arm-job");
+        await Step(first);
+        var ticket = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Job);
+        await original.DisposeAsync();
+        scheduler.RunAll();
+
+        var trial = Owner("trial");
+        await using var trialOwner = await Activate(trial);
+        for (var pass = 0; pass < 15 && ticket.Trial != trial.Fences.Single().Epoch; pass++) await Prime(trial);
+        var onTrial = ticket.Trial != 0 && ticket.Trial == trial.Fences.Single().Epoch;
+        check(onTrial && probe.JobTokens.Count == 0, $"WJ-1 {cut} establishes a durable trial before body entry");
+        if (!onTrial) return;
+
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        var owner = Owner("successor");
+        await using var active = await Activate(owner);
+        for (var pass = 0; pass < 15 && Row().Status != InstanceStatus.Faulted; pass++) await Step(owner);
+        if (Row().Status != InstanceStatus.Faulted)
+        {
+            check(false, $"WJ-1 {cut} parks the exhausted physical job");
+            return;
+        }
+        for (var index = 0; index <= 2 * InMemoryStore.ParkPageLimit; index++)
+            await Send($"pending-{index}", "unexpected", index == 0 ? new string('x', 5 * 1024 * 1024) : null);
+        await Step(owner);
+        var park = (await reads.GetAsync(scope, target.Actor))!.Selection!;
+        await Send("recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(park, Contract.RecoverMode.RetryAll)));
+        scheduler.RunAll();
+        await Step(owner);
+        await Step(owner);
+        for (var pass = 0; pass < 4; pass++) await Prime(owner);
+        var recovering = Row();
+        var release = new ParkRelease(recovering.Creation, recovering.ParkResolutionGeneration);
+        var pending = store.Messages.Values.SingleOrDefault(row => row.Message.Kind == Kinds.Job && !row.Done);
+        var ready = recovering is { Status: InstanceStatus.Running, ParkRecovery: not null } && pending?.ReleasedBy == release &&
+            scheduler.Count == 1 && probe.JobTokens.Count == 0;
+        check(ready, $"WJ-1 {cut} queues a restored job while Recover has a kept suffix");
+        if (!ready) return;
+
+        if (cut is OpenCut.NoTerminate or OpenCut.Entered) scheduler.RunAll();
+        if (cut == OpenCut.NoTerminate)
+        {
+            check(probe.JobTokens is [var token] && !token.IsCancellationRequested,
+                "WJ-1 the same restored callback enters while Recover runs without Terminate");
+            return;
+        }
+
+        if (cut == OpenCut.ParentRefused)
+        {
+            var command = await edge.SendAsync(scope, parent, "end-parent", Contract.Kinds.Terminate);
+            for (var pass = 0; pass < 8 && store.Instances[parentAddress].Status == InstanceStatus.Running; pass++)
+            {
+                await Prime(owner);
+                owner.RunTurn(parentAddress);
+                await owner.FlushAsync();
+            }
+            var parentEnded = command.Outcome == Contract.AdmissionOutcome.Accepted &&
+                store.Instances[parentAddress].Status == InstanceStatus.Cancelled;
+            check(parentEnded, "WJ-1 the real parent completes a cancellation with a child cascade");
+            if (!parentEnded) return;
+            for (var pass = 0; pass < 4 && refused == 0; pass++) await Step(owner);
+            var stillQueued = store.Messages.Values.SingleOrDefault(row => row.Message.Target.Id == address &&
+                row.Message.Kind == Kinds.Terminate && row.Message.CascadeOrigin && !row.Done);
+            check(refused == 2 && !owner.Owns && Row() == beforeOpen && stillQueued is not null,
+                "WJ-1 a refused parent Open leaves the committed Recover and exact cascade command pending" +
+                $" (refused {refused}, owned {owner.Owns}, pending {stillQueued is not null}, recovery {Row().ParkRecovery is not null})");
+            now += (long)Defaults.Lease.TotalMilliseconds + 1;
+            var retry = Owner("parent-retry");
+            await using var next = await Activate(retry);
+            for (var pass = 0; pass < 12 && Row().ParkDiscard is null; pass++) await Step(retry);
+            check(Row() is { ParkDiscard.Kind: ParkClearKind.Terminate, ParkRecovery: null } &&
+                stillQueued is not null && !store.Messages.ContainsKey(stillQueued.Message.InboxKey) && probe.JobTokens.Count == 0,
+                "WJ-1 the next owner applies the pending parent command without entering the restored job" +
+                $" ({Row().Status}, drain {Row().ParkDiscard?.Kind}, entries {probe.JobTokens.Count})");
+            return;
+        }
+
+        var terminate = Json.Write(new Contract.OperatorCommand(park));
+        var reply = cut == OpenCut.Refused
+            ? edge.RequestAsync(scope, target, "terminate", Contract.Kinds.Terminate, terminate, null,
+                new Contract.RequestOptions(null, now + 1_000)).AsTask()
+            : null;
+        var admission = reply is null ? await Send("terminate", Contract.Kinds.Terminate, terminate) : null;
+        for (var pass = 0; pass < 4 && Row().ParkDiscard is null && refused == 0; pass++) await Step(owner);
+        var after = Row();
+        var landed = admission?.Outcome == Contract.AdmissionOutcome.Accepted &&
+            after is { Status: InstanceStatus.Running, ParkDiscard.Kind: ParkClearKind.Terminate, ParkRecovery: null };
+        switch (cut)
+        {
+            case OpenCut.Acknowledgement:
+                check(landed && queuedAtBoundary == 1 && entriesAtBoundary == 0,
+                    "WJ-1 a queued callback cannot enter after Open lands while acknowledgement is held" + $" ({landed}, queued {queuedAtBoundary}, entered {entriesAtBoundary})");
+                break;
+            case OpenCut.Refused:
+                var response = await reply!.WaitAsync(TimeSpan.FromSeconds(5));
+                check(response.Error == "resolution unavailable",
+                    "WJ-1 the refused operator request receives resolution unavailable after the refusal lands");
+                check(refused == 2 && queuedAtBoundary == 1 && entriesAtBoundary == 0 && after == beforeOpen &&
+                      owner.Owns && beforeOpen?.ParkRecovery is { } prior && store.Messages.ContainsKey(prior.Control) &&
+                      store.Messages.Values.Any(row => ReferenceEquals(row, pending) && !row.Done),
+                    "WJ-1 the refused Open preserves the exact Recover row, control and pending ticket" + $" (refused {refused}, {after.Status}, owns {owner.Owns})");
+                for (var pass = 0; pass < 5 && probe.JobTokens.Count == 0; pass++)
+                {
+                    await Prime(owner);
+                    scheduler.RunAll();
+                }
+                check(probe.JobTokens is [var retried] && !retried.IsCancellationRequested && Row() == beforeOpen,
+                    "WJ-1 refusing Open releases the restriction and the restored job can enter");
+                break;
+            case OpenCut.Entered:
+                check(landed && aliveAtLand && probe.JobTokens is [var entered] && entered.IsCancellationRequested,
+                    "WJ-1 applying the first cascade page cancels the original entered driver's token" + $" ({landed}, live {aliveAtLand}, entries {probe.JobTokens.Count})");
+                break;
+        }
+
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, MaxAttempts = 1, Transport = new JobOpenReplies(requests) });
+        async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
+        InstanceRow Row() => store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!.Row;
+        ValueTask<Contract.Admission> Send(string operation, string kind, string? payload = null) =>
+            edge.SendAsync(scope, target, operation, kind, payload);
+
+        async Task Step(Worker worker)
+        {
+            await Prime(worker);
+            worker.RunTurn(address);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task Prime(Worker worker)
+    {
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+    }
+
+    private sealed class JobOpenReplies(Requests requests) : IReplyTransport
+    {
+        public void Send(string node, Reply reply) => requests.Receive(reply);
+    }
+
+    private sealed class Probe(bool retainOnTerminate = false, bool restoreTrial = false, bool restoreMany = false) : Contract.IActorType
     {
         public string Type => "park-cascade";
         public int UnexpectedOffers { get; private set; }
@@ -562,6 +833,9 @@ internal static class ParkDrainCascadeChecks
                         break;
                     case "publish": turn.Publish("cascade-topic", "witness", TimeSpan.FromMinutes(1)); break;
                     case "arm-job": turn.StartJob("trial"); break;
+                    case "arm-many":
+                        foreach (var job in ManyJobs()) turn.StartJob(job.Key);
+                        break;
                     case "spawn": turn.State = turn.Start(new(Type, "child")).Id; break;
                     case "park": throw new InvalidOperationException("The fixture parks the parent.");
                     case "unexpected": UnexpectedOffers++; break;
@@ -582,6 +856,9 @@ internal static class ParkDrainCascadeChecks
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
-            new([], restoreTrial ? [new("trial", null)] : [], []);
+            new([], restoreMany ? ManyJobs() : restoreTrial ? [new("trial", null)] : [], []);
+
+        private static Contract.JobSpec[] ManyJobs() => Enumerable.Range(0, CascadeProtocol.PageLimit + 1)
+            .Select(index => new Contract.JobSpec($"trial-{index:D4}", null)).ToArray();
     }
 }

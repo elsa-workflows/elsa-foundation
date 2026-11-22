@@ -2644,7 +2644,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var unit = units[i];
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
-                if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null &&
+                if (outcome == Outcome.Refused && unit.Slot is { CurrentRow.ParkRecovery: not null } recovering &&
+                    unit.Row is { ParkRecovery: null, ParkDiscard.Kind: ParkClearKind.Terminate } &&
+                    unit.Consumed is [var terminate] && terminate.Message.Kind == Kinds.Terminate)
+                {
+                    // A refused Open leaves the committed recovery and its jobs intact. Parent commands
+                    // must remain pending for the next take so the parent's cascade can still reach this actor.
+                    if (terminate.Message.Operator is null) break;
+                    var refusal = CreationProtocol.Refuse(unit.Instance, recovering.CurrentRow, unit.Consumed, "ResolutionUnavailable");
+                    Bound(refusal, recovering);
+                    ReleaseJobRestriction(unit);
+                    outcome = await CommitAsync([refusal], marks, trial, generation, cancellationToken);
+                }
+                else if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null &&
                     (unit.FoundationCascade is null || !unit.CreationRefused) && unit.Slot is { } slot)
                 {
                     slot.RollbackTurn?.Invoke();
