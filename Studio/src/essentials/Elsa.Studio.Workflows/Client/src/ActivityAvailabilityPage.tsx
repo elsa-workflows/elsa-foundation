@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, EyeOff, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
@@ -422,10 +422,9 @@ function ActivityAvailabilityDetails({
             Catalog metadata is unavailable for this activity — it is not exposed by the currently saved policy.
           </p>
         )}
-        <details className="availability-details-raw">
-          <summary>Raw metadata</summary>
-          <pre>{rawMetadata}</pre>
-        </details>
+        <TechnicalDetails label="Raw metadata">
+          <pre className="availability-details-raw">{rawMetadata}</pre>
+        </TechnicalDetails>
       </div>
     </aside>
   );

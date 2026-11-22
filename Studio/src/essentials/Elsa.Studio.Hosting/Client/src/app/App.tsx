@@ -45,7 +45,7 @@ import type {
   StudioFeatureAreaContribution,
   StudioContributionAvailability
 } from "../sdk";
-import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, reviewStudioNavigation, settleStudioNavigationReview, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -140,12 +140,12 @@ type DiagnosticsWidgetBoundaryState = {
 // (The HostHealthRegistry/HostHealthEntry types that #192 added here alongside this map now live in
 // hooks/useHostHealth.ts after the #189 Query migration, so they are intentionally not re-added.)
 const navIconColors = {
-  dashboard: "#0ea5e9",
-  weather: "#14b8a6",
-  diagnostics: "#10b981",
-  modules: "#8b5cf6",
-  feeds: "#f59e0b",
-  themes: "#0f766e"
+  dashboard: "var(--studio-nav-icon-blue)",
+  weather: "var(--studio-nav-icon-teal)",
+  diagnostics: "var(--studio-success-fg)",
+  modules: "var(--studio-nav-icon-violet)",
+  feeds: "var(--studio-nav-icon-amber)",
+  themes: "var(--studio-nav-icon-teal)"
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
@@ -1703,7 +1703,7 @@ function getDefaultNavIconColor(id: string) {
   if (id.includes("modules")) return navIconColors.modules;
   if (id.includes("theme")) return navIconColors.themes;
   if (id.includes("feeds")) return navIconColors.feeds;
-  return "var(--primary)";
+  return "var(--studio-accent)";
 }
 
 export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";
@@ -1883,7 +1883,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
   return ()=>reset.dispose();
  },[boot]);
- return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{if(!boot?.connection.getSnapshot().active?.pendingWrites && requestStudioNavigation(currentRelativeLocation(),"/"))window.location.assign("/");}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
+ return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{const origin=currentRelativeLocation();if(boot?.connection.getSnapshot().active?.pendingWrites)return;settleStudioNavigationReview(reviewStudioNavigation(origin,"/"),allowed=>{if(allowed&&currentRelativeLocation()===origin&&!boot?.connection.getSnapshot().active?.pendingWrites)window.location.assign("/");});}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
 }
 
 function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {

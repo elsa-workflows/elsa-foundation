@@ -20,7 +20,7 @@ describe("extension builder module", () => {
       label: "Extension Builder",
       path: "/extension-builder",
       order: 50,
-      iconColor: "#ec4899",
+      iconColor: "var(--studio-nav-icon-pink)",
       placement: "admin",
       section: "settings",
       icon: Hammer

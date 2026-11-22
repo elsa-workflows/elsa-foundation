@@ -28,7 +28,12 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         var query = new RuntimeHistoryQuery(request.WorkflowExecutionId, request.Limit, request.Cursor,
             request.ActivityExecutionId, request.IncludeDescendants, request.BookmarkId, request.Category,
             request.Name, request.Search, await BindingAsync(token));
-        if (history is null) return Empty(await CoverageAsync(workflow, null, token), time.GetUtcNow());
+        if (history is null)
+        {
+            var coverage = await CoverageAsync(workflow, null, token);
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
+            return Empty(coverage, time.GetUtcNow());
+        }
         try
         {
             var page = await history.ReadPageAsync(query, token);
@@ -44,12 +49,15 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
                     throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event page positions disagree with their scanned window");
                 previous = item.Sequence;
             }
-            return new(await CoverageAsync(workflow, page.Head, token), page.Items.Select(RuntimeHistoryEventView.From).ToArray(),
+            var coverage = await CoverageAsync(workflow, page.Head, token);
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
+            return new(coverage, page.Items.Select(RuntimeHistoryEventView.From).ToArray(),
                 page.UpperSequence, page.ScannedThroughSequence, page.ScannedCount, page.NextContinuationToken,
                 page.CatchUpToken, page.ScopeComplete, page.ScopeLimitation, time.GetUtcNow());
         }
         catch (RuntimeHistoryIntegrityException)
         {
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
             return Empty(InvalidCoverage(), time.GetUtcNow());
         }
     }
@@ -58,6 +66,7 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
     {
         var workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.HistoryEventId);
+        var requestBinding = await BindingAsync(token);
         if (history is not IRuntimeHistoryDetailsStore details) throw new RuntimeHistoryUnsupportedSignal();
         var (head, item) = await details.FindEventDetailsAsync(request.WorkflowExecutionId, request.HistoryEventId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
@@ -65,7 +74,9 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         if (item.HistoryEventId != request.HistoryEventId)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "event detail disagrees with the requested snapshot");
         EnsureEventPosition(item, head);
-        return new(await CoverageAsync(workflow, head, token), RuntimeHistoryEventView.From(item), time.GetUtcNow());
+        var coverage = await CoverageAsync(workflow, head, token);
+        await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, requestBinding, token);
+        return new(coverage, RuntimeHistoryEventView.From(item), time.GetUtcNow());
     }
 
     public async Task<RuntimeHistoryBookmarkPageView> ListBookmarksAsync(GetRuntimeHistoryBookmarks request, CancellationToken token = default)
@@ -75,7 +86,12 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
             throw new ArgumentException("Unknown bookmark status.", nameof(request));
         var query = new RuntimeHistoryBookmarkQuery(request.WorkflowExecutionId, request.Limit, request.Cursor,
             request.ActivityExecutionId, request.IncludeDescendants, request.Status, await BindingAsync(token));
-        if (history is null) return new(await CoverageAsync(workflow, null, token), [], null, null, null, false, "History is unsupported by this host.", time.GetUtcNow());
+        if (history is null)
+        {
+            var coverage = await CoverageAsync(workflow, null, token);
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
+            return new(coverage, [], null, null, null, false, "History is unsupported by this host.", time.GetUtcNow());
+        }
         try
         {
             var page = await history.ListBookmarksAsync(query, token);
@@ -87,11 +103,14 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
                 EnsureBookmarkPosition(item, page.Head);
                 items.Add(await BookmarkAsync(workflow, item, token));
             }
-            return new(await CoverageAsync(workflow, page.Head, token), items, page.NextContinuationToken, page.TotalCount,
+            var coverage = await CoverageAsync(workflow, page.Head, token);
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
+            return new(coverage, items, page.NextContinuationToken, page.TotalCount,
                 page.ActiveCount, page.ScopeComplete, page.ScopeLimitation, time.GetUtcNow());
         }
         catch (RuntimeHistoryIntegrityException)
         {
+            await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, query.AccessBinding, token);
             return new(InvalidCoverage(), [], null, null, null, false, "Bookmark history integrity could not be established.", time.GetUtcNow());
         }
     }
@@ -100,13 +119,17 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
     {
         var workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.BookmarkId);
+        var requestBinding = await BindingAsync(token);
         if (history is not IRuntimeHistoryDetailsStore details) throw new RuntimeHistoryUnsupportedSignal();
         var (head, item) = await details.FindBookmarkDetailsAsync(request.WorkflowExecutionId, request.BookmarkId, token);
         if (item is null) throw new RuntimeResourceMissingSignal();
         if (item.Bookmark.Identity.BookmarkId != request.BookmarkId)
             throw new RuntimeHistoryIntegrityException(workflow.WorkflowExecutionId, "bookmark detail disagrees with the requested snapshot");
         EnsureBookmarkPosition(item, head);
-        return new(await CoverageAsync(workflow, head, token), await BookmarkAsync(workflow, item, token), time.GetUtcNow());
+        var coverage = await CoverageAsync(workflow, head, token);
+        var bookmark = await BookmarkAsync(workflow, item, token);
+        await EnsureCurrentAccessAsync(workflow.WorkflowExecutionId, requestBinding, token);
+        return new(coverage, bookmark, time.GetUtcNow());
     }
 
     private async Task<WorkflowExecutionState> AuthorizeAsync(string run, CancellationToken token)
@@ -116,6 +139,12 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         if (workflow is null || workflow.WorkflowExecutionId != run || !await authorization.CanInspectStructureAsync(workflow, token))
             throw new RuntimeResourceMissingSignal();
         return workflow;
+    }
+
+    private async Task EnsureCurrentAccessAsync(string run, string? requestBinding, CancellationToken token)
+    {
+        _ = await AuthorizeAsync(run, token);
+        if (await BindingAsync(token) != requestBinding) throw new RuntimeResourceMissingSignal();
     }
 
     private async ValueTask<string> BindingAsync(CancellationToken token) => RuntimeHistoryIdentity.CreateBinding(
@@ -183,7 +212,7 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         return RuntimeHistoryBookmarkView.From(item, observedAt, eligibility, reason);
     }
 
-    private ValueTask<RuntimeHistoryCoverageView> CoverageAsync(WorkflowExecutionState workflow, RuntimeHistoryHead? head, CancellationToken token)
+    private async ValueTask<RuntimeHistoryCoverageView> CoverageAsync(WorkflowExecutionState workflow, RuntimeHistoryHead? head, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (workflow.HistoryCaptureEnabledAtAdmission == false && (head is not null || workflow.HistoryCapturePolicy is not null) ||
@@ -204,24 +233,19 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
                 captureAvailable = false;
             }
         }
-        // These later owner contracts are intentionally not installed in this API slice. An unknown
-        // responsibility is never represented as zero pending or source closure.
-        var needsSettlement = policy?.SupportedKinds.Any(kind => kind is
-            "TimerScheduled" or "TimerDispatched" or "TimerRetired" or "ChildWorkflowDispatchRequested" or
-            "StimulusPublicationCommitted" or "ChildWorkflowSettled") == true;
-        var sourceLimitation = head is not null && needsSettlement
-            ? "This host cannot establish the source history settlement covered by this capture policy. Recorded events remain readable."
-            : null;
+        var (sourcePending, sourceLimitation) = await SourceSettlementAsync(workflow.WorkflowExecutionId, head, policy, token);
         var coverage = Coverage(workflow, head);
-        if (sourceLimitation is not null && coverage.State == "captured")
+        if (sourcePending == true && coverage.State == "captured")
+            coverage = coverage with { State = "pending", Limitation = "Source history is awaiting acknowledgement. The recorded prefix remains readable." };
+        else if (sourceLimitation is not null && coverage.State == "captured")
             coverage = coverage with { State = "partial", Limitation = sourceLimitation };
-        return ValueTask.FromResult(coverage with
+        return coverage with
         {
             CaptureAvailable = captureAvailable,
             CaptureLimitation = captureAvailable == false ? "Required history capture is unavailable in this host's current composition. Retained history remains readable." : null,
-            SourceHistoryPending = null,
+            SourceHistoryPending = sourcePending,
             SourceHistoryLimitation = sourceLimitation
-        });
+        };
     }
 
     private static bool IsAvailabilityFailure(Exception error) => error is not

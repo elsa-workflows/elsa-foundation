@@ -22,7 +22,7 @@ export function register(api: ElsaStudioModuleApi) {
       requiresBackend: [{id:"elsa.api.secrets",contractVersion:"1"}],
       title: "Secrets",
       path: "/security/secrets",
-      iconColor: "#64748b",
+      iconColor: "var(--studio-text-muted)",
       placement: "integrations",
       order: 20
     },

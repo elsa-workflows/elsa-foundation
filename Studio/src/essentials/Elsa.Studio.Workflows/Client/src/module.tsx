@@ -118,22 +118,22 @@ export function register(api: ElsaStudioModuleApi) {
     nav: {
       title: "Workflows",
       path: "/workflows/definitions",
-      iconColor: "#0ea5e9",
+      iconColor: "var(--studio-nav-icon-blue)",
       placement: "build",
       childDisplay: "links",
       order: 20,
       items: [
-        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "build", parentId: "workflows", order: 10 },
+        { id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}], title: "Definitions", path: "/workflows/definitions", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "workflows", order: 10 },
         ...(api.backendSession ? [
           { id: "workflows-bpmn-processes", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-publications"]}], title: "BPMN processes", path: "/workflows/bpmn", placement: "build" as const, parentId: "workflows", order: 25 },
           { id: "workflows-bpmn-runs", requiresBackend: [{id:"elsa.api.bpmn-catalog",contractVersion:"1",relations:["bpmn-executions"]}], title: "BPMN runs", path: "/workflows/bpmn/runs", placement: "operate" as const, order: 35 }
         ] : []),
-        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "operate", order: 30 },
-        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "build", parentId: "workflows", order: 20 },
-        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "build", parentId: "library", order: 20 },
-        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "build", parentId: "library", order: 25 },
-        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
-        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "authoring", order: 50 }
+        { id: "workflows-runs", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Runs", path: "/workflows/instances", iconColor: "var(--studio-nav-icon-blue)", placement: "operate", order: 30 },
+        { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "var(--studio-nav-icon-amber)", placement: "build", parentId: "workflows", order: 20 },
+        { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "var(--studio-nav-icon-violet)", placement: "build", parentId: "library", order: 20 },
+        { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "library", order: 25 },
+        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "var(--studio-nav-icon-blue)", placement: "runtime", order: 40 },
+        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 }
       ]
     },
     routes: [

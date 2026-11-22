@@ -45,6 +45,8 @@ public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitO
     private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore;
     private readonly IPostCommitOutboxLookupStore? _innerLookupStore;
 
+    public bool CanInspectHistorySources(IRuntimeHistoryStore history) => _innerLookupStore?.CanInspectHistorySources(history) == true;
+
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);

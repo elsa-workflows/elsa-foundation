@@ -105,7 +105,7 @@ export function register(api: ElsaStudioModuleApi) {
     label: "Structured logs",
     path: "/diagnostics/structured-logs",
     order: 860,
-    iconColor: "#10b981",
+    iconColor: "var(--studio-success-fg)",
     parentId: "diagnostics"
   });
 

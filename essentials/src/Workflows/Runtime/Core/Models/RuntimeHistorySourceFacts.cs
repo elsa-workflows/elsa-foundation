@@ -102,7 +102,8 @@ public static class RuntimeHistorySourceFacts
         }
     }
 
-    public static bool IsFinalProfile(RuntimeHistoryCapturePolicy? policy) => policy is { PolicyId: "runtime-history-v3", Version: 3 };
+    public static bool IsFinalProfile(RuntimeHistoryCapturePolicy? policy) => policy is
+        { PolicyId: "runtime-history-v3", Version: 3 } or { PolicyId: "runtime-history-v4", Version: 4 };
     public static string EventName(RuntimeHistorySourceFactKind kind) => kind switch
     {
         RuntimeHistorySourceFactKind.IncidentCreated => "IncidentRecorded",

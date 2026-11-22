@@ -121,8 +121,10 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
             sp.GetService<IActivityExecutionStateStore>(),
             sp.GetService<ILogger<RuntimeHistoryInspectionService>>())
         {
+            SourceLookup = () => sp.GetService<IPostCommitOutboxLookupStore>(),
             OccurrenceAccessBinding = (workflow, binding, token) =>
                 sp.GetRequiredService<RuntimeHistoryOccurrenceAuthorization>().BindAsync(workflow, binding, token),
+            TimerLookup = () => sp.GetService<IDurableTimerStore>() as IDurableTimerHistoryStore,
             CaptureAvailability = policy =>
             {
                 var reader = sp.GetService<IRuntimeHistoryStore>();

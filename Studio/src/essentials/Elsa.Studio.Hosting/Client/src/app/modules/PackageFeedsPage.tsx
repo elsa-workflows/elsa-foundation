@@ -1,8 +1,8 @@
-import { StudioButton, StudioPageHeader, StudioField } from "../ui";
+import { StudioDialog, StudioDialogFooter, StudioButton, StudioPageHeader, StudioField } from "../ui";
 import { StudioIconButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useRef, useState, useId } from "react";
-import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
-import { defaultStudioHostId, useDialogFocus } from "../../sdk";
+import { PackagePlus, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { defaultStudioHostId } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
@@ -183,7 +183,7 @@ function PackageFeedsWorkbench({
 
           <StudioButton type="button" className="package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
             <PackagePlus size={15} />
-            Add feed
+            New feed
           </StudioButton>
 
           {addFeedDialogOpen ? (
@@ -325,10 +325,9 @@ function FeedDialog({
   onSubmit(feedDraft: FeedDraft): void;
 }) {
   const [feedDraft, setFeedDraft] = useState<FeedDraft>(() => createFeedDraft(feed));
-  const dialogRef = useRef<HTMLElement>(null);
-  const title = mode === "edit" ? "Edit Feed" : "Add Feed";
-  const submitLabel = mode === "edit" ? "Save feed" : "Add feed";
-  useDialogFocus(dialogRef, busy ? null : onClose);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const title = mode === "edit" ? "Edit feed" : "New feed";
+  const submitLabel = mode === "edit" ? "Save" : "Create";
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -336,20 +335,20 @@ function FeedDialog({
   }
 
   return (
-    <div className="modules-dialog-backdrop" role="presentation">
-      <section ref={dialogRef} className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title" tabIndex={-1}>
-        <div className="modules-upload-dialog-heading">
-          <div>
-            <h3 id="package-feed-dialog-title">{title}</h3>
-            {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
-          </div>
-          <StudioIconButton aria-label={`Close ${mode} feed`} onClick={onClose} disabled={busy}>
-            <X size={16} aria-hidden="true" />
-          </StudioIconButton>
-        </div>
-
-        <form id="package-feed-form" className="modules-form" onSubmit={submit}>
-          <StudioField label="Feed name"><input data-dialog-initial-focus name="feedName" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
+    <StudioDialog
+      open
+      title={title}
+      description={feedChangesRequireRestart ? `Restart the ${host.label} host after changing a feed to use its new settings.` : undefined}
+      closeLabel={`Close ${mode} feed`}
+      initialFocusRef={nameInput}
+      dismissDisabled={busy}
+      dismissOnOutsideClick={false}
+      onClose={onClose}
+      onSubmit={submit}
+      footer={<StudioDialogFooter onCancel={onClose} cancelDisabled={busy} confirmLabel={submitLabel} confirmDisabled={busy || !feedDraft.name.trim()} />}
+    >
+      <div className="modules-form">
+          <StudioField label="Feed name"><input ref={nameInput} name="feedName" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
           <StudioField label="Service index"><input name="serviceIndex" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
           <StudioField label="Directory path"><input name="directoryPath" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
           <StudioField label="Include patterns"><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
@@ -362,17 +361,8 @@ function FeedDialog({
             />
             Include all packages
           </label>
-        </form>
-
-        <div className="modules-dialog-actions">
-          <StudioButton type="button" onClick={onClose} disabled={busy}>Cancel</StudioButton>
-          <StudioButton type="submit" form="package-feed-form" disabled={busy || !feedDraft.name.trim()}>
-            <PackagePlus size={15} />
-            {submitLabel}
-          </StudioButton>
-        </div>
-      </section>
-    </div>
+      </div>
+    </StudioDialog>
   );
 }
 

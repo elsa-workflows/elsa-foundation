@@ -49,7 +49,7 @@ export function StudioDialog({
     <Dialog.Title className={hideTitle ? "studio-dialog-sr-only" : "studio-dialog-title"}>{title}</Dialog.Title>
     {!hideCloseButton ? (
       <Dialog.Close asChild>
-        <StudioButton className="studio-dialog-close" variant="ghost" aria-label={closeLabel} disabled={dismissDisabled}>
+        <StudioButton className="studio-dialog-close" variant="ghost" aria-label={closeLabel} title={closeLabel} disabled={dismissDisabled}>
           <X size={16} aria-hidden="true" />
         </StudioButton>
       </Dialog.Close>

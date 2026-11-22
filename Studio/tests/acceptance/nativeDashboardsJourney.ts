@@ -258,8 +258,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await expect(dashboardNavigation).toBeVisible();
       }
       await revealDashboardNavigation();
-      const cancelPrompt = page.waitForEvent("dialog"); const cancelledNavigation = dashboardNavigation.click();
-      const discard = await cancelPrompt; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.dismiss(); await cancelledNavigation;
+      await dashboardNavigation.click();
+      await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Cancel", exact: true }).click();
       await expectResourceLocation("questions", copied.id); await expect(page.getByRole("combobox", { name: "Query form", exact: true })).toHaveValue("records");
       await capture(page, info, "question-navigation-cancelled");
       const tabs = page.getByRole("tablist", { name: "Open screens", exact: true });
@@ -276,8 +276,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await tabs.locator(`[data-tab-id="${dashboardTabId}"]`).press("Delete");
       await expect(tabs.locator(`[data-tab-id="${dashboardTabId}"]`)).toHaveCount(0);
       await revealDashboardNavigation();
-      const confirmPrompt = page.waitForEvent("dialog"); const confirmedNavigation = dashboardNavigation.click();
-      const confirmedDiscard = await confirmPrompt; expect(confirmedDiscard.type()).toBe("confirm"); await confirmedDiscard.accept(); await confirmedNavigation;
+      await dashboardNavigation.click();
+      await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Discard changes", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Dashboards", level: 2, exact: true })).toBeVisible(); await capture(page, info, "question-navigation-confirmed");
       await page.getByRole("button", { name: "New dashboard", exact: true }).first().click();
       await page.getByLabel("Name", { exact: true }).fill(`Private operations ${suffix}`);
@@ -315,11 +315,11 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(page.getByRole("combobox", { name: "Size for question 2", exact: true })).toHaveCount(0);
       await page.getByRole("button", { name: "Edit dashboard", exact: true }).click();
       await page.getByLabel("Description", { exact: true }).fill("Unsaved description for a cancellation check.");
-      const declinedPrompt = page.waitForEvent("dialog"); const declinedCancel = page.getByRole("button", { name: "Cancel", exact: true }).click();
-      const decline = await declinedPrompt; expect(decline.type()).toBe("confirm"); await decline.dismiss(); await declinedCancel;
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Cancel", exact: true }).click();
       await expect(page.getByLabel("Description", { exact: true })).toHaveValue("Unsaved description for a cancellation check.");
-      const acceptedPrompt = page.waitForEvent("dialog"); const acceptedCancel = page.getByRole("button", { name: "Cancel", exact: true }).click();
-      const accept = await acceptedPrompt; expect(accept.type()).toBe("confirm"); await accept.accept(); await acceptedCancel;
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Discard changes", exact: true }).click();
       await expectResourceLocation("dashboards", dashboard.id);
       await expect(page.getByRole("heading", { name: dashboard.name, level: 2, exact: true })).toBeVisible();
       const firstSavedTile = page.locator(".named-tile").first();
@@ -518,8 +518,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await capture(reader, info, "question-repair-blank");
         expect(repairWrites).toEqual([]);
         // Explicitly discard the local replacement before reopening the saved definition.
-        const discardRepair = reader.waitForEvent("dialog"); const back = reader.getByRole("button", { name: "Back to questions", exact: true }).click();
-        const discard = await discardRepair; expect(discard.type()).toBe("confirm"); expect(discard.message()).toContain("Discard unsaved changes"); await discard.accept(); await back;
+        await reader.getByRole("button", { name: "Back to questions", exact: true }).click();
+        await reader.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Discard changes", exact: true }).click();
         await expect(reader.getByRole("heading", { name: "Questions", level: 2, exact: true })).toBeVisible();
       } finally { reader.off("request", collectRepairWrite); }
       const afterRepair = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
@@ -557,8 +557,8 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toContainText(lateReference.name);
       await expect(page.getByLabel("Maximum result rows/groups", { exact: true })).toHaveValue("23");
       expect((await backend.api<Resource>(`/_elsa/studio/questions/${copied.id}`)).revision).toBe(copied.revision);
-      const discardLateDraft = page.waitForEvent("dialog"); const closeLateDraft = page.getByRole("button", { name: "Back to questions", exact: true }).click();
-      const discardLate = await discardLateDraft; expect(discardLate.type()).toBe("confirm"); await discardLate.accept(); await closeLateDraft;
+      await page.getByRole("button", { name: "Back to questions", exact: true }).click();
+      await page.getByRole("dialog", { name: "Discard unsaved changes" }).getByRole("button", { name: "Discard changes", exact: true }).click();
       await expect(page.getByRole("link", { name: saved.name, exact: true })).toBeVisible();
       await captureDashboardAppearances(page, info, capture, "questions-collection", async name => {
         await expect(page.getByRole("button", { name: "New question", exact: true })).toBeVisible();

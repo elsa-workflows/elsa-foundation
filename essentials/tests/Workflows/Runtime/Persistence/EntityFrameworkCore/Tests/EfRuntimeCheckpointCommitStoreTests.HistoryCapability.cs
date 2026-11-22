@@ -21,6 +21,22 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "history-capability-controls-0123456789", AllowEphemeralDevelopmentKey = false }));
 
     [Fact]
+    public void Source_inspection_requires_the_actual_EF_reader_context_accessor_and_complete_history_model()
+    {
+        var services = CompleteHistoryReaderServices(); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
+        using var provider = services.BuildServiceProvider(); using var first = provider.CreateScope(); using var second = provider.CreateScope();
+        var context = first.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        var access = first.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>();
+        var reader = first.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>();
+        IPostCommitOutboxLookupStore lookup = new EfRuntimePostCommitOutboxStore(context, access);
+        Assert.True(lookup.CanInspectHistorySources(reader));
+        Assert.False(lookup.CanInspectHistorySources(second.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>()));
+        Assert.False(lookup.CanInspectHistorySources(new EfRuntimeHistoryStore(context, new FixedAccessor(access.Current.RequireScope().Value), HistoryCapabilityCodec, RuntimeHistoryEfModule.Chain)));
+        Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
+        Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
+    }
+
+    [Fact]
     public void Public_native_history_capability_requires_its_actual_reader_context_accessor_and_declared_chain()
     {
         var services = CompleteHistoryReaderServices(); services.AddRuntimeCheckpointCommitEntityFrameworkCore();
@@ -54,6 +70,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
         var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
         Assert.False(writer.CanCommitHistory(reader)); Assert.False(observer.CanRecordHistory(reader));
+        Assert.False(((IPostCommitOutboxLookupStore)new EfRuntimePostCommitOutboxStore(context, access)).CanInspectHistorySources(reader));
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
         Assert.Empty(context.ChangeTracker.Entries()); Assert.Null(context.Database.CurrentTransaction);
     }
@@ -69,6 +86,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         IRuntimeCheckpointCommitStore writer = new EfRuntimeCheckpointCommitStore(context, access);
         var observer = new EfRuntimeHistoryMutationStore(context, access, reader, TimeProvider.System, RuntimeHistoryEfModule.Chain);
         Assert.False(writer.CanCommitHistory(reader)); Assert.False(observer.CanRecordHistory(reader));
+        Assert.False(((IPostCommitOutboxLookupStore)new EfRuntimePostCommitOutboxStore(context, access)).CanInspectHistorySources(reader));
         Assert.Equal(System.Data.ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
