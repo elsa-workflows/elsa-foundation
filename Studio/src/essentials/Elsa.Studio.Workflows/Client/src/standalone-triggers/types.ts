@@ -30,7 +30,7 @@ export interface TargetView {
   supportsWorkflowOwnedHttpResponse?: boolean; findings: Finding[];
 }
 export type ValueSelector = { kind: "Literal"; value: JsonValue } | { kind: "SourceField"; path: string[] };
-export type InputBinding = ValueSelector | { kind: "Expression"; template: { language: string; source: string; resultType: Record<string, JsonValue>; options: Record<string, JsonValue>; capabilityProfile: "binding-pure-v1" }; parameters: Record<string, ValueSelector> };
+export type InputBinding = ValueSelector | { kind: "Expression"; template: { language: string; source: string; resultType: Record<string, JsonValue>; options: Record<string, JsonValue>; capabilityProfile: "binding-readonly-v1" }; parameters: Record<string, ValueSelector> };
 export interface InputMapping { inputName: string; binding: InputBinding }
 export interface InvocationGrant { state: "Absent" | "Granted" | "Revoked" | "Unavailable"; revision?: Revision; scopeFingerprint?: string; grantedAt?: string; grantedBy?: string; findings?: Finding[] }
 export interface SubscriptionView {

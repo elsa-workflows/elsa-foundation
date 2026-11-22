@@ -31,7 +31,7 @@ B[Client-side Blank workflow] --> St
 - Host options apply `Workflows:Design:Templates:RemovedStarters`. Unknown ids are ignored and diagnosed once at startup; a complete removal leaves the client-side Blank workflow.
 - A resolver checks the server's activity catalog, calculates availability with an actionable reason, selects the newest available version for each recipe activity on every use, and replaces placeholder node ids while remapping references.
 - A separate read-only built-in list is advertised by a Design capability link. Built-ins cannot be mutated through custom template APIs; copying one creates a custom template.
-- The Backend API Call recipe requires the HTTP activities and Liquid. Its binding-pure Liquid `parse_json` filter parses `SendHttpRequest.ResponseBody`, and escaped Liquid output renders the HTML response. The upstream URL is editable; tests use a local HTTP stub.
+- The Backend API Call recipe requires the HTTP activities and Liquid. Its binding-readonly Liquid `parse_json` filter parses `SendHttpRequest.ResponseBody`, and escaped Liquid output renders the HTML response. The upstream URL is editable; tests use a local HTTP stub.
 
 ### Studio responsibilities
 

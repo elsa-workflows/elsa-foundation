@@ -108,14 +108,14 @@ It follows the in-place amendment pattern of `specs/1179-agents`: a dated amendm
 ### Backend API Call: gap analysis (goes into research.md and the FR-018 rationale)
 Gaps found:
 1. `SendHttpRequestResult.ResponseBody` is a `string` (`FormattedContent`). It has no parsed-JSON output.
-2. Liquid (`PortableLiquidExpressionHandler`) runs in the `binding-pure-v1` profile and sees only declared parameters, such as an `ActivityResultExpressionParameterBinding` to `ResponseBody`. It has no filter to parse JSON, so `{% for p in products %}` over the body string can't work.
+2. Liquid (`PortableLiquidExpressionHandler`) runs in the `binding-readonly-v1` profile and sees only declared parameters, such as an `ActivityResultExpressionParameterBinding` to `ResponseBody`. It has no filter to parse JSON, so `{% for p in products %}` over the body string can't work.
 3. `ILiquidFilter`, `Base64Filter` and `DictionaryKeysFilter` exist but are never registered with the Fluid `TemplateOptions`. They are dead code.
-4. A Set Variable workflow intrinsic exists (`Elsa.SetVariable`) but is not a CLR activity. It may enable a preprocessing alternative, but it does not provide JSON parsing inside the current binding-pure Liquid expression path.
+4. A Set Variable workflow intrinsic exists (`Elsa.SetVariable`) but is not a CLR activity. It may enable a preprocessing alternative, but it does not provide JSON parsing inside the current binding-readonly Liquid expression path.
 
 Works today: JavaScript in the WriteHttpResponse `Body` binding (`JSON.parse` plus template literals). That isn't the Liquid experience you asked for.
 
 **Recommended fix (stated in the spec as FR-018 and decided in the plan):**
-- add a binding-pure `parse_json` Liquid filter;
+- add a binding-readonly `parse_json` Liquid filter;
 - register the existing `ILiquidFilter` set in the handler;
 - use Fluid's `escape` for product fields.
 
@@ -216,10 +216,10 @@ A new `specs/1167-workflow-templates/research.md` explains the decisions and wha
 
 - Gap findings:
   - `SendHttpRequestResult.ResponseBody` is a string;
-  - Liquid is binding-pure and has no `parse_json` filter;
+  - Liquid is binding-readonly and has no `parse_json` filter;
   - the `ILiquidFilter` set (`base64`, `keys`) is never registered;
   - Set Variable exists as an engine intrinsic, not a CLR activity; it may enable JavaScript preprocessing but does not provide JSON parsing inside Liquid.
-- Recommendation: a binding-pure `parse_json` filter, registering the existing filters, and `escape` for HTML output. Alternatives: a parsed `ResponseContent` output on `SendHttpRequest`, or a JavaScript binding.
+- Recommendation: a binding-readonly `parse_json` filter, registering the existing filters, and `escape` for HTML output. Alternatives: a parsed `ResponseContent` output on `SendHttpRequest`, or a JavaScript binding.
 - A sketch of the Backend API Call workflow (endpoint `/products`, editable upstream URL, Liquid table template), plus the stubbing and outbound-policy risks.
 - The recipe format (activity-type references, placeholder node ids), why a separate endpoint was chosen, the removal options name, and the starter-to-module ownership table.
 

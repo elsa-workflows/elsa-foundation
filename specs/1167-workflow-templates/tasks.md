@@ -18,7 +18,7 @@ The following tasks describe future implementation work; none is complete as par
 
 ### Recipe and Studio integration
 
-- [ ] T010 Implement and register the binding-pure Liquid `parse_json` filter and supported `ILiquidFilter` implementations; verify array iteration, malformed JSON failure and HTML escaping for the Backend API Call body. (FR-017, FR-018)
+- [ ] T010 Implement and register the binding-readonly Liquid `parse_json` filter and supported `ILiquidFilter` implementations; verify array iteration, malformed JSON failure and HTML escaping for the Backend API Call body. (FR-017, FR-018)
 - [ ] T011 Add the module-owned Hello World Console, Hello World HTTP (`http`), Backend API Call, Scheduled job, Dispatch child workflow and BPMN process recipes; verify each graph and its required activities/languages. Use a local HTTP stub for Backend API Call tests. (FR-010, FR-017)
 - [ ] T012 Update Studio to consume the advertised server list in Templates and Starting point, reflect unavailable/removed states, preserve client-side Blank with root-activity choice, keep built-ins read-only, and use the existing client HTTP recipe when the capability is absent. (FR-008, FR-011, FR-014, FR-015, FR-016)
 - [ ] T013 *(P3)* Add Studio export of a template as a module-embeddable starter recipe with activity-type references, no pinned versions and placeholder node ids. (FR-019)

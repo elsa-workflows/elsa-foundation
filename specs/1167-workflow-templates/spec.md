@@ -44,7 +44,7 @@
   - **Scheduled job**: a Timer or Cron trigger followed by WriteLine.
   - **Dispatch child workflow**: a parent workflow that dispatches a child workflow.
   - **BPMN process**: a minimal BPMN process with a start event, task and end event.
-- FR-018: Liquid bindings can parse a JSON response body into iterable data using a `parse_json` filter. Liquid filters implementing `ILiquidFilter` are registered with the binding-pure handler, and values interpolated into HTML are escaped using Liquid's `escape` behavior.
+- FR-018: Liquid bindings can parse a JSON response body into iterable data using a `parse_json` filter. Liquid filters implementing `ILiquidFilter` are registered with the binding-readonly handler, and values interpolated into HTML are escaped using Liquid's `escape` behavior.
 - FR-019 *(P3)*: Studio can export a template as a starter recipe that references activity types without pinned versions and uses placeholder node ids that are regenerated when the recipe is used.
 
 ## Key Entities

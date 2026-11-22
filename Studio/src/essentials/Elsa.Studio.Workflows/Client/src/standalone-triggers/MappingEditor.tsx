@@ -55,7 +55,7 @@ export function realizeMappings(inputs: DeclaredInput[], drafts: MappingDrafts):
           }
           else parameters[parameter.name] = { kind: "Literal", value: parseLiteralJson(parameter.text) };
         }
-        mappings.push({ inputName: input.name, binding: { kind: "Expression", template: { ...(draft.template ?? { resultType: { alias: input.type.alias, collectionKind: input.type.collectionKind }, options: {}, capabilityProfile: "binding-pure-v1" as const }), language: draft.language, source: draft.source }, parameters } });
+        mappings.push({ inputName: input.name, binding: { kind: "Expression", template: { ...(draft.template ?? { resultType: { alias: input.type.alias, collectionKind: input.type.collectionKind }, options: {}, capabilityProfile: "binding-readonly-v1" as const }), language: draft.language, source: draft.source }, parameters } });
       }
     } catch (error) { errors[input.name] = error instanceof Error ? error.message : "The mapping is invalid."; }
   }

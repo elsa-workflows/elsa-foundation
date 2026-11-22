@@ -137,7 +137,7 @@ describe("mounted source path authoring", () => {
     const literal = '[18446744073709551615,0.1234567890123456789012345678,null,{"nested":[true]}]';
     const mappings: InputMapping[] = [
       { inputName: "Customer", binding: { kind: "SourceField", path: ["payload", "customer.name", "address/line", "~key", "0"] } },
-      { inputName: "Formula", binding: { kind: "Expression", template: { language: "JavaScript", source: "args.customerId", resultType: { alias: "String", collectionKind: "Single" }, options: { strict: true }, capabilityProfile: "binding-pure-v1" }, parameters: {
+      { inputName: "Formula", binding: { kind: "Expression", template: { language: "JavaScript", source: "args.customerId", resultType: { alias: "String", collectionKind: "Single" }, options: { strict: true }, capabilityProfile: "binding-readonly-v1" }, parameters: {
         customerId: { kind: "SourceField", path: ["payload", "customer", "id"] }, configured: { kind: "Literal", value: parseLiteralJson(literal) }
       } } }
     ];

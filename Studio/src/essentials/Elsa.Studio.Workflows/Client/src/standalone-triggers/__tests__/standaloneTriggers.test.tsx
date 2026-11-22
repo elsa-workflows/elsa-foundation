@@ -64,13 +64,26 @@ describe("standalone trigger API and literal handling", () => {
     expect(serializeTriggerPayload(parseLiteralJson(quoted))).toBe(quoted);
     expect(() => parseLiteralJson("[01]")).toThrow();
   });
+  it("pins a newly authored expression mapping to the accepted readonly profile", () => {
+    const inputs = [{ name: "Amount", type: { alias: "UInt64", collectionKind: "Single" }, isRequired: true }];
+    const initial = mappingDrafts([{ inputName: "Amount", binding: { kind: "Literal", value: 7 } }]);
+    const built = realizeMappings(inputs, {
+      Amount: { ...initial.Amount, kind: "Expression", language: "JavaScript", source: "19" }
+    });
+    expect(built.errors).toEqual({});
+    expect(built.mappings).toEqual([{ inputName: "Amount", binding: {
+      kind: "Expression", template: { language: "JavaScript", source: "19",
+        resultType: { alias: "UInt64", collectionKind: "Single" }, options: {}, capabilityProfile: "binding-readonly-v1" },
+      parameters: {}
+    } }]);
+  });
   it("retains exact typed scalar inputs, explicit null, omission and expression options", () => {
     const inputs = [{ name: "Amount", type: { alias: "UInt64", collectionKind: "Single" }, isRequired: true }];
     const drafts = mappingDrafts([{ inputName: "Amount", binding: { kind: "Literal", value: "18446744073709551615" } }]);
     const built = realizeMappings(inputs, drafts);
     expect(built.errors).toEqual({});
     expect(serializeTriggerPayload(built.mappings)).toContain('"value":18446744073709551615');
-    const expression: InputMapping = { inputName: "Amount", binding: { kind: "Expression", template: { language: "JavaScript", source: "args.value", resultType: { alias: "UInt64", collectionKind: "Single" }, options: { strict: true }, capabilityProfile: "binding-pure-v1" }, parameters: { value: { kind: "SourceField", path: ["payload", "amount"] } } } };
+    const expression: InputMapping = { inputName: "Amount", binding: { kind: "Expression", template: { language: "JavaScript", source: "args.value", resultType: { alias: "UInt64", collectionKind: "Single" }, options: { strict: true }, capabilityProfile: "binding-readonly-v1" }, parameters: { value: { kind: "SourceField", path: ["payload", "amount"] } } } };
     expect(realizeMappings(inputs, mappingDrafts([expression])).mappings).toEqual([expression]);
     expect(realizeMappings(inputs, { Amount: { ...drafts.Amount, kind: "Null" } }).mappings).toEqual([{ inputName: "Amount", binding: { kind: "Literal", value: null } }]);
     expect(realizeMappings(inputs, { Amount: { ...drafts.Amount, kind: "Omit" } }).mappings).toEqual([]);
