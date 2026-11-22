@@ -15,12 +15,13 @@ internal static class ParkHandoffCreditChecks
         await Interrupt(check, loseAfter: null);
         await Interrupt(check, loseAfter: false);
         await Interrupt(check, loseAfter: true);
+        await HeldCohortAfterTake(check, suspend: false, secondInput: true);
         await HeldCohortAfterTake(check, suspend: false);
         await HeldCohortAfterTake(check, suspend: true);
         await HeldRunner(check);
     }
 
-    private static async Task HeldCohortAfterTake(Action<bool, string> check, bool suspend)
+    private static async Task HeldCohortAfterTake(Action<bool, string> check, bool suspend, bool secondInput = false)
     {
         const long initial = 1_702_610_021_000;
         const long releaseDue = initial + 1_000;
@@ -30,7 +31,8 @@ internal static class ParkHandoffCreditChecks
         var ingress = new InMemoryIngress(store, new Requests("held-cohort-take"), "held-cohort-take",
             (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Suspend or Contract.Kinds.Resume);
         var probe = new Probe { HoldInputs = true };
-        var label = $"E-8 {(suspend ? "suspended" : "running")} cohort";
+        var label = secondInput ? "E-8 bounded two-row cohort" : $"E-8 {(suspend ? "suspended" : "running")} cohort";
+        string[] inputs = secondInput ? ["held", "held-2"] : ["held"];
         var coldReads = new List<string>();
         var first = Worker("cohort-first", 32);
         await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
@@ -40,19 +42,20 @@ internal static class ParkHandoffCreditChecks
         await Step(first);
         await Send("fault", "fault");
         for (var pass = 0; pass < 6 && Row().Status != InstanceStatus.Faulted; pass++) await Step(first);
-        await Send("held", "input");
+        foreach (var input in inputs) await Send(input, "input");
         await Step(first);
         var park = (await new ActorList(store, 8).GetAsync(scope, target.Actor))!.Selection;
         await Send("recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(park)));
         await Step(first);
-        var opened = Row().ParkRecovery is not null && Delivery("held") is { Done: true, KeptBy: ParkKeepReason.Arrived };
-        check(opened, $"{label}: Resume opens with the input still kept");
+        var opened = Row().ParkRecovery is not null && inputs.All(input => Delivery(input) is { Done: true, KeptBy: ParkKeepReason.Arrived });
+        check(opened, $"{label}: Resume opens with its cohort inputs still kept");
         if (!opened) return;
         var epoch = first.Fences.Single().Epoch;
 
         var release = await ingress.SendAsync(scope, target, "release", "release-held", options: new(DueAt: releaseDue));
         var late = Delivery("release");
         var held = Delivery("held");
+        var cohort = inputs.Select(Delivery).ToArray();
         // The store contract permits an independently allocated ordering key below the restored input.
         late.Seq = held.Seq - 1;
         for (var pass = 0; pass < 16 && Row().ParkRecovery is not null; pass++)
@@ -62,9 +65,9 @@ internal static class ParkHandoffCreditChecks
         }
         var mark = Row().ParkCohort;
         var completed = first.Owns && release.Outcome == Contract.AdmissionOutcome.Accepted && Row().ParkRecovery is null &&
-            mark is not null && held is { Done: false, Held: true, ReleasedBy: var tag } && tag == mark &&
-            held.Seen == epoch && late is { Done: false, ReleasedBy: null } && late.Seen == epoch &&
-            probe.HandedHere.SetEquals(["held"]) && Json.Read<List<string>>(Row().State).Count == 0;
+            mark is not null && cohort.All(row => !row.Done && row.Held && row.ReleasedBy == mark && row.Seen == epoch) &&
+            late is { Done: false, ReleasedBy: null } && late.Seen == epoch &&
+            probe.HandedHere.SetEquals(inputs) && Json.Read<List<string>>(Row().State).Count == 0;
         check(completed, $"{label}: Complete keeps the held row and its mark while the earlier-order arrival waits " +
             $"(owns {first.Owns}; mark {mark}; held {held.Held}; late pending {!late.Done})");
         if (!completed) return;
@@ -80,6 +83,7 @@ internal static class ParkHandoffCreditChecks
 
         await owner.DisposeAsync();
         probe.HandedHere.Clear();
+        if (secondInput) probe.HoldOnly = "held";
         now = releaseDue;
         var cold = Worker("cohort-cold", 1, observed => coldReads.Add(observed.Message.Id));
         await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
@@ -101,9 +105,26 @@ internal static class ParkHandoffCreditChecks
         var handed = probe.HandedHere.SetEquals(["held"]) && !late.Done && !held.Done && held.Held && Row().ParkCohort == mark;
         check(handed, $"{label}: the cold owner hands the cohort row to the model before the earlier-order arrival");
         if (!handed) return;
+        if (secondInput)
+        {
+            var unpolled = coldReads.SequenceEqual(["release", "held"]) && Json.Read<List<string>>(Row().State).Count == 0;
+            check(unpolled, $"{label}: the first input is held while the second cohort input is still unpolled");
+            if (!unpolled) return;
+            // Let the owner try its cached arrival before the next narrow poll can reveal the second input.
+            await cold.FlushAsync();
+            cold.RunTurn(id);
+            await cold.FlushAsync();
+            check(!late.Done && Row().Status == InstanceStatus.Running && Row().ParkCohort == mark,
+                $"{label}: the owner defers the cached arrival while the second cohort input is unpolled (status {Row().Status})");
+            for (var pass = 0; pass < 12 && !probe.HandedHere.Contains("held-2") && !late.Done; pass++) await Step(cold);
+            check(probe.HandedHere.SetEquals(inputs) && !held.Done && !late.Done &&
+                Json.Read<List<string>>(Row().State).SequenceEqual(["held-2"]),
+                $"{label}: the mark skips the held input and makes the unpolled input precede the arrival");
+        }
         for (var pass = 0; pass < 12 && Row().Status == InstanceStatus.Running; pass++) await Step(cold);
+        string[] expected = secondInput ? ["held-2", "held", "release"] : ["held", "release"];
         check(Row() is { Status: InstanceStatus.Finished, ParkCohort: null } &&
-            Json.Read<List<string>>(Row().State).SequenceEqual(["held", "release"]) &&
+            Json.Read<List<string>>(Row().State).SequenceEqual(expected) &&
             store.Messages.Values.All(row => row.Done || row.ReleasedBy != mark),
             $"{label}: the release turn consumes the held input, finishes and clears the mark");
 
@@ -569,6 +590,7 @@ internal static class ParkHandoffCreditChecks
     {
         public string Type => "handoff-credit";
         internal bool HoldInputs { get; set; }
+        internal string? HoldOnly { get; set; }
         internal bool KeepsJob { get; init; }
         internal int JobEntries { get; private set; }
         internal int JobResults { get; private set; }
@@ -594,7 +616,7 @@ internal static class ParkHandoffCreditChecks
                 }
                 if (message.Kind != "input") continue;
                 HandedHere.Add(message.Id);
-                if (HoldInputs && !releasesHeld) turn.Hold(message);
+                if (HoldInputs && !releasesHeld && (HoldOnly is null || HoldOnly == message.Id)) turn.Hold(message);
                 else order.Add(message.Id);
             }
             turn.State = Json.Write(order);
