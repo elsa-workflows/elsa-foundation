@@ -41,6 +41,28 @@ it("uses the same opaque frozen window for a bounded distant ordinal read", asyn
   expect(Object.fromEntries(query)).toEqual({ limit: "50", sequenceToken: "opaque+/=", position: "2", activityExecutionId: "parent", includeDescendants: "true" });
   expect(getJson).toHaveBeenCalledTimes(2);
 });
+it("reads a committed activity prefix while source acknowledgement is pending", async () => {
+  const value = page({ coverage: { ...page().coverage, state: "pending", sourceHistoryPending: true,
+    limitation: "Source history is awaiting acknowledgement. The recorded prefix remains readable." } });
+  const { context } = setup(value);
+  const result = await readActivityPlayback(context, "run");
+  expect(result.items).toEqual(value.items);
+  expect(result.coverage.sourceHistoryPending).toBe(true);
+  expect(playbackWindow(result)).toEqual(playbackWindow(value));
+});
+it("retains the exact frozen window when a previously settled source becomes pending", async () => {
+  const admitted = page(); const { context, getJson } = setup(admitted);
+  const first = await readActivityPlayback(context, "run");
+  getJson.mockResolvedValue({ ...admitted, coverage: { ...admitted.coverage, state: "pending", sourceHistoryPending: true } });
+  const retained = await readActivityPlayback(context, "run", { window: playbackWindow(first)!, position: "0" });
+  expect(retained.sequenceToken).toBe(first.sequenceToken);
+  expect(selectedPlaybackOccurrence(retained)).toEqual(selectedPlaybackOccurrence(first));
+  expect(retained.coverage.sourceHistoryPending).toBe(true);
+});
+it.each([undefined, null, false])("refuses pending coverage without a qualified source witness (%s)", async sourceHistoryPending => {
+  const { context } = setup(page({ coverage: { ...page().coverage, state: "pending", sourceHistoryPending } }));
+  await expect(readActivityPlayback(context, "run")).rejects.toBeInstanceOf(ActivityPlaybackIdentityError);
+});
 it("never uses the legacy browser when the facet is absent", async () => {
   const { context, getJson } = setup(null, []);
   await expect(readActivityPlayback(context, "run")).rejects.toMatchObject({ name: "ApiCapabilityUnavailableError" });

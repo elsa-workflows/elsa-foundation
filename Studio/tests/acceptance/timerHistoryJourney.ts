@@ -95,7 +95,7 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
 
   await page.goto(eventUrl(dispatched.historyEventId));
   await waitCapturedPlaybackReady(page);
-  await expect(details.getByRole("heading", { name: "Timer dispatched", exact: true })).toBeVisible();
+  await expect(details.getByRole("heading", { name: "Timer dispatch reported", exact: true })).toBeVisible();
   await capture(page, info, "timer-dispatched");
   await details.getByRole("button", { name: "Inspect causal event →", exact: true }).click();
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();

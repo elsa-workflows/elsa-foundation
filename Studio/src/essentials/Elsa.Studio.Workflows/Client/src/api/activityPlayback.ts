@@ -81,7 +81,9 @@ function validatePage(value: unknown, run: string, request: PlaybackRequest): Pl
     if (page.items.length || page.sequenceToken !== null || page.selectedPosition !== null || page.totalCount !== null) invalid();
     return page;
   }
-  if (!identity(page.sequenceToken) || retained > upper || page.coverage.hasGaps || !["captured", "partial"].includes(page.coverage.state)
+  const readableCoverage = ["captured", "partial"].includes(page.coverage.state)
+    || page.coverage.state === "pending" && page.coverage.sourceHistoryPending === true;
+  if (!identity(page.sequenceToken) || retained > upper || page.coverage.hasGaps || !readableCoverage
     || playbackOrdinal(page.coverage.lastSequence) < upper || page.coverage.purgedThroughSequence !== page.retainedAfterSequence
     || page.hasNewerHistory !== (playbackOrdinal(page.coverage.lastSequence) > upper)) invalid();
   if (request.window && (page.sequenceToken !== request.window.sequenceToken || page.upperSequence !== request.window.upperSequence

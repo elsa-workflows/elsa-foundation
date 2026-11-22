@@ -63,10 +63,11 @@ export function ActivityPlaybackControls({ playback, scopeLabel, labelFor }: {
     {playback.note ? <p className="wf-playback-note" role="status">{playback.note}</p> : null}
     {playback.diagramLimitation ? <p className="wf-playback-note" role="status">{playback.diagramLimitation}</p> : null}
     {playback.error ? <p className="wf-playback-error" role="status">{playback.error}{playback.phase === "failed" ? <StudioButton type="button" onClick={() => { void playback.retry(); }}>Retry requested activity</StudioButton> : null}</p> : null}
+    {cursor && page?.coverage.sourceHistoryPending === true ? <p className="wf-playback-note" role="status">{page.coverage.limitation || "Some history observations are still pending. Playback shows the recorded prefix."}</p> : null}
     {page && !cursor ? <p className="wf-playback-note" role="status">{Object.hasOwn(coverageLabels, page.coverage.state) ? coverageLabels[page.coverage.state] : "Recording status is unavailable."}</p> : null}
     {cursor && playback.window ? <details className="wf-playback-details"><summary>{page?.coverage.state === "partial" ? "Partial playback range" : "Recorded playback range"} · through #{playback.window.upperSequence}</summary>
       <p>Presentation pace does not change recorded durations. Order does not imply causation or reconstruct historical workflow state.</p>
-      {page?.coverage.limitation ? <p>{page.coverage.limitation}</p> : null}{page?.reason ? <p>{playbackBoundaryReason(page.reason)}</p> : null}
+      {page?.coverage.limitation && page.coverage.sourceHistoryPending !== true ? <p>{page.coverage.limitation}</p> : null}{page?.reason ? <p>{playbackBoundaryReason(page.reason)}</p> : null}
       <dl>
       <dt>Run</dt><dd>{cursor.workflowExecutionId}</dd><dt>Activity execution</dt><dd>{cursor.activityExecutionId}</dd>
       <dt>Original observation</dt><dd>{humanizeTypeName(cursor.observationKind)}</dd><dt>Event</dt><dd>{cursor.historyEventId}</dd>
