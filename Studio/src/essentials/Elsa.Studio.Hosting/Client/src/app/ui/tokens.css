@@ -79,6 +79,7 @@
   --studio-radius: var(--radius);
   --studio-radius-md: var(--radius-md);
   --studio-radius-lg: var(--radius-lg);
+  --studio-radius-pill: 999px;
   --studio-shadow-sm: var(--shadow-sm);
 
   --studio-page-title-size: 20px;

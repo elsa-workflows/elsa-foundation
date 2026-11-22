@@ -359,7 +359,7 @@
 .otel-waterfall-track {
   position: relative;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   background: var(--otel-surface-subtle);
   overflow: hidden;
 }
@@ -369,7 +369,7 @@
   top: 2px;
   bottom: 2px;
   min-width: 2px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   background: var(--chart-1);
 }
 
