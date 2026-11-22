@@ -19,6 +19,7 @@ import { LazyWorkflowTestRunControls } from "./lazyTestDriveUi";
 import type { TestRunObservation } from "./useTestRunObservation";
 import { StudioLink } from "../StudioLink";
 import { isWarningSeverity } from "./publicationReview";
+import "./editorPanels.css";
 
 /**
  * Renders the unified draft-validation surface. The caller passes the merged validation set so the
