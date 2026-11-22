@@ -72,8 +72,9 @@ for (const width of [320, 1440]) {
 for (const width of [320, 1440]) {
   test(`Timeline respects the public typography scale (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/golden-runs.html?workbench-shell=1");
-    await page.getByRole("button", { name: "Inspect workflow run run-01 · Billing workflow", exact: true }).click();
+    await page.goto("/?mode=activity-duplicate-editor&host=instance&run-canvas=repeated&timeline-entries&theme=light");
+    await page.getByRole("navigation", { name: "Run workspace views", exact: true })
+      .getByRole("button", { name: "Timeline", exact: true }).click();
     const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
     await expect(timeline).toBeVisible();
     await page.evaluate(() => {

@@ -68,12 +68,18 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await details.getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
   const views = page.getByRole("tablist", { name: "Activity execution views", exact: true });
   await views.getByRole("tab", { name: "Journal", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Activity journal", exact: true })).toContainText("Bookmark created");
+  const journalCreation = page.getByRole("region", { name: "Activity journal", exact: true })
+    .getByText("Bookmark created", { exact: true });
+  await journalCreation.scrollIntoViewIfNeeded();
+  await expect(journalCreation).toBeInViewport();
   await capture(page, info, "timer-waiting-journal");
   await views.getByRole("tab", { name: "Bookmarks", exact: true }).click();
   const inventory = page.getByRole("region", { name: "Activity bookmark history", exact: true });
   await expect(inventory).toContainText(bookmarkId);
-  await expect(inventory.locator('[data-status="Active"]')).toHaveCount(1);
+  const activeBadge = inventory.locator('[data-status="Active"]');
+  await expect(activeBadge).toHaveCount(1);
+  await activeBadge.scrollIntoViewIfNeeded();
+  await expect(activeBadge).toBeInViewport();
   await capture(page, info, "timer-active-bookmark");
 
   await expect.poll(async () => (await api<WorkflowInstanceDetails>(runPath)).instance.status,
@@ -97,12 +103,15 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
 
   await page.goto(eventUrl(dispatched.historyEventId));
   await waitCapturedPlaybackReady(page);
-  await expect(details.getByRole("heading", { name: "Timer dispatch reported", exact: true })).toBeVisible();
+  const dispatchHeading = details.getByRole("heading", { name: "Timer dispatch reported", exact: true });
+  await dispatchHeading.scrollIntoViewIfNeeded();
+  await expect(dispatchHeading).toBeInViewport();
   await capture(page, info, "timer-dispatched");
   await details.getByRole("button", { name: "Inspect causal event →", exact: true }).click();
   await expect(details.getByRole("heading", { name: "Timer scheduled", exact: true })).toBeVisible();
   await details.getByText("Technical details", { exact: true }).click();
   await expect(details).toContainText(scheduled.historyEventId);
+  await details.getByRole("heading", { name: "Timer scheduled", exact: true }).scrollIntoViewIfNeeded();
   await capture(page, info, "timer-cause");
   await details.getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
   await views.getByRole("tab", { name: "Bookmarks", exact: true }).click();
@@ -112,6 +121,8 @@ export async function timerHistoryJourney(page: Page, info: TestInfo, capture: C
   await expect(lifecycle).toContainText(bookmarkId);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1);
   await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true })).toBeVisible();
+  await lifecycle.locator('[data-status="Consumed"]').scrollIntoViewIfNeeded();
+  await expect(lifecycle.locator('[data-status="Consumed"]')).toBeInViewport();
   await capture(page, info, "timer-consumed-bookmark");
   const oraclePath = info.outputPath("timer-history-oracle.json");
   writeFileSync(oraclePath, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, submitted, published, run,
