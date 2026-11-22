@@ -81,7 +81,8 @@ public sealed partial class InMemoryStore
                 {
                     dispositions.Add(digest, SuppressedTimer);
                 }
-                if (stored is not null && rearms.Count == beforeRearms) preserved.Add(key);
+                // Suppression and re-arm history also depend on the absence of a row.
+                if (rearms.Count == beforeRearms) preserved.Add(key);
 
                 void Rearm()
                 {

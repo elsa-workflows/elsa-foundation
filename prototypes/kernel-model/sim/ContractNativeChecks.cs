@@ -161,6 +161,7 @@ internal static class ContractNativeChecks
         await CheckRecoveredTimer(check);
         await CheckRearmedTimer(sweep: false, check);
         await CheckRearmedTimer(sweep: true, check);
+        await CheckRearmedTimer(sweep: true, check, preserveAfterSweep: true);
     }
 
     private static async Task CheckRecoveredTimer(Action<bool, string> check)
@@ -214,7 +215,7 @@ internal static class ContractNativeChecks
             "qualified Resume delivers the kept timer under its original key and the Native handler advances its frame once");
     }
 
-    private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check)
+    private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check, bool preserveAfterSweep = false)
     {
         const long initial = 1_701_800_025_000;
         var now = initial;
@@ -230,9 +231,28 @@ internal static class ContractNativeChecks
         var secondFault = false;
         var timerOffers = 0;
         var timerOfferedDuringDrain = false;
+        Message? siblingTimer = null;
+        var siblingRefused = false;
         Worker MakeWorker(string node) => new(node, 0, store, new ActorAdapter(store, new PublicWorkflow([model])), new WorkerOptions
         {
             Monotonic = () => now - initial,
+            OnPreparedCheckpoint = (opening, _, _) =>
+            {
+                if (siblingTimer is not { } collision || opening.FoundationRecoveryTimers is null) return;
+                siblingTimer = null;
+                var prior = store.Instances[opening.Instance];
+                var fence = store.Partitions[0];
+                var sibling = new TurnCommit(opening.Instance, null, null, [], [], [collision], [], [], null);
+                try
+                {
+                    store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [opening, sibling], [], []))
+                        .GetAwaiter().GetResult();
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite)
+                {
+                    siblingRefused = store.Instances[opening.Instance] == prior && !store.Messages.ContainsKey(collision.InboxKey);
+                }
+            },
             OnTurn = (actor, inbox, _) =>
             {
                 if (!firstFault && inbox.Any(message => message.Kind == NativeKinds.Timer))
@@ -295,6 +315,28 @@ internal static class ContractNativeChecks
             store.PlanFoundationTimers(interrupted.Row, ParkRecoveryMode.Resume, [recipe]) is { Rearms.Count: 0 } &&
             store.PlanFoundationTimers(interrupted.Row with { Creation = interrupted.Row.Creation + 1 }, ParkRecoveryMode.RetryAll, [recipe]) is null,
             $"the {(sweep ? "swept" : "payload-free")} timer fixture is ready and its handle names only the original creation");
+        if (preserveAfterSweep)
+        {
+            siblingTimer = envelope;
+            await ingress.SendAsync(scope, target, "resume-swept", Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume)));
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(interrupted.Row.Id);
+            await worker.FlushAsync();
+            check(siblingRefused, "a sibling send cannot replace the absence of a swept suppressed timer during Resume");
+            if (!siblingRefused) return;
+            await owner.DisposeAsync();
+            var successor = MakeWorker("native-suppressed-takeover");
+            await using var fresh = (await new DurableHost([successor]).ActivateAsync(0))!;
+            await Finish(fresh);
+            var restored = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+            check(restored is { Park: null, Row: { ParkRecovery: null, Status: InstanceStatus.Running } } &&
+                timerOffers == 0 && !store.Messages.ContainsKey(key),
+                "Resume and takeover leave the suppressed timer unarmed and its Native frame waiting");
+            return;
+        }
         var admitted = await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.RetryAll)));
         await worker.PollAsync();
