@@ -346,11 +346,11 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 - [ ] **X4.2** (#5078) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
   also exists in `SecretDialogs.tsx:24`; keep one flow, which D6 makes the dialog. **[check]** that the
   secret form (it has tabs) fits a dialog; if not, ask. `needs: D6`
-- [ ] **X4.3** (#5079) [seen] New question: "Preview" is the filled primary rather than "Save question".
+- [x] **X4.3** (#5079) [seen] New question: "Preview" is the filled primary rather than "Save question". (PR #5311)
 - [ ] **X4.4** (#5080) [seen] Decision and form: creation opens the editor directly. Add the dialog step.
   `needs: D6`
-- [ ] **X4.5** (#5081) [check] Dashboard and question: creation is a page with a query builder, which is more
-  than a name and description. Start both with the D6 dialog, then open the editor.
+- [x] **X4.5** (#5081) [check] Dashboard and question: creation is a page with a query builder, which is more
+  than a name and description. Start both with the D6 dialog, then open the editor. (PR #5311)
 
 ### X5. Labels and capitalisation
 
@@ -451,8 +451,8 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`,
   `WorkflowEditor.tsx:1283`, `graph-authoring/GraphAuthoringWorkbench.tsx:148`. Check whether
   `StudioTabs` has a dense mode before migrating.
-- [ ] **X8.8** (#5123) [seen] Dashboards and Questions "Mine / Shared with me": square 30px buttons with
-  radius 0 → `PeerViewSwitch` or `StudioTabs`.
+- [x] **X8.8** (#5123) [seen] Dashboards and Questions "Mine / Shared with me": square 30px buttons with
+  radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
 - [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
 - [ ] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
@@ -505,8 +505,8 @@ Replace local date formatting with `StudioTimestamp`.
   `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`.
 - [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
-- [ ] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
-  "Nov 21, 2026".
+- [x] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
+  "Nov 21, 2026". (PR #5311)
 - [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
 - [ ] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`:
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
@@ -565,8 +565,8 @@ the designer header is a documented exception.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
 - [ ] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`),
   `DecisionInputsEditor.tsx:182` [source].
-- [ ] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
-  `OverflowMenu`.
+- [x] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
+  `OverflowMenu`. (PR #5311)
 - [ ] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`.
 - [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
   about `:193`).
@@ -663,8 +663,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
   ("Artifact ID", "Artifact hash", "Artifact: {id}" filter chip). Use "Executable" for all of them
   (D9). `needs: G1` (PR #5300)
-- [ ] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
-  `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`).
+- [x] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
+  `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`). (PR #5311)
 - [ ] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected".
 - [ ] **X14.10** (#5211) [check] Extension Builder tooltip "Requires canBuild".
 
