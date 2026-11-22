@@ -5,7 +5,7 @@ namespace Kernel.Durable;
 
 public sealed partial class InMemoryStore
 {
-    internal enum KeyAdmissionOutcome { Accepted, Duplicate, Repeat, Missing, Conflict }
+    internal enum KeyAdmissionOutcome { Accepted, Duplicate, Repeat, Missing, Conflict, ObligationOutstanding }
     internal sealed record KeyAdmissionReceipt(KeyAdmissionOutcome Outcome, string? Reference = null);
 
     private sealed record CallerBinding(string Name, InstanceRef Address, string Reference, long ReuseAfter);
@@ -51,6 +51,8 @@ public sealed partial class InMemoryStore
             {
                 var now = clock();
                 var previous = binding is null ? null : Instances.GetValueOrDefault(binding.Address.Id);
+                if (previous is { Retired: true, Cascade: not null })
+                    return new(KeyAdmissionOutcome.ObligationOutstanding);
                 if (binding is not null && (previous is not { Retired: true } || now < binding.ReuseAfter))
                     return new(KeyAdmissionOutcome.Repeat);
 

@@ -40,6 +40,7 @@ public static class LeaseChecks
         await CommandAuthorityChecks.Run(Check);
         await CommandAuthorityChecks.RunActor(Check);
         await CommandAuthorityChecks.RunCascade(Check);
+        await CascadePageChecks.Run(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);
@@ -793,6 +794,7 @@ public sealed class DelayedCommit(IKernelStore inner) : IKernelStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    public bool SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

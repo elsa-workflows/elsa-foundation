@@ -128,6 +128,10 @@ events versus live delivery, event expiry, duplicate publication and registratio
 The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
 Actor-managed start-on-match stays outside this replay.
 
+`--cascade-pages-check` runs the live in-memory termination pages, including the 1,000-entry boundary,
+loss before and after a commit, a retirement marker continuing the original discharge, keyed reuse, and a
+Native Parallel with 1,001 parent-bound children. It also checks the application send cap independently.
+
 The focused [held request cases](sim/ContractHeldRequestChecks.cs) in `--lease-check` cover a live
 response after takeover and an input that stays durable across local reset. The seeded actor workload
 uses already-started counter receivers and one state version. The other legacy actor and transport

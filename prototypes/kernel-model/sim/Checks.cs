@@ -707,6 +707,8 @@ public sealed partial class World
             return $"I17 tree instance {alive.Id} still runs after its root was terminated";
         if (Store.Instances.Values.FirstOrDefault(i => i.Model == "tree" && i.Children is not null) is { } parent)
             return $"I17 terminated tree instance {parent.Id} still lists children {parent.Children}";
+        if (Store.Instances.Values.FirstOrDefault(i => i.Cascade is not null) is { } discharging)
+            return $"I17 terminated instance {discharging.Id} still holds cascade cursor {discharging.Cascade!.Cursor}";
         if (Store.Instances.Values.FirstOrDefault(i => i.Suspended) is { } suspended) return $"END {suspended.Id} is still suspended after its resume";
         foreach (var (process, request, instance) in Asked)
         {

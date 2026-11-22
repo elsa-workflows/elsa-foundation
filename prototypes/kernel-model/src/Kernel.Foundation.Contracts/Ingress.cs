@@ -48,7 +48,7 @@ public sealed record RequestOptions(object? Ambient, long Deadline, bool Release
 
 public enum AdmissionOutcome { Accepted, Duplicate, Refused }
 
-public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection }
+public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection, ObligationOutstanding }
 
 public sealed record Admission(
     AdmissionOutcome Outcome,
