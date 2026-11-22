@@ -387,9 +387,9 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Change the case only; the verb in the two dialog titles
   waits for the open point in D1. Leave "Test Run"
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
-- [ ] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
+- [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
   `EXT/UserTasks/module.tsx:22–24`. Blocked on the open point in D14 (whether "User Task" counts as
-  a glossary term). `needs: D14`
+  a glossary term). `needs: D14` (PR #5289)
 - [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string.
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
