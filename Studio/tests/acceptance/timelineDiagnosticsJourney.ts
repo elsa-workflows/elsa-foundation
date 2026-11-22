@@ -137,7 +137,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     const identity = journal.getByText("Execution identity", { exact: true });
     await frame(identity);
     await identity.click({ timeout: 30_000 });
-    await expect(journal.getByText(ownerId!, { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(journal.getByTitle(ownerId!, { exact: true })).toBeVisible({ timeout: 30_000 });
     await identity.click({ timeout: 30_000 });
     const target = views.getByRole("tab", { name: tab, exact: true });
     await frame(target);
@@ -164,7 +164,12 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await expect(lifecycle).toBeVisible();
     await expect(lifecycle.getByText("Loading exact bookmark lifecycle…", { exact: true })).toHaveCount(0);
     await expect(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeVisible();
+    const technical = lifecycle.getByText("Technical details", { exact: true });
+    await frame(technical);
+    await technical.click({ timeout: 30_000 });
     await expect(lifecycle.getByText(expected!.bookmark.identity.bookmarkId, { exact: true })).toBeVisible();
+    await technical.click({ timeout: 30_000 });
+    await frame(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true }));
     return lifecycle;
   };
   // Each project starts at wall time before admitting any inspected run. The prior project
