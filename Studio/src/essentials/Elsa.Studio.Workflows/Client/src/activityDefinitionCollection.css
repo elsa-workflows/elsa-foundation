@@ -21,6 +21,8 @@
 .ad-create-advanced-content { display: grid; gap: .75rem; }
 .ad-create-advanced .ad-key-summary { display: grid; justify-items: start; gap: .35rem; padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
 .ad-create-advanced .ad-key-summary span, .ad-create-advanced label small { color: var(--studio-text-muted); font-weight: 400; }
+.ad-create-advanced .ad-key-rules { display: grid; gap: .2rem; margin: .4rem 0 0; padding-left: 1.25rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-create-advanced .ad-key-error { display: block; margin-top: .35rem; color: var(--studio-danger-fg); font-weight: 500; }
 
 @media (max-width: 600px) {
   .ad-designed-collection .ad-collection-filters > .studio-search { flex-basis: 100%; }

@@ -571,6 +571,37 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it("explains Activity Type Key rules and blocks an invalid exact key", async () => {
+    const rendered = renderPage({
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url.startsWith("/design/activities/definitions?")) return page([]);
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "New activity definition"));
+    await waitForText(rendered.container, "Graph composition");
+    change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Greeter");
+    click(buttonByText(rendered.container, "Advanced"));
+
+    const keyInput = rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!;
+    expect(rendered.container.textContent).toContain("Starts with elsa.user.");
+    expect(rendered.container.textContent).toContain("Matches pattern ^elsa\\.user\\..+$");
+    const descriptionIds = keyInput.getAttribute("aria-describedby")?.split(/\s+/) ?? [];
+    expect(document.getElementById(descriptionIds[0]!)?.tagName).toBe("UL");
+    change(keyInput, "elsa.custom.greeter");
+
+    expect(rendered.container.textContent).toContain("Must start with elsa.user.");
+    expect(keyInput.getAttribute("aria-invalid")).toBe("true");
+    expect(keyInput.getAttribute("aria-describedby")?.split(/\s+/)).toHaveLength(2);
+    expect(document.getElementById(keyInput.getAttribute("aria-describedby")!.split(/\s+/)[1]!)?.getAttribute("role")).toBe("alert");
+    expect(buttonByText(rendered.container, "Create").hasAttribute("disabled")).toBe(true);
+    await rendered.unmount();
+  });
+
   it("does not preselect among multiple providers and sends an intentional exact key override", async () => {
     const capabilitiesResponse = authoringCapabilities({ graphSchemas: ["1", "2"] });
     capabilitiesResponse.providers.push({
