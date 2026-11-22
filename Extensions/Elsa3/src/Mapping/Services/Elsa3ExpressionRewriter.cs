@@ -1029,8 +1029,21 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 // A bare native helper reference can be aliased without being a direct host-function call.
                 // The global object also allows computed access to that helper. Record this separately so
                 // newly enabled Switch bodies cannot claim proven outcome safety from setter names alone.
-                if (node is Identifier { Name: "complete" or "globalThis" } identifier && !IsDeclared(identifier.Name))
+                if (node is Identifier { Name: "complete" or "globalThis" or "Function" or "eval" } identifier && !IsDeclared(identifier.Name))
                     MayAccessNativeCompletion = true;
+                if (node is MemberExpression member)
+                {
+                    var name = member.Computed ? (member.Property as Literal)?.Value as string : (member.Property as Identifier)?.Name;
+                    var dataVariableRead = member.Object is Identifier { Name: "variables" } && !IsDeclared("variables");
+                    // An unresolved property can select a prototype constructor and be passed/aliased before
+                    // invocation. Numeric literal indexes and named data properties cannot select that capability.
+                    var knownKey = member.Property is Literal { Value: string or double or int or long };
+                    if (name is "constructor" or "__proto__"
+                        || member.Computed && !knownKey && !dataVariableRead
+                        || member.Object is Identifier { Name: "Object" } && !IsDeclared("Object")
+                            && name is "getPrototypeOf" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors")
+                        MayAccessNativeCompletion = true;
+                }
                 VisitNode(node);
             }
             finally

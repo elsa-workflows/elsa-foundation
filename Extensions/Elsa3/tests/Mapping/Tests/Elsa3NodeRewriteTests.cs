@@ -413,8 +413,16 @@ public sealed class Elsa3NodeRewriteTests
     [Theory]
     [InlineData("const emit = typeof complete === 'function' ? complete : (value => value); return emit(null, ['Break']);", false)]
     [InlineData("const root = globalThis; const key = 'complete'; const emit = typeof root[key] === 'function' ? root[key] : (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const build = new Function('return globalThis.complete'); const emit = build() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const evaluate = eval; const emit = evaluate('globalThis.complete') || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const build = (function(){}).constructor; const emit = build('return globalThis.complete')() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const key = 'con' + 'structor'; const build = (function(){})[key]; const emit = build('return globalThis.complete')() || (value => value); return emit(null, ['Break']);", false)]
+    [InlineData("const proto = Object.getPrototypeOf(function(){}); const build = Object.values(Object.getOwnPropertyDescriptors(proto))[0].value; return build('return globalThis.complete')()(null,['Break']);", false)]
     [InlineData("const local = { complete: 42 }; return local.complete;", true)]
     [InlineData("const globalThis = { complete: 42 }; return globalThis.complete;", true)]
+    [InlineData("const values = [1,2]; return values[0];", true)]
+    [InlineData("const local = { complete: 42 }; return local['complete'];", true)]
+    [InlineData("function twice(value) { return value * 2; } return twice(2);", true)]
     [InlineData("return Math.max(1, 2);", true)]
     public async Task Script_native_completion_aliases_cannot_hide_an_unproven_case_boundary(string script, bool safe)
     {

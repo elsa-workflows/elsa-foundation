@@ -14,13 +14,13 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Switch.Activities;
 
 /// <summary>
-/// Runs the first case whose pinned Boolean condition is true, or the default branch when none match.
+/// Runs the first or every case whose pinned Boolean condition is true, or the default branch when none match.
 /// Retained legacy cases compare the pinned Value ordinally with their labels. Each case owns one
 /// named child slot and completes with its authored label; a selected empty case completes directly.
 /// </summary>
 /// <remarks>
 /// Schema 1 retains ordinary Value matching. Schema 2 uses structure-owned inputs pinned before
-/// activation, evaluates only cases reached in order, and treats an unbound predicate as false.
+/// activation, evaluates cases in order (all cases for MatchAny), and treats an unbound predicate as false.
 /// </remarks>
 [Activity(Icon = "Split")]
 [Version("4.1.0")]

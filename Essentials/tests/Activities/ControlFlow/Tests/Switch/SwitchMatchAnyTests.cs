@@ -17,7 +17,7 @@ namespace Elsa.Activities.Switch.Tests;
 
 /// <summary>
 /// Spec 1208 FR-031: a Switch in <c>MatchAny</c> mode selects every matching case, in case order, or <c>Default</c>
-/// when none match; its cases cannot hold activities. <c>MatchFirst</c> (the default) keeps selecting the first match.
+/// when none match. S-12 adds independent case bodies. <c>MatchFirst</c> (the default) keeps selecting the first match.
 /// </summary>
 public sealed class SwitchMatchAnyTests
 {

@@ -182,7 +182,11 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     native Break escaping a body with localized `ELS3-ACTIVITY-UNSUPPORTED-MODE` guidance. Rename control labels or
     restructure the body. Safe unused declared ports and supported case-local consuming loops remain convertible;
     a script-selected Break can change internal container behavior even if an outer container consumes it. Expression
-    modes and unknown modes remain refused. Every case carries a stable identity.
+    modes and unknown modes remain refused. A newly enabled body also refuses invalid Done co-selections and
+    unproven native-completion flow through helper aliases, eval/Function compilation, prototype constructors or
+    unresolved computed prototype/callable access. Numeric literal indexes, named data properties, protected variable
+    reads and proved ordinary scripts remain eligible. These scoped proof limits do not change standalone modes.
+    Every case carries a stable identity.
     A SendHttpRequest with expected status codes has no `Done` in Elsa 4, so its `Done` connection becomes one per
     code and one for the unmatched status code: Elsa 3 fired `Done` with every response, but not on "Failed to
     connect" or "Timeout". `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` warns only that, without expected codes, a non-2xx

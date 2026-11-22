@@ -34,7 +34,7 @@ internal static class Elsa3SwitchSafety
                         HasInvalidDoneSelection(unsafeNode)
                             ? $"Case '{slot.Label}' contains an invalid or unproven selection combining Done with another label in the native outcome contract."
                             : $"Case '{slot.Label}' can expose an incompatible or unproven native Break outcome; Elsa 3 Switch would keep waiting for its other bodies.",
-                        "Restructure the case so no incompatible control outcome escapes or changes its behavior. Use a case-local supported loop for a genuine Break, and rename Done/Break script outcomes or nested case labels where they have native control meaning."));
+                        "Restructure the case so no incompatible control outcome escapes or changes its behavior. Use a case-local supported loop for a genuine Break; rename control labels; avoid native completion aliases, dynamic compilation and unresolved prototype/callable access in imported case scripts."));
                 index++;
             }
         }

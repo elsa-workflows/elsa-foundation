@@ -115,3 +115,7 @@ No ratified-gate exception is planned. Provisional catalog/versioning text remai
 ## Implemented API classification
 
 Switch construction changes from `Switch()` to `Switch(IActivityExecutionStateStore)`: this is a Major public C# source/binary break accepted under pre-GA cleanup. The owning ControlFlow project has no PublicAPI baseline files; no unrelated baseline or package version is fabricated. CLR activation uses existing DI. Activity version 4.1.0, descriptor shape and structure schema 2.0.0 stay unchanged: existing artifacts retain the same pinned contract shape, and new bodies already participate in structure/artifact hashing. No stored-state schema or new versioning policy is introduced.
+
+## Import proof boundary
+
+The normalized/lowered body analysis records actual setter selections separately from declared ports, preserving safe unused ports. It distinguishes co-selected Done from alternative singleton selections. Native completion can also escape through aliases or dynamic compilation. The existing scoped AST pass marks unshadowed native/global/compiler references, prototype constructors/reflection and unresolved computed prototype/callable access as unproven, refusing these only within the new body scope. Ordinary scripts, known data properties, numeric literal indexes and protected workflow-variable reads remain supported. No evaluator policy, native authoring capability, stored marker or standalone import mode changes.
