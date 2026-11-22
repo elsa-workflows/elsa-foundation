@@ -59,46 +59,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
-  s2-rename-composed-proof:
-    name: S-2 focused composed rename proof
-    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'weaver' && github.ref_name == 'agent/claude/3052-s2-null-missing-undefined'
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: c8c814c26c2bd15832b022560e4e9441918097d5
-          persist-credentials: false
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-      - uses: ./.github/actions/setup-studio
-      - name: Install Chromium
-        uses: ./.github/actions/install-chromium
-        with:
-          working-directory: Studio
-      - name: Record workflow and tested-source provenance separately
-        run: |
-          python3 - <<'PY'
-          import json, os, pathlib, subprocess
-          source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-          assert source == 'c8c814c26c2bd15832b022560e4e9441918097d5'
-          record = {'workflowSha': os.environ['GITHUB_SHA'], 'testedSourceSha': source, 'workflowRun': os.environ['GITHUB_RUN_ID']}
-          pathlib.Path(os.environ['RUNNER_TEMP'], 's2-rename-workflow.json').write_text(json.dumps(record, indent=2) + '\n')
-          PY
-      - name: Exercise the changed journey on owned real hosts
-        env:
-          UX_PR_HEAD_SHA: c8c814c26c2bd15832b022560e4e9441918097d5
-        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/rename-ux-${{ github.run_id }}-${{ github.run_attempt }}" --journey "variable rename updates script reads and lists the rest"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: studio-ux-c8c814c26c2bd15832b022560e4e9441918097d5-rename-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/rename-ux-${{ github.run_id }}-${{ github.run_attempt }}
-            ${{ runner.temp }}/s2-rename-workflow.json
-          if-no-files-found: error
-          retention-days: 14
   plan-scope:
     name: Select focused validation
     runs-on: ubuntu-latest
