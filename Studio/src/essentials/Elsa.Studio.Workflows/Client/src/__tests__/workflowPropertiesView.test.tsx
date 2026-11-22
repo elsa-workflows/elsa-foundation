@@ -407,7 +407,7 @@ describe("properties view", () => {
       <WorkflowRunInputDialog inputs={updatedState.inputs as WorkflowInput[]} onSubmit={vi.fn()} onCancel={vi.fn()} />
     ));
 
-    expect(container.querySelector("input[aria-label='Max']")).not.toBeNull();
+    expect(document.querySelector("[role=dialog] input[aria-label='Max']")).not.toBeNull();
   });
 
   it("keeps workflow declarations and version history out of general Properties", () => {

@@ -12,7 +12,7 @@ import { workflowPromotionState } from "../graph-authoring/blockPromotionHostDoc
 import { validateWorkflowCandidate } from "../api/nativeBlockValidation";
 import { getWorkflowDefinitionVersion } from "../api/workflowDesign";
 import { evaluateBackendRequirements, studioBackendCapabilitiesChangedEvent, type StudioBackendSession, qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { StudioDialog, StudioDialogFooter, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -1608,27 +1608,11 @@ export function WorkflowEditor({
       ) : null}
 
       {expressionValidationWarning ? (
-        <div className="wf-dialog-backdrop" role="presentation">
-          <section
-            className="wf-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="expression-validation-warning-title"
-            aria-describedby="expression-validation-warning-description"
-          >
-            <h3 id="expression-validation-warning-title">Expression validation is unavailable</h3>
-            <p id="expression-validation-warning-description">
-              The backend cannot currently verify every expression. No known blocking error was found,
-              but this Test Run may fail. Proceed only if you accept that risk.
-            </p>
-            <div className="wf-dialog-actions">
-              <button type="button" onClick={cancelUnavailableExpressionValidation}>Cancel</button>
-              <button type="button" onClick={() => { void confirmUnavailableExpressionValidation(); }}>
-                Proceed with Test Run
-              </button>
-            </div>
-          </section>
-        </div>
+        <StudioDialog open role="alertdialog" title="Expression validation is unavailable" onClose={cancelUnavailableExpressionValidation}
+          dismissOnOutsideClick={false}
+          description="The backend cannot currently verify every expression. No known blocking error was found, but this Test Run may fail. Proceed only if you accept that risk."
+          footer={<StudioDialogFooter onCancel={cancelUnavailableExpressionValidation} confirmLabel="Proceed with Test Run"
+            confirmType="button" onConfirm={() => { void confirmUnavailableExpressionValidation(); }} />} />
       ) : null}
 
       <GraphAuthoringWorkbench

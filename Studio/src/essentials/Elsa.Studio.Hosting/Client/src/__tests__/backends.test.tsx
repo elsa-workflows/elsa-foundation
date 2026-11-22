@@ -17,9 +17,9 @@ const response = (value:unknown,status=200) => new Response(JSON.stringify(value
 function manager(token="token-a"):AuthProviderManager {
   return {getSession:()=>user,getAccessToken:async()=>token,refresh:async()=>user,initialize:async()=>user,getCapabilities:async()=>({ownershipMode:"foundation-owned",providers:[]}),login:async()=>undefined,logout:async()=>undefined,handleCallback:async()=>user};
 }
-function controller(commit=vi.fn(),identity=user) {
+function controller(commit=vi.fn(),identity=user,confirm=vi.fn(async () => false)) {
   const host = {...createEndpointContext("https://studio.example/"),http:{...createEndpointContext("https://studio.example/").http,getJson:vi.fn().mockRejectedValue(new StudioHttpError(404,"Not found"))}};
-  return {commit,connections:new BackendConnections({profileApiPath:"/_elsa/studio/backends/profiles",backendBaseUrl:a.baseUrl,hostId:"studio-one",backends:{profiles:[a,b]}},host,manager(),identity,commit)};
+  return {commit,connections:new BackendConnections({profileApiPath:"/_elsa/studio/backends/profiles",backendBaseUrl:a.baseUrl,hostId:"studio-one",backends:{profiles:[a,b]}},host,manager(),identity,{confirm},commit)};
 }
 afterEach(() => {vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();window.history.replaceState({},"","/");});
 
@@ -285,11 +285,12 @@ it("omits ambient cookies on every anonymous backend request",async()=>{
 });
 
 it("reports an unsaved backend profile to a workspace probe without prompting, and confirms on close",async()=>{
-  const {connections}=controller();
+  const confirm=vi.fn(async()=>false);
+  const {connections}=controller(vi.fn(),user,confirm);
   const {BackendsPage}=await import("../../../../Elsa.Studio.Backends/Client/src/BackendsPage");
   const {createRoot}=await import("react-dom/client");
   const {flushSync}=await import("react-dom");
-  const {requestStudioNavigation}=await import("../sdk");
+  const {requestStudioNavigation,reviewStudioNavigation}=await import("../sdk");
   const container=globalThis.document.createElement("div");globalThis.document.body.appendChild(container);
   const root=createRoot(container);
   flushSync(()=>root.render(<BackendsPage connections={connections} navigate={()=>undefined} path="/settings/backends/new"/>));
@@ -297,10 +298,9 @@ it("reports an unsaved backend profile to a workspace probe without prompting, a
   const setValue=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!;
   flushSync(()=>{setValue.call(input,"Staging");input.dispatchEvent(new Event("input",{bubbles:true}));});
   await new Promise(resolve=>setTimeout(resolve,0));
-  const confirm=vi.fn(()=>false);vi.stubGlobal("confirm",confirm);
   expect(requestStudioNavigation("/settings/backends/new","/settings/backends/new","probe")).toBe(false);
   expect(confirm).not.toHaveBeenCalled();
-  expect(requestStudioNavigation("/settings/backends/new","/","close")).toBe(false);
+  expect(await reviewStudioNavigation("/settings/backends/new","/","close")).toBe(false);
   expect(confirm).toHaveBeenCalledTimes(1);
   flushSync(()=>root.unmount());container.remove();
 });

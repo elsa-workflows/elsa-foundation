@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { StudioField, StudioMultiSelectField, StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import type { DashboardApi } from "./api";
 import type { AudienceCandidate, AudienceGrant, DashboardResource, DashboardTile, DefinitionRevision, QueryValue, Visualization } from "./types";
@@ -142,7 +143,7 @@ export function HistoryDialog({ api, resource, onClose, onRestored, onAccessLost
       <h5>Dashboard layout</h5>
       {selected.tiles?.length ? <ul>{selected.tiles.map((tile, index) => <li key={tile.id}>Question {index + 1} · {tile.size}</li>)}</ul> : <p>No questions on this dashboard.</p>}
     </> : <p>No definition details are available for this revision.</p>}
-    {selectedDefinition ? <details className="named-history-technical"><summary>View technical definition</summary><pre className="named-definition-inspection">{JSON.stringify(selectedDefinition, null, 2)}</pre></details> : null}
+    {selectedDefinition ? <div className="named-history-technical"><TechnicalDetails label="View technical definition"><pre className="named-definition-inspection">{JSON.stringify(selectedDefinition, null, 2)}</pre></TechnicalDetails></div> : null}
     {selected.revision !== resource.revision && resource.capabilities.canEdit ? <div className="named-history-restore">
       {confirmingRevision === selected.revision ? <div className="named-history-confirmation" role="alert">
         <p>Restoring revision {selected.revision} creates a new revision and preserves the current audience.{hasUnsavedChanges ? " Unsaved changes will be replaced." : ""}</p>

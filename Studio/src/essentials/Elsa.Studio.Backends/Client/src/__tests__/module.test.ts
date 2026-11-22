@@ -1,7 +1,7 @@
 import {afterEach,expect,it,vi} from "vitest";
 import {initialize} from "../module";
-import {createEndpointContext,anonymousAuthSession,type StudioModuleHostContext} from "@elsa-workflows/studio-sdk";
-const context=(configuration:Record<string,unknown>):StudioModuleHostContext=>({host:createEndpointContext("http://studio.example/"),identity:anonymousAuthSession,authManager:null,configuration,signal:new AbortController().signal});
+import {createEndpointContext,createDialogController,anonymousAuthSession,type StudioModuleHostContext} from "@elsa-workflows/studio-sdk";
+const context=(configuration:Record<string,unknown>):StudioModuleHostContext=>({host:createEndpointContext("http://studio.example/"),identity:anonymousAuthSession,authManager:null,dialogs:createDialogController().api,configuration,signal:new AbortController().signal});
 const configuration={backendBaseUrl:"http://backend.example/tenant/",extensions:{backends:{configuration:{allowPersonalProfiles:false},profileApiPath:"/studio-shell/_elsa/studio/backends/profiles"}}};
 afterEach(()=>{vi.unstubAllGlobals();window.history.replaceState({},"","/");sessionStorage.clear();});
 it("requires its feature-owned runtime projection",()=>{expect(()=>initialize(context({}))).toThrow("runtime configuration");});

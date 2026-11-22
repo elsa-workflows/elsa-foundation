@@ -268,10 +268,10 @@ describe("HTTP test request dialog", () => {
     const input = container.querySelector<HTMLInputElement>("input[role='combobox']")!;
     flushSync(() => input.focus());
     expect(input.getAttribute("aria-expanded")).toBe("true");
-    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(input.getAttribute("aria-expanded")).toBe("false");
     expect(onClose).not.toHaveBeenCalled();
-    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -618,7 +618,7 @@ async function renderDialog(onClose = () => undefined, extras: {
       publicationUnavailableReason={extras.publicationUnavailableReason}
     />
   ));
-  return container;
+  return document.body;
 }
 
 async function renderHeaderDialog(methods: string[] = ["POST"], onClose = () => undefined) {
