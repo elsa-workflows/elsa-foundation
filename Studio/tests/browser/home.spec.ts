@@ -323,7 +323,7 @@ test.describe("customizable Home", () => {
       "home.recent-workflows"
     ]);
     await expect(page.locator('[data-widget-id="workflows.run-health"] [role="img"]')).toHaveAttribute("aria-label", /Run starts by hour: 12 starts/);
-    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("12");
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .studio-stat-tile-value')).toHaveText("12");
     await expect(page.getByRole("link", { name: "View all failed runs for Orders" })).toHaveAttribute("href", "/workflows/instances?definitionId=orders&status=Faulted&runKind=PublishedRun");
 
     await page.getByText("View exact bucket counts").click();
@@ -344,10 +344,10 @@ test.describe("customizable Home", () => {
     await page.goto("/?mode=home-dashboard&state=empty");
     const health = page.locator('[data-widget-id="workflows.run-health"]');
     await expect(health.getByText("No workflow starts in this window.")).toBeVisible();
-    await expect(health.locator('[data-metric="Started"] .workflow-dashboard-metric__value')).toHaveText("0");
-    await expect(health.locator('[data-metric="Running now"] .workflow-dashboard-metric__value')).toHaveText("2");
+    await expect(health.locator('[data-metric="Started"] .studio-stat-tile-value')).toHaveText("0");
+    await expect(health.locator('[data-metric="Running now"] .studio-stat-tile-value')).toHaveText("2");
     await expect(health.getByRole("img")).toHaveCount(0);
-    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("0");
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .studio-stat-tile-value')).toHaveText("0");
 
     await page.goto("/?mode=home-dashboard&state=unavailable");
     await expect(page.getByText("Run statistics are unavailable.")).toBeVisible();
@@ -398,7 +398,7 @@ test.describe("customizable Home", () => {
     expect(savedOptions).toMatchObject({ range: "7d", includeTestRuns: true, keepVisible: true });
     await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("day");
     await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("Test runs included");
-    await page.locator('[data-widget-id="workflows.run-health"] summary').click();
+    await page.getByRole("button", { name: "View exact bucket counts", exact: true }).click();
     await expect(page.locator('[data-widget-id="workflows.run-health"] tbody tr')).toHaveCount(7);
   });
 

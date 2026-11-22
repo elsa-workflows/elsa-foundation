@@ -34,6 +34,11 @@ async function click(text: string) {
   await vi.waitFor(() => { button = [...container.querySelectorAll("button")].find(item => item.textContent === text); expect(button).toBeTruthy(); });
   await act(async () => button!.click());
 }
+async function refreshTask() {
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label="Refresh task"]')!;
+  expect(button).toBeTruthy();
+  await act(async () => button.click());
+}
 async function clickTaskAction(text: string) {
   const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Task actions"]');
   expect(trigger).toBeTruthy();
@@ -151,7 +156,7 @@ describe("task form rendering and decision delivery", () => {
       .mockRejectedValueOnce(new StudioHttpError(403, "Permission changed"))
       .mockResolvedValue({ ...task(), status: "CompletionPending", revision: 2 });
     await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
-    await click("Approve"); await click("Retry Approve"); await clickTaskAction("Refresh task"); await click("Retry Approve");
+    await click("Approve"); await click("Retry Approve"); await refreshTask(); await click("Retry Approve");
     expect(post).toHaveBeenCalledTimes(3);
     expect(post.mock.calls[0][1]).toEqual(post.mock.calls[1][1]); expect(post.mock.calls[0][1]).toEqual(post.mock.calls[2][1]);
     expect(post.mock.calls[0][1]).not.toHaveProperty("actorId"); expect(container.textContent).toContain("response is recorded");
@@ -171,7 +176,7 @@ describe("task form rendering and decision delivery", () => {
     const post = vi.fn().mockResolvedValue(accepted);
     await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
     await click("Approve"); expect(container.textContent).toContain("The workflow will continue when delivery completes.");
-    await clickTaskAction("Refresh task");
+    await refreshTask();
     expect(container.textContent).toContain("Completed");
     expect(container.textContent).not.toContain("The workflow will continue when delivery completes.");
   });
@@ -308,8 +313,7 @@ it("pages and filters the inbox without losing the opaque continuation", async (
   await act(async () => root.render(<TasksPage api={api(get)} />));
   await click("Next page"); expect(container.textContent).toContain("Next purchase");
   expect(get.mock.calls.some(([path]) => path.includes("after=opaque%2B%2F%3D"))).toBe(true);
-  const select = container.querySelector("select")!;
-  await act(async () => { select.value = "queue"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await click("Group queue");
   expect(get.mock.calls.at(-1)![0]).toContain("view=queue"); expect(get.mock.calls.at(-1)![0]).not.toContain("after=");
 });
 
@@ -416,8 +420,7 @@ it("does not present the previous inbox after a different inbox fails to load", 
   const get = vi.fn(async (path: string) => path.includes("identity") ? identity : path.includes("view=queue") ? Promise.reject(new Error("Queue unavailable")) : { items: [task()] });
   await act(async () => root.render(<TasksPage api={api(get)} />));
   expect(container.textContent).toContain("Purchase");
-  const select = container.querySelector("select")!;
-  await act(async () => { select.value = "queue"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await click("Group queue");
   expect(container.textContent).toContain("Tasks unavailable");
   expect(container.textContent).not.toContain("Purchase");
   expect(container.textContent).not.toContain("tasks shown");
@@ -429,7 +432,7 @@ it("resolves an unaccepted ambiguous response when a newer revision proves its C
   const get = vi.fn().mockResolvedValueOnce(withForm).mockResolvedValue({ ...withForm, revision: 2 });
   const post = vi.fn().mockRejectedValueOnce(new StudioHttpError(0, "Connection lost")).mockResolvedValue({ ...withForm, status: "CompletionPending", revision: 3 });
   await act(async () => root.render(<TaskDetail api={api(get, post)} id="task" identity={identity} />));
-  await input(container.querySelector("input")!, "Keep my response"); await click("Approve"); await clickTaskAction("Refresh task");
+  await input(container.querySelector("input")!, "Keep my response"); await click("Approve"); await refreshTask();
   expect(container.querySelector("input")!.disabled).toBe(false); expect(container.querySelector("input")!.value).toBe("Keep my response");
   await click("Approve"); expect(post.mock.calls[1][1].revision).toBe(2); expect(post.mock.calls[1][1].requestId).not.toBe(post.mock.calls[0][1].requestId);
 });
@@ -773,7 +776,7 @@ it("blocks closing and unload while an ambiguous task response is unconfirmed", 
   await click("Approve");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks", "close")).toBe(false);
   expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(false);
-  await clickTaskAction("Refresh task");
+  await refreshTask();
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
 });
 
@@ -847,7 +850,7 @@ it("releases an ambiguous attempt when refresh confirms a durable pending decisi
   const get = vi.fn().mockResolvedValueOnce(task()).mockResolvedValue(receipt);
   await act(async () => root.render(<TaskDetail api={api(get, vi.fn().mockRejectedValue(new StudioHttpError(0, "Connection lost")))} id="task" identity={identity} />));
   await click("Approve"); expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
-  await clickTaskAction("Refresh task"); expect(container.textContent).toContain("Your response is recorded");
+  await refreshTask(); expect(container.textContent).toContain("Your response is recorded");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
 });
 

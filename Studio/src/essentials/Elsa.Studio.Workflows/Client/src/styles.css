@@ -578,6 +578,8 @@
   gap: 6px;
 }
 
+.wf-workflow-picker-input .studio-search-input { font-weight: 400; }
+
 .wf-workflow-picker-input > .studio-search {
   flex: 1 1 0;
   min-width: 0;
@@ -2507,45 +2509,8 @@
   background: var(--studio-surface);
 }
 
-.wf-dialog.wf-incident-details-dialog {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(840px, 100%);
-  max-height: min(88vh, 920px);
-  overflow: hidden;
-  border-color: var(--studio-border);
-  background: var(--studio-surface);
-  color: var(--studio-text);
-}
-
-.wf-incident-details-dialog .wf-incident-details-heading {
-  align-items: center;
-  border-bottom: 1px solid var(--studio-border);
-  padding: 18px 22px;
-}
-
-.wf-incident-details-dialog .wf-incident-details-heading > div {
-  min-width: 0;
-}
-
-.wf-incident-details-dialog .wf-incident-details-heading > div > span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--studio-text-muted);
-  font-size: 12px;
-}
-
-.wf-incident-details-dialog .wf-incident-details-heading h3 {
-  color: var(--studio-text);
-  overflow-wrap: anywhere;
-}
-
-.wf-incident-details-dialog .wf-incident-details-heading p {
-  margin: 5px 0 0;
-  color: var(--studio-text);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.studio-dialog.wf-incident-details-dialog {
+  width: min(52.5rem, calc(100vw - 2rem));
 }
 
 .wf-incident-details-actions {
@@ -2558,30 +2523,6 @@
 
 .wf-incident-details-actions .wf-copy-status {
   margin: 0;
-}
-
-.wf-incident-details-close {
-  flex: 0 0 auto;
-  min-height: 32px;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface);
-  color: var(--studio-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 0 10px;
-}
-
-.wf-incident-details-close:hover {
-  background: var(--studio-accent-soft);
-}
-
-.wf-incident-details-body {
-  min-height: 0;
-  overflow: auto;
-  padding: 18px 22px 22px;
 }
 
 .wf-incident-details-dialog .wf-incident-technical-content {
@@ -2598,11 +2539,6 @@
     row-gap: 3px;
   }
 
-  .wf-dialog.wf-incident-details-dialog .wf-incident-details-heading,
-  .wf-incident-details-dialog .wf-incident-details-body {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
 }
 
 .wf-instance-unmatched-list {

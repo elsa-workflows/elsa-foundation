@@ -503,7 +503,8 @@ export function useOperatorActions({
     const state = focusReturn.current;
     if (!state) return;
     focusReturn.current = null;
-    if (state.trigger?.isConnected && !state.trigger.closest("[aria-hidden='true'], [inert]")) state.trigger.focus();
+    // The closing modal temporarily masks its opener until the portal cleanup runs.
+    if (state.trigger?.isConnected && !state.trigger.closest("[aria-hidden='true']:not([data-aria-hidden]), [inert]")) state.trigger.focus();
     else state.focusFallback?.();
   }, [focusReturnRequest]);
 

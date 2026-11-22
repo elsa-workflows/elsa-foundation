@@ -12,7 +12,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StudioCollectionFooter, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
@@ -446,7 +446,6 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
             <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
-            <StudioField label={<><span>Rows per page</span></>}><select value={pageSize} onChange={event => setPageSize(Number(event.target.value) as PageSize)}><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option></select></StudioField>
           </div>
         </details>
       </section>
@@ -516,8 +515,15 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           </div>;
           })}
         </div>
-        <footer className="studio-collection-footer" aria-label="Activity Definition pagination"><span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} definitions</span><div><StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</StudioButton><StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></StudioButton></div></footer>
       </> : null}
+      <StudioCollectionFooter aria-label="Activity Definition pagination"
+        summary={data ? <span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} definitions</span> : undefined}
+        pageSize={{ label: "Rows per page", value: pageSize, sizes: [10, 25, 50], onChange: size => setPageSize(size as PageSize) }}>
+        {data && data.items.length > 0 ? <div>
+          <StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={16} aria-hidden /> Previous</StudioButton>
+          <StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={16} aria-hidden /></StudioButton>
+        </div> : null}
+      </StudioCollectionFooter>
       {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>
   );

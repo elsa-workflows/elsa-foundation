@@ -262,14 +262,14 @@ Workflows:
 
 - [x] **X3.1** (#5037) [source] `WF/workflow-editor/CreateWorkflowDialog.tsx:158–261` (`.wf-create-dialog`).
   Also replace `<div className="wf-alert" role="alert">` at `:239` with `StudioAlert`. (PR #5271, PR #5278)
-- [ ] **X3.2** (#5038) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
+- [x] **X3.2** (#5038, PR #5323) [source] `WorkflowRunInputDialog.tsx:50–110`. Footer has two unstyled buttons, so
   "Run workflow" has no primary emphasis.
-- [ ] **X3.3** (#5039) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
+- [x] **X3.3** (#5039, PR #5323) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
   `needs: K2`
 - [x] **X3.4** (#5040) [source] `MoveWorkflowDefinitionsDialog.tsx:103–132`. (PR #5301)
-- [ ] **X3.5** (#5041) [source] `HttpTestRequestDialog.tsx:240–247`.
-- [ ] **X3.6** (#5042) [source] `ActivityVersionChangeDialog.tsx:94–226`.
-- [ ] **X3.7** (#5043) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
+- [x] **X3.5** (#5041, PR #5323) [source] `HttpTestRequestDialog.tsx:240–247`.
+- [x] **X3.6** (#5042, PR #5323) [source] `ActivityVersionChangeDialog.tsx:94–226`.
+- [x] **X3.7** (#5043, PR #5323) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
 - [x] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
   footer is raw with `.wf-primary-button`. (PR #5287)
 - [x] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`. (PR #5301)
@@ -281,7 +281,7 @@ Workflows:
 - [x] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`). (PR #5301)
 - [x] **X3.14** (#5050) [source] Folder picker drawer in `WorkflowFolderNavigation.tsx:686`
   (`.wf-folder-drawer`, bare `<strong>` heading). (PR #5301)
-- [ ] **X3.15** (#5051) [source] Incident details dialog in `WorkflowInstances.tsx:3149–3166`.
+- [x] **X3.15** (#5051, PR #5323) [source] Incident details dialog in `WorkflowInstances.tsx:3149–3166`.
 
 Activity definitions:
 
@@ -325,8 +325,8 @@ Browser dialogs and busy labels (no kit prerequisite):
 - [ ] **X3.33** (#5069) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
   `api.dialogs.confirm`.
 - [x] **X3.34** (#5070, PR #5319) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
-- [ ] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
-  `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`.
+- [x] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
+  `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`. (PR #5324)
 - [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
   `title` or `confirmLabel`; Secrets passes both (`SecretsPage.tsx:187, 202`).
 - [ ] **X3.37** (#5073) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
@@ -404,8 +404,8 @@ in scope.
 - [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
 - [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
 - [x] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`. (PR #5320)
-- [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
-  menu).
+- [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
+  menu). (PR #5325)
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
 - [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
   searching for a `StudioButton` labelled "Refresh" outside `KIT`.
@@ -423,7 +423,7 @@ Four badge styles were measured [seen]:
 
 Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
-- [ ] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`)
+- [x] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`) (PR #5322)
   `wf-status-badge`. See also W6.
 - [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
@@ -455,8 +455,8 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
 - [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
-- [ ] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
-  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version").
+- [x] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
+  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version"). (PR #5325)
 - [x] **X8.11** (#5126) [source] `EXT/Decisions/DecisionsPage.tsx:184–185` uses `StudioTabs` for Active / (PR #5320)
   Recycle bin where `PeerViewSwitch` is the peer-view primitive.
 
@@ -501,8 +501,8 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
-- [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
-  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`.
+- [x] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
+  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`. (PR #5325)
 - [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
 - [x] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
@@ -576,8 +576,8 @@ the designer header is a documented exception.
   `TechnicalDetails`.
 - [x] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"), (PR #5316)
   `WF/Elsa3ReusableImportPage.tsx:716–743`, `WF/ActivityDefinitionPublicationReview.tsx:337–467`.
-- [ ] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
-  `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`.
+- [x] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
+  `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`. (PR #5321)
 
 ### X13. CSS texture
 
@@ -672,28 +672,28 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Workflows module
 
-- [ ] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400.
+- [x] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400. (PR #5322)
 - [ ] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless
   in one and outlined in the other; the ⋯ button is borderless in one and boxed in the other.
   **[check]** palette category headings appear to differ in size.
-- [ ] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil
+- [x] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil (PR #5322)
   ("✏️Edit"). Use an `OverflowMenu`.
-- [ ] **W4** (#5216) [seen] Definitions table: the "Published" column header is clipped behind "Actions" at
+- [x] **W4** (#5216) [seen] Definitions table: the "Published" column header is clipped behind "Actions" at (PR #5322)
   1440px.
 - [ ] **W5** (#5217) [seen] Activity availability: raw 32px filter input and 16px-radius option cards.
-- [ ] **W6** (#5218) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23–35` renders a published
+- [x] **W6** (#5218) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23–35` renders a published (PR #5322)
   version with `data-status="completed"` and retired with `"cancelled"`. Use a tone that matches the
   meaning.
-- [ ] **W7** (#5219) [verified] 15px toolbar icons at `WF/workflow-editor/WorkflowEditorToolbar.tsx:186, 189`;
+- [x] **W7** (#5219) [verified] 15px toolbar icons at `WF/workflow-editor/WorkflowEditorToolbar.tsx:186, 189`; (PR #5322)
   [source] `WorkflowDefinitions.tsx:791, 862`; the kit rule is 16px. Also 14px and 15px in
   `EXT/Connections/ConnectionsPage.tsx:145–146` and `EXT/Secrets/SecretsPage.tsx:253–255`.
 - [ ] **W8** (#5220) [seen] Clicking an agent in Agents opens the Activity definitions workbench, and the
   sidebar selection jumps to Library.
-- [ ] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter
+- [x] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter (PR #5322)
   toolbar. `needs: K6`
 - [ ] **W10** (#5222) [source] `WF/ActivityDefinitionsPage.tsx:515` div-grid table with `role="table"` and
   `WF/workflow-editor/WorkflowDefinitions.tsx:867` `.wf-grid` → `StudioDataGrid`.
-- [ ] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit
+- [x] **W11** (#5223) [source] `WfListSkeleton` and `WfErrorCard` (`StatusViews.tsx`) are thin aliases over kit (PR #5322)
   components; use the kit components directly.
 - [ ] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
@@ -740,9 +740,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
   `NamedDashboards.tsx:522–524`. (PR #5313)
 - [x] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval. (PR #5313)
-- [ ] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
+- [x] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
-  `WorkflowRunHealthWidget.tsx:147`.
+  `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
 - [ ] **E16** (#5246) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
 - [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks

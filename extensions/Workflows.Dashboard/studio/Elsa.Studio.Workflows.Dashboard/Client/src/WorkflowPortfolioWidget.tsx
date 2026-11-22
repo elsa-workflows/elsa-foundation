@@ -13,12 +13,12 @@ export function WorkflowPortfolioWidget({ snapshot }: StudioDashboardWidgetBodyP
 
   return (
     <div className="workflow-portfolio">
-      <dl className="workflow-dashboard-metrics" aria-label="Workflow definition counts">
+      <div role="group" className="workflow-dashboard-metrics" aria-label="Workflow definition counts">
         <WorkflowDashboardMetric label="Active definitions" value={snapshot.activeDefinitionCount} detail="Not deleted" tone="accent" />
         <WorkflowDashboardMetric label="Published" value={snapshot.publishedDefinitionCount} detail="Available to run" tone="success" />
         <WorkflowDashboardMetric label="Unpublished drafts" value={snapshot.unpublishedDraftCount} detail="Changes not yet published" tone="warning" />
         <WorkflowDashboardMetric label="Invalid drafts" value={snapshot.invalidDraftCount} detail="Drafts with validation issues" tone="danger" />
-      </dl>
+      </div>
       <p className="workflow-dashboard-note" role="note">
         Counts can overlap: a published workflow can also have an unpublished draft.
       </p>

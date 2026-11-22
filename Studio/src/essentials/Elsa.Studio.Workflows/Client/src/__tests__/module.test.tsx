@@ -1434,9 +1434,9 @@ describe("workflows module", () => {
       expect(container.textContent).not.toContain("Copied executable ID");
 
       await click(buttonByLabel(container, "Run executable artifact-current"));
-      await waitForText(container, "Provide the workflow inputs for this run.");
-      await fill(inputByLabel(container, "Greeting"), "Hello from artifacts");
-      await click(buttonByText(container, "Run workflow"));
+      await waitForText(document.body, "Provide the workflow inputs for this run.");
+      await fill(inputByLabel(document.body, "Greeting"), "Hello from artifacts");
+      await click(buttonByText(document.body, "Run workflow"));
       await waitForText(container, "Open Run wfexec-artifacts-1");
       expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
         "https://server.example/design/workflows/versions/version-1"
@@ -2340,13 +2340,13 @@ describe("workflows module", () => {
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
     await click(buttonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
-    await click(buttonByText(container, "Cancel"));
+    await waitForText(document.body, "Provide the workflow inputs for this run.");
+    await click(buttonByText(document.body, "Cancel"));
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
     await click(buttonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
-    await fill(inputByLabel(container, "Greeting"), "Hello from published run");
-    await click(buttonByText(container, "Run workflow"));
+    await waitForText(document.body, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(document.body, "Greeting"), "Hello from published run");
+    await click(buttonByText(document.body, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
     await waitForRunWorkbench(container);
@@ -2859,9 +2859,9 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
 
     await click(await waitForButtonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
-    await fill(inputByLabel(container, "Greeting"), "Hello from inspector");
-    await click(buttonByText(container, "Run workflow"));
+    await waitForText(document.body, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(document.body, "Greeting"), "Hello from inspector");
+    await click(buttonByText(document.body, "Run workflow"));
     await waitForText(container, "Open Run wfexec-inspector-1");
 
     const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
@@ -3436,7 +3436,7 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(container.querySelector("input[aria-label='Custom stimulus']")).toBeTruthy());
     await select(startSelector, "direct");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
-    await fill(inputByLabel(container, "Greeting"), "Hello from test run");
+    await fill(inputByLabel(document.body, "Greeting"), "Hello from test run");
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
     await waitForText(container, "test-run-1");
@@ -3522,9 +3522,9 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Test Run"));
     await waitForEnabledButton(container, "Start Test Run");
     await click(buttonByText(container, "Start Test Run"));
-    await waitForText(container, "Expression validation is unavailable");
+    await waitForText(document.body, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
-    await click(buttonByText(container, "Proceed with Test Run"));
+    await click(buttonByText(document.body, "Proceed with Test Run"));
     await waitForText(container, "test-run-1");
 
     const requests = fetchMock.mock.calls
@@ -6532,7 +6532,7 @@ async function waitForText(container: HTMLElement, text: string) {
 
 async function waitForStatusBadge(row: Element | null, text: string) {
   await vi.waitFor(() => {
-    if (!Array.from(row?.querySelectorAll(".wf-status-badge") ?? []).some(badge => badge.textContent === text)) {
+    if (!Array.from(row?.querySelectorAll(".studio-status-chip") ?? []).some(badge => badge.textContent === text)) {
       throw new Error(`Timed out waiting for status badge '${text}'.`);
     }
   }, { timeout: 5_000, interval: 20 });

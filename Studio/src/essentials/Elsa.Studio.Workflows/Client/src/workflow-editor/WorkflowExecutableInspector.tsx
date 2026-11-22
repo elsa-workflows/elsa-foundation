@@ -1,9 +1,9 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
-import { Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { AlertCircle, Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioShellBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -37,7 +37,6 @@ import {
 import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { ConversionPlanCaption } from "../ConversionPlanCaption";
 import { formatDate } from "../workflowFormatting";
-import { WfErrorCard } from "./StatusViews";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
@@ -308,10 +307,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
           ) : null}
         </>}
       />
-      {runError ? <WfErrorCard message={runError} title="The executable could not be run" /> : null}
+      {runError ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} description={runError || "Please try again, or check that the Elsa server is reachable."} title="The executable could not be run" /> : null}
       {runStatus ? <ExecutableRunStatusLine status={runStatus} run={lastRun} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading executable...</div> : null}
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {currentData && graph ? (
         <GraphAuthoringWorkbench
           layout={sidePanelLayout}

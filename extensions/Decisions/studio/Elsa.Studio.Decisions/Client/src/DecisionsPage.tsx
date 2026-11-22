@@ -236,7 +236,11 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
             <h1 id="decision-title" ref={heading} tabIndex={-1} title={editorTitle}>{editorTitle}</h1>
             {editorStatus ? <StatusChip tone={dirty || isNew ? "warning" : "neutral"}>{editorStatus}</StatusChip> : null}
           </span></>
-          {shown ? <StudioField className="decision-version-picker" label="View"><select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(shown.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField> : null}
+          {shown && availableVersions.length > 0 ? <fieldset className="decision-version-picker" disabled={busy} aria-label="Decision version">
+            <PeerViewSwitch ariaLabel="Decision version" value={published?.id ?? "draft"} views={[
+              { id: "draft", label: "Current draft" }, ...availableVersions.map(item => ({ id: item.id, label: `Version ${item.number}` }))
+            ]} onChange={version => void leave(path(shown.id, version === "draft" ? undefined : version))} />
+          </fieldset> : null}
         </div>
         {!routePending && (isNew || shown) ? <div className="decision-actions">
           {!published ? <StudioButton variant="primary" disabled={busy || caseBusy || caseDirty || readOnly || !name.trim() || !xml || !dirty && !!asset} onClick={() => void save()}>{busy ? "Working…" : "Save decision"}</StudioButton>
