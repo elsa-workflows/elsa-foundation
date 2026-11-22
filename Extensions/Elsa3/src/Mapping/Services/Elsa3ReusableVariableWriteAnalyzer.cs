@@ -152,7 +152,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private State _state = new();
     private bool _writes;
     private int _opaqueDepth;
-    private readonly List<bool> _optionalChains = [];
+    private readonly List<State?> _optionalChains = [];
 
     public bool MayWrite(Script script)
     {
@@ -433,14 +433,13 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 result = Member(memberReceiver, Name(member), member.Object is Super ? _receivers.LastOrDefault() : null);
                 break;
             case ChainExpression chain:
-                var beforeChain = _state.Copy();
-                _optionalChains.Add(false);
+                _optionalChains.Add(null);
                 result = Evaluate(chain.Expression);
                 var skipped = _optionalChains[^1];
                 _optionalChains.RemoveAt(_optionalChains.Count - 1);
-                if (skipped)
+                if (skipped is not null)
                 {
-                    _state.Join(beforeChain);
+                    _state.Join(skipped);
                     result = result.Union(Value.Primitive);
                 }
                 break;
@@ -1758,7 +1757,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private void OptionalAccess(bool optional, Value receiver)
     {
-        if (optional && receiver.MayBePrimitive && _optionalChains.Count > 0) _optionalChains[^1] = true;
+        // The receiver/callee has already executed; only subsequent keys/arguments may be skipped. Preserve
+        // that exact checkpoint, including its mandatory effects, rather than the state before the whole chain.
+        if (optional && receiver.MayBePrimitive && _optionalChains.Count > 0)
+            _optionalChains[^1] = Join(_optionalChains[^1], _state);
     }
 
     private Value Flattened(Value source)
