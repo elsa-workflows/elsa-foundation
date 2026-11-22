@@ -6,9 +6,15 @@ namespace Kernel.Durable;
 /// <summary>The exact jobs and child creations a terminated actor handed to the durable layer.</summary>
 internal sealed record CascadeRegistry(ImmutableArray<JobRegistration> Jobs, ImmutableArray<CreationAddress> Children)
 {
+    internal const int ChildBytes = 384;
+    internal const int JobBytes = 12_416;
+    internal const int MaxBytes = 16_441_344;
     internal int Count => checked(Jobs.Length + Children.Length);
+    internal long StorageBytes => ChildBytes * (long)Children.Length + JobBytes * (long)Jobs.Length;
     internal static CascadeRegistry From(InstanceRow row) =>
         new([.. JobRegistry.Read(row.Jobs)], [.. ChildRegistry.Read(row.Children)]);
+    internal static CascadeRegistry? ForRetirement(InstanceRow row) =>
+        row is { Creation: > 0, Parent: not null, Cascade: null } ? From(row) : null;
 }
 
 internal sealed record CascadeDischarge(CascadeRegistry Entries, int Cursor, long Serial, InboxKey Control);
@@ -42,6 +48,20 @@ internal static class CascadeProtocol
             FoundationCascade = new(discharge.Entries, discharge.Control)
         };
     }
+
+    internal static TurnOutcome OpenRetired(InstanceRow row, Delivery input)
+    {
+        var refusal = CreationProtocol.Refuse(row.Id, row, [input], "RetiredCreation");
+        refusal.Row = row with { HeldCascade = null, Revision = checked(row.Revision + 1) };
+        refusal.Expected = row.Revision;
+        refusal.Revision = refusal.Row.Revision;
+        return Open(refusal, row.HeldCascade!);
+    }
+
+    internal static bool MatchesRetiredTerminate(InstanceRow row, Message command) =>
+        row is { Retired: true, HeldCascade: not null } &&
+        command is { Kind: Kinds.Terminate, CascadeOrigin: true, HasIssuedTicket: true } &&
+        command.Target.Id == row.Id && command.TargetCreation == row.Creation && CreationProtocol.MatchesCascadeParent(row, command);
 
     internal static CascadePage Page(InstanceRow row, CascadeRegistry registry, int cursor, long serial)
     {
@@ -91,10 +111,11 @@ public sealed partial class InMemoryStore
         IReadOnlySet<InboxKey>? earlier, IReadOnlySet<InboxKey> competing)
     {
         var before = previous?.Cascade;
+        var held = previous?.HeldCascade;
         var sent = turn.Sent.Where(message => message.CascadeOrigin || message.Kind == Kinds.Cascade).ToArray();
         if (turn.FoundationCascade is not { } action)
         {
-            if (turn.Row is { } ordinary && ordinary.Cascade != before ||
+            if (turn.Row is { } ordinary && (ordinary.Cascade != before || !turn.Delete && ordinary.HeldCascade != held) ||
                 before is not null && turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Contains(before.Control) ||
                 sent.Any(message => message.Kind == Kinds.Cascade))
                 throw InvalidCascade();
@@ -105,15 +126,17 @@ public sealed partial class InMemoryStore
             action.Entries.Count == 0 || turn.Delete || action.Input is null != (before is null))
             throw InvalidCascade();
 
-        if (before is not null)
+        if (before is not null || held is not null)
         {
-            if (action.Input != before.Control || action.Entries != before.Entries ||
-                turn.Consumed is not [var input] || input != before.Control || turn.Done.Count != 0 ||
-                Messages.GetValueOrDefault(input) is not { Done: false, Message: { } source } || !CascadeProtocol.Matches(previous!, source) ||
-                next != previous! with { Revision = checked(previous!.Revision + 1), Cascade = next.Cascade } ||
+            if (action.Entries != (before?.Entries ?? held) || turn.Consumed is not [var input] || turn.Done.Count != 0 ||
+                Messages.GetValueOrDefault(input) is not { Done: false, Message: { } source } ||
+                next != previous! with { Revision = checked(previous!.Revision + 1), Cascade = next.Cascade, HeldCascade = null } ||
                 turn.Unsubscribe || turn.Journal is not null || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
                 turn.Sent.Count != sent.Length || turn.Held is { Count: > 0 })
                 throw InvalidCascade();
+            var matches = before is null ? CascadeProtocol.MatchesRetiredTerminate(previous!, source) :
+                action.Input == before.Control && input == before.Control && CascadeProtocol.Matches(previous!, source);
+            if (!matches) throw InvalidCascade();
         }
         else
         {
@@ -128,7 +151,7 @@ public sealed partial class InMemoryStore
                     throw InvalidCascade();
                 tookTerminate |= addressed;
             }
-            if (next is not { Retired: false, Jobs: null, Children: null } ||
+            if (next is not { Retired: false, Jobs: null, Children: null, HeldCascade: null } ||
                 (birth ? next.Revision <= 0 : next.Revision != checked(previous!.Revision + 1)) ||
                 !(cancelled || tookTerminate) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||

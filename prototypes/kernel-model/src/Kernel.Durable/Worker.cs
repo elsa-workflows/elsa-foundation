@@ -1951,7 +1951,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (creationError is not null)
         {
-            Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, creationError), slot), cancellationToken);
+            var refusal = creationError == "RetiredCreation" && slot.Row is { } marker && due is [var terminate] &&
+                CascadeProtocol.MatchesRetiredTerminate(marker, request)
+                    ? CascadeProtocol.OpenRetired(marker, terminate)
+                    : CreationProtocol.Refuse(instance, slot.Row, due, creationError);
+            Enqueue(Bound(refusal, slot), cancellationToken);
             return;
         }
         if (request.Kind == Kinds.Cascade)

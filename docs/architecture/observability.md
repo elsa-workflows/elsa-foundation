@@ -357,6 +357,12 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     give; the operator terminates each child by its own selection. The marker's shape, its bound and when the
     obligation clears are on the data lifecycle page ([the qualified
     delete](data-lifecycle.md#proposed-the-qualified-delete)).
+    The K3 [retirement fixture](../../prototypes/kernel-model/sim/RetirementCascadeChecks.cs) runs the
+    in-memory Worker through qualified Delete of an already-ended child with live descendants. An operator
+    terminate leaves its obligation held. The recorded parent's terminate opens it, and one-page and
+    two-page schedules check progress across takeover and one send per exact child. The fixture also checks
+    the fenced retirement's job-pair and parent checks. A Park drain's Complete, ThenDelete and physical
+    providers have separate qualification.
 - **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
   actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends
   `kernel.terminate` through `ITurn.Send`, an application send. Neither carries a Park identity, and requiring one

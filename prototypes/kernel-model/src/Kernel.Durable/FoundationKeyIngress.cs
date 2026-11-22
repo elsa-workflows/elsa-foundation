@@ -51,7 +51,7 @@ public sealed partial class InMemoryStore
             {
                 var now = clock();
                 var previous = binding is null ? null : Instances.GetValueOrDefault(binding.Address.Id);
-                if (previous is { Retired: true, Cascade: not null })
+                if (previous is { Retired: true, HasCascadeObligation: true })
                     return new(KeyAdmissionOutcome.ObligationOutstanding);
                 if (binding is not null && (previous is not { Retired: true } || now < binding.ReuseAfter))
                     return new(KeyAdmissionOutcome.Repeat);
