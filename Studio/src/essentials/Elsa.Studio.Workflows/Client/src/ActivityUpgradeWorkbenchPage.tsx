@@ -397,12 +397,12 @@ function UpgradeSelection({
     <div className="au-root-add">
       <StudioField label={<><span>Root kind</span></>}><select value={rootKind} onChange={event => onRootKindChange(event.target.value as ActivityUpgradeRootKind)}>{rootKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></StudioField>
       <StudioField label={<><span>Exact root identity</span></>}><input value={rootId} onChange={event => onRootIdChange(event.target.value)} placeholder="Exact draft or immutable version ID" /></StudioField>
-      <button type="button" onClick={onAddRoot} disabled={!rootId.trim()}><Plus size={16} aria-hidden /> Add exact root</button>
+      <StudioButton type="button" onClick={onAddRoot} disabled={!rootId.trim()}><Plus size={16} aria-hidden /> Add exact root</StudioButton>
     </div>
     {draft.roots.length ? <ul className="au-root-list">
       {draft.roots.map(root => <li key={`${root.kind}:${root.id}`}>
         <div><strong>{root.kind}</strong><code>{root.id}</code><span>{root.kind.endsWith("Version") ? "Immutable root · the plan must clone a draft" : "Mutable exact draft root"}</span></div>
-        <button type="button" aria-label={`Remove ${root.kind} ${root.id}`} onClick={() => onRemoveRoot(root.kind, root.id)}><Trash2 size={16} aria-hidden /></button>
+        <StudioButton type="button" aria-label={`Remove ${root.kind} ${root.id}`} onClick={() => onRemoveRoot(root.kind, root.id)}><Trash2 size={16} aria-hidden /></StudioButton>
       </li>)}
     </ul> : <div className="ad-inline-status" role="status">No exact root selected. Nothing outside this explicit list can enter the plan.</div>}
     <fieldset className="au-options">
@@ -410,7 +410,7 @@ function UpgradeSelection({
       <label><input type="checkbox" checked={draft.includeTransitiveDependents} onChange={event => onDraftChange({ ...draft, includeTransitiveDependents: event.target.checked })} /><span><strong>Include indirect dependents</strong><small>The plan lists the affected workflows and activities in upgrade order.</small></span></label>
       <label><input type="checkbox" checked={draft.createDraftsForPublishedDependents} onChange={event => onDraftChange({ ...draft, createDraftsForPublishedDependents: event.target.checked })} /><span><strong>Create drafts for affected published versions</strong><small>Created drafts remain unpublished until separately reviewed.</small></span></label>
     </fieldset>
-    <footer><span>Reviewing the plan leaves your drafts and published versions unchanged.</span><button type="button" className="ad-primary-action" onClick={onReview} disabled={reviewing}>{reviewing ? "Reviewing selection…" : "Review upgrade plan"}</button></footer>
+    <footer><span>Reviewing the plan leaves your drafts and published versions unchanged.</span><StudioButton type="button" className="ad-primary-action" onClick={onReview} disabled={reviewing}>{reviewing ? "Reviewing selection…" : "Review upgrade plan"}</StudioButton></footer>
   </section>;
 }
 
@@ -428,7 +428,7 @@ function OutcomeUnknown({
   return <section className="au-outcome" role="alert" aria-labelledby="activity-upgrade-outcome">
     <AlertTriangle size={22} aria-hidden />
     <div><h2 id="activity-upgrade-outcome">Upgrade status unconfirmed</h2><p>{outcome.state === "not-found" ? "No result is available yet. You can retry this stage with the original request ID." : outcome.state === "rejected" ? "The durable receipt rejected the operation. The reviewed evidence remains visible." : "Studio will query the durable receipt before any retry. No second mutation request is sent while status is Preparing or unavailable."}</p><code>{outcome.receiptId}</code></div>
-    <div>{outcome.state === "not-found" ? <button type="button" onClick={onRetry}>Retry this stage</button> : <button type="button" onClick={onCheck} disabled={busy || outcome.state === "rejected"}>{busy ? "Checking upgrade status…" : "Check upgrade status"}</button>}</div>
+    <div>{outcome.state === "not-found" ? <StudioButton type="button" onClick={onRetry}>Retry this stage</StudioButton> : <StudioButton type="button" onClick={onCheck} disabled={busy || outcome.state === "rejected"}>{busy ? "Checking upgrade status…" : "Check upgrade status"}</StudioButton>}</div>
   </section>;
 }
 
@@ -464,7 +464,7 @@ function PublicationHandoff({
     <header><span>Publication handoff</span><h2 id="activity-upgrade-handoff">Awaiting separately reviewed publication</h2><p>Publish each exact child draft in its normal editor. Then enter the actual immutable version returned by publication to create a successor plan.</p></header>
     <div className="ad-inline-status" role="status" aria-live="polite">Publication handoff ready for {result.awaitingPublications.length} exact child draft{result.awaitingPublications.length === 1 ? "" : "s"}. No draft was published automatically.</div>
     <div className="au-handoff-list">{result.awaitingPublications.map(handoff => <HandoffRow key={handoff.draftId} handoff={handoff} planId={planId} value={values[handoff.draftId] ?? ""} onOpenDraft={onOpenDraft} onChange={value => onChange(handoff.draftId, value)} />)}</div>
-    <footer><span>Refresh never guesses a version or rewrites this predecessor plan.</span><button type="button" className="ad-primary-action" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Creating successor…" : "Refresh successor plan"}</button></footer>
+    <footer><span>Refresh never guesses a version or rewrites this predecessor plan.</span><StudioButton type="button" className="ad-primary-action" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Creating successor…" : "Refresh successor plan"}</StudioButton></footer>
   </section>;
 }
 
