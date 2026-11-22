@@ -79,6 +79,10 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Workflow inspector source audit
+
+The A6 review covered all of `WF/workflow-editor/WorkflowExecutableInspector.tsx` and `WF/workflow-editor/ReusableBoundaryInspector.tsx`. The executable review traced route and source identity, Run and Weaver actions, catalog fallback, graph modes, drift, input bindings and output captures. The boundary review traced pinned definitions, nested navigation, historical layout, cursor restart, virtualized keyboard selection, scoped value resolution and incident evidence. W18–W20 and X10.11 record the findings verified in source.
+
 ### Form and decision authoring audit
 
 The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
@@ -558,6 +562,8 @@ Replace local date formatting with `StudioTimestamp`.
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
   `EXT/Secrets/CopySecretNameButton.tsx:37` (custom copy button). See also E2.
 
+- [ ] **X10.11** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` uses `formatDate(detail.createdAt)`. `ReusableBoundaryInspector.tsx` displays `selectedInspection.lastCommittedAt` and `bookmark.createdAt` directly. Use the shared timestamp for all three.
+
 ### X11. Raw buttons instead of `StudioButton`
 
 Counts are raw `<button` occurrences. Canvas and context-toolbar buttons may be legitimately custom;
@@ -754,6 +760,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
+
+- [ ] **W18** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
+- [ ] **W19** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
+- [ ] **W20** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
 
 ### Extensions
 
