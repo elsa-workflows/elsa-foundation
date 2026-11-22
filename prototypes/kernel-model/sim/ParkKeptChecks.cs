@@ -1183,9 +1183,12 @@ internal static class ParkKeptChecks
             store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
     }
 
-    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
+    internal static Task CheckRecoverJobResult(Action<bool, string> check) =>
+        CaptureParkedCompletion(timed: false, check, recover: true);
+
+    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check, bool recover = false)
     {
-        const long now = 1_701_400_010_000;
+        var now = 1_701_400_010_000L;
         const string jobKey = "background";
         const int payloadLimit = 16 * 1024 * 1024 - 2 * 24 * 1024;
         var overhead = System.Text.Encoding.UTF8.GetByteCount(Json.Write(new JobFinished(jobKey, Json.Write(""), null)));
@@ -1194,7 +1197,8 @@ internal static class ParkKeptChecks
         var scope = new Contract.BoundScope("parked-job");
         Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
         var worker = MakeOwner("parked-job-first");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind == Contract.Kinds.Recover);
         var start = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(start.Actor!.Value);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -1225,9 +1229,23 @@ internal static class ParkKeptChecks
         await owner.DisposeAsync();
         await using var successor = (await new DurableHost([MakeOwner("parked-job-next")]).ActivateAsync(0))!;
         await Pump(successor);
-        check(actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
-            store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived },
-            "a successor keeps the bounded result as an arrival and does not rerun the job");
+        var kept = actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
+            store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        check(kept, "a successor keeps the bounded result as an arrival and does not rerun the job");
+        if (!recover || !kept) return;
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var resultAdmission = await edge.SendAsync(scope, target, "recover-job", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection)));
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(successor);
+        }
+        var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor;
+        check(resultAdmission.Outcome == Contract.AdmissionOutcome.Accepted && actor is { Entries: 1, Completions: 1 } &&
+            recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && !store.Messages.ContainsKey(ticket),
+            "Resume uses the current-generation kept result once and never restarts the settled job");
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -1369,7 +1387,7 @@ internal static class ParkKeptChecks
             return value;
         }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new("background", null)], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
