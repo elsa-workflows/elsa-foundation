@@ -84,12 +84,15 @@ internal static class MetadataEnvelopeChecks
         var existing = Checkpoint(live);
         await store.SubscribeAsync(new SubscriptionRow("metadata_old-wait", existing.Id, Probe.LegacyWait, Creation: existing.Creation)
             { FoundationTenant = scope.Tenant });
+        await store.SubscribeAsync(new SubscriptionRow("metadata_keep-wait", existing.Id, "keep", Creation: existing.Creation)
+            { FoundationTenant = scope.Tenant });
         var oldStartRemoved = true;
         try { await ingress.SetStartAsync(scope, "old-start", Probe.LegacyWait, null); }
         catch (Contract.MetadataLimitExceeded) { oldStartRemoved = false; }
         await ingress.SendAsync(scope, target, "drop-old-wait", "update", "unsubscribe-legacy");
         await Pump();
-        check(oldStartRemoved && store.Subscriptions.All(s => s.Wait != Probe.LegacyWait),
+        check(oldStartRemoved && Checkpoint(live).Status == InstanceStatus.Running &&
+            store.Subscriptions.Any(s => s.Key == "metadata_keep-wait") && store.Subscriptions.All(s => s.Wait != Probe.LegacyWait),
             "both public unsubscribe paths can remove legacy waits above the new registration limit");
 
         var prior = Checkpoint(live);
