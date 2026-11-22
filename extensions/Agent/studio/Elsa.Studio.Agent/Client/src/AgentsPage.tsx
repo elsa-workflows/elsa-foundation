@@ -3,7 +3,7 @@ import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
-  StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
+  StudioShellBreadcrumbs, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
 } from "@elsa-workflows/studio-ui";
 import {
   createAgent, getAgentAuthoring, listActiveAgentDrafts, listAgents, agentProviderKey, type AgentRow, type AgentAuthoring
@@ -292,6 +292,7 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   return (
     <form className="agent-create-form" aria-labelledby={`${nameId}-title`} onSubmit={submit}
       onKeyDown={event => { if (event.key === "Escape" && !submitting) onCancel(); }}>
+      <StudioShellBreadcrumbs items={[{ label: "Agents", onClick: onCancel, disabled: submitting }]} current="New agent" />
       <StudioPageHeader title="New agent" titleId={`${nameId}-title`}
         description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next." />
       <StudioField label="Name">

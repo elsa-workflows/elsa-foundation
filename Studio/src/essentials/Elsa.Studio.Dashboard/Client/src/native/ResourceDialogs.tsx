@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { StatusChip, StudioButton, StudioVersionHistory } from "@elsa-workflows/studio-ui";
-import { useHomeDialogFocus } from "../useHomeDialogFocus";
+import React, { useCallback, useEffect, useState } from "react";
+import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import type { DashboardApi } from "./api";
 import type { AudienceCandidate, AudienceGrant, DashboardResource, DashboardTile, DefinitionRevision, QueryValue, Visualization } from "./types";
 import { errorMessage, accessLost } from "./types";
@@ -8,11 +7,10 @@ import { useRequestLifetime } from "./useRequestLifetime";
 import { DashboardDependencyReview } from "./DashboardDependencyReview";
 export { DashboardDependencyReview } from "./DashboardDependencyReview";
 
-export function NativeDialog({ title, onClose, children }: { title: string; onClose(): void; children: React.ReactNode }) {
-  const ref = useRef<HTMLElement>(null);
-  const id = useId();
-  useHomeDialogFocus(ref, onClose);
-  return <div className="named-dialog-backdrop"><section ref={ref} role="dialog" aria-modal="true" aria-labelledby={id} className="named-dialog" tabIndex={-1}><div className="named-dialog-heading"><h3 id={id}>{title}</h3><StudioButton type="button" onClick={onClose} aria-label={`Close ${title}`}>Close</StudioButton></div>{children}</section></div>;
+export function NativeDialog({ title, onClose, footer, children }: { title: string; onClose(): void; footer?: React.ReactNode; children: React.ReactNode }) {
+  return <StudioDialog open title={title} closeLabel={`Close ${title}`} className="named-dialog" onClose={onClose} dismissOnOutsideClick={false} footer={footer}>
+    {children}
+  </StudioDialog>;
 }
 
 export function ShareDialog({ api, resource, onClose, onSaved }: { api: DashboardApi; resource: DashboardResource; onClose(): void; onSaved(resource: DashboardResource): void }) {
@@ -43,7 +41,30 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
     } catch (cause) { if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setCandidates([]); setCandidateCursor(null); } } }
     finally { if (request.current()) setSearching(false); request.finish(); }
   };
-  return <NativeDialog title={`Share ${resource.name}`} onClose={onClose}><p>Viewers see data using their own access. Sharing a dashboard does not share its questions automatically.</p>
+  async function save() {
+    if (saving || !audienceLoaded || !dependenciesReady) return;
+    const request = lifetime.begin("save");
+    setSaving(true);
+    setError(undefined);
+    try {
+      const updated = await api.share(resource, grants, request.signal);
+      if (request.current()) onSaved(updated);
+    } catch (cause) {
+      if (request.current()) {
+        setError(errorMessage(cause));
+        if (accessLost(cause)) {
+          setGrants([]);
+          setCandidates([]);
+        }
+      }
+    } finally {
+      if (request.current()) setSaving(false);
+      request.finish();
+    }
+  }
+  return <NativeDialog title={`Share ${resource.name}`} onClose={onClose}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} confirmLabel={saving ? "Saving audience…" : "Save audience"}
+      confirmDisabled={saving || loading || !audienceLoaded || !dependenciesReady} onConfirm={save} />}><p>Viewers see data using their own access. Sharing a dashboard does not share its questions automatically.</p>
     {resource.kind === "dashboard" ? <DashboardDependencyReview api={api} resource={resource} mode="share" onReadyChange={setDependenciesReady} /> : null}
     {error ? <p role="alert">{error}</p> : null}{loading ? <p role="status">Loading current audience…</p> : !audienceLoaded ? <><p role="status">The current audience is unknown. Load it successfully before changing sharing.</p><StudioButton onClick={() => setLoadAttempt(value => value + 1)}>Retry current audience</StudioButton></> : <>
       <form onSubmit={event => { event.preventDefault(); void searchAudience(search, audienceKind); }}><label>Audience kind<select value={audienceKind} onChange={event => { lifetime.cancel("search"); setAudienceKind(event.target.value); setCandidates([]); setCandidateCursor(null); setSearched(false); setSearching(false); }}><option value="user">Users</option><option value="role">Roles</option></select></label><label>Find authorized users or roles<input value={search} onChange={event => setSearch(event.target.value)} /></label><StudioButton type="submit" disabled={searching || saving}>{searching ? "Searching…" : "Search audience"}</StudioButton></form>
@@ -51,7 +72,7 @@ export function ShareDialog({ api, resource, onClose, onSaved }: { api: Dashboar
       {candidates.length ? <ul className="named-picker-list">{candidates.map(candidate => <li key={`${candidate.kind}:${candidate.id}`}><span>{candidate.displayName || candidate.name || candidate.id} ({candidate.kind})</span><StudioButton type="button" disabled={grants.some(grant => grant.id === candidate.id && grant.kind === candidate.kind)} onClick={() => setGrants(current => [...current, { kind: candidate.kind, id: candidate.id, access: "viewer" }])}>Add audience</StudioButton></li>)}</ul> : null}
       {candidateCursor ? <StudioButton type="button" disabled={searching || saving} onClick={() => void searchAudience(appliedCandidateSearch.query, appliedCandidateSearch.kind, candidateCursor)}>More audience entries</StudioButton> : null}
       <h4>Current audience</h4>{grants.length ? <ul className="named-picker-list">{grants.map((grant, index) => <li key={`${grant.kind}:${grant.id}`}><span>{grant.id} ({grant.kind})</span><label>Access for {grant.id}<select value={grant.access} onChange={event => setGrants(current => current.map((item, at) => at === index ? { ...item, access: event.target.value as AudienceGrant["access"] } : item))}><option value="viewer">Can view</option><option value="editor">Can edit content</option></select></label><StudioButton type="button" onClick={() => setGrants(current => current.filter((_, at) => at !== index))}>Remove {grant.id}</StudioButton></li>)}</ul> : <p>Personal. No audience grants.</p>}
-      <p className="named-help">Only the owner manages sharing and deletion. Editors cannot change the audience.</p><StudioButton type="button" variant="primary" disabled={saving || !dependenciesReady} onClick={() => { if (saving || !dependenciesReady) return; const request = lifetime.begin("save"); setSaving(true); setError(undefined); void api.share(resource, grants, request.signal).then(value => { if (request.current()) onSaved(value); }).catch(cause => { if (request.current()) { setError(errorMessage(cause)); if (accessLost(cause)) { setGrants([]); setCandidates([]); } } }).finally(() => { if (request.current()) setSaving(false); request.finish(); }); }}>{saving ? "Saving audience…" : "Save audience"}</StudioButton>
+      <p className="named-help">Only the owner manages sharing and deletion. Editors cannot change the audience.</p>
     </>}
   </NativeDialog>;
 }
@@ -158,13 +179,14 @@ export function TileOptionsDialog({ api, tile, onClose, onApply }: { api: Dashbo
   useEffect(() => { const request = lifetime.begin("load"); void api.get("question", tile.questionId!, request.signal).then(resource => { if (!request.current()) return; setQuestion(resource); if (!tile.presentation && resource.definition) setPresentation(resource.definition.visualization); }).catch(cause => { if (request.current()) setError(errorMessage(cause)); }).finally(request.finish); return () => lifetime.cancel("load"); }, [api, tile, lifetime]);
   const definition = question?.definition;
   const columns = definition ? [...definition.query.fields, ...definition.query.groupBy, ...definition.query.metrics.flatMap(metric => [metric.alias, `current.${metric.alias}`, ...(definition.query.comparison ? [`baseline.${metric.alias}`, `delta.${metric.alias}`] : [])])] : [];
-  return <NativeDialog title="Tile presentation and parameters" onClose={onClose}><p>These settings affect this tile only. The saved question stays unchanged. Save the dashboard layout to persist them.</p>{error ? <p role="alert">{error}</p> : !question ? <p role="status">Loading current question…</p> : !definition ? <p role="status">Question settings are unavailable under your current access. The existing overrides remain preserved.</p> : <>
+  return <NativeDialog title="Tile presentation and parameters" onClose={onClose}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} confirmLabel="Use tile settings" confirmDisabled={Boolean(error) || !definition}
+      onConfirm={() => onApply({ ...tile, presentation, parameters })} />}><p>These settings affect this tile only. The saved question stays unchanged. Save the dashboard layout to persist them.</p>{error ? <p role="alert">{error}</p> : !question ? <p role="status">Loading current question…</p> : !definition ? <p role="status">Question settings are unavailable under your current access. The existing overrides remain preserved.</p> : <>
     <label>Tile visualization<select value={presentation.kind} onChange={event => setPresentation({ ...presentation, kind: event.target.value as Visualization["kind"] })}>{["table", "bar", "line", "list", "metric"].map(item => <option key={item}>{item}</option>)}</select></label>
     <label>Tile label<input value={presentation.label ?? ""} onChange={event => setPresentation({ ...presentation, label: event.target.value })} /></label>
-    <label>Category / x axis<select value={presentation.x ?? ""} onChange={event => setPresentation({ ...presentation, x: event.target.value || undefined })}><option value="">None</option>{columns.map(item => <option key={item}>{item}</option>)}</select></label>
+    <label>Horizontal axis<select value={presentation.x ?? ""} onChange={event => setPresentation({ ...presentation, x: event.target.value || undefined })}><option value="">None</option>{columns.map(item => <option key={item}>{item}</option>)}</select></label>
     <label>Value columns<select multiple value={presentation.y} onChange={event => setPresentation({ ...presentation, y: [...event.target.selectedOptions].map(item => item.value) })}>{columns.map(item => <option key={item}>{item}</option>)}</select></label>
     {definition.query.parameters.map(parameter => <fieldset key={parameter.name}><legend>{parameter.name} ({parameter.type})</legend><label><input type="checkbox" checked={Object.hasOwn(parameters, parameter.name)} onChange={event => setParameters(current => { const next = { ...current }; if (!event.target.checked) delete next[parameter.name]; else next[parameter.name] = parameter.default ?? { type: parameter.type, literal: "" }; return next; })} />Override the saved default</label>{Object.hasOwn(parameters, parameter.name) ? <><label>Value kind<select value={parameters[parameter.name].type === "null" ? "null" : "value"} onChange={event => setParameters(current => ({ ...current, [parameter.name]: event.target.value === "null" ? { type: "null" } : { type: parameter.type, literal: "" } }))}><option value="value">Typed value</option>{parameter.nullable ? <option value="null">Null</option> : null}</select></label>{parameters[parameter.name].type !== "null" ? <label>Override value for {parameter.name}<input value={parameters[parameter.name].literal ?? ""} onChange={event => setParameters(current => ({ ...current, [parameter.name]: { type: parameter.type, literal: event.target.value } }))} /></label> : null}</> : <p>Uses the saved question default.</p>}</fieldset>)}
-    <StudioButton variant="primary" onClick={() => onApply({ ...tile, presentation, parameters })}>Use tile settings</StudioButton>
   </>}</NativeDialog>;
 }
 

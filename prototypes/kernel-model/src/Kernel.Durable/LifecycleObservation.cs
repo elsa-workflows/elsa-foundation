@@ -46,7 +46,7 @@ public sealed partial class InMemoryStore
             if (!_watched.Contains(turn.Instance) && prepared?.Refusals is null ||
                 turn.Row is null && !turn.Delete && prepared?.Refusals is null) return null;
             bool Disposed(Message m) => (turn.Consumed.Contains(m.InboxKey) || turn.Done.Contains(m.InboxKey)) &&
-                store.Messages.TryGetValue(m.InboxKey, out var stored) && ReferenceEquals(stored.Message, m);
+                store.Messages.TryGetValue(m.InboxKey, out var stored) && ReferenceEquals(stored.Message, m.StoredEnvelope ?? m);
             return new(turn, store.Instances.GetValueOrDefault(turn.Instance), null, null, prepared?.Input,
                 _cancels.TryGetValue(turn, out var cancel) && Disposed(cancel),
                 prepared?.Refusals?.Where(d => !d.Durable || Disposed(d.Message)).Select(d => d.Message).ToArray());

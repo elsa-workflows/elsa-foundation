@@ -1,6 +1,6 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioLoadingStatus, AdvancedSection, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioActivityDefinitionImplementationState, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityOutcomeContract, ActivityProviderAuthoringCapability, CreateActivityDefinitionResponse } from "./activityDefinitionTypes";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
@@ -11,7 +11,6 @@ import { deriveActivityCategorySuggestions } from "./activityCategories";
 import { createActivityNode } from "./workflowAdapter";
 import { canonicalizeStateForWire } from "./activityInputWire";
 import { WorkflowRootRadioCards } from "./workflow-editor/WorkflowRootCards";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { getCreateRootActivity } from "./workflow-editor/editorHelpers";
 import { defaultActivityGraphOutcomeChoice, getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
 
@@ -40,14 +39,11 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
   const [category, setCategory] = useState("Custom");
   const [rootActivityVersionId, setRootActivityVersionId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
-  const [advanced, setAdvanced] = useState(false);
   const [activityTypeKey, setActivityTypeKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const displayNameRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
 
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     const defaultChoice = defaultProviderChoice(choices);
@@ -87,7 +83,7 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
         category: category.trim(),
         displayName: displayName.trim(),
         description: description.trim() || null,
-        ...(advanced && rules?.allowsPreCreationOverride && exactKey ? { activityTypeKey: exactKey } : {}),
+        ...(rules?.allowsPreCreationOverride && exactKey ? { activityTypeKey: exactKey } : {}),
         provider: {
           providerKey: choice.providerKey,
           schemaVersion: choice.schemaVersion,
@@ -112,10 +108,14 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
     }
   };
 
-  return <div className="ad-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !submitting) onClose(); }}>
-    <section ref={dialogRef} className="ad-dialog ad-create-dialog" role="dialog" aria-modal="true" aria-labelledby="create-activity-definition-title" tabIndex={-1}>
-      <header><div><span className="ad-kicker">Design-owned reusable activity</span><h2 id="create-activity-definition-title">New activity definition</h2></div><button type="button" className="ad-icon-button" aria-label="Close" onClick={onClose} disabled={submitting}><X size={18} /></button></header>
-      {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized authoring providers…</div> : null}
+  return <StudioDialog open title="New activity definition" className="ad-create-dialog" dismissDisabled={submitting} onClose={onClose}
+    initialFocusRef={displayNameRef} onEscapeKeyDown={event => {
+      if (event.target instanceof HTMLElement && event.target.matches('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
+    }}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Creating…" : "Create"}
+      confirmDisabled={!canSubmit} onConfirm={() => void submit()} />}
+  >
+      {capabilitiesQuery.isPending ? <StudioLoadingStatus>Loading authorized authoring providers…</StudioLoadingStatus> : null}
       {capabilitiesQuery.isError ? <div className="ad-inline-error" role="alert">Authoring capabilities are unavailable. Studio will not guess a provider or contract.</div> : null}
       {capabilitiesQuery.data && choices.length === 0 ? <div className="ad-inline-error" role="alert">No authorable implementation provider is currently advertised.</div> : null}
       {choices.length ? <div className="ad-form-grid">
@@ -123,20 +123,17 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
         {choice && !choice.contribution ? <div className="ad-inline-error" role="alert"><AlertTriangle size={17} aria-hidden /> The backend advertises this provider, but its exact Studio editor contribution is unavailable. Creation is disabled.</div> : null}
         <StudioField label={<><span>Display name</span></>}><input ref={displayNameRef} name="displayName" value={displayName} onChange={event => setDisplayName(event.target.value)} aria-label="Display name" placeholder="e.g. Send invoice reminder" /></StudioField>
         <ActivityCategoryCombobox value={category} suggestions={categorySuggestions} onChange={setCategory} />
-        {isGraphCreation ? <fieldset className="ad-form-wide ad-composition-picker wf-tokens"><legend>Graph composition</legend>{catalogQuery.isPending ? <p className="ad-inline-status" role="status">Loading the authorized graph composition catalog…</p> : catalogQuery.isError ? <p className="ad-inline-error" role="alert">Graph compositions could not be loaded. Creation is disabled until the authorized catalog is available.</p> : <WorkflowRootRadioCards catalog={catalog} value={rootActivityVersionId} onChange={setRootActivityVersionId} />}</fieldset> : null}
+        {isGraphCreation ? <fieldset className="ad-form-wide ad-composition-picker wf-tokens"><legend>Graph composition</legend>{catalogQuery.isPending ? <StudioLoadingStatus>Loading the authorized graph composition catalog…</StudioLoadingStatus> : catalogQuery.isError ? <p className="ad-inline-error" role="alert">Graph compositions could not be loaded. Creation is disabled until the authorized catalog is available.</p> : <WorkflowRootRadioCards catalog={catalog} value={rootActivityVersionId} onChange={setRootActivityVersionId} />}</fieldset> : null}
         <StudioField className="ad-form-wide" label={<><span>Description </span></>}><textarea name="description" value={description} onChange={event => setDescription(event.target.value)} rows={3} aria-label="Description" placeholder="Optional summary of what this activity does" /><small>Optional</small></StudioField>
-        <details className="ad-form-wide ad-create-advanced" onToggle={event => { const isOpen = event.currentTarget.open; setAdvanced(isOpen); if (!isOpen) setActivityTypeKey(""); }}>
-          <summary>Advanced</summary>
+        <div className="ad-form-wide ad-create-advanced"><AdvancedSection onOpenChange={open => { if (!open) setActivityTypeKey(""); }}>
           <div className="ad-create-advanced-content">
             <div className="ad-key-summary"><strong>Activity Type Key</strong><span>{rules?.serverGenerated ? `Generated by the backend under ${rules.prefix}.` : "Defined by the backend authoring contract."} It is immutable after creation.</span></div>
             {rules?.allowsPreCreationOverride ? <StudioField className="ad-form-wide" label={<><span>Exact Activity Type Key</span></>}><input name="activityTypeKey" value={activityTypeKey} onChange={event => setActivityTypeKey(event.target.value)} placeholder={`${rules.prefix}.team-name.activity-name`} maxLength={rules.maximumLength} /><small>Must match the advertised namespace rules. Collisions fail; Studio never adds a suffix.</small></StudioField> : null}
           </div>
-        </details>
+        </AdvancedSection></div>
       </div> : null}
       {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-      <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Creating…" : "Create"}</button></footer>
-    </section>
-  </div>;
+  </StudioDialog>;
 }
 
 export function createProviderChoices(

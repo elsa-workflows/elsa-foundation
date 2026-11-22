@@ -1,12 +1,11 @@
 import { graphPublicationValidationFailure } from "./activityPublicationValidationFailure";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { StudioFactList, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { activityDesignKeys, getActivityDefinition } from "./api/activityDesign";
 import { compareSemVer, parseSemVer } from "./semver";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import {
   getActivityPublicationReceipt,
   preflightActivityDraftPublication,
@@ -271,6 +270,10 @@ export function ActivityDefinitionPublicationReview({
   const attentionTitle = publicationBlocked && hasBlockingDiagnostics ? "Publication blocked" : phase === "failed" ? preflight ? "Publication did not complete" : "Review could not be prepared"
     : publicationBlocked ? "Publication blocked" : publicationStatusLabel(phase, preflight?.isPublishable);
   const closeAllowed = phase !== "publishing" && phase !== "unknown";
+  const reviewPanelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (mode === "toolbar" && dialogOpen && !closeAllowed) reviewPanelRef.current?.focus();
+  }, [closeAllowed, dialogOpen, mode]);
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement) => {
     if (mode === "toolbar") {
       if (closeAllowed) setDialogOpen(false);
@@ -292,8 +295,8 @@ export function ActivityDefinitionPublicationReview({
           : "The activity is not ready to publish. Review the readiness checks below or ask an administrator to resolve unavailable services, then check again."}</p>
         {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} embedded disabled={phase === "publishing" || phase === "unknown"} /> : null}
         <div className="ad-publication-blocker-actions">
-          {mode === "toolbar" ? <button type="button" onClick={() => setDialogOpen(false)}>Return to editor</button> : null}
-          <button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</button>
+          {mode === "toolbar" ? <StudioButton onClick={() => setDialogOpen(false)}>Return to editor</StudioButton> : null}
+          <StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</StudioButton>
         </div>
       </div> : null;
 
@@ -331,31 +334,30 @@ export function ActivityDefinitionPublicationReview({
           {versionError ? <p role="alert">{versionError}</p> : null}
         </div> : null}
       </>}
-      <footer className="ad-publication-actions">
-        <span><ShieldCheck size={16} aria-hidden /> {mode === "toolbar" ? "Existing workflows keep the activity version they already use." : "Publication is atomic and idempotent for this reviewed revision and head."}</span>
-        <button type="button" className="ad-primary-action" aria-describedby={publicationBlocked ? blockedReasonId : undefined} onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
+      {mode === "full" ? <footer className="ad-publication-actions">
+        <span><ShieldCheck size={16} aria-hidden /> Publication is atomic and idempotent for this reviewed revision and head.</span>
+        <StudioButton variant="primary" aria-describedby={publicationBlocked ? blockedReasonId : undefined} onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
           {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${selectedVersion}` : `Publish ${selectedVersion || "exact version"}`}
-        </button>
-      </footer>
+        </StudioButton>
+      </footer> : null}
     </> : null;
 
-  const reviewPanel = <section className="ad-publication-review" aria-labelledby="activity-publication-title">
-    <header className="ad-publication-header">
-      <div><span className="ad-kicker">{mode === "toolbar" ? "Publish activity" : "Immutable publication"}</span>{titleLevel === "h3" ? <h3 id="activity-publication-title">Review &amp; publish</h3> : <h2 id="activity-publication-title">Review &amp; publish</h2>}<p>{mode === "full" ? "Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection." : "Studio saves the current draft, then checks its impact and readiness before publication."}</p></div>
-      {mode === "full" ? <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
+  const reviewPanel = <section ref={reviewPanelRef} tabIndex={mode === "toolbar" ? -1 : undefined} className="ad-publication-review" aria-labelledby={mode === "full" ? "activity-publication-title" : undefined}>
+    {mode === "full" ? <header className="ad-publication-header">
+      <div>{titleLevel === "h3" ? <h3 id="activity-publication-title">Review &amp; publish</h3> : <h2 id="activity-publication-title">Review &amp; publish</h2>}<p>Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection.</p></div>
+      <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>
         <GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}
-      </button> : null}
-      {mode === "toolbar" ? <button type="button" className="ad-publication-dialog-close" aria-label="Close publication review" onClick={() => closeAllowed && setDialogOpen(false)} disabled={!closeAllowed}><X size={18} aria-hidden /></button> : null}
-    </header>
-    {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
+      </button>
+    </header> : null}
+    {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</StudioButton></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
     {!preflight ? blockerPanel : null}
-    {failure && (phase === "stale" || phase === "failed" || phase === "unknown") ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
+    {failure && (phase === "stale" || phase === "failed" || phase === "unknown") ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <StudioButton onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</StudioButton> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">
       <CheckCircle2 size={20} aria-hidden />
       <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{recommendationMessage(recommendationEvidence, mode === "toolbar")}</span></div>
-      {onOpenWorkflows ? <button type="button" onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></button> : null}
-      {onOpenVersion ? <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button> : null}
+      {onOpenWorkflows ? <StudioButton onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></StudioButton> : null}
+      {onOpenVersion ? <StudioButton onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></StudioButton> : null}
     </div> : null}
     {phase === "success" && mode === "toolbar" ? <details className="ad-publication-technical-details"><summary>Publication review details</summary>{reviewDetails}</details> : reviewDetails}
   </section>;
@@ -373,31 +375,40 @@ export function ActivityDefinitionPublicationReview({
       <div><strong>{attentionTitle}{diagnosticCounts ? ` · ${diagnosticCounts}` : ""}</strong>{failure ? <p>{failure}</p> : null}</div>
       <StudioButton size="sm" onClick={() => setDialogOpen(true)} aria-haspopup="dialog">{diagnosticSource.length ? "View issues" : "View details"}</StudioButton>
     </div> : <span className="ad-publication-toolbar-status" role="status">{publicationStatusLabel(phase, preflight?.isPublishable)}</span> : null}
-    {dialogOpen ? <PublicationDialog canClose={closeAllowed} onClose={() => closeAllowed && setDialogOpen(false)} restoreFocus={() => reviewTriggerRef.current?.focus()}>{reviewPanel}</PublicationDialog> : null}
+    {dialogOpen ? <StudioDialog open title="Review & publish" className="ad-publication-dialog"
+      description="Studio saves the current draft, then checks its impact and readiness before publication."
+      closeLabel="Close publication review" dismissDisabled={!closeAllowed} onClose={() => setDialogOpen(false)}
+      onCloseAutoFocus={event => { event.preventDefault(); reviewTriggerRef.current?.focus(); }}
+      footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialogOpen(false)} cancelDisabled={!closeAllowed}
+        cancelLabel={phase === "success" ? "Close" : "Cancel"}
+        confirmLabel={preflight ? phase === "success" ? `Published ${selectedVersion}` : phase === "publishing" ? "Publishing atomically…" : `Publish ${selectedVersion || "exact version"}` : undefined}
+        confirmDisabled={disabled || phase !== "review" || !preflight?.isPublishable || Boolean(versionError)}
+        confirmProps={{ "aria-describedby": publicationBlocked ? blockedReasonId : undefined }} onConfirm={() => void publish()} />}
+    >{reviewPanel}{preflight ? <p>Existing workflows keep the activity version they already use.</p> : null}</StudioDialog> : null}
   </div>;
 }
 
 function PublicationSummary({ preflight, publishedOutcome, version, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; version: string; compact?: boolean }) {
-  if (!compact) return <dl className="ad-publication-summary">
+  if (!compact) return <StudioFactList>
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
     <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
     <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
     <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
-  </dl>;
+  </StudioFactList>;
   return <>
-    <dl className="ad-publication-summary">
+    <StudioFactList>
       <div><dt>Version</dt><dd>{version || "Not selected"}</dd></div>
       <div><dt>Readiness</dt><dd>{preflight.isPublishable && !blocked ? "Ready to publish" : "Blocked"}</dd></div>
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
       <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>
-    </dl>
+    </StudioFactList>
     <details className="ad-publication-technical-details">
       <summary>Exact publication identities</summary>
-      <dl className="ad-publication-summary">
+      <StudioFactList>
         <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
         <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
         <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
-      </dl>
+      </StudioFactList>
     </details>
   </>;
 }
@@ -445,18 +456,6 @@ function uniquePublicationDiagnostics(diagnostics: StudioActivityDiagnostic[]) {
     seen.add(key);
     return true;
   }).sort((left, right) => ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(left.severity)) - ["Error", "Warning", "Info"].indexOf(diagnosticSeverity(right.severity)));
-}
-
-function PublicationDialog({ canClose, onClose, restoreFocus, children }: { canClose: boolean; onClose(): void; restoreFocus(): void; children: ReactNode }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocus(dialogRef, canClose ? onClose : null, true, restoreFocus);
-  return <div className="ad-dialog-backdrop ad-publication-dialog-backdrop" role="presentation" onMouseDown={event => {
-    if (canClose && event.target === event.currentTarget) onClose();
-  }}>
-    <section ref={dialogRef} className="ad-dialog ad-publication-dialog" role="dialog" aria-modal="true" aria-labelledby="activity-publication-title" tabIndex={-1}>
-      {children}
-    </section>
-  </div>;
 }
 
 function publicationTriggerLabel(phase: ReviewPhase, hasPreflight: boolean) {

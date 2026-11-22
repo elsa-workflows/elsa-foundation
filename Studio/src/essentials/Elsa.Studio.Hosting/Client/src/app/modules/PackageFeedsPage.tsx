@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioField } from "../ui";
+import { StudioButton, StudioPageHeader, StudioField } from "../ui";
 import { StudioIconButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useRef, useState, useId } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
@@ -181,10 +181,10 @@ function PackageFeedsWorkbench({
             ))}
           </div>
 
-          <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
+          <StudioButton type="button" className="package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
             <PackagePlus size={15} />
             Add feed
-          </button>
+          </StudioButton>
 
           {addFeedDialogOpen ? (
             <FeedDialog
@@ -219,10 +219,10 @@ function PackageFeedsWorkbench({
             </div>
 
             <div className="modules-operation-grid">
-              <button type="button" className="studio-button" disabled={busy || !canMutate || !registry.capabilities.canReconcile} onClick={onReconcile}>
+              <StudioButton type="button" disabled={busy || !canMutate || !registry.capabilities.canReconcile} onClick={onReconcile}>
                 <RefreshCcw size={15} />
                 Reconcile
-              </button>
+              </StudioButton>
             </div>
             <PackageMaintenance
               key={`${host.id}:${effectiveRetentionPolicy.status}:${effectiveRetentionPolicy.keepNewestInactiveVersionsPerPackage}`}
@@ -245,15 +245,15 @@ function PackageFeedsWorkbench({
             ) : null}
             <p>Manual cleanup only. Leave the count blank to retain every install. Active and protected versions remain retained.</p>
             <div className="modules-form">
-              <StudioField label={<><span>Inactive versions to keep per package</span></>}><input
+              <StudioField label="Inactive versions to keep per package"><input
                   type="number" min="0" step="1"
                   disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy}
                   value={retentionDraft.keepNewestInactiveVersionsPerPackage ?? ""}
                   onChange={event => setRetentionDraft({ ...retentionDraft, keepNewestInactiveVersionsPerPackage: numberOrNull(event.target.value) })}
                 /></StudioField>
-              <button type="button" className="studio-button"
+              <StudioButton type="button"
                 disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy || !retentionDirty || !validRetention(retentionDraft)}
-                onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
+                onClick={() => onSaveRetention(retentionDraft)}>Save retention</StudioButton>
             </div>
           </section>
         </aside>
@@ -288,7 +288,7 @@ function ChangeLedger({
           <span>Affects: {host.label}</span>
         </div>
         {retentionDirty ? (
-          <button type="button" className="studio-button" onClick={onDiscardRetention}>Discard local changes</button>
+          <StudioButton type="button" onClick={onDiscardRetention}>Discard local changes</StudioButton>
         ) : null}
       </div>
       <div className="package-change-ledger-row">
@@ -349,10 +349,10 @@ function FeedDialog({
         </div>
 
         <form id="package-feed-form" className="modules-form" onSubmit={submit}>
-          <StudioField label={<><span>Name</span></>}><input data-dialog-initial-focus aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
-          <StudioField label={<><span>Service index</span></>}><input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
-          <StudioField label={<><span>Directory path</span></>}><input aria-label="Directory path" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
-          <StudioField label={<><span>Include patterns</span></>}><textarea aria-label="Include patterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
+          <StudioField label="Feed name"><input data-dialog-initial-focus name="feedName" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
+          <StudioField label="Service index"><input name="serviceIndex" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
+          <StudioField label="Directory path"><input name="directoryPath" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
+          <StudioField label="Include patterns"><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
           <label className="modules-checkbox">
             <input
               type="checkbox"
@@ -365,11 +365,11 @@ function FeedDialog({
         </form>
 
         <div className="modules-dialog-actions">
-          <button type="button" className="studio-button" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" form="package-feed-form" className="studio-button" disabled={busy || !feedDraft.name.trim()}>
+          <StudioButton type="button" onClick={onClose} disabled={busy}>Cancel</StudioButton>
+          <StudioButton type="submit" form="package-feed-form" disabled={busy || !feedDraft.name.trim()}>
             <PackagePlus size={15} />
             {submitLabel}
-          </button>
+          </StudioButton>
         </div>
       </section>
     </div>

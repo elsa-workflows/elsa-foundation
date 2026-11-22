@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
-import { OverflowMenu, selectSettingEditor, StudioField } from "@elsa-workflows/studio-ui";
-import { normalizeHomeWidgetSize, useDialogFocus, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, selectSettingEditor, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
 const sizeLabels: Record<StudioDashboardWidgetSize, string> = {
@@ -160,10 +160,8 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
   const definition = widget.settings!;
   const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...(value as Record<string, unknown>) }));
   const [validationError, setValidationError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const titleId = useId();
   const errorId = useId();
-  useDialogFocus(dialogRef, onClose);
+  const firstField = useRef<HTMLElement | null>(null);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -175,10 +173,11 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
     onSave(valid);
   }
 
-  return <div className="dashboard-settings-backdrop" role="presentation"><section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={validationError ? errorId : undefined} className="dashboard-settings-dialog dashboard-widget-settings-dialog" tabIndex={-1}>
-    <h4 id={titleId}>{widget.title} settings</h4>
-    <form className="dashboard-widget-settings-form" onSubmit={submit}>
-      <div className="dashboard-widget-settings-fields">
+  return <StudioDialog open title={`${widget.title} settings`} className="dashboard-widget-settings-dialog" onClose={onClose} dismissOnOutsideClick={false}
+    initialFocusRef={firstField} onSubmit={submit} footer={<StudioDialogFooter onCancel={onClose} confirmLabel="Save" />}>
+      <div className="dashboard-widget-settings-fields" ref={element => {
+        firstField.current = element?.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)") ?? null;
+      }}>
         {definition.descriptors.map(descriptor => {
           const editor = selectSettingEditor(api, descriptor);
           const Editor = editor.component;
@@ -188,10 +187,5 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
         })}
         {validationError ? <p id={errorId} className="dashboard-widget-settings-error" role="alert">{validationError}</p> : null}
       </div>
-      <footer className="dashboard-widget-settings-actions">
-        <button type="button" className="studio-button" data-variant="ghost" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button" data-variant="primary">Save</button>
-      </footer>
-    </form>
-  </section></div>;
+  </StudioDialog>;
 }

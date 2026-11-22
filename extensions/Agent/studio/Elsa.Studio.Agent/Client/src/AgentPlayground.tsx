@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
@@ -42,7 +42,8 @@ export function playgroundPath(draftId: string) {
 export function AgentPlayground({ context, draftId: given, navigate, pollInterval = pollIntervalMs }:
   { context: StudioEndpointContext; draftId?: string | null; navigate?(path: string): void; pollInterval?: number }) {
   const draftId = given ?? readPlaygroundDraftId(window.location.pathname);
-  return <Playground key={draftId ?? ""} context={context} draftId={draftId} navigate={navigate} pollInterval={pollInterval} />;
+  return <><StudioShellBreadcrumbs items={navigate ? [{ label: "Agents", onClick: () => navigate("/agents") }] : [{ href: "/agents", label: "Agents" }]} current="Agent playground" />
+    <Playground key={draftId ?? ""} context={context} draftId={draftId} navigate={navigate} pollInterval={pollInterval} /></>;
 }
 
 function Playground({ context, draftId, navigate, pollInterval }: { context: StudioEndpointContext; draftId: string | null; navigate?(path: string): void; pollInterval: number }) {
@@ -172,7 +173,7 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
     <StudioPage className="agent-playground">
       <StudioPageHeader
         icon={<FlaskConical aria-hidden="true" size={18} />}
-        eyebrow="Agent playground"
+        compact
         title={`Draft revision ${draft.revision}`}
         description="Runs the saved revision on the production agent runtime. Unsaved editor changes are not included."
         actions={<>

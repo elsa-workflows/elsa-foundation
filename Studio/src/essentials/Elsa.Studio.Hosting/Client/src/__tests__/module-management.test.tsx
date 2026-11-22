@@ -76,8 +76,8 @@ describe("module management page", () => {
     expect(gridPanel?.textContent).toContain("Elsa.Studio.FeatureManagement");
     expect(gridPanel?.textContent).toContain("Source kind");
     expect(gridPanel?.textContent).toContain("static-web-asset");
-    expect(gridPanel?.textContent).not.toContain("Upload Packages");
-    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload Packages");
+    expect(gridPanel?.textContent).not.toContain("Upload packages");
+    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload packages");
     expect(container.textContent).not.toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
     await clickSourceButton(container, "Nuplane");
@@ -87,7 +87,7 @@ describe("module management page", () => {
     expect(activeGridPanel(container)?.textContent).toContain("studio-local-packages");
     expect(activeGridPanel(container)?.textContent).toContain("installed");
     expect(activeGridPanel(container)?.textContent).toContain("Drop .nupkg files here");
-    expect(activeGridPanel(container)?.textContent).toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).toContain("Upload packages");
     expect(activeGridPanel(container)?.textContent).toContain("Staged uploads");
     expect(activeGridPanel(container)?.textContent).toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
     expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
@@ -113,7 +113,7 @@ describe("module management page", () => {
     expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
     expect(container.textContent).not.toContain("Package drop folder");
 
-    const uploadPackagesButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Upload Packages");
+    const uploadPackagesButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Upload packages");
     expect(uploadPackagesButton).toBeTruthy();
     expect(stagedUploads(container)?.textContent).toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
@@ -242,7 +242,7 @@ describe("module management page", () => {
 
     const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
     const uploadPackagesButton = Array.from(activeGridPanel(container)?.querySelectorAll("button") ?? [])
-      .find(button => button.textContent === "Upload Packages");
+      .find(button => button.textContent === "Upload packages");
     expect(input).toBeTruthy();
     expect(uploadPackagesButton).toBeTruthy();
     const clickSpy = vi.spyOn(input!, "click").mockImplementation(() => undefined);
@@ -466,7 +466,7 @@ describe("module management page", () => {
     expect(operationsPanel?.textContent).not.toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Save retention");
-    expect(container.querySelector("[aria-label='Feed name']")).toBeNull();
+    expect(container.querySelector("[name='feedName']")).toBeNull();
 
     const refresh = container.querySelector<HTMLButtonElement>("button[aria-label='Refresh package feeds']");
     expect(refresh?.title).toBe("Refresh package feeds");
@@ -482,8 +482,8 @@ describe("module management page", () => {
     await flushPromises();
 
     expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
-    expect(container.querySelector<HTMLInputElement>("[aria-label='Feed name']")?.value).toBe("studio-local-packages");
-    expect(container.querySelector<HTMLInputElement>("[aria-label='Directory path']")?.value).toBe("packages");
+    expect(container.querySelector<HTMLInputElement>("[name='feedName']")?.value).toBe("studio-local-packages");
+    expect(container.querySelector<HTMLInputElement>("[name='directoryPath']")?.value).toBe("packages");
     expect(container.textContent).toContain("Save feed");
 
     const closeEditFeedButton = container.querySelector<HTMLButtonElement>("button[aria-label='Close edit feed']");
@@ -503,7 +503,7 @@ describe("module management page", () => {
     await flushPromises();
 
     expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
-    expect(container.querySelector("[aria-label='Feed name']")).toBeTruthy();
+    expect(container.querySelector("[name='feedName']")).toBeTruthy();
     expect(container.querySelector("[aria-label='Include all packages']")).toBeTruthy();
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
@@ -556,7 +556,7 @@ describe("module management page", () => {
     await flushAnimationFrame();
 
     const form = container.querySelector<HTMLFormElement>("#package-feed-form")!;
-    const name = form.querySelector<HTMLInputElement>("[aria-label='Feed name']")!;
+    const name = form.querySelector<HTMLInputElement>("[name='feedName']")!;
     setInputValue(name, "test-feed");
     flushSync(() => form.requestSubmit());
     await flushPromises();
@@ -654,7 +654,7 @@ describe("module management page", () => {
     await clickSourceButton(container, "Nuplane");
     expect(activeGridPanel(container)?.textContent).toContain("Elsa.Samples.Nuplane.Activities");
     expect(activeGridPanel(container)?.textContent).toContain("local-packages");
-    expect(activeGridPanel(container)?.textContent).not.toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).not.toContain("Upload packages");
     expect(activeGridPanel(container)?.textContent).toContain("read-only in Studio");
 
     await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
@@ -664,7 +664,7 @@ describe("module management page", () => {
     expect(inspector).toContain("local-packages");
     expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
     expect(inspector).toContain("Elsa.Activities.Design.Core");
-    expect(container.textContent).not.toContain("Upload Packages");
+    expect(container.textContent).not.toContain("Upload packages");
 
     await unmount();
   });
@@ -753,12 +753,12 @@ describe("module management page", () => {
     await flushPromises();
 
     const panel = activeGridPanel(container)?.parentElement ?? container.querySelector("[role='tabpanel']:not([hidden])")!;
-    expect(panel.textContent).toContain("Privileged host management is not configured");
-    expect(panel.textContent).toContain("It is optional, but required to manage Server modules");
+    expect(panel.textContent).toContain("Server module management is not connected");
+    expect(panel.textContent).toContain("Ask your administrator to connect this server");
     expect(panel.textContent).toContain("Studio:BackendServerBaseUrl");
     expect(panel.textContent).toContain("Studio:BackendBaseUrl");
     expect(panel.textContent).toContain("Studio:BackendModuleManagementApiKey");
-    expect(panel.textContent?.match(/Privileged host management/g)).toHaveLength(1);
+    expect(panel.textContent?.match(/Server module management is not connected/g)).toHaveLength(1);
     expect(panel.querySelector('[role="alert"]')).toBeNull();
     expect(panel.querySelector(".studio-empty-state")).not.toBeNull();
     expect(activeGridPanel(container)).toBeNull();

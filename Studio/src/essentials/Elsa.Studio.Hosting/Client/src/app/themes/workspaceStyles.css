@@ -242,13 +242,6 @@ html[data-workspace-style] .settings-radio-card[aria-checked="true"] {
   line-height: 1.5;
 }
 
-.settings-theme-presets > summary {
-  width: fit-content;
-  padding-block: 12px;
-  color: var(--studio-text-muted);
-  cursor: pointer;
-}
-
 .workspace-style-preview {
   display: flex;
   width: 100%;

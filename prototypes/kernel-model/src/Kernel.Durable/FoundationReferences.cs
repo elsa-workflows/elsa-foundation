@@ -295,7 +295,9 @@ public sealed partial class InMemoryStore
         _foundationParks.Remove(address);
     }
 
-    internal static bool IsOutsideMessageId(string id) => !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
+    internal static bool IsOutsideMessageId(string id) => !ReservedMessageId(id) && FoundationMetadataLimits.FitsName(id);
+
+    private static bool ReservedMessageId(string id) => id.StartsWith('~') || id.StartsWith("key/", StringComparison.Ordinal);
 
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
@@ -303,8 +305,10 @@ public sealed partial class InMemoryStore
         long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false, string? replyTo = null, FoundationOperatorCommand? @operator = null)
     {
         Kinds.RequireApplicationSend(kind);
-        if (!keyed && !IsOutsideMessageId(id))
+        if (!keyed && ReservedMessageId(id))
             throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
+        if ((!keyed && !FoundationMetadataLimits.FitsName(id)) || !FoundationMetadataLimits.FitsKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
+            return null;
         var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {

@@ -10,7 +10,7 @@ import { QueryControls } from "../QueryControls";
 import { NativeDialog, QuestionPickerDialog, ShareDialog } from "../ResourceDialogs";
 import { ResultView } from "../ResultView";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult, type QuestionDefinition } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared business data", fields: [{ id: "category", label: "Category", type: "string", filterOperators: ["eq", "isNull"], groupable: true, projectable: true, sortable: false, nullable: true }], metrics: [{ id: "duration", revision: "1", label: "Duration", unit: "s", description: "Elapsed duration" }] };
 const resource = (id = "q1"): DashboardResource => ({ id, kind: "question", revision: "r1", name: `Question ${id}`, description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "2026-11-06T12:00:00Z", updatedAt: "2026-11-06T12:00:00Z" });
@@ -19,7 +19,7 @@ function render(children: React.ReactNode) {
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   flushSync(() => root.render(children));
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
-  disposers.push(dispose); return { container, dispose };
+  disposers.push(dispose); return { container: document.body, dispose };
 }
 function button(container: HTMLElement, text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(target).toBeDefined(); flushSync(() => target!.click()); }
 function openDisclosure(container: HTMLElement, selector: string) { const details = container.querySelector<HTMLDetailsElement>(selector)!; if (!details.open) flushSync(() => details.querySelector("summary")!.click()); expect(details.open).toBe(true); }
@@ -85,10 +85,9 @@ describe("private draft recovery", () => {
     await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
     const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
     inputValue(name, "My unsaved refinement");
-    openDisclosure(container, ".named-question-actions");
-    button(container, "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
+    selectResourceAction(container, "Question actions", "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
-    button(container, "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
+    selectResourceAction(container, "Question actions", "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);
     const creates = post.mock.calls.filter(call => call[0].endsWith("/questions"));
     const first = creates[0][1] as { operationKey: string; definition: QuestionDefinition };
     const second = creates[1][1] as { operationKey: string; definition: QuestionDefinition };
@@ -105,7 +104,7 @@ describe("closed dialogs and bounded paging", () => {
     let finish!: (value: DashboardResource) => void;
     const share = vi.spyOn(api, "share").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const accepted = vi.fn(); const view = render(<ShareDialog api={api} resource={resource()} onClose={vi.fn()} onSaved={accepted} />);
-    await waitUntil(() => view.container.textContent?.includes("Save audience") === true);
+    await waitUntil(() => [...view.container.querySelectorAll("button")].some(item => item.textContent === "Save audience" && !item.disabled));
     button(view.container, "Save audience"); expect(share).toHaveBeenCalledOnce(); view.dispose(); finish(resource());
     await new Promise(resolve => setTimeout(resolve, 0)); expect(accepted).not.toHaveBeenCalled();
   });
@@ -134,11 +133,11 @@ describe("closed dialogs and bounded paging", () => {
   it("contains keyboard focus, closes with Escape and returns focus to its opener", async () => {
     const opener = document.createElement("button"); document.body.append(opener); opener.focus();
     const closed = vi.fn(); const view = render(<NativeDialog title="Keyboard witness" onClose={closed}><input aria-label="A field" /><button type="button">Last action</button></NativeDialog>);
-    await waitUntil(() => view.container.querySelector("button") === document.activeElement);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    await waitUntil(() => view.container.querySelector("[role=dialog] button") === document.activeElement);
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.activeElement?.textContent).toBe("Last action");
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
-    view.dispose(); expect(document.activeElement).toBe(opener); opener.remove();
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
+    view.dispose(); await waitUntil(() => document.activeElement === opener); opener.remove();
   });
 });
 

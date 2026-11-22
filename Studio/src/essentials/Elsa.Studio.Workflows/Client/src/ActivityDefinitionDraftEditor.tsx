@@ -6,7 +6,7 @@ import { validateActivityDefinitionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { tabElementIds, StudioBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { tabElementIds, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, Play, RefreshCw, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
@@ -123,7 +123,7 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   const failed = !ownClone && (draftId ? query.isError : versionQuery.isError);
 
   if (loading) return <main className="ad-page ad-draft-editor" aria-busy="true"><div className="ad-skeleton" role="status">Loading the exact Activity Definition {draftId ? "draft" : "version"}…</div></main>;
-  if (failed || !initialDraft || initialDraft.definitionId !== definitionId || version && version.versionId !== (ownClone?.version.versionId ?? versionId)) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> {onManage ? "Activity Definitions" : "Activity Definition"}</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity {draftId ? "draft" : "version"} unavailable</h1><p>Studio could not confirm the exact authorized {draftId ? "draft" : "version"}. No provider state is shown.</p><button type="button" onClick={() => void (draftId ? query.refetch() : versionQuery.refetch())}>Try again</button></section></main>;
+  if (failed || !initialDraft || initialDraft.definitionId !== definitionId || version && version.versionId !== (ownClone?.version.versionId ?? versionId)) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> {onManage ? "Activity Definitions" : "Activity Definition"}</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity {draftId ? "draft" : "version"} unavailable</h1><p>Studio could not confirm the exact authorized {draftId ? "draft" : "version"}. No provider state is shown.</p><button type="button" onClick={() => void (draftId ? query.refetch() : versionQuery.refetch())}>Retry</button></section></main>;
 
   const designAuthoringAllowed = !definitionQuery.isError && definitionQuery.data?.definition.contentAuthority.kind.toLowerCase() === "design" && definitionQuery.data?.actions.some(action => action.action === "create-draft" && action.allowed) === true;
   return <LoadedActivityDefinitionDraftEditor key={`${scope}:${definitionId}:${ownClone || !draftId ? `version:${version?.versionId}` : `draft:${draftId}`}`} context={context} initialDraft={initialDraft} initialVersion={version} readOnly={readOnly} allowStartEditing={allowStartEditing && designAuthoringAllowed && !readOnly} openPublicationReviewOnMount={openPublicationReviewOnMount} onManage={onManage} onDraftStarted={draft => {
@@ -191,6 +191,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
   const [proposalApplying, setProposalApplying] = useState(false);
   const [publicationPending, setPublicationPending] = useState(false);
   const [migrationOpen, setMigrationOpen] = useState(false);
+  const testRunTriggerRef = useRef<HTMLButtonElement>(null);
   const [testRunOpen, setTestRunOpen] = useState(false);
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
@@ -955,16 +956,16 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
     <div className="ad-draft-editor-toolbar">
       <WorkflowEditorToolbarFrame
         className="ad-workbench-header"
-        identity={<StudioBreadcrumbs
+        identity={<><StudioShellBreadcrumbs
           items={[{ href: "/workflows/activity-definitions", label: onManage ? "Activity Definitions" : "Activity Definition" }]}
-          current={<span className="wf-editor-title"><strong id="activity-draft-title" role="heading" aria-level={1} title={draftHeaderTitle(definitionDisplayName, draft)}>{draftHeaderTitle(definitionDisplayName, draft)}</strong><span className="wf-chip">{draftIsActive ? "Draft" : "Published"}</span></span>}
+          current={draftHeaderTitle(definitionDisplayName, draft)}
           renderLink={item => <StudioLink href={item.href} aria-disabled={revisionSensitiveActionsBlocked || undefined} tabIndex={revisionSensitiveActionsBlocked ? -1 : undefined} onClick={event => {
             if (revisionSensitiveActionsBlocked) { event.preventDefault(); return; }
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             onBack();
-          }}>{item.label}</StudioLink>}
-        />}
+          }}>{item.label}</StudioLink>} />
+          <span className="wf-editor-title"><strong id="activity-draft-title" role="heading" aria-level={1} title={draftHeaderTitle(definitionDisplayName, draft)}>{draftHeaderTitle(definitionDisplayName, draft)}</strong><span className="wf-chip">{draftIsActive ? "Draft" : "Published"}</span></span></>}
         metadata={<div className="ad-draft-context">
           {publishedVersion && !draftIsActive ? <><span>Version {publishedVersion}</span><span aria-hidden>·</span></> : !onManage || draftIsActive || status !== "saved" || codeBufferState.dirty ? <><span>{onManage ? "Unpublished changes" : draftIsActive ? "Draft" : "Published draft"}</span><span aria-hidden>·</span></> : null}
           {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure || codeBufferState.dirty ? " needs-attention" : ""}`} aria-label={diagnosticsLabel} title={diagnosticsLabel} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>
@@ -990,7 +991,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           /> : null}
-          <button type="button" onClick={event => {
+          <button ref={testRunTriggerRef} type="button" onClick={event => {
             event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => {
               disclosure.open = false;
             });
@@ -1046,6 +1047,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       prepareExactRevision={prepareExactTestRunRevision}
       onFocusDiagnostic={focusDiagnostic}
       onClose={() => setTestRunOpen(false)}
+      restoreFocus={() => testRunTriggerRef.current?.focus()}
       onOpenRun={onOpenStudioPath}
     /></Suspense> : null}
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}

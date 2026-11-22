@@ -1,7 +1,7 @@
 import "./WorkflowEditorToolbar.css";
 import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
-import { AnchoredPopover, StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
@@ -138,18 +138,18 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   return (
     <WorkflowEditorToolbarFrame
       identity={
-        <StudioBreadcrumbs
+        <><StudioShellBreadcrumbs
           items={[{ href: props.templateMode ? "/workflows/templates" : "/workflows/definitions", label: props.templateMode ? "Templates" : "Definitions" }]}
-          current={<span className="wf-editor-title">
-            <strong title={props.name}>{props.name}</strong>
-            <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
-          </span>}
+          current={props.name}
           renderLink={item => <StudioLink href={item.href} onClick={event => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             props.onBack();
-          }}>{item.label}</StudioLink>}
-        />
+          }}>{item.label}</StudioLink>} />
+          <span className="wf-editor-title">
+            <strong role="heading" aria-level={2} title={props.name}>{props.name}</strong>
+            <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
+          </span></>
       }
       metadata={
         <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>

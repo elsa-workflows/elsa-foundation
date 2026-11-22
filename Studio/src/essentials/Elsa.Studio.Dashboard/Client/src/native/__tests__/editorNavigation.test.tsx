@@ -6,7 +6,7 @@ import { AnonymousAuthProvider, StudioWorkspaceTabProvider, requestStudioNavigat
 import { createDashboardAuthoringController, type DashboardAuthoringController } from "../authoring";
 import { NamedDashboardsRoute } from "../NamedDashboards";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { beginNamedDraft, selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared business data", fields: [{ id: "category", label: "Category", type: "string", filterOperators: ["eq"], groupable: true, projectable: true, sortable: true, nullable: false }], metrics: [{ id: "duration", revision: "1", label: "Duration", unit: "s", description: "Elapsed duration" }] };
 const resource = (): DashboardResource => ({ id: "q1", kind: "question", revision: "r1", name: "Question q1", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canCopy: true, canDelete: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "2026-11-06T12:00:00Z", updatedAt: "2026-11-06T12:00:00Z" });
@@ -45,7 +45,7 @@ function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringControlle
   draw();
   disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
   return {
-    container, navigate,
+    container: document.body, navigate,
     hide() { active = false; window.history.replaceState({}, "", "/dashboards"); draw(); },
     reveal() { active = true; window.history.replaceState({}, "", path); draw(); }
   };
@@ -76,7 +76,7 @@ describe("dashboard viewer and editor routes", () => {
     expect(viewer.container.querySelector("input")).toBeNull();
     expect(viewer.container.textContent).toContain("Current operations");
     expect(viewer.container.textContent).toContain("Question q1");
-    expect(viewer.container.querySelector(".named-dashboard-actions")?.querySelector("summary")?.textContent).toBe("More actions");
+    expect(viewer.container.querySelector('button[aria-label="Dashboard actions"]')).toBeTruthy();
     expect([...viewer.container.querySelectorAll("button")].map(item => item.textContent?.trim())).toContain("Edit dashboard");
     expect([...viewer.container.querySelectorAll("button")].some(item => item.textContent?.includes("Move earlier"))).toBe(false);
     expect([...viewer.container.querySelectorAll("select")]).toHaveLength(0);
@@ -174,6 +174,7 @@ describe("native editor host navigation guards", () => {
     });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const { container, navigate } = mount(api, controller, "create");
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(container.querySelector(".named-query-controls option[value='acme']")));
     expect(container.querySelector(".named-preview")).toBeNull();
     expect(container.textContent).not.toContain("Query form");
@@ -219,6 +220,7 @@ describe("retained native editor Activity lifecycle", () => {
     const { api, controller } = fixture();
     const post = vi.fn(async () => result()); api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const editor = mount(api, controller, "create");
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Keep this new local question");
     const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
@@ -283,6 +285,7 @@ describe("retained native editor Activity lifecycle", () => {
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const go = vi.fn((path: string) => { window.history.pushState({}, "", path); });
     const editor = mount(api, controller, "create", go);
+    await beginNamedDraft("Native question");
     await waitUntil(() => Boolean(editor.container.querySelector(".named-query-controls option[value='acme']")));
     edit(value(editor.container, "Name"), "Created while this tab is parked");
     const select = editor.container.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
@@ -528,8 +531,7 @@ describe("current native disclosure and reuse review", () => {
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const navigate = vi.fn(); const editor = mount(api, controller, "detail", navigate, "dashboard");
     await waitUntil(() => editor.container.textContent?.includes("Original dashboard") === true);
-    flushSync(() => editor.container.querySelector<HTMLElement>(".named-dashboard-actions summary")!.click());
-    button(editor.container, "Make a copy");
+    selectResourceAction(editor.container, "Dashboard actions", "Make a copy");
     await waitUntil(() => editor.container.textContent?.includes("Review dashboard copy dependencies") === true);
     expect(api.dialogs.prompt).not.toHaveBeenCalled();
     await waitUntil(() => editor.container.textContent?.includes("Copy Question q1 as an independent question") === true);
