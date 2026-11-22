@@ -17,6 +17,7 @@ import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
 import { executionNavigationJourney } from "./executionNavigationJourney";
 import { historyOccurrenceQualificationJourney } from "./historyOccurrenceQualificationJourney";
+import { nativeHistoryOwnersJourney } from "./nativeHistoryOwnersJourney";
 import { timerHistoryJourney } from "./timerHistoryJourney";
 import { timelineSelectionJourney } from "./timelineSelectionJourney";
 import { playbackTransportJourney, playbackSeekingJourney, playbackLiveWaitJourney, playbackCoverageJourney } from "./activityPlaybackJourney";
@@ -80,6 +81,8 @@ type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
+
+test("native child and compensation history navigation", async ({ page }, info) => nativeHistoryOwnersJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
 test("durable timer history and bookmark resumption", async ({ page }, info) => timerHistoryJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
