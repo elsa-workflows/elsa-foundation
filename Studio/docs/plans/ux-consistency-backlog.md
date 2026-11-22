@@ -178,7 +178,7 @@ Candidates reported by source readers. Confirm the need before building any of t
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
 - [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).
-- [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
+- [x] **K11.** (#5004, PR #5341) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
@@ -362,7 +362,7 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 
 - [x] **X4.1** (#5077) [source] Agent: `EXT/Agent/AgentsPage.tsx:163, 293–306` inline form that replaces the (PR #5329)
   list; primary "Create and edit" before Cancel. `needs: D6`
-- [ ] **X4.2** (#5078) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
+- [x] **X4.2** (#5078, PR #5341) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
   also exists in `SecretDialogs.tsx:24`; keep one flow, which D6 makes the dialog. **[check]** that the
   secret form (it has tabs) fits a dialog; if not, ask. `needs: D6`
 - [x] **X4.3** (#5079) [seen] New question: "Preview" is the filled primary rather than "Save question". (PR #5311)
@@ -581,7 +581,7 @@ the designer header is a documented exception.
 - [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [x] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on (PR #5329)
   `closest("details")`; keep that focus behaviour working.
-- [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
+- [x] **X12.4** (#5174, PR #5341) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
 - [x] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`), (PR #5320)
   `DecisionInputsEditor.tsx:182` [source].
 - [x] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
@@ -619,7 +619,7 @@ Uppercase labels (`needs: D3`):
 - [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
-- [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
+- [x] **X13.9** (#5192, PR #5341) [verified] `EXT/Connections/styles.css:31`.
 - [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
 - [x] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules). (PR #5326)
@@ -732,7 +732,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 - [x] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link (PR #5299)
   (`ConnectionList.tsx:39, 46`). Replace both with `studioRowInteraction` on the row. `needs: D12`
-- [ ] **E2** (#5232) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
+- [x] **E2** (#5232, PR #5341) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
   copy button → `CopyableIdentifier`.
 - [x] **E3** (#5233) [seen] Decisions: "Add rule" is a second filled primary beside header Save and is (PR #5320)
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
@@ -764,7 +764,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
 - [ ] **E16** (#5246) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
-- [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
+- [x] **E17** (#5247, PR #5341) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
   `requiresBackend` (`EXT/Secrets/module.tsx:40–44`). **[check]** whether the legacy route is still
   needed.
 - [ ] **E18** (#5248) [source] Row opening in the other lists (D12): Secrets uses an
