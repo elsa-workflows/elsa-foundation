@@ -166,7 +166,7 @@ public sealed partial class InMemoryStore
                 throw InvalidDrain();
             else if (after.Kind == ParkClearKind.Terminate)
             {
-                if (!AuthorizesDrainingTerminate(previous, input) || previous.Cascade is not null ||
+                if (!AuthorizesDrainingTerminate(previous, input) ||
                     next != (previous with
                     {
                         Revision = next.Revision, ParkDiscard = after, ParkResolutionGeneration = next.ParkResolutionGeneration,
@@ -217,12 +217,24 @@ public sealed partial class InMemoryStore
             ParkDrainEnvelope.For(previous, park).MatchesExpiry(input, previous, expiry);
     }
 
-    private static bool MatchesTerminateNotice(IReadOnlyList<Message> sent, InstanceRow row) => row.Parent is null
-        ? sent.Count == 0
-        : sent is [var notice] && notice.Kind == Kinds.ChildFinished && notice.Target.Id == row.Parent &&
-            notice.TargetCreation == row.ParentCreation && notice.Sender == row.Id &&
-            CreationProtocol.HasTerminalNoticeId(notice, row.Id, row.Creation) &&
-            notice.Id == CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision);
+    private static bool MatchesTerminateNotice(IReadOnlyList<Message> sent, InstanceRow row)
+    {
+        if (row.Parent is null) return sent.Count == 0;
+        if (sent is not [var notice] || notice.Kind != Kinds.ChildFinished || notice.Target.Id != row.Parent ||
+            notice.TargetCreation != row.ParentCreation || notice.Sender != row.Id || notice.SenderCreation != row.Creation ||
+            notice.InboxKey != InboxKey.Issued(CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision)) ||
+            notice.Payload is null)
+            return false;
+
+        try
+        {
+            return notice.Read<TerminateNotice>() is { Final: true, Status: InstanceStatus.Cancelled, Output: null } finished &&
+                finished.Child == row.Id && finished.Creation == row.Creation;
+        }
+        catch (System.Text.Json.JsonException) { return false; }
+    }
+
+    private sealed record TerminateNotice(string Child, InstanceStatus Status, string? Output, long Creation, bool Final);
 
     private bool IsOutstandingDrain(InboxKey key) =>
         key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&

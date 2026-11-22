@@ -30,7 +30,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
         if (!SupportsFoundationOperator(row)) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
-            return store.AuthorizesDrainingTerminate(row, message);
+            return row.ParkRecovery is null && store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
             if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
