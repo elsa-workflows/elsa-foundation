@@ -21,13 +21,15 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     {
         public bool UnknownSpread { get; init; }
         public bool MayBeString { get; init; }
+        public bool MayBePrimitive { get; init; }
         public static readonly Value Local = new(false, [], []);
-        public static readonly Value Owned = new(true, [], []);
+        public static readonly Value Primitive = Local with { MayBePrimitive = true };
+        public static readonly Value Owned = new(true, [], []) { MayBePrimitive = true };
         public static readonly Value Text = Local with { MayBeString = true };
         public static Value Object(Node node) => new(false, [node], []);
         public static Value Function(Node node) => new(false, [node], [node]);
-        public Value Union(Value other) => new(Session || other.Session, Objects.Union(other.Objects), Functions.Union(other.Functions)) { UnknownSpread = UnknownSpread || other.UnknownSpread, MayBeString = MayBeString || other.MayBeString };
-        public bool Same(Value other) => Session == other.Session && UnknownSpread == other.UnknownSpread && MayBeString == other.MayBeString && Objects.SetEquals(other.Objects) && Functions.SetEquals(other.Functions);
+        public Value Union(Value other) => new(Session || other.Session, Objects.Union(other.Objects), Functions.Union(other.Functions)) { UnknownSpread = UnknownSpread || other.UnknownSpread, MayBeString = MayBeString || other.MayBeString, MayBePrimitive = MayBePrimitive || other.MayBePrimitive };
+        public bool Same(Value other) => Session == other.Session && UnknownSpread == other.UnknownSpread && MayBeString == other.MayBeString && MayBePrimitive == other.MayBePrimitive && Objects.SetEquals(other.Objects) && Functions.SetEquals(other.Functions);
     }
 
     private readonly record struct Attributes(bool Configurable, bool Enumerable, bool Writable)
@@ -201,7 +203,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private void EnterScope(Node node, HashSet<string> scope)
     {
         _scopes.Add(scope);
-        foreach (var name in scope) _state.Bindings[new Binding(scope, name)] = Value.Local;
+        foreach (var name in scope) _state.Bindings[new Binding(scope, name)] = Value.Primitive;
         IEnumerable<Node> statements = node switch
         {
             Script script => script.Body,
@@ -408,7 +410,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
 
     private Value Evaluate(Node? node)
     {
-        if (node is null || _writes) return Value.Local;
+        if (node is null) return Value.Primitive;
+        if (_writes) return Value.Local;
         Value result;
         switch (node)
         {
@@ -583,7 +586,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 {
                     _ordinaryObjects.Add(node);
                     if (constructorArguments.FirstOrDefault() is { } wrapped &&
-                        (wrapped.Session || wrapped.Objects.Count > 0 || wrapped.Functions.Count > 0)) result = wrapped;
+                        (wrapped.Session || wrapped.Objects.Count > 0 || wrapped.Functions.Count > 0))
+                        result = wrapped.MayBePrimitive ? result.Union(wrapped) : wrapped;
                 }
                 else if (construction.Callee is Identifier { Name: "Array" } && Global("Array"))
                 {
@@ -606,6 +610,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     if (child is Statement) Execute(child); else Evaluate(child);
                 result = Value.Local; break;
         }
+        if (!result.Session && result.Objects.Count == 0 && result.Functions.Count == 0)
+            result = result with { MayBePrimitive = true };
         if (_opaqueDepth > 0 && result.Session) _writes = true;
         foreach (var exceptional in _exceptionStates) exceptional.Join(_state);
         return result;
@@ -685,6 +691,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (getter.Functions.Count > 0) result = result.Union(Apply(getter, [], getterReceiver ?? receiver));
         if (name == "constructor" && result.Functions.Count == 0 && !DefinitelyHasProperty(receiver, name))
             result = result.Union(Value.Function(_dynamicConstructor!));
+        if (!DefinitelyHasProperty(receiver, name)) result = result.Union(Value.Primitive);
         return result;
     }
 
@@ -1083,7 +1090,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 foreach (var nested in _closures.Values.Where(item => item.Scopes.Contains(local)))
                     foreach (var (binding, value) in _state.Bindings.Where(item => nested.Scopes.Contains(item.Key.Scope)))
                         nested.Captured[binding] = nested.Captured.GetValueOrDefault(binding, Value.Local).Union(value);
-            return flow.Returned;
+            return flow.Normal ? flow.Returned.Union(Value.Primitive) : flow.Returned;
         }
         finally
         {
@@ -1381,7 +1388,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         _unknownMembers[call.Callee] = call.Callee;
         _summaryObjects.Add(call.Callee);
         _state.Unordered.Add(call.Callee);
-        return result;
+        return result with { MayBePrimitive = true };
     }
 
     private Value ParsedJson(CallExpression call)
@@ -1718,8 +1725,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
         if (call.Callee is Identifier { Name: "Object" } && Global("Object"))
         {
-            if (arguments.FirstOrDefault() is { } value && (value.Session || value.Objects.Count > 0 || value.Functions.Count > 0)) return value;
             _ordinaryObjects.Add(call);
+            if (arguments.FirstOrDefault() is { } value && (value.Session || value.Objects.Count > 0 || value.Functions.Count > 0))
+                return value.MayBePrimitive ? Allocate(call).Union(value) : value;
             return Allocate(call);
         }
         // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
