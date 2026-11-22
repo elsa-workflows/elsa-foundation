@@ -990,12 +990,12 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
             mode="toolbar"
             triggerRef={publicationToolbarRef}
           /> : null}
-          <button ref={testRunTriggerRef} type="button" onClick={event => {
+          <StudioButton size="sm" ref={testRunTriggerRef} type="button" onClick={event => {
             event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => {
               disclosure.open = false;
             });
             setTestRunOpen(true);
-          }} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</button>
+          }} disabled={dependentActionsBlocked}><Play size={16} /> Test Run</StudioButton>
           <StudioButton variant="primary" onClick={saveNow} disabled={!documentEditable || publicationPending || !contractLocallyValid || status === "saved" || status === "saving" || status === "conflict" || proposalApplying || codeBufferState.dirty}><RefreshCw size={16} /> Save now</StudioButton>
           {onManage ? <details className="ad-authoring-history" onKeyDown={event => {
             if (event.key !== "Escape") return;

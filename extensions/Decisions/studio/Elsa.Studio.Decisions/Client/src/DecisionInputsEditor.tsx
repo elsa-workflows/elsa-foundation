@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioExpressionEditorContribution, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection, StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, AdvancedSection, StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { ValueInput } from "./CasePanel";
 import { decisionsCapability, failureMessage, type Scalar } from "./decisionsApi";
 import {
@@ -138,7 +138,7 @@ export function DecisionInputsEditor({
 
   return <div className="decision-inputs-editor" ref={rootRef}>
     {!parsed ? <p className="decision-muted">Select a decision to load its input fields from the table. JSON stays available below.</p> : null}
-    {loading ? <p role="status">Loading input fields…</p> : null}
+    {loading ? <SkeletonRows rows={3} label="Loading input fields" /> : null}
     {unpublished ? <StudioAlert tone="warning">This decision has no published version. Publish it before Review &amp; publish; these fields follow the current draft table.</StudioAlert> : null}
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
     {missing.length ? <StudioAlert tone="danger">

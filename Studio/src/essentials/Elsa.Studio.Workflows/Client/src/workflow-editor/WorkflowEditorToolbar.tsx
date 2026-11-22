@@ -1,7 +1,7 @@
 import "./WorkflowEditorToolbar.css";
 import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
-import { StatusChip, AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
@@ -173,11 +173,10 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={16} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
-        {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</button> : null}
-        <button
+        {!props.templateMode ? <StudioButton size="sm" type="button" aria-label="Test Run" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</StudioButton> : null}
+        <StudioButton size="sm"
           ref={triggerRef}
           type="button"
-          className="wf-icon-button"
           aria-label="More workflow actions"
           title="More workflow actions"
           aria-haspopup="menu"
@@ -194,7 +193,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
               setOpen(true);
             }
           }}
-        ><MoreHorizontal size={18} /></button>
+        ><MoreHorizontal size={18} /></StudioButton>
         </>
       }
       afterActions={
