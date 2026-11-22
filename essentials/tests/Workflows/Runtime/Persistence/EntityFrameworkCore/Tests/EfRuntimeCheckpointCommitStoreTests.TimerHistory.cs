@@ -254,8 +254,9 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public async Task Legacy_timer_refuses_pending_ownership_edits_without_reloading_or_flushing_them(bool callerTransaction)
+    [InlineData(false, true)] [InlineData(true, true)]
+    [InlineData(false, false)] [InlineData(true, false)]
+    public async Task Legacy_timer_refuses_pending_ownership_edits_without_reloading_or_flushing_them(bool callerTransaction, bool autoDetectChanges)
     {
         await using var f = await TimerHistoryFixture.Create(native: false);
         var executions = new EfWorkflowExecutionStateStore(f.Context, f.Access, new NoopContinuationCodec());
@@ -265,12 +266,14 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
         var metadata = new Dictionary<string, string>(state.Metadata) { ["caller.change"] = "preserve-me" };
         var pending = RuntimeArtifactJson.Serialize(new ExecutionLivenessState(state.ExecutionLivenessStateId, state.WorkflowExecutionId,
             state.ExecutionLease, state.Heartbeat, state.Drain, state.InterruptedExecution, state.PendingPostCommitIntentIds, metadata));
+        f.Context.ChangeTracker.AutoDetectChangesEnabled = autoDetectChanges;
         row.ContentJson = pending;
-        Assert.True(f.Context.ChangeTracker.HasChanges());
+        if (autoDetectChanges) Assert.True(f.Context.ChangeTracker.HasChanges());
+        var pendingState = f.Context.Entry(row).State;
         await using var transaction = callerTransaction ? await f.Context.Database.BeginTransactionAsync() : null;
         await Assert.ThrowsAsync<InvalidOperationException>(() => f.Store.SaveAsync(HistoryTimer("legacy") with { HistoryResponsibility = null }).AsTask());
         Assert.Equal(pending, row.ContentJson);
-        Assert.Equal(EntityState.Modified, f.Context.Entry(row).State);
+        Assert.Equal(pendingState, f.Context.Entry(row).State);
         Assert.Empty(await f.Context.DurableTimers.AsNoTracking().ToArrayAsync());
         if (transaction is not null) await transaction.RollbackAsync();
         await using var fresh = f.Database.Open("tenant-a");
