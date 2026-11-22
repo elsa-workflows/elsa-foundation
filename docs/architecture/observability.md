@@ -417,6 +417,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **What the review's trace needed.** The fourth round's RT-1 supplied the binding in its fixture before its live
     termination (`ParentBound`, `experiments/Review4.Blockers/Rt1.cs` 329–330, used at 352–357). The proposal puts
     that check in the actor type's control path, ahead of `Terminate`, for cascade-marked terminates.
+    The in-memory origin slice checks the actual committing sender and creation and binds delivery to the recipient's
+    recorded parent. The real Worker checks an unrelated parent, a stale parent creation, and the ordinary terminate
+    control. Paged cascades, Park termination and retirement obligations have separate cases.
   - **An operator's terminate is not parent-bound.** It is an outside add, whose scope the entry point resets to the
     ordinary one (`Messages.cs` 49), so it never has an issued origin or the mark, whatever `Sender` it names. Its
     authority is the terminate permission checked at ingress, and at a parked or draining row its `ParkSelection`,

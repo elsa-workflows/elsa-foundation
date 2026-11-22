@@ -75,6 +75,7 @@ public sealed record Message(
     internal ParkCatchUpTicket? ParkCatchUp { get; init; }
     internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
     internal bool ActorAuthored { get; init; }
+    internal bool CascadeOrigin { get; private init; }
     internal bool FoundationJobResult { get; init; }
     internal long JobGeneration { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
@@ -88,6 +89,8 @@ public sealed record Message(
         _issuedTicket = new(this);
         return this;
     }
+    internal Message AsCascadeTerminate() => (this with { CascadeOrigin = true }).AsKernelTicket();
+    internal Message WithoutCascadeOrigin() => CascadeOrigin ? this with { CascadeOrigin = false } : this;
     internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
@@ -97,7 +100,8 @@ public sealed record Message(
     internal string? StorageId { get; init; }
     public Message WithInboxScope(long scope, string? match = null) => this with { InboxScope = scope, EventMatch = match };
     public Message AsIssued() => WithInboxScope(InboxKey.Issued(Id).Scope);
-    public Message AsOrdinary() => InboxScope == 0 && EventMatch is null ? this : WithInboxScope(0);
+    public Message AsOrdinary() => InboxScope == 0 && EventMatch is null && !CascadeOrigin ? this :
+        this with { InboxScope = 0, EventMatch = null, CascadeOrigin = false };
     // Creation provenance is assigned by the accepted event insert or StartChild. Outside entry points
     // discard their supplied scope. Ordinary application sends can address an already running child.
     internal bool SuppliedCreator => Start is not null &&

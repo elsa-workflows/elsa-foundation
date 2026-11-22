@@ -39,6 +39,7 @@ public static class LeaseChecks
         await FoundationEventReferences.Run(Check);
         await CommandAuthorityChecks.Run(Check);
         await CommandAuthorityChecks.RunActor(Check);
+        await CommandAuthorityChecks.RunCascade(Check);
         await NodeLeaseChecks.Run(Check);
         await ReplyRegistrationChecks.Run(Check);
         await ReplyAdmissionChecks.Run(Check);

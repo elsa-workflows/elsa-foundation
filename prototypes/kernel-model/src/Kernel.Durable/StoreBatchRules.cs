@@ -184,6 +184,10 @@ public static class StoreBatchRules
         List<CreationAddress>? children = null;
         foreach (var message in turn.Sent)
         {
+            if (message.CascadeOrigin && (message.Kind != Kinds.Terminate || !message.HasIssuedTicket ||
+                message.InboxScope != InboxKey.Issued(message.Id).Scope || (turn.Row ?? previous) is not { } issuer ||
+                message.Sender != issuer.Id || message.SenderCreation != issuer.Creation || issuer.Id != turn.Instance))
+                throw new StoreException(Failure.Definite, "A cascade terminate requires an issued origin from the committing creation.");
             if (!message.ActorControl) continue;
             if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
             {

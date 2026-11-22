@@ -31,6 +31,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     public TurnOutcome? Command(TurnInput input)
     {
         var (row, first) = (input.Row, input.Taken[input.From]);
+        if (first.Message.CascadeOrigin && !CreationProtocol.MatchesCascadeParent(row, first.Message))
+            return CreationProtocol.Refuse(input.Actor, row, input.Taken, "WrongParent");
         // The persisted protocol remains authoritative when a cold model drops either metadata interface.
         // Refuse before controls or the ordinary terminal drain can consume a protected query/Delete.
         if (row is { IdentityMetadataRequired:true } && _models[row.Model] is not IStateFreeTerminalMetadata)
@@ -196,7 +198,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
             Journal = Journal(row.History, ["terminated"]),
             Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
-                TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued()).ToList(),
+                TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued().AsCascadeTerminate()).ToList(),
             Cancelled = JobRegistry.Read(row.Jobs).Select(job => InboxKey.Ticket(instance, job.Key, row.Creation, job.Generation)).ToList(),
         };
         foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);

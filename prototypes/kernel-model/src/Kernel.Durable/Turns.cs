@@ -425,6 +425,13 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal void CascadeTerminate(CreationAddress child)
+    {
+        Send(IssuedAt(_ordinal++), new(child.Id), Kinds.Terminate, null,
+            new SendOptions(TargetCreation: child.Creation > 0 ? child.Creation : null));
+        _sent[^1] = _sent[^1].AsCascadeTerminate();
+    }
+
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
@@ -456,6 +463,7 @@ public sealed class DurableTurn
     /// <summary>A message the actor type composed itself: a parent's notice, say. It takes no ordinal.</summary>
     public void Add(Message message)
     {
+        message = message.WithoutCascadeOrigin();
         Kinds.RequireApplicationSend(message.Kind);
         if (_input.Creation > 0 && CreationProtocol.IsCompatibleTerminalHandle(message.Id, Origin))
             throw new ArgumentException("A qualified actor's reserved end handle requires AddTerminalNotice.", nameof(message));
