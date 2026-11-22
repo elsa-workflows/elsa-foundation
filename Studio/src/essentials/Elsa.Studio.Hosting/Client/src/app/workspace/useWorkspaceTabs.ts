@@ -76,6 +76,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   // restored from a stale address (screens update filters with replaceState and no event).
   const activeLocationRef = useRef(getActiveTab(state).location);
   const navigationVersion = useRef(0);
+  const displacedEntries = useRef(new Map<string, { location: string; state: unknown }>());
   const acceptedLocationRef = useRef(currentRelativeLocation());
   // Where the active tab was before a screen pushed an entry the shell has not accepted yet. A screen
   // that opens a resource another tab shows pushes first; that tab keeps this location.
@@ -277,6 +278,14 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       const version = ++navigationVersion.current;
+      // Another Back or Forward can leave a provisional entry before its dialog settles.
+      // Restore that entry's original address and state whenever the browser returns to it.
+      const provisionalId = window.history.state?.["elsa.studio.pendingTraversal"];
+      const displaced = displacedEntries.current.get(provisionalId);
+      if (displaced) {
+        window.history.replaceState(displaced.state, "", displaced.location);
+        displacedEntries.current.delete(provisionalId);
+      }
       const qualified = optionsRef.current.qualifyPath(currentRelativeLocation());
       if (!qualified) {
         window.history.replaceState(window.history.state, "", acceptedLocationRef.current);
@@ -326,9 +335,12 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
           }
           // Keep the mounted editor and browser address together while the shared dialog is open.
           // Preserve the destination entry and its state so approval can finish the original traversal.
-          window.history.replaceState(withHistoryTabId(null, current.activeId), "", origin);
+          const provisional = crypto.randomUUID();
+          displacedEntries.current.set(provisional, { location: destination, state: targetState });
+          window.history.replaceState(withHistoryTabId({ "elsa.studio.pendingTraversal": provisional }, current.activeId), "", origin);
           void decision.then(allowed => {
             if (version !== navigationVersion.current || stateRef.current.activeId !== current.activeId || acceptedLocationRef.current !== origin || currentRelativeLocation() !== origin) return;
+            displacedEntries.current.delete(provisional);
             window.history.replaceState(withHistoryTabId(targetState, current.activeId), "", destination);
             if (!allowed) {
               window.history.pushState(withHistoryTabId(null, current.activeId), "", origin);
