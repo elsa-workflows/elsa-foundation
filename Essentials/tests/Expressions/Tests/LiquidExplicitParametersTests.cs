@@ -92,7 +92,7 @@ public sealed class LiquidExplicitParametersTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await Handler().EvaluateAsync(request));
 
-        Assert.Contains("binding-pure-v1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("binding-readonly-v1", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public sealed class LiquidExplicitParametersTests
             new TypeReference(resultType),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
     }
 }

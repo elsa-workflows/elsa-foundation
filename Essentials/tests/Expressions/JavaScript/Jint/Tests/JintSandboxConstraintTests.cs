@@ -44,6 +44,27 @@ public class JintSandboxConstraintTests
         await Assert.ThrowsAsync<StatementsCountOverflowException>(() => EvaluateAsync(evaluator, "while (true) { }").AsTask());
     }
 
+    // The memory limit is the script's: converting large arguments into the engine before it runs does not count.
+    [Fact]
+    public async Task ConvertingArgumentsDoesNotCountAgainstTheMemoryLimit()
+    {
+        await using var provider = JintTestHost.Build(f =>
+        {
+            f.ExecutionTimeout = null;
+            f.MaxStatements = null;
+            f.MaxMemoryBytes = 4 * 1024 * 1024;
+        });
+        using var scope = provider.CreateScope();
+        var items = Enumerable.Range(0, 20_000).Select(index => new { i = index }).ToArray();
+
+        var result = await EvaluateAsync(
+            scope.ScriptEvaluator(),
+            "return 1;",
+            arguments: JsonSerializer.SerializeToElement(new { items }));
+
+        Assert.Equal(1, result!.Value.GetInt32());
+    }
+
     [Fact]
     public async Task RecursionLimitAborts()
     {

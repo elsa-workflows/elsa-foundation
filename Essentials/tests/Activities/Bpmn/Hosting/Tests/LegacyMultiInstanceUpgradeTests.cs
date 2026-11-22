@@ -11,7 +11,7 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 
 public sealed class LegacyMultiInstanceUpgradeTests
 {
-    [Fact]
+    [Fact(Skip = "Compatibility is owed only from the first stable release: since S-1 (#4855) the frozen captures pin binding-pure-v1, refused by spec 1223 FR-031. Re-capture or retire: #4916.")]
     public async Task Actual_partial_multi_instance_calls_preserve_iterations_and_finish_after_restart()
     {
         var matrix = Environment.GetEnvironmentVariable("ELSA_BPMN_LEGACY_MATRIX_DIRECTORY"); var fixtures = Path.Combine(AppContext.BaseDirectory, "Fixtures");

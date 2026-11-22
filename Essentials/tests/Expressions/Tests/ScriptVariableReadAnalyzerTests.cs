@@ -128,13 +128,29 @@ public sealed class ScriptVariableReadAnalyzerTests
         // FR-008, T023: the function reads variables the script does not name, so publish sets the fallback marker.
         var services = new ServiceCollection();
         new JavaScriptFeature().ConfigureServices(services);
-        services.AddSingleton(new JavaScriptHostFunctionDeclaration("lookupRate", ReadsVariables: true));
-        services.AddSingleton(new JavaScriptHostFunctionDeclaration("formatRate"));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.lookupRate", _ => default, ReadsVariables: true));
+        services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.formatRate", _ => default));
+        foreach (var builtIn in JavaScriptBuiltInFunctions.Names)
+            services.AddSingleton(new JavaScriptHostFunctionDeclaration(builtIn, _ => default));
         using var provider = services.BuildServiceProvider();
         var analyzer = provider.GetServices<IScriptVariableReadAnalyzer>().Single(candidate => candidate.Language == "JavaScript");
 
-        Assert.True(analyzer.Analyze("lookupRate('eu') * 2")!.HasComputedRead);
-        Assert.False(analyzer.Analyze("formatRate(2)")!.HasComputedRead);
+        // A host function is called as namespace.member (spec 1223 FR-027).
+        Assert.True(analyzer.Analyze("acme.lookupRate('eu') * 2")!.HasComputedRead);
+        Assert.False(analyzer.Analyze("acme.formatRate(2)")!.HasComputedRead);
+        Assert.False(analyzer.Analyze("acme['lookupRate']")!.HasComputedRead);
+    }
+
+    [Theory]
+    [InlineData("newGuid()")]
+    [InlineData("parseGuid(variables.id) + newShortGuid()")]
+    [InlineData("stringToBase64(variables.name)")]
+    public void Calling_a_built_in_adds_no_fallback_read_marker(string source)
+    {
+        // Spec 1223 FR-029: the built-ins read no variables.
+        var analysis = _javaScript.Analyze(source)!;
+
+        Assert.False(analysis.HasComputedRead);
     }
 
     [Theory]

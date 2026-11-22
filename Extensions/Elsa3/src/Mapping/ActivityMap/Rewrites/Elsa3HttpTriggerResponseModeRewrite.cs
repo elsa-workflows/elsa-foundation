@@ -104,7 +104,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
                 ["request"] = new ActivityResultExpressionParameterBinding(Elsa3ConversionDiagnostics.NodeId(endpoint), RequestOutput)
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var setNode = new Elsa3Activity
         {
             Id = nodeId,

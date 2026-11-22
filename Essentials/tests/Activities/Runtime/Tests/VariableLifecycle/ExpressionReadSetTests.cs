@@ -71,7 +71,7 @@ public sealed class ExpressionReadSetTests
                     ["current"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, VariableLifecycleTestGraph.CountKey)
                 },
                 options: JsonSerializer.SerializeToElement(new { }),
-                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1)
+                capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1)
             : readPath == "variables"
                 ? new RuntimeExpressionBinding(
                     "JavaScript",
@@ -82,14 +82,14 @@ public sealed class ExpressionReadSetTests
                         ["variables.count"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, VariableLifecycleTestGraph.CountKey, ExpressionParameterSurfaces.Variables)
                     },
                     options: JsonSerializer.SerializeToElement(new { }),
-                    capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1)
+                    capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1)
                 : new RuntimeExpressionBinding(
                     "JavaScript",
                     "variables[['co', 'unt'].join('')]",
                     new RuntimeValueTypeDescriptor("alias", type.Alias, null),
                     parameters: new Dictionary<string, ExpressionParameterBinding>(),
                     options: JsonSerializer.SerializeToElement(new { }),
-                    capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1,
+                    capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1,
                     variableReadFallback: new VariableReadFallback(
                         [new VariableReadCandidate("count", VariableReference.WorkflowScopeId, VariableLifecycleTestGraph.CountKey)]));
         var binding = new RuntimeInputBinding(

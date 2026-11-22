@@ -82,6 +82,7 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0088 | [Rules owns its execution domain](0088-rules-owns-its-execution-domain.md) | Accepted |
 | 0089 | [Scripts Read Variables By Name And Publish Pins Them As Declared Parameters](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) | Accepted |
 | 0090 | [Activities Change Variables As A Unit Of Work Committed With The Step](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) | Accepted |
+| 0091 | [JSON Data Passes Through Unchanged And Every Serializer Derives From One Baseline](0091-json-data-passes-through-unchanged-and-every-serializer-derives-from-one-baseline.md) | Accepted (hash-input amendment 2026-11-20) |
 | 0092 | [Variable Reads And Writes Share One Versioned Lifecycle](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) | Accepted (decision 8 amended 2026-11-16; decisions 6 and 9 amended 2026-11-18, #4791) |
 | 0093 | [Background Execution Eligibility Is One Set Of Criteria](0093-background-execution-eligibility-is-one-set-of-criteria.md) | Accepted |
 | 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Accepted |

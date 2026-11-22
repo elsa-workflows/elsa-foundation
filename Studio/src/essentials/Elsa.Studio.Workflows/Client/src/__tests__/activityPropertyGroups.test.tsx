@@ -190,7 +190,7 @@ describe("activity property organization", () => {
             resultType: { alias: "String", collectionKind: "Single" },
             parameters: { Existing: { kind: "Literal", value: "preserve me" } },
             options: {},
-            capabilityProfile: "binding-pure-v1"
+            capabilityProfile: "binding-readonly-v1"
           }
         }
       } }),
@@ -243,7 +243,7 @@ describe("activity property organization", () => {
             resultType: { alias: "String", collectionKind: "Single" },
             parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
             options: {},
-            capabilityProfile: "binding-pure-v1"
+            capabilityProfile: "binding-readonly-v1"
           }
         }
       } }),
@@ -275,7 +275,7 @@ describe("activity property organization", () => {
             resultType: { alias: "String", collectionKind: "Single" },
             parameters: { OrderId: { kind: "WorkflowRequest" } },
             options: {},
-            capabilityProfile: "binding-pure-v1"
+            capabilityProfile: "binding-readonly-v1"
           }
         }
       } }),
@@ -1535,7 +1535,7 @@ describe("activity property organization", () => {
         }
       },
       options: { strict: true },
-      capabilityProfile: "binding-pure-v1",
+      capabilityProfile: "binding-readonly-v1",
       metadata: { origin: "seeded-workflow" }
     };
     const changes: ActivityNode[] = [];
@@ -1613,7 +1613,7 @@ describe("activity property organization", () => {
       resultType: { alias: "String", collectionKind: "Single" },
       parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
       options: {},
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const container = renderPanel([
       input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
@@ -1642,7 +1642,7 @@ describe("activity property organization", () => {
       resultType: { alias: "String", collectionKind: "Single" },
       parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
       options: {},
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const container = renderPanel([
       input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
@@ -1676,7 +1676,7 @@ describe("activity property organization", () => {
       resultType: { alias: "String", collectionKind: "Single" },
       parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
       options: {},
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const container = renderPanel([
       input("Text", { referenceKey: "text", typeName: "System.String", defaultValue: "default text", isWrapped: true })
@@ -1707,7 +1707,7 @@ describe("activity property organization", () => {
       resultType: { alias: "Int32", collectionKind: "Single" },
       parameters: { Count: { kind: "WorkflowRequest", memberKey: "Count" } },
       options: {},
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
     const container = renderPanel([
       input("Count", { referenceKey: "count", typeName: "System.Int32", defaultValue: 42, isWrapped: true })

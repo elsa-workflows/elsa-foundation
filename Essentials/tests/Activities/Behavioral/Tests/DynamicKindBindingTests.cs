@@ -189,7 +189,7 @@ public sealed class DynamicKindBindingTests
                 resultType ?? new TypeReference("Any"),
                 new Dictionary<string, ExpressionParameterBinding>(),
                 JsonSerializer.SerializeToElement(new { }),
-                ExpressionCapabilityProfiles.BindingPureV1), "JavaScript"), null, null, null, null)
+                ExpressionCapabilityProfiles.BindingReadonlyV1), "JavaScript"), null, null, null, null)
         ], []);
 
     private static TypeReference InputType(Type activityType, string property) =>

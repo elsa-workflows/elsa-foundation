@@ -16,7 +16,7 @@ descriptors are metadata only; they do not carry runtime handler factories.
   `WorkflowInstance` parameter value, never as ambient state.
 
 Shipped implementations are `PortableJavaScriptExpressionHandler` and
-`PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.
+`PortableLiquidExpressionHandler`, both restricted to `binding-readonly-v1`.
 
 ### `IExpressionDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
 
@@ -74,10 +74,12 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
   (`Warning` or `Information`) and string `Details`. A warning changes and refuses nothing, and it never carries a value
   (spec 1229 FR-006): it names paths, inputs and variables only. A warning whose paths go below a root sets
   `ProtectedForm`, naming roots only, since a member can be a key of a stored value; the runtime keeps that form when
-  the evaluation or step read a protected value (`ExecutionWarningCollector(protect: true)`).
+  the evaluation or step read a protected value (`ExecutionWarningCollector(protect: true)` in
+  `Elsa.Workflows.Runtime`).
 - **Where it comes from:** `ExpressionEvaluationRequest.Warnings` for an input expression (kept with the input snapshot,
   with the input key in `Details["input"]`), `JavaScriptScriptEvaluationRequest.Warnings` and
-  `ActivityExecutionContext.Warnings` for a step (kept on the activity state). The activity execution inspection view
+  `ActivityExecutionContext.Warnings` for a step (kept on the activity state; null outside a step body, where a
+  step drops its reports). The activity execution inspection view
   lists both in `Warnings`, and Studio's run view shows them.
 - **Users:** `VF-PREC-002` (a lossy number read but not written). Next: S-7's C2 visibility warning and S-4's
   `VF-READ` warnings.

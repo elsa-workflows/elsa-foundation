@@ -54,7 +54,7 @@
           "parameters": {},
           "parameterConversionPlans": {},
           "options": {},
-          "capabilityProfile": "binding-pure-v1"
+          "capabilityProfile": "binding-readonly-v1"
         },
         "metadata": {
           "referenceKey": "value"

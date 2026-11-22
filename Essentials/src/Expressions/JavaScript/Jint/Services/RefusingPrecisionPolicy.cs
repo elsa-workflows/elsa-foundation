@@ -1,7 +1,7 @@
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
 
-namespace Elsa.Expressions.JavaScript.Core.Services;
+namespace Elsa.Expressions.JavaScript.Jint.Services;
 
 /// <summary>
 /// Elsa's only precision policy (D-17, spec 1228 FR-013, FR-014): it refuses every write that carries a precision loss.

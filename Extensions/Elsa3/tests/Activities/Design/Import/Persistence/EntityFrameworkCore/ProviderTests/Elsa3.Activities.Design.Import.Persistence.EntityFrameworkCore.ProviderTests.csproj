@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\Essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\..\Essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\..\Essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>

@@ -191,7 +191,7 @@ public sealed class VariablesRootEvaluationTests
             new TypeReference("String"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         var result = await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, new Dictionary<string, JsonElement>(), reader, CancellationToken.None));
 
@@ -229,7 +229,7 @@ public sealed class VariablesRootEvaluationTests
                 ["variables.order"] = new VariableExpressionParameterBinding("workflow", "order", ExpressionParameterSurfaces.Variables)
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
 
         var result = await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(
             definition,
@@ -257,7 +257,7 @@ public sealed class VariablesRootEvaluationTests
     }
 
     private static ExpressionDefinition Definition(string source, IReadOnlyDictionary<string, ExpressionParameterBinding> parameters) =>
-        new("JavaScript", source, new TypeReference("Any"), parameters, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingPureV1);
+        new("JavaScript", source, new TypeReference("Any"), parameters, JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1);
 
     private static JsonElement Json<T>(T value) => JsonSerializer.SerializeToElement(value);
 
