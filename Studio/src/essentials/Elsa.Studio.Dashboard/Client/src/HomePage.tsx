@@ -186,7 +186,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   return (
     <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
       <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
-          <StudioField label="Refresh"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
+          <StudioField label="Refresh interval"><select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></StudioField>
@@ -232,13 +232,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
           <div className="dashboard-empty">
             <House size={22} />
             <span>No Home widgets are visible.</span>
-            <button type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</button>
+            <StudioButton type="button" onClick={() => { setEditing(true); setPickerOpen(true); }}>Add widget</StudioButton>
           </div>
         )}
         {editing ? (
-          <button type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
+          <StudioButton type="button" className="home-add-slot" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}>
             ＋ Add widget
-          </button>
+          </StudioButton>
         ) : null}
       </div>
       {pickerOpen ? (
@@ -280,10 +280,10 @@ function AddWidgetGroup({
                 : undefined;
           return (
             <li key={widget.id}>
-              <button type="button" onClick={() => onAdd(widget)}>
+              <StudioButton type="button" onClick={() => onAdd(widget)}>
                 {widget.title}
                 {reason ? <span> {reason}</span> : null}
-              </button>
+              </StudioButton>
             </li>
           );
         })}
