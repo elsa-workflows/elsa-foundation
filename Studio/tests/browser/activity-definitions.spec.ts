@@ -1824,7 +1824,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   await createBrowserActivity(page);
   const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
   const changesRegion = publicationDialog.getByRole("region", { name: "Changes", exact: true });
-  const summarizedVersion = publicationDialog.locator(".ad-publication-summary").first().locator("dd").first();
+  const summarizedVersion = publicationDialog.locator("dt").filter({ hasText: /^Version$/ }).locator("+ dd");
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
@@ -2260,7 +2260,9 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "valid";
   state.publishMode = "stale";
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
+  const readiness = page.getByRole("dialog", { name: "Review & publish" }).locator("dt").filter({ hasText: /^Readiness$/ }).locator("+ dd");
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toHaveText("Ready to publish");
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
   expect(state.publicationWrites).toBe(1);
@@ -4156,7 +4158,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
         rowTop: element.getBoundingClientRect().top
       }));
     });
-    await expect(header.getByRole("columnheader")).toHaveCount(6);
+    await expect(header.getByRole("columnheader")).toHaveText(["Activity", "Definition ID", "Provider", "Identifiers", "State", "Updated", "Actions"]);
     for (const column of alignment) {
       expect(column.leftGap).toBeLessThanOrEqual(1);
       expect(column.rowTopGap).toBeLessThanOrEqual(16);
