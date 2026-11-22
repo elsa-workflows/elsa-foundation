@@ -139,24 +139,32 @@ public sealed partial class InMemoryStore
         var needsNext = false;
         foreach (var (publication, wait) in CatchUpMatches(ticket, source, revoked).Take(ParkPageLimit))
         {
-            var delivery = MatchRoute(publication, wait).Delivery(partitions);
-            ValidateEventIdentity(delivery);
-            var nextSerial = serial;
-            var write = !Messages.ContainsKey(delivery.Message.InboxKey) && keys.Add(delivery.Message.InboxKey)
-                ? PrepareEventWrite(delivery, ref nextSerial) : null;
-            var estimatedBytes = write is null ? CatchUpDeliveryBytes(delivery.Message) : PublicationWriteBytes(write);
-            if (matched != 0 && bytes + estimatedBytes > ParkRecoveryCredit.LimitBytes)
+            InboxKey? compactKey = publication.FoundationIncarnation is { } incarnation
+                ? new(FoundationEventIdentity.DeliveryId(publication, wait, incarnation), InboxKey.EventDeliveryScope,
+                    FoundationEventIdentity.Match(publication, incarnation))
+                : null;
+            if (compactKey is not { } known || !Messages.ContainsKey(known) && !keys.Contains(known))
             {
-                needsNext = true;
-                break;
-            }
-            if (write is not null)
-            {
-                writes.Add(write);
-                serial = nextSerial;
+                var route = MatchRoute(publication, wait).Delivery(partitions, null, compactKey);
+                var inboxKey = route.Message.InboxKey;
+                if (!Messages.ContainsKey(inboxKey) && !keys.Contains(inboxKey))
+                {
+                    ValidateEventIdentity(route);
+                    var nextSerial = serial;
+                    var write = PrepareEventWrite(route, ref nextSerial);
+                    var estimatedBytes = PublicationWriteBytes(write);
+                    if (bytes != 0 && bytes + estimatedBytes > ParkRecoveryCredit.LimitBytes)
+                    {
+                        needsNext = true;
+                        break;
+                    }
+                    writes.Add(write);
+                    keys.Add(inboxKey);
+                    bytes += estimatedBytes;
+                    serial = nextSerial;
+                }
             }
             matched++;
-            bytes += estimatedBytes;
             last = new(wait.Key, wait.Wait, publication.Id);
         }
         Message? successor = null;
@@ -271,11 +279,11 @@ public sealed partial class InMemoryStore
 
     private IEnumerable<(EventRow Publication, SubscriptionRow Wait)> CatchUpMatches(ParkCatchUpTicket ticket, Message source, IReadOnlySet<Guid>? revoked)
     {
-        var waits = _foundationCatchUpCoverage.Where(pair => revoked?.Contains(pair.Key) != true && pair.Value.Ticket.Chain == ticket.Chain &&
-                (ticket.Start is { } start ? pair.Value.Wait.Start is not null && pair.Value.Wait.FoundationIncarnation == start.Incarnation &&
-                    pair.Value.Wait.FoundationTenant == start.Tenant && pair.Value.Wait.Key == start.Key && pair.Value.Wait.Wait == start.Wait :
-                    pair.Value.Wait.Instance == source.Target.Id && pair.Value.Wait.Creation == source.TargetCreation))
-            .Select(pair => pair.Value.Wait).OrderBy(wait => wait.Key, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal);
+        IEnumerable<SubscriptionRow> waits = ticket.Start is { } start
+            ? StartCoverage(ticket, start) is { } coverage && revoked?.Contains(start.Incarnation) != true ? [coverage.Wait] : []
+            : _foundationCatchUpCoverage.Where(pair => revoked?.Contains(pair.Key) != true && pair.Value.Ticket.Chain == ticket.Chain &&
+                   pair.Value.Wait.Instance == source.Target.Id && pair.Value.Wait.Creation == source.TargetCreation)
+                .Select(pair => pair.Value.Wait).OrderBy(wait => wait.Key, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal);
         foreach (var wait in waits)
         {
             var position = new CatchUpPosition(wait.Key, wait.Wait, "");
@@ -290,6 +298,11 @@ public sealed partial class InMemoryStore
             }
         }
     }
+
+    private CatchUpCoverage? StartCoverage(ParkCatchUpTicket ticket, StartCatchUpRegistration start) =>
+        _foundationCatchUpCoverage.TryGetValue(start.Incarnation, out var coverage) && coverage.Ticket.Chain == ticket.Chain &&
+        coverage.Wait.Start is not null && coverage.Wait.FoundationTenant == start.Tenant &&
+        coverage.Wait.Key == start.Key && coverage.Wait.Wait == start.Wait ? coverage : null;
 
     private static int FirstAfter(IList<string> ids, string after)
     {
@@ -359,6 +372,12 @@ public sealed partial class InMemoryStore
         foreach (var write in step.Writes) ApplyEventWrite(write);
         if (step.EventSerial is { } serial) _eventSerial = serial;
         if (step.Next is { } next) Messages.Add(next.InboxKey, new(next, ++_seq, 0));
+        if (step.Ticket.Start is { } start)
+        {
+            if (step.Next is null && StartCoverage(step.Ticket, start) is not null)
+                _foundationCatchUpCoverage.Remove(start.Incarnation);
+            return;
+        }
         var cursor = step.Next?.ParkCatchUp?.After;
         var passed = _foundationCatchUpCoverage.Where(pair => pair.Value.Ticket.Chain == step.Ticket.Chain &&
             (cursor is null || new CatchUpPosition(pair.Value.Wait.Key, pair.Value.Wait.Wait, "").CompareTo(cursor.Value with { Event = "" }) < 0))

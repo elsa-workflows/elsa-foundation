@@ -146,6 +146,7 @@ internal static class FoundationEventSendChecks
         foreach (var outcome in new[] { "takeover", "remove", "exhausted" })
             await Run(outcome);
         await CheckRegistrarPage(check);
+        await CheckRegistrarDuplicates(check);
 
         async Task Run(string outcome)
         {
@@ -217,6 +218,46 @@ internal static class FoundationEventSendChecks
 
             IReadOnlyList<InMemoryStore.ActorCheckpoint> Actors() => store.ReadFoundationActors(scope.Tenant).Actors;
         }
+    }
+
+    private static async Task CheckRegistrarDuplicates(Action<bool, string> check)
+    {
+        const long now = 1_701_511_020_000;
+        const int count = 12;
+        const int megabyte = 1_024 * 1_024;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("registrar-duplicates");
+        var edge = new EventIngress(store, new Requests("registrar"), "caller");
+        var actor = new Probe();
+        var payload = new string('x', megabyte);
+        for (var index = 0; index < count; index++)
+            await edge.SendAsync(scope, new("signal"), $"event-{index:D2}", payload, new(KeepFor: TimeSpan.FromMinutes(1)));
+        await edge.SetStartAsync(scope, "signal", "starter", new(actor.Type, "duplicates"));
+        var before = 0L;
+        var allocated = -1L;
+        var thread = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is not [{ FoundationCatchUpStep: not null, FoundationPublicationSequence: null }]) return;
+            if (!landed)
+            {
+                thread = Environment.CurrentManagedThreadId;
+                before = GC.GetAllocatedBytesForCurrentThread();
+            }
+            else if (thread == Environment.CurrentManagedThreadId)
+                allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
+        var worker = new Worker("registrar-duplicates", 0, wire, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        for (var index = 0; index < count; index++) await Step(worker);
+        var beforeRegistrar = Creators();
+        await Step(worker);
+        check(beforeRegistrar == count && Creators() == count && allocated is >= 0 and < megabyte &&
+            store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the registrar settles twelve previously delivered megabyte events in one page without framing their payloads again");
+
+        int Creators() => store.Messages.Values.Count(row => row.Message.InboxScope == InboxKey.EventCreatorScope);
     }
 
     private static async Task CheckRegistrarPage(Action<bool, string> check)
