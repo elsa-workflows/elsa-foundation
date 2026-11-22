@@ -1,8 +1,8 @@
 import { qualifyStudioBackendPath, isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Inbox, RefreshCw } from "lucide-react";
+import { Inbox } from "lucide-react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, PeerViewSwitch } from "@elsa-workflows/studio-ui";
 import { FormsPage } from "./FormsPage";
 import { actor, list, message, statusOf, type TaskActor, type TaskPage } from "./taskApi";
 import { TaskStatus } from "./TaskStatus";
@@ -45,13 +45,16 @@ export function TasksPage({ api, navigate }: { api: ElsaStudioModuleApi; navigat
   const clearInToolbar = filtered && !(page && page.items.length === 0);
   return <StudioPage className="user-tasks" aria-label="User tasks management">
     <StudioPageHeader title="User tasks" description="Your assigned work and available group tasks."
-      actions={<><StudioButton onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} aria-hidden="true" />Refresh</StudioButton>
+      refresh={{ id: "user-task-inbox", label: "Refresh tasks", onRefresh: refresh, refreshing: loading, autoRefresh: true }}
+      actions={<>
         {identity?.canReadForms || identity?.canManageForms ? <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks/forms")}>Reusable forms</a> : null}</>} />
     <div ref={root} className="user-task-content">
     {!denied && <StudioCollectionToolbar>
       <StudioSearchInput className="user-task-search" aria-label="Search tasks" placeholder="Search tasks" value={search} onChange={event => { changeBrowse({ ...browse, search: event.target.value, cursor: null }); }} />
-      <StudioField className="user-task-inbox" label="Inbox"><select value={view} onChange={event => { changeBrowse({ ...browse, view: event.target.value, cursor: null }); }}>
-        <option value="mine">My tasks</option><option value="queue">Group queue</option><option value="history">History</option>{identity?.canManage ? <option value="all">All tasks</option> : null}</select></StudioField>
+      <PeerViewSwitch ariaLabel="Inbox" value={view} views={[
+        { id: "mine", label: "My tasks" }, { id: "queue", label: "Group queue" }, { id: "history", label: "History" },
+        ...(identity?.canManage ? [{ id: "all", label: "All tasks" }] : [])
+      ]} onChange={next => changeBrowse({ ...browse, view: next, cursor: null })} />
       {clearInToolbar && <StudioButton variant="ghost" onClick={() => { changeBrowse({ ...browse, search: "", cursor: null }); }}>Clear search</StudioButton>}
     </StudioCollectionToolbar>}
       <div className="user-task-results" aria-busy={loading}>
