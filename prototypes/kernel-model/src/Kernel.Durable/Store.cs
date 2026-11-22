@@ -178,6 +178,7 @@ public sealed record TurnCommit(
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
     internal long? FoundationPublicationSequence { get; init; }
     internal CascadeCommit? FoundationCascade { get; init; }
+    internal IReadOnlyList<FoundationValue>? FoundationValues { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
@@ -191,6 +192,9 @@ public sealed record CommitBatch(
     public IReadOnlyList<InboxKey> ClearJobTrials { get; init; } = [];
 
     internal FoundationPublicationReservation? PublicationReservation { get; init; }
+
+    /// <summary>Optional due-depth estimates written under the exact fences of this batch.</summary>
+    internal IReadOnlyDictionary<int, int>? DueBacklog { get; init; }
 
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
@@ -257,6 +261,22 @@ public sealed class StoreException(Failure failure, string message, Exception? i
     public Failure Failure => failure;
 }
 
+// Optional local scheduling data. These observations never issue a database call.
+internal interface IFoundationSchedulingStore
+{
+    string? FoundationScheduleTenant(CreationAddress address);
+    ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere);
+}
+
+internal interface IDueBacklogStore
+{
+    bool MeasuresDueBacklog => true;
+    int PublishedDueBacklog(int partition);
+
+    // Count pending due rows using the store's clock, stopping at a positive cap.
+    ValueTask<int> CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// The durable layer's storage contract, stated by what each operation guarantees. It also keeps the built-in runtime's
 /// membership (<see cref="IMembership"/>): the node rows and which partitions nobody holds.
@@ -269,7 +289,6 @@ public interface IKernelStore : IMembership
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
     bool SupportsCascadePages => false;
-    internal ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) => null;
 
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;

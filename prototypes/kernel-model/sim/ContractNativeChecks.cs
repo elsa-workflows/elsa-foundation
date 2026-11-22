@@ -362,7 +362,7 @@ internal static class ContractNativeChecks
             "qualified Resume delivers the kept timer under its original key and the Native handler advances its frame once");
     }
 
-    private enum RearmedWhenSelected { Pending, Arrived, Consumed }
+    private enum RearmedWhenSelected { Pending, Arrived, Consumed, Stale, StaleResume }
 
     private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check, bool explicitSelection = false,
         RearmedWhenSelected? testRepeat = null, bool keepMarker = false, bool preserveAfterSweep = false)
@@ -418,7 +418,7 @@ internal static class ContractNativeChecks
                     secondFault = true;
                     throw new InvalidOperationException("fault after suppression");
                 }
-                if (inbox.Any(message => message.Id is "interrupt-rearm" or "retry-y"))
+                if (inbox.Any(message => message.Id is "interrupt-rearm" or "retry-y" or "stale-trip"))
                 {
                     if (!rearmedFault)
                     {
@@ -540,6 +540,8 @@ internal static class ContractNativeChecks
         }
         if (testRepeat is { } variant)
         {
+            var staleTimer = variant is RearmedWhenSelected.Stale or RearmedWhenSelected.StaleResume;
+            var selectInputs = variant != RearmedWhenSelected.StaleResume;
             await WaitForRepark();
             var samePark = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
             var retryArrival = store.Messages.Values.Single(row => row.Message.Id == "interrupt-rearm");
@@ -585,24 +587,57 @@ internal static class ContractNativeChecks
                 }
             }
 
-            var expectedAlreadyRearmed = variant == RearmedWhenSelected.Consumed ? 0 : 1;
-            var repeat = await ingress.SendAsync(scope, target, "retry-again", Contract.Kinds.Recover,
-                Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Retry,
-                    [keptHandle, store.SealFoundationKeptHandle(scope.Tenant, reference.Id, retryArrival.Message.InboxKey)!])));
-            if (variant == RearmedWhenSelected.Pending)
+            if (staleTimer)
+            {
+                await ingress.SendAsync(scope, target, "stale-trip", "act");
+                await Step(worker);
+                var trigger = store.Messages.Values.Single(row => row.Message.Id == "stale-trip");
+                trigger.Seq = rebuiltTimer.Seq - 1;
+                await ingress.SendAsync(scope, target, "release-before-interruption", Contract.Kinds.Recover,
+                    Json.Write(new Contract.OperatorCommand(selection)));
+                await Step(worker);
+                await Step(worker);
+                var released = store.Instances[interrupted.Row.Id];
+                var tagged = rebuiltTimer.ReleasedBy is { } release && rebuiltTimer is { Done: false, KeptBy: null } &&
+                    release.Generation == released.ParkResolutionGeneration && trigger.ReleasedBy == release;
+                check(tagged, "RA-1 the actual bounded page first releases the timer and an earlier input");
+                if (!tagged) return;
+
+                trigger.Attempts = 3; // Inject the persisted attempt count before the owner offers the cohort.
+                await WaitForRepark();
+                var parkedAgain = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+                var interruptedBeforeTimer = parkedAgain.Park == parked.Park &&
+                    parkedAgain.Row is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+                    trigger is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+                    rebuiltTimer is { Done: false, KeptBy: null, ReleasedBy: not null } && timerOffers == 0;
+                check(interruptedBeforeTimer, "RA-1 an earlier exhausted cohort input re-parks while the re-armed timer still has its old tag");
+                if (!interruptedBeforeTimer) return;
+                retryArrival = trigger;
+            }
+
+            var expectedAlreadyRearmed = selectInputs && variant != RearmedWhenSelected.Consumed ? 1 : 0;
+            var operation = selectInputs
+                ? new Contract.OperatorCommand(selection, Contract.RecoverMode.Retry,
+                    [keptHandle, store.SealFoundationKeptHandle(scope.Tenant, reference.Id, retryArrival.Message.InboxKey)!])
+                : new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume);
+            var repeat = await ingress.SendAsync(scope, target, "retry-again", Contract.Kinds.Recover, Json.Write(operation));
+            if (staleTimer || variant == RearmedWhenSelected.Pending)
                 store.Messages.Values.Single(row => row.Message.Id == "retry-again").Seq = rebuiltTimer.Seq - 1;
             await Step(worker);
             var repeated = repeat.Outcome == Contract.AdmissionOutcome.Accepted &&
                 store.Instances[interrupted.Row.Id].ParkRecovery is { Cursor: null } drain &&
                 drain.AlreadyRearmed == expectedAlreadyRearmed &&
-                ReferenceEquals(rebuiltTimer, store.Messages[key]) && retryArrival.KeptBy == ParkKeepReason.Selected &&
+                ReferenceEquals(rebuiltTimer, store.Messages[key]) &&
+                retryArrival.KeptBy == (selectInputs ? ParkKeepReason.Selected : ParkKeepReason.Consumed) &&
                 (variant switch
                 {
                     RearmedWhenSelected.Pending => rebuiltTimer is { Done: false, KeptBy: null, ReleasedBy: null },
                     RearmedWhenSelected.Arrived => rebuiltTimer is { Done: true, KeptBy: ParkKeepReason.Arrived },
+                    RearmedWhenSelected.Stale or RearmedWhenSelected.StaleResume => rebuiltTimer is { Done: false, KeptBy: null, ReleasedBy: { } released } &&
+                        released.Generation < store.Instances[interrupted.Row.Id].ParkResolutionGeneration,
                     _ => rebuiltTimer is { Done: true, KeptBy: ParkKeepReason.Selected }
                 });
-            check(repeated, $"R2 accepts the old timer handle and selects the other Consumed row with T {variant}");
+            check(repeated, $"R2 opens {operation.Mode} with T {variant} and keeps its original envelope ({repeat.Outcome}; companion {retryArrival.KeptBy})");
             if (!repeated) return;
 
             InMemoryStore.MessageRow? late = null;
@@ -611,6 +646,12 @@ internal static class ContractNativeChecks
                 await ingress.SendAsync(scope, target, "unreleased-arrival", "act");
                 late = store.Messages.Values.Single(row => row.Message.Id == "unreleased-arrival");
             }
+            else if (staleTimer)
+            {
+                await ingress.SendAsync(scope, target, "late-native-cancel", NativeKinds.Cancel);
+                late = store.Messages.Values.Single(row => row.Message.Id == "late-native-cancel");
+                late.Seq = rebuiltTimer.Seq - 2;
+            }
             await Step(worker);
             var gate = store.Instances[interrupted.Row.Id].ParkRecovery?.Gate;
             check(variant switch
@@ -618,6 +659,9 @@ internal static class ContractNativeChecks
                     RearmedWhenSelected.Pending => gate == retryArrival.Message.InboxKey &&
                         rebuiltTimer is { Done: false, Seen: > 0, ReleasedBy: null } && late is { Done: false, Seen: > 0, ReleasedBy: null },
                     RearmedWhenSelected.Arrived => gate == key,
+                    RearmedWhenSelected.Stale or RearmedWhenSelected.StaleResume => gate == key && rebuiltTimer is { Done: false, ReleasedBy: { } released } &&
+                        released.Generation == store.Instances[interrupted.Row.Id].ParkResolutionGeneration &&
+                        late is { Done: false, ReleasedBy: null },
                     _ => rebuiltTimer is { Done: false, ReleasedBy: not null, KeptBy: null }
                 }, $"the first R2 page waits only on a released input with T {variant}");
         }
@@ -635,16 +679,17 @@ internal static class ContractNativeChecks
         var checkpoint = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
         var state = Json.Read<NativeState>(checkpoint.Row.State);
         check(checkpoint is { Park: null, Row: { Status: InstanceStatus.Finished, ParkTimerDispositions: null } } &&
-            timerOfferedDuringDrain == (testRepeat is RearmedWhenSelected.Arrived or RearmedWhenSelected.Consumed) &&
+            timerOfferedDuringDrain == (testRepeat is RearmedWhenSelected.Arrived or RearmedWhenSelected.Consumed or RearmedWhenSelected.Stale or RearmedWhenSelected.StaleResume) &&
             timerOffers == 1 && state.Waits.Count == 0 &&
             state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "continued" &&
             store.Messages.GetValueOrDefault(key) is null or { Done: true, KeptBy: null },
             $"{mode} offers the re-armed timer in the expected phase and resumes the real Native frame exactly once");
         if (testRepeat is { } finalVariant)
-            check(retryArrivalOffers == 1 && store.Journal.Values.Any(entry => entry.Instance == checkpoint.Row.Id &&
+            check(retryArrivalOffers == (finalVariant == RearmedWhenSelected.StaleResume ? 0 : 1) &&
+                store.Journal.Values.Any(entry => entry.Instance == checkpoint.Row.Id &&
                 entry.Entries.Contains("\"Operation\":\"retry-again\"", StringComparison.Ordinal) &&
-                entry.Entries.Contains("\"AlreadyRearmed\":" + (finalVariant == RearmedWhenSelected.Consumed ? 0 : 1), StringComparison.Ordinal)),
-                $"R2 restores the selected Consumed arrival once and records the already re-armed count with T {finalVariant}");
+                entry.Entries.Contains("\"AlreadyRearmed\":" + (finalVariant is RearmedWhenSelected.Consumed or RearmedWhenSelected.StaleResume ? 0 : 1), StringComparison.Ordinal)),
+                $"R2 records the expected replay and already re-armed count with T {finalVariant}");
 
         async Task Step(Worker current)
         {

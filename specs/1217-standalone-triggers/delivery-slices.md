@@ -29,3 +29,9 @@ Run the affected whole projects and compare discovery to executed identities. Pr
 Stacked PRs merge base-first. Use `Part of #3582` while feature acceptance remains incomplete; only the finishing delivery may close the issue and mark the spec Implemented. A precursor merge never closes the whole feature. Every slice records its exact reviewed head, validation, current check states and actual merge/resulting-main evidence.
 
 The owner's explicit personal-account admin-merge exception applies if CI has not started or is too slow. Record its use and the pending/bypassed checks on the exact PR. This exception does not constitute a passing CI result, a clean source review or acceptance evidence for unexecuted behavior. Other paused programs and transferred ownership are unchanged.
+
+## Finishing delivery, 22 November 2026
+
+**Scoped owner exception (22 November 2026):** The owner explicitly instructed “Skip CI and stick to self review only. Self merge when done.” For this delivery only, CI and independent review are waived; Codex performs source/visual self-review, local validation and personal-account self-merge. Waived checks are not passing checks. Normal contributor requirements below remain the default for later changes. See [delivery receipt](evidence/delivery-2026-11-22.md).
+
+The RuntimeArtifact predecessor is merged as #4370; backend slices are integrated. The remaining stack delivers product/UI/public extension integration (#4580), separately compiled consumers (#4582), seven browser journeys (#4584), then the owned producer and terminal specification/operator documentation (#4585). The complete local 49-case union and nine owning backend projects pass on the source recorded in the receipt. Merge base-first; record exact merged heads and resulting-main verification on #4585 and the owner-closed #3582 without reopening #3912 or resuming #2892.

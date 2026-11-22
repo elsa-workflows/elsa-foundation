@@ -1,6 +1,8 @@
 # Standalone trigger qualification guide
 
-**Status**: Qualification in progress. Backend slices are integrated; Studio, independent consumers, browser journeys and the finite producer are draft [#4580](https://github.com/elsa-workflows/elsa-foundation/pull/4580), [#4582](https://github.com/elsa-workflows/elsa-foundation/pull/4582), [#4584](https://github.com/elsa-workflows/elsa-foundation/pull/4584) and [#4585](https://github.com/elsa-workflows/elsa-foundation/pull/4585). Commands describe required verification, not passing acceptance. Use a committed candidate and owned temporary hosts/stores.
+**Status**: Implemented in finishing delivery [#4585](https://github.com/elsa-workflows/elsa-foundation/pull/4585), following [#4580](https://github.com/elsa-workflows/elsa-foundation/pull/4580), [#4582](https://github.com/elsa-workflows/elsa-foundation/pull/4582) and [#4584](https://github.com/elsa-workflows/elsa-foundation/pull/4584). Actual merge/resulting-main receipts are recorded on the finishing PR. Use committed candidates and owned disposable hosts/stores; commands alone do not establish a pass.
+
+**Scoped owner exception (22 November 2026):** The owner explicitly instructed “Skip CI and stick to self review only. Self merge when done.” For this delivery only, CI and independent review are waived; Codex performs source/visual self-review, local validation and personal-account self-merge. Waived checks are not passing checks. Normal contributor requirements below remain the default for later changes. See [delivery receipt](evidence/delivery-2026-11-22.md).
 
 ## Preparation
 
@@ -22,16 +24,16 @@ Use the normal `dotnet` command on PATH. A build-slot wait is a queue, not a han
 For each changed project, enumerate tests then run the complete project and record executed versus listed counts. The main affected projects are:
 
 ```bash
-dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --list-tests
-dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --list-tests
+dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj
 ```
 
 Select further whole suites from the actual final diff (HTTP activities, Primitives, Publishing, Expressions or distributed providers). Do not count a filtered helper as whole-suite acceptance. Meaningful revert/mutation controls prove changed behavior fails without its implementation; retain original failure and corrected pass separately.
@@ -73,7 +75,7 @@ Open the actual screenshots, accessibility snapshots and traces. Independent ins
 
 ```bash
 bash tools/architecture/restore-ci-project-graph.sh
-dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
+dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
 ```

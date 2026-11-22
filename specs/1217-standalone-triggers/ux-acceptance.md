@@ -1,7 +1,9 @@
 # Standalone triggers: Studio acceptance
 
+**Scoped owner exception (22 November 2026):** The owner explicitly instructed “Skip CI and stick to self review only. Self merge when done.” For this delivery only, CI and independent review are waived; Codex performs source/visual self-review, local validation and personal-account self-merge. Waived checks are not passing checks. Normal contributor requirements below remain the default for later changes. See [delivery receipt](evidence/delivery-2026-11-22.md).
+
 **Feature:** [#3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582)
-**Status:** Acceptance plan; qualification is in progress. Exact-source passing, failed and interrupted results are recorded on the [draft delivery stack](quickstart.md). Full acceptance remains pending.
+**Status:** Local functional qualification and visual self-review complete; see the [delivery receipt](evidence/delivery-2026-11-22.md). Independent review and CI are owner-waived for this delivery. The inventory below remains the repeatable acceptance plan; actual merge/resulting-main receipts are appended on finishing PR #4585.
 **Original plan source review:** `e0ba87ecfc3b1e774c509ed274b19cd3f34a1124`, 5 November 2026.
 
 This record applies the existing [Studio UX acceptance process](../../docs/contributing/studio-ux-acceptance.md). It defines the experience to inspect and the evidence to retain. The feature's reviewed contracts own delivery guarantees, input semantics and lifecycle policy; this record does not ratify an unresolved contract or substitute for backend qualification.
@@ -12,7 +14,7 @@ An operator creates an End of business day schedule, subscribes Reconcile Accoun
 
 An integrator deliberately selects either HTTP workflow-owned response or asynchronous fan-out. They can see who owns the response, what an acknowledgement means, and where to investigate a failed or incomplete delivery.
 
-Use [Workflow Definitions](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages.tsx) and [Connections](../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionsPage.tsx) as collection references. Use the public components and interaction guidance in [Building a module UI](../../Studio/docs/module-ui.md), the [Studio UX design spec](../../Studio/docs/ux/design-spec.md), and the [design token contract](../../Studio/docs/design-tokens.md). A shared control supplies presentation; backend permissions and resource revisions still govern the action.
+Use [Workflow Definitions](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages.tsx) and [Connections](../../extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionsPage.tsx) as collection references. Use the public components and interaction guidance in [Building a module UI](../../Studio/docs/module-ui.md), the [Studio UX design spec](../../Studio/docs/ux/design-spec.md), and the [design token contract](../../Studio/docs/design-tokens.md). A shared control supplies presentation; backend permissions and resource revisions still govern the action.
 
 ## Surfaces and observable outcomes
 
@@ -82,7 +84,7 @@ Source-owned trigger configuration is readable within the caller's access and cl
 
 Test an absent backend capability, unsupported contract major, missing trigger family module and missing optional configuration editor. Explain which capability is unavailable, preserve permitted readable facts, and provide recovery without resetting saved values or pretending a trigger is valid. A public module extension must also be exercised by an independently built consumer. Built-in family behavior alone does not qualify the extension contract.
 
-Keep permissions and availability server-authoritative. The existing [backend capability evaluation](../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/backends.ts), [workflow tag access handling](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage.tsx), and [User Tasks actor/revision API](../../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/taskApi.ts) provide implementation references.
+Keep permissions and availability server-authoritative. The existing [backend capability evaluation](../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/backends.ts), [workflow tag access handling](../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTagsPage.tsx), and [User Tasks actor/revision API](../../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client/src/taskApi.ts) provide implementation references.
 
 ## Composed journey inventory
 

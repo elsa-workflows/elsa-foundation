@@ -165,11 +165,15 @@ public sealed class PartitionRuntime(string node, IMembership membership, int pa
     }
 
     /// <summary>One pass of a scope this node holds, never two at once. Null when it holds none, or a pass is under way.</summary>
-    public async ValueTask<TimeSpan?> PassAsync(int scope, CancellationToken cancellationToken = default)
+    public async ValueTask<TimeSpan?> PassAsync(int scope, CancellationToken cancellationToken = default) =>
+        (await PassWithAgeAsync(scope, cancellationToken)).Delay;
+
+    /// <summary>The serialized pass with the optional fairness hint used by a clocked host.</summary>
+    public async ValueTask<ScopePass> PassWithAgeAsync(int scope, CancellationToken cancellationToken = default)
     {
-        if (_passing[scope] || Activation(scope) is not { } activation) return null;
+        if (_passing[scope] || Activation(scope) is not { } activation) return default;
         _passing[scope] = true;
-        try { return await activation.RunAsync(cancellationToken); }
+        try { return await activation.RunWithAgeAsync(cancellationToken); }
         finally { _passing[scope] = false; }
     }
 }

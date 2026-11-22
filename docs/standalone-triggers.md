@@ -2,7 +2,7 @@
 
 Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 
-**Implementation status:** This guide describes the source implementation being prepared for [#3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582). The examples are source-checked request shapes, not passing host, provider, restart or Studio acceptance evidence. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) records the required checks. The [specification and proposed contracts](../specs/1217-standalone-triggers/spec.md) also contain requirements whose acceptance remains open.
+**Implementation status:** Implemented for the explicitly selected host features and supported profiles described below. See the [source-bound delivery receipt](../specs/1217-standalone-triggers/evidence/delivery-2026-11-22.md) for local qualification, self-review, owner-waived CI/independent review and operational limits. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) describes repeatable verification.
 
 ## Compose the host
 
@@ -28,7 +28,7 @@ The checked-in Workbench feature list does not select the standalone management/
 
 ## Use Studio
 
-Open **More tools → Triggers** on a backend advertising standalone-trigger contract 1. Create a paused resource, choose its family and configuration, then use **Add workflow**. Search by the workflow's human name; its exact ID stays copyable. Choose the publication slot explicitly. A never-published workflow can be saved disabled without inventing a serving input contract. **Browse published Runtime slots** provides ID-based discovery when Design metadata is unavailable.
+Open **Operate → Triggers** on a backend advertising standalone-trigger contract 1. Create a paused resource, choose its family and configuration, then use **Add workflow**. Search by the workflow's human name; its exact ID stays copyable. Choose the publication slot explicitly. A never-published workflow can be saved disabled without inventing a serving input contract. **Browse published Runtime slots** provides ID-based discovery when Design metadata is unavailable.
 
 The workflow editor's **Triggers** inspector tab edits the same live associations. Saving an association does not save or publish the business graph. Map each declared serving input, authorize the shared resource and enable the association before enabling the trigger. Review the server's impact and findings before applying a change. Source-owned settings and unavailable actions retain their projected restrictions.
 
@@ -114,7 +114,7 @@ The other three families use the same create route:
 }
 ```
 
-Timer accepts a positive ISO-8601 duration or invariant `TimeSpan`. Cron accepts five fields, or six fields with seconds first, and an installed `TimeZoneInfo` ID. Supply the timezone explicitly; these examples use UTC instants for inputs and local time only for Cron calculation. The calculator uses the repository's pinned Cronos dependency. Actual DST, clock-change and cross-host timezone qualification remains part of the pending matrix.
+Timer accepts a positive ISO-8601 duration or invariant `TimeSpan`. Cron accepts five fields, or six fields with seconds first, and an installed `TimeZoneInfo` ID. Supply the timezone explicitly; these examples use UTC instants for inputs and local time only for Cron calculation. The calculator uses the repository's pinned Cronos dependency. Calculator tests cover DST and clock changes; the composed journeys additionally prove real due Timer/Cron delivery and timezone-change preview. Participating hosts must provide the same timezone database; arbitrary cross-host database combinations are not qualified.
 
 ## Associate a serving workflow and map inputs
 
@@ -240,8 +240,8 @@ Retry and cancel-pending use the same preview/apply routes as configuration chan
 
 Pause, association removal, grant revocation, unpublication and trigger deletion stop or change future intake; they do not cancel accepted work. Deletion retains a tombstone for delivery-history authorization. Do not manually delete source/outbox rows to clear an alarm: those rows retain captured material, deduplication and command authority. The protocol has no automatic source-key expiry or configurable receipt-retention window. Material remains rooted while accepted work is unresolved; after source delivery completes, guarded collection still requires the deterministic target's deletion tombstone. Missing target state alone cannot release it. Explicitly cancelled unsealed roots can release their own material hold, while operational receipts remain.
 
-## Limits still requiring qualification
+## Qualified scope and operational limits
 
-Provider/process restart, multi-worker races, actual due Timer/Cron firing, publication replacement, genuine BPMN inputs/service work, external module consumers and the complete Studio experience require the linked qualification evidence before support is claimed. Limited delivery filters and absent automatic receipt expiry are current implementation limits. Expression availability depends on the actual installed portable handlers/evaluator and profile support.
+The delivery receipt records real owned-host source/dispatch/first-checkpoint interruptions, queue peers, due Timer/Cron, slot replacement, genuine BPMN worker-input consumption and separately compiled source/Studio consumers. The 49-case Studio matrix uses six coordinated-SDK journeys and one normal-application management journey, all on one committed source. The supported .NET polling file watcher is used for owned hosts. These queue/process witnesses do not establish distributed placement or arbitrary storage-provider interoperability. Limited delivery filters and absent automatic receipt expiry remain implementation limits. Expression availability depends on the installed portable handlers/evaluator and profile support.
 
-The direct BPMN target accepts captures from the standalone source arm and from a saved workflow-origin cohort, validating the tenant from the corresponding physical source capture. Its dispatch still requires the ordinary model protocol, in-process actor, queue and committed source seal. The full real PublishEvent-to-BPMN host journey remains pending qualification. Neither this guide nor a green isolated test establishes the full feature's delivery acceptance.
+The direct BPMN target accepts captures from the standalone source arm and from a saved workflow-origin cohort, validating the tenant from the corresponding physical source capture. Its dispatch still requires the ordinary model protocol, in-process actor, queue and committed source seal. The composed genuine-model journey exercises the real PublishEvent-to-BPMN path and ordinary worker continuation. Optional nullable input values preserve explicit JSON null separately from omission/default; explicit-null model/worker default declarations remain outside the supported profile. Separately compiled source consumers demonstrate public extensibility, not compatibility of an already published package binary. Bare stopped-host EF setup can retain predecessor metadata stamps and log incomplete family backfill on startup; successful ingress does not establish a universal legacy-metadata rewrite.
