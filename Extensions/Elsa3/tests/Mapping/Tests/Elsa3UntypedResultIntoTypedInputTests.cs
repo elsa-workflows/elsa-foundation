@@ -294,4 +294,37 @@ public sealed class Elsa3UntypedResultIntoTypedInputTests
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_future_or_optional_capture_does_not_prove_the_value_at_a_typed_read(bool optional)
+    {
+        var producer = Activity("calc", "Elsa.RunJavaScript", ("script", Literal("true")), ("result", Captured("ok")));
+        var consumer = Activity("consume", "Elsa.FlowDecision", ("condition", VariableExpression("ok", "Boolean")));
+        var root = optional
+            ? Sequence("root", Activity("optional", "Elsa.If", ("condition", Literal("false", "Boolean")), ("then", Port(producer))), consumer)
+            : Sequence("root", consumer, producer);
+
+        var result = await ConvertAsync(root, new Elsa3Variable { Id = "ok", Name = "ok", TypeName = "Object", Value = "true" });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
+    }
+
+    [Theory]
+    [InlineData("literal")]
+    [InlineData("LITERAL")]
+    public async Task A_pure_script_with_a_case_variant_literal_marker_does_not_invalidate_a_loop_read(string literalType)
+    {
+        var pure = Activity("pure", "Elsa.RunJavaScript", ("script", JsonSerializer.SerializeToElement(new
+        {
+            typeName = "String", expression = new { type = literalType, value = "return 1;" }
+        })));
+        var read = Activity("read", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", VariableExpression("i", "Object")));
+
+        var result = await ConvertAsync(Sequence("root", For(Sequence("body", pure, read))), new Elsa3Variable { Id = "i", Name = "i", TypeName = "Int32" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
 }

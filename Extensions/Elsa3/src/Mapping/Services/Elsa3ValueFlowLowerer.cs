@@ -84,7 +84,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
         var hasScriptWrites = properties.Any(property => TryReadVariableExpression(property.Value, out _)) &&
             properties.Where(property => isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
-                .Any(property => property.Expression is not { Type: "Literal" } expression ||
+                .Any(property => property.Expression is not { } expression ||
+                    !expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
                     expressionRewriter.ScriptMayWriteVariables(expression.Value,
                         ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)));
 
@@ -453,7 +454,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         {
             if (producers.Count == 0 || property.InputContract?.Type is not { } target)
                 return false;
-            return producers.All(producer =>
+            // A compatible future or conditional capture says nothing about the value this read will see.
+            return producers.Any(IsPriorSequenceCapture) && producers.All(producer =>
             {
                 var contract = inventory.PropertyContracts.FirstOrDefault(contract =>
                     contract.Direction == Elsa3PropertyDirection.Output &&
@@ -467,6 +469,22 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                        Elsa3ScriptResultKinds.ScalarTarget(SimpleName(target.Alias)) is not null &&
                        ResultRefusal(properties, producer, property) is null;
             });
+        }
+
+        bool IsPriorSequenceCapture(Elsa3MemoryOccurrence producer)
+        {
+            var node = plan?.Nodes.Keys.FirstOrDefault(node =>
+                StringComparer.Ordinal.Equals(Elsa3ConversionDiagnostics.NodeId(node), producer.ActivityNodeId));
+            if (node is null || plan!.Find(node)?.Parent is not { Activities: { } children } sequence ||
+                plan.Find(sequence)?.Resolved?.ActivityTypeKey != "Elsa.Activities.Sequence.Activities.Sequence")
+                return false;
+            var producerIndex = children.IndexOf(node);
+            if (producerIndex < 0)
+                return false;
+            for (var branch = property.Activity; plan.Find(branch)?.Parent is { } parent; branch = parent)
+                if (ReferenceEquals(parent, sequence))
+                    return children.IndexOf(branch) > producerIndex;
+            return false;
         }
     }
 
