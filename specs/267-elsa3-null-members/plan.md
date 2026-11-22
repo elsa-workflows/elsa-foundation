@@ -123,62 +123,79 @@ Import integration test projects.
 
 None.
 
-## #3281 follow-up plan — planned, 6 November 2026
+## #3281 follow-up plan
 
-This bounded S-0 follow-up implements FR-011–FR-015 without reopening the original delivered JSON-null scope.
-Work branch: `agent/codex/3281-elsa3-default-parity`. Source investigation and reviewed proposal are recorded in
-[research R-12](research.md#r-12-3281-source-audit-and-shape-boundary) and the issue's claim6676510016.
-The final-text agreement rule in [initiative governance](../../docs/contributing/initiatives.md#how-work-flows)
-applies because the follow-up changes spec requirements. This draft contains documentation only; production work
-waits for that human agreement. Technical plan review does not substitute for it.
+This S-0 amendment implements FR-011–FR-015 without reopening the original bare-null delivery. It uses the existing
+proposal branch `agent/codex/3281-elsa3-default-parity` and spec directory. The proposal remains documentation only.
+
+### Approval and delivery route
+
+The initiative's recorded coordinator-only spec approval rule applies. The final requirements need coordinator
+agreement and merge into `initiative/3052-elsa3-to-elsa4-conversion` before production work under D-18. No new ADR
+decision is proposed: HTTP/scheduling/outcome/default behavior remains unchanged, and unsupported source behavior is
+refused under the existing faithful-or-refuse rule. An actual ADR change, if discovered, gets its own agreement route.
+
+Retain proposal #3945. After its approval and merge, cut a fresh implementation branch from the initiative and open
+a separate implementation PR fixing #3281. The documentation PR does not complete the bug. Main synchronization
+belongs to the existing coordinator/S-2 lane; do not create a competing main-sync proposal.
 
 ### Implementation route
 
-1. Add nullable init properties `OnAbsent`, `OnBlank` and `OnLiteralNull` to the existing `Elsa3MemberRule` body,
-   using the existing `Elsa3NullConversion` actions. Keep the constructor signature unchanged. Existing/custom maps
-   default to no correction. No service, strategy, feature, dependency or new policy record is introduced.
-2. Record only the specified built-in member corrections in the activity map. Preserve existing `OnNull` values,
-   except that new literal-null overrides are checked before the original normalization erases the distinction.
-   Absent ExpectedStatusCodes emits `[200]`; an explicit empty list is never a missing binding. ContentType's literal
-   blank-string behavior remains distinct from its absent/no-body refusal.
-3. In the normalizer, inspect the original source shape before literal-null normalization. Apply optional corrections
-   using the same duplicate-binding, original-path and emitted-value machinery. Missing-member handling uses the
-   case-insensitive source inventory. Blank handling is limited to audited literal/empty-wrapper shapes, never a
-   general `!IsBound` rule or evaluation of arbitrary expressions. Retain prior handling for unconfigured rules.
-4. Keep real null refusals in their existing diagnostic family. Missing/blank refusals use the existing no-counterpart
-   or contract family with truthful source-shape wording and corrective guidance. Refused nodes skip the later
-   required-input diagnostic. Keep supported values on the existing mapper/compiler path.
-5. Update the existing mapping README, extension description and canonical spec236 member-map rows to describe the
-   corrected data semantics. Keep the historical spec267 table and acceptance receipts intact, marking this separate
-   follow-up's status accurately. No source or documentation assertion tests are added.
+1. Add optional init properties `OnAbsent`, `OnBlank` and `OnLiteralNull` to the existing `Elsa3MemberRule` body,
+   reusing `Elsa3NullConversion` actions. Keep its positional constructor and unconfigured/custom-map behavior.
+   Introduce no service, feature, dependency or general null-policy record.
+2. Classify supported source shapes before literal-null/default normalization and before any `!IsBound` shortcut.
+   Preserve the case-insensitive source inventory, original path, duplicate-binding checks and emitted-value markers.
+   Resolved Literal-without-value belongs to literal-null; the named empty wrappers belong to the legacy default path.
+3. Record only the named built-in corrections. Preserve existing `OnNull` values. Absent status lists emit `[200]`;
+   literal-null/blank-to-null and explicit empty status lists refuse the current incompatible routing. A focused
+   nonempty status-list contract must inspect explicit `[]` before unbound/default handling; no generic empty-list
+   policy is added. Nonempty supported lists retain the merged outcome conversion.
+4. Use focused narrowed contracts for positive Timer literals and response status values the target can reproduce.
+   Preserve the existing generic `LiteralTimeSpanToString` / `EnumNameToInt` behavior for custom maps. Built-in
+   status handling refuses 0/negative/invalid values and unproven computed ranges instead of normalizing to 200;
+   Timer refuses zero/negative/invalid intervals instead of selecting one minute.
+5. Null refusals retain their existing family; missing/blank/empty-list/invalid-value refusals use the existing
+   contract/no-counterpart families with truthful shape-specific guidance. Mark the node failed so required-input
+   checks do not add a second refusal. No imported record or publication is written for a refused selection.
+6. Update Mapping README, the owning extension description and canonical spec236 member-map rows. Keep the original
+   spec267 receipts intact and this follow-up's delivery status separate. Add no documentation/source assertion tests.
 
-### Constitution and boundary check
+### Constitution and integration check
 
-- Elsa §E2.7/§E2.2: production remains inside `Extensions/Elsa3`, with no Runtime-to-Design or new project edge.
-- Framework §2.6.2/§2.17: reuse `IElsa3ActivityMap` data and the existing normalizer; no replacement/contributor seam
-  or dependency is added. Optional rule properties belong to the existing public map contract; implementation helpers
-  remain private/internal. The public constructor and old call sites stay intact.
-- ADR0080 D1/framework §2.23: test observable conversion and real import/runtime behavior at the cheapest useful
-  boundaries. Causal policy removal must reach intended assertions; a failed build is not a behavioral counterexample.
-- Framework §2.22: update the owning extension description and existing canonical member map, not a new concept guide.
-- No reliance on provisional §2.24, Model X, Elsa §E2.9 or the pending S-2/S-3/S-8 proposals. Elsa 4 defaults and
-  scheduling/HTTP/outcome semantics are not changed to accommodate legacy values.
+- Ratified framework v6.1.0 / Elsa v6.5.0: import boundary (§E2.7), Runtime/Design boundary (§E2.2), existing map data
+  and normalizer; no project edge, replacement/contributor seam or dependency. No reliance on provisional framework
+  §2.24 or Elsa §E2.8/§E2.9.
+- ADR0080 risk-based tests / framework §2.23: observable conversion and actual import/runtime behavior, with causal
+  red/green controls and complete affected projects. New logic stays internal/private; public map additions are
+  reviewed/tracked without changing the existing constructor.
+- S-3/S-7/S-8 are merged contracts, not pending proposals this work implements. Do not alter target outcomes, script
+  write semantics or the bridge to accommodate a source member.
+- Spec1232 owns generic null/missing/undefined, required-before-default, supported type defaults, null substitution,
+  converter policies and their pins/hash. This follow-up authors the named legacy effective values or refuses them.
+  Delay zero is an explicit converter-authored value, not an S-2 runtime type default. S-2's separate null-intrinsic
+  amendment remains free to change its owned rows; no S-2 worktree or artifact is edited here.
+- Framework §2.22: extend the existing owner/member-map documentation, rather than a new explanation of core concepts.
 
-### Validation and execution limits
+### Validation route
 
-Tests live in the existing Mapping and import integration projects. The Mapping matrix covers both HTTP variants,
-case-insensitive keys, absent/JSONnull/Literalnull/blank/empty-list distinctions, supported expressions, duplicate
-bindings, unchanged caller JSON and one refusal with the original source path. Split the old Delay deliberate-null
-assertion into this follow-up's zero-duration expectation while preserving its unrelated typed-null assertion and all
-bare JSON-null tests.
+Use `Elsa3.Mapping.Tests` and the existing HTTP/SQLite import integration project. Matrix controls cover both HTTP
+variants; missing/bare-null/supported-empty/Literal-null/blank/empty-list shapes; Literal-without-value; malformed
+metadata; literal `"null"`; valid and invalid boundary values; case-insensitive keys; duplicate bindings; caller
+immutability; original member paths; and one refusal per failed node.
 
-Use owned import hosts, private stores and a local HTTP receiver for actual For/Delay/GET/status-list oracles and
-no-write refusal proof. Pin both historical source tags and record their differences; source reads are not an executed
-historical witness. Use a targeted actual historical witness only where a disputed effective value needs one, rather
-than inventing a blanket old-host gate. Record unavailable corpus evidence honestly.
+Owned disposable hosts and a local HTTP receiver prove For iteration counts, zero Delay due time, effective GET,
+ContentType/request-body differences (including empty string Content), and default `[200]` paths on 200/404/500.
+Cleared status lists are refused before any request or import write. Timer invalidity and raw HTTP status 0/negative
+values are no-default controls. Preserve the existing accepted Fault.Message text difference.
 
-Before acceptance, run both whole touched test projects with discovery/method/case reconciliation, required Release
-and Debug architecture restores, whole Architecture/maps, causal controls, three independent exact-source lenses and
-required hosted CI. Current machine instruction holds new local heavy work. Native phases need their own frozen
-source/commands/caps/full-artifact/cleanup packet and sequential remote admission; no existing issue's source, unit or
-receipts are borrowed. Keep every native/runtime/whole/corpus row NOT RUN until it actually executes.
+Use the established isolated local/Linux path when Windows execution is blocked, the build-slot wrapper where
+installed, bounded concurrency and load checks for timing failures. Freeze source/commands/results; compare discovery
+with whole-project execution; run architecture Release/Debug graph restores, whole Architecture and generated-filter
+check. Reuse the authorized read-only 36-definition corpus source and record real current measurements; do not assume
+it is unavailable or borrow another issue's pass. Historical source inspection is not historical runtime execution.
+
+Review/fix/review until an independent round has no remaining verified findings, without a numeric cap. CI waits are
+deferred to initiative integration by the dispatch; do not poll it or infer success. Organizational Code Review and
+coordinator acceptance/merge remain. Recheck the corrected members against S-2 policies on/off when that implementation
+is available; record that integration as NOT RUN until exercised, without moving its ownership into S-0.

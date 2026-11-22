@@ -6,6 +6,9 @@
 
 **Status**: Implemented
 
+**Status scope:** the original bare-JSON-null delivery is implemented. The #3281 requirements amendment below is
+proposed and unimplemented; its agreement and separate implementation remain required.
+
 **Issue**: [#3200](https://github.com/elsa-workflows/elsa-foundation/issues/3200), part of epic
 [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052)
 
@@ -251,7 +254,7 @@ to set, or that the activity can be removed.
 
 ### Edge Cases
 
-- An input holding a literal null (the deliberate-null shape) converts by the same table as a JSON `null` (FR-005).
+- An input holding a literal null follows FR-005, including the named declared-default exceptions in the follow-up.
 - An empty string or an empty JSON array or object is not `null`. It converts by the existing rules; blank strings are
   #3281.
 - A member that is absent converts by the existing rules; absent members whose value differs from Elsa 3's are #3281.
@@ -281,8 +284,10 @@ to set, or that the activity can be removed.
   value as a literal (the table's "emit" rows). The activity map is the one record of those values; it gains
   FlowSendHttpRequest `[200]` and the Correlate / SetName empty string.
 - **FR-004**: A `null` output MUST get no binding (nothing is captured).
-- **FR-005**: An input holding a literal null MUST convert as a JSON `null` member does, by the same table. (Corrected
-  in planning: the converter already reads it as unbound; research R-5.)
+- **FR-005**: An input holding a literal null MUST convert by the original JSON-null table except for the named
+  declared-default cases amended by FR-014 below. Those cases use their deliberate-null effective value or refusal,
+  rather than acquiring the bare-null declared default. Research R-5 records the original delivered conflation;
+  the #3281 follow-up corrects only those named exceptions.
 - **FR-006**: A `null` member whose Elsa 3 behaviour Elsa 4 cannot reproduce or represent MUST be refused with one new
   stable diagnostic code (the table's "refuse" rows). The message names the member and the reason; the guidance says
   to set a value in the Elsa 3 workflow, or to remove the activity.
@@ -291,8 +296,8 @@ to set, or that the activity can be removed.
   conversion, or an Elsa 3 default it emits. A test fails when one has neither.
 - **FR-009**: The spec 236 member map document MUST record each member's `null` conversion, in one section of its own
   that names every member.
-- **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. Absent and blank members do not
-  change in this spec (#3281).
+- **FR-010**: Elsa 4 activity defaults, publication and the runtime MUST NOT change. The original delivered unit
+  covered bare JSON-null members; the #3281 amendment below adds only the named converter corrections.
 
 ### Key Entities
 
@@ -319,77 +324,126 @@ to set, or that the activity can be removed.
 
 ## Assumptions
 
-- Elsa 3's behaviour is taken from the release/3.6.3 source, checked against the 3.5.3 tag. They differ only for
-  `For.OuterBoundInclusive`, settled above.
+- Elsa 3's selected baseline is release/3.6.3, checked against the 3.5.3 tag. The original For default choice is settled
+  above; follow-up research also records Cron and source-layout differences rather than claiming identical runtimes.
 - The JTest corpus's tool version is 3.5. No corpus definition has a `null` `For.OuterBoundInclusive`.
 - The measurement method matches specs 247, 248, 262 and 264: throwaway tests, deleted before the commit.
 - Out of scope: Elsa 4 changes (#3280), absent and blank members (#3281), #3195 (RunJavaScript `arguments`), #3201,
   #3202, ExecuteWorkflow's mapping (spec 236), engine-start reconciliation (spec 235).
 
-## Converter default follow-up — #3281 (planned, 6 November 2026)
+## Converter default follow-up — #3281
 
-**Follow-up status:** Draft — final-text human agreement under initiative #3052 is required before implementation.
+**Follow-up status:** Draft requirements amendment; implementation has not started. The document-level Implemented
+status describes the original bare-JSON-null delivery only.
 
-The implemented JSON-null delivery above remains the baseline. This follow-up implements the explicitly deferred
-absent/blank and declared-default exceptions in [#3281](https://github.com/elsa-workflows/elsa-foundation/issues/3281).
-It is S-0 correctness work and changes only the Elsa 3 conversion boundary. The source audit is recorded in
-[research R-12](research.md#r-12-3281-source-audit-and-shape-boundary); source inspection is not an executed parity result.
-Once agreed, this follow-up narrows FR-005 for the named declared-default exceptions; it is a requirement amendment,
-not a lifecycle-only delivery update. The current proposal authorizes no production implementation.
+The selected legacy baseline is 3.6.3, checked against 3.5.3. This follow-up applies the existing faithful-or-refuse
+rule to absent, blank and deliberately null members. The source evidence and current-target constraints are in
+[research R-12](research.md#r-12-3281-source-audit-and-shape-boundary) and
+[research R-13](research.md#r-13-current-source-recheck-and-initiative-integration).
+Source inspection is not historical runtime execution.
+
+### User Story 4 — Defaults do not change during migration (Priority: P1)
+
+An author imports a workflow that omits an input, deliberately clears it, supplies a blank value, or clears a status
+list. The converted workflow uses the effective legacy value, or import names the member that cannot be reproduced.
+It never silently substitutes a different Elsa 4 default.
+
+**Independent test:** import, publish and execute representative For/Delay/HTTP workflows; compare concrete values,
+requests and selected paths. Refused variants leave no imported versions or publications.
+
+**Acceptance scenarios:**
+
+1. An absent ContentType with potentially non-null Content is refused because Elsa 3 sent no body. An explicit blank
+   string ContentType retains JSON-writer behavior. Empty string Content is non-null and is included in this boundary.
+2. Absent/defaulted FlowSendHttpRequest.ExpectedStatusCodes emits `[200]`. A deliberate null or explicit empty list
+   must not become omission or `[200]`. With the current target's different non-2xx routing, those cleared-list uses
+   are refused, naming ExpectedStatusCodes.
+3. Deliberate-null For.OuterBoundInclusive uses false and Delay.TimeSpan uses zero duration; bare JSON null retains
+   the delivered true/one-minute behavior.
+4. Zero, negative or invalid Timer intervals, and HTTP response statuses that Elsa 4 would normalize to 200, are
+   refused rather than omitted or replaced by defaults.
+5. Blank Cron/Script uses receive member-specific guidance for legacy disabled/no-work behavior. Valid supported
+   nonblank inputs, custom maps without the new corrections, caller JSON and duplicate-binding checks retain their
+   contracts.
 
 ### Requirements
 
-- **FR-011**: For the built-in members in the table below, conversion MUST distinguish an absent member, a bare
-  JSON `null`, a supported empty input wrapper, a literal holding JSON null, and a literal empty/whitespace string.
-  Bare JSON-null behavior from the implemented table above MUST remain unchanged. Explicit empty arrays/objects,
-  text such as `"null"`, and nonblank expressions MUST NOT become absent merely because `IsBound` returns false.
-- **FR-012**: An absent or supported empty `ContentType` input on SendHttpRequest/FlowSendHttpRequest with meaningful
-  Content MUST be refused with guidance that Elsa 3 sent no body whereas Elsa 4 would send one. A present empty or
-  whitespace *literal string* ContentType MUST retain its distinct behavior: Elsa 3's content writer selected JSON.
-  This correction MUST remain within the converter's existing Content contract; unrelated HTTP serialization and
-  empty-body behavior are outside this follow-up.
-- **FR-013**: An absent or supported empty FlowSendHttpRequest.ExpectedStatusCodes input MUST emit `[200]`.
-  A deliberate literal-null or an explicitly empty list MUST retain no numeric status branch. A blank literal that
-  Elsa 3 evaluates as a null collection MUST NOT be replaced by `[200]`. Existing outcome rules remain in force;
-  this follow-up MUST NOT implement the pending S-3 outcome contract.
-- **FR-014**: A blank CronExpression or Script MUST be refused with guidance describing Elsa 3's disabled/no-work
-  behavior when Elsa 4 cannot reproduce it. The accepted difference for Fault.Message MUST continue converting
-  silently. Deliberate nulls on the six declared-default members MUST preserve their effective values or be refused
-  as specified below; they MUST NOT silently acquire declared defaults.
-- **FR-015**: Member conversion MUST remain data of the existing activity map. Custom maps without these optional
-  corrections, by-name/replacement handling, the existing public constructor, caller JSON, Elsa 4 activity defaults,
-  publication and runtime behavior MUST remain unchanged. Refusals MUST identify the original member path and
-  guidance, with no duplicate required-input diagnostic for the same refused node.
+- **FR-011**: For the named built-in members, conversion MUST distinguish absence, bare JSON null, a supported empty
+  input wrapper, a resolved Literal expression whose value is null or omitted, literal blank strings, and explicit
+  empty collections. It MUST inspect source shape before normalization erases that distinction. Text such as
+  `"null"`, explicit arrays/objects and arbitrary expressions MUST NOT become absence through a general `!IsBound`
+  test. Bare JSON-null handling from the delivered table remains unchanged by this follow-up.
+- **FR-012**: Missing or supported-empty ContentType on SendHttpRequest/FlowSendHttpRequest MUST be refused when
+  Content is or may be non-null: Elsa 3 skipped the body, whereas the target can send it. The legacy guard is
+  **non-null**, not nonempty/nonwhitespace. A present blank literal ContentType MUST retain JSON-writer behavior
+  within the existing Content contract, or receive a member-specific refusal if that use cannot be reproduced.
+- **FR-013**: Missing or supported-empty FlowSendHttpRequest.ExpectedStatusCodes MUST emit `[200]`. Literal null,
+  blank values that evaluate to a null collection, and explicit empty lists MUST remain distinct from that default.
+  Faithfulness includes **every selected path on 200, 404 and 500**, not only absence of numeric branches. Elsa 3
+  selects Done for every response when cleared; the current target selects Done for 2xx and Failed otherwise.
+  Therefore these cleared-list forms MUST currently be refused with member-specific guidance. The merged outcome
+  contract MUST NOT change to hide the mismatch. Nonempty supported lists retain their existing mapping.
+- **FR-014**: The named declared-default exceptions MUST use the legacy effective value or be refused according to
+  the matrix. Timer literals that are zero, negative or invalid MUST NOT select one minute. Response status literals
+  `0`, negative values, literal-null-to-zero and invalid blank enum text MUST NOT become 200. A computed status whose
+  compatible range cannot be established MUST be refused rather than evaluated or defaulted during import.
+  Blank Cron/Script refusals MUST describe the conversion/catalog constraint accurately; the target RunJavaScript
+  runtime already has a blank-script path. Fault.Message retains its accepted silent message-text difference.
+- **FR-015**: Corrections MUST be data of the existing built-in member map and use existing diagnostics/mapper paths.
+  Custom maps without corrections, the public member-rule constructor, by-name/replacement handling and caller JSON
+  MUST retain their contracts. Refusals name the original member path and corrective guidance, with no duplicate
+  required-input diagnostic on a refused node. Elsa 4 runtime, defaults and outcome behavior MUST NOT change.
 
-| Member/use | Missing/supported empty input | Deliberate literal-null | Literal empty/whitespace string |
+| Member/use | Missing/supported empty input | Deliberate literal-null | Literal blank / other boundary |
 |---|---|---|---|
-| SendHttpRequest/FlowSendHttpRequest.ContentType, meaningful Content present | Refuse: Elsa 3 sent no body | Existing no-body refusal | Retain existing JSON writer behavior; not absence |
-| Same ContentType, no meaningful Content | Existing no-binding behavior | Existing typed null | Existing behavior |
-| FlowSendHttpRequest.ExpectedStatusCodes | Emit `[200]` | Typed null: no numeric branch | Typed null where Elsa 3's collection conversion yields null; explicit `[]` stays empty |
-| Cron.CronExpression | Refuse disabled/no-trigger behavior | Existing refusal | Refuse disabled/no-trigger behavior |
-| RunJavaScript.Script | Refuse no-script/no-work behavior | Existing refusal | Refuse no-script/no-work behavior |
-| Fault.Message | Existing accepted silent conversion | Existing typed null | Existing behavior |
-| For.OuterBoundInclusive | Existing `true` | Emit `false` | Emit `false` when the typed blank evaluates null |
-| Delay.TimeSpan | Existing one minute | Emit zero duration | Emit zero duration when the typed blank evaluates null |
-| Timer.Interval | Existing one minute | Refuse zero recurrence interval | Same refusal when the typed blank evaluates zero |
-| SendHttpRequest/FlowSendHttpRequest.Method | Existing `GET` | Existing effective `GET` fallback | Refuse invalid blank method rather than Elsa 4's `GET` normalization |
-| WriteHttpResponse.StatusCode | Existing `200` | Refuse invalid zero status rather than Elsa 4's zero-to-200 normalization | Refuse unsupported blank enum/status input with guidance; do not assume it evaluates zero |
+| SendHttpRequest/FlowSendHttpRequest.ContentType, Content potentially non-null | Refuse legacy no-body mismatch | Retain delivered no-body refusal | Blank string selects JSON writer; it is not absence |
+| Same ContentType, Content known null/unbound | Retain existing no-body behavior | Retain typed null | Retain compatible behavior within existing Content contract |
+| FlowSendHttpRequest.ExpectedStatusCodes | Emit `[200]` | Refuse incompatible cleared-list routing | Blank-to-null and explicit `[]` also refuse; never substitute `[200]` |
+| Cron.CronExpression | Refuse disabled/no-trigger conversion | Retain refusal | Refuse blank disabled/no-trigger conversion |
+| RunJavaScript.Script | Refuse through current required converted-input contract | Retain refusal | Refuse blank/no-work conversion; do not claim the runtime cannot execute blank script |
+| Fault.Message | Retain accepted silent conversion | Retain typed null | Retain accepted message-text treatment |
+| For.OuterBoundInclusive | Retain true | Emit false | Emit false when the typed blank evaluates null |
+| Delay.TimeSpan | Retain one minute | Emit explicit zero duration | Emit zero when the typed blank evaluates null |
+| Timer.Interval | Retain one minute | Refuse zero recurrence | Refuse blank/zero/negative/invalid authored interval |
+| SendHttpRequest/FlowSendHttpRequest.Method | Retain GET | Retain effective GET fallback | Refuse invalid blank method rather than target whitespace-to-GET normalization |
+| WriteHttpResponse.StatusCode | Retain 200 | Refuse raw zero versus target 200 | Refuse zero/negative literals and invalid blank enum text; preserve supported positive status values |
 
-The selected source baseline remains 3.6.3. The 3.5.3 audit records its For-default and Cron differences; this table
-does not assert that both historical runtimes are identical. Unsupported malformed wrappers are not silently
-salvaged as valid empty inputs; supported empty shapes must be established by the tagged deserializer.
+Supported empty wrappers established by the tagged loader are `{}`, `{"typeName":"…"}` and
+`{"typeName":"…","expression":{}}`. A resolved Literal wrapper with omitted `value` is deliberate literal-null,
+not a defaulted empty wrapper. An `expression:null` or primitive expression is not that empty-wrapper path;
+unsupported metadata must be refused or handled by an independently evidenced existing rule, never silently repaired
+into a default. The 3.5.3 For-default and Cron differences remain recorded in research; the runtimes are not described
+as identical.
+
+### Boundary with S-2
+
+The [active spec1232 proposal](https://github.com/elsa-workflows/elsa-foundation/pull/3726) owns general missing/null/
+undefined representation, requiredness, native omitted-input defaults, intrinsic nullability, default-on-null and
+workflow policy recording/pinning. This follow-up introduces no policy, marker, coalescing rewrite or policy precedence.
+
+A converter-authored zero TimeSpan preserves a legacy CLR zero value; it is **not** a claim that TimeSpan has an S-2
+supported runtime type default. Nullable null and `[]` remain different values; their refusal here is about HTTP
+outcome fidelity, not a license for a null policy to replace them. Delivered bare-JSON-null rows are unchanged by this
+follow-up; this does not prevent S-2's separately owned SetVariable/SetOutput null amendment. Variable initialization
+and missing computed-name rules remain owned by ADR0089/S-2/S-4.
 
 ### Acceptance
 
-- **SC-008**: Real-converter/catalog tests cover every changed row and meaningful shape, preserving the implemented
-  bare-null table, explicit empty lists, supported nonblank values, original paths and duplicate-binding behavior.
-- **SC-009**: Actual import/publish/run tests prove the corrected For boundary, zero Delay, effective GET and the
-  default versus cleared status list; refused uses leave no imported definition/version/publication writes.
-- **SC-010**: Causal controls fail the intended assertions without the relevant corrections, then pass after exact
-  source restoration. Whole touched projects reconcile discovery/execution and report all failed/skipped/not-run rows.
-- **SC-011**: No production diff leaves `Extensions/Elsa3`; no Elsa 4 runtime/default or pending ADR semantics change.
-  Current-head architecture/maps, independent source reviews and required CI pass. Any unavailable corpus receipt
-  stays explicitly unrun; prior corpus numbers are never presented as current measurements.
+- **SC-008**: Real-converter/catalog tests cover each changed row and meaningful shape, including supported empty
+  wrappers versus Literal-without-value, explicit empty arrays/JSON-list text, literal `"null"`, malformed metadata,
+  zero/negative/invalid literals, supported values, original paths, duplicate bindings and caller immutability.
+  Delivered bare-null controls remain passing.
+- **SC-009**: Actual import/publication/execution proves the corrected For boundary, zero Delay, effective GET,
+  ContentType/body distinctions and default `[200]` routing with a local HTTP receiver. Use 200/404/500 controls.
+  Cleared-list and other refused uses leave no imported definition/version/publication writes and make no HTTP call.
+- **SC-010**: Removing the relevant correction reaches an intended failing assertion; restoration passes. Whole
+  touched projects reconcile discovery/execution and preserve every failed/skipped/not-run receipt. Independent
+  implementation review continues until a fresh round has no remaining verified findings.
+- **SC-011**: Production changes stay in `Extensions/Elsa3`; no runtime/default/outcome/policy contract changes.
+  Local affected builds/tests, architecture/maps and fresh current-corpus measurements carry exact-source evidence.
+  CI waits are deferred to initiative integration under the dispatch; CI success is never inferred. Formal Code
+  Review and coordinator merge remain gates. When S-2 implementation is available, recheck these corrected member
+  values with its converter policy option on/off; unavailable S-2 integration is explicitly qualified.
 
-All new implementation, native, import/runtime, corpus and whole-suite acceptance for this follow-up is currently
-**NOT RUN**. The existing document-level Implemented status describes the original JSON-null delivery only.
+This is a requirements proposal. New production/runtime/corpus acceptance for #3281 remains **NOT RUN** until its
+separate implementation. Historical spec267 receipts and #3201's distinct receipts do not prove this follow-up.
