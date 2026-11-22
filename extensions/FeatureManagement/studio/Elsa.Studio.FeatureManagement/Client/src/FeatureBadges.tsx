@@ -1,5 +1,4 @@
 import React from "react";
-import { Package } from "lucide-react";
 import { normalizeType } from "./featureModel";
 
 export function FeatureBadge({ tone = "neutral", title, children }: { tone?: string; title?: string; children: React.ReactNode }) {

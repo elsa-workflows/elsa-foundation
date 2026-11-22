@@ -125,7 +125,7 @@ export function FeatureManagementScreen({ moduleApi }: { moduleApi: ElsaStudioMo
   const hostTabsBaseId = useId();
   const session = useAuthSession();
   const permissions = usePermissions();
-  const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
+  const hosts = useMemo(() => getFeatureHosts(moduleApi), [moduleApi]);
   const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => {const target=new URLSearchParams(window.location.search).get("target");return target === "studio" || target === "server" ? target : featureCompletion?.hostId ?? defaultStudioHostId;});
   const completionRef = useRef<HTMLDivElement | null>(null);
   const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);

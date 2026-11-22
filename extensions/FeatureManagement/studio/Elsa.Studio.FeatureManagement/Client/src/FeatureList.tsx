@@ -80,6 +80,7 @@ export function CategorySelect({
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const selected = categories.find(category => category.id === selectedCategory) ?? categories[0];
   const normalizedQuery = query.trim().toLowerCase();
   const visibleCategories = normalizedQuery
@@ -109,6 +110,7 @@ export function CategorySelect({
   }, [open]);
 
   function close() {
+    triggerRef.current?.focus();
     setOpen(false);
     setQuery("");
   }
@@ -125,6 +127,7 @@ export function CategorySelect({
       }}
     >
       <StudioButton
+        ref={triggerRef}
         className="feature-management-category-trigger"
         aria-label="Filter by category"
         aria-haspopup="listbox"
