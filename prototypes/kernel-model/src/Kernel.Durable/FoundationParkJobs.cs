@@ -87,13 +87,22 @@ public sealed partial class InMemoryStore
                 var keepsResult = result is { Done: false } or { KeptBy: not null };
                 var retriesTicket = !keepsResult && ticket is { KeptBy: ParkKeepReason.Consumed } &&
                     (mode == ParkRecoveryMode.RetryAll || markedSelection?.Contains(ticketKey) == true);
+                if (retriesTicket)
+                {
+                    if (existingTicket is null || existingTicket.Key != key || ticket is null) return null;
+                    var admitted = ticket.JobTiming;
+                    if (existingTicket.Timer is null)
+                    {
+                        if (existingTicket.Deadline is not null || admitted != default) return null;
+                    }
+                    else if (existingTicket.Deadline is null || admitted != (key, existingTicket.Timer, existingTicket.Deadline))
+                        return null;
+                }
                 var restart = ticket is not { Done: false } && !keepsResult && !retriesTicket;
                 if (!restart)
                 {
                     if (retriesTicket && existingTicket?.Deadline is { } deadline)
                     {
-                        if (existingTicket.Timer is null || ticket?.JobTiming is not { } admitted ||
-                            admitted != (key, existingTicket.Timer, deadline)) return null;
                         var stored = Messages.GetValueOrDefault(oldDeadline);
                         if (stored is not null && (stored.Message.Kind != Kinds.JobDeadline || stored.Message.Due != deadline ||
                             stored.Message.Target.Id != row.Id || stored.Message.TargetCreation != row.Creation ||
