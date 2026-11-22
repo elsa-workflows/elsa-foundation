@@ -652,7 +652,7 @@ Raw font sizes, weights, radii and colours:
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
-- [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
+- [x] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`. (PR #5345)
 - [x] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move (PR #5332)
   it to CSS with tokens.
 
