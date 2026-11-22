@@ -13,7 +13,7 @@ public sealed class ActivityTemplateHasherTests
     // Minimal/value vectors retain the original Publishing helper's contract. The expression-bearing vector
     // follows the accepted capability profile, which is itself part of the captured behavioral identity.
     private const string MinimalHash = "sha256:82189d4ffd4a775a87743a10a428873bdcc6a27735d9b9d38b5c48457f20b4d0";
-    private const string RichHash = "sha256:54c70f6834ebefa6b00199623344ebd4dddbb6d05bed588c99b9242096c67cee";
+    private const string RichHash = "sha256:976939661c2c4c2f5851714c88557cccab947435eedcc3bf0fb53daf375b4be5";
     private const string ValueHash = "sha256:913d823b7d53f28a0f2954f196284e8c3526e53ea31dafc74f4378c5b4459895";
     private const string CanonicalValue = "{\"z\":[3,1,2],\"é\":\"λ\",\"a\":{\"b\":null,\"a\":true}}";
 
