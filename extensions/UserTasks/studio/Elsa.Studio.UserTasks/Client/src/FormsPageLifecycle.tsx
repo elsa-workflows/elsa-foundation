@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioTimestamp, StudioNewResourceDialog, type StudioResourceMetadata, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioTimestamp, StudioNewResourceDialog, type StudioResourceMetadata, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
@@ -29,7 +29,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
   const currentIdRef = useRef<string | null>(null);
   const persistedIdRef = useRef<string | null>(null);
   const createButton = useRef<HTMLButtonElement>(null); const editorElement = useRef<HTMLElement>(null);
-  const rowButtons = useRef(new Map<string, HTMLButtonElement>());
+  const formRows = useRef(new Map<string, HTMLTableRowElement>());
   const deletingRef = useRef<string | null>(null);
   const [identity, setIdentity] = useState<TaskActor>();
   const [definitions, setDefinitions] = useState<FormDefinition[]>([]);
@@ -114,7 +114,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
       const focusId = definitionsRef.current.find(item => item.id !== latest.id)?.id;
       setDefinitions(previous => previous.filter(item => item.id !== latest.id));
       requestAnimationFrame(() => {
-        if (focusId) rowButtons.current.get(focusId)?.focus(); else createButton.current?.focus();
+        if (focusId) formRows.current.get(focusId)?.focus(); else createButton.current?.focus();
       });
     } catch (failure) {
       if (currentOwner.current === owner) setDeleteError(message(failure));
@@ -195,7 +195,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
     unappliedSourceRef.current = false;
     requestAnimationFrame(() => {
       if (!shouldRestoreFocus || (document.activeElement !== document.body && document.activeElement !== focused)) return;
-      if (id) rowButtons.current.get(id)?.focus(); else createButton.current?.focus();
+      if (id) formRows.current.get(id)?.focus(); else createButton.current?.focus();
     });
   };
   const loadHistory = async (id: string, after?: string | null, append = false) => {
@@ -330,7 +330,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
     closeEditor(false);
     if (formId && navigate) { returningToCollection.current = true; navigate(formsPath()); return; }
     if (!restoreFocus) return;
-    requestAnimationFrame(() => { if (id) rowButtons.current.get(id)?.focus(); else createButton.current?.focus(); });
+    requestAnimationFrame(() => { if (id) formRows.current.get(id)?.focus(); else createButton.current?.focus(); });
   };
 
   const backToForms = () => { void leaveEditor(true); };
@@ -446,7 +446,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
   const selectedHistory = history.find(item => item.form.version === selectedHistoryVersion)
     ?? history.find(item => item.form.version === currentDefinition?.latestPublished?.form.version)
     ?? history[0];
-  const versionsPanel = !historyLoaded ? historyLoading ? <p role="status">Loading published versions…</p> : historyError ? <div><StudioAlert tone="danger">{historyError}</StudioAlert><StudioButton onClick={() => currentId && void loadHistory(currentId)}>Retry version history</StudioButton></div> : <p role="status">Published versions have not been loaded.</p> : <StudioVersionHistory label="Published form versions"
+  const versionsPanel = !historyLoaded ? historyLoading ? <SkeletonRows rows={3} label="Loading published versions" /> : historyError ? <div><StudioAlert tone="danger">{historyError}</StudioAlert><StudioButton onClick={() => currentId && void loadHistory(currentId)}>Retry version history</StudioButton></div> : <p role="status">Published versions have not been loaded.</p> : <StudioVersionHistory label="Published form versions"
     items={history.map(version => ({
       id: version.form.version, ariaLabel: `Select version ${version.form.version}`, title: `Version ${version.form.version}`,
       subtitle: <StudioTimestamp value={version.createdAt} />,
@@ -506,20 +506,19 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
     {!editing ? <>
       {!loading && !error && !hasFormAccess ? <StudioResultState tone="danger" title="Form access unavailable" description="Your account does not have permission to view reusable forms." /> : null}
       {deleteError ? <StudioAlert tone="danger">{deleteError}</StudioAlert> : null}
-      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><div role="status">Loading forms…</div></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
-          <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Published version</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+      {loading ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><SkeletonRows rows={3} label="Loading forms" /></StudioTableContainer> : definitions.length ? <StudioTableContainer role="region" aria-label="Reusable forms" tabIndex={0}><table className="studio-table user-task-table user-task-forms-table" aria-label="Task forms">
+          <thead><tr><th scope="col">Form</th><th scope="col">Identifier</th><th scope="col">Published version</th><th scope="col">Status</th>{deleteAvailable && identity?.canManageForms ? <th scope="col">Actions</th> : null}</tr></thead>
           <tbody>{definitions.map(definition => {
             const name = definition.draft?.form?.name || definition.latestPublished?.form.name || definition.id;
             const status = definition.draft ? definition.latestPublished ? "Published · Draft" : "Draft" : definition.latestPublished ? `Published · v${definition.latestPublished.form.version}` : "Draft";
-            const menuItems: OverflowMenuItem[] = [
-              { id: "open", label: identity?.canManageForms ? "Edit" : "View", onSelect: () => selectDefinition(definition.id) },
-              ...(deleteAvailable && identity?.canManageForms ? [{ id: "delete", label: "Delete", destructive: true, onSelect: () => void removeDefinition(definition) }] : [])
-            ];
-            return <tr key={definition.id} aria-label={`Open reusable task form ${name}`} {...studioRowInteraction<HTMLTableRowElement>(() => selectDefinition(definition.id))}>
-              <td data-label="Form"><StudioButton className="user-task-link" disabled={busy} ref={button => { if (button) rowButtons.current.set(definition.id, button); else rowButtons.current.delete(definition.id); }} onClick={() => selectDefinition(definition.id)}>{name}</StudioButton></td><td data-label="Identifier">{definition.id}</td>
+            return <tr key={definition.id} aria-label={`Open reusable task form ${name}`}
+              ref={row => { if (row) formRows.current.set(definition.id, row); else formRows.current.delete(definition.id); }}
+              {...studioRowInteraction<HTMLTableRowElement>(busy ? undefined : () => selectDefinition(definition.id))}>
+              <th scope="row" data-label="Form">{name}</th><td data-label="Identifier">{definition.id}</td>
               <td data-label="Published version">{definition.latestPublished?.form.version ?? "—"}</td>
               <td data-label="Status"><StatusChip tone={definition.draft ? "warning" : "success"}>{status}</StatusChip></td>
-              <td data-label="Actions" onClick={event => event.stopPropagation()}><OverflowMenu items={menuItems} ariaLabel={`Actions for ${name}`} /></td>
+              {deleteAvailable && identity?.canManageForms ? <td data-label="Actions"><OverflowMenu ariaLabel={`Actions for ${name}`}
+                items={[{ id: "delete", label: "Delete", destructive: true, onSelect: () => void removeDefinition(definition) }]} /></td> : null}
             </tr>;
           })}</tbody>
         </table></StudioTableContainer> : !error && hasFormAccess ? <StudioCollectionEmptyState title="No reusable forms yet" description="Create a form once, save a draft as you work, then publish it for new tasks."
@@ -530,7 +529,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
     </> : null}
 
     {editing ? <section ref={editorElement} className="user-task-form-editor" aria-label="Form editor">
-      {editorLoading ? <div role="status">Loading form…</div> : null}
+      {editorLoading ? <SkeletonRows rows={3} label="Loading form" /> : null}
       {formError ? <StudioAlert tone="danger">{formError}{conflict && currentId ? <StudioButton disabled={busy} onClick={() => void openDefinition(currentId)}>Reload latest draft</StudioButton> : null}</StudioAlert> : null}
       {showValidation && validation.length ? <StudioAlert tone="danger">{validation.join(" ")}</StudioAlert> : null}
       {!editorLoading && (!readOnly || identity?.canReadForms) ? <>

@@ -178,7 +178,6 @@
   font-size: var(--studio-label-size);
   font-weight: var(--studio-title-weight, 700);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .wf-instance-section .wf-activity-overview-title h4 {

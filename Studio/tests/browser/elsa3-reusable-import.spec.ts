@@ -66,7 +66,10 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
     selectedSourceVersionIds: ["owner-v1"]
   });
 
+  const progress = page.getByRole("list", { name: "Import progress" }).locator('[aria-current="step"]');
+  await expect(progress).toHaveText(/Review selection/);
   await page.getByRole("button", { name: "Review exact import" }).click();
+  await expect(progress).toHaveText(/Confirm import/);
   const review = page.getByRole("heading", { name: "4. Confirm import" }).locator("xpath=ancestor::section[1]");
   await expect(review).toContainText("Exact source versions2");
   await expect(review).toContainText("Activity Definitions2");
