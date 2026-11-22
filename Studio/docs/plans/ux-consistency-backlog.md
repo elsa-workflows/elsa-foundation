@@ -404,8 +404,8 @@ in scope.
 - [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
 - [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
 - [x] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`. (PR #5320)
-- [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
-  menu).
+- [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
+  menu). (PR #5325)
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
 - [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
   searching for a `StudioButton` labelled "Refresh" outside `KIT`.
@@ -455,8 +455,8 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
 - [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
-- [ ] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
-  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version").
+- [x] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
+  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version"). (PR #5325)
 - [x] **X8.11** (#5126) [source] `EXT/Decisions/DecisionsPage.tsx:184–185` uses `StudioTabs` for Active / (PR #5320)
   Recycle bin where `PeerViewSwitch` is the peer-view primitive.
 
@@ -501,8 +501,8 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
-- [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
-  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`.
+- [x] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
+  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`. (PR #5325)
 - [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
 - [x] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show

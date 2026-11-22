@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
@@ -431,7 +431,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   const versionsPanel = !historyLoaded ? historyLoading ? <p role="status">Loading published versions…</p> : historyError ? <div><StudioAlert tone="danger">{historyError}</StudioAlert><StudioButton onClick={() => currentId && void loadHistory(currentId)}>Retry version history</StudioButton></div> : <p role="status">Published versions have not been loaded.</p> : <StudioVersionHistory label="Published form versions"
     items={history.map(version => ({
       id: version.form.version, ariaLabel: `Select version ${version.form.version}`, title: `Version ${version.form.version}`,
-      subtitle: <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>,
+      subtitle: <StudioTimestamp value={version.createdAt} />,
       status: version.form.version === currentDefinition?.latestPublished?.form.version ? <StatusChip tone="success">Latest</StatusChip> : undefined
     }))}
     selectedId={selectedHistory?.form.version ?? null}
