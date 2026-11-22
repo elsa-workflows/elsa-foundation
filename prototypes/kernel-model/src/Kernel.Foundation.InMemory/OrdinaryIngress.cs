@@ -51,6 +51,7 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
         {
             Durable.InMemoryStore.KeyAdmissionOutcome.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
             Durable.InMemoryStore.KeyAdmissionOutcome.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
+            Durable.InMemoryStore.KeyAdmissionOutcome.Conflict => new(AdmissionOutcome.Refused, Reason: RefusalReason.Conflict),
             Durable.InMemoryStore.KeyAdmissionOutcome.Repeat => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.Repeat),
             Durable.InMemoryStore.KeyAdmissionOutcome.ObligationOutstanding => new(AdmissionOutcome.Refused, Reason: RefusalReason.ObligationOutstanding),
             _ => new Admission(AdmissionOutcome.Refused)
