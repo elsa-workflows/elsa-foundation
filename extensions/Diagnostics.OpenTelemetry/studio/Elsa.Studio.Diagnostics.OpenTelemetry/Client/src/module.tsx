@@ -544,7 +544,7 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
                 <span role="cell" title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
                 <strong role="cell" title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
                 <span role="cell">{formatDuration(trace.durationMs)}</span>
-                <span role="cell">{trace.spanCount}</span>
+                <span role="cell">{trace.spanCount}<span className="otel-compact-span-label" aria-hidden="true"> {trace.spanCount === 1 ? "span" : "spans"}</span></span>
                 <span role="cell"><StatusChip status={trace.status} /></span>
               </div>
             );
@@ -625,7 +625,7 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
   return (
     <header className="otel-trace-detail-header">
       <div>
-        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans · {trace.status}</span>
+        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} {trace.spanCount === 1 ? "span" : "spans"} · {trace.status}</span>
         <h3>{trace.name ?? trace.traceId}</h3>
         <p>{trace.traceId}</p>
         <StudioTimestamp value={trace.startTime} format="date-time" />

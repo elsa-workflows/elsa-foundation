@@ -169,9 +169,13 @@
   grid-template-columns: minmax(0, 45fr) 10px minmax(0, 55fr);
 }
 
+.otel-traces-layout.is-stacked .otel-trace-table {
+  min-height: 7rem;
+}
+
 .otel-traces-layout.is-stacked {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(14rem, 0.8fr) minmax(18rem, 1fr);
+  grid-template-rows: minmax(19rem, 0.8fr) minmax(18rem, 1fr);
   align-content: start;
   overflow: auto;
 }
@@ -204,6 +208,7 @@
 }
 
 .otel-trace-list {
+  container: otel-list / inline-size;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -500,11 +505,32 @@
     grid-template-columns: 1fr;
   }
 
-  .otel-trace-row {
-    grid-template-columns: 72px minmax(0, 1fr) 76px 52px 82px;
+}
+
+.otel-compact-span-label { display: none; }
+
+@container otel-list (width <= 440px) {
+  .otel-trace-row.header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
   }
 
-  .otel-trace-row span:nth-child(2) {
-    display: none;
+  .otel-trace-row:not(.header) {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    grid-template-areas: "trace trace status" "service service service" "start duration spans";
+    gap: var(--studio-space-1) var(--studio-space-2);
   }
+
+  .otel-trace-row > [role="cell"]:nth-child(1) { grid-area: start; }
+  .otel-trace-row > [role="cell"]:nth-child(2) { grid-area: service; }
+  .otel-trace-row > [role="cell"]:nth-child(3) { grid-area: trace; }
+  .otel-trace-row > [role="cell"]:nth-child(4) { grid-area: duration; }
+  .otel-trace-row > [role="cell"]:nth-child(5) { grid-area: spans; }
+  .otel-trace-row > [role="cell"]:nth-child(6) { grid-area: status; }
+  .otel-compact-span-label { display: inline; }
 }
