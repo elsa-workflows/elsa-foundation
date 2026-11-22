@@ -439,7 +439,7 @@ export function WorkflowInstances({ context, navigate }: {
             {appliedFilterChips.map(chip => (
               <span className="wf-run-filter-chip" key={chip.name}>
                 <span>{chip.label}</span>
-                <button type="button" aria-label={`Remove ${chip.removeLabel} filter`} onClick={() => updateAppliedFilter(chip.name, "")}>×</button>
+                <StudioButton type="button" aria-label={`Remove ${chip.removeLabel} filter`} onClick={() => updateAppliedFilter(chip.name, "")}>×</StudioButton>
               </span>
             ))}
           </div>
@@ -507,12 +507,12 @@ export function WorkflowInstances({ context, navigate }: {
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
         <div className="wf-run-deletion-toolbar" aria-label="Workflow run deletion controls">
           <span aria-live="polite">{formatRunCount(selectedRunIds.size)} selected</span>
-          <button type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => void deleteRuns([...selectedRunIds])}>
+          <StudioButton type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => void deleteRuns([...selectedRunIds])}>
             {deletionPhase === "deleting" ? "Deleting…" : "Delete selected"}
-          </button>
-          <button type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => setSelectedRunIds(new Set())}>
+          </StudioButton>
+          <StudioButton type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => setSelectedRunIds(new Set())}>
             Clear selection
-          </button>
+          </StudioButton>
         </div>
       ) : null}
       {canDeleteRuns && deleteFeedback ? (
@@ -538,14 +538,13 @@ export function WorkflowInstances({ context, navigate }: {
         <div className={`studio-table-container studio-collection-table wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
             <span role="columnheader" className="wf-run-column-header">
-              {canDeleteRuns ? <label className="wf-run-select-all"><input
+              {canDeleteRuns ? <StudioField className="wf-run-select-all" label={<span className="sr-only">Select all workflow runs on this page</span>}><input
                 ref={selectAllRef}
                 type="checkbox"
-                aria-label="Select all workflow runs on this page"
                 checked={allVisibleSelected}
                 disabled={deletingRuns}
                 onChange={event => toggleVisibleRunSelection(event.target.checked)}
-              /></label> : null}
+              /></StudioField> : null}
               <strong>Run</strong>
             </span>
             <span role="columnheader">Execution ID</span>
@@ -575,22 +574,21 @@ export function WorkflowInstances({ context, navigate }: {
               key={instance.workflowExecutionId}
             >
               <div role="cell" className="wf-run-identity-cell">
-                {canDeleteRuns ? <label className="wf-run-select"><input
+                {canDeleteRuns ? <StudioField className="wf-run-select" label={<span className="sr-only">{`Select workflow run ${instance.workflowExecutionId}`}</span>}><input
                   type="checkbox"
-                  aria-label={`Select workflow run ${instance.workflowExecutionId}`}
                   checked={selectedRunIds.has(instance.workflowExecutionId)}
                   disabled={deletingRuns}
                   onChange={event => toggleRunSelection(instance.workflowExecutionId, event.target.checked)}
-                /></label> : null}
+                /></StudioField> : null}
                 <div className="wf-run-identity-content">
-                  <button
+                  <StudioButton
                     type="button"
                     className="wf-run-inspect"
                     aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName}`}
                     onClick={() => openInstance(instance.workflowExecutionId)}
                   >
                     <strong>{workflowName}</strong>
-                  </button>
+                  </StudioButton>
                 </div>
               </div>
               <span role="cell" className="wf-list-primary-id wf-run-primary-identifier"><CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} /></span>
@@ -605,7 +603,7 @@ export function WorkflowInstances({ context, navigate }: {
                 <span aria-hidden="true" title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
                 <span className="wf-visually-hidden">{instance.activityCount} activities · {instance.incidentCount} incidents</span>
               </span>
-              <span role="cell"><StudioTimestamp value={instance.startedAt ?? instance.createdAt} fallback={formatDate(instance.startedAt ?? instance.createdAt)} /></span>
+              <span role="cell"><StudioTimestamp value={instance.startedAt ?? instance.createdAt} fallback="—" /></span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
               {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
                 <OverflowMenu ariaLabel={`Actions for workflow run ${instance.workflowExecutionId}`} items={[{
@@ -631,23 +629,23 @@ export function WorkflowInstances({ context, navigate }: {
               {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
             </select></StudioField>
           <div className="wf-page-controls">
-            <button type="button" disabled={!previousPage.available} onClick={() => {
+            <StudioButton type="button" disabled={!previousPage.available} onClick={() => {
               const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
               if (!previous.destination.available) return;
               cursorHistory.current = previous.history;
               updateLocation({ ...location, cursor: previous.destination.cursor }, false);
             }} aria-label="Previous workflow run page">
               <ChevronLeft size={14} /> Previous
-            </button>
+            </StudioButton>
             <span role="status">{page.hasNext ? "More results" : "End of results"}</span>
-            <button type="button" disabled={!page.hasNext || !page.nextCursor} onClick={() => {
+            <StudioButton type="button" disabled={!page.hasNext || !page.nextCursor} onClick={() => {
               const next = moveCursorHistoryNext(cursorHistory.current, cursorScope, location.cursor, page.nextCursor);
               if (!next.destination.available) return;
               cursorHistory.current = next.history;
               updateLocation({ ...location, cursor: next.destination.cursor }, false);
             }} aria-label="Next workflow run page">
               Next <ChevronRight size={14} />
-            </button>
+            </StudioButton>
           </div>
         </div>
       ) : null}
@@ -1657,22 +1655,22 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     || (scopeNavigation.context === browserContext && (scopeNavigation.loading || Boolean(scopeNavigation.error)));
   const executionBreadcrumb = hasExecutionScopeContext ? (
     <nav className="wf-execution-scope" aria-label="Execution scope">
-      <button type="button" onClick={() => {
+      <StudioButton type="button" onClick={() => {
         scopeRequest.current?.abort();
         setBoundaryCanvas(null);
         requestedScope.current = null;
         setExecutionScopes({ context: browserContext, items: [] });
         setScopeNavigation({ context: browserContext, loading: false, error: "" });
         setFrames([]);
-      }}>All executions</button>
+      }}>All executions</StudioButton>
       {currentExecutionScopes.map(scope => (
-        <button type="button" key={scope.execution.activityExecutionId} onClick={() => {
+        <StudioButton type="button" key={scope.execution.activityExecutionId} onClick={() => {
           selectBrowserExecution(scope.execution);
           focusNodePath(scope.execution.authoredActivityId);
           void restoreExecutionContext(scope.execution, true);
         }}>
           <ChevronRight size={13} />{scope.label}
-        </button>
+        </StudioButton>
       ))}
       {executionScope && (!scopeBlocked || retainScope) ? (
         <Suspense fallback={null}>
@@ -1699,12 +1697,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             ? retainScope ? "Loading requested occurrence… Showing the previous scope." : "Resolving execution scope…"
             : scopeNavigation.error}
           {scopeNavigation.error ? (
-            <button type="button" onClick={() => {
+            <StudioButton type="button" onClick={() => {
               const request = requestedScope.current;
               if (!request) return;
               if (request.moveOccurrence) void moveScopeOccurrence(request.execution);
               else void restoreExecutionContext(request.execution, request.includeSelf, request.label);
-            }}>Retry execution scope</button>
+            }}>Retry execution scope</StudioButton>
           ) : null}
         </span>
       ) : null}
@@ -1787,7 +1785,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
             }}
           />
           {mediumDrawerOpen ? (
-            <button type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
+            <StudioButton type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
           ) : null}
           {canResizeInspector ? (
             <div
@@ -2540,7 +2538,7 @@ function WorkflowInstanceInspector({
         <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
         <span className="wf-panel-actions">
           {layoutMode !== "desktop" ? (
-            <button
+            <StudioButton
               type="button"
               className="wf-panel-action-button"
               aria-label={layoutMode === "narrow" ? "Back to workflow run canvas" : "Close run details panel"}
@@ -2548,10 +2546,10 @@ function WorkflowInstanceInspector({
               onClick={onCloseResponsive}
             >
               <ChevronLeft size={14} />
-            </button>
+            </StudioButton>
           ) : null}
           {layoutMode === "desktop" ? (
-          <button
+          <StudioButton
             type="button"
             className="wf-panel-action-button"
             aria-label={collapsed ? "Expand run details panel" : "Collapse run details panel"}
@@ -2559,10 +2557,10 @@ function WorkflowInstanceInspector({
             onClick={onToggleCollapsed}
           >
             {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </button>
+          </StudioButton>
           ) : null}
           {layoutMode === "desktop" && !collapsed ? (
-            <button
+            <StudioButton
               type="button"
               className="wf-panel-action-button"
               aria-label={maximized ? "Restore run details panel" : "Maximize run details panel"}
@@ -2570,7 +2568,7 @@ function WorkflowInstanceInspector({
               onClick={onToggleMaximized}
             >
               {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
+            </StudioButton>
           ) : null}
         </span>
       </div>
@@ -2649,11 +2647,11 @@ function WorkflowInstanceInspector({
                       />
                     </dd>
                     <dt>Created</dt>
-                    <dd>{formatDate(summary.createdAt)}</dd>
+                    <dd><StudioTimestamp value={summary.createdAt} fallback="—" /></dd>
                     <dt>Started</dt>
-                    <dd>{formatDate(summary.startedAt)}</dd>
+                    <dd><StudioTimestamp value={summary.startedAt} fallback="—" /></dd>
                     <dt>Completed</dt>
-                    <dd>{formatDate(summary.completedAt)}</dd>
+                    <dd><StudioTimestamp value={summary.completedAt} fallback="—" /></dd>
                     <dt>Correlation</dt>
                     <dd>{summary.correlationId || "None"}</dd>
                     <WorkflowInstanceInspectionFacts
@@ -2668,7 +2666,7 @@ function WorkflowInstanceInspector({
                       <div className="wf-runtime-input-list" role="list">
                         {Object.entries(details.outputs).map(([name, output]) => (
                           <article className="wf-runtime-input wf-workflow-output" role="listitem" key={name}>
-                            <header><strong>{name}</strong><small>Captured {formatDate(output.capturedAt)}</small></header>
+                            <header><strong>{name}</strong><small>Captured <StudioTimestamp value={output.capturedAt} fallback="—" /></small></header>
                             {output.isRedacted ? <p>{output.redactionReason || "This output is redacted."}</p> : <RuntimeCapturedValue value={output.value} captureMode={output.captureMode} />}
                           </article>
                         ))}
@@ -2911,7 +2909,7 @@ export function WorkflowIncidentList({
             ? `Some affected activities are not shown yet (${pendingIncidentActivityCount} remaining).`
             : "This server cannot provide exact activity data."}</p>
           {associationLookupSupported && onLoadMoreIncidentAssociations ? (
-            <button
+            <StudioButton
               type="button"
               className="wf-run-incident-action"
               data-health="active"
@@ -2922,7 +2920,7 @@ export function WorkflowIncidentList({
               }}
             >
               {loadingAssociations ? "Loading affected activities..." : `Load more affected activities (${pendingIncidentActivityCount})`}
-            </button>
+            </StudioButton>
           ) : null}
         </div>
       ) : null}
@@ -2959,7 +2957,7 @@ export function WorkflowIncidentList({
               data-selected={incident.incidentId === selectedEvidenceId}
               key={incident.incidentId}
             >
-              <button
+              <StudioButton
                 type="button"
                 className="wf-instance-incident-summary"
                 onClick={() => onSelectEvidence?.(incident.incidentId)}
@@ -2968,17 +2966,17 @@ export function WorkflowIncidentList({
                 <p className="wf-instance-incident-cause">{getIncidentRootCause(incident, incidentRootCauseProviders)}</p>
                 <span className="wf-instance-incident-status" data-health={incident.isBlocking && isActiveIncident(incident) ? "blocking" : "neutral"}>{incidentHealthLabel} · {incident.status}</span>
                 {expressionLanguage ? <small>Expression language · {expressionLanguage}</small> : null}
-              </button>
+              </StudioButton>
               <div className="wf-instance-incident-actions">
                 {association?.nodeId || hasIncidentActivityExecutionId(incident) ? (
-                  <button type="button" onClick={() => onShowAffectedActivity?.(incident)}>Show affected activity</button>
+                  <StudioButton type="button" onClick={() => onShowAffectedActivity?.(incident)}>Show affected activity</StudioButton>
                 ) : <span className="wf-instance-note">Run-level issue · no activity association was recorded.</span>}
                 {inputKey && (association?.activityExecution || hasIncidentActivityExecutionId(incident)) ? (
-                  <button type="button" onClick={() => onViewInput?.(incident)}>View input data</button>
+                  <StudioButton type="button" onClick={() => onViewInput?.(incident)}>View input data</StudioButton>
                 ) : inputKey ? (
                   <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
                 ) : null}
-                <button type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
+                <StudioButton type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</StudioButton>
                 <CopyValueButton
                   scope={context}
                   value={formatIncidentForClipboard(incident)}
@@ -3097,8 +3095,8 @@ function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary
         <dt>Severity</dt><dd>{incident.severity}</dd>
         <dt>Blocking</dt><dd>{incident.isBlocking ? "Yes" : "No"}</dd>
         {incident.resolutionOutcome ? <><dt>Resolution action</dt><dd>{resolutionOutcomeLabel(incident.resolutionOutcome)}</dd></> : null}
-        <dt>Created</dt><dd>{formatDate(incident.createdAt)}</dd>
-        {incident.resolvedAt ? <><dt>Resolved</dt><dd>{formatDate(incident.resolvedAt)}</dd></> : null}
+        <dt>Created</dt><dd><StudioTimestamp value={incident.createdAt} fallback="—" /></dd>
+        {incident.resolvedAt ? <><dt>Resolved</dt><dd><StudioTimestamp value={incident.resolvedAt} fallback="—" /></dd></> : null}
         {innerType ? <><dt>Root cause type</dt><dd><code>{innerType}</code></dd></> : null}
         {inputKey ? <><dt>Input key</dt><dd><code>{inputKey}</code></dd></> : null}
         {inputFailureCode ? <><dt>Input failure code</dt><dd><code>{inputFailureCode}</code></dd></> : null}

@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, useId, type ReactNode } fr
 import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioTabs, tabElementIds, StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioTabs, tabElementIds, StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -363,7 +363,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
       return <div key={item.version.versionId} className="ad-version-row">
         <button type="button" className={isSelected ? "is-selected" : ""} aria-expanded={Boolean(selectedItem)} aria-controls={selectedItem ? detailsId : undefined} onClick={() => onSelect(isSelected ? null : item.version.versionId)}>
           <span className="ad-version-primary"><strong>{designOwned ? item.version.version : displayActivityDefinitionVersion(item.version.version)}</strong><small>{formatDate(item.version.publishedAt)}</small></span>
-          <span className="ad-version-badges"><span className="ad-version-lifecycle">{item.version.lifecycle}</span>{item.isRecommended ? <span className="ad-version-recommended">Recommended</span> : null}</span>
+          <span className="ad-version-badges"><StatusChip tone={isActivityDefinitionEnumValue(item.version.lifecycle, "Active") ? "success" : "neutral"}>{item.version.lifecycle}</StatusChip>{item.isRecommended ? <span className="ad-version-recommended">Recommended</span> : null}</span>
           <span className="ad-version-disclosure"><span>{selectedItem ? "Hide details" : "Show details"}</span><ChevronDown size={16} aria-hidden /></span>
         </button>
         {selectedItem ? <div id={detailsId} className="ad-version-expanded"><SelectedVersion item={selectedItem} compact={!designOwned} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selectedItem.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selectedItem.version.versionId)} onManage={action => onManage(action, selectedItem)} /></div> : null}
