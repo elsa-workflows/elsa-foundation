@@ -1,10 +1,12 @@
 # Validation guide: activity playback
 
+**Current qualified delivery**: see [the shared delivery evidence](evidence.md). The complete feature corpus is54 cases/420 PNG-ARIA pairs/48 native oracles/54 traces, covering the36 playback/prerequisite cases below plus native semantic-owner, real timer and process-restart/expiry/duplicate/stale diagnostics. Each result retains its original source. The immutable API zipball was actually downloaded and independently verified. CI is deliberately skipped under owner authorization; exact-head merge and resulting-main verification remain distinct. Dated preparation receipts below are historical and do not override this current boundary.
+
 ## Prerequisites
 
 T003 technical readiness is qualified locally on6185 with the explicit research R11 source handoff; formal dependency publication/shared CI remains required for delivery. The current activity browser alone does not qualify. Use only owned disposable Workbench/Studio stores, ports and test identities. No existing demo/personal host, external model call, timestamp editing or substituted history response.
 
-## Latest local qualification
+## Historical local qualification
 
 The [complete assertion receipt](https://github.com/elsa-workflows/elsa-foundation/issues/4366#issuecomment-6886894389) records clean tested source `60a0e7848d16a0c5fe94d038e489e919cebfa2fe`,24/24 passed with zero skips/retries/flaky cases. Each journey executes once in every original viewport/theme project; playback narrow cases remain320px. All132 playback PNG/ARIA pairs and44 prerequisite pairs are present, with traces and required oracles. Documentation reconciliation after this campaign does not change the tested SHA or promote it to a new-head run.
 
@@ -36,7 +38,7 @@ python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
 
 The browser file is an explicitly isolated presentation fixture; it is not runtime evidence. Its dedicated owned-server configuration is `tests/browser/playwright.activity-playback.config.ts` (set `PLAYBACK_FIXTURE_PORT` to a free owned port and `PLAYBACK_FIXTURE_REPORT` to a new JSON output path). Reconcile whole-suite execution with discovery. Run the owner facet's complete API/provider suites and applicable architecture/map/public-contract gates; exact commands follow the reviewed owner implementation paths. Check `uptime` before interpreting timing-shaped failures. Do not bypass build-slot wrappers.
 
-## Composed evidence matrix
+## Playback/prerequisite subset (36 cases of the complete54)
 
 The four playback journeys execute in all six standard projects: desktop-light/dark, original narrow-light/dark at320px and narrow-390-light/dark at their native390px. This requires24 playback executions. The two affected Timeline/history prerequisite journeys add12 executions:36 total,264 required PNG/ARIA pairs,30 oracles and36 traces. No skips/retries/expected failures qualify. The320px override changes only the original two narrow variants; inherited and new390px projects are retained.
 
@@ -64,7 +66,7 @@ python3 tools/ux-acceptance/run.py --output /tmp/studio-activity-playback-<uniqu
 Retain exact head/source/dirty metadata, identities/coverage/request manifest, named PNG/ARIA states and traces. Include normal, pending, failure/retry, gap/denied/unavailable and context-loss captures; all intended project/journeys must run. Download the current CI artifact and have an independent reviewer open the affected states and traces. A green machine report, a local absolute path or an illustrative concept is not final UX approval. Preserve failed/not-run states and rerun the affected full journey after fixes.
 
 
-## Recorded prerequisite qualification
+## Historical prerequisite qualification
 
 These earlier supporting receipts predate the final local technical qualification in research R11. Read their pending statements as historical checkpoint status. R11 and the final paragraph below establish the current local T003 handoff; formal shared publication and full playback acceptance remain open. Exact commands, failure history, scope and local TRX hashes are in their receipts; these tables are not downloadable visual acceptance.
 
