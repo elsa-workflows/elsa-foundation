@@ -83,6 +83,12 @@ PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives de
 
 The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
 
+### Dark appearance review
+
+The dark-mode review covered workflow and activity graph editors, creation and publication dialogs, the Test Run dialog, and every run inspector tab. The review checked the selected and focused controls, text and status contrast, keyboard access, and whether the primary and secondary actions fit the phone viewport. The run tabs used a newly published Write Line workflow. The Activity, Timeline, Issues and Details views are recorded in [the run inspector evidence](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/a0a0e2d0d589881cb4fc57e03013228a60a735dd/Studio/qa-evidence/5337-3f519736.zip).
+
+The [publication review](https://github.com/elsa-workflows/elsa-foundation/pull/5316), [creation and Test Run dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5337), [status contrast checks](https://github.com/elsa-workflows/elsa-foundation/pull/5334), [feature switches and confirmation dialog](https://github.com/elsa-workflows/elsa-foundation/pull/5338), and [secret and connection dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5327) carry the module-level evidence and fixture details.
+
 ### Narrow viewport review
 
 The audit reviewed the following composed Studio states at 360–390px widths. The Executable Inspector maximize defect reproduced during the initial run was repaired and retested in #5305.
@@ -845,7 +851,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
   workflows, JavaScript and Liquid expression editors. (PR #5326)
 - [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
   [Coverage gaps](#coverage-gaps).
-- [ ] **A3** (#5263) Review dark mode, including dialogs.
+- [x] **A3** (#5263) Review dark mode, including dialogs. (PR #5350)
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
