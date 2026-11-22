@@ -38,7 +38,8 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// Threads are reused across evaluations and retire after <see cref="IdleTimeout"/> idle; an evaluation started from
 /// inside another (on an evaluation thread) runs inline and shares the outer evaluation's budget. Recursion inside
 /// Jint's native code over deeply nested data (a very deep array or Proxy chain) runs no statement and no call, and is
-/// not bounded here.
+/// not bounded here. Native dispatch that does not record a Jint call (bound functions and Proxy forwarding) can
+/// likewise bypass the pre-parameter check; it is outside this adapter's expression-level safety guarantee.
 /// </para>
 /// <para>
 /// Host settings may only tighten the 512 KiB budget or increase the 16 MiB stack, up to 64 MiB. These bounds preserve

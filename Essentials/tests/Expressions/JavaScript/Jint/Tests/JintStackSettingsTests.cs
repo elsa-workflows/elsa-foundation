@@ -12,6 +12,25 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 public sealed class JintStackSettingsTests
 {
     [Theory]
+    [InlineData("script")]
+    [InlineData("binding")]
+    public void Each_production_evaluator_uses_its_hosts_stack_settings(string surface)
+    {
+        foreach (var (stack, budget) in new[] { (24 * 1024 * 1024, 128 * 1024), (40 * 1024 * 1024, 256 * 1024) })
+        {
+            var services = new ServiceCollection();
+            new JintFeature { EvaluationThreadStackBytes = stack, EvaluationStackBudgetBytes = budget }.ConfigureServices(services);
+            services.AddSingleton(new JavaScriptHostFunctionDeclaration("acme.stack", _ =>
+                JsonSerializer.SerializeToElement(new { stack = JintEvaluationThreads.CurrentStackSize, budget = JintEvaluationThreads.CurrentBudget })));
+            using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            var result = JintCrashProbe.Evaluate(scope, surface, "return acme.stack();");
+            Assert.Equal(stack, result.GetProperty("stack").GetInt32());
+            Assert.Equal(budget, result.GetProperty("budget").GetInt64());
+        }
+    }
+
+    [Theory]
     [InlineData(16 * 1024 * 1024 - 1, 512 * 1024)]
     [InlineData(64 * 1024 * 1024 + 1, 512 * 1024)]
     [InlineData(16 * 1024 * 1024, 64 * 1024 - 1)]

@@ -22,11 +22,9 @@ namespace Elsa.Expressions.JavaScript.Jint;
 public class JintFeature : IShellFeature
 {
     /// <summary>Requested evaluation-thread stack size, 16–64 MiB. Default 16 MiB.</summary>
-    [ManifestSetting(DisplayName = "Evaluation thread stack bytes", Description = "Thread stack size in bytes, from 16 to 64 MiB. Does not increase the execution stack budget.", Category = "Security", Advanced = true)]
     public int EvaluationThreadStackBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>Evaluation stack budget, 64–512 KiB. Default 512 KiB.</summary>
-    [ManifestSetting(DisplayName = "Evaluation stack budget bytes", Description = "Stack budget in bytes, from 64 to 512 KiB. A smaller budget aborts deep evaluations earlier; the safety ceiling cannot be increased.", Category = "Security", Advanced = true)]
     public long EvaluationStackBudgetBytes { get; set; } = 512 * 1024;
 
     /// <summary>

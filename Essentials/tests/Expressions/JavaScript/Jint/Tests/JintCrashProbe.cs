@@ -54,7 +54,7 @@ internal static class JintCrashProbe
         }
     }
 
-    private static JsonElement Evaluate(IServiceScope scope, string surface, string source)
+    internal static JsonElement Evaluate(IServiceScope scope, string surface, string source)
     {
         if (surface == "script")
             return scope.ScriptEvaluator().EvaluateAsync(new JavaScriptScriptEvaluationRequest(
