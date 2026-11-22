@@ -109,7 +109,10 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await openOwner(id, eventId, "Bookmarks");
     await page.getByRole("region", { name: "Activity bookmark history", exact: true }).getByRole("button", { name: "View lifecycle →", exact: true }).click();
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
-    await expect(lifecycle).toBeVisible(); return lifecycle;
+    await expect(lifecycle).toBeVisible();
+    await expect(lifecycle.getByText("Loading exact bookmark lifecycle…", { exact: true })).toHaveCount(0);
+    await expect(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeVisible();
+    return lifecycle;
   };
   // Each project starts at wall time before admitting any inspected run. The prior project
   // may have advanced its disposable clock; never restart a live approval backwards in time.
@@ -127,7 +130,10 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   expectQualifiedTimelineCoverage(before.history.coverage);
   expect(before.bookmarks.items).toHaveLength(1);
   const active = before.bookmarks.items[0]; expect(active.status).toBe("Active");
-  await openLifecycle(approval.id, active.createdHistoryEventId!);
+  const waitingLifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
+  await expect(waitingLifecycle.locator('[data-status="Active"]')).toHaveCount(1);
+  await expect(waitingLifecycle).toContainText("Eligible");
+  await expect(waitingLifecycle.getByRole("button", { name: "Inspect creation event →", exact: true })).toBeInViewport({ ratio: 1 });
   await capture(page, info, "diagnostics-approval-before-restart");
   await restart();
   const restored = { details: await details(approval.id), history: await history(approval.id), bookmarks: await bookmarks(approval.id),
@@ -193,6 +199,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
   await timeline.getByText("Filter events", { exact: true }).click();
   await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+  await timeline.getByText("Filter events", { exact: true }).click();
   await expect(timeline).toHaveAttribute("aria-busy", "false");
   const rows = timeline.getByRole("list", { name: "Run history events", exact: true }).locator("[data-history-event-id]");
   await expect(rows.first()).toBeVisible();
@@ -222,8 +229,14 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     staleIds = await rendererIds(); expect(staleIds).toEqual(beforeStaleIds);
     await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
     await expect(selectedDetails.getByRole("heading").first()).toHaveText(selectedHeading!);
-    await timeline.getByText("Showing last confirmed history", { exact: true }).scrollIntoViewIfNeeded();
-    await expect(timeline.getByRole("button", { name: "Retry history", exact: true })).toBeInViewport();
+    const retry = timeline.getByRole("button", { name: "Retry history", exact: true });
+    await retry.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+    await expect(retry).toBeInViewport({ ratio: 1 });
+    await expect.poll(() => retry.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+      return hit !== null && element.contains(hit);
+    })).toBe(true);
     await capture(page, info, "diagnostics-history-stale");
   } finally { await page.unroute(matcher); }
   const response = page.waitForResponse(message => matcher(new URL(message.url())) && message.ok());
