@@ -2,7 +2,7 @@
 
 **Input**: [spec](spec.md), [plan](plan.md), [research](research.md), [data model](data-model.md), [contract](contracts/workflow-state.md), [validation guide](quickstart.md).
 
-All tasks below are implementation work and remain unchecked until executed. Continue the existing isolated branch and same PR targeting the initiative under the recorded coordinator agreement and scoped delivery sequence. No ADR decisions or graph support are authorized by this task list. Tests develop alongside the behavior slices under the plan's risk-based cadence; the list is dependency ordered, not a new TDD mandate.
+All 40 tasks below have been executed. Local validation and independent source/visual review converged on the existing isolated branch and [PR #5415](https://github.com/elsa-workflows/elsa-foundation/pull/5415), which retains the raw receipts and exact reviewed/tested heads. Formal initiative integration, review and coordinator merge remain separate; CI is deferred. No ADR decisions or broader graph support are authorized by this task list. Tests followed the plan's risk-based cadence.
 
 ## Phase 1 — Setup
 
@@ -78,15 +78,15 @@ All tasks below are implementation work and remain unchecked until executed. Con
 - [X] T032 [US5] Show known/conservative node effects in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx` using existing effect UI primitives and pinned descriptor facts; include native and imported bodies.
 - [X] T033 [US5] Present committed outputs/current identity and value-free effect attribution in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowInstanceInspection.ts`, `WorkflowInstanceTimeline.tsx` and `workflow-editor/WorkflowInstanceInspectionFacts.tsx`, preserving failure/cancel/protected/empty states.
 - [X] T034 [US5] Add interaction/regression cases in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstanceInspection.test.tsx` and affected Activity Properties tests; run affected whole frontend suites.
-- [ ] T035 [US5] Extend owned composed-host journeys in `Studio/tests/acceptance` and the journey/artifact inventory in `tools/ux-acceptance/run.py` for native/imported authoring and success/fault/cancel/protected inspection, narrow/themes/keyboard; retain exact-head artifacts and an independent inspected UX verdict on the implementation PR.
+- [X] T035 [US5] Extend owned composed-host journeys in `Studio/tests/acceptance` and the journey/artifact inventory in `tools/ux-acceptance/run.py` for native/imported authoring and success/fault/cancel/protected inspection, narrow/themes/keyboard; retain exact-head artifacts and an independent inspected UX verdict on the implementation PR.
 
 ## Phase 8 — Cross-cutting delivery
 
-- [ ] T036 Run the affected project builds/tests and verified negative controls in `specs/1234-step-workflow-state/quickstart.md`, recording exact source SHA, shared-machine load, commands/counts and all platform/provider failures or not-run states on the implementation PR.
+- [X] T036 Run the affected project builds/tests and verified negative controls in `specs/1234-step-workflow-state/quickstart.md`, recording exact source SHA, shared-machine load, commands/counts and all platform/provider failures or not-run states on the implementation PR.
 - [X] T037 Update touched public surfaces and domain extension catalogs (`Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`, relevant Expressions/Runtime catalogs and root `EXTENSION_POINTS.md` only if its links change); document registrations and avoid unnecessary new public implementations.
-- [ ] T038 Review the full implementation diff, issue/PR discussions and composed UX independently for correctness, standards and acceptance; verify every finding against source/reproduction, fix surviving findings in new commits, and repeat until a fresh independent round returns no verified findings. Record exact heads and false-positive/out-of-scope evidence on the implementation PR.
-- [ ] T039 Set `specs/1234-step-workflow-state/spec.md` to Implemented in the completing implementation PR only after the approved scope/local/UX acceptance is actually delivered; remove terminal checklist residue under the lifecycle rule and retain design/validation artifacts.
-- [ ] T040 Post final scope/validation/review receipts on the implementation PR and a factual pointer on the initiative, explicitly linking the remaining graph work and stating CI deferred plus outstanding formal approval/merge gates; do not claim the initiative pre-merge gate or main landing.
+- [X] T038 Review the full implementation diff, issue/PR discussions and composed UX independently for correctness, standards and acceptance; verify every finding against source/reproduction, fix surviving findings in new commits, and repeat until a fresh independent round returns no verified findings. Record exact heads and false-positive/out-of-scope evidence on the implementation PR.
+- [X] T039 Set `specs/1234-step-workflow-state/spec.md` to Implemented in the completing implementation PR only after the approved scope/local/UX acceptance is actually delivered; remove terminal checklist residue under the lifecycle rule and retain design/validation artifacts.
+- [X] T040 Post final scope/validation/review receipts on the implementation PR and a factual pointer on the initiative, explicitly linking the remaining graph work and stating CI deferred plus outstanding formal approval/merge gates; do not claim the initiative pre-merge gate or main landing.
 
 ## Dependencies and execution strategy
 

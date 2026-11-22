@@ -44,7 +44,6 @@ Pre-research check: no identified violation. Post-design recheck: same; no archi
 specs/1234-step-workflow-state/
   spec.md, plan.md, research.md, data-model.md, quickstart.md, tasks.md
   contracts/workflow-state.md
-  checklists/requirements.md
 Essentials/src/Activities/Runtime/Core/Contracts/IStepWorkflowState.cs (new)
 Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/StepState/ (new internal preparation)
 Essentials/src/Activities/Scripting/Activities/RunJavaScript.cs

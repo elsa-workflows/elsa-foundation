@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-22
 
-**Status**: Approved
+**Status**: Implemented — completing [PR #5415](https://github.com/elsa-workflows/elsa-foundation/pull/5415); effective upon merge.
 
 **Input**: Complete ADR 0090's workflow-output, correlation-ID and instance-name capability for native activity bodies and imported Elsa 3 scripts, reusing the step transaction and keeping input expressions pure.
 
