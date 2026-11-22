@@ -139,6 +139,200 @@ internal static class FoundationEventSendChecks
         await CheckAlreadyDeliveredPage(check);
     }
 
+    internal static async Task KeepingSubscription(Action<bool, string> check)
+    {
+        const long initial = 1_701_510_000_000;
+        var now = initial;
+        const string key = "keeping";
+        var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase)
+        {
+            IngressDeduplicationWindow = TimeSpan.FromMilliseconds(10)
+        };
+        var scope = new Contract.BoundScope("keeping-scope");
+        var actor = new Probe();
+        var edge = new InMemoryIngress(store, new Requests("keeping-wait"), "keeping-wait");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var worker = Owner("keeping-wait");
+        await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, key)), "actor", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(first);
+
+        await Publish(key, "owed", 100);
+        await Publish("uncovered", "later-horizon", 110);
+        await Pump(first);
+        now++;
+        await Turn("register", "wait-keep");
+        var registration = store.Subscriptions.SingleOrDefault();
+        var ticket = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null);
+        var opened = registration is { FoundationKeepsEvents: true, FoundationRegisteredAt: initial + 1, FoundationIncarnation: not null } &&
+            ticket is { Done: false, Message: { HasIssuedTicket: true, ParkCatchUp.Entitlement: initial + 1 } };
+        check(opened, "a keeping subscription stamps its first registration and commits one entitled meet ticket with it");
+        if (!opened) return;
+
+        now++;
+        await Turn("duplicate", "wait-keep");
+        check(store.Subscriptions.Single() == registration &&
+            store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) == ticket,
+            "same-turn and later equivalent registrations keep one incarnation, its stamp and its meet ticket");
+
+        now = initial + 111;
+        await store.SweepAsync();
+        check(store.FoundationEvents.Values.Select(row => row.Id).SequenceEqual(["owed"]),
+            "coverage holds the owed event while the sweep removes an uncovered event and advances the horizon");
+        await first.DisposeAsync();
+        worker = Owner("keeping-successor");
+        await using var successor = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(successor);
+        check(Observed().SequenceEqual(["owed"]) && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the successor finishes the committed catch-up and delivers the expired owed event once");
+
+        await Turn("remove", "wait-remove");
+        check(store.Subscriptions.Count == 0, "unsubscribing removes the covered incarnation");
+        now = initial + 50;
+        await successor.DisposeAsync();
+        worker = Owner("keeping-backstep");
+        await using var latest = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Publish(key, "below-horizon", 30);
+        await Pump(latest);
+        await Turn("register-again", "wait-keep");
+        check(store.Subscriptions.SingleOrDefault() is { FoundationRegisteredAt: initial + 50 } replacement &&
+            replacement.FoundationIncarnation != registration!.FoundationIncarnation &&
+            store.FoundationEvents.Values.Any(row => row.Id == "below-horizon" && row.KeepUntil == initial + 80) &&
+            store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null) is
+                { Message.ParkCatchUp.Entitlement: initial + 111 },
+            "a new incarnation after clock rollback cannot claim events at or below the recorded horizon");
+        await Pump(latest);
+        check(Observed().SequenceEqual(["owed"]) && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the later incarnation completes without replaying the old publication or claiming an event behind the horizon");
+
+        await Turn("repeat-at-cap", "keep-and-send-at-cap");
+        check(Checkpoint().Status == InstanceStatus.Running && store.Subscriptions.Count == 1 &&
+            store.Messages.Values.Count(row => row.Message.Kind == "batch-at-cap") == FoundationMetadataLimits.MaxTurnSends &&
+            store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the existing keeping wait permits a full send turn because it creates no meet ticket");
+        await Turn("new-at-cap", "keep-and-send-at-cap", "new");
+        check(Checkpoint().Status == InstanceStatus.Faulted && store.Subscriptions.Count == 0 &&
+            store.Messages.Values.Count(row => row.Message.Kind == "batch-at-cap") == FoundationMetadataLimits.MaxTurnSends &&
+            store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the first keeping registration's meet ticket counts toward the cap and aborts the over-limit batch whole");
+
+        async Task Publish(string topic, string id, long keep) =>
+            _ = await edge.SendAsync(scope, new Contract.Target.Event(topic), id, "ignored", id,
+                new(KeepFor: TimeSpan.FromMilliseconds(keep)));
+
+        InstanceRow Checkpoint() => store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!.Row;
+        List<string> Observed() => Json.Read<List<string>>(Checkpoint().State);
+
+        async Task Turn(string id, string kind, string? payload = null)
+        {
+            await edge.SendAsync(scope, target, id, kind, payload);
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id);
+            await worker.FlushAsync();
+        }
+    }
+
+    internal static async Task KeepingSubscriptionBatch(Action<bool, string> check)
+    {
+        const long now = 1_701_510_100_000;
+        var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
+        var scope = new Contract.BoundScope("keeping-batch");
+        var probe = new Probe();
+        var edge = new InMemoryIngress(store, new Requests("keeping-batch"), "keeping-batch");
+        var worker = new Worker("keeping-batch", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "batch")), "actor", Contract.Kinds.Start);
+        await Pump(owner);
+        var previous = store.ReadFoundationActor(scope.Tenant, started.Actor!.Value.Id).Actor!.Row;
+        var fence = worker.Fences.Single();
+        var rowless = new TurnCommit(previous.Id, null, null, [], [], [], [], [], "[]");
+        var wait = new SubscriptionRow(scope.Tenant + "_key", previous.Id, "wait", Creation: previous.Creation)
+            { FoundationTenant = scope.Tenant, FoundationKeepsEvents = true };
+        var next = previous with { Revision = previous.Revision + 1 };
+        var registering = new TurnCommit(previous.Id, next, previous.Revision, [], [], [], [wait], [], "[]");
+        try
+        {
+            var answer = await store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [rowless, registering], [], []));
+            check(answer.Landed && store.Partitions[0].Position == fence.Position + 2 && store.Instances[previous.Id] == next &&
+                store.Subscriptions.Count == 1 && store.Messages.Values.Count(row => row.Message.ParkCatchUp is not null) == 1,
+                "only the checkpoint turn writes the meet plan when a rowless sibling shares its instance");
+        }
+        catch (ArgumentException)
+        {
+            check(false, "only the checkpoint turn writes the meet plan when a rowless sibling shares its instance");
+            return;
+        }
+
+        var partition = store.Partitions[0];
+        foreach (var all in new[] { false, true })
+        {
+            var original = store.Subscriptions.Single();
+            var removal = all ? rowless with { Unsubscribe = true } : rowless with { Unsubscribed = [wait] };
+            var saved = store.Instances[previous.Id];
+            var write = registering with { Expected = saved.Revision, Row = saved with { Revision = saved.Revision + 1 } };
+            var answer = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false, [removal, write], [], []));
+            check(answer.Landed && store.Subscriptions.ToArray() is [var replacement] &&
+                replacement.FoundationIncarnation != original.FoundationIncarnation && replacement.Wait == original.Wait &&
+                store.Messages.Values.Any(message => message.Message.Id.EndsWith($"#{saved.Revision + 1}.keep", StringComparison.Ordinal)),
+                all ? "a checkpoint registers a fresh wait after an earlier batch turn clears all waits" :
+                    "a checkpoint registers a fresh wait after an earlier batch turn removes the exact wait");
+            if (store.Subscriptions.Count != 1) return;
+        }
+
+        var typed = wait with { Key = scope.Tenant + "_mixed" };
+        var raw = typed with { FoundationTenant = null, FoundationKeepsEvents = false, Creation = 0 };
+        var addRaw = rowless with { Subscribed = [raw] };
+        var addTyped = Add(typed);
+        await RefusesWithoutWrites([addRaw, addTyped], "the batch refuses an exact raw key that precedes the typed keeping wait");
+        await RefusesWithoutWrites([addTyped, addRaw], "the batch refuses an exact raw key that follows the typed keeping wait");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [raw, typed] }],
+            "a single checkpoint refuses raw then typed registration at one exact slot");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [typed, raw] }],
+            "a single checkpoint refuses typed then raw registration at one exact slot");
+
+        var alias = typed with { Key = scope.Tenant + "_MIXED" };
+        var combined = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false, [addRaw, Add(alias)], [], []));
+        check(combined.Landed && store.Subscriptions.Contains(raw) && store.Subscriptions.Contains(alias),
+            "different physical spellings keep the raw and scoped registrations separate");
+        var removeAlias = rowless with { Unsubscribed = [alias] };
+        await RefusesWithoutWrites([removeAlias, Add(typed)], "an earlier alias removal cannot expose a raw slot to a scoped insert");
+
+        var transferRaw = raw with { Key = scope.Tenant + "_transfer" };
+        var transferTyped = typed with { Key = transferRaw.Key };
+        await store.SubscribeAsync(transferRaw);
+        var enter = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferRaw] }, Add(transferTyped)], [], []));
+        check(enter.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) is
+            { FoundationTenant: not null, FoundationIncarnation: not null }, "a preceding raw removal frees the exact slot for the scoped wait");
+        var leave = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferTyped] }, rowless with { Subscribed = [transferRaw] }], [], []));
+        check(leave.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) == transferRaw,
+            "a preceding scoped removal frees the exact slot for a raw wait");
+
+        TurnCommit Add(SubscriptionRow subscription)
+        {
+            var saved = store.Instances[previous.Id];
+            return registering with { Expected = saved.Revision, Row = saved with { Revision = saved.Revision + 1 }, Subscribed = [subscription] };
+        }
+
+        async Task RefusesWithoutWrites(IReadOnlyList<TurnCommit> turns, string name)
+        {
+            var saved = store.Instances[previous.Id];
+            var position = partition.Position;
+            var waits = store.Subscriptions.ToArray();
+            var tickets = store.Messages.Count;
+            var refused = false;
+            try { await store.CommitAsync(new(0, fence.Epoch, position, Defaults.Lease, false, turns, [], [])); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+            check(refused && store.Instances[previous.Id] == saved && partition.Position == position &&
+                store.Subscriptions.Count == waits.Length && waits.All(wait => store.Subscriptions.Contains(wait)) &&
+                store.Messages.Count == tickets, name);
+        }
+    }
+
     private static async Task CheckMatchOrder(Action<bool, string> check)
     {
         var now = 1_702_200_020_000L;
@@ -448,6 +642,15 @@ internal static class FoundationEventSendChecks
                         break;
                     case { Kind: "wait-remove" }:
                         turn.Unsubscribe(turn.Header.TypeData, "single");
+                        break;
+                    case { Kind: "wait-keep" }:
+                        turn.Subscribe(turn.Header.TypeData, "single", keep: true);
+                        turn.Subscribe(turn.Header.TypeData.ToUpperInvariant(), "SINGLE", keep: true);
+                        break;
+                    case { Kind: "keep-and-send-at-cap" }:
+                        turn.Subscribe(turn.Header.TypeData, message.Payload ?? "single", keep: true);
+                        for (var index = 0; index < FoundationMetadataLimits.MaxTurnSends; index++)
+                            turn.Send(turn.Header.Ref, "batch-at-cap", dueAt: turn.Now + 60_000);
                         break;
                     case { Kind: "wait-end" }:
                         turn.End(Contract.ActorStatus.Finished);

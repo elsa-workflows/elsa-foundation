@@ -9,7 +9,6 @@ namespace Kernel.Foundation.InMemory;
 internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
     (Durable.Requests Requests, string Node)? local = null) : Durable.IActorType
 {
-    private const int MaxTurnSends = 10_000;
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
     private const int MaxFaultTextBytes = 4_096;
@@ -239,8 +238,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var outcome = turn.Seal();
-        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > MaxTurnSends)
-            throw new InvalidOperationException($"A turn may send at most {MaxTurnSends:N0} messages.");
+        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > Durable.FoundationMetadataLimits.MaxTurnSends)
+            throw new InvalidOperationException($"A turn may send at most {Durable.FoundationMetadataLimits.MaxTurnSends:N0} messages.");
         if (outcome.Row is { } nextRow)
         {
             var nextHeader = header with
