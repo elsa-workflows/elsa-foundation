@@ -178,7 +178,21 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1); await capture(page, info, "diagnostics-single-consumption");
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline`); await waitCapturedPlaybackReady(page);
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
+  const rows = timeline.locator("[data-history-event-id]");
+  await expect(rows.first()).toBeVisible();
+  const rendererIds = () => rows.evaluateAll(elements => elements.map(element => element.getAttribute("data-history-event-id")));
+  const beforeStaleIds = await rendererIds();
+  expect(beforeStaleIds.length).toBeGreaterThan(1);
+  expect(beforeStaleIds.every(id => duplicateHistory.items.some(event => event.historyEventId === id))).toBe(true);
+  const selectedEventId = beforeStaleIds.at(-1)!;
+  const selectedRow = timeline.locator(`[data-history-event-id="${selectedEventId}"]`);
+  await selectedRow.press("Enter");
+  await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
+  const selectedDetails = page.getByRole("region", { name: "History event details", exact: true });
+  await expect(selectedDetails).toBeVisible();
+  const selectedHeading = await selectedDetails.getByRole("heading").first().textContent();
   const failedRequests: string[] = [], recoveredRequests: string[] = [];
+  let staleIds: (string | null)[] = [];
   const matcher = (url: URL) => url.pathname === `${path(duplicate.id)}/history`;
   await page.route(matcher, async route => { failedRequests.push(route.request().url()); await route.abort("failed"); });
   try {
@@ -186,6 +200,11 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await expect(timeline.getByText("Showing last confirmed history", { exact: true })).toBeVisible();
     await expect(timeline.getByRole("list", { name: "Run history events", exact: true })).toBeVisible();
     await expect(timeline.getByRole("button", { name: "Retry history", exact: true })).toBeVisible();
+    staleIds = await rendererIds(); expect(staleIds).toEqual(beforeStaleIds);
+    await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
+    await expect(selectedDetails.getByRole("heading").first()).toHaveText(selectedHeading!);
+    await timeline.getByText("Showing last confirmed history", { exact: true }).scrollIntoViewIfNeeded();
+    await expect(timeline.getByRole("button", { name: "Retry history", exact: true })).toBeInViewport();
     await capture(page, info, "diagnostics-history-stale");
   } finally { await page.unroute(matcher); }
   const response = page.waitForResponse(message => matcher(new URL(message.url())) && message.ok());
@@ -193,10 +212,13 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   recoveredRequests.push((await response).url()); await expect(timeline.getByText("Live history", { exact: true })).toBeVisible();
   await expect(timeline.getByRole("button", { name: "Retry history", exact: true })).toHaveCount(0);
   expect((await history(duplicate.id)).items).toEqual(duplicateHistory.items);
+  const recoveredIds = await rendererIds(); expect(recoveredIds).toEqual(beforeStaleIds);
+  await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
+  await expect(selectedDetails.getByRole("heading").first()).toHaveText(selectedHeading!);
   await capture(page, info, "diagnostics-history-recovered");
   const oracle = info.outputPath("timeline-diagnostics-oracle.json");
   writeFileSync(oracle, JSON.stringify({ sourceSha: process.env.UX_SOURCE_SHA, approval, taskId, before, restored, completed, retained, restarts,
-    expiry, expiryBefore, advanced, expired, duplicate, duplicateBefore, dispatch, duplicateHistory, duplicateBookmarks, failedRequests, recoveredRequests,
+    expiry, expiryBefore, advanced, expired, duplicate, duplicateBefore, dispatch, duplicateHistory, duplicateBookmarks, failedRequests, recoveredRequests, renderer: { beforeStaleIds, staleIds, recoveredIds, selectedEventId, selectedHeading },
     boundaries: { expiry: "Deadline authored before FIRST native creation; actual source clock advances only after real quiescence", duplicate: "Actual native dispatcher/EF reads/actor idempotency; nonterminal second wait", stale: "Abort genuine renderer reads; no substituted response body", restart: "Main-thread-owned distinct backend processes reopen the same owned store" } }, null, 2));
   await info.attach("timeline-diagnostics-oracle.json", { path: oracle, contentType: "application/json" });
   await cancel(duplicate.id);
