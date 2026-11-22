@@ -59,7 +59,7 @@ describe("native authoring proposal binding", () => {
     const snapshot = [...controller.snapshots.values()][0];
     const pending = controller.useProposal(snapshot.generationId, { ...snapshot, definition: { ...snapshot.definition, query: { ...snapshot.definition.query, groupBy: ["category"] } } });
     await waitUntil(() => typeof finish === "function");
-    const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    const name = ([...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     inputValue(name, "User changed the draft");
     finish({ isValid: true, problems: [] });
     expect((await pending).outcome).toBe("refused");
@@ -83,7 +83,7 @@ describe("private draft recovery", () => {
     const manager = { getSession: () => session, initialize: async () => session, getCapabilities: async () => ({ ownershipMode: "foundation-owned" as const, providers: [] }), login: async () => undefined, logout: async () => undefined, handleCallback: async () => session, getAccessToken: async () => null, refresh: async () => session };
     const { container } = render(<AuthProvider manager={manager}><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={navigate} /></AuthProvider>);
     await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
-    const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    const name = ([...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     inputValue(name, "My unsaved refinement");
     selectResourceAction(container, "Question actions", "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
@@ -151,7 +151,7 @@ describe("declared editing bounds and chart semantics", () => {
     button(filters, "Add condition group");
     expect(filters.querySelectorAll("button").length).toBeGreaterThan(0);
     expect([...filters.querySelectorAll("button")].filter(item => item.textContent === "Add condition group")).toHaveLength(1);
-    const operator = [...filters.querySelectorAll("label")].find(label => label.textContent?.startsWith("Operator"))!.querySelector("select")!;
+    const operator = ([...filters.querySelectorAll("label")].find(label => label.textContent?.startsWith("Operator"))!.control as HTMLSelectElement);
     flushSync(() => { operator.value = "isNull"; operator.dispatchEvent(new Event("change", { bubbles: true })); });
     expect(latest.query.filters?.all?.[0].all?.[0]).toEqual({ field: "category", operator: "isNull", value: undefined, values: undefined });
   });

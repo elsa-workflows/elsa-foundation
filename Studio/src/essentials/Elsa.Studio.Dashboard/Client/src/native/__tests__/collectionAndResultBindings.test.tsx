@@ -1,3 +1,4 @@
+import { selectResourceAction } from "../../__tests__/testSupport";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -82,14 +83,14 @@ describe("dashboard collection deletion", () => {
   it("shows Delete only when the resource capability allows it", async () => {
     const { view } = dashboardCollection([dashboard(), dashboard("d2", false, "Read-only dashboard")]);
     await waitUntil(() => view.textContent?.includes("Read-only dashboard") === true);
-    expect(view.querySelector('button[aria-label="Delete My Cockpit"]')).not.toBeNull();
-    expect(view.querySelector('button[aria-label="Delete Read-only dashboard"]')).toBeNull();
+    expect(view.querySelector('button[aria-label="Actions for My Cockpit"]')).not.toBeNull();
+    expect(view.querySelector('button[aria-label="Actions for Read-only dashboard"]')).toBeNull();
   });
 
   it("leaves the collection unchanged when deletion is canceled", async () => {
     const { view, module, list } = dashboardCollection([dashboard()]);
     await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
-    click(view, "Delete"); await waitUntil(() => module.dialogs.confirm.mock.calls.length === 1);
+    selectResourceAction(view, "Actions for My Cockpit", "Delete"); await waitUntil(() => module.dialogs.confirm.mock.calls.length === 1);
     expect(module.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Delete dashboard", message: expect.stringContaining("My Cockpit"), tone: "danger" }));
     expect(module.backend.http.deleteJson).not.toHaveBeenCalled();
     expect(list).toHaveBeenCalledOnce(); expect(view.textContent).toContain("My Cockpit");
@@ -100,7 +101,7 @@ describe("dashboard collection deletion", () => {
     const deleteJson = vi.spyOn(module.backend.http, "deleteJson").mockImplementation(async () => { results.items = []; return {}; });
     module.dialogs.confirm.mockResolvedValue(true);
     await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
-    click(view, "Delete"); await waitUntil(() => list.mock.calls.length === 2);
+    selectResourceAction(view, "Actions for My Cockpit", "Delete"); await waitUntil(() => list.mock.calls.length === 2);
     expect(deleteJson).toHaveBeenCalledWith(expect.stringContaining("/dashboards/d1"), expect.objectContaining({ headers: { "If-Match": '"dashboard-r7"' } }));
     expect(list.mock.calls.at(-1)?.slice(0, 3)).toEqual(["dashboard", "mine", ""]);
     expect(view.textContent).not.toContain("My Cockpit"); expect(navigate).not.toHaveBeenCalled();
@@ -112,7 +113,7 @@ describe("dashboard collection deletion", () => {
     vi.spyOn(module.backend.http, "deleteJson").mockRejectedValue(new Error("Delete was rejected"));
     module.dialogs.confirm.mockResolvedValue(true);
     await waitUntil(() => view.textContent?.includes("My Cockpit") === true);
-    click(view, "Delete"); await waitUntil(() => view.querySelector('[role="alert"]')?.textContent?.includes("Delete was rejected") === true);
+    selectResourceAction(view, "Actions for My Cockpit", "Delete"); await waitUntil(() => view.querySelector('[role="alert"]')?.textContent?.includes("Delete was rejected") === true);
     expect(view.textContent).toContain("My Cockpit"); expect(list).toHaveBeenCalledOnce();
   });
 });
