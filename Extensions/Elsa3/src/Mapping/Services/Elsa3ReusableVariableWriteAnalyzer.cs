@@ -53,13 +53,23 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (second is not null) joined.Join(second);
         return joined;
     }
-    private readonly record struct Flow(bool Normal, Value Returned, State? Returns = null, State? Breaks = null, State? Continues = null, State? Throws = null)
+    private static ImmutableDictionary<string, State>? JoinLabels(ImmutableDictionary<string, State>? first, ImmutableDictionary<string, State>? second)
+    {
+        if (second is null) return first;
+        var joined = first ?? ImmutableDictionary<string, State>.Empty;
+        foreach (var (label, state) in second) joined = joined.SetItem(label, Join(joined.GetValueOrDefault(label), state)!);
+        return joined;
+    }
+    private readonly record struct Flow(bool Normal, Value Returned, State? Returns = null, State? Breaks = null, State? Continues = null, State? Throws = null,
+        ImmutableDictionary<string, State>? LabeledBreaks = null, ImmutableDictionary<string, State>? LabeledContinues = null)
     {
         public static readonly Flow Next = new(true, Value.Local);
         public Flow Union(Flow other) => new(Normal || other.Normal, Returned.Union(other.Returned),
-            Join(Returns, other.Returns), Join(Breaks, other.Breaks), Join(Continues, other.Continues), Join(Throws, other.Throws));
+            Join(Returns, other.Returns), Join(Breaks, other.Breaks), Join(Continues, other.Continues), Join(Throws, other.Throws),
+            JoinLabels(LabeledBreaks, other.LabeledBreaks), JoinLabels(LabeledContinues, other.LabeledContinues));
     }
     private sealed record Closure(HashSet<string>[] Scopes, Dictionary<Binding, Value> Captured, Value This);
+    private sealed record ClassInfo(ClassBody Body, Value Super);
     private readonly List<HashSet<string>> _scopes = [];
     private readonly Dictionary<Node, Closure> _closures = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Node> _calls = new(ReferenceEqualityComparer.Instance);
@@ -67,6 +77,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private readonly List<Value> _receivers = [];
     private readonly Dictionary<(Node Object, string Member), Value> _getters = [];
     private readonly Dictionary<(Node Object, string Member), Value> _setters = [];
+    private readonly HashSet<Node> _allocated = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Node> _summaryObjects = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, Value> _intrinsics = new(StringComparer.Ordinal);
+    private readonly List<(string Name, Node Target)> _labels = [];
+    private readonly Dictionary<Node, ClassInfo> _classes = new(ReferenceEqualityComparer.Instance);
     private State _state = new();
     private bool _writes;
 
@@ -84,6 +99,19 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     }
     private Value Read(string name) => Resolve(name) is { } binding ? _state.Bindings.GetValueOrDefault(binding, Value.Local) : Value.Local;
     private bool Global(string name) => Resolve(name) is null;
+    private static bool NativeNamespace(string name) => name is "JSON" or "Math" or "Object" or "Reflect" or "Array" or "Number" or "String" or "Boolean" or "Date" or "Intl" or "Temporal" or "RegExp";
+    private Value Allocate(Node node)
+    {
+        // One allocation site can represent several live instances after another call or loop iteration.
+        // Its fields then need weak updates, so a later instance cannot erase an earlier instance's ownership.
+        if (!_allocated.Add(node)) _summaryObjects.Add(node);
+        return Value.Object(node);
+    }
+    private Value Intrinsic(Identifier name)
+    {
+        if (!_intrinsics.TryGetValue(name.Name, out var value)) _intrinsics[name.Name] = value = Value.Object(name);
+        return value;
+    }
 
     private Flow Execute(Node node)
     {
@@ -137,27 +165,43 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             case VariableDeclaration declaration:
                 foreach (var item in declaration.Declarations) Bind(item.Id, Evaluate(item.Init));
                 return Flow.Next;
+            case ClassDeclaration type:
+                ClassValue(type, type.Id, type.Body, type.SuperClass);
+                return Flow.Next;
             case ReturnStatement returned:
                 var returnedValue = Evaluate(returned.Argument);
                 return new Flow(false, returnedValue, Returns: _state.Copy());
             case ThrowStatement thrown: Evaluate(thrown.Argument); return new Flow(false, Value.Local, Throws: _state.Copy());
-            case BreakStatement: return new Flow(false, Value.Local, Breaks: _state.Copy());
-            case ContinueStatement: return new Flow(false, Value.Local, Continues: _state.Copy());
-            case LabeledStatement labeled: return Execute(labeled.Body);
+            case BreakStatement broken:
+                return broken.Label is { } breakLabel ? new Flow(false, Value.Local, LabeledBreaks: ImmutableDictionary<string, State>.Empty.Add(breakLabel.Name, _state.Copy()))
+                    : new Flow(false, Value.Local, Breaks: _state.Copy());
+            case ContinueStatement continued:
+                return continued.Label is { } continueLabel ? new Flow(false, Value.Local, LabeledContinues: ImmutableDictionary<string, State>.Empty.Add(continueLabel.Name, _state.Copy()))
+                    : new Flow(false, Value.Local, Continues: _state.Copy());
+            case LabeledStatement labeled:
+                var target = labeled.Body;
+                while (target is LabeledStatement innerLabel) target = innerLabel.Body;
+                _labels.Add((labeled.Label.Name, target));
+                var labeledFlow = Execute(labeled.Body);
+                _labels.RemoveAt(_labels.Count - 1);
+                var labeledExit = labeledFlow.LabeledBreaks?.GetValueOrDefault(labeled.Label.Name);
+                var labeledExits = Join(labeledFlow.Normal ? _state : null, labeledExit);
+                if (labeledExits is not null) _state = labeledExits;
+                return labeledFlow with { Normal = labeledExits is not null, LabeledBreaks = labeledFlow.LabeledBreaks?.Remove(labeled.Label.Name) };
             case IfStatement branch:
                 Evaluate(branch.Test);
                 return Branch(() => Execute(branch.Consequent), () => branch.Alternate is null ? Flow.Next : Execute(branch.Alternate));
             case ForStatement loop:
                 if (loop.Init is VariableDeclaration init) Execute(init); else Evaluate(loop.Init);
-                return Loop(() => Evaluate(loop.Test), () => Execute(loop.Body), () => Evaluate(loop.Update));
-            case WhileStatement loop: return Loop(() => Evaluate(loop.Test), () => Execute(loop.Body), () => Value.Local);
-            case DoWhileStatement loop: return Loop(() => Value.Local, () => Execute(loop.Body), () => Evaluate(loop.Test), atLeastOnce: true);
+                return Loop(loop, () => Evaluate(loop.Test), () => Execute(loop.Body), () => Evaluate(loop.Update));
+            case WhileStatement loop: return Loop(loop, () => Evaluate(loop.Test), () => Execute(loop.Body), () => Value.Local);
+            case DoWhileStatement loop: return Loop(loop, () => Value.Local, () => Execute(loop.Body), () => Evaluate(loop.Test), atLeastOnce: true);
             case ForOfStatement loop:
                 var values = Evaluate(loop.Right);
-                return Loop(() => Value.Local, () => { BindLoop(loop.Left, Member(values, "*")); return Execute(loop.Body); }, () => Value.Local);
+                return Loop(loop, () => Value.Local, () => { BindLoop(loop.Left, Member(values, "*")); return Execute(loop.Body); }, () => Value.Local);
             case ForInStatement loop:
                 Evaluate(loop.Right);
-                return Loop(() => Value.Local, () => { BindLoop(loop.Left, Value.Local); return Execute(loop.Body); }, () => Value.Local);
+                return Loop(loop, () => Value.Local, () => { BindLoop(loop.Left, Value.Local); return Execute(loop.Body); }, () => Value.Local);
             case SwitchStatement choice:
                 Evaluate(choice.Discriminant);
                 var entry = _state.Copy();
@@ -205,10 +249,12 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         var result = new Flow(false, Value.Local);
         State? normalExit = null;
         Run(normal, 0); Run(incoming.Returns, 1); Run(incoming.Breaks, 2); Run(incoming.Continues, 3); Run(incoming.Throws, 4);
+        foreach (var (label, state) in incoming.LabeledBreaks ?? ImmutableDictionary<string, State>.Empty) Run(state, 5, label);
+        foreach (var (label, state) in incoming.LabeledContinues ?? ImmutableDictionary<string, State>.Empty) Run(state, 6, label);
         _state = normalExit ?? normal ?? _state;
         return result;
 
-        void Run(State? state, int kind)
+        void Run(State? state, int kind, string? label = null)
         {
             if (state is null || _writes) return;
             _state = state.Copy();
@@ -221,6 +267,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 2 => new Flow(false, Value.Local, Breaks: _state.Copy()),
                 3 => new Flow(false, Value.Local, Continues: _state.Copy()),
                 4 => new Flow(false, Value.Local, Throws: _state.Copy()),
+                5 => new Flow(false, Value.Local, LabeledBreaks: ImmutableDictionary<string, State>.Empty.Add(label!, _state.Copy())),
+                6 => new Flow(false, Value.Local, LabeledContinues: ImmutableDictionary<string, State>.Empty.Add(label!, _state.Copy())),
                 _ => Flow.Next
             };
             if (kind == 0) normalExit = Join(normalExit, _state);
@@ -241,13 +289,16 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         return first.Union(second);
     }
 
-    private Flow Loop(Func<Value> test, Func<Flow> body, Func<Value> update, bool atLeastOnce = false)
+    private Flow Loop(Node identity, Func<Value> test, Func<Flow> body, Func<Value> update, bool atLeastOnce = false)
     {
         var entry = _state.Copy();
         var head = entry.Copy();
         var returns = Value.Local;
         State? returnStates = null;
         State? thrownStates = null;
+        ImmutableDictionary<string, State>? labeledBreaks = null;
+        ImmutableDictionary<string, State>? labeledContinues = null;
+        var loopLabels = _labels.Where(item => ReferenceEquals(item.Target, identity)).Select(item => item.Name).ToArray();
         State? exits = null;
         while (!_writes)
         {
@@ -258,8 +309,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             returns = returns.Union(flow.Returned);
             returnStates = Join(returnStates, flow.Returns);
             thrownStates = Join(thrownStates, flow.Throws);
+            labeledBreaks = JoinLabels(labeledBreaks, flow.LabeledBreaks);
+            labeledContinues = JoinLabels(labeledContinues, flow.LabeledContinues?.RemoveRange(loopLabels));
             exits = Join(exits, flow.Breaks);
             var back = Join(flow.Normal ? _state : null, flow.Continues);
+            foreach (var label in loopLabels) back = Join(back, flow.LabeledContinues?.GetValueOrDefault(label));
             if (back is not null)
             {
                 _state = back;
@@ -272,7 +326,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             head = next;
         }
         _state = exits ?? entry;
-        return new Flow(exits is not null, returns, Returns: returnStates, Throws: thrownStates);
+        return new Flow(exits is not null, returns, Returns: returnStates, Throws: thrownStates, LabeledBreaks: labeledBreaks, LabeledContinues: labeledContinues);
     }
 
     private void BindLoop(Node target, Value value)
@@ -288,10 +342,13 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         Value result;
         switch (node)
         {
-            case Identifier name: result = name.Name == "variables" && Global(name.Name) ? Value.Owned : Read(name.Name); break;
+            case Identifier name:
+                result = Global(name.Name) ? name.Name == "variables" ? Value.Owned : NativeNamespace(name.Name) ? Intrinsic(name) : Value.Local : Read(name.Name);
+                break;
             case ThisExpression: result = _receivers.Count > 0 ? _receivers[^1] : Value.Local; break;
             case Literal: result = Value.Local; break;
             case IFunction: result = FunctionValue(node); break;
+            case ClassExpression type: result = ClassValue(type, type.Id, type.Body, type.SuperClass); break;
             case MemberExpression member:
                 result = Member(Evaluate(member.Object), Name(member));
                 if (member.Computed) Evaluate(member.Property);
@@ -302,6 +359,16 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 foreach (var expression in sequence.Expressions) result = Evaluate(expression);
                 break;
             case AssignmentExpression assignment:
+                if (assignment.Operator is Operator.LogicalOrAssignment or Operator.LogicalAndAssignment or Operator.NullishCoalescingAssignment)
+                {
+                    var existing = Evaluate(assignment.Left);
+                    var beforeAssignment = _state.Copy();
+                    result = Evaluate(assignment.Right);
+                    Bind(assignment.Left, result);
+                    _state.Join(beforeAssignment);
+                    result = existing.Union(result);
+                    break;
+                }
                 if (assignment.Left is MemberExpression target)
                 {
                     // JavaScript evaluates the reference before the RHS can reassign the receiver's local binding.
@@ -332,7 +399,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 _state.Join(beforeRight);
                 result = logical.Operator == Operator.LogicalAnd ? last : first.Union(last); break;
             case ObjectExpression value:
-                result = Value.Object(node);
+                result = Allocate(node);
                 foreach (var property in value.Properties)
                 {
                     if (property is Property item)
@@ -347,10 +414,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 }
                 break;
             case ArrayExpression array:
-                result = Value.Object(node);
+                result = Allocate(node);
                 for (var index = 0; index < array.Elements.Count; index++)
                     if (array.Elements[index] is { } item)
-                        Put(result, item is SpreadElement ? "*" : index.ToString(System.Globalization.CultureInfo.InvariantCulture), Evaluate(item is SpreadElement spread ? spread.Argument : item));
+                        Put(result, item is SpreadElement ? "*" : index.ToString(System.Globalization.CultureInfo.InvariantCulture), item is SpreadElement spread ? Member(Evaluate(spread.Argument), "*") : Evaluate(item));
                 break;
             case CallExpression call: result = Call(call); break;
             case TaggedTemplateExpression tagged:
@@ -358,8 +425,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 break;
             case NewExpression construction:
                 var constructor = Evaluate(construction.Callee);
-                var constructorArguments = construction.Arguments.Select(Evaluate).ToArray();
-                result = Value.Object(node);
+                var constructorArguments = Arguments(construction.Arguments, constructor);
+                result = Allocate(node);
                 if (constructor.Functions.Count > 0)
                 {
                     var explicitResult = Apply(constructor, constructorArguments, result);
@@ -389,7 +456,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             case AssignmentPattern assignment: Bind(assignment.Left, value.Union(Evaluate(assignment.Right))); break;
             case ObjectPattern patternObject:
                 foreach (var property in patternObject.Properties)
-                    if (property is Property item) Bind(item.Value, Member(value, PropertyName(item)));
+                    if (property is Property item)
+                    {
+                        if (item.Computed) Evaluate(item.Key);
+                        Bind(item.Value, Member(value, PropertyName(item)));
+                    }
                     else if (property is RestElement rest) Bind(rest.Argument, LocalCopy(pattern, value));
                 break;
             case ArrayPattern array:
@@ -409,16 +480,27 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private void AssignMember(Value receiver, string name, Value value)
     {
         if (receiver.Session) _writes = true;
+        if (receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item)))) _writes = true;
         foreach (var item in receiver.Objects)
             if (_setters.TryGetValue((item, name), out var setter)) Apply(setter, [value], receiver);
         Put(receiver, name, value);
     }
     private Value Member(Value receiver, string name)
     {
-        var result = receiver.Session ? Value.Owned : Value.Local;
+        var result = StoredMember(receiver, name);
         foreach (var item in receiver.Objects)
         {
-            if (_getters.TryGetValue((item, name), out var getter)) result = result.Union(Apply(getter, [], receiver));
+            foreach (var (key, getter) in _getters.Where(entry => ReferenceEquals(entry.Key.Object, item) && (name == "*" || entry.Key.Member == name)).ToArray())
+                result = result.Union(Apply(getter, [], receiver));
+        }
+        return result;
+    }
+    private Value StoredMember(Value receiver, string name)
+    {
+        var result = receiver.Session ? Value.Owned : Value.Local;
+        if (receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item)))) result = result.Union(receiver);
+        foreach (var item in receiver.Objects)
+        {
             result = result.Union(_state.Members.GetValueOrDefault((item, name), Value.Local));
             result = result.Union(_state.Members.GetValueOrDefault((item, "*"), Value.Local));
             if (name == "*")
@@ -428,11 +510,13 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     }
     private void Put(Value receiver, string name, Value value)
     {
-        foreach (var item in receiver.Objects) _state.Members[(item, name)] = value;
+        foreach (var item in receiver.Objects)
+            _state.Members[(item, name)] = receiver.Objects.Count != 1 || name == "*" || _summaryObjects.Contains(item)
+                ? _state.Members.GetValueOrDefault((item, name), Value.Local).Union(value) : value;
     }
     private Value LocalCopy(Node identity, Value source)
     {
-        var copy = Value.Object(identity);
+        var copy = Allocate(identity);
         CopyMembers(copy, source);
         return copy;
     }
@@ -440,7 +524,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     {
         if (source.Session) Put(target, "*", Value.Owned);
         foreach (var item in source.Objects)
+        {
             foreach (var (key, value) in _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item)).ToArray()) Put(target, key.Member, value);
+            foreach (var (key, getter) in _getters.Where(entry => ReferenceEquals(entry.Key.Object, item)).ToArray())
+                Put(target, key.Member, Apply(getter, [], source));
+        }
     }
     private bool ContainsSession(Value value, HashSet<Node>? seen = null)
     {
@@ -457,8 +545,83 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         return Value.Function(function);
     }
 
+    private Value ClassValue(Node node, Identifier? name, ClassBody body, Node? superClass)
+    {
+        var local = node is ClassExpression ? scopeOf(node) : null;
+        if (local is not null) EnterScope(node, local);
+        try
+        {
+            var value = FunctionValue(node).Union(Allocate(node));
+            if (name is not null) Bind(name, value);
+            _classes[node] = new ClassInfo(body, Evaluate(superClass));
+            _receivers.Add(value);
+            try
+            {
+                foreach (var element in body.Body)
+                {
+                    if (element is MethodDefinition method)
+                    {
+                        if (method.Computed) Evaluate(method.Key);
+                        var function = FunctionValue(method.Value);
+                        if (method.Static) DefineMethod(node, method, function);
+                    }
+                    else if (element is PropertyDefinition field)
+                    {
+                        if (field.Computed) Evaluate(field.Key);
+                        if (field.Static) Put(value, ClassMemberName(field.Key, field.Computed), Evaluate(field.Value));
+                    }
+                    else if (element is StaticBlock block) Execute(block);
+                }
+            }
+            finally { _receivers.RemoveAt(_receivers.Count - 1); }
+            return value;
+        }
+        finally { if (local is not null) _scopes.RemoveAt(_scopes.Count - 1); }
+    }
+
+    private void DefineMethod(Node target, MethodDefinition method, Value function)
+    {
+        var name = ClassMemberName(method.Key, method.Computed);
+        if (method.Kind is PropertyKind.Get or PropertyKind.Set)
+            (method.Kind == PropertyKind.Get ? _getters : _setters)[(target, name)] = function;
+        else Put(Value.Object(target), name, function);
+    }
+
+    private Value ConstructClass(Node node, ClassInfo type, IReadOnlyList<Value> arguments, Value receiver)
+    {
+        if (!_closures.TryGetValue(node, out var closure)) return Value.Local;
+        if (!_calls.Add(node)) { _writes |= arguments.Any(argument => OpaqueOwnership(argument)); return Value.Local; }
+        var callerScopes = _scopes.ToArray();
+        _scopes.Clear(); _scopes.AddRange(closure.Scopes);
+        foreach (var (binding, value) in closure.Captured) _state.Bindings.TryAdd(binding, value);
+        _receivers.Add(receiver);
+        try
+        {
+            if (type.Super.Functions.Count > 0) Apply(type.Super, arguments, receiver);
+            else if (type.Super.Objects.Count > 0) _writes |= arguments.Any(argument => OpaqueOwnership(argument));
+            foreach (var element in type.Body.Body)
+            {
+                if (element is MethodDefinition { Static: false } method)
+                    foreach (var target in receiver.Objects) DefineMethod(target, method, FunctionValue(method.Value));
+                else if (element is PropertyDefinition { Static: false } field)
+                    Put(receiver, ClassMemberName(field.Key, field.Computed), Evaluate(field.Value));
+            }
+            var constructor = type.Body.Body.OfType<MethodDefinition>().FirstOrDefault(method => method.Kind == PropertyKind.Constructor);
+            return constructor is null ? Value.Local : Invoke(constructor.Value, arguments, receiver);
+        }
+        finally
+        {
+            _receivers.RemoveAt(_receivers.Count - 1);
+            _scopes.Clear(); _scopes.AddRange(callerScopes);
+            _calls.Remove(node);
+        }
+    }
+
+    private static string ClassMemberName(Node key, bool computed) => !computed && key is Identifier name ? name.Name : Key(key);
+
     private Value Invoke(Node node, IReadOnlyList<Value> arguments, Value? receiver = null)
     {
+        if (_classes.TryGetValue(node, out var type)) return ConstructClass(node, type, arguments, receiver ?? Value.Local);
         if (node is not IFunction function || !_closures.TryGetValue(node, out var closure)) return Value.Local;
         // A recursive/opaque cycle is not unrolled indefinitely. Refuse when it carries workflow ownership;
         // otherwise its unknown result cannot introduce workflow ownership into a later local mutation.
@@ -476,7 +639,18 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         _receivers.Add(node is ArrowFunctionExpression ? closure.This : receiver ?? Value.Local);
         try
         {
-            for (var index = 0; index < function.Params.Count; index++) Bind(function.Params[index], index < arguments.Count ? arguments[index] : Value.Local);
+            for (var index = 0; index < function.Params.Count; index++)
+            {
+                if (function.Params[index] is RestElement rest)
+                {
+                    var restArray = Allocate(rest);
+                    for (var position = index; position < arguments.Count; position++)
+                        Put(restArray, (position - index).ToString(System.Globalization.CultureInfo.InvariantCulture), arguments[position]);
+                    Bind(rest.Argument, restArray);
+                    break;
+                }
+                Bind(function.Params[index], index < arguments.Count ? arguments[index] : Value.Local);
+            }
             var flow = function.Body is BlockStatement ? Execute(function.Body) : new Flow(false, Evaluate(function.Body), Returns: _state.Copy());
             var exits = Join(flow.Normal ? _state : null, flow.Returns);
             if (exits is not null) _state = exits;
@@ -526,6 +700,76 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         return _writes;
     }
 
+    private Value[] Arguments(IEnumerable<Node> nodes, Value function)
+    {
+        var arguments = new List<Value>();
+        var width = Math.Max(1, function.Functions.OfType<IFunction>().Select(target => target.Params.Count).DefaultIfEmpty(1).Max());
+        int? uncertain = null;
+        var uncertainValues = Value.Local;
+        foreach (var node in nodes)
+        {
+            if (node is SpreadElement spread)
+            {
+                var source = Evaluate(spread.Argument);
+                var expanded = ArrayArguments(source, width, out var exact);
+                if (!exact) uncertain ??= arguments.Count;
+                arguments.AddRange(expanded);
+                foreach (var value in expanded) uncertainValues = uncertainValues.Union(value);
+            }
+            else
+            {
+                var value = Evaluate(node);
+                arguments.Add(value);
+                if (uncertain is not null) uncertainValues = uncertainValues.Union(value);
+            }
+        }
+        if (uncertain is { } from)
+            for (var index = from; index < arguments.Count; index++) arguments[index] = arguments[index].Union(uncertainValues);
+        return arguments.ToArray();
+    }
+
+    private Value[] ArrayArguments(Value source, int width, out bool exact)
+    {
+        var arrays = source.Objects.OfType<ArrayExpression>().ToArray();
+        exact = !source.Session && arrays.Length == source.Objects.Count && arrays.Length > 0 &&
+                arrays.All(array => array.Elements.All(item => item is not SpreadElement)) &&
+                source.Objects.All(item => !_state.Members.ContainsKey((item, "*")) && !_summaryObjects.Contains(item));
+        var count = exact ? arrays.Max(array => array.Elements.Count) : Math.Max(1, width);
+        return Enumerable.Range(0, count).Select(index => Member(source, index.ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+    }
+
+    private void Serialize(Value value, HashSet<Node>? seen = null, bool invokeToJson = true)
+    {
+        // JSON.stringify invokes toJSON, getters and a supplied replacer; these are executable boundaries too.
+        seen ??= new(ReferenceEqualityComparer.Instance);
+        foreach (var item in value.Objects)
+        {
+            if (!seen.Add(item)) continue;
+            var receiver = Value.Object(item);
+            var toJson = Member(receiver, "toJSON");
+            if (invokeToJson && toJson.Functions.Count > 0)
+            {
+                var replacement = Apply(toJson, [Value.Local], receiver);
+                if (replacement.Objects.Contains(item)) seen.Remove(item);
+                Serialize(replacement, seen, invokeToJson: false);
+                continue;
+            }
+            foreach (var name in _state.Members.Keys.Where(key => ReferenceEquals(key.Object, item)).Select(key => key.Member)
+                         .Concat(_getters.Keys.Where(key => ReferenceEquals(key.Object, item)).Select(key => key.Member)).Distinct().ToArray())
+                Serialize(Member(receiver, name), seen);
+        }
+    }
+
+    private void Coerce(IEnumerable<Value> arguments)
+    {
+        foreach (var value in arguments)
+            foreach (var name in new[] { "valueOf", "toString" })
+            {
+                var method = Member(value, name);
+                if (method.Functions.Count > 0) Apply(method, [], value);
+            }
+    }
+
     private Value Call(CallExpression call)
     {
         if (call.Callee is Identifier reader && Global(reader.Name))
@@ -543,12 +787,31 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         MemberExpression? member = call.Callee as MemberExpression;
         var function = member is null ? Evaluate(call.Callee) : Member(receiver = Evaluate(member.Object), Name(member));
         if (member?.Computed == true) Evaluate(member.Property);
-        var arguments = call.Arguments.Select(argument => Evaluate(argument is SpreadElement spread ? spread.Argument : argument)).ToArray();
+        var arguments = Arguments(call.Arguments, function);
         if (function.Functions.Count > 0)
             return Apply(function, arguments, receiver);
         var method = member is null ? null : Name(member);
         if (member?.Object is Identifier global && Global(global.Name))
         {
+            if (global.Name == "Reflect" && method == "apply" && arguments.Length >= 3)
+            {
+                var width = arguments[0].Functions.OfType<IFunction>().Select(target => target.Params.Count).DefaultIfEmpty(1).Max();
+                return Apply(arguments[0], ArrayArguments(arguments[2], width, out _), arguments[1]);
+            }
+            if (global.Name == "Reflect" && method == "get" && arguments.Length >= 2)
+                return Member(arguments[0], call.Arguments.Count >= 2 ? Key(call.Arguments[1]) : "*");
+            if (global.Name == "Object" && method == "getOwnPropertyDescriptor" && arguments.Length >= 2)
+            {
+                var descriptor = Allocate(call);
+                var key = call.Arguments.Count >= 2 ? Key(call.Arguments[1]) : "*";
+                Put(descriptor, "value", StoredMember(arguments[0], key));
+                foreach (var item in arguments[0].Objects)
+                {
+                    if (_getters.TryGetValue((item, key), out var getter)) Put(descriptor, "get", getter);
+                    if (_setters.TryGetValue((item, key), out var setter)) Put(descriptor, "set", setter);
+                }
+                return descriptor;
+            }
             if (global.Name == "Object" && method == "assign" && arguments.Length > 0)
             {
                 if (arguments[0].Session && call.Arguments.Skip(1).Any(source => !EmptySource(source))) _writes = true;
@@ -558,9 +821,47 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             if (arguments.Length > 0 && arguments[0].Session &&
                 (global.Name == "Object" && method is "defineProperty" or "defineProperties" or "setPrototypeOf" ||
                  global.Name == "Reflect" && method is "set" or "deleteProperty" or "defineProperty" or "setPrototypeOf")) _writes = true;
-            if (global.Name is "JSON" or "Math" or "Object" or "Reflect" or "Array" or "Number" or "String" or "Boolean" or "Date" or "Intl" or "Temporal")
-                return global.Name == "Object" && method is "values" or "entries" || global.Name == "Array" && method == "from"
-                    ? LocalCopy(call, arguments.FirstOrDefault() ?? Value.Local) : Value.Local;
+            if (global.Name == "JSON" && method == "stringify")
+            {
+                if (arguments.Length > 0) Serialize(arguments[0]);
+                if (arguments.Length > 1 && arguments[1].Functions.Count > 0)
+                    Apply(arguments[1], [Value.Local, arguments[0].Union(Member(arguments[0], "*"))], Value.Local);
+                return Value.Local;
+            }
+            if (global.Name == "JSON" && method == "parse")
+                return arguments.Length > 1 && arguments[1].Functions.Count > 0
+                    ? Apply(arguments[1], [Value.Local, Value.Local], Value.Local) : Value.Local;
+            if (global.Name == "Object" && method is "values" or "entries" && arguments.Length > 0)
+            {
+                var listed = Allocate(call);
+                var value = Member(arguments[0], "*");
+                if (method == "entries")
+                {
+                    // Entry rows are new arrays; only their value column shares the source value.
+                    var row = Allocate(call.Callee);
+                    Put(row, "0", Value.Local); Put(row, "1", value);
+                    value = row;
+                }
+                Put(listed, "*", value);
+                return listed;
+            }
+            if (global.Name == "Array" && method == "from" && arguments.Length > 0)
+            {
+                if (arguments.Length <= 1 || arguments[1].Functions.Count == 0) return LocalCopy(call, arguments[0]);
+                var mapped = Allocate(call);
+                Put(mapped, "*", Apply(arguments[1], [Member(arguments[0], "*"), Value.Local], Value.Local));
+                return mapped;
+            }
+            // Only known read-only intrinsics bypass the opaque-call guard. Reflection and callbacks can return or
+            // execute workflow-owned references; an unfamiliar native entry point is not assumed harmless.
+            if (global.Name == "Math" || global.Name == "Object" && method is "keys" or "hasOwn" or "is" or "isExtensible" or "isFrozen" or "isSealed" or "getPrototypeOf" ||
+                global.Name == "Reflect" && method is "has" or "ownKeys" or "isExtensible" or "getPrototypeOf" ||
+                global.Name == "Number" && method is "isFinite" or "isInteger" or "isNaN" or "isSafeInteger" or "parseFloat" or "parseInt" ||
+                global.Name == "String" && method is "fromCharCode" or "fromCodePoint" || global.Name == "Date" && method is "now" or "parse" or "UTC")
+            {
+                Coerce(arguments);
+                return Value.Local;
+            }
         }
         if (method is "push" or "unshift" or "splice" or "copyWithin") _writes |= receiver.Session && arguments.Length > 0;
         else if (method is "pop" or "shift" or "sort" or "reverse" or "fill") _writes |= receiver.Session;
@@ -572,6 +873,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             Put(receiver, "*", members);
         }
         var callbackResult = Value.Local;
+        if (method is "sort" or "toSorted")
+            foreach (var callback in arguments.SelectMany(argument => argument.Functions))
+                Invoke(callback, [Member(receiver, "*"), Member(receiver, "*")]);
         if (method is "map" or "filter" or "find" or "findIndex" or "findLast" or "findLastIndex" or "some" or "every" or "forEach" or "flatMap" or "reduce" or "reduceRight")
             foreach (var callback in arguments.SelectMany(argument => argument.Functions))
                 callbackResult = callbackResult.Union(Invoke(callback, method is "reduce" or "reduceRight"
@@ -598,7 +902,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             "join" or "includes" or "indexOf" or "lastIndexOf" or "findIndex" or "findLastIndex" or "some" or "every" or "forEach" or "reduce" or "reduceRight" or
             "toString" or "toLocaleString" or "valueOf" or "hasOwnProperty" or "isPrototypeOf" or "propertyIsEnumerable" or
             "charAt" or "charCodeAt" or "codePointAt" or "substring" or "substr" or "split" or "replace" or "replaceAll" or "trim" or "toUpperCase" or "toLowerCase" or "startsWith" or "endsWith") return Value.Local;
-        if (call.Callee is Identifier pure && Global(pure.Name) && pure.Name is "String" or "Number" or "Boolean" or "parseInt" or "parseFloat" or "isNaN" or "isFinite") return Value.Local;
+        if (call.Callee is Identifier pure && Global(pure.Name) && pure.Name is "String" or "Number" or "Boolean" or "parseInt" or "parseFloat" or "isNaN" or "isFinite")
+        {
+            Coerce(arguments);
+            return Value.Local;
+        }
         if (call.Callee is Identifier { Name: "Object" } && Global("Object")) return arguments.FirstOrDefault() ?? Value.Object(call);
         // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
         // change it. Unlike a known local helper, its read-only behavior cannot be established here.
