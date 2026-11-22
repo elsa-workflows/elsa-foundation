@@ -215,12 +215,15 @@ describe("User Task assignment editor", () => {
 
     expect(editors.find(editor => editor.id === "user-tasks.user")?.presentsField).toBe(true);
     expect(editors.find(editor => editor.id === "user-tasks.group")?.presentsField).toBe(true);
-    expect(editors.find(editor => editor.id === "user-tasks.user")?.propertyGroup).toEqual({
+    const userGroup = editors.find(editor => editor.id === "user-tasks.user")?.propertyGroup;
+    expect(userGroup).toMatchObject({
       id: "assignment",
       label: "Assignment",
-      description: "Assign this task to one person or one group. Choose an assignee or a group—not both."
+      description: "Assign this task to one person or one group. Choose an assignee or a group—not both.",
+      inputKeys: ["AssigneeId", "GroupId"]
     });
-    expect(editors.find(editor => editor.id === "user-tasks.group")?.propertyGroup).toEqual(editors.find(editor => editor.id === "user-tasks.user")?.propertyGroup);
+    expect(userGroup?.component).toBeTypeOf("function");
+    expect(editors.find(editor => editor.id === "user-tasks.group")?.propertyGroup).toBe(userGroup);
     expect(editors.find(editor => editor.id === "user-tasks.form")?.presentsField).toBe(true);
   });
 });

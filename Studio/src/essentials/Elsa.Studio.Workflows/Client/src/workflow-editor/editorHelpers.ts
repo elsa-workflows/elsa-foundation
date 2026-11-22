@@ -1,14 +1,13 @@
 import { sha256Hex } from "../sha256";
 import type { Node } from "@xyflow/react";
-import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
-import type { CreateDefinitionRequest, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
-import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
+import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
-import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
+import type { ActivityPaletteGroup, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 import { resolveActivityLabel } from "../activityPresentation";
 
 export { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./executableRunHelpers";
@@ -147,32 +146,6 @@ export function getCreateRootActivity(selectedVersionId: string | null, activiti
   return findCompositionActivity(available, "flowchart")
     ?? findCompositionActivity(available, "sequence")
     ?? findCompositionActivity(available, "bpmn");
-}
-
-export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
-  if (draft.starter === "http") return createHttpStarterState(activities);
-  const activity = getCreateRootActivity(draft.rootActivityVersionId, activities);
-  if (!activity?.authoringTemplate) return null;
-
-  const rootActivity = createActivityNode(activity, createNodeId(activity));
-  return {
-    rootActivity: {
-      ...rootActivity,
-      inputs: toAuthoredArguments(activity.authoringTemplate.inputs) as unknown as ActivityNode["inputs"],
-      outputs: toAuthoredArguments(activity.authoringTemplate.outputs) as unknown as ActivityNode["outputs"]
-    }
-  };
-}
-
-function toAuthoredArguments(value: unknown) {
-  if (!Array.isArray(value)) return structuredClone(value ?? {});
-  return Object.fromEntries(value.flatMap(item => {
-    if (!item || typeof item !== "object") return [];
-    const argument = item as { referenceKey?: unknown; value?: unknown };
-    return typeof argument.referenceKey === "string"
-      ? [[argument.referenceKey, structuredClone(argument.value)]]
-      : [];
-  }));
 }
 
 export function findCompositionActivity(activities: ActivityCatalogItem[], kind: CreateWorkflowKind) {
@@ -705,7 +678,3 @@ function isNotFoundError(error: unknown, message: string) {
 }
 
 
-export function getCreateInitialDocument(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]): Pick<CreateDefinitionRequest, "initialState" | "layout" | "activityPresentation"> {
-  if (draft.templateContent) return { initialState: structuredClone(draft.templateContent.state), layout: structuredClone(draft.templateContent.layout), activityPresentation: structuredClone(draft.templateContent.activityPresentation ?? []) };
-  return { initialState: getCreateInitialState(draft, activities) };
-}

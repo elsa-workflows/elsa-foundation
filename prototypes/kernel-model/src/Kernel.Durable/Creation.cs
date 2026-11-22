@@ -5,7 +5,11 @@ namespace Kernel.Durable;
 /// <summary>An exact actor creation. Zero is the explicitly unqualified legacy protocol.</summary>
 public sealed record CreationAddress(string Id, long Creation);
 
-public sealed record CreationResult(string Actor, string Result, long? Requested, long? Current);
+public sealed record CreationResult(string Actor, string Result, long? Requested, long? Current)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwningOperation { get; init; }
+}
 
 internal sealed record FoundationChildNotice(string Child, InstanceStatus Status, string? Output, long Creation, bool Final)
 {
@@ -121,11 +125,12 @@ public static class CreationProtocol
     internal static bool MatchesCascadeParent(InstanceRow? row, Message message) =>
         row?.Parent is { } parent && message.Sender == parent && message.SenderCreation == row.ParentCreation;
 
-    public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason)
+    public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason, string? owningOperation = null)
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status, CreationRefused = true };
         foreach (var item in taken)
-            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation), creationRefusal: true);
+            outcome.ReplyTo(item, new CreationResult(actor, reason, item.Message.TargetCreation ?? item.Message.Start?.Creation?.Generation, row?.Creation)
+                { OwningOperation = owningOperation }, creationRefusal: true);
         return outcome;
     }
 
@@ -162,7 +167,7 @@ public static class CreationProtocol
         return null;
     }
 
-    internal static void Validate(TurnCommit turn, InstanceRow? previous)
+    internal static void Validate(TurnCommit turn, InstanceRow? previous, bool thenDelete = false)
     {
         if (previous is { Creation: > 0 } && turn.Delete && turn.Row is not { Retired: true })
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
@@ -181,9 +186,17 @@ public static class CreationProtocol
         {
             if (continuesRetired) return; // The cascade validator checks the source command and the exact next marker.
             if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) ||
-                row.Status == InstanceStatus.Running || row != Retire(previous, row.HeldCascade))
+                row.Status == InstanceStatus.Running ||
+                row != (thenDelete
+                    ? Retire(previous with
+                    {
+                        Status = previous.Status == InstanceStatus.Running || previous.ParkDiscard?.ThenDelete == true
+                            ? InstanceStatus.Cancelled : previous.Status,
+                        Cascade = row.Cascade, Children = null, Jobs = null
+                    })
+                    : Retire(previous, row.HeldCascade)))
                 RefuseWrite("invalid lifecycle retirement");
-            ValidateRetirementObligation(previous!, row.HeldCascade);
+            if (!thenDelete) ValidateRetirementObligation(previous!, row.HeldCascade);
             return;
         }
         if (row.HeldCascade is not null) RefuseWrite("only a retirement marker can hold an obligation");
@@ -212,10 +225,11 @@ public static class CreationProtocol
         if (held is null) return;
 
         var jobs = JobRegistry.Read(previous.Jobs).ToHashSet();
+        var children = ChildRegistry.Read(previous.Children).ToHashSet();
         if (held.Count == 0 || held.StorageBytes > CascadeRegistry.MaxBytes ||
             held.Jobs.Length != jobs.Count || !held.Jobs.ToHashSet().SetEquals(jobs) ||
             held.Jobs.Any(job => job.Generation < 0 || !FoundationMetadataLimits.FitsName(job.Key, preservesCodeUnits: true)) ||
-            held.Children.Distinct().Count() != held.Children.Length ||
+            held.Children.Length != children.Count || !children.SetEquals(held.Children) ||
             held.Children.Any(child => child.Creation <= 0 || !FoundationMetadataLimits.FitsTarget(child.Id) ||
                 StoreBatchRules.AddressPartition(child.Id) is null) ||
             sizeof(char) * (long)Json.Write(held).Length > CascadeRegistry.MaxBytes)

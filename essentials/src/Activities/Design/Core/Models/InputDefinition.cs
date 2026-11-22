@@ -55,12 +55,16 @@ public sealed record InputDefinition(
 {
     private readonly JsonElement? _defaultValue = DefaultValue;
 
-    /// <summary>A literal default; legacy JSON null without a syntax denotes no default.</summary>
+    /// <summary>A literal default; legacy JSON null without a syntax or with the Connection editor hint denotes no default.</summary>
     [JsonConverter(typeof(NullableJsonElementConverter))]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public JsonElement? DefaultValue
     {
-        get => _defaultValue is { ValueKind: JsonValueKind.Null } && DefaultSyntax is null ? null : _defaultValue;
+        get => _defaultValue is { ValueKind: JsonValueKind.Null } &&
+               (DefaultSyntax is null || (!string.IsNullOrWhiteSpace(ConnectionType) &&
+                   string.Equals(DefaultSyntax, "Connection", StringComparison.OrdinalIgnoreCase)))
+            ? null
+            : _defaultValue;
         init => _defaultValue = value;
     }
 }

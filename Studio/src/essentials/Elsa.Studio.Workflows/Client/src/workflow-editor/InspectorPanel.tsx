@@ -1,7 +1,7 @@
 import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
-import { StudioButton, CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
   StudioActivityPropertyEditorContribution,
@@ -97,6 +97,8 @@ interface InspectorPanelProps {
   scopedVariableAnalysis: ScopedVariableAnalysis;
   /** Source analysis for Choose data on the ordinary activity inputs; absent where the owner offers none. */
   activityDataSelection?: ActivityDataSelectionHost | null;
+  focusInputKey?: string | null;
+  focusInputRequest?: number;
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode, edit?: StudioExpressionEditorEdit): void;
@@ -156,6 +158,8 @@ export function InspectorPanel({
   onRetryExpressionDescriptors,
   scopedVariableAnalysis,
   activityDataSelection = null,
+  focusInputKey,
+  focusInputRequest,
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
@@ -250,6 +254,8 @@ export function InspectorPanel({
       scopeRetry={scopedVariableAnalysis.retry}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      focusInputKey={focusInputKey}
+      focusInputRequest={focusInputRequest}
       onChange={onSelectedActivityChange}
     />
   ) : (
@@ -273,6 +279,8 @@ export function InspectorPanel({
       scopeRetry={scopedVariableAnalysis.retry}
       showHeading={false}
       emptyLabel="This activity has no configurable inputs."
+      focusInputKey={focusInputKey}
+      focusInputRequest={focusInputRequest}
       activityDataSelection={activityDataSelection}
       onChange={onSelectedActivityChange}
     />
@@ -516,7 +524,7 @@ function ReusableActivityIdentity({
       {status === "loading" ? <p className="wf-muted" role="status">Loading exact version details…</p> : null}
       {status === "failed" ? <p className="wf-muted" role="status">Exact authorized version details are unavailable.</p> : null}
       <div className="wf-reusable-actions">
-        <StudioButton type="button" disabled={!version || !onChangeVersion} onClick={() => {
+        <StudioButton className="wf-reusable-version-button" type="button" disabled={!version || !onChangeVersion} onClick={() => {
           if (version) onChangeVersion?.(node, version);
         }}>
           <Repeat2 size={14} /> Change exact version

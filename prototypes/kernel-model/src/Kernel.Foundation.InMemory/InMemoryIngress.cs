@@ -40,6 +40,7 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
                     RefusalReason.Repeat => "repeat",
                     RefusalReason.Conflict => "conflict",
                     RefusalReason.StaleSelection => "stale selection",
+                    RefusalReason.TargetMismatch => "target",
                     _ => "missing"
                 });
             if (kind is Kinds.Discard or Kinds.Recover && admission.Outcome == AdmissionOutcome.Duplicate)

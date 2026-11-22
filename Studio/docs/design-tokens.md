@@ -186,7 +186,8 @@ titles), `--studio-title-weight` (optional; a theme whose display face has a sin
 so titles don't render in faux bold — read it as `var(--studio-title-weight, 700)`);
 `--studio-page-title-size`, `--studio-section-title-size`, `--studio-body-size`,
 `--studio-label-size`;
-`--studio-radius-sm`, `--studio-radius`, `--studio-radius-md`, `--studio-radius-lg`,
+`--studio-radius-sm`, `--studio-radius`, `--studio-radius-control` (compact interactive controls),
+`--studio-radius-md`, `--studio-radius-lg`,
 `--studio-radius-pill` (fully rounded badges, tracks and handles). Elevation uses `--studio-shadow-sm`,
 `--studio-shadow-md`, `--studio-shadow-lg` and `--studio-shadow-xl`. Larger elevations fall back
 to the preceding size when a standalone host supplies only the small shadow.

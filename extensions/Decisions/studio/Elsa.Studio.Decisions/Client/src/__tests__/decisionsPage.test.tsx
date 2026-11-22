@@ -3,11 +3,13 @@ import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DecisionsPage } from "../DecisionsPage";
 import { CasePanel } from "../CasePanel";
+import { DecisionDiagnostics } from "../DecisionDiagnostics";
 import { DecisionVersionEditor } from "../DecisionVersionEditor";
 import { EvaluationPanel } from "../EvaluationPanel";
 import { createNotificationController, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { decisionFailure, failureMessage } from "../decisionsApi";
+import { decisionDiagnosticMessage } from "../decisionDiagnosticMessage";
 import { beginDecision, asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
@@ -19,7 +21,7 @@ function decisionMenuItem(host: HTMLElement, label: string) {
   const menu = document.getElementById(trigger.getAttribute("aria-controls")!)!;
   return Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(item => item.textContent === label)!;
 }
-function decisionAction(host: HTMLElement, label: string) { click(decisionMenuItem(host, label)); }
+function decisionAction(host: HTMLElement, label: string) { click(label === "Publish" ? button(host, label) : decisionMenuItem(host, label)); }
 function collectionMenuItem(host: HTMLElement, name: string, label: string) {
   const trigger = host.querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${name}"]`)!;
   if (trigger.getAttribute("aria-expanded") !== "true") click(trigger);
@@ -56,7 +58,7 @@ describe("Decisions Studio journeys", () => {
       expect(document.activeElement).toBe(description);
       type(description, "Determine purchase approval requirements.");
       api.backend.http.postJson.mockResolvedValue(asset as never);
-      click(button(host, "Save decision"));
+      click(button(host, "Save"));
       await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({
         name: "Approval policy", description: "Determine purchase approval requirements."
       })));
@@ -71,6 +73,7 @@ describe("Decisions Studio journeys", () => {
     await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("New decision");
+      expect(button(host, "Publish").disabled).toBe(true);
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       frames[0](0);
       expect(document.activeElement).toBe(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name"));
@@ -120,7 +123,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     click(host.querySelector<HTMLButtonElement>('[role="tab"][data-tab-id="settings"]')!);
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Pending save");
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledOnce());
     const link = host.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a[href="/decisions"]')!;
     expect(link.getAttribute("aria-disabled")).toBe("true");
@@ -171,10 +174,10 @@ describe("Decisions Studio journeys", () => {
     await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Saved draft"));
     expect(decisionMenuItem(host, "Validate").disabled).toBe(false);
-    expect(decisionMenuItem(host, "Publish").disabled).toBe(false);
+    expect(button(host, "Publish").disabled).toBe(false);
     api.backend.http.postJson.mockResolvedValue({ success: true, diagnostics: [] } as never);
     decisionAction(host, "Validate");
     await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid") })));
@@ -313,7 +316,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
     const name = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!;
-    type(name, "Purchase approval"); click(button(host, "Save decision"));
+    type(name, "Purchase approval"); click(button(host, "Save"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions", expect.objectContaining({ name: "Purchase approval", xml: expect.stringContaining("decisionTable") }));
     expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" });
@@ -338,7 +341,7 @@ describe("Decisions Studio journeys", () => {
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     expect(gridCell(host, "Rule 1, input amount").textContent).toBe("<= 1000");
     const failure = Object.assign(new Error("The draft changed."), { status: 409 }); api.backend.http.putJson.mockRejectedValue(failure as never);
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => expect(host.textContent).toContain("Your unsaved work is still here"));
     expect(gridCell(host, "Rule 1, input amount").textContent).toBe("<= 1000");
     click(button(host, "Reload server draft"));
@@ -348,7 +351,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(["read"]); api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions") ? { items: [] } : { ...asset, xml: null } as never);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Decision source is protected"));
-    expect(button(host, "Save decision").disabled).toBe(true); expect(decisionMenuItem(host, "Publish").disabled).toBe(true); expect(decisionMenuItem(host, "Export DMN").disabled).toBe(true);
+    expect(button(host, "Save").disabled).toBe(true); expect(button(host, "Publish").disabled).toBe(true); expect(decisionMenuItem(host, "Export DMN").disabled).toBe(true);
     expect(host.querySelector(".decision-table")).toBeNull();
   });
   it("allows Test+Read without Source to run cases while keeping source and protected values unavailable", async () => {
@@ -375,6 +378,8 @@ describe("Decisions Studio journeys", () => {
     expect(host.querySelector('button[aria-label="Delete Boundary"]')).toBeNull();
     click(caseMenuItem(host, "Boundary", "Edit"));
     await vi.waitFor(() => expect(host.querySelector("form[aria-label='Edit decision case']")).not.toBeNull());
+    expect(host.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('input[data-dialog-initial-focus]'));
     click(button(host, "Cancel"));
     expect(document.activeElement).toBe(trigger);
 
@@ -385,6 +390,127 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector("form")).toBeNull());
     expect(api.backend.http.putJson).toHaveBeenCalledWith("/tenant/decisions/approval/cases/case1", expect.objectContaining({ expectedRevision: "c1", name: "Updated boundary" }));
     expect(document.activeElement).toBe(trigger);
+  });
+  it("keeps case edits in a modal and blocks conflicting actions until cancellation", async () => {
+    const api = stubApi();
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/cases") ? { items: [] } : path.endsWith("/versions") ? { items: [] } : asset);
+    const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
+    await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    click(button(host, "Tests"));
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet"));
+    click(button(host, "Add case"));
+    const name = host.querySelector<HTMLInputElement>('form[aria-label="New decision case"] input')!;
+    type(name, "Draft retained across views");
+    expect(host.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Unsaved case changes");
+    expect(button(host, "Add case").disabled).toBe(true);
+    expect(button(host, "Run saved cases").disabled).toBe(true);
+    name.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(host.querySelector('[role="dialog"]')).toBeNull());
+    expect(button(host, "Add case")).toBe(document.activeElement);
+    click(button(host, "Rules")); click(button(host, "Tests"));
+    expect(host.querySelector('form[aria-label="New decision case"]')).toBeNull();
+  });
+  it("keeps each case input on its own row and saves exact scalar values", async () => {
+    let xml = editTable(newDecisionXml(), { kind: "add-clause", output: false });
+    const addedInput = parseTable(xml).inputs[1];
+    xml = editTable(xml, { kind: "clause", id: addedInput.id, output: false, name: "eligible", type: "boolean" });
+    const api = stubApi(), number = "1234567890123456789012345678901234";
+    let savedCase: Record<string, unknown> | null = null;
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/cases") ? { items: savedCase ? [savedCase] : [] } : { items: [] });
+    api.backend.http.postJson.mockImplementation(async (_path, body) => {
+      savedCase = { ...(body as Record<string, unknown>), id: "case-compact", revision: "case-r1" };
+      return savedCase as never;
+    });
+    const { host } = mount(<CasePanel api={api} asset={{ ...asset, xml }} xml={xml} dirty={false} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet"));
+    click(button(host, "Add case"));
+
+    const rows = host.querySelectorAll<HTMLElement>(".decision-case-form-fields > fieldset:first-of-type .decision-case-value-grid > .decision-value-field");
+    expect(rows).toHaveLength(2);
+    expect(Array.from(rows, row => row.querySelector(".decision-value-name")?.textContent)).toEqual(["amount", "eligible"]);
+    expect(host.querySelector('[aria-label="Case input amount value kind"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Case input amount"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Case input eligible value kind"]')).not.toBeNull();
+
+    const amountKind = host.querySelector<HTMLSelectElement>('[aria-label="Case input amount value kind"]')!;
+    select(amountKind, "null");
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Case input amount"]')?.disabled).toBe(true);
+    select(amountKind, "number");
+    type(host.querySelector<HTMLInputElement>('[aria-label="Case input amount"]')!, number);
+    const eligibleKind = host.querySelector<HTMLSelectElement>('[aria-label="Case input eligible value kind"]')!;
+    select(eligibleKind, "null");
+    expect(host.querySelector<HTMLInputElement>('[aria-label="Case input eligible"]')?.disabled).toBe(true);
+    select(eligibleKind, "boolean");
+    select(host.querySelector<HTMLSelectElement>('[aria-label="Case input eligible"]')!, "true");
+
+    type(host.querySelector<HTMLInputElement>('form[aria-label="New decision case"] input[data-dialog-initial-focus]')!, "Compact case");
+    click(button(host, "Save case"));
+    await vi.waitFor(() => expect(host.querySelector('[role="dialog"]')).toBeNull());
+    expect(savedCase).toMatchObject({ inputs: {
+      amount: { kind: "number", value: number },
+      eligible: { kind: "boolean", value: "true" }
+    } });
+    expect(host.textContent).toContain("Compact case");
+  });
+  it("keeps case values and exposes save errors inside the dialog until a retry succeeds", async () => {
+    const api = stubApi(), saved = { id: "case-new", name: "Exact boundary", revision: "case-r1", inputs: { amount: { kind: "number" as const, value: "20" } }, expectedStatus: "Success", expectedResult: null };
+    let hasSaved = false;
+    api.backend.http.postJson.mockRejectedValueOnce(new Error("Case save unavailable")).mockImplementationOnce(async () => { hasSaved = true; return saved as never; });
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/cases") ? { items: hasSaved ? [saved] : [] } : { items: [] });
+    const { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet"));
+    click(button(host, "Add case"));
+    const name = host.querySelector<HTMLInputElement>('form[aria-label="New decision case"] input[data-dialog-initial-focus]')!;
+    type(name, "Exact boundary"); click(button(host, "Save case"));
+    await vi.waitFor(() => expect(host.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe("Case save unavailable"));
+    expect(name.value).toBe("Exact boundary");
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    click(button(host, "Save case"));
+    await vi.waitFor(() => expect(host.querySelector('[role="dialog"]')).toBeNull());
+    expect(api.backend.http.postJson).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toContain("Exact boundary");
+  });
+  it("prevents closing or duplicate submission while a case save is pending", async () => {
+    const api = stubApi(); let complete!: (result: unknown) => void;
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/cases") ? { items: [] } : { items: [] });
+    api.backend.http.postJson.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+    const { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet"));
+    const add = button(host, "Add case"); click(add);
+    type(host.querySelector<HTMLInputElement>("input[data-dialog-initial-focus]")!, "Pending save");
+    click(button(host, "Save case"));
+    await vi.waitFor(() => expect(complete).toBeTypeOf("function"));
+    const cancel = button(host, "Cancel");
+    expect(cancel.disabled).toBe(true);
+    expect(host.querySelector<HTMLInputElement>("input[data-dialog-initial-focus]")?.matches(":disabled")).toBe(true);
+    host.querySelector<HTMLInputElement>("input[data-dialog-initial-focus]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    click(button(host, "Save case"));
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(api.backend.http.postJson).toHaveBeenCalledTimes(1);
+    complete({ id: "pending-case", name: "Pending save", revision: "case-r1" });
+    await vi.waitFor(() => expect(host.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(add);
+  });
+  it("groups repeated test diagnostics and exposes named cell review actions", async () => {
+    const api = stubApi(), table = parseTable(asset.xml!);
+    const saved = { id: "case1", name: "Boundary", revision: "c1", inputs: { amount: { kind: "number" as const, value: "20" } }, expectedStatus: "Success", expectedResult: null };
+    api.backend.http.getJson.mockImplementation(async path => path.endsWith("/cases") ? { items: [saved] } : path.endsWith("/versions") ? { items: [] } : { items: [] });
+    const failure = Object.assign(new Error("Request failed with 400"), { payload: { message: "The exact candidate cannot be evaluated.", diagnostics: [
+      { code: "UnsupportedExpression", message: "Decision content does not satisfy the supported profile.", ruleId: table.rules[0].id, clauseId: table.inputs[0].id },
+      { code: "UnsupportedExpression", message: "Decision content does not satisfy the supported profile.", ruleId: table.rules[0].id, clauseId: table.outputs[0].id }
+    ] } });
+    api.backend.http.postJson.mockRejectedValue(failure);
+    const onReviewRules = vi.fn(), { host } = mount(<CasePanel api={api} asset={asset} xml={asset.xml!} dirty={false} onReviewRules={onReviewRules} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("Boundary"));
+    click(button(host, "Run saved cases"));
+    await vi.waitFor(() => expect(host.textContent).toContain("The exact candidate cannot be evaluated."));
+    expect(host.querySelectorAll(".decision-diagnostic-group")).toHaveLength(2);
+    expect(host.querySelectorAll(".decision-diagnostic-message")).toHaveLength(2);
+    const review = button(host, "Rule 1 · Column amount");
+    click(review);
+    expect(onReviewRules).toHaveBeenCalledWith([expect.objectContaining({ clauseId: table.inputs[0].id })]);
+    expect(host.textContent).toContain("Column result");
   });
   it("confirms case deletion from the overflow menu and keeps cancellation safe", async () => {
     const api = stubApi(), saved = { id: "case1", name: "Boundary", revision: "c1", inputs: { amount: { kind: "number" as const, value: "20" } }, expectedStatus: "Success", expectedResult: null };
@@ -455,6 +581,7 @@ describe("Decisions Studio journeys", () => {
     expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(asset.name);
     expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1 · Read only");
     expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
+    expect(host.querySelector('button[aria-label="Publish"]')).toBeNull();
     click(button(host, "Clone to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
     expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/clone-to-draft", expect.objectContaining({ expectedRevision: "r1", versionId: "v1" }));
@@ -470,6 +597,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid for the supported DMN profile.") })));
     decisionAction(host, "Publish");
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval&version=v1"));
+    expect(api.backend.http.postJson).toHaveBeenCalledWith("/tenant/decisions/approval/publish", expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) }));
     expect(api.notifications.notify).toHaveBeenCalledTimes(2); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
     expect(host.textContent).not.toContain("Version 1 published");
   });
@@ -479,10 +607,10 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     const description = Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!;
-    type(description, "Updated"); click(button(host, "Save decision"));
+    type(description, "Updated"); click(button(host, "Save"));
     await vi.waitFor(() => expect(host.textContent).toContain("Save unavailable"));
     expect(description.value).toBe("Updated"); expect(api.notifications.notify).not.toHaveBeenCalled();
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => { expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" }); });
     expect(host.textContent).not.toContain("Save unavailable"); expect(host.textContent).not.toContain("Decision saved");
   });
@@ -508,7 +636,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     if (operation === "save") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Updated");
     if (operation === "publish") decisionAction(host, "Publish");
-    else click(button(host, operation === "save" ? "Save decision" : "Clone to draft"));
+    else click(button(host, operation === "save" ? "Save" : "Clone to draft"));
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
     update(<button>Current backend</button>); controller.setScope("backend-b:user-a");
     complete(operation === "publish" ? published : { ...asset, revision: "r2" });
@@ -596,6 +724,61 @@ describe("Decisions Studio journeys", () => {
     expect(decisionFailure(legacy).diagnostics).toEqual([]);
     expect(failureMessage(new Error("Network unavailable"))).toBe("Network unavailable");
   });
+  it("explains unsupported expressions using the affected column role and type", () => {
+    const source = parseTable(asset.xml!);
+    const table = {
+      ...source,
+      inputs: [
+        { id: "amount-input", name: "amount", type: "number" },
+        { id: "category-input", name: "category", type: "string" },
+        { id: "active-input", name: "active", type: "boolean" }
+      ],
+      outputs: [
+        { id: "count-output", name: "count", type: "number" },
+        { id: "label-output", name: "label", type: "string" },
+        { id: "enabled-output", name: "enabled", type: "boolean" }
+      ]
+    };
+    const diagnostic = (clauseId: string) => ({ code: "UnsupportedExpression", message: "This expression is not supported.", clauseId });
+    expect(decisionDiagnosticMessage(diagnostic("amount-input"), table)).toContain("The “amount” input already supplies the value. Enter a condition such as < 21, not “amount < 21”.");
+    expect(decisionDiagnosticMessage(diagnostic("category-input"), table)).toContain('Match text with a quoted value such as "male".');
+    expect(decisionDiagnosticMessage(diagnostic("active-input"), table)).toContain("Use true or false as the condition.");
+    expect(decisionDiagnosticMessage(diagnostic("count-output"), table)).toContain("expects a number value, not a condition");
+    expect(decisionDiagnosticMessage(diagnostic("label-output"), table)).toContain('expects a quoted text value, such as "Approved".');
+    expect(decisionDiagnosticMessage(diagnostic("enabled-output"), table)).toContain("expects true or false as the result value.");
+  });
+  it("groups equivalent cell errors while preserving every review location", () => {
+    const source = parseTable(asset.xml!), table = { ...source, rules: [{ ...source.rules[0], id: "rule-a" }, { ...source.rules[0], id: "rule-b" }] };
+    const onReview = vi.fn(), message = "This expression is not supported.";
+    const amountId = table.inputs[0].id, outputId = table.outputs[0].id;
+    const diagnostics = [
+      { code: "UnsupportedExpression", message, ruleId: "rule-a", clauseId: amountId },
+      { code: "UnsupportedExpression", message, ruleId: "rule-b", clauseId: amountId },
+      { code: "UnsupportedExpression", message, ruleId: "rule-a", clauseId: outputId }
+    ];
+    const { host } = mount(<DecisionDiagnostics diagnostics={diagnostics} table={table} label="Decision diagnostics" onReview={onReview} />);
+    const groups = host.querySelectorAll(".decision-diagnostic-group");
+    expect(groups).toHaveLength(2);
+    const numberGroup = Array.from(groups).find(group => group.textContent?.includes("input already supplies the value"))!;
+    expect(numberGroup.querySelectorAll(".decision-diagnostic-locations button")).toHaveLength(2);
+    expect(numberGroup.querySelector(".decision-diagnostic-summary")?.textContent).toBe("2 affected cells need review.");
+    click(button(numberGroup as HTMLElement, "Rule 2 · Column amount"));
+    expect(onReview).toHaveBeenCalledWith(diagnostics[1]);
+    const outputGroup = Array.from(groups).find(group => group.textContent?.includes("output expects a quoted text value"))!;
+    expect(outputGroup.textContent).toContain("output expects a quoted text value");
+    expect(outputGroup.querySelector(".decision-diagnostic-summary")?.textContent).toBe("1 affected cell needs review.");
+  });
+  it("retains authoritative messages when diagnostic context or type is unavailable", () => {
+    const table = parseTable(asset.xml!), message = "The server reported an unsupported expression.";
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message, clauseId: "missing" }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "OtherError", message, clauseId: table.inputs[0].id }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message, clauseId: table.inputs[0].id }, null)).toBe(message);
+
+    const { host } = mount(<DecisionDiagnostics diagnostics={[{ code: "InvalidRange", message: "The range is invalid." }]} table={table} label="Decision diagnostics" />);
+    expect(host.textContent).toContain("The range is invalid.");
+    expect(host.querySelector(".decision-diagnostic-summary")).toBeNull();
+  });
   it("reviews saved-case diagnostics, clears stale results, and allows correction and retry", async () => {
     const api = stubApi(), table = parseTable(asset.xml!);
     const savedCase = { id: "case-1", name: "Under age boy", revision: "case-r1", inputs: { amount: { kind: "number", value: "20" } }, expectedStatus: "Success", expectedResult: { kind: "string", value: "Approved" } };
@@ -614,15 +797,18 @@ describe("Decisions Studio journeys", () => {
     click(button(host, "Run saved cases")); await vi.waitFor(() => expect(host.textContent).toContain("All cases passed"));
     click(button(host, "Run saved cases"));
     await vi.waitFor(() => expect(host.textContent).toContain("The exact candidate cannot be evaluated."));
+    expect(host.textContent).toContain("Saved cases could not run");
     expect(host.textContent).not.toContain("All cases passed");
     expect(host.textContent).toContain("This condition is not supported by the selected profile.");
+    expect(host.textContent).toContain("The “amount” input already supplies the value.");
+    expect(host.textContent).toContain("not “amount < 21”.");
     expect(host.textContent).toContain("Rule 1"); expect(host.textContent).toContain("Column amount"); expect(host.textContent).not.toContain(table.rules[0].id);
     click(button(host, "Review rules"));
     const cell = gridCell(host, "Rule 1, input amount");
     await vi.waitFor(() => expect(document.activeElement).toBe(cell));
-    expect(host.textContent).toContain("UnsupportedExpression");
+    expect(cell.querySelector(".decision-cell-diagnostic")?.textContent).toContain("The “amount” input already supplies the value.");
     editGridCell(host, "Rule 1, input amount", "< 21");
-    click(button(host, "Save decision"));
+    click(button(host, "Save"));
     await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledWith("/tenant/decisions/approval", expect.objectContaining({ xml: correctedXml, expectedRevision: "r1" })));
     click(host.querySelector<HTMLElement>('[role="tab"][data-tab-id="tests"]')!);
     click(button(host, "Run saved cases")); await vi.waitFor(() => expect(host.textContent).toContain("All cases passed"));
@@ -672,7 +858,7 @@ describe("Decisions Studio journeys", () => {
     expect(caseMenuItem(host, "First", "Edit").disabled).toBe(true); click(host.querySelector<HTMLButtonElement>('button[aria-label="Actions for First"]')!);
     expect(caseMenuItem(host, "Second", "Edit").disabled).toBe(true);
     expect(name.value).toBe("Unsaved boundary"); expect(amount.value).toBe("9007199254740993");
-    expect(host.textContent).toContain("Save or cancel this case before adding or editing another case."); expect(api.backend.http.postJson).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("Save or cancel this case before adding or editing another case."); expect(api.backend.http.postJson).not.toHaveBeenCalled();
     click(button(host, "Cancel")); expect(button(host, "Add case").disabled).toBe(false);
     expect(caseMenuItem(host, "Second", "Edit").disabled).toBe(false); click(caseMenuItem(host, "Second", "Edit"));
     expect(host.querySelector("form")?.querySelector<HTMLInputElement>("input")?.value).toBe("Second");
@@ -688,12 +874,12 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.textContent).toContain("No saved cases yet")); click(button(host, "Add case"));
     type(host.querySelector<HTMLFormElement>("form")!.querySelector<HTMLInputElement>("input")!, "Unsaved boundary");
-    await vi.waitFor(() => expect(decisionMenuItem(host, "Publish").disabled).toBe(true)); expect(button(host, "Save decision").disabled).toBe(true);
+    await vi.waitFor(() => expect(button(host, "Publish").disabled).toBe(true)); expect(button(host, "Save").disabled).toBe(true);
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
     api.dialogs.confirm.mockResolvedValue(false);
     window.dispatchEvent(new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "navigate" } }));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled()); expect(navigate).not.toHaveBeenCalled(); expect(host.querySelector<HTMLFormElement>("form")!.querySelector<HTMLInputElement>("input")!.value).toBe("Unsaved boundary");
-    click(button(host, "Cancel")); await vi.waitFor(() => expect(decisionMenuItem(host, "Publish").disabled).toBe(false));
+    click(button(host, "Cancel")); await vi.waitFor(() => expect(button(host, "Publish").disabled).toBe(false));
     const released = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?decision=approval", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(released); expect(released.defaultPrevented).toBe(false);
   });
   it("keeps a dirty workspace tab open on close intent without navigating to another screen", async () => {

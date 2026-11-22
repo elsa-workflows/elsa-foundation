@@ -2,20 +2,120 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioHttpError, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionPublicationReview } from "../ActivityDefinitionPublicationReview";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
 const unmounts: Array<() => void> = [];
+const activityPublishModeKey = "elsa-studio-activity-definition-publish-mode";
+const workflowPublishModeKey = "elsa-studio-workflow-publish-mode";
+
+beforeEach(() => {
+  window.localStorage.removeItem(activityPublishModeKey);
+  window.localStorage.setItem(workflowPublishModeKey, "review");
+});
 
 afterEach(() => {
   unmounts.splice(0).forEach(unmount => unmount());
   clearApiCapabilityCache();
+  window.localStorage.removeItem(activityPublishModeKey);
+  window.localStorage.removeItem(workflowPublishModeKey);
   document.body.replaceChildren();
 });
 
 describe("ActivityDefinitionPublicationReview toolbar mode", () => {
+  it("opens the review when that action is selected from the dropdown", async () => {
+    const postJson = vi.fn(async (_url: string, _body: unknown) => publicationPreflight());
+    const harness = renderReview({ postJson });
+
+    choosePublishMode(harness.container, "review");
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+
+    expect((postJson.mock.calls as Array<[string, unknown]>).some(([url]) => url.endsWith("/publication"))).toBe(false);
+  });
+
+  it("publishes directly from the dropdown only after a clear exact preflight", async () => {
+    const postJson = vi.fn(async (url: string, body: unknown) => url.endsWith("/publication-preflight")
+      ? publicationPreflight()
+      : publicationReceipt(body as Record<string, unknown>));
+    const harness = renderReview({ postJson });
+
+    choosePublishMode(harness.container, "publish");
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(2));
+
+    const publicationBody = postJson.mock.calls[1][1] as Record<string, unknown>;
+    expect(publicationBody).toMatchObject({
+      expectedDraftRevision: 3,
+      expectedDefinitionHeadVersionId: null,
+      version: "1.0.0",
+      reviewToken: "review-1"
+    });
+    expect(harness.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(window.localStorage.getItem(activityPublishModeKey)).toBe("publish");
+    expect(window.localStorage.getItem(workflowPublishModeKey)).toBe("review");
+  });
+
+  it("falls back to the publication review when direct preflight is blocked", async () => {
+    const postJson = vi.fn(async () => ({ ...publicationPreflight(), isPublishable: false }));
+    const harness = renderReview({ postJson });
+
+    choosePublishMode(harness.container, "publish");
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+
+    expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull();
+    expect(postJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a blocked Secret-refusal diagnostic and never publishes the activity draft", async () => {
+    const diagnostic = {
+      code: "VF-ACT-012",
+      severity: "Error",
+      message: "VF-ACT-012: Activity node 'write-line' input 'text' refuses a Secret reference.",
+      subject: { kind: "ActivityDefinitionDraft", id: "draft-1", revision: 3 },
+      location: {
+        providerKey: "elsa.activity-graph",
+        jsonPointer: "/rootActivity",
+        referenceKey: "write-line",
+        nodeOrigin: [{ kind: "AuthoredNode", id: "write-line" }]
+      },
+      metadata: {}
+    };
+    const postJson = vi.fn(async (url: string, body: unknown) => url.endsWith("/publication-preflight")
+      ? { ...publicationPreflight(), isPublishable: false, diagnostics: [diagnostic] }
+      : publicationReceipt(body as Record<string, unknown>));
+    const harness = renderReview({ postJson });
+
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+
+    const blockers = harness.container.querySelector<HTMLElement>(".ad-publication-blockers")!;
+    expect(blockers.textContent).toContain(diagnostic.message);
+    expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+    click(buttonByText(blockers, "Go to setting"));
+    await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(diagnostic, expect.any(HTMLButtonElement)));
+    expect(postJson.mock.calls.filter(([url]) => url.endsWith("/publication"))).toHaveLength(0);
+  });
+
+  it("does not publish when the exact draft changes during direct preflight", async () => {
+    let resolvePreflight!: (value: ReturnType<typeof publicationPreflight>) => void;
+    const pendingPreflight = new Promise<ReturnType<typeof publicationPreflight>>(resolve => { resolvePreflight = resolve; });
+    const postJson = vi.fn((url: string) => url.endsWith("/publication-preflight")
+      ? pendingPreflight
+      : Promise.resolve(publicationReceipt()));
+    const harness = renderReview({ postJson });
+
+    choosePublishMode(harness.container, "publish");
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    harness.render(4);
+    resolvePreflight(publicationPreflight());
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+
+    expect(harness.container.textContent).toContain("The draft changed after review");
+    expect(postJson.mock.calls.filter(([url]) => url.endsWith("/publication"))).toHaveLength(0);
+  });
+
   it("reopens failure details without retrying until the explicit prepare action", async () => {
     const postJson = vi.fn(async () => { throw new TypeError("private transport detail"); });
     const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
@@ -104,7 +204,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     }), expect.any(HTMLButtonElement)));
     harness.render(4);
     await waitFor(() => expect(harness.container.textContent).toContain("Review is out of date"));
-    click(harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!);
+    click(harness.container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!);
     expect(harness.container.textContent).not.toContain("Edit output value source");
     expect(post).toHaveBeenCalledTimes(1);
   });
@@ -186,7 +286,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     click(trigger);
 
     await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
-    const continuationTrigger = buttonByText(harness.container, "Continue publication review");
+    const continuationTrigger = buttonByText(harness.container, "Review & publish");
     const continuationName = continuationTrigger.getAttribute("aria-label") ?? continuationTrigger.textContent?.trim();
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
     expect(preflight).toHaveBeenCalledTimes(1);
@@ -205,7 +305,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
     expect(preflight).toHaveBeenCalledTimes(1);
     expect(entryName).toBe("Review & publish");
-    expect(continuationName).toBe("Continue publication review");
+    expect(continuationName).toBe("Review & publish");
     await harness.unmount();
   });
 
@@ -257,7 +357,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
     document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
-    harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!.focus();
+    harness.container.querySelector<HTMLButtonElement>(".studio-split-button-primary")!.focus();
     document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(harness.container.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
     expect(publicationPending).toHaveBeenCalledWith(true);
@@ -266,7 +366,9 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(publishRequest).not.toBeNull());
     resolvePublish(publicationReceipt(publishRequest));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
-    expect(harness.container.textContent).toContain("View publication");
+    expect(harness.container.querySelector(".ad-publication-toolbar")).toBeNull();
+    expect(harness.container.textContent).not.toContain("View publication");
+    expect(harness.container.textContent).not.toContain("Published immutable version");
     expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true, false]);
     await harness.unmount();
   });
@@ -452,6 +554,14 @@ function buttonByText(container: ParentNode, text: string) {
 
 function click(element: Element) {
   flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+}
+
+function choosePublishMode(container: ParentNode, mode: "review" | "publish") {
+  click(container.querySelector<HTMLButtonElement>("[aria-label='Publish options']")!);
+  const option = [...document.body.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")]
+    .find(candidate => candidate.textContent?.trim() === (mode === "review" ? "Review & publish" : "Publish"));
+  if (!option) throw new Error(`Publish mode '${mode}' not found.`);
+  click(option);
 }
 
 async function waitFor(assertion: () => void) {

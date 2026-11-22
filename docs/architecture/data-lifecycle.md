@@ -61,6 +61,12 @@ public sealed record RetentionPolicy(
 - **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
 - **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
 
+The in-memory Foundation uses a host-issued Retention Delete with a reserved id derived from the
+tenant, actor reference and terminal selection. The owner reads the configured window at execution.
+`--retention-delete-check` covers a policy extension, a queued delete across caller-key reuse, an
+unresolved re-park and the new Faulted window after expiry. The policy configuration surface,
+retention worker and its rate control retain their K11 cases.
+
 ### Proposed: the qualified delete
 
 > **Counterexample and answer** ([Astra High gate 2 review, B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)). The trace: the projection reports an expired finished run A under caller key K. A is removed. Run B reuses K and finishes, with its retention period still ahead. A delayed retention worker then submits the selected delete by K. The built handler checks only that the row has ended and is not protected, and deletes at the revision it has just loaded (`Control` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)), so it deletes B and its history. A message id derived from A's end revision only deduplicates submissions, and B can end at the same revision. The same creation can also change eligibility: a parked run recovered and ended again, or a policy extended after the selection.
@@ -116,6 +122,16 @@ public sealed record DeleteSelection(
   - Today only the in-memory store persists creation; EF rows carry creation 0 ([storage model](storage-model.md#physical-records)), and no store has the terminal mark. Until K3 lands, every delete on EF is refused as ambiguous.
   - Release 1 starts from empty databases (owner, 17 November), and every new run gets a creation once K3 lands, so release 1 never meets an ambiguous row.
 - **Observability.** A refusal adds no journal row, as for other no-op commands. It counts in a layer-3 metric, `elsa.kernel.delete.refused`, by reason: tenant, target, run, transition, not eligible, protected, ambiguous, and in progress (a delete reaching a drain that already ends in a delete).
+
+  The in-memory Foundation requires both operator permissions for `ThenDelete` and carries the selected
+  actor's exact reference as `ExpectedTarget`. The real Worker uses that pinned creation through delivery.
+  `--cascade-pages-check` covers Native retirement with its first bounded cascade page, a protected
+  running actor, and already ended actors with and without a child. It also drives the 1,000-child
+  and one-job schedules for running and ended roots and children, including the protected child and a
+  fresh owner taking over after the first commit. `--park-drain-cascade-check` covers
+  parked and running Recover origins. `--park-recovery-check` covers taking over an ended Recover and
+  a competing `ThenDelete` that cascades while preserving the existing owner's operation.
+
 
 - **What stays after a delete:**
   - the retirement marker, for every id kind, caller keys included (proposed; built for generated ids and rows with a creation), with the retained cancellation obligation above;

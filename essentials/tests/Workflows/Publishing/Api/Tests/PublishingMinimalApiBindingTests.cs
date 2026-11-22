@@ -209,10 +209,12 @@ public sealed class PublishingMinimalApiBindingTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("TestRuns.Get" or "TestRuns.Waits" or "TestRuns.Stop" or "IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "PublicationSlots.UnpublishReviewed" or
         "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
+        "ActivityTestRuns.GetVersionByIdempotencyKey" or
         "ActivityTestRuns.Cancel");
 
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");

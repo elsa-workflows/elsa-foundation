@@ -30,10 +30,17 @@ for (const width of [320, 360, 1280]) {
     await expect(runKind).not.toBeChecked();
     await expect(page.getByLabel("Selected grouping fields")).toHaveText("status");
 
-    const filters = page.locator('.named-query-controls [data-query-path="query.filters"]');
+    const controls = page.locator(".named-query-controls");
+    const sectionNavigation = page.getByRole("navigation", { name: "Question sections" });
+    const filters = controls.locator('[data-query-path="query.filters"]');
     const trigger = filters.getByRole("button", { name: "Source filters", exact: true });
-    await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await trigger.focus(); await page.keyboard.press("Enter");
+    const filtersButton = sectionNavigation.getByRole("link", { name: "Filters", exact: true });
+    const sortButton = sectionNavigation.getByRole("link", { name: "Sort", exact: true });
+    await sortButton.focus(); await page.keyboard.press("Enter");
+    await expect(sortButton).toHaveAttribute("aria-current", "page");
+    await filtersButton.focus(); await page.keyboard.press("Enter");
+    await expect(filtersButton).toHaveAttribute("aria-current", "page");
+    await expect(filters).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(filters.getByRole("button", { name: "Add condition", exact: true })).toBeVisible();
 
@@ -50,25 +57,58 @@ for (const width of [320, 360, 1280]) {
 }
 
 for (const width of [360, 1280]) {
-  test(`question authoring reveals query controls and preview after dataset selection at ${width}px`, async ({ page }, info) => {
+  test(`question workspace keeps Build, explicit Preview and Properties usable at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/dashboard-checkboxes.html?emptyQuestion");
     const controls = page.locator(".named-query-controls");
     const dataset = page.getByRole("combobox", { name: "Dataset", exact: true });
     const queryForm = controls.getByRole("combobox", { name: "Query form", exact: true });
+    const previewTab = page.getByRole("tab", { name: "Preview", exact: true });
     await expect(dataset).toBeVisible();
     await expect(queryForm).toHaveCount(0);
     await expect(controls.getByRole("group", { name: "Group by", exact: true })).toHaveCount(0);
-    await expect(page.locator(".named-preview")).toHaveCount(0);
+    await expect(previewTab).toBeDisabled();
+    await expect(page.locator(".named-question-properties-panel")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     await info.attach(`question-authoring-empty-${width}px`, { body: await page.screenshot({ path: info.outputPath(`question-authoring-empty-${width}px.png`) }), contentType: "image/png" });
 
     await dataset.selectOption("checkbox-runs");
     await expect(queryForm).toBeVisible();
     await expect(controls.getByRole("group", { name: "Group by", exact: true })).toBeVisible();
+    await expect(previewTab).toBeEnabled();
+    await expect(page.getByLabel("Preview runs")).toHaveText("0");
+    await previewTab.click();
     await expect(page.locator(".named-preview")).toBeVisible();
+    await expect(page.getByLabel("Preview runs")).toHaveText("0");
+    await page.getByRole("button", { name: "Preview", exact: true }).click();
+    await expect(page.getByLabel("Preview runs")).toHaveText("1");
+
+    await page.getByRole("tab", { name: "Build", exact: true }).click();
+    const sectionNavigation = page.getByRole("navigation", { name: "Question sections" });
+    const sort = sectionNavigation.getByRole("link", { name: "Sort", exact: true });
+    const filters = sectionNavigation.getByRole("link", { name: "Filters", exact: true });
+    await sort.focus(); await page.keyboard.press("Enter");
+    await expect(sort).toHaveAttribute("aria-current", "page");
+    await filters.focus(); await page.keyboard.press("Enter");
+    await expect(filters).toHaveAttribute("aria-current", "page");
+    await page.getByRole("button", { name: "Properties", exact: true }).click();
+    const properties = page.getByRole("complementary", { name: "Question properties" });
+    await expect(properties).toBeVisible();
+    await expect(properties.getByRole("textbox", { name: "Name" })).toBeVisible();
+    if (width <= 700) await expect(page.locator(".named-question-main")).toBeHidden();
+    else await expect(page.locator(".named-question-main")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     await info.attach(`question-authoring-selected-${width}px`, { body: await page.screenshot({ path: info.outputPath(`question-authoring-selected-${width}px.png`) }), contentType: "image/png" });
+  });
+
+  test(`read-only viewers can navigate query sections but cannot edit fields at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/dashboard-checkboxes.html?readOnly");
+    const navigation = page.getByRole("navigation", { name: "Question sections" });
+    const sort = navigation.getByRole("link", { name: "Sort", exact: true });
+    await sort.focus(); await page.keyboard.press("Enter");
+    await expect(sort).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("spinbutton", { name: "Maximum result rows/groups" })).toBeDisabled();
   });
 }
 

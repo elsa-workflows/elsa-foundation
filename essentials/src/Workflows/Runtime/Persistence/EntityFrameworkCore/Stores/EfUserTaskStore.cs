@@ -66,12 +66,12 @@ internal sealed class EfUserTaskStore(RuntimeDbContext context, IPersistenceAcce
         var userHash = query.UserId is null ? null : Hash(query.UserId);
         var groupHashes = query.GroupIds.Select(Hash).ToArray();
         var groups = query.GroupIds.Select(Encode).ToArray();
-        if (user is not null) source = source.Where(x => x.GroupKey != null
+        if (user is not null) source = source.Where(x => x.GroupKey != null && x.GroupKey != ""
             ? groupHashes.Contains(x.GroupHash!) && groups.Contains(x.GroupKey) && (x.ClaimantKey == null || (x.ClaimantHash == userHash && x.ClaimantKey == user)) : x.AssigneeHash == userHash && x.AssigneeKey == user);
         source = query.View switch
         {
             "mine" => source.Where(x => x.Status < (int)UserTaskStatus.Completed && ((x.AssigneeHash == userHash && x.AssigneeKey == user) || (x.ClaimantHash == userHash && x.ClaimantKey == user))),
-            "queue" => source.Where(x => x.Status == (int)UserTaskStatus.Open && x.GroupKey != null && groups.Contains(x.GroupKey) && x.ClaimantKey == null),
+            "queue" => source.Where(x => x.Status == (int)UserTaskStatus.Open && x.GroupKey != null && x.GroupKey != "" && groups.Contains(x.GroupKey) && x.ClaimantKey == null),
             "history" => source.Where(x => x.Status >= (int)UserTaskStatus.Completed),
             "all" when user is null => source,
             _ => throw new UserTaskException("validation", "Invalid task query.")
