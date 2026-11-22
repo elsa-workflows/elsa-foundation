@@ -61,6 +61,7 @@ import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeSto
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
+import { dialogs } from "./dialogs";
 import { DialogHost } from "./ui/dialog/DialogHost";
 import { NotificationCenter } from "./ui/feedback/NotificationCenter";
 import { ToastHost } from "./ui/feedback/ToastHost";
@@ -1863,7 +1864,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   let owned:typeof boot=null;
   const abort=new AbortController();
   const configuration=getStudioRuntimeConfig();
-  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
+  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,dialogs,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
    .then(result=>{
     if(abort.signal.aborted){for(const {instance} of [...result.instances].reverse())disposeStudioModuleInstance(instance);return;}
     const connection=result.instances.find(item=>item.instance.connection)?.instance.connection
@@ -1897,7 +1898,11 @@ function ConnectionApplication({authManager,connections,modules,manifest}:{authM
   const stopRestore=reloadConnectionOnPageRestore(connections);
   return()=>{mounted=false;stopRestore();};
  },[connections]);
- const navigate=(path:string)=>window.location.assign(path);
+ const navigate=async(path:string)=>{
+  const from=currentRelativeLocation();
+  const session=connections.getSnapshot().active;
+  if(await reviewStudioNavigation(from,path) && from===currentRelativeLocation() && session===connections.getSnapshot().active && !session?.pendingWrites)window.location.assign(path);
+ };
  if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
  {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
  </ShellFrame></ThemeProvider>;

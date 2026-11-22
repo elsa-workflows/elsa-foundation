@@ -1,6 +1,13 @@
 import { chromium, expect, type Locator, type Page, type Request, type TestInfo } from "@playwright/test";
 import { attachDashboardJson, dashboardBackend, registerDashboardCleanup, observeNativeWeaverBoundary, seedDashboardRuns, signInDashboardReader, tag, type Capture, type Resource, type Result } from "./dashboardJourneySupport";
 
+async function openQuerySection(page: Page, path: string) {
+  const section = page.locator(`[data-query-path="${path}"]`).first();
+  const trigger = section.locator("button[aria-expanded]").first();
+  if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+  return section;
+}
+
 /** Native authoring against real Workflow/Identity/Dashboard authorities; no provider or result mocks. */
 export async function nativeDashboardsJourney(page: Page, info: TestInfo, capture: Capture) {
   info.setTimeout(300_000);
@@ -89,25 +96,30 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Add metric", exact: true }).click();
       await page.getByRole("combobox", { name: "Metric 3", exact: true }).selectOption("workflow.failure-rate");
       await page.getByLabel("Result name", { exact: true }).nth(2).fill("rate");
+      await openQuerySection(page, "query.parameters");
       await page.getByRole("button", { name: "Add parameter", exact: true }).click();
       await page.getByLabel("Parameter name", { exact: true }).fill("workflow");
       await page.getByLabel("Default / preview value", { exact: true }).fill(seeded.definitionId);
-      const source = page.getByRole("group", { name: "Source filters", exact: true });
+      const source = await openQuerySection(page, "query.filters");
       await source.getByRole("button", { name: "Add condition", exact: true }).click();
       await source.getByRole("combobox", { name: "Field", exact: true }).selectOption("definitionId");
       await source.getByRole("combobox", { name: "Comparison value source", exact: true }).selectOption("parameter");
       await source.getByRole("combobox", { name: "Comparison value parameter", exact: true }).selectOption("workflow");
+      await openQuerySection(page, "query.time");
       await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
       await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("last7Days");
       await page.getByLabel("Time zone", { exact: true }).fill("UTC");
-      const having = page.getByRole("group", { name: "Result conditions", exact: true });
+      const having = await openQuerySection(page, "query.having");
       await having.getByRole("button", { name: "Add condition", exact: true }).click();
       await having.getByRole("combobox", { name: "Result metric", exact: true }).selectOption("started");
       await having.getByLabel("Comparison value", { exact: true }).fill("0");
+      await openQuerySection(page, "query.sort");
       await page.getByRole("button", { name: "Add sort", exact: true }).click();
       await page.getByRole("combobox", { name: "Sort column", exact: true }).selectOption("started");
       await page.getByRole("combobox", { name: "Direction", exact: true }).selectOption("descending");
+      await openQuerySection(page, "query.sort");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("25");
+      await openQuerySection(page, "visualization");
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("bar");
       await page.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("status");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started", "failed", "rate"]);
@@ -171,10 +183,10 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await expect(page.getByRole("region", { name: "Exact result values", exact: true }).getByRole("cell", { name: "4", exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: "Save question", exact: true })).toBeEnabled();
         await capture(page, info, name);
-        const parameters = page.getByRole("group", { name: "Parameters and accepted defaults", exact: true });
+        const parameters = await openQuerySection(page, "query.parameters");
         await captureScrollPosition(page, info, capture, `${name}-parameters`, parameters.getByRole("textbox", { name: "Parameter name", exact: true }));
         await captureScrollPosition(page, info, capture, `${name}-parameters-end`, parameters.getByRole("button", { name: "Remove parameter 1", exact: true }), "end");
-        const presentation = page.getByRole("group", { name: "Presentation", exact: true });
+        const presentation = await openQuerySection(page, "visualization");
         await captureScrollPosition(page, info, capture, `${name}-presentation`, presentation.getByRole("combobox", { name: "Visualization", exact: true }));
         await captureScrollPosition(page, info, capture, `${name}-presentation-end`, presentation.getByRole("textbox", { name: "Display label", exact: true }), "end");
         await captureNativeResultSections(page, info, capture, name, page.locator(".named-preview > .named-result"));
@@ -229,6 +241,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("combobox", { name: "Query form", exact: true }).selectOption("records");
       const columns = page.getByRole("group", { name: "Columns", exact: true });
       for (const label of ["Run", "Current status", "Run kind"]) await columns.getByLabel(label, { exact: true }).check();
+      await openQuerySection(page, "visualization");
       await page.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("table");
       await page.getByRole("listbox", { name: "Value columns", exact: true }).selectOption([]);
       const recordsResponse = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/questions/${copied.id}/preview`));
@@ -312,13 +325,13 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const firstSavedTile = page.locator(".named-tile").first();
       await expect(firstSavedTile.locator(".named-result tbody tr").first()).toBeVisible();
       const resultDetails = firstSavedTile.locator(".named-result-details");
-      const resultDetailsSummary = resultDetails.locator("summary");
+      const resultDetailsSummary = resultDetails.getByRole("button", { name: "Result details" });
       await expect(firstSavedTile.locator(".named-result-provenance")).toContainText("Coverage:");
-      await expect(resultDetails).toHaveJSProperty("open", false);
+      await expect(resultDetailsSummary).toHaveAttribute("aria-expanded", "false");
       await resultDetailsSummary.focus(); await resultDetailsSummary.press("Enter");
-      await expect(resultDetails).toHaveJSProperty("open", true);
+      await expect(resultDetailsSummary).toHaveAttribute("aria-expanded", "true");
       await expect(resultDetails).toContainText("Last successful refresh:");
-      await resultDetailsSummary.press("Enter"); await expect(resultDetails).toHaveJSProperty("open", false);
+      await resultDetailsSummary.press("Enter"); await expect(resultDetailsSummary).toHaveAttribute("aria-expanded", "false");
       await resultDetailsSummary.evaluate(element => (element as HTMLElement).blur());
       await capture(page, info, "dashboard-reopened");
       await capture(page, info, "dashboard-multi-tile");
@@ -499,7 +512,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await repair.getByRole("button", { name: "Confirm", exact: true }).click();
         await expect(reader.getByRole("combobox", { name: "Dataset", exact: true })).toHaveValue("");
         await expect(reader.getByRole("group", { name: "Metrics", exact: true }).getByRole("combobox")).toHaveCount(0);
-        await expect(reader.getByRole("group", { name: "Parameters and accepted defaults", exact: true }).getByRole("textbox")).toHaveCount(0);
+        await expect(reader.getByRole("group", { name: "Parameters and defaults", exact: true }).getByRole("textbox")).toHaveCount(0);
         await expect(reader.locator(".named-result")).toHaveCount(0);
         await expect(reader.getByRole("status").filter({ hasText: "Started a blank replacement query. Nothing has been saved." })).toBeVisible();
         await capture(reader, info, "question-repair-blank");
@@ -533,6 +546,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect(page.getByRole("region", { name: "Question reuse", exact: true })).toHaveCount(0);
       const lateReference = await backend.api<Resource>("/_elsa/studio/dashboards", "POST", { name: `Late question reference ${suffix}`, description: "Added after opening the question editor", operationKey: `late-reference-${suffix}`, tiles: [{ id: "late-reference", questionId: copied.id, size: "medium" }] });
       resources.push({ kind: "dashboards", id: lateReference.id });
+      await openQuerySection(page, "query.sort");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("23");
       await page.getByRole("button", { name: "Save question", exact: true }).click();
       const lateReuse = page.getByRole("dialog", { name: "Update reused question", exact: true });
@@ -554,6 +568,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       // A current saved revision mismatch is rejected instead of silently overwriting the editor's draft.
       await page.goto(`/questions/${questionId}`); const current = await backend.api<Resource>(`/_elsa/studio/questions/${questionId}`);
       await page.getByRole("textbox", { name: "Description", exact: true }).fill("Keep this local conflicted draft");
+      await openQuerySection(page, "query.sort");
       await page.getByLabel("Maximum result rows/groups", { exact: true }).fill("24");
       await backend.api(`/_elsa/studio/questions/${questionId}`, "PUT", { name: current.name, description: "Concurrent saved edit", definition: current.definition }, tag(current.revision));
       await page.getByRole("button", { name: "Save question", exact: true }).click();
@@ -606,7 +621,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const metricGrouping = page.getByRole("group", { name: "Group by", exact: true });
       await metricGrouping.getByRole("checkbox", { name: "Current status", exact: true }).uncheck();
       await metricGrouping.getByRole("checkbox", { name: "Run kind", exact: true }).uncheck();
-      const metricPresentation = page.getByRole("group", { name: "Presentation", exact: true });
+      const metricPresentation = await openQuerySection(page, "visualization");
       await metricPresentation.getByRole("combobox", { name: "Visualization", exact: true }).selectOption("metric");
       await metricPresentation.getByRole("combobox", { name: "Horizontal axis", exact: true }).selectOption("");
       await metricPresentation.getByRole("listbox", { name: "Value columns", exact: true }).selectOption(["started"]);
@@ -692,7 +707,7 @@ async function captureScrollPosition(page: Page, info: TestInfo, capture: Captur
 
 async function captureNativeResultSections(page: Page, info: TestInfo, capture: Capture, name: string, result: Locator, compactProvenance = false) {
   const details = result.locator(".named-result-details");
-  if (compactProvenance) await details.locator("summary").click();
+  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
   const provenance = compactProvenance ? result.locator(".named-result-details-content > p") : result.locator(".named-result-provenance > p");
   await captureScrollPosition(page, info, capture, `${name}-provenance`, provenance.first());
   await captureScrollPosition(page, info, capture, `${name}-coverage-periods`, provenance.last(), "end");
@@ -704,7 +719,7 @@ async function captureNativeResultSections(page: Page, info: TestInfo, capture: 
   await values.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await capture(page, info, `${name}-exact-values-end`);
   await values.evaluate(element => { element.scrollLeft = 0; });
-  if (compactProvenance) await details.locator("summary").click();
+  if (compactProvenance) await details.getByRole("button", { name: "Result details" }).click();
 }
 
 type DashboardAppearance = { style: string; mode: string; navigation: string; layout: string };

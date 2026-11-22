@@ -176,7 +176,7 @@ describe("Evaluate Decision Inputs editor", () => {
     api.backend.http.getJson.mockImplementation(async path => path.endsWith("/versions/v1") ? published : { ...asset, publishedVersionId: "v1" });
     const { host } = mount(<DecisionInputsEditor api={api} descriptor={descriptor} syntax="Literal" value={{ amount: { kind: "number", value: "0" } }} context={expressionContext(pin("approval@v1"))} onChange={onChange} />);
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     const json = host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!;
     type(json, '{"amount":{"kind":"number","value":"15000"}}');
     expect(onChange).toHaveBeenLastCalledWith({ amount: { kind: "number", value: "15000" } });
@@ -195,7 +195,7 @@ describe("Evaluate Decision Inputs editor", () => {
     }
     const { host } = mount(<Harness />);
     await vi.waitFor(() => expect(host.querySelector('[aria-label="amount"]')).not.toBeNull());
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     const json = host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!;
     type(json, "{}");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
@@ -587,7 +587,7 @@ describe("Evaluate Decision draft validation collection", () => {
 
   it("does not seed a new @latest clause when Advanced JSON is cleared after table growth", async () => {
     const { host, onChange, added } = await mountLatestThenGrow();
-    click(host.querySelector("summary")!);
+    click(button(host, "Advanced JSON"));
     type(host.querySelector<HTMLTextAreaElement>('[aria-label="Decision inputs JSON"]')!, "{}");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({}));
     expect(onChange.mock.calls.some(call => added.name in (call[0] as Record<string, unknown>))).toBe(false);

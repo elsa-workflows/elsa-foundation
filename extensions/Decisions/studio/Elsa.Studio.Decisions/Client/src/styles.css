@@ -19,12 +19,7 @@
 .decision-editor-header .decision-version-picker { flex: 0 0 13rem; min-width: min(13rem, 100%); gap: .2rem; }
 .decision-editor-header .decision-version-picker label { gap: .2rem; color: var(--studio-text-muted); font-size: .75rem; }
 .decision-editor-header .decision-actions { justify-content: flex-end; }
-.decision-draft-status { padding: .3rem .6rem; border: 1px solid var(--studio-border); border-radius: 999px; background: var(--studio-surface-subtle, var(--studio-surface)); color: var(--studio-text-muted); font-size: .85rem; }
 .decision-collection-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
-.decision-collection-views { display: flex; align-items: center; gap: .25rem; border-bottom: 1px solid var(--studio-border); }
-.decision-collection-views button { padding: .55rem .8rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--studio-text-muted); font: inherit; cursor: pointer; }
-.decision-collection-views button[aria-selected="true"] { border-bottom-color: var(--studio-accent); color: var(--studio-text); font-weight: 600; }
-.decision-collection-views button:focus-visible { outline: 2px solid var(--studio-accent); outline-offset: 2px; }
 .decision-editor-tabs { margin-bottom: .75rem; }
 .decision-actions, .decision-rule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
 .decisions-page .studio-overflow-menu-trigger { box-sizing: border-box; display: inline-flex; min-width: 2rem; min-height: 2rem; align-items: center; justify-content: center; padding: .2rem .5rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-control, 6px); background: var(--studio-surface); color: var(--studio-text-muted); font: inherit; line-height: 1; cursor: pointer; }
@@ -147,7 +142,6 @@
   .decision-editor-header .decision-draft-context { align-items: flex-start; flex-basis: 100%; }
   .decision-editor-header .decision-actions { justify-content: flex-start; }
   .decision-collection-toolbar > * { width: 100%; }
-  .decision-collection-views { width: 100%; }
   .decision-assets th, .decision-assets td { min-width: 8rem; }
   .decision-case-table td { min-width: 9rem; }
   .decision-grid-data-column { width: 14rem; }

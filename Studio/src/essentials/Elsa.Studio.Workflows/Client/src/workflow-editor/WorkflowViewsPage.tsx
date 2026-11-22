@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SkeletonRows, StudioAlert, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioDialog, StudioDialogFooter, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
-import { Bookmark, Trash2 } from "lucide-react";
+import { OverflowMenu, SkeletonRows, StudioAlert, StudioShellBreadcrumbs, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioDialog, StudioDialogFooter, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { deleteWorkflowView, listWorkflowViews, saveWorkflowView, workflowOrganizationSupport, type WorkflowLibraryView } from "../api/workflowOrganization";
 import { StudioLink } from "../StudioLink";
@@ -112,11 +111,11 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
           <td><strong>{view.name}</strong></td>
           <td>{view.shared ? "Shared" : "Private"}</td>
           <td>
-            <div className="wf-library-control-row">
-              <StudioButton onClick={() => applyView(view)}><Bookmark size={14} aria-hidden="true" />Apply saved view</StudioButton>
-              <StudioButton onClick={() => setEditingView(view)}><span aria-hidden="true">✏️</span>Edit</StudioButton>
-              {view.canDelete ? <StudioButton onClick={() => void deleteView(view)}><Trash2 size={14} aria-hidden="true" />Delete saved view</StudioButton> : null}
-            </div>
+            <OverflowMenu ariaLabel={`Actions for ${view.name}`} items={[
+              { id: "apply", label: "Apply saved view", onSelect: () => applyView(view) },
+              { id: "edit", label: "Edit", onSelect: () => setEditingView(view) },
+              ...(view.canDelete ? [{ id: "delete", label: "Delete saved view", destructive: true, onSelect: () => void deleteView(view) }] : [])
+            ]} />
           </td>
         </tr>)}</tbody>
       </table>

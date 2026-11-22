@@ -45,7 +45,6 @@ import {
 import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
-import { WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { WorkflowInstanceInspectionFacts, WorkflowInstanceInspectionNote } from "./WorkflowInstanceInspectionFacts";
@@ -63,7 +62,6 @@ import { readRunHistoryLocation as readTimelineLocation, writeRunHistoryLocation
 import type { RunHistorySelection, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
-import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
 import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
 import type { WorkflowWeaverController } from "../workflowWeaver";
@@ -84,7 +82,7 @@ import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioResultState, SkeletonRows, StudioDialog, studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import { StudioLink } from "../StudioLink";
@@ -515,10 +513,10 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
         </AdvancedSection>
       </form>
-      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} action={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
-      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} actions={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
+      {state === "ready" && error ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" headingLevel={3} description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
-      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
+      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><SkeletonRows /></div> : null}
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
         <div className="wf-run-deletion-toolbar" aria-label="Workflow run deletion controls">
           <span aria-live="polite">{formatRunCount(selectedRunIds.size)} selected</span>
@@ -2046,7 +2044,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
         scopeLabel={historyLocation.filters.activityExecutionId ? `Selected execution${historyLocation.filters.includeDescendants ? " and descendants" : " only"}` : "Entire run"}
         labelFor={labelForPlayback} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {currentData && currentData.activityCatalogAccess !== "allowed" ? (
         <p className="wf-instance-note" role="status">
           Activity definitions are not available {currentData.activityCatalogAccess === "forbidden" ? "with your permissions" : "on this backend"}. Activity labels and input descriptions may be limited.
@@ -2927,7 +2925,7 @@ function WorkflowInstanceInspector({
       {expanded ? (
         <>
           {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
-          {state === "failed" ? <WfErrorCard message={error} /> : null}
+          {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
           {state === "ready" && details ? (
             <div className="wf-instance-tab-content">
               {activeTab === "activity" || activeTab === "timeline" ? (activityContent ??
@@ -3480,56 +3478,29 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
   actions?: ReactNode;
   incidentRootCauseProviders?: StudioIncidentRootCauseProviderContribution[];
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  const titleId = useId();
   const [copyStatus, setCopyStatus] = useState("");
-  useDialogFocus(dialogRef, onClose);
 
   return (
-    <div className="wf-dialog-backdrop" role="presentation" onMouseDown={event => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <section
-        ref={dialogRef}
-        className="wf-dialog wf-incident-details-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={event => {
-          if (event.key !== "Escape") return;
-          event.preventDefault();
-          event.stopPropagation();
-          onClose();
-        }}
-      >
-        <header className="wf-dialog-heading wf-incident-details-heading">
-          <div>
-            <span>Workflow incident</span>
-            <h3 id={titleId}>Incident details</h3>
-            <p>{getIncidentRootCause(incident, incidentRootCauseProviders)}</p>
-          </div>
-          <button type="button" className="wf-incident-details-close" aria-label="Close incident details" onClick={onClose}>Close</button>
-        </header>
-        <div className="wf-incident-details-body">
-          <div className="wf-incident-details-actions">
-            <CopyValueButton
-              scope={context}
-              value={formatIncidentForClipboard(incident)}
-              ariaLabel={`Copy incident ${incident.failureType}`}
-              copiedLabel="incident"
-              textLabel="Copy incident details"
-              onCopied={() => { setCopyStatus(""); getNotifications().notify({ level: "success", title: "Copied incident" }); }}
-              onCopyFailed={() => setCopyStatus("Could not copy incident.")}
-            />
-            {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
-          </div>
-          {actions}
-          {guidance ? <IncidentNextStep context={context} summary={summary} incident={incident} guidance={guidance} onOpenDefinition={onOpenDefinition} definitionAccess={definitionAccess} /> : null}
-          <IncidentTechnicalContent incident={incident} />
+    <StudioDialog open title="Incident details" closeLabel="Close incident details" className="wf-incident-details-dialog"
+      description={getIncidentRootCause(incident, incidentRootCauseProviders)} onClose={onClose} onEscapeKeyDown={event => event.stopPropagation()}>
+      <div className="wf-incident-details-body">
+        <div className="wf-incident-details-actions">
+          <CopyValueButton
+            scope={context}
+            value={formatIncidentForClipboard(incident)}
+            ariaLabel={`Copy incident ${incident.failureType}`}
+            copiedLabel="incident"
+            textLabel="Copy incident details"
+            onCopied={() => { setCopyStatus(""); getNotifications().notify({ level: "success", title: "Copied incident" }); }}
+            onCopyFailed={() => setCopyStatus("Could not copy incident.")}
+          />
+          {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
         </div>
-      </section>
-    </div>
+        {actions}
+        {guidance ? <IncidentNextStep context={context} summary={summary} incident={incident} guidance={guidance} onOpenDefinition={onOpenDefinition} definitionAccess={definitionAccess} /> : null}
+        <IncidentTechnicalContent incident={incident} />
+      </div>
+    </StudioDialog>
   );
 }
 

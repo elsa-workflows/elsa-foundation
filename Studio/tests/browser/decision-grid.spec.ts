@@ -407,8 +407,9 @@ test("decision collections have linked keyboard tabs that retain focus after loa
   const recycledRow = page.getByRole("row", { name: /Approval/ });
   await expect(recycledRow).toBeVisible();
   await expect(recycleBin).toBeFocused();
-  await recycledRow.getByRole("button", { name: "Restore", exact: true }).click();
-  await expect(page.getByText("Approval was restored as an unpublished decision.")).toBeVisible();
+  await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Actions for Approval", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+  await expect(page.getByRole("row", { name: /Approval/ })).toHaveCount(0);
   await decisions.click();
   await expect(page.getByRole("button", { name: "Approval", exact: true })).toBeVisible();
   await expect(page.getByText("Unpublished", { exact: true })).toBeVisible();
@@ -416,19 +417,20 @@ test("decision collections have linked keyboard tabs that retain focus after loa
   const activeRow = page.getByRole("row", { name: /Approval/ });
   await activeRow.getByRole("button", { name: "Actions for Approval", exact: true }).click();
   const activeMenu = page.getByRole("menu", { name: "Actions for Approval", exact: true });
-  await expect(activeMenu.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
-  await activeMenu.getByRole("menuitem", { name: "Delete", exact: true }).click();
-  await expect(page.getByText("Approval was moved to the recycle bin.")).toBeVisible();
+  await expect(activeMenu.getByRole("menuitem", { name: "Move to recycle bin", exact: true })).toBeVisible();
+  await activeMenu.getByRole("menuitem", { name: "Move to recycle bin", exact: true }).click();
   await expect(page.getByRole("row", { name: /Approval/ })).toHaveCount(0);
   await recycleBin.click();
   await expect(page.getByRole("row", { name: /Approval/ })).toBeVisible();
-  await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Restore", exact: true }).click();
-  await expect(page.getByText("Approval was restored as an unpublished decision.")).toBeVisible();
+  await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Actions for Approval", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+  await expect(page.getByRole("row", { name: /Approval/ })).toHaveCount(0);
 
   await page.goto("/decision-grid.html?page=collection&theme=light");
   await page.getByRole("tab", { name: "Recycle bin", exact: true }).click();
-  await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Delete permanently", exact: true }).click();
-  await expect(page.getByText("Approval was permanently deleted.")).toBeVisible();
+  await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Actions for Approval", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete permanently", exact: true }).click();
+  await expect(page.getByRole("row", { name: /Approval/ })).toHaveCount(0);
   await expect(page.getByText("Recycle bin is empty")).toBeVisible();
 });
 
@@ -437,13 +439,14 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/decision-grid.html?page=collection&theme=${theme}`);
     await page.getByRole("tab", { name: "Recycle bin", exact: true }).click();
-    await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Restore", exact: true }).click();
+    await page.getByRole("row", { name: /Approval/ }).getByRole("button", { name: "Actions for Approval", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
     await page.getByRole("tab", { name: "Decisions", exact: true }).click();
     const row = page.getByRole("row", { name: /Approval/ });
     const trigger = row.getByRole("button", { name: "Actions for Approval", exact: true });
     await trigger.click();
     const menu = page.getByRole("menu", { name: "Actions for Approval", exact: true });
-    await expect(menu.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Move to recycle bin", exact: true })).toBeVisible();
     expect(await menu.evaluate(element => {
       const bounds = element.getBoundingClientRect();
       return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= window.innerWidth && bounds.bottom <= window.innerHeight;
@@ -479,7 +482,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await editor.press("Enter");
     await expect(cell).toHaveText("< 21");
     await page.getByRole("button", { name: "Save decision", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => document.querySelector(".decision-draft-status")?.textContent)).toBe("Saved draft");
+    await expect.poll(() => page.evaluate(() => document.querySelector(".decision-editor-title .studio-status-chip")?.textContent)).toBe("Saved draft");
 
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
     await page.getByRole("button", { name: "Run saved cases", exact: true }).click();
