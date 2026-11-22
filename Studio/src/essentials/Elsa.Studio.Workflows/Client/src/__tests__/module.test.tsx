@@ -111,7 +111,7 @@ describe("workflows module", () => {
 
     try {
       flushSync(() => root.render(<ValidationPanel draft={draft} onRepair={vi.fn()} />));
-      expect(container.textContent).toContain("No validation errors");
+      expect(container.textContent).toContain("No validation issues found");
     } finally {
       flushSync(() => root.unmount());
     }
@@ -421,6 +421,51 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
     await unmount();
+  });
+
+  it("loads the published definition run action on demand", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/runtime/workflows/executables/artifact-current/execute") && init?.method === "POST") {
+        return response({ workflowExecutionId: "wfexec-published-run" });
+      }
+      if (url.includes("/runtime/workflows/executables")) return response([
+        executable({
+          artifactId: "artifact-current",
+          definitionVersionId: "version-1",
+          references: [executableReference({
+            artifactId: "artifact-current",
+            sourceReferenceId: "published-reference",
+            definitionVersionId: "version-1"
+          })]
+        })
+      ]);
+      if (url.endsWith("/design/workflows/versions/version-1")) {
+        return response({ id: "version-1", version: "1.0.0", state: { inputs: [] } });
+      }
+      return response({ items: [definition({ publishedVersionId: "version-1" })] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute();
+
+    try {
+      await waitForText(container, "Hello World");
+      const menu = await openDefinitionActions(container, "Hello World");
+      expect(menu.textContent).toContain("Run…");
+      await click(buttonByText(menu, "Run…"));
+
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+        "https://server.example/runtime/workflows/executables/artifact-current/execute",
+        expect.objectContaining({ method: "POST" })
+      ));
+      await vi.waitFor(() => expect(api.notifications!.notify).toHaveBeenCalledWith(expect.objectContaining({
+        level: "success",
+        title: "Run started",
+        message: "Started Hello World."
+      })));
+    } finally {
+      await unmount();
+    }
   });
 
   it("soft delete offers restore through a notification action and link", async () => {
@@ -2129,10 +2174,10 @@ describe("workflows module", () => {
     await click(inputByLabel(dialog(container), "Sequence"));
     await click(buttonByText(dialog(container), "Create"));
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/design/workflows/definitions",
       expect.objectContaining({ method: "POST" })
-    );
+    ));
     await waitForUrlParam("definition", "created-definition");
     expect(createBody).toEqual({
       name: "Customer onboarding",
@@ -2194,7 +2239,7 @@ describe("workflows module", () => {
     await click(buttonByText(dialog(container), "Create"));
 
     await waitForText(container, "Review & publish");
-    expect(container.textContent).toContain("No validation errors");
+    expect(container.textContent).toContain("Checking validation");
 
     await unmount();
   });

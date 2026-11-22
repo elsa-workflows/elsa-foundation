@@ -284,7 +284,7 @@ export function ActivityGraphPublicInterfaceEditor({
 
 export function ActivityGraphVariablesEditor({ context, value, readOnly, onChange }: Pick<StudioActivityDefinitionImplementationEditorProps, "context" | "value" | "readOnly" | "onChange">) {
   const payload = normalizePayload(value.payload);
-  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens">
+  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens ad-definition-variables-editor">
     <ScopedVariablesEditor
       context={context}
       variables={toVariableEditorRecords(payload.variables)}

@@ -8,4 +8,4 @@ html[data-workspace-style="minimal"] .wf-instance-meta { font-size: var(--studio
 html[data-workspace-style="minimal"] .wf-instance-canvas { background: var(--studio-bg); }
 html[data-workspace-style="minimal"] .wf-node-runtime:not(.faulted):not(.wf-node-unavailable):not(.wf-node-ghost) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
 html[data-workspace-style="minimal"] .wf-node-runtime.selected:not(.faulted):not(.wf-node-unavailable):not(.wf-node-ghost) { border-color: var(--studio-selection-mark); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
-html[data-workspace-style="minimal"] .wf-node-runtime .wf-status-badge:is([data-status="completed"], [data-status="running"]) { color: var(--studio-text-muted); background: transparent; }
+html[data-workspace-style="minimal"] .wf-node-runtime .wf-status-badge[data-status="running"] { color: var(--studio-text-muted); background: transparent; }

@@ -1170,7 +1170,7 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
 /* Local route views share the shell cell with the full-bleed editor. Allocate the
    remaining height to the editor, including retained workspace screens and the dock. */
-.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor) {
+.content:has(> .wf-editor, > .studio-workspace-panel:not([hidden]) > .wf-editor, > .studio-authoring-workspace, > .studio-workspace-panel:not([hidden]) > .studio-authoring-workspace) {
   --studio-content-padding-block: 0px;
   --studio-content-padding-inline: 0px;
   display: flex;
@@ -1179,7 +1179,9 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 }
 
 .content > .wf-editor,
-.content > .studio-workspace-panel:not([hidden]) > .wf-editor {
+.content > .studio-workspace-panel:not([hidden]) > .wf-editor,
+.content > .studio-authoring-workspace,
+.content > .studio-workspace-panel:not([hidden]) > .studio-authoring-workspace {
   flex: 1 1 0;
   height: auto;
   min-height: 0;
