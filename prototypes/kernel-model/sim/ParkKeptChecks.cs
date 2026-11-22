@@ -96,17 +96,89 @@ internal static class ParkKeptChecks
             Retained(exhausted.Message, "exhausted payload", ParkKeepReason.Consumed) && Retained(refused, "refused payload", ParkKeepReason.Consumed),
             "the sweep deletes expired ordinary markers and preserves expired kept rows");
         await owner.DisposeAsync();
-        await using var successor = (await new DurableHost([MakeOwner("park-next")]).ActivateAsync(0))!;
+        var successorWorker = MakeOwner("park-next");
+        await using var successor = (await new DurableHost([successorWorker]).ActivateAsync(0))!;
         await Pump(successor);
         check(actor.PoisonOffers == 1 && actor.Offers == priorOffers && Retained(poison, "private payload", ParkKeepReason.Consumed) &&
             Retained(twin, "ordinary payload", ParkKeepReason.Consumed) && Retained(late, "late payload", ParkKeepReason.Arrived),
             "takeover does not offer done kept rows to the parked actor");
+
+        await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
 
         foreach (var timed in new[] { false, true })
             await CaptureParkedCompletion(timed, (ok, name) => check(ok, $"{(timed ? "timed" : "untimed")} completion: {name}"));
 
         bool Retained(Message message, string payload, ParkKeepReason reason) => store.Messages.GetValueOrDefault(message.InboxKey) is
             { Done: true, Held: false, Trial: 0, KeptBy: var actualReason, Message.Payload: var actual } && actual == payload && actualReason == reason;
+    }
+
+    private static async Task CheckKeptPages(InMemoryStore store, PartitionFence fence, string id, long creation, Action<bool, string> check)
+    {
+        var address = new CreationAddress(id, creation);
+        var identity = store.FoundationIdentity(id, creation);
+        var park = store.ReadFoundationActor(identity.Tenant, identity.Reference).Actor!.Park!;
+        const int wideBytes = 5 * 1024 * 1024;
+        var widePayload = new string('x', wideBytes);
+        var input = Enumerable.Range(0, InMemoryStore.ParkPageLimit + 2).Reverse().Select(index =>
+            new Message("page-tie", new(id), "update", index == 0 ? widePayload : null, TargetCreation: creation)
+                .WithInboxScope(index / 2, index % 2 == 0 ? null : "match"))
+            .ToArray();
+        var keys = input.Select(message => message.InboxKey).ToArray();
+        var add = new TurnCommit(id, null, null, [], [], input, [], [], null);
+        var added = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [add], [], []));
+        var checkpoint = store.Instances[id];
+        var keep = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 1 }, checkpoint.Revision,
+            [], keys, [], [], [], null)
+        { FoundationKept = keys.ToDictionary(key => key, _ => ParkKeepReason.Arrived) };
+        var kept = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [keep], [], []));
+        check(added.Landed && kept.Landed, "the fenced store retains the complete paging fixture");
+
+        // Model an allowed provider order-key collision without depending on the in-memory counter to generate one.
+        var sharedSeq = store.Messages[keys[0]].Seq;
+        foreach (var key in keys) store.Messages[key].Seq = sharedSeq;
+        var after = new ParkPageCursor(sharedSeq - 1, new InboxKey("\uffff"));
+        var front = store.ReadFoundationKeptPage(address, park, after)!;
+        var start = keys[^1];
+        check(front.Count == InMemoryStore.ParkPageLimit && front[0] == new ParkPageRow(new(sharedSeq, start), "update", null, ParkKeepReason.Arrived, wideBytes),
+            "the page starts with an oversized payload's metadata and enforces its row limit");
+        var tail = store.ReadFoundationKeptPage(address, park, front[^1].Cursor)!;
+        check(front.Concat(tail).Select(item => item.Cursor.Key).SequenceEqual(keys.Reverse()) &&
+            tail.Count == 2 && store.ReadFoundationKeptPage(address, park, tail[^1].Cursor) is { Count: 0 },
+            "the full tuple advances through scope and match ties without skipping or repeating a kept input");
+        check(store.ReadFoundationKeptPage(address, park with { Revision = park.Revision + 1 }, null) is null &&
+            store.ReadFoundationKeptPage(address with { Creation = creation + 1 }, park, null) is null,
+            "a mismatched Park mark or creation is distinguishable from an empty page");
+
+        checkpoint = store.Instances[id];
+        var altered = front.ToArray();
+        altered[^1] = altered[^1] with { Reason = ParkKeepReason.Consumed };
+        var divergent = false;
+        try { await Clear(fence, altered); }
+        catch (StoreException error) when (error.Failure == Failure.Unknown) { divergent = true; }
+        var rolledBack = divergent && store.Instances[id] == checkpoint &&
+            store.Partitions[fence.Partition].Position == fence.Position &&
+            front.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason);
+        check(rolledBack, "one mismatched kept reason rolls back the entire page and checkpoint");
+        if (!rolledBack) return;
+
+        var stale = await Clear(fence with { Epoch = fence.Epoch - 1 }, front);
+        check(!stale.Landed && store.Instances[id] == checkpoint && store.Messages[start].KeptBy == ParkKeepReason.Arrived,
+            "a stale fence cannot clear kept inputs");
+
+        var cleared = await Clear(fence, front);
+        var until = store.FoundationClock() + (long)store.IngressDeduplicationWindow.TotalMilliseconds;
+        check(cleared.Landed && store.Instances[id].Revision == checkpoint.Revision + 1 &&
+            store.Partitions[fence.Partition].Position == fence.Position + 1 &&
+            front.All(item => store.Messages[item.Cursor.Key] is { Done: true, KeptBy: null, Message.KeepUntil: var expires } && expires == until) &&
+            store.Messages[start].Message.Payload == widePayload && tail.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason),
+            "one fenced commit clears exactly the page and refreshes its window while the suffix stays kept");
+
+        ValueTask<Committed> Clear(PartitionFence authority, IReadOnlyList<ParkPageRow> page)
+        {
+            var turn = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 1 }, checkpoint.Revision, [],
+                [], [], [], [], "[\"page\"]") { FoundationParkClear = new(park, page) };
+            return store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
+        }
     }
 
     private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)

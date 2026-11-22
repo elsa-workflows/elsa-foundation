@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -25,6 +26,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public sealed class MessageRow(Message message, long seq, long seen)
     {
         internal ParkKeepReason? KeptBy;
+        internal int KeptPayloadBytes;
         public Message Message = message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
@@ -164,7 +166,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear);
+        StoreBatchRules.Validate(batch, ownedSets: true, supportsJobTrialClear: SupportsJobTrialClear,
+            supportsFoundationParkClear: true);
         if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: true);
         if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
         lock (_gate)
@@ -202,6 +205,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
+            Dictionary<InboxKey, int>? keptPayloadSizes = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -240,7 +244,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                                 Messages.GetValueOrDefault(id) is { Done: false } selected &&
                                 selected.Message.Target.Id == park.Id && selected.Message.TargetCreation == park.Creation))
                             throw new StoreException(Failure.Definite, "A kept delivery must be marked done by its exact Park.");
+                        foreach (var id in kept.Keys)
+                        {
+                            var payload = Messages[id].Message.Payload;
+                            (keptPayloadSizes ??= [])[id] = payload is null ? 0 : Encoding.UTF8.GetByteCount(payload);
+                        }
                     }
+                    if (ChangedFoundationParkInput(turn, previous, epochs) is { } changed)
+                        Diverged($"kept input {changed.Cursor.Key} changed before its Park page cleared");
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
@@ -306,12 +317,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
+                ClearFoundationParkPage(turn.FoundationParkClear, now);
                 foreach (var id in turn.Done)
                 {
                     if (turn.FoundationKept?.TryGetValue(id, out var reason) == true)
                     {
                         var retained = Messages[id];
                         (retained.Done, retained.Held, retained.Trial, retained.KeptBy) = (true, false, 0, reason);
+                        retained.KeptPayloadBytes = keptPayloadSizes?.GetValueOrDefault(id) ?? 0;
                         continue;
                     }
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.

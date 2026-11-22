@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkClear=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -17,6 +17,7 @@ public static class StoreBatchRules
         var rows = new HashSet<string>(StringComparer.Ordinal);
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
+        ValidateParkPageClears(batch, supportsFoundationParkClear);
         if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
         {
             var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
@@ -52,6 +53,22 @@ public static class StoreBatchRules
             if ((turn.Row is not null || turn.Delete) && !changed.Add(turn.Instance))
                 throw new StoreException(Failure.Definite,"A batch cannot mutate the same actor row twice.");
         }
+    }
+
+    private static void ValidateParkPageClears(CommitBatch batch, bool supported)
+    {
+        if (!batch.Turns.Any(turn => turn.FoundationParkClear is not null)) return;
+        var cleared = new HashSet<InboxKey>();
+        foreach (var turn in batch.Turns)
+            if (turn.FoundationParkClear is { } page &&
+                (!supported || turn.OpensPark || turn.Delete ||
+                    page.Rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
+                    page.Rows.Any(row => !cleared.Add(row.Cursor.Key))))
+                throw new StoreException(Failure.Definite, "A clear must write one bounded page of distinct kept keys.");
+        if (batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(turn =>
+                turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])))
+            .Any(cleared.Contains))
+            throw new StoreException(Failure.Definite, "A cleared kept input cannot be changed elsewhere in the batch.");
     }
 
     /// <summary>

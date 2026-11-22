@@ -142,6 +142,7 @@ public sealed record TurnCommit(
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }
     internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
+    internal ParkPageClear? FoundationParkClear { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
