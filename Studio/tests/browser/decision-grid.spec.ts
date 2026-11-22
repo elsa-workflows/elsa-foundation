@@ -479,7 +479,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await editor.press("Enter");
     await expect(cell).toHaveText("< 21");
     await page.getByRole("button", { name: "Save decision", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => document.querySelector(".decision-draft-status")?.textContent)).toBe("Saved draft");
+    await expect.poll(() => page.evaluate(() => document.querySelector(".decision-editor-title .studio-status-chip")?.textContent)).toBe("Saved draft");
 
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
     await page.getByRole("button", { name: "Run saved cases", exact: true }).click();
