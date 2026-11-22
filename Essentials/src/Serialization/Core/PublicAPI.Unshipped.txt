@@ -66,3 +66,12 @@ virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.<Clone>$() -> Els
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.EqualityContract.get -> System.Type!
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.Equals(Elsa.Serialization.Core.Options.ObjectConverterOptions? other) -> bool
 virtual Elsa.Serialization.Core.Options.ObjectConverterOptions.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Serialization.Core.JsonBaseline
+static Elsa.Serialization.Core.JsonBaseline.Options.get -> System.Text.Json.JsonSerializerOptions!
+static Elsa.Serialization.Core.JsonBaseline.CreateCopy() -> System.Text.Json.JsonSerializerOptions!
+Elsa.Serialization.Core.JsonCanonicalForm
+static Elsa.Serialization.Core.JsonCanonicalForm.Equals(System.Text.Json.JsonElement left, System.Text.Json.JsonElement right) -> bool
+Elsa.Serialization.Core.JsonHashInput
+static Elsa.Serialization.Core.JsonHashInput.Hash(System.Text.Json.JsonElement value) -> string!
+static Elsa.Serialization.Core.JsonHashInput.Hash<T>(T value) -> string!
+static Elsa.Serialization.Core.JsonHashInput.Hash(object? value, System.Type! type) -> string!
