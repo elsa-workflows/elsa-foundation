@@ -19,6 +19,8 @@ internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? S
 {
     internal ParkRelease? ReleasedBy { get; init; }
     internal bool ObsoleteJob { get; init; }
+    internal long? JobResultGeneration { get; init; }
+    internal ParkPageRow? JobTicketPrerequisite { get; init; }
 }
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
@@ -39,7 +41,17 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
                 Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
 }
 
-internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false);
+internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false)
+{
+    internal IEnumerable<ParkPageRow> Writes()
+    {
+        foreach (var row in Rows)
+        {
+            if (row.JobTicketPrerequisite is { } ticket) yield return ticket;
+            yield return row;
+        }
+    }
+}
 
 public sealed partial class InMemoryStore
 {
@@ -92,25 +104,51 @@ public sealed partial class InMemoryStore
                 else page.Enqueue(row, cursor);
             }
 
-            var currentJobs = recoveryGeneration is null || current.Jobs is null ? null
-                : JobRegistry.Read(current.Jobs).SelectMany(job => new[]
+            var jobs = recoveryGeneration is null || current.Jobs is null ? null : JobRegistry.Read(current.Jobs);
+            var currentJobs = jobs?.SelectMany(job => new[]
                 {
                     InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation),
                     InboxKey.JobResult(current.Id, job.Key, current.Creation, job.Generation)
                 }).ToHashSet();
-            var result = new ParkPageRow[page.Count];
-            for (var index = result.Length - 1; index >= 0; index--)
+            var deadlineJobs = !terminalInputs && current.ParkRecovery?.Mode == ParkRecoveryMode.RetryAll &&
+                current.Status == InstanceStatus.Running ? jobs?.ToDictionary(job => job.Key, job => job.Generation, StringComparer.Ordinal) : null;
+            var result = new List<ParkPageRow>(page.Count);
+            foreach (var (row, cursor) in page.UnorderedItems.OrderBy(item => item.Priority))
             {
-                page.TryDequeue(out var row, out var cursor);
-                result[index] = new(cursor, row!.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
+                var prerequisite = deadlineJobs is null ? null : ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs);
+                if (prerequisite is not null && result.Count + 2 > ParkPageLimit) break;
+                result.Add(new(cursor, row.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
                 {
                     ReleasedBy = row.ReleasedBy,
                     ObsoleteJob = recoveryGeneration is not null && (row.Message.Kind == Kinds.Job || row.Message.FoundationJobResult) &&
-                        currentJobs?.Contains(cursor.Key) != true
-                };
+                        currentJobs?.Contains(cursor.Key) != true,
+                    JobResultGeneration = recoveryGeneration is not null && row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true }
+                        ? row.Message.JobGeneration : null,
+                    JobTicketPrerequisite = prerequisite
+                });
+                // The cursor names the deadline. Its later ticket cannot occupy a second position in this page.
+                if (prerequisite is not null) break;
             }
             return result;
         }
+    }
+
+    private ParkPageRow? ReadDeadlinePrerequisite(InstanceRow actor, MessageRow deadline, ParkPageCursor cursor,
+        IReadOnlyDictionary<string, long> jobs)
+    {
+        var message = deadline.Message;
+        if (message.Kind != Kinds.JobDeadline || !cursor.Key.HasIssuedOrigin || message.Sender != actor.Id ||
+            message.SenderCreation != actor.Creation || deadline.JobTiming.JobKey is not { } key ||
+            !jobs.TryGetValue(key, out var generation))
+            return null;
+        var ticketKey = InboxKey.Ticket(actor.Id, key, actor.Creation, generation);
+        if (Messages.GetValueOrDefault(ticketKey) is not { Done: true, KeptBy: ParkKeepReason.Consumed } ticket ||
+            !IsJobEnvelope(ticket.Message, actor, Kinds.Job, generation) ||
+            ticket.JobTiming.Timer != message.Id || ticket.JobTiming.At != message.Due)
+            return null;
+        var later = new ParkPageCursor(ticket.Seq, ticketKey);
+        if (later.CompareTo(cursor) <= 0) return null;
+        return new(later, Kinds.Job, ticket.Message.Sender, ticket.KeptBy, ticket.PayloadLength) { ReleasedBy = ticket.ReleasedBy };
     }
 
     private ParkPageRow? ChangedFoundationParkInput(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs)
@@ -137,7 +175,7 @@ public sealed partial class InMemoryStore
         var drain = checkpoint.ParkRecovery!;
         var release = new ParkRelease(checkpoint.Creation, checkpoint.ParkResolutionGeneration);
         var until = now + (long)FoundationIngressWindow(null).TotalMilliseconds;
-        foreach (var row in page.Rows)
+        foreach (var row in page.Writes())
         {
             var stored = Messages[row.Cursor.Key];
             stored.Message = stored.Message with { KeepUntil = until };

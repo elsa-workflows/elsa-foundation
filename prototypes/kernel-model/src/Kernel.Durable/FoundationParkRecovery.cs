@@ -182,7 +182,7 @@ public sealed partial class InMemoryStore
             return;
         }
 
-        if (next != (previous with { Revision = next.Revision, ParkRecovery = after }) ||
+        if (next != (previous with { Revision = next.Revision, ParkRecovery = after, Jobs = JobsAfterRecoveryPage(previous, page) }) ||
             turn.Sent is not [var control] || control.KeepUntil is not null ||
             after.Serial != checked(before.Serial + 1) || !envelope.MatchesIssued(control, next, after.Serial, after.Control))
             throw InvalidDrain();
@@ -208,11 +208,12 @@ public sealed partial class InMemoryStore
             return;
         }
         var restored = current.Where(row => before.Restores(row, previous.Status)).ToArray();
+        var prerequisites = current.Count(row => row.JobTicketPrerequisite is not null);
         var gate = restored.LastOrDefault()?.Cursor.Key;
         if (after != (rescheduled with
             {
                 Cursor = current[^1].Cursor,
-                Restored = checked(before.Restored + restored.Length),
+                Restored = checked(before.Restored + restored.Length + prerequisites),
                 Cleared = checked(before.Cleared + current.Count - restored.Length), Gate = gate
             }))
             throw InvalidDrain();

@@ -107,6 +107,7 @@ internal sealed partial class ActorAdapter
 
         var admitted = new List<Durable.ParkPageRow>(page.Count);
         var restored = 0;
+        var written = 0;
         var (rows, bytes) = (credit.Rows, credit.Bytes);
         Durable.InboxKey? gate = null;
         foreach (var item in page)
@@ -124,19 +125,27 @@ internal sealed partial class ActorAdapter
                 gate = item.Cursor.Key;
             }
             admitted.Add(item);
+            written++;
+            if (item.JobTicketPrerequisite is null) continue;
+            written++;
+            restored++;
         }
         if (admitted.Count == 0)
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);
         var continued = drain with
         {
             Cursor = admitted[^1].Cursor, Restored = checked(drain.Restored + restored),
-            Cleared = checked(drain.Cleared + admitted.Count - restored), Gate = gate
+            Cleared = checked(drain.Cleared + written - restored), Gate = gate
         };
         return NextPage(envelope.Issue(row, serial), continued, new(park, admitted));
 
         Durable.TurnOutcome NextPage(Durable.Message next, Durable.ParkRecoveryDrain state, Durable.ParkRecoveryPage? change)
         {
-            var outcome = ParkCheckpoint(input, row, row with { ParkRecovery = state with { Serial = serial, Control = next.InboxKey } });
+            var outcome = ParkCheckpoint(input, row, row with
+            {
+                ParkRecovery = state with { Serial = serial, Control = next.InboxKey },
+                Jobs = Durable.InMemoryStore.JobsAfterRecoveryPage(row, change)
+            });
             outcome.Sent.Add(next);
             outcome.FoundationRecoveryPage = change;
             return outcome;

@@ -2474,7 +2474,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var units = _queue.GetRange(0, Math.Min(_queue.Count, _options.MaxBatch));     // rows per flush are capped
         var changing = units.Exists(unit => unit.FoundationRecoveryPage is not null || unit.FoundationRecoveryTimers is { Rearms.Count: > 0 })
-            ? units.SelectMany(unit => (unit.FoundationRecoveryPage?.Rows.Select(row => row.Cursor.Key) ?? [])
+            ? units.SelectMany(unit => (unit.FoundationRecoveryPage?.Writes().Select(row => row.Cursor.Key) ?? [])
                 .Concat(unit.FoundationRecoveryTimers?.Rearms.Select(rearm => rearm.Envelope.InboxKey) ?? [])).ToHashSet()
             : null;
         var markable = changing is null ? _items.Values.AsEnumerable()
@@ -2963,7 +2963,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (unit.FoundationRecoveryPage is { } page)
         {
-            foreach (var row in page.Rows)
+            foreach (var row in page.Writes())
             {
                 var key = row.Cursor.Key;
                 if (_items.TryGetValue(key, out var cached)) Forget(cached);

@@ -91,7 +91,7 @@ public static class StoreBatchRules
                 if (jobs.Writes.Any(job => !changed.Add(job.InboxKey)))
                     throw new StoreException(Failure.Definite, "Each restarted job write must have a distinct full key.");
             }
-            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
+            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Writes().ToArray();
             if (rows is null) continue;
             changed ??= [];
             if ((turn.FoundationParkClear is not null && turn.FoundationRecoveryPage is not null) ||

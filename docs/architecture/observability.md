@@ -2055,6 +2055,16 @@ calls one new model hook.
   ticket g finds it of an obsolete generation and clears it. Ticket g is therefore never restored beside g + 1, and
   the job runs at most twice, once as g before the Park and once as g + 1 (fifth review).
 
+  For retry-all, a kept deadline whose current-generation ticket is still kept `Consumed` may sort before that
+  ticket. The page that releases the deadline also releases the paired ticket in the same fenced commit. The match
+  uses the creation, generation, issued deadline id and its original due time. Both rows count against the page
+  limit. If only one position remains, the page ends before the deadline. The cursor advances to the deadline's
+  position, and the later ticket is already released when a subsequent page reaches that position. The ticket is
+  exempt from handoff credit under the usual ticket rule. This lets the deadline settle the pending ticket as a
+  timeout while preserving the absolute due time and the current job generation. The in-memory reference store
+  projects the linkage from the metadata saved with each row at insertion. Physical provider projection and its
+  cost are part of K4 qualification.
+
   **The re-arm.** A timer is re-armed under its own full key from one durable source, whichever branch the
   disposition step's point lookup chose. The plan's `TimerSpec`, from the model's committed state, gives `Kind`,
   `Payload` (encoded as `Send` encodes it) and `Due`, the original absolute deadline. The instance row gives the rest:

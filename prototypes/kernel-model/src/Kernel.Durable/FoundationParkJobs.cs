@@ -13,17 +13,36 @@ public sealed partial class InMemoryStore
 {
     private const int JobDispositionEntryBytes = 40;
 
+    internal static string? JobsAfterRecoveryPage(InstanceRow actor, ParkRecoveryPage? page)
+    {
+        if (actor.Status == InstanceStatus.Running || actor.Jobs is null || page is null) return actor.Jobs;
+        var results = page.Rows.Where(row => row.JobResultGeneration.HasValue)
+            .ToDictionary(row => row.Cursor.Key, row => row.JobResultGeneration!.Value);
+        if (results.Count == 0) return actor.Jobs;
+        var jobs = JobRegistry.Read(actor.Jobs);
+        var removed = jobs.RemoveAll(job =>
+            results.TryGetValue(InboxKey.JobResult(actor.Id, job.Key, actor.Creation, job.Generation), out var generation) &&
+            generation == job.Generation);
+        return removed == 0 ? actor.Jobs : JobRegistry.Write(jobs);
+    }
+
     internal ParkJobOpen? PlanFoundationJobs(InstanceRow row, ParkRecoveryMode mode, IReadOnlyList<ParkJobRecipe> recipes, long timerBytes)
     {
         var registered = JobRegistry.Read(row.Jobs);
         if (registered.Count > recipes.Count || registered.Count > 0 && row.Creation <= 0) return null;
 
         var byKey = new Dictionary<string, ParkJobRecipe>(StringComparer.Ordinal);
+        var registeredKeys = registered.Select(job => job.Key).ToHashSet(StringComparer.Ordinal);
+        var bytes = timerBytes;
+        var nextGeneration = row.NextJobGeneration ?? 1;
         foreach (var recipe in recipes)
+        {
             if (recipe.Key is null || !FoundationMetadataLimits.FitsName(recipe.Key, preservesCodeUnits: true) ||
                 !FoundationMetadataLimits.FitsContent(recipe.Arguments) || !byKey.TryAdd(recipe.Key, recipe))
                 return null;
-        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], timerBytes);
+            if (!registeredKeys.Contains(recipe.Key) && !Charge(EncodeRecipe(recipe, nextGeneration, out _))) return null;
+        }
+        if (registered.Count == 0) return new(recipes, row.Jobs, row.NextJobGeneration, null, [], [], [], [], bytes);
         var discardedResults = new HashSet<string>(StringComparer.Ordinal);
         var pending = new List<InboxKey>();
         var retained = new List<InboxKey>();
@@ -31,8 +50,6 @@ public sealed partial class InMemoryStore
         var writes = new List<Message>();
         var previousRestarts = ReadJobRestarts(row.ParkRestartedJobs);
         var restarts = new SortedDictionary<string, long>(StringComparer.Ordinal);
-        var bytes = timerBytes;
-        var nextGeneration = row.NextJobGeneration ?? 1;
         lock (_gate)
         {
             for (var index = 0; index < registered.Count; index++)
@@ -45,37 +62,40 @@ public sealed partial class InMemoryStore
                 var resultKey = InboxKey.JobResult(row.Id, key, row.Creation, generation);
                 var result = ticket is { Done: false } ? null : Messages.GetValueOrDefault(resultKey);
                 if (result is not null && (!result.Message.FoundationJobResult || !IsJobEnvelope(result.Message, row, Kinds.JobFinished, generation))) return null;
+
+                // Preserve these full keys even when conversion or sweep has removed the rows.
+                if (ticket is { Done: false }) pending.Add(ticketKey);
+                else retained.Add(ticketKey);
+                retained.Add(resultKey);
+                var oldTimer = ticket?.Message.Payload is not null ? ticket.Message.Read<JobTicket>().Timer : null;
+                oldTimer ??= DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
+                var oldDeadline = InboxKey.Issued(oldTimer);
+
                 var digest = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(key)));
+                var payload = EncodeRecipe(recipe, nextGeneration, out var timerId);
+                if (!Charge(payload)) return null;
                 if (mode == ParkRecoveryMode.Resume && result is { KeptBy: ParkKeepReason.Consumed })
                 {
-                    retained.Add(resultKey);
+                    retained.Add(oldDeadline);
                     discardedResults.Add(key);
                     continue;
                 }
                 var keepsResult = result is { Done: false } or { KeptBy: not null };
                 var retriesTicket = !keepsResult && mode == ParkRecoveryMode.RetryAll && ticket is { KeptBy: ParkKeepReason.Consumed };
                 var restart = ticket is not { Done: false } && !keepsResult && !retriesTicket;
-                var deadline = recipe.Deadline;
-                var timerId = deadline is null ? null : DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, nextGeneration);
-                var payload = Json.Write(new JobTicket(row.Model, key, recipe.Arguments, deadline, timerId));
-                bytes += RestoreWaitAllowance + Encoding.UTF8.GetByteCount(payload);
-                if (bytes > MaxRestoreBytes || !FoundationMetadataLimits.FitsContent(payload)) return null;
-
                 if (!restart)
                 {
-                    if (ticket is { Done: false }) pending.Add(ticketKey);
-                    else retained.Add(keepsResult ? resultKey : ticketKey);
+                    retained.Add(oldDeadline);
                     if (previousRestarts.TryGetValue(digest, out var restarted) && restarted == generation)
                         restarts.Add(digest, generation);
                     continue;
                 }
 
-                var oldTimer = ticket?.Message.Payload is not null ? ticket.Message.Read<JobTicket>().Timer : null;
-                oldTimer ??= DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
-                var oldDeadline = InboxKey.Issued(oldTimer);
                 if (Messages.GetValueOrDefault(oldDeadline) is { Done: false, Message: { Kind: Kinds.JobDeadline } expiry } &&
                     expiry.Target.Id == row.Id && expiry.TargetCreation == row.Creation && expiry.Read<JobDeadline>().Key == key)
                     recalls.Add(oldDeadline);
+                else
+                    retained.Add(oldDeadline);
                 var newKey = InboxKey.Ticket(row.Id, key, row.Creation, nextGeneration);
                 var job = new Message(newKey.Id, new(row.Id), Kinds.Job, payload, row.Id,
                     TargetCreation: row.Creation, SenderCreation: row.Creation) { JobGeneration = nextGeneration };
@@ -83,11 +103,11 @@ public sealed partial class InMemoryStore
                 if (timerId is not null)
                 {
                     var timeout = new Message(timerId, new(row.Id), Kinds.JobDeadline, Json.Write(new JobDeadline(key)), row.Id,
-                        Due: deadline, TargetCreation: row.Creation, SenderCreation: row.Creation);
-                    bytes += RestoreWaitAllowance + Encoding.UTF8.GetByteCount(timeout.Payload!);
+                        Due: recipe.Deadline, TargetCreation: row.Creation, SenderCreation: row.Creation);
+                    if (!Charge(timeout.Payload!)) return null;
                     writes.Add(timeout.AsIssued().AsKernelTicket());
                 }
-                if (bytes > MaxRestoreBytes || nextGeneration == long.MaxValue) return null;
+                if (nextGeneration == long.MaxValue) return null;
                 registered[index] = new(key, nextGeneration);
                 restarts.Add(digest, nextGeneration++);
             }
@@ -95,6 +115,18 @@ public sealed partial class InMemoryStore
         registered.RemoveAll(job => discardedResults.Contains(job.Key));
         return writes.Any(message => !FoundationMetadataLimits.FitsComposed(message)) ? null :
             new(recipes, JobRegistry.Write(registered), nextGeneration, WriteJobRestarts(restarts), pending, retained, recalls, writes, bytes);
+
+        string EncodeRecipe(ParkJobRecipe recipe, long generation, out string? timerId)
+        {
+            timerId = recipe.Deadline is null ? null : DurableTurn.FoundationJobDeadlineId(row.Id, row.Creation, generation);
+            return Json.Write(new JobTicket(row.Model, recipe.Key, recipe.Arguments, recipe.Deadline, timerId));
+        }
+
+        bool Charge(string payload)
+        {
+            bytes += RestoreWaitAllowance + Encoding.UTF8.GetByteCount(payload);
+            return bytes <= MaxRestoreBytes && FoundationMetadataLimits.FitsContent(payload);
+        }
     }
 
     private static bool IsJobEnvelope(Message message, InstanceRow row, string kind, long generation) =>
