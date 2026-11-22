@@ -118,6 +118,8 @@ internal static class ParkKeptChecks
         await CheckUnarmedParkExpiry(check);
         await CheckFiniteParkExpiry(manual: false, check);
         await CheckFiniteParkExpiry(manual: true, check);
+        await CheckDelayedExpiry(interrupt: true, check);
+        await CheckDelayedExpiry(interrupt: false, check);
         await CheckZeroWindowWithoutWake(check);
         await CheckParkExpiryClockAtFence(early: false, check);
         await CheckParkExpiryClockAtFence(early: true, check);
@@ -1783,6 +1785,127 @@ internal static class ParkKeptChecks
         check(probe.Notices is [{ Final: false, Status: Contract.ActorStatus.Faulted }, { Final: true, Status: Contract.ActorStatus.Faulted }],
             $"{label}: the parent receives its provisional Park notice and one final Faulted notice");
 
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task CheckDelayedExpiry(bool interrupt, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_044_000;
+        const int maxAttempts = 3;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(20) };
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("stale-expiry");
+        var ingress = new InMemoryIngress(store, new Requests("stale-expiry"), "stale-expiry", (_, kind) => kind == Contract.Kinds.Recover);
+        var label = interrupt ? "P-4(2b) expiry after re-park" : "P-4(3) expiry at a new Park";
+        var first = Owner("capture-expiry");
+        await using var originalOwner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        var id = store.FoundationTarget(scope.Tenant, actor.Id)!.Id;
+        await Pump(originalOwner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(originalOwner);
+        var parked = Read();
+        if (parked.Park is null || store.FoundationExpiry(parked.Row) is not { Armed: { } oldKey } initialExpiry)
+        {
+            check(false, $"{label}: the first Park commits its timer");
+            return;
+        }
+        var old = store.Messages[oldKey];
+        if (interrupt)
+        {
+            await ingress.SendAsync(scope, target, "trip", "poison", new string('x', ParkRecoveryCredit.LimitBytes));
+            await ingress.SendAsync(scope, target, "kept-suffix", "advance");
+            await Pump(originalOwner);
+        }
+        var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+        var resume = await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(first);
+        var recalled = resume.Outcome == Contract.AdmissionOutcome.Accepted && Read().Row.ParkRecovery is not null &&
+            store.FoundationExpiry(Read().Row) is { Armed: null } && !store.Messages.ContainsKey(oldKey);
+        check(recalled, $"{label}: Open recalls the old timer before its original deadline");
+        if (!recalled) return;
+        if (interrupt)
+        {
+            var trip = store.Messages.Values.Single(row => row.Message.Id == "trip");
+            for (var pass = 0; pass < 8 && trip.ReleasedBy is null; pass++) await Step(first);
+            var released = trip is { Done: false, ReleasedBy: not null } && Read().Row.ParkRecovery is { Cursor: not null } &&
+                store.Messages.Values.Any(row => row.KeptBy is not null);
+            check(released, $"{label}: page one releases a trip input before the kept suffix");
+            if (!released) return;
+            trip.Attempts = maxAttempts;
+        }
+
+        await originalOwner.DisposeAsync();
+        now++;
+        var recovery = Owner("advance-to-park");
+        await using var recoveryOwner = (await new DurableHost([recovery]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 20 && Read().Row.ParkRecovery is not null; pass++)
+        {
+            now += 11;
+            await Step(recovery);
+        }
+        if (!interrupt)
+        {
+            var recovered = Read() is { Park: null, Row: { Status: InstanceStatus.Running, ParkRecovery: null } };
+            check(recovered, $"{label}: the first Park finishes recovery before the second fault");
+            if (!recovered) return;
+            await ingress.SendAsync(scope, target, "fault-later", "poison");
+            await Pump(recoveryOwner);
+        }
+        var current = Read();
+        var expiry = store.FoundationExpiry(current.Row);
+        if (current is not { Park: not null, Row: { Status: InstanceStatus.Faulted, ParkRecovery: null } } ||
+            expiry?.Armed is not { } currentKey)
+        {
+            check(false, $"{label}: the current Park has an armed expiry");
+            return;
+        }
+        var epoch = recovery.Fences.Single().Epoch;
+        var fresh = store.Messages[currentKey].Message;
+        var successorTimer = current.Row.Creation == parked.Row.Creation && oldKey != currentKey &&
+            fresh.Read<ParkDrainEnvelope>().Generation > old.Message.Read<ParkDrainEnvelope>().Generation &&
+            ParkDrainEnvelope.For(current.Row, current.Park).MatchesExpiry(fresh, current.Row, expiry) &&
+            (interrupt ? current.Park == parked.Park && expiry.At == initialExpiry.At :
+                current.Park != parked.Park && expiry.At > initialExpiry.At);
+        check(successorTimer, $"{label}: the current timer has a new key and current generation");
+        if (!successorTimer) return;
+
+        await recoveryOwner.DisposeAsync();
+        now = expiry.At;
+        var cold = Owner("deliver-stale-expiry");
+        await using var next = (await new DurableHost([cold]).ActivateAsync(0))!;
+        // Replay the authentic recalled carrier below admission, with its original earlier sequence.
+        store.Messages.Add(oldKey, new(old.Message, old.Seq, 0) { Scoped = true, Tenant = scope.Tenant });
+        await Step(cold);
+        var refused = cold.Fences.SingleOrDefault()?.Epoch > epoch && !store.Messages.ContainsKey(oldKey) &&
+            Read() == current && store.FoundationExpiry(current.Row) == expiry && store.Messages.ContainsKey(currentKey);
+        check(refused, $"{label}: the due stale timer is dropped and the current timer retains authority " +
+            $"(opened by {Read().Row.ParkDiscard?.Operation})");
+        if (!refused) return;
+
+        await Step(cold);
+        var opened = Read().Row.ParkDiscard;
+        check(opened is { Expired: true } && opened.Operation == fresh.Id && !store.Messages.ContainsKey(currentKey),
+            $"{label}: only the armed full key opens the expiry drain (opened by {opened?.Operation}; owns {cold.Owns})");
+        await Pump(next);
+        check(Read() is { Park: null, Row: { ParkDiscarded: true, ParkDiscard: null } } &&
+            store.Messages.Values.All(row => row.KeptBy is null && row.Message.Kind != Kinds.ParkExpiry) &&
+            store.Journal.Values.Count(row => row.Entries.Contains("\"expired\"", StringComparison.Ordinal)) == 1,
+            $"{label}: Complete settles the kept inputs and records one expiry");
+
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { MaxAttempts = maxAttempts, Monotonic = () => now - initial, Horizon = TimeSpan.Zero });
         async Task Step(Worker worker)
         {
             await worker.PollAsync();
