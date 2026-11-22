@@ -118,6 +118,8 @@ internal static class ParkKeptChecks
         await CheckUnarmedParkExpiry(check);
         await CheckFiniteParkExpiry(manual: false, check);
         await CheckFiniteParkExpiry(manual: true, check);
+        await CheckRecalledExpiryDuringRecovery(ended: false, check);
+        await CheckRecalledExpiryDuringRecovery(ended: true, check);
         await CheckDelayedExpiry(interrupt: true, check);
         await CheckDelayedExpiry(interrupt: false, check);
         await CheckZeroWindowWithoutWake(check);
@@ -1791,6 +1793,97 @@ internal static class ParkKeptChecks
             await worker.LoadAsync();
             await worker.FlushAsync();
             worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+    }
+
+    private static async Task CheckRecalledExpiryDuringRecovery(bool ended, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_043_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
+        var probe = new Probe { FaultOnAdvance = ended };
+        var scope = new Contract.BoundScope("recalled-expiry");
+        var ingress = new InMemoryIngress(store, new Requests("recalled-expiry"), "recalled-expiry", (_, kind) => kind == Contract.Kinds.Recover);
+        var label = $"P-4(2a) {(ended ? "ended" : "running")} recovery";
+        var first = Owner("recall-first", 32);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(owner);
+        var parked = Read();
+        if (parked.Park is null || store.FoundationExpiry(parked.Row) is not { Armed: { } oldKey } armed)
+        {
+            check(false, $"{label}: the parked actor has an armed timer");
+            return;
+        }
+        var old = store.Messages[oldKey];
+        await ingress.SendAsync(scope, target, "advance", "advance", new string('x', ParkRecoveryCredit.LimitBytes));
+        await ingress.SendAsync(scope, target, "suffix", "update");
+        await Pump(owner);
+        var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+        probe.PausePages = !ended;
+        await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(first);
+        var opened = Read().Row.ParkRecovery is not null && !store.Messages.ContainsKey(oldKey) &&
+            store.FoundationExpiry(Read().Row) is { Armed: null };
+        check(opened, $"{label}: Open recalls the original expiry before the window closes");
+        if (!opened) return;
+        for (var pass = 0; pass < 12 && !Ready(); pass++)
+        {
+            now += 11;
+            await Step(first);
+        }
+        var before = Read();
+        var stable = Ready() && now < armed.At && store.FoundationExpiry(before.Row) is { Armed: null } &&
+            before.Row.ParkResolutionGeneration > old.Message.Read<ParkDrainEnvelope>().Generation;
+        check(stable, $"{label}: the drain is open with a newer generation and a kept suffix");
+        if (!stable) return;
+
+        var epoch = first.Fences.Single().Epoch;
+        await owner.DisposeAsync();
+        now = armed.At;
+        var seen = new List<InboxKey>();
+        var cold = Owner("recall-cold", 1, row => seen.Add(row.Message.InboxKey));
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        // Reinsert an authentic carrier below admission so the original id and its due time both survive.
+        store.Messages.Add(oldKey, new(old.Message, old.Seq, 0) { Scoped = true, Tenant = scope.Tenant });
+        var kept = store.Messages.Values.Count(row => row.KeptBy is not null);
+        await Step(cold);
+        var current = Read();
+        var refused = cold.Fences.SingleOrDefault()?.Epoch > epoch && seen.SequenceEqual([oldKey]) && !store.Messages.ContainsKey(oldKey) &&
+            current == before && store.Messages.Values.Count(row => row.KeptBy is not null) == kept;
+        check(refused, $"{label}: the recalled expiry is dropped at its original deadline (expiry opened {current.Row.ParkDiscard?.Expired == true})");
+        if (!refused) return;
+
+        probe.PausePages = false;
+        for (var pass = 0; pass < 20 && (Read().Row.ParkRecovery is not null || probe.RecoveredArrivals == 0); pass++)
+        {
+            now += 11;
+            await Step(cold);
+        }
+        current = Read();
+        check(current is { Park: null, Row: { ParkRecovery: null, ParkDiscard: null } } &&
+            current.Row.Status == (ended ? InstanceStatus.Faulted : InstanceStatus.Running) && probe.RecoveredArrivals == 1 &&
+            store.Messages.Values.All(row => row.KeptBy is null) &&
+            store.Journal.Values.All(row => !row.Entries.Contains("\"expired\"", StringComparison.Ordinal)),
+            $"{label}: the genuine recovery finishes with its saved outcome and clears all kept inputs");
+
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        bool Ready() => Read().Row is { ParkRecovery: { } drain } row &&
+            (ended ? row.Status == InstanceStatus.Faulted : store.Messages[drain.Control].Message.Due > now) &&
+            store.Messages.Values.Any(row => row.KeptBy is not null);
+        Worker Owner(string node, int pollLimit, Action<Stored>? observe = null) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, PollLimit = pollLimit, Horizon = TimeSpan.Zero, OnObservedDelivery = observe });
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
             await worker.FlushAsync();
         }
     }
