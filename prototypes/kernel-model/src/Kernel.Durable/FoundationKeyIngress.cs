@@ -5,7 +5,7 @@ namespace Kernel.Durable;
 
 public sealed partial class InMemoryStore
 {
-    internal enum KeyAdmissionOutcome { Accepted, Duplicate, Repeat, Missing, Conflict, ObligationOutstanding }
+    internal enum KeyAdmissionOutcome { Accepted, Duplicate, Repeat, Missing, Conflict, ObligationOutstanding, Invalid }
     internal sealed record KeyAdmissionReceipt(KeyAdmissionOutcome Outcome, string? Reference = null);
 
     private sealed record CallerBinding(string Name, InstanceRef Address, string Reference, long ReuseAfter);
@@ -22,7 +22,7 @@ public sealed partial class InMemoryStore
         if (!FoundationMetadataLimits.FitsName(key) || !FoundationMetadataLimits.FitsName(id, preservesCodeUnits: true) ||
             (spec is null ? !FoundationMetadataLimits.FitsKind(kind) || !FoundationMetadataLimits.FitsContent(payload) :
                 !FoundationMetadataLimits.FitsContent(spec.Input, FoundationMetadataLimits.StartContentBytes)))
-            return new(KeyAdmissionOutcome.Conflict);
+            return new(KeyAdmissionOutcome.Invalid);
         if (spec is null) Kinds.RequireApplicationSend(kind);
         var window = FoundationIngressWindow(keepFor);
         var qualified = tenant + "_" + key;

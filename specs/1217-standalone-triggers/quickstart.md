@@ -1,6 +1,8 @@
 # Standalone trigger qualification guide
 
-**Status**: Planned qualification. No command/result below is a claim of feature acceptance. Run after implementing the corresponding tasks, using the committed candidate and owned temporary hosts/stores.
+**Status**: Implemented in finishing delivery [#4585](https://github.com/elsa-workflows/elsa-foundation/pull/4585), following [#4580](https://github.com/elsa-workflows/elsa-foundation/pull/4580), [#4582](https://github.com/elsa-workflows/elsa-foundation/pull/4582) and [#4584](https://github.com/elsa-workflows/elsa-foundation/pull/4584). Actual merge/resulting-main receipts are recorded on the finishing PR. Use committed candidates and owned disposable hosts/stores; commands alone do not establish a pass.
+
+**Scoped owner exception (22 November 2026):** The owner explicitly instructed “Skip CI and stick to self review only. Self merge when done.” For this delivery only, CI and independent review are waived; Codex performs source/visual self-review, local validation and personal-account self-merge. Waived checks are not passing checks. Normal contributor requirements below remain the default for later changes. See [delivery receipt](evidence/delivery-2026-11-22.md).
 
 ## Preparation
 
@@ -22,16 +24,16 @@ Use the normal `dotnet` command on PATH. A build-slot wait is a queue, not a han
 For each changed project, enumerate tests then run the complete project and record executed versus listed counts. The main affected projects are:
 
 ```bash
-dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --list-tests
-dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj
-dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj
-dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --list-tests
+dotnet test essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj
+dotnet test essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj
+dotnet test essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj
 ```
 
 Select further whole suites from the actual final diff (HTTP activities, Primitives, Publishing, Expressions or distributed providers). Do not count a filtered helper as whole-suite acceptance. Meaningful revert/mutation controls prove changed behavior fails without its implementation; retain original failure and corrected pass separately.
@@ -62,10 +64,10 @@ Extend the existing runner's finite journey/capture inventory before this run. I
 ```bash
 pnpm --dir Studio typecheck
 pnpm --dir Studio check:bundle:workflows
-python3 tools/ux-acceptance/run.py --output /tmp/standalone-triggers-ux-UNIQUE-RUN
+python3 tools/ux-acceptance/standalone.py --suite standalone-triggers --studio-shape coordinated-sdk --output /tmp/standalone-triggers-ux-UNIQUE-RUN
 ```
 
-Choose a new output path for every run; do not reuse or overwrite failed evidence. The existing runner uses the normal development seed without requiring another identity/credential product. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
+Choose a new output path for every run; do not reuse or overwrite failed evidence. The standalone producer requires seven journeys in seven appearances (49 executions), uses the normal development seed and independently composes the SDK consumer's owned store. Its controlled identity/composition setup touches only stopped, token-marked disposable hosts. `--journey` runs all seven appearances of one selected journey and cannot certify the complete feature. The existing `run.py` retains its original suite as its default; it does not run this feature matrix. See [UX acceptance](ux-acceptance.md) for resource/association/input/mode/policy/delivery/permission states and named captures.
 
 Open the actual screenshots, accessibility snapshots and traces. Independent inspection covers desktop/narrow/light/dark and the additional changed-surface checks named in that record. Retain keyboard/focus, empty/populated, validation/conflict/recovery, source-owned and denied states. Link current-commit downloadable CI artifacts; local paths alone are not shared acceptance evidence.
 
@@ -73,11 +75,11 @@ Open the actual screenshots, accessibility snapshots and traces. Independent ins
 
 ```bash
 bash tools/architecture/restore-ci-project-graph.sh
-dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
+dotnet test essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
 ```
 
 If ProjectReferences change, run the required locked solution restore. Review public API deltas, module catalogs and migration/upcast paths. Keep the PR draft through converged independent correctness/standards/acceptance review, with current-head receipts. Mark ready and request normal review so required checks run on the final head. Follow current org merge rules without bypassing protection or human holds.
 
-After merge, record the actual resulting-main SHA/CI and repeat the applicable composed source/Studio qualification. Advance the spec lifecycle in the finishing implementation PR. Close #3582 only after the full accepted feature matrix is delivered; a design packet, partial milestone or unmerged branch is incomplete.
+After merge, record the actual resulting-main SHA/CI and repeat the applicable composed source/Studio qualification. Advance the spec lifecycle in the finishing implementation PR. The owner closed #3582 on 14 November; preserve that state and append the actual delivery receipt when the full accepted matrix is delivered. If an owning issue remains open, close it only after delivery; a design packet, partial milestone or unmerged branch is incomplete.

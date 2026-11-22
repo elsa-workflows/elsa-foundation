@@ -51,6 +51,11 @@ public sealed record ActivityTemplatePlacement(
     public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } = [];
 }
 
+public sealed class ActivityTemplateMissingRequiredInputException(Exception innerException)
+    : Exception("A required activity input has no value or default.", innerException)
+{
+}
+
 /// <summary>
 /// Iteratively expands exact immutable templates under canonical invocation origins. Every placed
 /// identity uses the full SHA-256 of a length-framed origin; readable origins remain in metadata.
@@ -341,7 +346,15 @@ public sealed class ActivityTemplatePlacer(
                 continue;
             }
 
-            var build = BuildPlacement(frame, generatedIds, request, cancellationToken);
+            PlacementBuild build;
+            try
+            {
+                build = BuildPlacement(frame, generatedIds, request, cancellationToken);
+            }
+            catch (ArgumentException exception) when (IsMissingRequiredInput(exception))
+            {
+                throw new ActivityTemplateMissingRequiredInputException(exception);
+            }
             stack.Pop();
             if (stack.TryPeek(out var parent))
                 parent.Children.Add(build);
@@ -356,6 +369,10 @@ public sealed class ActivityTemplatePlacer(
             new(result.LayoutSegments),
             result.RuntimeRequirements) { ActivityPresentation = result.ActivityPresentation };
     }
+
+    private static bool IsMissingRequiredInput(ArgumentException exception) =>
+        exception.Message.StartsWith("VF-ACT-003: Activity node '", StringComparison.Ordinal) &&
+        exception.Message.Contains("' omits required input '", StringComparison.Ordinal);
 
     private PlacementBuild BuildPlacement(
         PlacementFrame frame,
@@ -764,13 +781,13 @@ public sealed class ActivityTemplatePlacer(
         PlacementFrame frame)
     {
         var overlay = frame.OccurrenceOverlay!;
-        var inputStates = overlay.InputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [];
+        var inputStates = RuntimeInputBindingCompiler.ReadOccurrenceInputStates(overlay.InputBindings);
         if (frame.InClosedScope)
             inputStates = inputStates.Select(ToGraphInputRead).ToArray();
         var contract = templateRoot.ActivityContract;
         if (contract is null)
         {
-            if (inputStates.Length == 0)
+            if (!inputStates.Any())
                 return templateRoot.InputBindings;
 
             throw new InvalidOperationException(

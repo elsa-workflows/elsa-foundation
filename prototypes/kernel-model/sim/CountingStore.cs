@@ -2,9 +2,17 @@ namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
 public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
-    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore
+    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
+    string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
+        (inner as IFoundationSchedulingStore)?.FoundationScheduleTenant(address);
+    ParkDrainSample? IFoundationSchedulingStore.SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) =>
+        (inner as IFoundationSchedulingStore)?.SampleParkDrains(node, owned, handedOffHere);
+    bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
+    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
+        ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, cancellationToken);
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;

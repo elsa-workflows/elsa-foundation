@@ -76,7 +76,7 @@ public sealed partial class InMemoryStore : IKeyAdmission
             if (Messages.ContainsKey(message.InboxKey)) throw new InvalidOperationException("Key admission message identity already exists.");
             var decision = new KeyDecision("accepted", binding.Run, binding.Until);
             var seq = checked(_seq + 1);
-            Messages.Add(message.InboxKey, new MessageRow(message, seq, 0));
+            Messages.Add(message.InboxKey, StoreMessage(message, seq, 0));
             _seq = seq;
             _keyBindings[request.Key] = binding;
             _keyReceipts.Add(id, (request, decision));

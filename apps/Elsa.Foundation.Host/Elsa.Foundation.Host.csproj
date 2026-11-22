@@ -6,17 +6,18 @@
   </PropertyGroup>
 
   <!--
-    The whole point of this host: it compiles in no Elsa feature implementation. It is pure plumbing —
-    Nuplane (the package feed + runtime assembly loader) and CShells (shell activation, routing,
+    The whole point of this host: it compiles in no Elsa feature implementation. It composes Nuplane
+    (the package feed + runtime assembly loader) and CShells (shell activation, routing,
     per-shell middleware). Every actual feature — activities, HTTP, persistence, and the Tasks
     feature that runs startup/background/recurring tasks — arrives as a package through the Nuplane
     feed and is discovered by CShells through CShells.Nuplane. Versions are centrally managed
-    in the repository-root Directory.Packages.props. The shared Elsa.Api.AspNetCore reference below only
-    publishes the typed host endpoint metadata contract; it does not bring an Elsa feature into this host.
+    in the repository-root Directory.Packages.props. Elsa.Modularity.Api supplies the reusable, opt-in
+    host module-management endpoints; it does not bring a shell feature implementation into this host.
   -->
   <ItemGroup>
-    <!-- Shared typed endpoint ownership/security metadata; this host still compiles no Elsa feature implementation. -->
+    <!-- Shared typed endpoint ownership/security metadata and reusable host module-management endpoints. -->
     <ProjectReference Include="../../essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="../../essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj" />
 
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per

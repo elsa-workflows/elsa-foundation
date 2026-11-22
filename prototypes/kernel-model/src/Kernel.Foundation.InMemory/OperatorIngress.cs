@@ -20,6 +20,7 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
             return new(refused);
 
         string? selection = null;
+        string? deleteTarget = null;
         Durable.ParkRecoveryMode? recoverMode = null;
         IReadOnlyList<string>? recoverHandles = null;
         if (kind is Kinds.Terminate or Kinds.Delete or Kinds.Discard or Kinds.Recover)
@@ -28,8 +29,15 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
             if (!Durable.FoundationMetadataLimits.FitsContent(payload)) return new(refused);
             try { command = payload is null ? null : JsonSerializer.Deserialize<OperatorCommand>(payload, kind == Kinds.Recover ? RecoverJson : null); }
             catch (JsonException) { return new(refused); }
-            if (command?.ThenDelete == true) return new(refused);
-            if (command is not { Selection.Length: > 0 })
+            if (command?.ThenDelete == true)
+            {
+                if (kind != Kinds.Terminate || authorize.Invoke(scope, Kinds.Delete) != true ||
+                    command.ExpectedTarget is not { Id.Length: > 0 } expected)
+                    return new(refused);
+                deleteTarget = expected.Id;
+            }
+            if (command is not { Selection.Length: > 0 } &&
+                (kind != Kinds.Terminate || command?.Selection is not null))
                 return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection));
             if (kind == Kinds.Recover)
             {
@@ -41,18 +49,19 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
                     _ => null
                 };
                 if (recoverMode is null) return new(refused);
-                if (recoverMode == Durable.ParkRecoveryMode.Retry) recoverHandles = command.Handles;
+                if (recoverMode == Durable.ParkRecoveryMode.Retry) recoverHandles = command?.Handles;
             }
-            selection = command.Selection;
+            selection = command?.Selection;
         }
 
         var receipt = store.AdmitFoundationOperator(scope.Tenant, (target as Target.Ref)?.Actor.Id,
-            (target as Target.Key)?.CallerKey, id, kind, payload, options?.DueAt, options?.KeepFor, selection, replyTo, recoverMode, recoverHandles);
+            (target as Target.Key)?.CallerKey, id, kind, payload, options?.DueAt, options?.KeepFor, selection, replyTo, recoverMode, recoverHandles, deleteTarget);
         return new(receipt.Outcome switch
         {
             Durable.InMemoryStore.OperatorAdmission.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),
             Durable.InMemoryStore.OperatorAdmission.Duplicate => new Admission(AdmissionOutcome.Duplicate, new ActorRef(receipt.Reference!)),
             Durable.InMemoryStore.OperatorAdmission.StaleSelection => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection),
+            Durable.InMemoryStore.OperatorAdmission.TargetMismatch => new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.TargetMismatch),
             _ => refused
         });
     }

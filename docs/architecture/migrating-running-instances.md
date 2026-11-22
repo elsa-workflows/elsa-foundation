@@ -221,6 +221,8 @@ From the [Astra High gate 2 review](https://github.com/elsa-workflows/elsa-found
 | MP2 Reused key | Select A under key K; delete A; start B under K at the source version; deliver A's `Migrate` | The message to A's exact ref is dropped (FC-15); B is not migrated and sends no outcome; A stays pending | K3, K4 |
 | MP3 Retried batch | The runner sends a batch, loses the answers and sends the batch again within the deduplication window | Each repeat answers `Duplicate` (FC-16); each instance migrates once and sends one outcome | K11 |
 
+The K3 in-memory witness (`Kernel.Sim --foundation-migration-dispatch-check`) commits a batch of two exact refs in a test plan, deletes one selected life, and reuses its caller key before the runner resumes. The runner rejects the retired ref, the Worker settles an earlier delayed command pinned to that life, and only the live peer moves and sends an outcome naming itself. Resolving the stale selection by caller key instead makes the successor migrate and fails both exact-dispatch assertions. The test actor stands in for the production migration hook and plan; K11 qualifies the plan service and its outcome read model.
+
 ## Decisions (owner, 16–17 November 2026)
 
 The owner took these on 17 November; the [decision register](decisions.md#the-seven-design-now-answers-1617-november) lists them with

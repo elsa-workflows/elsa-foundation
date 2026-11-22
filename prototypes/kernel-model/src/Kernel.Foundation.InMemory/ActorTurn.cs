@@ -159,6 +159,12 @@ internal sealed partial class ActorAdapter
             (_status, _output) = (status, output);
         }
 
+        internal void EnsureTerminated()
+        {
+            if (_row.Status == Durable.InstanceStatus.Running && _status != Contract.ActorStatus.Cancelled)
+                (_status, _output) = (Contract.ActorStatus.Cancelled, null);
+        }
+
         public void SetHeader(string typeData, IReadOnlyDictionary<string, string> labels)
         {
             HeaderLimits.ValidateTypeData(typeData);
@@ -182,7 +188,7 @@ internal sealed partial class ActorAdapter
             foreach (var notice in outcome.Consumed.Where(entry => entry.Message.Kind == Contract.Kinds.ChildFinished))
             {
                 var message = notice.Message;
-                if (message.Read<Completion>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
+                if (message.Read<Durable.FoundationChildNotice>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
             }
 
             var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children]) : null;
@@ -253,7 +259,7 @@ internal sealed partial class ActorAdapter
             }
             if (message.Kind == Contract.Kinds.ChildFinished)
             {
-                var result = message.Read<Completion>();
+                var result = message.Read<Durable.FoundationChildNotice>();
                 var payload = Durable.Json.Write(new Contract.ChildFinished(sender!.Value, (Contract.ActorStatus)result.Status, result.Output, result.Final));
                 return new(id, message.Kind, payload, sender);
             }

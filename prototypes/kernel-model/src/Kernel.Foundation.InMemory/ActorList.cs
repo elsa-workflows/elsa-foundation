@@ -148,7 +148,9 @@ internal sealed class ActorList : IActorReads
             : null;
         var header = new ActorHeader(new(checkpoint.Reference), row.Model, tenant, (ActorStatus)row.Status,
             row.Fault, parent, checkpoint.EndedAt, checkpoint.Header.TypeData, checkpoint.Header.Labels);
-        var park = checkpoint.Park is { } mark ? new ParkView(mark.At, null) : null;
+        var park = checkpoint.Park is { } mark
+            ? new ParkView(mark.At, row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate ? "terminating" : null)
+            : null;
         return new(header, _store.SealFoundationSelection(tenant, checkpoint), park, asOf);
     }
 

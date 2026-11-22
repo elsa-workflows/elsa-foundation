@@ -123,7 +123,14 @@ internal sealed partial class ActorAdapter
             {
                 ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
             });
-            completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared, drain.AlreadyRearmed });
+            var retire = drain.Deletion is not null &&
+                DeletionRefusal(Header(checkpoint), row.State, input.Services.Now) is null;
+            if (retire)
+            {
+                completed.Row = Durable.CreationProtocol.Retire(row, Durable.CascadeRegistry.ForRetirement(row));
+                completed.Delete = completed.Unsubscribe = true;
+            }
+            completed.Journal = Durable.InMemoryStore.RecoveryCompleteJournal(drain, retire);
             return completed;
         }
 
@@ -172,6 +179,35 @@ internal sealed partial class ActorAdapter
             outcome.FoundationRecoveryPage = change;
             return outcome;
         }
+    }
+
+    private Durable.TurnOutcome TakeOverEndedRecovery(Durable.TurnInput input, Durable.InstanceRow row, string? selection,
+        bool thenDelete = false)
+    {
+        var delivery = input.Taken[input.From];
+        var drain = row.ParkRecovery!;
+        var authorized = thenDelete && store.AuthorizesEndedRecoverThenDelete(row, delivery.Message);
+        if (drain.Deletion is { } prior)
+        {
+            var refusal = Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InProgress", prior.Operation);
+            if (!authorized || row.Cascade is not null) return refusal;
+            var registry = Durable.CascadeRegistry.From(row);
+            if (registry.Count == 0) return refusal;
+            refusal.Row = row with { Revision = checked(row.Revision + 1) };
+            refusal.Expected = row.Revision;
+            refusal.Revision = refusal.Row.Revision;
+            return Durable.CascadeProtocol.Open(refusal, registry);
+        }
+        if (thenDelete && !authorized)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
+        var protection = DeletionRefusal(Header(store.FoundationTurnHeader(row)), row.State, input.Services.Now);
+        if (protection is not null)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
+
+        var next = row with { ParkRecovery = drain with { Deletion = new(delivery.Message.Id, selection, thenDelete) } };
+        var outcome = ParkCheckpoint(input, row, next);
+        outcome.ReplyTo(delivery, "started");
+        return thenDelete && row.Cascade is null ? Durable.CascadeProtocol.Open(outcome, Durable.CascadeRegistry.From(row)) : outcome;
     }
 
     private bool RecoveryWithholds(Contract.ActorHeader header)

@@ -170,6 +170,10 @@ also means a `done = true` update is no longer HOT, so it writes an entry in eve
 delete writes no index entry and leaves dead tuples for vacuum. All of this is unmeasured: the release 1 cost runs
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
+The K3 in-memory store counts due, undone rows up to the supplied cap under its own clock. The
+`--backlog-store-check` fixture covers a timer maturing, a retained Done row, partition isolation, and a stale
+owner or position leaving every stored estimate unchanged. The physical index and query plans qualify at K4.
+
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
 assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (19 November) the
@@ -178,7 +182,13 @@ seen marks while messages arrive, and its last commit before the partition falls
 When a sampled estimate crosses the low- or high-water mark and the partition has had no commit for one heartbeat
 interval, the owner sends a fenced commit with no journal rows that writes it, so a partition whose commits stall
 still publishes its depth within one heartbeat interval; a partition whose estimate stays on one side of the marks
-writes nothing.
+writes nothing. The K3 store accepts an estimate with ordinary writes or in a fence-only commit and returns
+a snapshot filtered at the low-water mark. The opt-in K3 Worker samples the capped depth from the in-memory store,
+carries a changed estimate on the next ordinary commit, and writes a pressure-only commit after one heartbeat of
+inactivity when the sample crosses a mark. A successor starts from the published depth for its new epoch.
+`--backlog-worker-check` covers both writes, the high and low crossings, and the same-band no-write case.
+The short-poll estimate and the behind-partition sample optimisation qualify with the provider poll path at K4.
+Release configuration, refusal policy and the production pressure list stay with K11.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:
@@ -211,28 +221,38 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
 
 ## Fair scheduling within a pass
 
-**Proposed changes to the Worker (layer 2):**
+**Worker scheduling (layer 2):**
 
-1. **A turn budget per pass.** A pass runs at most `PassTurnBudget` turns, flushes, and returns `TimeSpan.Zero` while
+1. **A turn budget per pass (K3, in-memory).** A pass runs at most `PassTurnBudget` turns, flushes, and returns `TimeSpan.Zero` while
    ready work remains. Layer 1 then runs its other scopes before this one again. The flush cap stays.
-2. **Deficit round robin by tenant.** The ready instances are grouped by the tenant on their row. Each round gives every
+2. **Deficit round robin by tenant (K3, in-memory).** The ready instances are grouped by the tenant on their row. Each round gives every
    tenant with ready instances a quantum of turns (its weight; equal by default). Within a tenant, instances rotate: a
    newly ready instance joins the back of its tenant's queue, in the order its oldest deliverable message was
    observed, and an instance that takes a turn and is still ready goes to the back. An instance therefore takes at
    most one turn before every instance ahead of it in its tenant's queue has taken one. A cursor carries the rounds
    from pass to pass; a reset drops it with the rest of memory. The ordinal order of today starves high ids once a
    budget exists, so it goes.
-3. **An age hint for layer 1.** `RunAsync` also reports the age of its oldest waiting deliverable message. The
-   built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
+3. **An age hint for layer 1 (K3, in-memory).** `RunWithAgeAsync` returns the next delay and the age of the oldest
+   deliverable message the current owner has observed, measured from its observation or due time, whichever is later.
+   The built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
    the scopes go in order of their oldest waiting work, scope order breaking ties. The age orders a round and never
    gives one scope a second pass before every other ready scope has had one. Layer 1 learns an age and nothing about
-   tenants or messages.
+   tenants or messages. A node's shared Worker still coalesces its virtual scopes into one actual pass and reports
+   a separate age for each scope. An unknown age sorts after known ages.
 
 The per-target order rule is unchanged: a target's messages are handled in `seq` order, and one sender's messages to
 one target arrive in the order sent. The selection only chooses which instance takes the next turn.
 
-**Cost.** In memory, O(ready instances) per pass. No database call. The seam change is one field in the result of
-`RunAsync`.
+**Cost.** Keep the ready queues in memory. The K3 pass scans the ready actors and sorts newly ready actors by observation
+order before they join the queues. The in-memory store supplies the tenant from the admitted exact creation. There is
+no database call. K4 qualifies the tenant column and provider loads. The age hint scans locally ready messages after
+the pass and needs no database call.
+
+The in-memory `--pass-turn-budget-check` and `--tenant-pass-check` run the real Worker. They cover a perpetually
+productive actor, equal and weighted rounds, a cold owner, and a weight spread across passes when the tenant has one
+ready actor. The tests check per-actor order, the pass cap and the quiet tenant's first turn. The
+`--scope-age-check` and runtime `scope-rounds` check cover future timers, a shared Worker and the built-in node's
+oldest-first rounds.
 
 **What it cannot do.** The poll stays first in, first out: one query, one index. A tenant's message beyond the poll
 window is not in memory, so the in-pass selection cannot reach it. The ingress threshold limits how far outside starts
@@ -301,7 +321,7 @@ and one `kernel.cascade` (proposed, fifth review R5-B2).
 **Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
 an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.
 
-**Verification planned for release 1** (none of it exists):
+**Verification for release 1:**
 
 - Simulation invariants:
   - with deficit round robin and the rotation within a tenant, an instance at position k in its tenant's queue takes

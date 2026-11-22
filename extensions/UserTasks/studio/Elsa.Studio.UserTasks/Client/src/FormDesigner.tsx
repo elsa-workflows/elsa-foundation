@@ -140,6 +140,15 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
   };
   const updateField = (id: string, update: Partial<TaskField>) => publishFields(rows.map(row => row.id === id ? { ...row, field: { ...row.field, ...update } } : row));
   const replaceField = (id: string, field: TaskField) => publishFields(rows.map(row => row.id === id ? { ...row, field } : row));
+  const updateSelectedControl = (value: unknown) => {
+    if (typeof value !== "object" || value === null || !selectedRow) return;
+    const candidate = value as Partial<TaskField>;
+    const update: Partial<TaskField> = {};
+    for (const key of ["minimum", "maximum", "maxLength", "choices", "presentation", "mustBeTrue", "configuration"] as const) {
+      if (Object.hasOwn(candidate, key)) Object.assign(update, { [key]: candidate[key] });
+    }
+    updateField(selectedRow.id, update);
+  };
   const addField = (controlId: string) => {
     if (rows.length >= 100) return;
     const control = controlItems.find(item => item.id === controlId);
@@ -292,28 +301,13 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                   <label className="user-task-designer__checkbox"><input type="checkbox" checked={selectedRow.field.required} disabled={canvasDisabled} onChange={event => updateField(selectedRow.id, { required: event.target.checked })} />Required</label>
                   <label className="user-task-designer__checkbox"><input type="checkbox" checked={selectedRow.field.readOnly} disabled={canvasDisabled} onChange={event => updateField(selectedRow.id, { readOnly: event.target.checked })} />Read only</label>
                   <StudioField label="Help text"><textarea rows={2} value={selectedRow.field.help ?? ""} disabled={canvasDisabled} onChange={event => updateField(selectedRow.id, { help: event.target.value || undefined })} /></StudioField>
-                  {selectedControl?.status === "available" && selectedControl.control ? <>
-                    <h4>{selectedControl.control.label} properties</h4>
-                    {selectedControl.control.propertiesEditor ? <>{selectedControl.control.propertiesLabel ? <AdvancedSection label={selectedControl.control.propertiesLabel}>
-                      <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
-                        if (typeof value !== "object" || value === null) return;
-                        const candidate = value as Partial<TaskField>;
-                        const update: Partial<TaskField> = {};
-                        for (const key of ["minimum", "maximum", "maxLength", "choices", "presentation", "mustBeTrue", "configuration"] as const) {
-                          if (Object.hasOwn(candidate, key)) Object.assign(update, { [key]: candidate[key] });
-                        }
-                        updateField(selectedRow.id, update);
-                      }} />
-                    </AdvancedSection> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
-                      if (typeof value !== "object" || value === null) return;
-                      const candidate = value as Partial<TaskField>;
-                      const update: Partial<TaskField> = {};
-                      for (const key of ["minimum", "maximum", "maxLength", "choices", "presentation", "mustBeTrue", "configuration"] as const) {
-                        if (Object.hasOwn(candidate, key)) Object.assign(update, { [key]: candidate[key] });
-                      }
-                      updateField(selectedRow.id, update);
-                    }} />}</> : null}
-                  </> : <StudioAlert tone="danger">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</StudioAlert>}
+                  {selectedControl?.status === "available" && selectedControl.control ? selectedControl.control.propertiesEditor ? <div className="user-task-designer__control-properties" key={selectedControl.control.id}>
+                    {selectedControl.control.propertiesLabel ? <AdvancedSection label={selectedControl.control.propertiesLabel}>
+                      <div className="user-task-designer__advanced-content">
+                        <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={updateSelectedControl} />
+                      </div>
+                    </AdvancedSection> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={updateSelectedControl} />}
+                  </div> : null : <StudioAlert tone="danger">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</StudioAlert>}
                   {fieldErrors[selectedIndex].length ? <ul className="user-task-designer__property-errors" aria-label="Selected field errors">{fieldErrors[selectedIndex].map(error => <li key={error}>{error}</li>)}</ul> : null}
                 </> : <p>Select a field in the canvas to edit its properties, or open Form settings.</p>}
               </div>

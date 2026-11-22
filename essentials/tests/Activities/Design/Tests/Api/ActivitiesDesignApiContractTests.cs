@@ -33,6 +33,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.List"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDefinitions",
         ["Definitions.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDefinition",
         ["Definitions.Update"] = "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDefinition",
+        ["Definitions.Restore"] = "Elsa.Activities.Design.Api.Commands.RestoreReusableActivityDefinition",
         ["Definitions.Recommendation"] = "Elsa.Activities.Design.Api.Commands.SetRecommendedReusableActivityVersion",
         ["Definitions.Picker"] = "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions",
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
@@ -75,6 +76,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.List"] = "Elsa.Activities.Design.Api.Models.ActivityManagementPageView`1",
         ["Definitions.Get"] = "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView",
         ["Definitions.Update"] = "Elsa.Activities.Design.Api.Models.ActivityDefinitionIdentityView",
+        ["Definitions.Restore"] = "System.Void",
         ["Definitions.Recommendation"] = "Elsa.Activities.Design.Api.Models.ActivityDefinitionRecommendationView",
         ["Definitions.Picker"] = "Elsa.Activities.Design.Api.Models.RecommendedActivityDefinitionPageView",
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Models.ActivityManagementPageView`1",
@@ -106,18 +108,20 @@ public sealed class ActivitiesDesignApiContractTests
     };
 
     [Fact]
-    public async Task Real_host_retains_the_38_reviewed_operations_and_additive_data_context_candidate_validation_and_archive()
+    public async Task Real_host_retains_the_38_reviewed_operations_and_additive_data_context_candidate_validation_archive_and_restore()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
         var endpoints = OwnedEndpoints(host).ToArray();
 
-        Assert.Equal(41, endpoints.Length);
-        Assert.Equal(41, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
+        Assert.Equal(43, endpoints.Length);
+        Assert.Equal(43, endpoints.Select(endpoint => Identity(endpoint)).Distinct().Count());
         Assert.Equal(
             ActivitiesDesignCompatibilityCases.Manifest.Select(route => route.Endpoint)
                 .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/activity-data/context", "POST"))
                 .Append(new EndpointIdentity("/design/activities/drafts/{draftId}/candidate-validation", "POST"))
-                .Append(new EndpointIdentity("/design/activities/definitions/{definitionId}", "DELETE")).OrderBy(endpoint => endpoint.ToString()),
+                .Append(new EndpointIdentity("/design/activities/versions/{versionId}/candidate-validation", "POST"))
+                .Append(new EndpointIdentity("/design/activities/definitions/{definitionId}", "DELETE"))
+                .Append(new EndpointIdentity("/design/activities/definitions/{definitionId}/restore", "POST")).OrderBy(endpoint => endpoint.ToString()),
             endpoints.Select(Identity).OrderBy(endpoint => endpoint.ToString()));
     }
 
@@ -139,6 +143,47 @@ public sealed class ActivitiesDesignApiContractTests
         Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status204NoContent);
         Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status401Unauthorized);
         Assert.Contains(produced, metadata => metadata.StatusCode == StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task Definition_restore_has_manage_metadata_and_no_request_body()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = Assert.Single(OwnedEndpoints(host), candidate => Identity(candidate) ==
+            new EndpointIdentity("/design/activities/definitions/{definitionId}/restore", "POST"));
+
+        Assert.Equal(OperationPrefix + "DefinitionsRestore", endpoint.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName);
+        Assert.Equal(OwnerId, endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId);
+        Assert.Equal([OwnerId], endpoint.Metadata.GetMetadata<ITagsMetadata>()?.Tags);
+        Assert.Null(endpoint.Metadata.GetMetadata<IAcceptsMetadata>());
+        var disposition = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        var policy = new PermissionPolicyCodec().Parse(disposition.Value!);
+        Assert.Equal([PermissionKey.Normalize("activities/design:manage")], policy.Descriptor!.Permissions);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == StatusCodes.Status204NoContent);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public async Task Version_candidate_validation_has_manage_metadata_and_a_json_request_contract()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = Assert.Single(OwnedEndpoints(host), candidate => Identity(candidate) ==
+            new EndpointIdentity("/design/activities/versions/{versionId}/candidate-validation", "POST"));
+
+        Assert.Equal(OperationPrefix + "VersionsValidateCandidate", endpoint.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName);
+        Assert.Equal(OwnerId, endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId);
+        Assert.Equal([OwnerId], endpoint.Metadata.GetMetadata<ITagsMetadata>()?.Tags);
+        var accepts = Assert.IsAssignableFrom<IAcceptsMetadata>(endpoint.Metadata.GetMetadata<IAcceptsMetadata>());
+        Assert.Equal("Elsa.Activities.Design.Api.Commands.ValidateReusableActivityVersionCandidate", accepts.RequestType?.FullName);
+        Assert.Contains("application/json", accepts.ContentTypes);
+        var disposition = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        var policy = new PermissionPolicyCodec().Parse(disposition.Value!);
+        Assert.Equal([PermissionKey.Normalize("activities/design:manage")], policy.Descriptor!.Permissions);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata =>
+            metadata.StatusCode == StatusCodes.Status200OK && metadata.Type?.FullName == "Elsa.Activities.Design.Api.Models.ActivityCandidateValidationView");
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == StatusCodes.Status401Unauthorized);
+        Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == StatusCodes.Status403Forbidden);
     }
 
     [Fact]

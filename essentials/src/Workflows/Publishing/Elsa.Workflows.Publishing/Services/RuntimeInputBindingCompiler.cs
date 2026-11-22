@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
@@ -39,6 +40,11 @@ public sealed class RuntimeInputBindingCompiler(
     private const string ActivityResultExpressionType = "ActivityResult";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
+
+    private static readonly JsonSerializerOptions OccurrenceSerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
 
     /// <summary>
     /// The authored expression type of a secret reference. It duplicates the Secrets module's expression type name
@@ -400,10 +406,11 @@ public sealed class RuntimeInputBindingCompiler(
         ValuePolicyCombiner.ApplyInputDeclaration(contract.Policy, isSensitive: false, contract.IsCredential);
 
     /// <summary>
-    /// Compiles an authored binding under its effective policy. On an input whose effective policy requires encryption,
-    /// a binding that carries no value (<see cref="ArgumentState.IsBound"/>, the definition the design-time required-input
-    /// check uses) compiles exactly as an unbound input does, so an empty credential field
-    /// does not fail publication. A secret reference and a request for the declared default keep their own handling.
+    /// Compiles an authored binding under its effective policy. On an input whose effective policy requires encryption
+    /// or that is a Connection input, a binding that carries no value (<see cref="ArgumentState.IsBound"/>, the definition
+    /// the design-time required-input check uses) compiles exactly as an unbound input does. Optional empty fields are
+    /// omitted while required-input checks still apply. A secret reference and a request for the declared default keep
+    /// their own handling.
     /// </summary>
     private RuntimeInputBinding CompileAuthored(
         string nodeId,
@@ -416,7 +423,7 @@ public sealed class RuntimeInputBindingCompiler(
             state.StorageDriverType,
             state.IsSensitive,
             InputRole(nodeId, inputDefinition.ReferenceKey));
-        var compilesAsUnbound = effective.RequiresEncryption
+        var compilesAsUnbound = (effective.RequiresEncryption || IsConnectionInput(inputDefinition))
                                 && !state.IsBound()
                                 && !IsSecretBinding(state.Value)
                                 && !IsDefaultRequest(state.Value);
@@ -638,6 +645,9 @@ public sealed class RuntimeInputBindingCompiler(
     /// <summary>True when the authored value is a connection reference.</summary>
     public static bool IsConnectionBinding(ArgumentValue? value) =>
         string.Equals(value?.ExpressionType, ConnectionExpressionType, StringComparison.OrdinalIgnoreCase);
+
+    public static ArgumentState[] ReadOccurrenceInputStates(JsonElement inputBindings) =>
+        inputBindings.Deserialize<ArgumentState[]>(OccurrenceSerializerOptions) ?? [];
 
     /// <summary>
     /// Refuses (<c>VF-ACT-012</c>) a secret reference on a node that would read the value anywhere but CLR

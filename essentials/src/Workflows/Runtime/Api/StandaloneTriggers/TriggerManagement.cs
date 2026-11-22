@@ -91,7 +91,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
         var actor = await access.ActorAsync(ct);
         if (!actor.CanRead) throw Missing();
         return new(types.List().Select(type => new TriggerTypeView(type.TypeKey, type.SchemaVersion.ToString(CultureInfo.InvariantCulture),
-            type.DisplayName, type.Family, type.ConfigurationFields, actor.CanManage, type.Description)
+            type.DisplayName, type.Family, type.ConfigurationFields.Select(TriggerConfigurationFieldView.From).ToArray(), actor.CanManage, type.Description)
             { ConfigurationEditorId = type.ConfigurationEditorId }).ToArray(), null);
     }
 
@@ -183,6 +183,7 @@ internal sealed partial class TriggerManagement(IStandaloneTriggerStore store, I
             [new("SaveConfiguration", manageable && reviewable && !trigger.Origin.ConfigurationReadOnly && (!needsPhysical || available)),
              new("AddSubscription", manageable && (!needsPhysical || available)), new("EnableTrigger", operable && reviewable && available && eligible > 0 && http?.ReservationState is not ("Unavailable" or "Conflict")),
              new("PauseTrigger", operable && (!needsPhysical || stoppable)), new("DeleteTrigger", manageable && (!needsPhysical || stoppable)),
+             new("OperateSubscriptions", operable && available), new("AuthorizeSubscriptions", await access.HasAsync(TriggerPermissions.Authorize, trigger, ct)),
              new("ReadDeliveries", deliveries?.SupportsInspection == true && await access.HasAsync(TriggerPermissions.DeliveriesRead, trigger, ct))],
             trigger.CreatedAt, trigger.UpdatedAt, http, schedule, redactions);
     }

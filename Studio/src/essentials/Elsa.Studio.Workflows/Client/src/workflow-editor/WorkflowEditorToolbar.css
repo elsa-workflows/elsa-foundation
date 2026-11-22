@@ -98,6 +98,10 @@
   color: var(--studio-text-muted);
 }
 
+.wf-editor-save-status[data-attention] {
+  color: var(--studio-warning-fg);
+}
+
 .wf-editor-toolbar .wf-editor-actions {
   flex: 0 0 auto;
   flex-wrap: wrap;

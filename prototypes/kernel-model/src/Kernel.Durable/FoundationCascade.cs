@@ -142,7 +142,7 @@ public sealed partial class InMemoryStore
     }
 
     private CascadeInputs? PrepareCascade(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs,
-        IReadOnlySet<InboxKey>? earlier, IReadOnlySet<InboxKey> competing)
+        IReadOnlySet<InboxKey>? earlier, IReadOnlySet<InboxKey> competing, bool thenDelete)
     {
         var before = previous?.Cascade;
         var held = previous?.HeldCascade;
@@ -151,13 +151,14 @@ public sealed partial class InMemoryStore
         {
             if (turn.Row is { } ordinary && (ordinary.Cascade != before || !turn.Delete && ordinary.HeldCascade != held) ||
                 before is not null && turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Contains(before.Control) ||
-                sent.Any(message => message.Kind == Kinds.Cascade))
+                sent.Any(message => message.Kind == Kinds.Cascade) ||
+                thenDelete && before is null && previous is { } deleteSource && CascadeRegistry.From(deleteSource).Count != 0)
                 throw InvalidCascade();
             return null;
         }
         if (turn.Row is not { } next ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
-            action.Entries.Count == 0 || turn.Delete || action.Input is null != (before is null))
+            action.Entries.Count == 0 || turn.Delete && !thenDelete || action.Input is null != (before is null))
             throw InvalidCascade();
 
         if (before is not null || held is not null)
@@ -180,16 +181,30 @@ public sealed partial class InMemoryStore
             foreach (var key in turn.Consumed.Concat(turn.Done))
             {
                 if (Messages.GetValueOrDefault(key)?.Message is not { Kind: Kinds.Terminate } command) continue;
-                var addressed = command.Target.Id == next.Id && CreationProtocol.TargetError(next, command) is null;
+                var addressed = command.Target.Id == next.Id && CreationProtocol.TargetError(thenDelete ? previous : next, command) is null;
                 if (command.CascadeOrigin && (!addressed || birth || !CreationProtocol.MatchesCascadeParent(previous, command)))
+                    throw InvalidCascade();
+                if (command.Operator?.DeleteTarget is not null &&
+                    previous is { ParkRecovery: not null, Status: not InstanceStatus.Running } ended &&
+                    !AuthorizesEndedRecoverThenDelete(ended, command))
                     throw InvalidCascade();
                 tookTerminate |= addressed;
             }
-            if (next is not { Retired: false, Jobs: null, Children: null, HeldCascade: null } ||
+            if (next.Retired != thenDelete || next is not { Jobs: null, Children: null, HeldCascade: null } ||
                 (birth ? next.Revision <= 0 : next.Revision != checked(previous!.Revision + 1)) ||
                 !(cancelled || tookTerminate) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)
+                throw InvalidCascade();
+            if (previous is { } draining &&
+                (draining.ParkDiscard is not null ||
+                    draining is { ParkRecovery: not null, Status: not InstanceStatus.Running } && next.ParkRecovery == draining.ParkRecovery) &&
+                (turn.Consumed.Concat(turn.Done).ToArray() is not [var input] ||
+                    Messages.GetValueOrDefault(input) is not { Done: false, Message: { } source } ||
+                    !AuthorizesDrainingTerminate(draining, source) ||
+                    next != draining with { Revision = next.Revision, Jobs = null, Children = null, Cascade = next.Cascade } ||
+                    turn.Unsubscribe || turn.Journal is not null || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
+                    turn.Sent.Count != sent.Length || turn.Held is { Count: > 0 }))
                 throw InvalidCascade();
             ValidateCascadeOpen(turn, previous, next, action.Entries, earlier!);
         }
@@ -246,6 +261,7 @@ public sealed partial class InMemoryStore
             var stored = Messages[key];
             stored.KeptBy = null;
             stored.Message = stored.Message with { KeepUntil = until };
+            stored.DropDonePayload();
         }
     }
 

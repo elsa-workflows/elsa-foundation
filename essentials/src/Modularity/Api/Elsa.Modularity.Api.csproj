@@ -24,4 +24,8 @@
     <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Modularity.Tests" />
+  </ItemGroup>
+
 </Project>

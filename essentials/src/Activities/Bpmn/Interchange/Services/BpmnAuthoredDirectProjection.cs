@@ -159,7 +159,7 @@ internal static class BpmnAuthoredDirectProjection
         {
             if (!string.IsNullOrWhiteSpace(input.DefaultSyntax) && input.DefaultSyntax != "Literal")
                 throw new BpmnModelValidationException($"Workflow input '{input.Name}' supports only a literal default.");
-            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue);
+            return new WorkflowDeclaredInput(input.Name, input.Type, input.IsRequired, input.DefaultValue, input.IsNullable);
         }).ToArray());
     }
 

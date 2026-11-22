@@ -483,7 +483,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
   await expect(instructions).toBeVisible();
   await instructions.fill("Proofread the supplied text and return concise suggestions.");
   await instructions.press("Tab");
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved", { timeout: 30_000 });
   await page.reload();
   await expect(instructions).toHaveValue("Proofread the supplied text and return concise suggestions.");
   const advanced = editor.locator("details.agent-advanced");
@@ -512,7 +512,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
     const member = view.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
     const settings = member.getByRole("tablist", { name: "Member settings", exact: true });
     await expect(member.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved", { timeout: 30_000 });
     const key = member.getByRole("textbox", { name: "Stable reference key", exact: true });
     if (kind === "input") {
       await expect(key).toHaveValue("topic");
@@ -544,7 +544,7 @@ test("agent authoring and navigation", async ({ page }, info) => {
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A retained topic");
       await member.getByRole("button", { name: "Apply default", exact: true }).click();
     }
-    await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved", { timeout: 30_000 });
     await page.reload();
     await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: kind === "input" ? "Inputs (1)" : "Outputs (1)", exact: true }).click();
     const saved = page.locator(`[data-contract-kind="${kind}"][data-contract-selected="true"]`);
@@ -889,8 +889,8 @@ test("publication blockers explain how to correct agent settings", async ({ page
   const instructions = editor.getByRole("textbox", { name: /^Instructions/ });
   await instructions.fill("");
   await instructions.press("Tab");
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
-  const publish = page.locator(".ad-publication-toolbar-trigger");
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved", { timeout: 30_000 });
+  const publish = page.locator(".studio-split-button-primary");
   await publish.click();
   const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
   const blockers = dialog.locator(".ad-publication-blockers");
@@ -908,7 +908,7 @@ test("publication blockers explain how to correct agent settings", async ({ page
   await capture(page, info, "instructions-focused");
   await instructions.fill("Proofread the supplied text and return concise suggestions.");
   await instructions.press("Tab");
-  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout: 30_000 });
+  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved", { timeout: 30_000 });
   await publish.click();
   await dialog.getByRole("button", { name: /Prepare publication|Check again/, exact: true }).click();
   await expect(blockers.getByText("A complete model connection has not been selected.", { exact: true })).toBeVisible();

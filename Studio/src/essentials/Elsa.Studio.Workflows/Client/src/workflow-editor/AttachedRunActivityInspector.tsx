@@ -49,7 +49,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
       {selection.scopes.map(item => <button type="button" key={item.execution.activityExecutionId} onClick={() => {
         void selection.choose(item.execution, graph, labelFor, true, item.label).then(ready => { if (ready) onEnter(item.execution); });
       }}>{item.label}</button>)}
-      {selection.loading ? <span className="wf-execution-loading" role="status" aria-live="polite" aria-label={selection.execution ? "Loading requested execution" : "Resolving execution scope"}><LoaderCircle size={14} className="wf-execution-loading-spinner" /><span className="sr-only">{selection.execution ? "Loading requested execution" : "Resolving execution scope"}</span></span> : null}
+      {selection.loading ? <span className="wf-execution-loading" role="status" aria-live="polite" aria-label={selection.execution ? "Loading requested execution" : "Resolving execution scope"}><LoaderCircle size={14} className="wf-execution-loading-spinner" /><span className="wf-visually-hidden">{selection.execution ? "Loading requested execution" : "Resolving execution scope"}</span></span> : null}
     </nav>
     {scope ? <ExecutionScopeNavigator choiceFocus={scopeChoiceFocus} captureFocusOperation={selection.captureFocusOperation} context={context} execution={scope.execution} label={labelFor(scope.execution)} refreshKey={canvas.refreshKey}
       initialPage={prepared?.scopePage?.executionId === scope.execution.activityExecutionId ? prepared.scopePage.page : undefined}

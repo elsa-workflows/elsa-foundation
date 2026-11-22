@@ -45,32 +45,20 @@ function name(value: string) {
 }
 async function settle() { await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {}); }
 
-it("offers the published host's editing action without applying a block and shows its pending state", () => {
-  context = { ...context, canEdit: false };
-  const startEditing = vi.fn();
-  const authority = { sourceKey: "published:1", canEdit: false, canApply: () => false, validate: vi.fn(), startEditing };
+it("allows published block proposals without a separate Start editing action", async () => {
+  const validateCandidate = vi.fn(async () => ({ state: "validated" as const, messages: [] }));
+  const authority = { sourceKey: "published:1", canEdit: true, canApply: () => true, validate: validateCandidate };
   const before = structuredClone(context.document);
   render(authority);
-  expect(container.textContent).not.toContain("Other edits create a draft automatically.");
-  click("Blocks");
-  expect(document.body.textContent).toContain("Other edits create a draft automatically.");
-  expect(document.body.textContent).not.toContain("Open an editable draft");
-  expect(button("Create Sequence block").disabled).toBe(true);
-  expect(startEditing).not.toHaveBeenCalled();
-  click("Start editing");
-  expect(startEditing).toHaveBeenCalledTimes(1);
-  render({ ...authority, startingEditing: true });
-  expect(button("Starting…").disabled).toBe(true);
-  expect(container.querySelector("[role=status]")?.textContent).toBe("Preparing your draft…");
-  click("Starting…");
-  expect(startEditing).toHaveBeenCalledTimes(1);
-  expect(validate).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Start editing");
+  click("Create Sequence block"); name("Published edit"); click("Preview change"); await settle();
+  expect(validate).toHaveBeenCalledTimes(1);
   expect(apply).not.toHaveBeenCalled();
   expect(context.document).toEqual(before);
-  context = { ...context, canEdit: true };
-  render({ ...authority, canEdit: true, startEditing: undefined });
-  expect(container.textContent).not.toContain("Start editing");
-  expect(button("Create Sequence block").disabled).toBe(false);
+  click("Apply change"); await settle();
+  expect(validate).toHaveBeenCalledTimes(2);
+  expect(apply).toHaveBeenCalledTimes(1);
+  expect(container.querySelector("[role=dialog]")).toBeNull();
 });
 
 it("keeps genuinely read-only block commands unavailable without offering draft creation", () => {
@@ -212,7 +200,8 @@ it("preserves explicit result bindings through the expanded editor input boundar
   const children = payload.activities as ActivityNode[];
   expect(children[0].structure!.payload.activities).toHaveLength(3);
   const transfer = (children[0].structure!.payload.activities as ActivityNode[]).find(node => node.nodeId.endsWith("-capture-1"))!;
-  expect(transfer.structure).toBeNull();
+  // This transfer is a leaf with no authored structure; passive normalization keeps it absent.
+  expect(transfer.structure).toBeUndefined();
   expect(normalizeActivityStructures(candidate.rootActivity, context.catalog)).toBe(candidate.rootActivity);
   const binding = children[1].inputs[0] as { value: { value: { source: string; parameters: unknown } } };
   expect(binding.value.value.source).toBe("args.prior + 1");

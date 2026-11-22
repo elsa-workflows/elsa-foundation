@@ -184,6 +184,13 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     private static readonly Type[] ActivityDefinitionArchiveContractTypes =
         [typeof(ArchiveReusableActivityDefinition)];
 
+    private static readonly Type[] ActivityDefinitionRestoreContractTypes =
+        [typeof(RestoreReusableActivityDefinition)];
+
+    // Published-version candidate validation is additive and reuses ActivityCandidateValidationView.
+    private static readonly Type[] VersionCandidateContractTypes =
+        [typeof(ValidateReusableActivityVersionCandidate)];
+
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
@@ -193,7 +200,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
 
         Assert.Equal("Elsa.Activities.Design.Api", apiAssembly.GetName().Name);
 
-        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes))
+        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes).Concat(ActivityDefinitionRestoreContractTypes).Concat(VersionCandidateContractTypes))
         {
             Assert.Same(apiAssembly, contractType.Assembly);
             Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
@@ -212,7 +219,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
-            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
+            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(NativeBlockCandidateContractTypes).Concat(ActivityDefinitionArchiveContractTypes).Concat(ActivityDefinitionRestoreContractTypes).Concat(VersionCandidateContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
             exported);
     }
 
@@ -259,6 +266,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved again when the six legacy mediator requests and commands with no endpoint (GetDefinition,
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
+        // It moved for archived-definition filtering: ListReusableActivityDefinitions gains the
+        // optional ArchivedOnly query field while retaining its existing positional defaults.
         // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
         // contracts because MinimalEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
@@ -273,7 +282,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // Spec 1231 moved it for VariableAccess, an optional trailing positional parameter on ActivityInputDescriptorView
         // (as ConnectionType before it), and AccessesUndeclaredVariables, an additive body init property on
         // ActivityAuthoringDescriptorView: an input's variable-reference direction and the free-name marker.
-        Assert.Equal("b62958b33e6d5393d406e685f7df2fd7f9bef3027127d6bffcce1f00faef8fd1", PublicShapeHash(ContractTypes));
+        // Archived-only listing adds the optional trailing Boolean parameter while retaining the S7 descriptor fields.
+        Assert.Equal("7ed284560b461ef33701e230535ec4033d56c289b5688d4a113cdeeef288d800", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

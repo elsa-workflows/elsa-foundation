@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using Kernel.Foundation.InMemory;
+using Kernel.Native;
 using Contract = Kernel.Foundation.Contracts;
 
 namespace Kernel.Sim;
@@ -10,13 +12,89 @@ internal static class EventIdentityChecks
     {
         foreach (var fill in new[] { '\u0001', '<' })
             await AtNameLimits(fill, check);
+        await NativePublicationBoundary(check);
         await PublicationReuse(StringComparer.OrdinalIgnoreCase, check);
         await PublicationReuse(StringComparer.Ordinal, check);
         await PublicationReuse(StringComparer.Ordinal, check, slowConsumer: true);
         await UnsettledTicket(check);
+        await CheckAuthoredStep(loseAfter: false, check);
+        await CheckAuthoredStep(loseAfter: true, check);
+        await CheckAuthoredStep(loseAfter: false, check, paged: true);
+        await CheckAuthoredStep(loseAfter: true, check, paged: true);
+        await CheckAuthoredStep(loseAfter: null, check);
+        await CheckAuthoredStep(loseAfter: null, check, endPublisher: true);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.Resume, check);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.Resume, check, takeover: true);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.RetryAll, check);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.Retry, check, selectPublication: true);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.Retry, check);
+        await CheckPartialPublicationRecovery(Contract.RecoverMode.Resume, check, endBeforeTicket: true);
+        foreach (var resolution in Enum.GetValues<ParkClearKind>())
+            await CheckPartialPublicationRecovery(Contract.RecoverMode.Resume, check, clear: resolution);
+        await CheckRestoredWait(RestoreAt.BeforeAuthor, check);
+        await CheckRestoredWait(RestoreAt.BeforeMatch, check);
+        await CheckRestoredWait(RestoreAt.AfterMatch, check);
+        await CheckRestoredWait(RestoreAt.BeforeInsert, check, keep: true);
+        await CheckRestoredWait(RestoreAt.BeforeMatch, check, keep: true);
+        await CheckRestoredWait(RestoreAt.AfterMatch, check, keep: true);
+        await FoundationEventSendChecks.KeepingSubscription(check);
+        await FoundationEventSendChecks.KeepingSubscriptionBatch(check);
+        await FoundationEventSendChecks.StartRegistrationCatchUp(check);
         await FoldedRegistration(check);
         await LegacyTicket(doneDelivery: false, check);
         await LegacyTicket(doneDelivery: true, check);
+    }
+
+    private static async Task NativePublicationBoundary(Action<bool, string> check)
+    {
+        const long now = 1_701_400_041_000;
+        var budget = FoundationMetadataLimits.EventContentBytes - 2;
+        var escaped = new string('<', budget / 6) + new string('x', budget % 6);
+        var exact = JsonValue.Create(escaped);
+        var wire = exact.ToJsonString();
+        var registry = new WorkflowRegistry()
+            .Add(Wf.Workflow("exact", Wf.Publish("publish", "Order-7", Binding.Literal(exact))))
+            .Add(Wf.Workflow("excess", Wf.Publish("publish", "Order-7", Binding.Literal(JsonValue.Create(escaped + "x")))))
+            .Add(Wf.Workflow("absent", Wf.Publish("publish", "Order-7")))
+            .Add(Wf.Workflow("empty", Wf.Publish("publish", "Order-7", "")));
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("native-publication");
+        var probe = new Probe([("event:Order-7", "wait")], wire);
+        var adapter = new ActorAdapter(store, probe);
+        var native = new Kernel.WorkflowActor.WorkflowActor([new NativeExecutionModel(registry)]);
+        var router = new ActorTypeRouter(adapter, new Dictionary<string, IActorType>
+        {
+            [native.Type] = new ActorAdapter(store, native)
+        });
+        var worker = new Worker("native-publication", 0, store, router, new WorkerOptions { Monotonic = () => 0 });
+        var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        var reads = new ActorList(store, 10);
+        var runtime = new Kernel.WorkflowActor.WorkflowRuntime(edge, reads);
+        var subscriber = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "wait")), "wait", Contract.Kinds.Start)).Actor!.Value;
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(owner);
+
+        var actor = await Publish("exact");
+        check(Encoding.UTF8.GetByteCount(wire) == FoundationMetadataLimits.EventContentBytes &&
+            store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is { Row.Status: InstanceStatus.Finished } &&
+            Observed(store, scope, subscriber) is [{ Payload: "equal to limit payload" }],
+            "a real Native Publish effect matches the first attainable maximum serialized payload once");
+        var excessive = await Publish("excess");
+        check(store.ReadFoundationActor(scope.Tenant, excessive.Id).Actor is { Park: not null } &&
+            store.FoundationEvents.Count == 1 && store.Messages.Values.All(row => row.Message.Kind != Kinds.Publish),
+            "a Native serialized payload one byte above the limit parks without a ticket or event row");
+        await Publish("absent");
+        await Publish("empty");
+        var observations = Observed(store, scope, subscriber);
+        check(observations.Count == 3 && observations[1].Payload is null && observations[2].Payload == "\"\"",
+            "Native publication preserves a missing payload and a serialized empty string distinctly");
+
+        async Task<Contract.ActorRef> Publish(string definition)
+        {
+            var started = await runtime.StartAsync(scope, definition, NativeExecutionModel.Start(definition));
+            await Pump(owner);
+            return started.Actor!.Value;
+        }
     }
 
     private static async Task AtNameLimits(char fill, Action<bool, string> check)
@@ -66,6 +144,29 @@ internal static class EventIdentityChecks
             observed.Any(item => item.Key == name && item.Wait == name && item.Payload == expected) &&
             observed.Any(item => item.Key == secondKey && item.Wait == name && item.Payload == ""),
             $"{label}: the real actor receives exact event ids, waits and original payloads");
+        if (nearLimit is null) return;
+
+        var target = new Contract.Target.Ref(actor);
+        await edge.SendAsync(scope, target, "author-exact", "publish-sized");
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Id);
+        await worker.FlushAsync();
+        var ticket = store.Messages.Values.Single(row => row.Message.FoundationPublish?.Authored is not null).Message;
+        var framed = FoundationEventTicket.Decode(ticket);
+        check(framed.Payload == nearLimit && framed.Id == "~" + ticket.Id &&
+            Encoding.UTF8.GetByteCount(ticket.Payload!) <= FoundationMetadataLimits.MessageContentBytes,
+            "a real authored turn stores the exact maximum escaped-looking payload in a bounded frame");
+        await Pump(active);
+        check(Observed(store, scope, actor).Count(item => item.Id == framed.Id && item.Payload == "equal to limit payload") == 2,
+            "both waits receive the maximum authored payload unchanged and once");
+        await edge.SendAsync(scope, target, "author-over", "publish-sized", "one more");
+        await Pump(active);
+        check(store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is { Park: not null } &&
+            store.FoundationEvents.Values.Count(publication => publication.Id.StartsWith('~')) == 1 &&
+            store.Messages.Values.All(row => row.Message.FoundationPublish?.Authored is null),
+            "one byte above the authored payload limit parks the producer without committing a publication ticket");
     }
 
     private static async Task PublicationReuse(StringComparer equality, Action<bool, string> check, bool slowConsumer = false)
@@ -224,10 +325,13 @@ internal static class EventIdentityChecks
         await SelectAndFlush(worker);
 
         // This is the old durable intermediate state after matching and before the ticket was consumed.
-        var ticket = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish).Message;
-        var publication = FoundationEventTicket.Decode(ticket);
-        if (doneDelivery)
-            store.Messages[ticket.InboxKey].Message = ticket with { Payload = Json.Write(publication) };
+        var stored = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish);
+        var first = stored.Message;
+        var framed = FoundationEventTicket.Decode(first);
+        var publication = framed with { KeepUntil = now + framed.KeepUntil };
+        var ticket = (first with { FoundationPublish = null,
+            Payload = doneDelivery ? Json.Write(publication) : FoundationEventTicket.Encode(publication) }).AsKernelTicket();
+        stored.Message = ticket;
         var key = (publication.Key, publication.Id);
         store.RecordFoundationPublication(publication);
         var legacy = Events.Route(publication, store.Subscriptions.Single());
@@ -282,22 +386,383 @@ internal static class EventIdentityChecks
         await worker.FlushAsync();
         worker.RunTurn(store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Id);
         await worker.FlushAsync();
-        var ticket = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish).Message.InboxKey;
+        var before = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish);
+        var ticket = before.Message.InboxKey;
         await worker.MeetAsync();
         var original = store.FoundationEvents.Single();
+        check(original.Value.FoundationAcceptedAt == now && original.Value.KeepUntil == now + 20 &&
+            original.Value.Id == "~" + ticket.Id && store.Messages[ticket] is { Message.Payload: null } after &&
+            after.Seq != before.Seq && !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
+            "the authored insert step commits the event and rewrites its ticket without matching or copying its payload");
         now += 21;
         await store.SweepAsync();
         check(store.Messages.GetValueOrDefault(ticket) is { Done: false } &&
             store.FoundationEvents.GetValueOrDefault(original.Key)?.FoundationIncarnation == original.Value.FoundationIncarnation,
             "an expired turn publication keeps its incarnation while its owning ticket is still pending");
 
-        await worker.FlushAsync();
+        await worker.PollAsync();
+        await worker.MeetAsync();
         await store.SweepAsync();
         check(!store.Messages.ContainsKey(ticket) && !store.FoundationEvents.ContainsKey(original.Key),
             "a sweep can remove an expired turn publication after its ticket settles");
         await Pump(active);
         check(Observed(store, scope, actor) is [{ Payload: "from turn" }],
             "the delivery remains available after the settled publication is swept");
+    }
+
+    private static async Task CheckAuthoredStep(bool? loseAfter, Action<bool, string> check, bool paged = false, bool endPublisher = false)
+    {
+        const long initial = 1_701_400_090_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("authored-step");
+        var count = paged ? InMemoryStore.ParkPageLimit + 1 : 1;
+        var probe = new Probe(Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray(), restoreKeep: true);
+        var lost = false;
+        var failSteps = loseAfter is null;
+        CommitBatch? lostCommit = null;
+        var initialSequence = 0L;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is not [{ FoundationPublicationSequence: { } sequence, FoundationCatchUpStep: not null }] ||
+                paged && sequence == initialSequence) return;
+            if (failSteps && !landed) throw new StoreException(Failure.Definite, "authored page rejected by fixture");
+            if (landed == loseAfter && !lost)
+            {
+                lost = true;
+                lostCommit = batch;
+                throw new StoreException(Failure.Unknown, "authored insert response lost");
+            }
+        });
+        Worker NewOwner() => new("authored-step", 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, MaxAttempts = 2 });
+        var first = NewOwner();
+        var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var admitted = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
+        var actor = admitted.Actor!.Value;
+        await using var active = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Pump(active);
+        var address = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Id;
+        await edge.SendAsync(scope, new Contract.Target.Ref(actor), "emit", endPublisher ? "publish-and-end" : "publish");
+        await first.PollAsync();
+        await first.LoadAsync();
+        await first.FlushAsync();
+        first.RunTurn(address);
+        now += 5;
+        await first.FlushAsync();
+        var original = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish);
+        var key = original.Message.InboxKey;
+        initialSequence = original.Seq;
+        check(original.Message.FoundationPublish is { Authored.AcceptedAt: initial + 5 } && store.FoundationEvents.Count == 0,
+            "the author commit stamps the framed ticket while the event row is still absent");
+        var outside = await edge.SendAsync(scope, new Contract.Target.Event("Order-7"), "~" + key.Id, Contract.Kinds.Event);
+        check(outside is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.InvalidEventId, Publication: null } &&
+            store.FoundationEvents.Count == 0 && store.Messages[key] == original,
+            "outside admission refuses the authored event id before the insert-only phase");
+        now += 7;
+
+        if (loseAfter is null)
+        {
+            await Pump(active);
+            var parked = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+            if (endPublisher)
+            {
+                check(parked is { Park: null, Row.Status: InstanceStatus.Finished } && store.FoundationEvents.Count == 0 &&
+                    store.Messages[key] is { Done: true, KeptBy: null, ParkDeadLetter: true, Message.Payload: not null },
+                    "an exhausted insert for an ended publisher keeps its replayable payload as a dead letter");
+                return;
+            }
+            check(parked is { Park: not null, Row.Status: InstanceStatus.Faulted } && store.FoundationEvents.Count == 0 &&
+                store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed, ParkDeadLetter: false, Message.Payload: not null },
+                "an exhausted authored insert parks the exact actor and keeps its original payload for retry");
+            if (parked.Park is null) return;
+            var selection = (await new ActorList(store, 10).GetAsync(scope, actor))!.Selection!;
+            failSteps = false;
+            await edge.SendAsync(scope, new Contract.Target.Ref(actor), "recover-publish", Contract.Kinds.Recover,
+                Json.Write(new Contract.OperatorCommand(selection, Mode: Contract.RecoverMode.RetryAll)));
+            await Pump(active);
+            check(store.ReadFoundationActor(scope.Tenant, actor.Id).Actor is { Park: null } &&
+                !store.Messages.ContainsKey(key) && Observed(store, scope, actor) is [{ Payload: "from turn" }],
+                "recovery restores the kept authored ticket and completes its original publication once");
+            return;
+        }
+
+        await first.PollAsync();
+        await first.MeetAsync();
+        if (paged)
+        {
+            await first.PollAsync();
+            await first.MeetAsync();
+            check(lost && !first.Owns && store.FoundationEvents.Count == 1 &&
+                (store.Messages[key].Message.FoundationPublish?.After is not null) == loseAfter.Value &&
+                store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == (loseAfter.Value ? InMemoryStore.ParkPageLimit : 0),
+                "loss at a nonfinal match page preserves the original cursor or the exact committed delivery prefix");
+        }
+        else check(lost && !first.Owns && (store.FoundationEvents.Count == 1) == loseAfter.Value &&
+                (store.Messages[key].Message.Payload is null) == loseAfter.Value,
+                "a lost insert answer leaves either both durable phase changes or the original framed ticket");
+        await active.DisposeAsync();
+        var successor = NewOwner();
+        await using var replacement = (await new DurableHost([successor]).ActivateAsync(0))!;
+        check(lostCommit is not null && !(await store.CommitAsync(lostCommit)).Landed,
+            "the previous owner's delayed authored step cannot land after the successor takes ownership");
+        await Pump(replacement);
+        var observed = Observed(store, scope, actor);
+        check(store.FoundationEvents.Values.Single() is { FoundationAcceptedAt: initial + 5, KeepUntil: initial + 25 } &&
+            !store.Messages.ContainsKey(key) && observed.Count == count && observed.All(item => item.Payload == "from turn") &&
+            observed.Select(item => item.Wait).Distinct().Count() == count,
+            "the successor finishes matching once and keeps the original author commit's retention deadline");
+    }
+
+    private static async Task CheckPartialPublicationRecovery(Contract.RecoverMode mode, Action<bool, string> check,
+        bool takeover = false, bool selectPublication = false, bool endBeforeTicket = false, ParkClearKind? clear = null)
+    {
+        const long initial = 1_701_400_097_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = clear == ParkClearKind.Expiry ? TimeSpan.FromMilliseconds(1) : null
+        };
+        var scope = new Contract.BoundScope("partial-publication");
+        var count = 2 * InMemoryStore.ParkPageLimit + 1;
+        var waits = Enumerable.Range(0, count).Select(index => ("Order-7", $"wait-{index:D3}")).ToArray();
+        var probe = new Probe(waits, restoreKeep: false, separatePublisher: true);
+        var fail = false;
+        var rejected = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!landed && fail && batch.Turns is [{ FoundationPublicationSequence: not null, FoundationCatchUpStep: not null }])
+            {
+                rejected++;
+                throw new StoreException(Failure.Definite, "Refuse the publication step after the first match page.");
+            }
+        });
+        var worker = Owner("partial-publication-first");
+        var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Terminate or Contract.Kinds.Delete);
+        await using var first = await Activate(worker);
+        var subscriber = await Start("subscriber");
+        var publisher = await Start("publisher");
+        await Pump(first);
+        var address = store.FoundationTarget(scope.Tenant, publisher.Id)!.Id;
+        var target = new Contract.Target.Ref(publisher);
+        await edge.SendAsync(scope, target, "emit", "publish");
+        await Step(worker);
+        if (endBeforeTicket)
+        {
+            // Admit the first recovery page before the publication advances to its new stored sequence.
+            await edge.SendAsync(scope, target, "end-first", "end-model");
+            for (var index = 1; index < InMemoryStore.ParkPageLimit; index++)
+                await edge.SendAsync(scope, target, $"earlier-{index:D3}", "ordinary");
+        }
+        var key = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Publish).Message.InboxKey;
+        await RunMatch(worker);
+        await RunMatch(worker);
+        var page = store.Messages[key].Message.FoundationPublish;
+        var prefix = store.Messages.Values.Count(message => message.Message.Kind == Kinds.Event);
+        var label = clear?.ToString() ?? $"{mode}, takeover={takeover}, select-ticket={selectPublication}, earlier-end={endBeforeTicket}";
+        check(page?.After is not null && store.FoundationEvents.Count == 1 && prefix == InMemoryStore.ParkPageLimit &&
+            store.Subscriptions.Count == count,
+            $"KP-1 {label}: first page commits before a separate publisher parks");
+        if (page?.After is null) return;
+
+        fail = true;
+        for (var pass = 0; pass < 12 && store.Instances[address].Status == InstanceStatus.Running; pass++) await RunMatch(worker);
+        var park = store.ReadFoundationActor(scope.Tenant, publisher.Id).Actor!;
+        check(rejected == 2 && park.Park is not null &&
+            store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed, ParkDeadLetter: false } &&
+            store.Messages[key].Message.FoundationPublish == page,
+            $"KP-1 {label}: exhausting the later step keeps the already-landed cursor on the original publication");
+        if (park.Park is null) return;
+        if (clear is { } disposition)
+        {
+            var selected = (await new ActorList(store, 5).GetAsync(scope, publisher))!.Selection!;
+            var commandKind = disposition switch
+            {
+                ParkClearKind.Discard => Contract.Kinds.Discard,
+                ParkClearKind.Terminate => Contract.Kinds.Terminate,
+                ParkClearKind.Delete => Contract.Kinds.Delete,
+                _ => null
+            };
+            if (commandKind is null) now++;
+            else await edge.SendAsync(scope, target, "clear-park", commandKind, Json.Write(new Contract.OperatorCommand(selected)));
+
+            fail = false;
+            await Pump(first);
+            var cleared = store.Instances[address];
+            check(cleared.ParkDiscard is null && (cleared.Retired || cleared.ParkDiscarded) &&
+                store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: null, ParkDeadLetter: true } letter &&
+                letter.Message.FoundationPublish == page && Observed(store, scope, subscriber).Count == prefix,
+                $"KP-1 {label}: clearing the Park leaves the original cursor in a dead letter and never repeats the delivered prefix");
+            return;
+        }
+        if (endBeforeTicket) await Step(worker);
+
+        IReadOnlyList<string>? handles = null;
+        if (mode == Contract.RecoverMode.Retry)
+        {
+            var selected = key;
+            if (!selectPublication)
+            {
+                await edge.SendAsync(scope, target, "other", "other-consumed");
+                var other = store.Messages.Values.Single(message => message.Message.Id == "other");
+                other.Attempts = 2;
+                await Step(worker);
+                selected = other.Message.InboxKey;
+            }
+            var handle = store.SealFoundationKeptHandle(scope.Tenant, publisher.Id, selected);
+            check(handle is not null, $"KP-1 {label}: the operator can select the intended consumed envelope");
+            if (handle is null) return;
+            handles = [handle];
+        }
+        var selection = (await new ActorList(store, 5).GetAsync(scope, publisher))!.Selection!;
+        var accepted = await edge.SendAsync(scope, target, "remove-park", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection, mode, handles)));
+        fail = false;
+        var reachedEndFirst = false;
+        for (var pass = 0; pass < 18 && store.Messages[key].Done; pass++)
+        {
+            if (endBeforeTicket && pass != 0 && pass % 3 == 0) now += 11;
+            await Step(worker);
+            reachedEndFirst |= store.Messages[key].Done && store.Instances[address] is
+                { Status: InstanceStatus.Finished, ParkRecovery: not null };
+        }
+        if (endBeforeTicket)
+            check(reachedEndFirst, "KP-1 the restored first page ends the publisher before the retained ticket opens");
+        var restored = (!endBeforeTicket || reachedEndFirst) && accepted.Outcome == Contract.AdmissionOutcome.Accepted && !store.Messages[key].Done &&
+            store.Messages[key].KeptBy is null && store.Messages[key].Message.FoundationPublish == page;
+        check(restored, $"KP-1 {label}: the fenced Recover page restores the exact publish ticket without resetting its match cursor");
+        if (!restored) return;
+        if (takeover)
+        {
+            await first.DisposeAsync();
+            now += 11;
+            await using var cold = await Activate(Owner("partial-publication-cold"));
+            // The first page's inherited inputs may each need a fenced trial before their subscriber runs.
+            for (var pass = 0; pass < count / 10 + 10 && Observed(store, scope, subscriber).Count < count; pass++)
+                await Pump(cold);
+        }
+        else
+        {
+            for (var pass = 0; pass < 6 && (store.Instances[address].ParkRecovery is not null ||
+                Observed(store, scope, subscriber).Count < count); pass++)
+            {
+                await Pump(first);
+                now += 11;
+            }
+        }
+        var delivered = Observed(store, scope, subscriber);
+        var resolved = store.Instances[address];
+        var finished = resolved.ParkRecovery is null &&
+            resolved.Status == (endBeforeTicket ? InstanceStatus.Finished : InstanceStatus.Running) &&
+            !store.Messages.ContainsKey(key) && delivered.Count == count &&
+            delivered.Select(item => item.Wait).Distinct(StringComparer.Ordinal).Count() == count &&
+            delivered.All(item => item.Payload == "from turn");
+        check(finished, $"KP-1 {label}: all 341 waits receive the original publication once through the real subscriber" +
+            (finished ? "" : $" (observed {delivered.Count}, publisher {resolved.Status}, drain {resolved.ParkRecovery}, ticket {store.Messages.ContainsKey(key)})"));
+
+        async Task<Contract.ActorRef> Start(string definition)
+        {
+            var start = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, definition)), definition, Contract.Kinds.Start);
+            return start.Actor!.Value;
+        }
+        async Task Step(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.FlushAsync();
+            owner.RunTurn(address);
+            await owner.FlushAsync();
+        }
+        static async Task RunMatch(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.MeetAsync();
+            await owner.FlushAsync();
+        }
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, MaxAttempts = 2 });
+        static async Task<IScopeActivation> Activate(Worker owner) => (await new DurableHost([owner]).ActivateAsync(0))!;
+    }
+
+    private enum RestoreAt { BeforeAuthor, BeforeInsert, BeforeMatch, AfterMatch }
+
+    private static async Task CheckRestoredWait(RestoreAt point, Action<bool, string> check, bool keep = false)
+    {
+        var now = 1_701_400_091_000L;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("authored-restored-wait");
+        var probe = new Probe([("Order-7", "wait")], restoreKeep: keep);
+        var publicationSteps = 0;
+        var catchUpSteps = 0;
+        var observedStore = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!landed) return;
+            publicationSteps += batch.Turns.Count(turn => turn.FoundationPublicationSequence is not null && turn.FoundationCatchUpFailed is null);
+            catchUpSteps += batch.Turns.Count(turn => turn.FoundationCatchUpStep is not null && turn.FoundationPublicationSequence is null);
+        });
+        var worker = new Worker("restored-wait", 0, observedStore, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var publisher = await Begin("publisher");
+        var restored = await Begin("restored");
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(owner);
+        await ingress.SendAsync(scope, new Contract.Target.Ref(restored), "fault", "fault");
+        await Pump(owner);
+        var target = new Contract.Target.Ref(restored);
+        var selection = (await new ActorList(store, 10).GetAsync(scope, restored))!.Selection!;
+
+        if (point == RestoreAt.BeforeAuthor)
+        {
+            await Restore();
+            now -= 30_000;
+        }
+        await ingress.SendAsync(scope, new Contract.Target.Ref(publisher), "authored-publish", "publish");
+        await Step(publisher);
+        if (point == RestoreAt.BeforeInsert) await Restore();
+        await Match();
+        check(publicationSteps == 1 && store.FoundationEvents.Count == 1 && !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
+            "the first authored step commits before any live or restored wait is matched");
+
+        var catchUpBeforeRestore = catchUpSteps;
+        if (point == RestoreAt.AfterMatch) await Match();
+        if (point is RestoreAt.BeforeMatch or RestoreAt.AfterMatch) await Restore();
+        if (point != RestoreAt.AfterMatch) await Match();
+        await Pump(owner);
+        if (point == RestoreAt.BeforeMatch && keep)
+            check(publicationSteps == 2 && catchUpSteps == catchUpBeforeRestore + 1,
+                "both the publication page and keeping catch-up commit after the insert");
+        var expected = point != RestoreAt.AfterMatch || keep ? 1 : 0;
+        var shift = point == RestoreAt.BeforeAuthor ? " followed by a 30-second clock backstep" : "";
+        check(Observed(store, scope, publisher) is [{ Payload: "from turn" }] &&
+            Observed(store, scope, restored).Count == expected,
+            $"restoring a {(keep ? "keeping" : "non-keeping")} wait at {point}{shift} gets {expected} authored deliveries");
+
+        async Task<Contract.ActorRef> Begin(string id) =>
+            (await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, id)), id, Contract.Kinds.Start)).Actor!.Value;
+
+        async Task Step(Contract.ActorRef actor)
+        {
+            var id = store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.Id;
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
+
+        async Task Match()
+        {
+            await worker.PollAsync();
+            await worker.MeetAsync();
+        }
+
+        async Task Restore()
+        {
+            await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+            await Step(restored);
+        }
     }
 
     private static Worker Owner(string node, InMemoryStore store, Probe probe) =>
@@ -317,7 +782,8 @@ internal static class EventIdentityChecks
 
     private sealed record Observation(string Key, string Id, string Wait, string? Payload);
 
-    private sealed class Probe((string Key, string Wait)[] waits, string? limitPayload = null) : Contract.IActorType
+    private sealed class Probe((string Key, string Wait)[] waits, string? limitPayload = null, bool? restoreKeep = null,
+        bool separatePublisher = false) : Contract.IActorType
     {
         public string Type => "event-identity";
         public bool Withholds(Contract.ActorHeader header) => false;
@@ -326,10 +792,18 @@ internal static class EventIdentityChecks
             var observed = turn.State is { } previous ? Json.Read<List<Observation>>(previous) : [];
             foreach (var message in turn.Inbox)
             {
-                if (message.Kind == "publish") turn.Publish("Order-7", "from turn", TimeSpan.FromMilliseconds(20));
+                if (message.Kind is "publish" or "publish-and-end")
+                {
+                    turn.Publish("Order-7", "from turn", TimeSpan.FromMilliseconds(20));
+                    if (message.Kind == "publish-and-end") turn.End(Contract.ActorStatus.Finished);
+                }
+                if (message.Kind == "publish-sized")
+                    turn.Publish(waits[0].Key, message.Payload is null ? limitPayload : limitPayload + "<", TimeSpan.FromMinutes(1));
+                if (message.Kind == "fault") throw new InvalidOperationException("The fixture parks the wait.");
+                if (message.Kind == "end-model") turn.End(Contract.ActorStatus.Finished);
                 if (message.Kind == "unsubscribe") turn.Unsubscribe("order-7", "WAIT");
-                if (message.Kind == Contract.Kinds.Start)
-                    foreach (var (key, wait) in waits) turn.Subscribe(key, wait, keep: true);
+                if (message.Kind == Contract.Kinds.Start && (!separatePublisher || turn.Header.TypeData == "subscriber"))
+                    foreach (var (key, wait) in waits) turn.Subscribe(key, wait, keep: restoreKeep ?? true);
                 if (message.Event is { } delivery)
                     observed.Add(new(delivery.Key, delivery.Id, delivery.Wait,
                         limitPayload is not null && message.Payload == limitPayload ? "equal to limit payload" : message.Payload));
@@ -338,7 +812,8 @@ internal static class EventIdentityChecks
             return default;
         }
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => new((object?)null);
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            new([], [], (!separatePublisher || header.TypeData == "subscriber") && restoreKeep is { } keep ? waits.Select(wait => new Contract.SubscriptionSpec(wait.Key, wait.Wait, keep)).ToArray() : []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

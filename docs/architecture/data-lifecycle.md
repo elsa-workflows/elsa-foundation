@@ -61,6 +61,12 @@ public sealed record RetentionPolicy(
 - **Refused deletes.** A delete the owner refuses (protected, not yet eligible, or a different run or transition) is consumed with no change to the row. A later sweep selects the instance again if it is still eligible, with its current identity.
 - **The same path serves operators.** Delete one instance and delete by filter (definition, tenant, status, age) send the same qualified delete, with reason Operator. Terminate-then-delete for a running instance is one command, below.
 
+The in-memory Foundation uses a host-issued Retention Delete with a reserved id derived from the
+tenant, actor reference and terminal selection. The owner reads the configured window at execution.
+`--retention-delete-check` covers a policy extension, a queued delete across caller-key reuse, an
+unresolved re-park and the new Faulted window after expiry. The policy configuration surface,
+retention worker and its rate control retain their K11 cases.
+
 ### Proposed: the qualified delete
 
 > **Counterexample and answer** ([Astra High gate 2 review, B1](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)). The trace: the projection reports an expired finished run A under caller key K. A is removed. Run B reuses K and finishes, with its retention period still ahead. A delayed retention worker then submits the selected delete by K. The built handler checks only that the row has ended and is not protected, and deletes at the revision it has just loaded (`Control` in [WorkflowInstance.cs](../../prototypes/kernel-model/src/Kernel.Workflows/WorkflowInstance.cs)), so it deletes B and its history. A message id derived from A's end revision only deduplicates submissions, and B can end at the same revision. The same creation can also change eligibility: a parked run recovered and ended again, or a policy extended after the selection.
@@ -84,6 +90,10 @@ public sealed record DeleteSelection(
 ```
 
 - **The terminal mark.** The commit that ends or parks an instance records `(revision, time)` on the instance row. Discard, expiry and the terminate of a parked instance are drains, so for them the drain's completing commit writes the mark. Later commits to the ended row leave the mark unchanged: a late child result, a metadata turn, an archive request. A re-park of an already-parked row continues the same Park (observability, "What Park keeps"), so it keeps the first Park's mark. A recover's Open clears the Park's mark. A mark the model's end writes during the recover drain stays through its Complete, which does not clear it. A recover that completes with the model still running leaves no mark, and the run's next end, Park or discard writes one. A re-park that interrupts the drain, which happens only while the model runs, restores the Park's own mark, since it is the same Park ([observability](observability.md#every-park-operation-names-its-park)). The Open of a discard, expiry, terminate or delete writes no mark. So a terminate of a parked instance leaves the Park's mark on the row until its Complete writes the Cancelled mark, and a terminate that interrupts a running recover finds no mark, and the row has none until that Complete. A delete takes an open drain over only when check 3 passes against the row's current mark ([observability](observability.md#delete-during-a-drain)); while a row has no mark, no separate delete qualifies. During a terminate that interrupted a running recover, the operator deletes after Complete under the Cancelled mark; during a recover whose model still runs, the operator sends a terminate with `ThenDelete` or waits for the run's next end. Revisions restart for each creation, so the mark identifies a transition only together with the creation; the selection carries both and the owner compares the revision and the time. The lifecycle entries (format item 4) carry tenant, creation and the mark, so the instance-list read model has all three.
+- **In-memory qualification.** The store records the revision and clock of the terminal transition in its fenced
+  commit. A later bookkeeping write keeps the mark. The read model's signed selection rejects a mismatched
+  revision or clock, even when the other field and creation agree. `OperatorIngressChecks` exercises those cases
+  through the real Worker and in-memory store. Qualified Delete takeover and the provider columns have their own cases.
 - **The owner's checks,** in the workflow actor's command turn, in this order. The owner refuses on the first that fails:
   1. the selection's tenant equals the row's tenant, and then its `Instance`, the canonical tenant-qualified actor id the selector read, equals the row's stored id, refused as "target" (proposed, fourth review R4-M5, the same order as a Park selection's checks in [observability](observability.md#every-park-operation-names-its-park)). A creation is unique per tenant and id, so two live instances of one tenant can share a creation and a terminal mark, and only the id tells a delete read for one from a delete for the other. For a caller key, `Instance` is the actor id its binding row holds (fourth review R4-M6, [the caller-key binding](tenancy.md#names-one-namespace-per-tenant)). A terminate with `ThenDelete` carries the same `Instance` in its own payload, so its check 1 has both parts;
   2. the selection's creation equals the row's creation, and both are known;
@@ -113,6 +123,16 @@ public sealed record DeleteSelection(
   - Release 1 starts from empty databases (owner, 17 November), and every new run gets a creation once K3 lands, so release 1 never meets an ambiguous row.
 - **Observability.** A refusal adds no journal row, as for other no-op commands. It counts in a layer-3 metric, `elsa.kernel.delete.refused`, by reason: tenant, target, run, transition, not eligible, protected, ambiguous, and in progress (a delete reaching a drain that already ends in a delete).
 
+  The in-memory Foundation requires both operator permissions for `ThenDelete` and carries the selected
+  actor's exact reference as `ExpectedTarget`. The real Worker uses that pinned creation through delivery.
+  `--cascade-pages-check` covers Native retirement with its first bounded cascade page, a protected
+  running actor, and already ended actors with and without a child. It also drives the 1,000-child
+  and one-job schedules for running and ended roots and children, including the protected child and a
+  fresh owner taking over after the first commit. `--park-drain-cascade-check` covers
+  parked and running Recover origins. `--park-recovery-check` covers taking over an ended Recover and
+  a competing `ThenDelete` that cascades while preserving the existing owner's operation.
+
+
 - **What stays after a delete:**
   - the retirement marker, for every id kind, caller keys included (proposed; built for generated ids and rows with a creation), with the retained cancellation obligation above;
   - the journal's deletion marker;
@@ -130,6 +150,13 @@ Release 1 uses option a ([write volume](write-volume.md), decision 1a). Option b
 | Orphans | None: the row commits with its reference | A put whose commit never landed leaves an object; the sweeper removes instance prefixes that have no instance after a grace period |
 | Erasure lag | None beyond the delete | Until the sweeper runs |
 | Costs | One row write per value, in the fenced batch, plus its own WAL and TOAST once per value; one more row delete per value at delete time | Witness: by reference costs more engine calls than inline (13 against 5 to the first value-bearing commit; 20 against 12 for a fresh owner's read), plus one object put and one read. At delete time: one read-model row per deleted instance, then object deletes |
+
+The in-memory store stages immutable value bytes beside their owning checkpoint. The fenced writer
+validates the exact creation and commits both together. Values with the same digest share one row
+within that creation. Qualified Delete erases its rows in the same commit, and caller-key reuse sees
+a new value namespace. `--foundation-value-check` exercises stale fences, immutable reads, missing
+checkpoints, lost answers and deletion. Provider persistence is K4. The model-facing API and PostgreSQL
+WAL acceptance retain their release 1 milestones.
 
 ### Proposed: archiving, after release 1
 
@@ -224,6 +251,11 @@ These cost little now and require rewriting stored history later:
 5. **Non-positive journal rows are compactable below the projector's cursor,** with invariant 6 restated.
 6. **Done markers keep only the id and window.** The consuming commit already updates the row to mark it done (`UPDATE "Messages" SET "Done"` in the owned commit). Clearing `Payload` and `Start` in the same update leaves no copy of a handled command's input, and duplicate detection needs only the id. This changes the commit's consume step (step 4), so it is kernel behaviour.
    - **Park's kept deliveries are excepted.** Park keeps its consumed deliveries and its arrivals as done rows marked `KeptBy`, which the sweep skips, so a retry can deliver them again ([observability](observability.md#what-park-keeps), decision 2a). The rows a Park keeps retain their payloads until the drain that resolves the Park clears them: recover, discard, the delete of the parked instance, or the expiry of a finite `Parked` window. After an expiry, recover is refused in both modes. The clearing applies to ordinary consumption only. A drain's page that clears a kept timer leaves an ordinary done marker, which may be payload-free; a later re-arm of that timer writes its kind, payload and original due from the model's restore plan, never from the marker ([observability](observability.md#recover)).
+
+   - **In-memory qualification.** Ordinary completion and a cleared kept row remove the body and start
+     envelope. Recoverable kept rows and publication dead letters retain their replay data. The event-start
+     and outside-command duplicates still identify the same outcome, and Native timer re-arm reconstructs
+     its envelope from the restore plan. Provider updates remain at K4.
 
 ## What release 1 ships
 

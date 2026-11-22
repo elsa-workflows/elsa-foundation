@@ -69,6 +69,24 @@ if (args.Contains("--held-job-result-check"))
     await HeldJobResultChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-coverage-budget-check"))
+{
+    var failed = false;
+    await ParkCoverageBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-page-bounds-check"))
+{
+    var failed = false;
+    await ParkPageBoundsChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-large-drain-check"))
+{
+    var failed = false;
+    await ParkLargeDrainChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--park-kept-check"))
 {
     var failed = false;
@@ -124,6 +142,72 @@ if (args.Contains("--cascade-pages-check"))
     await CascadePageChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-cohort-tuple-check"))
+{
+    var failed = false;
+    await ParkCohortTupleChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--tenant-pass-check"))
+{
+    var failed = false;
+    await TenantPassChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--scope-age-check"))
+{
+    var failed = false;
+    await ScopeAgeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--backlog-worker-check"))
+{
+    var failed = false;
+    await BacklogWorkerChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--backlog-store-check"))
+{
+    var failed = false;
+    await BacklogStoreChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--pass-turn-budget-check"))
+{
+    var failed = false;
+    await PassTurnBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-handoff-credit-check"))
+{
+    var failed = false;
+    await ParkHandoffCreditChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-drain-cascade-check"))
+{
+    var failed = false;
+    await ParkDrainCascadeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--foundation-value-check"))
+{
+    var failed = false;
+    await FoundationValueChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--retention-delete-check"))
+{
+    var failed = false;
+    await RetentionDeleteChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-delete-check"))
+{
+    var failed = false;
+    await ParkDeleteChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--retirement-cascade-check"))
 {
     var failed = false;
@@ -134,6 +218,12 @@ if (args.Contains("--metadata-envelope-check"))
 {
     var failed = false;
     await MetadataEnvelopeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--event-byte-budget-check"))
+{
+    var failed = false;
+    await EventByteBudgetChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--event-identity-check"))
@@ -152,6 +242,18 @@ if (args.Contains("--paged-publication-check"))
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),
         Arg("--seed") is not null ? 1 : int.Parse(Arg("--seeds") ?? "100"), count, flaws, args.Contains("--tree-stall"));
+if (args.Contains("--foundation-tenant-check"))
+{
+    var failed = false;
+    await FoundationTenantChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--foundation-migration-dispatch-check"))
+{
+    var failed = false;
+    await FoundationMigrationDispatchChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--public-owner-check"))
 {
     var failed = false;

@@ -10,7 +10,8 @@
 # contract projects every host shares with every feature (ADR 0067, #2126), plus
 # the cluster membership it composes on its own container, whose contracts
 # (Elsa.Cluster.Core, Elsa.Persistence.Schema) it shares too (#2143), and the
-# opt-in EF membership provider with EF Core and the four engines (#2151) —
+# opt-in EF membership provider with EF Core and the four engines (#2151), and
+# the opt-in host module-management endpoints from Elsa.Modularity.Api (#5386) —
 # none of which brings a feature implementation into this host — so its
 # project and their sources must also be present in the Docker build context.
 # Example:
@@ -60,8 +61,13 @@ COPY essentials/src/Events/Core/Elsa.Events.Core.csproj essentials/src/Events/Co
 COPY essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj essentials/src/Expressions/Core/packages.lock.json essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj essentials/src/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json essentials/src/Foundation/DataProtection/EntityFrameworkCore/
 COPY essentials/src/Foundation/Hosting/Elsa.Foundation.Hosting.csproj essentials/src/Foundation/Hosting/packages.lock.json essentials/src/Foundation/Hosting/
+COPY essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj essentials/src/Foundation/Identity/Core/packages.lock.json essentials/src/Foundation/Identity/Core/
+COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj essentials/src/Foundation/Identity/Elsa.Foundation.Identity/packages.lock.json essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
 COPY essentials/src/Locking/Core/Elsa.Locking.Core.csproj essentials/src/Locking/Core/packages.lock.json essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj essentials/src/Mediator/Core/packages.lock.json essentials/src/Mediator/Core/
+COPY essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj essentials/src/Modularity/Api/packages.lock.json essentials/src/Modularity/Api/
+COPY essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj essentials/src/Modularity/Core/packages.lock.json essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj essentials/src/Modularity/Nuplane/packages.lock.json essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj essentials/src/Persistence/EntityFramework/packages.lock.json essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/Elsa.Persistence.Core.csproj essentials/src/Persistence/Core/packages.lock.json essentials/src/Persistence/Core/
 COPY essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj essentials/src/Persistence/Schema/packages.lock.json essentials/src/Persistence/Schema/
@@ -91,8 +97,13 @@ COPY essentials/src/Events/Core/ essentials/src/Events/Core/
 COPY essentials/src/Expressions/Core/ essentials/src/Expressions/Core/
 COPY essentials/src/Foundation/DataProtection/EntityFrameworkCore/ essentials/src/Foundation/DataProtection/EntityFrameworkCore/
 COPY essentials/src/Foundation/Hosting/ essentials/src/Foundation/Hosting/
+COPY essentials/src/Foundation/Identity/Core/ essentials/src/Foundation/Identity/Core/
+COPY essentials/src/Foundation/Identity/Elsa.Foundation.Identity/ essentials/src/Foundation/Identity/Elsa.Foundation.Identity/
 COPY essentials/src/Locking/Core/ essentials/src/Locking/Core/
 COPY essentials/src/Mediator/Core/ essentials/src/Mediator/Core/
+COPY essentials/src/Modularity/Api/ essentials/src/Modularity/Api/
+COPY essentials/src/Modularity/Core/ essentials/src/Modularity/Core/
+COPY essentials/src/Modularity/Nuplane/ essentials/src/Modularity/Nuplane/
 COPY essentials/src/Persistence/EntityFramework/ essentials/src/Persistence/EntityFramework/
 COPY essentials/src/Persistence/Core/ essentials/src/Persistence/Core/
 COPY essentials/src/Persistence/Schema/ essentials/src/Persistence/Schema/

@@ -8,8 +8,10 @@ internal static class FoundationEventTicket
     private const string Version = "1|";
 
     internal static string Encode(EventRow publication)
-        => FoundationEventFrame.Encode(Version, publication.Payload, publication.Key, publication.Id,
-            publication.KeepUntil.ToString(CultureInfo.InvariantCulture));
+        => Encode(publication.Key, publication.Id, publication.Payload, publication.KeepUntil);
+
+    internal static string Encode(string key, string id, string? payload, long retention)
+        => FoundationEventFrame.Encode(Version, payload, key, id, retention.ToString(CultureInfo.InvariantCulture));
 
     internal static EventRow Decode(Message ticket)
     {

@@ -13081,6 +13081,13 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindEventDetai
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryDetailsStore.FindBookmarkDetailsAsync(string! workflowExecutionId, string! bookmarkId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<(Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryHead? Head, Elsa.Workflows.Runtime.Core.Models.RuntimeHistoryBookmark? Bookmark)>
 static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeHistorySource(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit) -> string!
 
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.StandaloneTriggerResourceCommitted(Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope! scope, string! triggerId, string! typeKey, long revision) -> void
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Scope.get -> Elsa.Workflows.Runtime.Core.StandaloneTriggers.TriggerScope!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TriggerId.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.TypeKey.get -> string!
+Elsa.Workflows.Runtime.Core.StandaloneTriggers.StandaloneTriggerResourceCommitted.Revision.get -> long
+
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.RuntimeInitialStartFault(Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! work, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerPoisonRecord! poison) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeInitialStartFault.Work.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!
@@ -13328,3 +13335,8 @@ static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage.operator
 static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDefinitionPage? right) -> bool
 static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft.operator !=(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft? right) -> bool
 static Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft.operator ==(Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft? left, Elsa.Workflows.Runtime.Core.UserTasks.UserTaskFormDraft? right) -> bool
+
+
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.ModelKey.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionOutcomeProjector.Project(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! execution) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionStatus?

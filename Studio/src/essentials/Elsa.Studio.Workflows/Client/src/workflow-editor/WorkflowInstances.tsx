@@ -555,7 +555,7 @@ export function WorkflowInstances({ context, navigate }: {
         <div className={`studio-table-container studio-collection-table wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
             <span role="columnheader" className="wf-run-column-header">
-              {canDeleteRuns ? <StudioField className="wf-run-select-all" label={<span className="sr-only">Select all workflow runs on this page</span>}><input
+              {canDeleteRuns ? <StudioField className="wf-run-select-all" label={<span className="wf-visually-hidden">Select all workflow runs on this page</span>}><input
                 ref={selectAllRef}
                 type="checkbox"
                 checked={allVisibleSelected}
@@ -592,7 +592,7 @@ export function WorkflowInstances({ context, navigate }: {
               key={instance.workflowExecutionId}
             >
               <div role="cell" className="wf-run-identity-cell">
-                {canDeleteRuns ? <StudioField className="wf-run-select" label={<span className="sr-only">{`Select workflow run ${instance.workflowExecutionId}`}</span>}><input
+                {canDeleteRuns ? <StudioField className="wf-run-select" label={<span className="wf-visually-hidden">{`Select workflow run ${instance.workflowExecutionId}`}</span>}><input
                   type="checkbox"
                   checked={selectedRunIds.has(instance.workflowExecutionId)}
                   disabled={deletingRuns}
