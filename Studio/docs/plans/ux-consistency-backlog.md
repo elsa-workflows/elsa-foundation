@@ -79,6 +79,19 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Visual coverage follow-up
+
+A2 captures and independent reviews are linked from the corresponding delivery PRs.
+
+| Surface | Evidence |
+| --- | --- |
+| Theme, notifications and account menus | [Host and extension recovery](https://github.com/elsa-workflows/elsa-foundation/pull/5339#issuecomment-7072890665) |
+| Bottom dock actions and Weaver menu | [Diagnostics actions](https://github.com/elsa-workflows/elsa-foundation/pull/5292#issuecomment-7071892351), [Weaver and backend menus](https://github.com/elsa-workflows/elsa-foundation/pull/5310#issuecomment-7072317218) |
+| Activity draft editor and publication dialog | [Composed draft and publication](https://github.com/elsa-workflows/elsa-foundation/pull/5306#issuecomment-7072249665), [publication review actions](https://github.com/elsa-workflows/elsa-foundation/pull/5316#issuecomment-7072420893) |
+| Run detail tabs and inspectors | [Run and inspector views](https://github.com/elsa-workflows/elsa-foundation/pull/5334#issuecomment-7072894933) |
+| Decisions Tests and Settings | [Peer views](https://github.com/elsa-workflows/elsa-foundation/pull/5320#issuecomment-7072505304), [360 px dark and 1440 px light captures](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/3d6c772650353cea14f07f8800303da448dfd68a/Studio/qa-evidence/5340-273b42af20-visual.zip) |
+| Dark dialogs and narrow viewports | [Decisions and Forms](https://github.com/elsa-workflows/elsa-foundation/pull/5331#issuecomment-7072854830), [Feature management](https://github.com/elsa-workflows/elsa-foundation/pull/5338#issuecomment-7072910713), [five optional extensions](https://github.com/elsa-workflows/elsa-foundation/pull/5326#issuecomment-7072814127) |
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -643,7 +656,7 @@ Raw font sizes, weights, radii and colours:
 | `WF/workflow-editor/boundaryInspector.css` | 20 | 0 | 0 | 0 | [source] |
 | `WF/activityDataChooser.css` | 17 | 0 | 1 | 0 | [source] |
 
-- [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
+- [x] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens. (PR #5347)
   Many raw radii are `999px` pills; check each one before changing it.
   Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294). Extension Builder completed in PR #5326.
 - [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
@@ -818,7 +831,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [x] **A1** (#5261) Source audit of the extensions with no completed report: ETL, Extension Builder, Feature
   management, Identity, Console stream, OpenTelemetry, Structured logs, Weather sample, Weaver
   workflows, JavaScript and Liquid expression editors. (PR #5326)
-- [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
+- [x] **A2** (#5262) Capture and review the surfaces listed as not captured under (PR #5347)
   [Coverage gaps](#coverage-gaps).
 - [ ] **A3** (#5263) Review dark mode, including dialogs.
 - [ ] **A4** (#5264) Review narrow viewports.
