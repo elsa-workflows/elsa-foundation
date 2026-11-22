@@ -122,9 +122,10 @@ internal static class Elsa3LiteralConversion
         else interpreted = local.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", System.Globalization.CultureInfo.InvariantCulture);
         report(new(Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted, path,
             options.DateInterpretation == Elsa3DateInterpretation.SourceTimeZone
-                ? $"The literal was interpreted in source time zone '{options.SourceTimeZone}', with its offset on that date."
-                : "The literal was interpreted as UTC. Its instant differs from Elsa 3 if that server was not on UTC.",
-            "Keep the same date interpretation when converting this workflow again.", Elsa3MigrationDiagnosticSeverity.Warning));
+                ? $"The literal '{text}' was interpreted as '{interpreted}' in source time zone '{options.SourceTimeZone}', with its offset on that date."
+                : $"The literal '{text}' was interpreted as '{interpreted}' in UTC. Its instant differs from Elsa 3 if that server was not on UTC.",
+            "Keep the same date interpretation when converting this workflow again.",
+            options.DateInterpretation == Elsa3DateInterpretation.SourceTimeZone ? Elsa3MigrationDiagnosticSeverity.Info : Elsa3MigrationDiagnosticSeverity.Warning));
         return JsonSerializer.SerializeToElement(interpreted, JsonBaseline.Options);
     }
 

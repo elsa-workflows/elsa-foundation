@@ -56,10 +56,10 @@ public sealed class Elsa3VariableStartingValueTests
         { "System.Net.HttpStatusCode, System.Net.Primitives", false, "OK", "System.Net.HttpStatusCode", CollectionKind.Single, "200" },
         // Elsa 3 kept an Object variable's text as it was, JSON or not: it becomes Any holding a JSON string with that text
         // (spec 1228 FR-019).
-        { "Object", false, """{"a":1}""", "Any", CollectionKind.Single, "\"{\\u0022a\\u0022:1}\"" },
+        { "Object", false, """{"a":1}""", "Any", CollectionKind.Single, "\"{\\\"a\\\":1}\"" },
         // Elsa 3 writes a list as List<T> and an array as T[]: a known element type keeps its type in a collection.
         { "List<String>", false, """["a","b"]""", "String", CollectionKind.List, """["a","b"]""" },
-        { "List<Int32>", false, "[1, 2]", "Int32", CollectionKind.List, "[1,2]" },
+        { "List<Int32>", false, "[1, 2]", "Int32", CollectionKind.List, "[1, 2]" },
         { "List<Object>", false, """[{"a":1}]""", "Any", CollectionKind.List, """[{"a":1}]""" },
         { "String[]", false, """["x"]""", "String", CollectionKind.Array, """["x"]""" },
         { "String", true, """["x","y"]""", "String", CollectionKind.Array, """["x","y"]""" },

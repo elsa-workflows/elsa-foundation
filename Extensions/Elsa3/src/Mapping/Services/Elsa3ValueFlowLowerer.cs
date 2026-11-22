@@ -60,7 +60,6 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         foreach (var sourceProperty in properties)
         {
             var property = sourceProperty;
-            if (!RewriteLiteral(input, ref property, diagnostics)) continue;
             var directions = property.Occurrences.Select(occurrence => occurrence.Direction).Distinct().ToArray();
             if (directions.Contains(Elsa3PropertyDirection.Unknown))
             {
@@ -103,6 +102,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     property.MemoryReferenceId));
                 continue;
             }
+
+            if (!RewriteLiteral(input, ref property, diagnostics)) continue;
 
             if (property.Expression is not null)
             {
@@ -307,8 +308,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     private bool RewriteLiteral(DiagnosticScope input, ref ActivityProperty property, List<Elsa3MigrationDiagnostic> diagnostics)
     {
+        // An earlier script can have expanded this node's outcomes since CollectProperties took its snapshot.
+        var current = property.Activity.AdditionalProperties[property.PropertyName];
+        TryReadTypedValue(current, out var currentMemory, out var currentExpression);
+        property = property with { Value = current, MemoryReferenceId = currentMemory, Expression = currentExpression };
         if (property.InputContract?.Type is not { } reference || !typeRegistry.TryGetTypeOrDefault(reference.Alias, out var elementType)) return true;
         var targetType = TypeReferenceFactory.Close(elementType, reference);
+        var scalarTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
         var location = property;
         void Report(Elsa3LiteralConversion.Note note) => diagnostics.Add(CreateDiagnostic(input, location, note.Code, note.Message,
             note.Guidance, $"{location.JsonPath}.expression.value{note.Path[1..]}", null, note.Severity));
@@ -323,10 +329,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         try
         {
             var encodedDocument = literal.ValueKind == JsonValueKind.String && (kind.Equals("Object", StringComparison.OrdinalIgnoreCase) || reference.CollectionKind != CollectionKind.Single ||
-                !targetType.IsPrimitive && targetType != typeof(string) && targetType != typeof(DateTime) && targetType != typeof(DateTimeOffset) &&
-                targetType != typeof(DateOnly) && targetType != typeof(TimeOnly) && targetType != typeof(TimeSpan) && targetType != typeof(Guid) && !targetType.IsEnum && targetType != typeof(decimal) &&
-                targetType != typeof(object) && targetType != typeof(JsonElement) && !typeof(JsonNode).IsAssignableFrom(targetType));
-            if (encodedDocument || literal.ValueKind == JsonValueKind.String && (targetType.IsPrimitive && targetType != typeof(char) || targetType == typeof(decimal)))
+                !scalarTarget.IsPrimitive && scalarTarget != typeof(string) && scalarTarget != typeof(DateTime) && scalarTarget != typeof(DateTimeOffset) &&
+                scalarTarget != typeof(DateOnly) && scalarTarget != typeof(TimeOnly) && scalarTarget != typeof(TimeSpan) && scalarTarget != typeof(Guid) && !scalarTarget.IsEnum && scalarTarget != typeof(decimal) &&
+                scalarTarget != typeof(object) && scalarTarget != typeof(JsonElement) && !typeof(JsonNode).IsAssignableFrom(scalarTarget));
+            if (scalarTarget == typeof(bool) && literal.ValueKind == JsonValueKind.String && bool.TryParse(literal.GetString(), out var boolean))
+                literal = JsonSerializer.SerializeToElement(boolean, JsonBaseline.Options);
+            else if (encodedDocument || literal.ValueKind == JsonValueKind.String && (scalarTarget.IsPrimitive && scalarTarget != typeof(char) || scalarTarget == typeof(decimal)))
             {
                 using var document = JsonDocument.Parse(literal.GetString()!);
                 literal = document.RootElement.Clone();

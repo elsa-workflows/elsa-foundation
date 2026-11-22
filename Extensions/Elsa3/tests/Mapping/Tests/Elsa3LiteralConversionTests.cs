@@ -55,7 +55,7 @@ public sealed class Elsa3LiteralConversionTests
         var converted = Elsa3LiteralConversion.Rewrite(JsonSerializer.SerializeToElement(text, JsonBaseline.Options), typeof(DateTimeOffset), options, notes.Add);
         Assert.Equal(expected, converted.GetString());
         Assert.Equal(Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted, Assert.Single(notes).Code);
-        Assert.Equal(Elsa3MigrationDiagnosticSeverity.Warning, notes[0].Severity);
+        Assert.Equal(interpretation == Elsa3DateInterpretation.SourceTimeZone ? Elsa3MigrationDiagnosticSeverity.Info : Elsa3MigrationDiagnosticSeverity.Warning, notes[0].Severity);
     }
 
     [Theory]
