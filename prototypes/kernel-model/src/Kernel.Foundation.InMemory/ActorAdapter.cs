@@ -49,8 +49,11 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        (delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null) &&
-        store.FoundationTurnHeader(row).Park is null;
+        store.FoundationTurnHeader(row).Park is not null
+            ? CapturesParkArrival(delivery)
+            : delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+
+    private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
@@ -64,6 +67,17 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var message = delivery.Message;
         if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (input.Row is { Status: Durable.InstanceStatus.Faulted } parked && CapturesParkArrival(delivery) &&
+            store.FoundationTurnHeader(parked).Park is not null &&
+            input.Taken.All(item => item.Attempts < input.MaxAttempts || item.Message.Kind == Durable.Kinds.JobFinished))
+        {
+            var revision = checked(parked.Revision + 1);
+            return new(input.Actor)
+            {
+                Expected = parked.Revision, Row = parked with { Revision = revision }, Revision = revision, Status = parked.Status,
+                Consumed = [.. input.Taken], FoundationKeep = Durable.ParkKeepReason.Arrived
+            };
+        }
         if (message.Kind == Durable.Kinds.JobDeadline)
             return TimeoutJob(input, message);
         if (delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null && input.Row is { } completedRow &&

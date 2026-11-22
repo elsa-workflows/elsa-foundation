@@ -137,9 +137,10 @@ answer was lost counts as an unknown outcome.
 Today Park consumes its deliveries (deletes them, or marks done those that carry a `keep_until`), and later arrivals are
 dropped. A retry then has nothing to deliver again: only `resume` is possible. FINDINGS 25.9 records that Park does not
 keep consumed deliveries in a dead-letter queue. Retry of a parked message needs two additions, which **extend** the
-13 November decision. The owner adopted them on 17 November (decision 2). The in-memory Park commit now keeps its
-consumed durable inputs and the in-memory sweep skips them. `--park-kept-check` exercises the failed turn and takeover.
-Later arrivals, the expiry control and the resolution paths remain proposed.
+13 November decision. The owner adopted them on 17 November (decision 2). The in-memory foundation keeps the durable
+inputs consumed by Park and other durable arrivals while it is unresolved. The in-memory sweep skips these rows.
+`--park-kept-check` exercises both reasons and takeover. In-flight job conversion, the expiry control and the resolution
+paths remain proposed.
 
 1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows with a kept reason. A
    nullable `KeptBy` column on the message row holds `Consumed` (the Park's commit, or a later re-park, consumed it)

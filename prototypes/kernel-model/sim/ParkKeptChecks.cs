@@ -38,23 +38,56 @@ internal static class ParkKeptChecks
         var parked = await new ActorList(store, 10).GetAsync(scope, target.Actor);
         check(parked is { Header.Status: Contract.ActorStatus.Faulted, Park: not null } && store.Instances[row.Id].State == "saved",
             "the real failed turn parks without changing the last saved state");
-        check(Retained(poison, "private payload") && Retained(twin, "ordinary payload"),
+        check(Retained(poison, "private payload", ParkKeepReason.Consumed) && Retained(twin, "ordinary payload", ParkKeepReason.Consumed),
             "the Park keeps both consumed deliveries by full key with their original payloads");
         check(store.Journal.Values.Count(entry => entry.Entries.Contains("parked", StringComparison.Ordinal)) == 1,
             "the Park checkpoint and journal land once");
 
+        var priorOffers = actor.Offers;
+        var admission = await edge.SendAsync(scope, target, "twin", "update", "late payload",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await Pump(owner);
+        var late = store.Messages.Values.Single(message => message.Message.Payload == "late payload").Message;
+        check(admission.Outcome == Contract.AdmissionOutcome.Accepted && late.InboxKey != poison.InboxKey && late.InboxKey != twin.InboxKey &&
+            Retained(late, "late payload", ParkKeepReason.Arrived) && actor.Offers == priorOffers &&
+            (await new ActorList(store, 10).GetAsync(scope, target.Actor))?.Park == parked?.Park,
+            "a late input with the same wire ID is kept as Arrived without entering the actor or replacing the Park");
+
+        await edge.SendAsync(scope, target, "exhausted", "update", "exhausted payload",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        var exhausted = store.Messages.Values.Single(message => message.Message.Id == "exhausted");
+        exhausted.Attempts = 3;
+        await Pump(owner);
+        check(Retained(exhausted.Message, "exhausted payload", ParkKeepReason.Consumed) && actor.Offers == priorOffers &&
+            (await new ActorList(store, 10).GetAsync(scope, target.Actor))?.Park == parked?.Park,
+            "an exhausted late delivery is Consumed by the same Park on re-park");
+
+        await edge.SendAsync(scope, target, "refused", "update", "refused payload",
+            options: new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        var refused = store.Messages.Values.Single(message => message.Message.Id == "refused").Message;
+        var refusals = 0;
+        store.Refuses = candidate => candidate.Id == row.Id && ++refusals <= 2;
+        await Pump(owner);
+        store.Refuses = null;
+        check(refusals == 3 && Retained(refused, "refused payload", ParkKeepReason.Consumed) && actor.Offers == priorOffers &&
+            (await new ActorList(store, 10).GetAsync(scope, target.Actor))?.Park == parked?.Park,
+            "a definite arrival commit refusal re-parks and keeps the input as Consumed");
+
         now += 3;
         await store.SweepAsync();
-        check(!store.Messages.ContainsKey(ordinary.Message.InboxKey) && Retained(poison, "private payload") && Retained(twin, "ordinary payload"),
+        check(!store.Messages.ContainsKey(ordinary.Message.InboxKey) && Retained(poison, "private payload", ParkKeepReason.Consumed) &&
+            Retained(twin, "ordinary payload", ParkKeepReason.Consumed) && Retained(late, "late payload", ParkKeepReason.Arrived) &&
+            Retained(exhausted.Message, "exhausted payload", ParkKeepReason.Consumed) && Retained(refused, "refused payload", ParkKeepReason.Consumed),
             "the sweep deletes expired ordinary markers and preserves expired kept rows");
         await owner.DisposeAsync();
         await using var successor = (await new DurableHost([MakeOwner("park-next")]).ActivateAsync(0))!;
         await Pump(successor);
-        check(actor.PoisonOffers == 1 && Retained(poison, "private payload") && Retained(twin, "ordinary payload"),
+        check(actor.PoisonOffers == 1 && actor.Offers == priorOffers && Retained(poison, "private payload", ParkKeepReason.Consumed) &&
+            Retained(twin, "ordinary payload", ParkKeepReason.Consumed) && Retained(late, "late payload", ParkKeepReason.Arrived),
             "takeover does not offer done kept rows to the parked actor");
 
-        bool Retained(Message message, string payload) => store.Messages.GetValueOrDefault(message.InboxKey) is
-            { Done: true, Held: false, Trial: 0, KeptBy: ParkKeepReason.Consumed, Message.Payload: var actual } && actual == payload;
+        bool Retained(Message message, string payload, ParkKeepReason reason) => store.Messages.GetValueOrDefault(message.InboxKey) is
+            { Done: true, Held: false, Trial: 0, KeptBy: var actualReason, Message.Payload: var actual } && actual == payload && actualReason == reason;
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -70,10 +103,12 @@ internal static class ParkKeptChecks
     {
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
+        public int Offers { get; private set; }
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            Offers++;
             if (turn.Inbox.Any(message => message.Kind == "poison"))
             {
                 PoisonOffers++;
