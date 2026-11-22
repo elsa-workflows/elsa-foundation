@@ -1270,6 +1270,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 cancellationToken: cancellationToken, persistedHold: row.PersistedHold && row.ReleasedBy is null, releasedBy: row.ReleasedBy);
             if (!LeaseUsable()) return;
         }
+        if (ParkDrainMetrics.Enabled)
+        {
+            HashSet<InboxKey> heldHere;
+            IReadOnlyList<PartitionFence> sampledFences;
+            lock (_turnSync)
+            {
+                sampledFences = Fences;
+                heldHere = _items.Where(entry => entry.Value.HeldHere).Select(entry => entry.Key).ToHashSet();
+            }
+            if (_store.SampleParkDrains(Node, sampledFences, heldHere.Contains) is { } sample && LeaseUsable() && generation == _generation)
+                ParkDrainMetrics.Record(sample);
+        }
+
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
         // A poll proves it only for the set it read: a partition gained while it was in flight has not been read yet.
         if (polled.Messages.Count < _options.PollLimit && _behind.Count == 0 && Fences.Select(f => f.Partition).SequenceEqual(fences.Select(f => f.Partition))) _caughtUp = true;

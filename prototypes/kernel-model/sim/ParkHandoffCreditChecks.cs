@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Kernel.Foundation.InMemory;
 using Contract = Kernel.Foundation.Contracts;
 
@@ -21,6 +22,16 @@ internal static class ParkHandoffCreditChecks
         var scope = new Contract.BoundScope("drain-credit");
         var edge = new InMemoryIngress(store, new Requests("drain-credit"), "drain-credit", (_, kind) => kind == Contract.Kinds.Recover);
         var probe = new Probe { HoldInputs = keepHeld };
+        var measurements = new DrainMeasurements();
+        using var meter = measurements.Listen();
+        var allSamplesMatch = true;
+        var sampledPending = false;
+        var sampledHeld = false;
+        var neighbourSharesTurns = true;
+        var neighbourSent = 0;
+        var neighbourTurns = 0;
+        string? neighbour = null;
+        Contract.Target.Ref? neighbourTarget = null;
         var worker = MakeWorker("first");
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var birth = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
@@ -46,6 +57,9 @@ internal static class ParkHandoffCreditChecks
         check(opened, $"HC-1 a real {(large ? "byte" : "row")} drain opens with its backlog kept");
         if (!opened) return;
 
+        var other = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "neighbour-start", Contract.Kinds.Start);
+        neighbourTarget = new Contract.Target.Ref(other.Actor!.Value);
+        neighbour = store.FoundationTarget(scope.Tenant, other.Actor.Value.Id)!.Id;
         await Step();
         var first = Row().ParkRecovery!;
         var expected = large ? 3 : limit - 1;
@@ -66,6 +80,7 @@ internal static class ParkHandoffCreditChecks
         if (keepHeld)
         {
             await RetakeHeldBacklog();
+            CheckSamples();
             return;
         }
 
@@ -88,6 +103,11 @@ internal static class ParkHandoffCreditChecks
               Row().ParkRecovery is null && Kept() == 0 && Outstanding().Length == 0 &&
               received.SequenceEqual(Enumerable.Range(0, arrivalCount).Select(index => $"arrival-{index:D4}")),
             "HC-1 the drain completes with exact ordered once-only inputs and never exceeds its credit");
+        CheckSamples();
+
+        void CheckSamples() => check(allSamplesMatch && sampledPending && sampledHeld == keepHeld &&
+            neighbourSharesTurns && neighbourTurns > 0,
+            $"HC-3 {large}/{keepHeld}: every poll's gauges match the independent backlog and the neighbour advances in the same passes");
 
         async Task RetakeHeldBacklog()
         {
@@ -98,7 +118,8 @@ internal static class ParkHandoffCreditChecks
                 if (Outstanding().All(row => row.Held)) AdvanceToControl();
                 await Step();
             }
-            var old = worker.Fences.Single().Epoch;
+            var old = worker.Fences.Single();
+            var oldNode = worker.Node;
             var retained = ReadyToTake();
             check(retained, large ? "HC-2 the first owner holds ten large rows and restores an oversized row alone"
                 : "HC-2 the first owner holds three pages and leaves the fourth kept");
@@ -109,10 +130,12 @@ internal static class ParkHandoffCreditChecks
             worker = MakeWorker("second");
             await using var second = (await new DurableHost([worker]).ActivateAsync(0))!;
             var middle = worker.Fences.Single().Epoch;
-            await worker.PollAsync();
+            await Poll();
             await worker.LoadAsync();
-            check(middle > old && Row().ParkRecovery?.Restored == beforeSuffix && probe.HandedHere.Count == 0,
+            check(middle > old.Epoch && Row().ParkRecovery?.Restored == beforeSuffix && probe.HandedHere.Count == 0,
                 "HC-2 the first takeover stops after polling and before any handoff");
+            check(((IKernelStore)store).SampleParkDrains(oldNode, [old], _ => true) is null,
+                "HC-3 the store refuses a sample from the previous owner's fence");
             await second.DisposeAsync();
 
             worker = MakeWorker("third");
@@ -158,14 +181,77 @@ internal static class ParkHandoffCreditChecks
         InstanceRow Row() => store.Instances[actor];
         ValueTask<Contract.Admission> Send(string operation, string kind, string? payload = null) =>
             edge.SendAsync(scope, target, operation, kind, payload);
+        async Task Poll()
+        {
+            measurements.Clear();
+            var checkpoint = store.Instances.GetValueOrDefault(actor);
+            var open = checkpoint?.ParkRecovery is not null;
+            var cohort = open ? new ParkRelease(checkpoint!.Creation, checkpoint.ParkResolutionGeneration) : checkpoint?.ParkCohort;
+            var candidates = cohort is null ? [] : store.Messages.Values.Where(message =>
+                !message.Done && message.Message.Target.Id == actor && message.ReleasedBy == cohort).ToArray();
+            var held = candidates.LongCount(message => probe.HandedHere.Contains(message.Message.Id));
+            var pending = open ? candidates.Where(message => !probe.HandedHere.Contains(message.Message.Id)).ToArray() : [];
+            await worker.PollAsync();
+            allSamplesMatch &= measurements.Match(pending.Length, pending.Sum(Charged), held);
+            sampledPending |= pending.Length > 0;
+            sampledHeld |= held > 0;
+        }
+
         async Task Step()
         {
-            await worker.PollAsync();
+            var before = neighbour is not null && store.Instances.TryGetValue(neighbour, out var peer)
+                ? Json.Read<List<string>>(peer.State).Count : (int?)null;
+            if (before is not null && neighbourSent == before)
+            {
+                var accepted = await edge.SendAsync(scope, neighbourTarget!, $"tick-{neighbourSent}", "tick");
+                neighbourSharesTurns &= accepted.Outcome == Contract.AdmissionOutcome.Accepted;
+                neighbourSent++;
+            }
+            await Poll();
             await worker.LoadAsync();
             await worker.FlushAsync();
+            var ordinaryPass = !worker.Trial.Any();
             worker.RunTurn(actor);
+            if (neighbour is not null) worker.RunTurn(neighbour);
             await worker.FlushAsync();
+            if (before is { } previous)
+            {
+                var moved = Json.Read<List<string>>(store.Instances[neighbour!].State).Count - previous;
+                if (ordinaryPass) neighbourSharesTurns &= moved == 1;
+                neighbourTurns += moved;
+            }
         }
+    }
+
+    private sealed class DrainMeasurements
+    {
+        private readonly Dictionary<(string Name, string Aggregate), long> values = [];
+
+        internal MeterListener Listen()
+        {
+            var listener = new MeterListener();
+            listener.InstrumentPublished = (instrument, sink) =>
+            {
+                if (instrument.Meter.Name == "Elsa.Kernel.Durable" && instrument.Name.StartsWith("elsa.kernel.drain.", StringComparison.Ordinal))
+                    sink.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+            {
+                var aggregate = tags.Length == 0 ? "" : (string)tags[0].Value!;
+                values.Add((instrument.Name, aggregate), value);
+            });
+            listener.Start();
+            return listener;
+        }
+
+        internal void Clear() => values.Clear();
+
+        internal bool Match(long pending, long bytes, long held) => values.Count == 5 &&
+            Is("pending", "sum", pending) && Is("pending", "max", pending) &&
+            Is("pending.bytes", "sum", bytes) && Is("pending.bytes", "max", bytes) && Is("held", "", held);
+
+        private bool Is(string name, string aggregate, long expected) =>
+            values.TryGetValue(($"elsa.kernel.drain.{name}", aggregate), out var measured) && measured == expected;
     }
 
     private sealed class Probe : Contract.IActorType
@@ -180,6 +266,7 @@ internal static class ParkHandoffCreditChecks
             foreach (var message in turn.Inbox)
             {
                 if (message.Kind == "fault") throw new InvalidOperationException("Park the drain-credit fixture.");
+                if (message.Kind == "tick") { order.Add(message.Id); continue; }
                 if (message.Kind != "input") continue;
                 HandedHere.Add(message.Id);
                 if (HoldInputs) turn.Hold(message);
