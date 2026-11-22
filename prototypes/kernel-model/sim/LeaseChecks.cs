@@ -38,6 +38,7 @@ public static class LeaseChecks
         await BacklogStoreChecks.Run(Check);
         await BacklogWorkerChecks.Run(Check);
         await ParkHandoffCreditChecks.Run(Check);
+        await ParkPageBoundsChecks.Run(Check);
         await ContractHeldRequestChecks.Run(Check, flaw);
         await FoundationEventSendChecks.Run(Check);
         await FoundationEventSendChecks.CheckPagedPublication(Check);
