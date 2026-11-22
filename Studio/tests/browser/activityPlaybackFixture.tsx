@@ -27,16 +27,16 @@ window.__activityPlaybackFixture = controls;
 function pageAt(position: number): PlaybackPage {
   const start = Math.floor(position / 50) * 50;
   const unavailable = scenario === "gap" || scenario === "unavailable" || scenario === "disabled" || scenario === "uncaptured" || scenario === "unknown-coverage" || scenario === "unknown-reason";
-  return { state: unavailable ? "unavailable" : "available", reason: scenario === "unknown-reason" ? "__proto__" : scenario === "gap" ? "history-gap-unlocated" : unavailable ? "occurrence-recording-unavailable" : null,
-    sequenceToken: unavailable ? null : "fixture-frozen-window", upperSequence: "210", retainedAfterSequence: "0",
+  return { state: unavailable ? "unavailable" : scenario === "partial" ? "partial" : "available", reason: scenario === "partial" ? "retained-prefix-purged" : scenario === "unknown-reason" ? "__proto__" : scenario === "gap" ? "history-gap-unlocated" : unavailable ? "occurrence-recording-unavailable" : null,
+    sequenceToken: unavailable ? null : "fixture-frozen-window", upperSequence: "210", retainedAfterSequence: scenario === "partial" ? "5" : "0",
     totalCount: unavailable || scenario === "unknown" ? null : String(count), selectedPosition: unavailable || !count ? null : String(position),
     readAt: "2026-11-14T06:00:00Z", hasNewerHistory: false,
-    coverage: { state: scenario === "unknown-coverage" ? "__proto__" : scenario === "gap" ? "partial" : scenario === "disabled" || scenario === "uncaptured" ? scenario : "captured", supportedKinds: ["ActivityCompleted"], capturedFromStart: true, hasGaps: scenario === "gap",
-      firstSequence: "1", lastSequence: "210", settledSequence: "210", purgedThroughSequence: "0" },
+    coverage: { state: scenario === "unknown-coverage" ? "__proto__" : (scenario === "gap" || scenario === "partial") ? "partial" : scenario === "disabled" || scenario === "uncaptured" ? scenario : "captured", supportedKinds: ["ActivityCompleted"], capturedFromStart: true, hasGaps: scenario === "gap",
+      firstSequence: scenario === "partial" ? "6" : "1", lastSequence: "210", settledSequence: "210", purgedThroughSequence: scenario === "partial" ? "5" : "0" },
     items: unavailable ? [] : Array.from({ length: Math.max(0, Math.min(50, count - start)) }, (_, offset) => {
       const ordinal = start + offset;
       return { workflowExecutionId: "fixture-run", activityExecutionId: `fixture-execution-${ordinal}`, executableNodeId: `repeated-${ordinal % 3}`,
-        historyEventId: `fixture-event-${ordinal}`, position: String(ordinal), sequence: String(ordinal + 1), observationKind: "ActivityCompleted",
+        historyEventId: `fixture-event-${ordinal}`, position: String(ordinal), sequence: String(ordinal + (scenario === "partial" ? 6 : 1)), observationKind: "ActivityCompleted",
         occurredAt: "2026-11-14T06:00:00Z", recordedAt: "2026-11-14T06:00:01Z",
         previousActivityExecutionId: ordinal ? `fixture-execution-${ordinal - 1}` : null,
         nextActivityExecutionId: ordinal < count - 1 ? `fixture-execution-${ordinal + 1}` : null };

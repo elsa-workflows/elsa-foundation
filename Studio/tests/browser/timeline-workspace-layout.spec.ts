@@ -83,6 +83,13 @@ for (const width of [320, 1440]) {
       document.documentElement.style.setProperty("--studio-body-size", "21px");
       document.documentElement.style.setProperty("--studio-section-title-size", "25px");
     });
+    await page.evaluate(() => {
+      document.documentElement.style.setProperty("--studio-focus", "rgb(1, 80, 240)");
+      document.documentElement.style.setProperty("--studio-selection-mark", "rgb(230, 50, 0)");
+    });
+    const filterSummary = timeline.locator(".wf-history-filters > summary");
+    await filterSummary.focus();
+    await expect(filterSummary).toHaveCSS("outline-color", "rgb(1, 80, 240)");
     await expect(timeline.locator(".wf-history-heading h3")).toHaveCSS("font-size", "25px");
     await expect(timeline.locator(".wf-history-heading p").first()).toHaveCSS("font-size", "19px");
     await expect(timeline.locator(".wf-history-event-body strong").first()).toHaveCSS("font-size", "21px");

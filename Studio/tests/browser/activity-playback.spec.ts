@@ -139,3 +139,15 @@ for (const width of [320, 1440]) {
     await page.screenshot({ path: test.info().outputPath("playback-typography.png"), fullPage: true });
   });
 }
+
+for (const theme of ["light", "dark"]) for (const width of [320, 1280]) {
+  test(`partial playback stays qualified with secondary options closed at ${width}px ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/activity-playback.html?theme=${theme}&scenario=partial`);
+    const playback = page.getByRole("region", { name: "Activity playback", exact: true });
+    await expect(playback).toContainText("Step 1 of 200");
+    await expect(playback.locator(".wf-playback-options")).toHaveJSProperty("open", false);
+    await expect(playback.getByRole("status").filter({ hasText: "Partial playback range" })).toBeVisible();
+    await expect(playback.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
+  });
+}
