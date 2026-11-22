@@ -17,6 +17,7 @@ internal static class CascadePageChecks
         await Run(CascadeProtocol.PageLimit + 1, check, loseAfter: false);
         await Run(10_001, check, delete: true, loseAfter: true);
         await Run(2 * CascadeProtocol.PageLimit + 1, check, delete: true, loseAfter: false);
+        await Run(CascadeProtocol.PageLimit + 1, check, keepRunning: true);
         await RunNative(check);
         await RunModelCap(check);
     }
@@ -70,13 +71,15 @@ internal static class CascadePageChecks
         }
     }
 
-    private static async Task Run(int count, Action<bool, string> check, bool delete = false, bool jobs = false, bool? loseAfter = null)
+    private static async Task Run(int count, Action<bool, string> check, bool delete = false, bool jobs = false,
+        bool? loseAfter = null, bool keepRunning = false)
     {
         const long initial = 1_702_300_000_000;
         var now = initial;
         var store = new InMemoryStore(2, () => now) { IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100) };
         var scope = new Contract.BoundScope("cascade-pages");
-        var edge = new InMemoryIngress(store, new Requests("cascade-paging"), "cascade-paging", (_, kind) => kind == Contract.Kinds.Delete);
+        var edge = new InMemoryIngress(store, new Requests("cascade-paging"), "cascade-paging",
+            (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Terminate);
         var probe = new Probe();
         var spec = new Contract.StartSpec(probe.Type, "root");
         var key = new Contract.Target.Key("cascade-root", spec);
@@ -143,12 +146,30 @@ internal static class CascadePageChecks
 
         worker = NewWorker();
         await using var owner = (await new DurableHost([worker]).ActivateAsync(partition))!;
-        await edge.SendAsync(scope, target, "stop", "stop");
-        await Step(worker, address);
+        if (keepRunning)
+        {
+            var selection = (await new ActorList(store, 10).GetAsync(scope, root))!.Selection!;
+            await edge.SendAsync(scope, target, "stop", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(selection)));
+        }
+        else await edge.SendAsync(scope, target, "stop", "stop");
+        if (jobs)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            var late = store.Messages[present];
+            late.Message = (late.Message with { Due = null }).AsKernelTicket();
+            await worker.PollAsync();
+            worker.RunTurn(address);
+            await worker.FlushAsync();
+        }
+        else await Step(worker, address);
         var ended = store.Instances[address];
-        check(ended is { Status: InstanceStatus.Cancelled, Children: null, Jobs: null } && landedPages.Count == 1 &&
+        var expectedStatus = keepRunning ? InstanceStatus.Running : InstanceStatus.Cancelled;
+        check(ended is { Children: null, Jobs: null } && ended.Status == expectedStatus && landedPages.Count == 1 &&
             Stops().Count == Math.Min(CascadeProtocol.PageLimit - registry.Count, count),
-            $"the real ending turn discharges the first bounded page for {count} children");
+            keepRunning ? "a consumed Terminate cascades even when the actor keeps its Running status" :
+                $"the real ending turn discharges the first bounded page for {count} children");
         if (jobs)
             check(!store.Messages.ContainsKey(present) && !store.Messages.ContainsKey(result) && store.Messages.ContainsKey(older) &&
                 store.Messages[kept] is { Done: true, KeptBy: null },
@@ -184,7 +205,18 @@ internal static class CascadePageChecks
             canFail = true;
         }
 
-        if (loseAfter.HasValue)
+        if (keepRunning)
+        {
+            var outstanding = ended.Cascade!;
+            await edge.SendAsync(scope, target, "ping", "ping");
+            store.Messages.Values.Single(item => item.Message.Kind == "ping").Seq = store.Messages[outstanding.Control].Seq - 1;
+            await Step(worker, address);
+            check(probe.Pulses == 0 && store.Instances[address] is { Status: InstanceStatus.Running, Cascade: null },
+                "the same running actor discharges its remaining old registry before its next authored turn");
+            await Step(worker, address);
+            check(probe.Pulses == 1, "the running actor accepts its next authored input after the cascade");
+        }
+        else if (loseAfter.HasValue)
         {
             var beforeLoss = Stops().Count;
             await Step(worker, address);
@@ -262,9 +294,11 @@ internal static class CascadePageChecks
     private sealed class Probe : Contract.IActorType
     {
         public string Type => "cascade-pages";
+        public int Pulses { get; private set; }
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox.Any(message => message.Kind == "stop")) turn.End(Contract.ActorStatus.Cancelled);
+            if (turn.Inbox.Any(message => message.Kind == "ping")) Pulses++;
             if (turn.Inbox.Any(message => message.Kind == "oversize"))
                 for (var i = 0; i < 10_001; i++) turn.Send(turn.Header.Ref, "surplus");
             return default;

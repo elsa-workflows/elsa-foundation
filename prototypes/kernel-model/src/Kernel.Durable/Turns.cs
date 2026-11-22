@@ -83,7 +83,7 @@ public interface ITurnServices
     long Now { get; }
     bool CommitClockAvailable { get; }
     bool CreationIdentityAvailable { get; }
-    internal bool SupportsCascadePages => false;
+    bool SupportsCascadePages => false;
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }

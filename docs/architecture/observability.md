@@ -465,10 +465,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     It acts only when its full key equals `Cascade.Control`; any other is consumed and dropped (reason control). It
     passes withholding, is never a suspect and is exempt from the poison check, as `kernel.drain` is. At a marker the
     worker's refusal path consumes it as `RetiredCreation` and, for the outstanding control, composes the next page
-    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark: a cascade starts
-    only at a row that has ended, at a marker, or under a discard, expiry, terminate or delete drain, whose Open
-    cleared any mark; a model end clears the mark in its own commit, and so does a terminate's commit at a running
-    row, which ends the model.
+    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark. An ended row,
+    a marker or an open discard, expiry, terminate or delete drain has cleared that mark. A Foundation actor may
+    consume Terminate and stay Running under FC-8. Its cascade control runs before its next authored turn, including
+    any remaining cohort input. The actor retains its Running status and the cohort resumes after the discharge.
   - **The idempotent cancel** (R5-B1). A job entry names the ticket whose key derives from (instance id, creation,
     job key, `JobGeneration`). The owner decides the ticket's presence under its own fence: a job ticket of instance
     A lives in A's partition inbox, which only A's current owner consumes, so what the owner reads in its memory, or
@@ -562,8 +562,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     the cursor by at least one entry, so a list of n entries ends in ⌈n / `P_cascade`⌉ page commits. The review's
     10,001 children end in 11.
   - **In-memory live path.** The ending commit moves the live registry to the durable obligation and sends the
-    first page. Qualified Delete carries forward an existing discharge. The Worker handles the outstanding
-    control at an ended row or its retirement marker and the store checks the exact successor before applying
+    first page. A consumed Terminate still starts the cascade when the actor keeps its Running status (FC-8).
+    That actor discharges the captured registry before its next authored turn. Qualified Delete carries forward
+    an existing discharge on an ended actor. The Worker handles the outstanding control at the live row or its
+    retirement marker and the store checks the exact successor before applying
     the page. `--cascade-pages-check` covers the 1,000, 1,001 and 10,001 entry boundaries, job and result
     settlement, lost outcomes, Delete and keyed reuse, and the real Native tree with 1,001 live children. This
     evidence covers live discharge and its transfer on Delete. Starting from a held retirement marker, Park

@@ -1663,6 +1663,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private List<Delivery> Deliverable(string instance, Slot slot, long now)
     {
+        if (slot.CurrentRow is { Status: InstanceStatus.Running, Cascade: { } cascade })
+        {
+            var next = slot.Inbox.Find(item => item.Message.InboxKey == cascade.Control && !item.Taken);
+            return next is not null && !Awaits(next) ? [next] : [];
+        }
         if (_exhaustedCatchUps.Count != 0 && slot.CurrentRow is { Status: InstanceStatus.Running } row &&
             _exhaustedCatchUps.Any(ticket => ticket.Message.Target.Id == instance &&
                 _type.OwnsParkCatchUp(row, ticket.Message)))
@@ -2044,7 +2049,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         // The owner already knows its restricting decision, even if its durable acknowledgement is still in flight.
         // Count each such outcome separately: applying one unit must not release another unit's restriction.
-        if (unit.FoundationWithholds || unit.Delete || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
+        if (unit.FoundationWithholds || unit.Delete || unit.FoundationCascade is not null || unit.Row is { } next && (next.Retired || next.Status != InstanceStatus.Running ||
             next.Creation != slot.ActiveCreation || _type.Withholds(next, this)) ||
             slot.Unwritten && unit.Row is null && unit.Status is not (null or InstanceStatus.Running))
         {
@@ -2589,9 +2594,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
             : null;
         var markable = changing is null ? _items.Values.AsEnumerable()
             : _items.Values.Where(item => !changing.Contains(item.Message.InboxKey));
-        var marks = markable.Where(Unmarked).Take(_options.MaxBatch).ToList();
+        var cascading = units.Where(unit => unit.FoundationCascade is not null).Select(unit => unit.Instance).ToHashSet(StringComparer.Ordinal);
+        bool SettlingCascade(Delivery item) => (item.IsJobWork || item.Message.Kind == Kinds.JobDeadline) &&
+            cascading.Contains(Canonical(item.Message.Target.Id));
+        var marks = markable.Where(item => !SettlingCascade(item) && Unmarked(item)).Take(_options.MaxBatch).ToList();
         var trial = units.Count == _queue.Count ? NextTrial() : [];
         if (changing is not null) trial.RemoveAll(item => changing.Contains(item.Message.InboxKey));    // a trial starts only when this commit leaves nothing else in flight
+        if (cascading.Count != 0) trial.RemoveAll(SettlingCascade);
         if (units.Count == 0 && marks.Count == 0 && trial.Count == 0 && !beat) return;
         if (trial.Count > 0 && !Has(Flaw.BumpAllInherited))
         {

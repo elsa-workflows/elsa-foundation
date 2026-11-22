@@ -165,8 +165,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
         if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
         {
-            if (terminal.Cascade is not null || message.ActorAuthored || terminal is { Children: null, Jobs: null })
+            if (terminal.Cascade is not null || message.ActorAuthored || message.CascadeOrigin && terminal is { Children: null, Jobs: null })
                 return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
+            if (!message.CascadeOrigin) return null;
             var next = terminal with { Revision = checked(terminal.Revision + 1) };
             return Durable.CascadeProtocol.Open(new(input.Actor)
             {

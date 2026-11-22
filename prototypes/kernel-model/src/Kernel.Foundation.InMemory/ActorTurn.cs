@@ -173,8 +173,8 @@ internal sealed partial class ActorAdapter
             var wasRunning = _row.Status == Durable.InstanceStatus.Running;
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
-            var cascades = _status != Contract.ActorStatus.Running && (outcome.Consumed.Any(delivery =>
-                delivery.Message.Kind == Contract.Kinds.Terminate) || ended && _status == Contract.ActorStatus.Cancelled);
+            var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
+                ended && _status == Contract.ActorStatus.Cancelled;
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)

@@ -45,8 +45,8 @@ internal static class CascadeProtocol
 
     internal static CascadePage Page(InstanceRow row, CascadeRegistry registry, int cursor, long serial)
     {
-        if (cursor < 0 || cursor >= registry.Count || serial < 0 || row.Status == InstanceStatus.Running)
-            throw new InvalidOperationException("A cascade page needs an ended creation and an outstanding entry.");
+        if (cursor < 0 || cursor >= registry.Count || serial < 0)
+            throw new InvalidOperationException("A cascade page needs an outstanding entry.");
 
         var end = cursor + Math.Min(PageLimit, registry.Count - cursor);
         var jobs = registry.Jobs.Skip(cursor).Take(end - cursor).ToArray();
@@ -100,7 +100,7 @@ public sealed partial class InMemoryStore
                 throw InvalidCascade();
             return null;
         }
-        if (turn.Row is not { Status: not InstanceStatus.Running, Jobs: null, Children: null } next ||
+        if (turn.Row is not { Jobs: null, Children: null } next ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             action.Entries.Count == 0 || turn.Delete || action.Input is null != (before is null))
             throw InvalidCascade();
@@ -118,6 +118,9 @@ public sealed partial class InMemoryStore
         else
         {
             if (next.Retired || (previous is null ? next.Revision <= 0 : next.Revision != checked(previous.Revision + 1)) ||
+                next.Status == InstanceStatus.Running && !turn.Consumed.Concat(turn.Done).Any(key =>
+                    Messages.GetValueOrDefault(key)?.Message is { Kind: Kinds.Terminate } command &&
+                    command.Target.Id == next.Id && (command.TargetCreation ?? 0) == next.Creation) ||
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)
                 throw InvalidCascade();

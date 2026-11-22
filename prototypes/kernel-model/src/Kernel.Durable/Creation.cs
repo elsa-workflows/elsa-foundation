@@ -140,7 +140,6 @@ public static class CreationProtocol
     public static string? HeaderError(InstanceRow row, bool born)
     {
         if (row.Creation < 0 || row.ParentCreation < 0) return "negative creation identity";
-        if (row.Cascade is not null && row.Status == InstanceStatus.Running) return "a running actor cannot discharge a terminal cascade";
         if (row.Creation == 0 && (row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) return "legacy row cannot carry a partial creation header";
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) return "incomplete exact parent address";
         if (row.PendingStart is { } pending && (string.IsNullOrEmpty(pending.Id) || row.Status != InstanceStatus.Running)) return "invalid held start continuation";
