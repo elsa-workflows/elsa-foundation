@@ -496,7 +496,7 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
 }
 test("Tab exits the data cells at both grid boundaries while browsing or editing", async ({ page }) => {
   const grid = await openGrid(page, "light");
-  const cells = grid.getByRole("gridcell");
+  const cells = grid.getByRole("gridcell", { name: /^Rule \d+, (input|output) / });
   for (const [cell, key] of [[cells.first(), "Shift+Tab"], [cells.last(), "Tab"]] as const) {
     await cell.click();
     await cell.press(key);
