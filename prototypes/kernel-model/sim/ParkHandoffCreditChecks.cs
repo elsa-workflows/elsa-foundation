@@ -15,7 +15,112 @@ internal static class ParkHandoffCreditChecks
         await Interrupt(check, loseAfter: null);
         await Interrupt(check, loseAfter: false);
         await Interrupt(check, loseAfter: true);
+        await HeldCohortAfterTake(check, suspend: false);
+        await HeldCohortAfterTake(check, suspend: true);
         await HeldRunner(check);
+    }
+
+    private static async Task HeldCohortAfterTake(Action<bool, string> check, bool suspend)
+    {
+        const long initial = 1_702_610_021_000;
+        const long releaseDue = initial + 1_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("held-cohort-take");
+        var ingress = new InMemoryIngress(store, new Requests("held-cohort-take"), "held-cohort-take",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Suspend or Contract.Kinds.Resume);
+        var probe = new Probe { HoldInputs = true };
+        var label = $"E-8 {(suspend ? "suspended" : "running")} cohort";
+        var coldReads = new List<string>();
+        var first = Worker("cohort-first", 32);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(birth.Actor!.Value);
+        var id = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        await Step(first);
+        await Send("fault", "fault");
+        for (var pass = 0; pass < 6 && Row().Status != InstanceStatus.Faulted; pass++) await Step(first);
+        await Send("held", "input");
+        await Step(first);
+        var park = (await new ActorList(store, 8).GetAsync(scope, target.Actor))!.Selection;
+        await Send("recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(park)));
+        await Step(first);
+        var opened = Row().ParkRecovery is not null && Delivery("held") is { Done: true, KeptBy: ParkKeepReason.Arrived };
+        check(opened, $"{label}: Resume opens with the input still kept");
+        if (!opened) return;
+        var epoch = first.Fences.Single().Epoch;
+
+        var release = await ingress.SendAsync(scope, target, "release", "release-held", options: new(DueAt: releaseDue));
+        var late = Delivery("release");
+        var held = Delivery("held");
+        // The store contract permits an independently allocated ordering key below the restored input.
+        late.Seq = held.Seq - 1;
+        for (var pass = 0; pass < 16 && Row().ParkRecovery is not null; pass++)
+        {
+            now += 11;
+            await Step(first);
+        }
+        var mark = Row().ParkCohort;
+        var completed = first.Owns && release.Outcome == Contract.AdmissionOutcome.Accepted && Row().ParkRecovery is null &&
+            mark is not null && held is { Done: false, Held: true, ReleasedBy: var tag } && tag == mark &&
+            held.Seen == epoch && late is { Done: false, ReleasedBy: null } && late.Seen == epoch &&
+            probe.HandedHere.SetEquals(["held"]) && Json.Read<List<string>>(Row().State).Count == 0;
+        check(completed, $"{label}: Complete keeps the held row and its mark while the earlier-order arrival waits " +
+            $"(owns {first.Owns}; mark {mark}; held {held.Held}; late pending {!late.Done})");
+        if (!completed) return;
+
+        if (suspend)
+        {
+            await Send("suspend", Contract.Kinds.Suspend);
+            await Step(first);
+            var suspended = Suspended() && Row().ParkCohort == mark && !held.Done && !late.Done;
+            check(suspended, $"{label}: Suspend lands while the held row still carries the mark");
+            if (!suspended) return;
+        }
+
+        await owner.DisposeAsync();
+        probe.HandedHere.Clear();
+        now = releaseDue;
+        var cold = Worker("cohort-cold", 1, observed => coldReads.Add(observed.Message.Id));
+        await using var successor = (await new DurableHost([cold]).ActivateAsync(0))!;
+        await cold.PollAsync();
+        var took = cold.Fences.Single().Epoch > epoch && coldReads.SequenceEqual(["release"]) && probe.HandedHere.Count == 0;
+        check(took, $"{label}: the successor's first one-row poll returns only the earlier-order arrival");
+        if (!took) return;
+
+        if (suspend)
+        {
+            await Send("resume", Contract.Kinds.Resume);
+            for (var pass = 0; pass < 12 && Suspended(); pass++) await Step(cold);
+            var resumed = !Suspended() && Row().ParkCohort == mark && probe.HandedHere.Count == 0 && !late.Done && !held.Done;
+            check(resumed, $"{label}: Resume bypasses the unavailable cohort without consuming either input (suspended {Suspended()})");
+            if (!resumed) return;
+        }
+
+        for (var pass = 0; pass < 12 && !probe.HandedHere.Contains("held") && !late.Done; pass++) await Step(cold);
+        var handed = probe.HandedHere.SetEquals(["held"]) && !late.Done && !held.Done && held.Held && Row().ParkCohort == mark;
+        check(handed, $"{label}: the cold owner hands the cohort row to the model before the earlier-order arrival");
+        if (!handed) return;
+        for (var pass = 0; pass < 12 && Row().Status == InstanceStatus.Running; pass++) await Step(cold);
+        check(Row() is { Status: InstanceStatus.Finished, ParkCohort: null } &&
+            Json.Read<List<string>>(Row().State).SequenceEqual(["held", "release"]) &&
+            store.Messages.Values.All(row => row.Done || row.ReleasedBy != mark),
+            $"{label}: the release turn consumes the held input, finishes and clears the mark");
+
+        InstanceRow Row() => store.Instances[id];
+        bool Suspended() => store.FoundationTurnHeader(Row()).Header.TypeData == "suspended";
+        InMemoryStore.MessageRow Delivery(string messageId) => store.Messages.Values.Single(row => row.Message.Id == messageId);
+        ValueTask<Contract.Admission> Send(string messageId, string kind, string? payload = null) => ingress.SendAsync(scope, target, messageId, kind, payload);
+        Worker Worker(string node, int pollLimit, Action<Stored>? observe = null) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, PollLimit = pollLimit, Horizon = TimeSpan.FromSeconds(2), OnObservedDelivery = observe });
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task Backlog(bool large, Action<bool, string> check, bool keepHeld = false)
@@ -472,6 +577,7 @@ internal static class ParkHandoffCreditChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             var order = turn.State is null ? [] : Json.Read<List<string>>(turn.State);
+            var releasesHeld = turn.Inbox.Any(message => message.Kind == "release-held");
             foreach (var message in turn.Inbox)
             {
                 if (message.Kind == "fault") throw new InvalidOperationException("Park the drain-credit fixture.");
@@ -480,9 +586,15 @@ internal static class ParkHandoffCreditChecks
                 if (message.Kind == "arm") turn.StartJob("credit-job");
                 if (message.Kind == Contract.Kinds.JobFinished) JobResults++;
                 if (message.Kind == "tick") { order.Add(message.Id); continue; }
+                if (message.Kind == "release-held")
+                {
+                    order.Add(message.Id);
+                    turn.End(Contract.ActorStatus.Finished);
+                    continue;
+                }
                 if (message.Kind != "input") continue;
                 HandedHere.Add(message.Id);
-                if (HoldInputs) turn.Hold(message);
+                if (HoldInputs && !releasesHeld) turn.Hold(message);
                 else order.Add(message.Id);
             }
             turn.State = Json.Write(order);
