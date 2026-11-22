@@ -9,8 +9,10 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Resolution;
+using Elsa3.Mapping.Services;
 using Elsa3.Models;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
+using Microsoft.Extensions.Options;
 
 namespace Elsa3.Mapping.Conversion;
 
@@ -24,7 +26,8 @@ internal sealed class Elsa3ActivityNormalizer(
     Elsa3ActivityResolver resolver,
     IEnumerable<IElsa3NodeRewrite> rewrites,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
-    IObjectConverter objectConverter)
+    IObjectConverter objectConverter,
+    IOptions<Elsa3ConversionOptions> conversionOptions)
 {
     /// <summary>
     /// The deepest JSON level an activity node may sit at. The state is limited to 64 JSON levels (System.Text.Json's
@@ -74,17 +77,39 @@ internal sealed class Elsa3ActivityNormalizer(
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
-            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var refusal))
+            var path = $"$.variables[{index}].value";
+            if (TryMapVariable(plan, variables[index], path, out var mapped, out var refusal))
+            {
+                plan.WorkflowVariables.Add(variables[index], mapped);
                 continue;
+            }
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,
-                VariableValueUnconvertible,
+                refusal!.Code ?? VariableValueUnconvertible,
                 refusal!.Message,
                 refusal.Guidance,
                 $"$.variables[{index}]",
                 new Dictionary<string, string> { ["VariableName"] = variables[index].Name }));
         }
+    }
+
+    private bool TryMapVariable(Elsa3ConversionPlan plan, Elsa3Variable source, string path,
+        out Elsa.Expressions.Core.Models.VariableDefinition mapped, out Elsa3VariableRefusal? refusal)
+    {
+        var notes = new List<Elsa3LiteralConversion.Note>();
+        var success = Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, source, out mapped, out refusal,
+            conversionOptions.Value, notes.Add);
+        foreach (var note in notes)
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, note.Severity, note.Code, note.Message, note.Guidance,
+                path + note.Path[1..], new Dictionary<string, string> { ["VariableName"] = source.Name }));
+        if (notes.Any(note => note.Code == LiteralDateInterpreted) && plan.Diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, Elsa3MigrationDiagnosticSeverity.Info,
+                Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
+                $"The workflow's starting values were converted with {conversionOptions.Value.DateInterpretation}" +
+                (conversionOptions.Value.SourceTimeZone is null ? "." : $" '{conversionOptions.Value.SourceTimeZone}'."),
+                "Keep the same date interpretation when converting this workflow again.", path));
+        return success;
     }
 
     /// <summary>
@@ -956,10 +981,10 @@ internal sealed class Elsa3ActivityNormalizer(
                 var variable = item.Deserialize<Elsa3Variable>(Elsa3JsonOptions);
                 if (variable is null || string.IsNullOrWhiteSpace(variable.Id))
                     continue;
-                if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variable, out var mapped, out var refusal))
+                if (TryMapVariable(context.Plan, variable, $"{context.Node.JsonPath}{Elsa3ConversionDiagnostics.FormatProperty(property)}.value", out var mapped, out var refusal))
                     context.Node.Variables.Add(mapped);
                 else
-                    context.Error(VariableValueUnconvertible, refusal!.Message, refusal.Guidance, property);
+                    context.Error(refusal!.Code ?? VariableValueUnconvertible, refusal.Message, refusal.Guidance, property);
             }
         }
         catch (JsonException exception)

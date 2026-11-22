@@ -6,6 +6,7 @@ using Elsa.Primitives.Models;
 using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Internal;
 using Elsa3.Models;
+using Elsa.Serialization.Core;
 
 namespace Elsa3.Mapping.Services;
 
@@ -13,7 +14,7 @@ namespace Elsa3.Mapping.Services;
 /// Importer-local pass-two implementation. It validates the Elsa 3 reference graph and rewrites a
 /// private definition clone into ordinary Elsa 4 authored bindings before the design mapper sees it.
 /// </summary>
-public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewriter)
+public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewriter, IWellKnownTypeRegistry typeRegistry)
 {
     public IReadOnlyList<Elsa3MigrationDiagnostic> Lower(
         Elsa3WorkflowDefinition definition,
@@ -56,8 +57,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         };
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
 
-        foreach (var property in properties)
+        foreach (var sourceProperty in properties)
         {
+            var property = sourceProperty;
+            if (!RewriteLiteral(input, ref property, diagnostics)) continue;
             var directions = property.Occurrences.Select(occurrence => occurrence.Direction).Distinct().ToArray();
             if (directions.Contains(Elsa3PropertyDirection.Unknown))
             {
@@ -300,6 +303,64 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
 
         return diagnostics;
+    }
+
+    private bool RewriteLiteral(DiagnosticScope input, ref ActivityProperty property, List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        if (property.InputContract?.Type is not { } reference || !typeRegistry.TryGetTypeOrDefault(reference.Alias, out var elementType)) return true;
+        var targetType = TypeReferenceFactory.Close(elementType, reference);
+        var location = property;
+        void Report(Elsa3LiteralConversion.Note note) => diagnostics.Add(CreateDiagnostic(input, location, note.Code, note.Message,
+            note.Guidance, $"{location.JsonPath}.expression.value{note.Path[1..]}", null, note.Severity));
+        if (!Elsa3TypedValues.TryGetExpression(property.Value, out var kind, out var literal) ||
+            !(kind.Equals("Literal", StringComparison.OrdinalIgnoreCase) || kind.Equals("Object", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (elementType == typeof(DateTime) || elementType == typeof(DateTimeOffset) || elementType == typeof(DateOnly))
+                Report(Elsa3LiteralConversion.WallClock("$"));
+            return true;
+        }
+        var options = new Elsa3ConversionOptions { DateInterpretation = expressionRewriter.DateInterpretation, SourceTimeZone = expressionRewriter.SourceTimeZone };
+        try
+        {
+            var encodedDocument = literal.ValueKind == JsonValueKind.String && (kind.Equals("Object", StringComparison.OrdinalIgnoreCase) || reference.CollectionKind != CollectionKind.Single ||
+                !targetType.IsPrimitive && targetType != typeof(string) && targetType != typeof(DateTime) && targetType != typeof(DateTimeOffset) &&
+                targetType != typeof(DateOnly) && targetType != typeof(TimeOnly) && targetType != typeof(TimeSpan) && targetType != typeof(Guid) && !targetType.IsEnum && targetType != typeof(decimal) &&
+                targetType != typeof(object) && targetType != typeof(JsonElement) && !typeof(JsonNode).IsAssignableFrom(targetType));
+            if (encodedDocument || literal.ValueKind == JsonValueKind.String && (targetType.IsPrimitive && targetType != typeof(char) || targetType == typeof(decimal)))
+            {
+                using var document = JsonDocument.Parse(literal.GetString()!);
+                literal = document.RootElement.Clone();
+            }
+            var notes = new List<Elsa3LiteralConversion.Note>();
+            var converted = Elsa3LiteralConversion.Rewrite(literal, targetType, options, notes.Add);
+            foreach (var note in notes) Report(note);
+            if (notes.Any(note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted) &&
+                diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
+                diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
+                    $"The workflow's date literals were converted with {options.DateInterpretation}" + (options.SourceTimeZone is null ? "." : $" '{options.SourceTimeZone}'."),
+                    "Keep the same date interpretation when converting this workflow again.", property.JsonPath, null, Elsa3MigrationDiagnosticSeverity.Info));
+            var node = JsonNode.Parse(property.Value.GetRawText())!.AsObject();
+            node.Remove("memoryReference");
+            node["expression"]!["value"] = JsonNode.Parse(converted.GetRawText());
+            var rewritten = JsonSerializer.SerializeToElement(node, JsonBaseline.Options);
+            property.Activity.AdditionalProperties[property.PropertyName] = rewritten;
+            TryReadTypedValue(rewritten, out var memory, out var expression);
+            property = property with { Value = rewritten, MemoryReferenceId = memory, Expression = expression };
+            return true;
+        }
+        catch (Elsa3LiteralConversion.LiteralRefusal refusal)
+        {
+            diagnostics.Add(CreateDiagnostic(input, property, refusal.Code, refusal.Message, refusal.Guidance,
+                $"{property.JsonPath}.expression.value{refusal.Path[1..]}"));
+            return false;
+        }
+        catch (JsonException)
+        {
+            diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.IncompatibleValue,
+                $"The literal is not valid JSON for target member '{reference.ToDisplayString()}'.",
+                "Write a JSON value of the target member's type before import.", $"{property.JsonPath}.expression.value"));
+            return false;
+        }
     }
 
     private void LowerExpression(

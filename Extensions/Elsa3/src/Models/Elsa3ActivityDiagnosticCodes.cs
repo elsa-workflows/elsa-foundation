@@ -7,6 +7,17 @@ namespace Elsa3.Models;
 /// </summary>
 public static class Elsa3ActivityDiagnosticCodes
 {
+    /// <summary>A literal has multiple possible exact target names or would overwrite a member after rewriting.</summary>
+    public const string LiteralKeyAmbiguous = "ELS3-LITERAL-KEY-AMBIGUOUS";
+    /// <summary>A literal key was rewritten to the target's exact JSON name.</summary>
+    public const string LiteralKeyRewritten = "ELS3-LITERAL-KEY-REWRITTEN";
+    /// <summary>A legacy date literal cannot establish an instant without a source interpretation or offset.</summary>
+    public const string LiteralDateOffsetMissing = "ELS3-LITERAL-DATE-OFFSET-MISSING";
+    /// <summary>A legacy date literal was given the configured source interpretation.</summary>
+    public const string LiteralDateInterpreted = "ELS3-LITERAL-DATE-INTERPRETED";
+    /// <summary>A converted date may show a different clock or date from the Elsa 3 host.</summary>
+    public const string LiteralDateWallClock = "ELS3-LITERAL-DATE-WALL-CLOCK";
+
     /// <summary>The node's type is not in the built-in map, not claimed by a replaced-type alias and not a catalog key.</summary>
     public const string UnmappedType = "ELS3-ACTIVITY-UNMAPPED-TYPE";
 

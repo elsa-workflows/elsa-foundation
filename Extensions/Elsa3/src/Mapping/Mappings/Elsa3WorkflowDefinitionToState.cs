@@ -18,7 +18,8 @@ public sealed class Elsa3WorkflowDefinitionToState(
     internal WorkflowDefinitionState Map(Elsa3ConversionPlan plan)
     {
         var definition = plan.Definition;
-        var variables = definition.Variables.Select(variable => Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable)).ToList();
+        var variables = definition.Variables.Select(variable => plan.WorkflowVariables.TryGetValue(variable, out var mapped)
+            ? mapped : Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable)).ToList();
         var rootActivity = definition.Root is null ? null : activityMapper.Map(plan, definition.Root);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();

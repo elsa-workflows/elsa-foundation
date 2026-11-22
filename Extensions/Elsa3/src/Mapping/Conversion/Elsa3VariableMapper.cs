@@ -8,7 +8,7 @@ using Elsa3.Models;
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>Why a variable's starting value is refused, and how to fix it in the Elsa 3 workflow.</summary>
-internal sealed record Elsa3VariableRefusal(string Message, string Guidance);
+internal sealed record Elsa3VariableRefusal(string Message, string Guidance, string? Code = null);
 
 /// <summary>
 /// Maps an Elsa 3 variable declaration to an Elsa 4 <see cref="VariableDefinition"/> (spec 264). Elsa 3 stored a
@@ -22,18 +22,6 @@ internal static class Elsa3VariableMapper
     // The Elsa 3 name of its untyped kind, and the Elsa 4 alias it becomes: Any, the dynamic kind (spec 1228 FR-019).
     private const string Elsa3ObjectTypeName = "Object";
     private const string AnyAlias = TypeAliasConvention.AnyAlias;
-    private static readonly ObjectConverterOptions StrictConversion = new(StrictMode: true);
-
-    /// <summary>
-    /// The options Elsa 3's <c>ObjectConverter</c> read a collection's JSON text with: enums by name and case-insensitive
-    /// property names. They only read the Elsa 3 text; the result is written back with default options for Elsa 4.
-    /// </summary>
-    private static readonly JsonSerializerOptions Elsa3ReadOptions = new(Elsa.Serialization.Core.JsonBaseline.Options)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-    };
 
     /// <summary>
     /// Elsa 3 types that stand for a resource (a file, a stream, raw bytes), not data. Elsa 4 has no counterpart yet, and
@@ -77,7 +65,9 @@ internal static class Elsa3VariableMapper
         IObjectConverter objectConverter,
         Elsa3Variable source,
         out VariableDefinition variable,
-        out Elsa3VariableRefusal? refusal)
+        out Elsa3VariableRefusal? refusal,
+        Elsa3ConversionOptions? options = null,
+        Action<Elsa3LiteralConversion.Note>? report = null)
     {
         var typeName = string.IsNullOrWhiteSpace(source.TypeName) ? Elsa3ObjectTypeName : source.TypeName.Trim();
         var shape = Resolve(wellKnownTypeRegistry, typeName, source.IsArray);
@@ -101,7 +91,7 @@ internal static class Elsa3VariableMapper
         if (source.Value is null)
             return true;
 
-        if (!TryStart(objectConverter, shape, source, typeName, out var json, out refusal))
+        if (!TryStart(shape, source, typeName, options ?? new(), report ?? (_ => { }), out var json, out refusal))
             return false;
 
         variable = variable with { Default = new ArgumentValue(json, Elsa3TypedValues.Literal) };
@@ -109,10 +99,11 @@ internal static class Elsa3VariableMapper
     }
 
     private static bool TryStart(
-        IObjectConverter objectConverter,
         VariableShape shape,
         Elsa3Variable source,
         string typeName,
+        Elsa3ConversionOptions options,
+        Action<Elsa3LiteralConversion.Note> report,
         out JsonElement json,
         out Elsa3VariableRefusal? refusal)
     {
@@ -123,7 +114,7 @@ internal static class Elsa3VariableMapper
         {
             // Elsa 3 kept an Object variable's text as it was, JSON or not: it becomes a JSON string with the same text.
             case ShapeKind.Text:
-                json = JsonSerializer.SerializeToElement(value);
+                json = JsonSerializer.SerializeToElement(value, JsonBaseline.Options);
                 return true;
 
             case ShapeKind.Collection:
@@ -132,9 +123,9 @@ internal static class Elsa3VariableMapper
                     refusal = NotJsonArray(source, typeName, value, shape.ElementIsText);
                     return false;
                 }
-                if (!TryConvertItems(array, shape.ClrType!, out json))
+                if (!TryConvert(array, shape.ClrType!, options, report, out json, out var collectionRefusal))
                 {
-                    refusal = new(
+                    refusal = collectionRefusal ?? new(
                         $"Variable '{source.Name}' has the starting value '{Echo(value)}', whose items cannot be converted to '{shape.Type.Alias}'.",
                         $"In the Elsa 3 workflow, write every item as a JSON {shape.Type.Alias} value, for example {Example(shape.Type.Alias)}.");
                     return false;
@@ -154,10 +145,27 @@ internal static class Elsa3VariableMapper
             case ShapeKind.Scalar:
                 // Strict: Elsa 3 silently started a value it could not parse ("abc" for an Int32) as the type's default.
                 // That is an authoring mistake, so it is refused (spec 264 clarification).
-                var converted = objectConverter.TryConvertTo(value, shape.ClrType!, StrictConversion);
-                if (converted.IsSuccess && TrySerialize(converted.ValueOrDefault, out json))
-                    return true;
-                refusal = new(
+                try
+                {
+                    var scalarType = shape.ClrType!;
+                    JsonElement scalar;
+                    if (scalarType == typeof(bool) && bool.TryParse(value, out var boolean)) scalar = JsonSerializer.SerializeToElement(boolean, JsonBaseline.Options);
+                    else if (scalarType.IsPrimitive && scalarType != typeof(char) || scalarType == typeof(decimal))
+                    {
+                        using var document = JsonDocument.Parse(value);
+                        scalar = document.RootElement.Clone();
+                    }
+                    else if (value.TrimStart().StartsWith('{') || value.TrimStart().StartsWith('['))
+                    {
+                        using var document = JsonDocument.Parse(value);
+                        scalar = document.RootElement.Clone();
+                    }
+                    else scalar = JsonSerializer.SerializeToElement(value, JsonBaseline.Options);
+                    if (TryConvert(scalar, scalarType, options, report, out json, out var scalarRefusal)) return true;
+                    refusal = scalarRefusal;
+                }
+                catch (JsonException) { json = default; }
+                refusal ??= new(
                     $"Variable '{source.Name}' has the starting value '{Echo(value)}', which cannot be converted to its type '{typeName}'.",
                     $"In the Elsa 3 workflow, change the starting value to a valid {typeName} value, or change the type to Object to keep the value as text.");
                 return false;
@@ -296,29 +304,26 @@ internal static class Elsa3VariableMapper
         }
     }
 
-    private static bool TryConvertItems(JsonElement array, Type collectionType, out JsonElement json)
+    private static bool TryConvert(JsonElement value, Type type, Elsa3ConversionOptions options, Action<Elsa3LiteralConversion.Note> report,
+        out JsonElement json, out Elsa3VariableRefusal? refusal)
     {
+        refusal = null;
         try
         {
-            // Read as Elsa 3 read it; write with default options, so Elsa 4 gets plain JSON (an enum as its number).
-            json = JsonSerializer.SerializeToElement(array.Deserialize(collectionType, Elsa3ReadOptions), collectionType);
+            json = Elsa3LiteralConversion.Rewrite(value, type, options, report);
+            var contract = JsonConversionContract.For(type);
+            var converted = contract.Read(json, type);
+            // Validate a typed copy; preserve every carried object member, including unknown keys.
+            if (json.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) json = contract.Write(converted, type);
             return true;
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
+        catch (Elsa3LiteralConversion.LiteralRefusal failure)
         {
             json = default;
+            refusal = new(failure.Message, failure.Guidance, failure.Code);
             return false;
         }
-    }
-
-    private static bool TrySerialize(object? value, out JsonElement json)
-    {
-        try
-        {
-            json = JsonSerializer.SerializeToElement(value);
-            return true;
-        }
-        catch (Exception exception) when (exception is NotSupportedException or JsonException or InvalidOperationException)
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             json = default;
             return false;
