@@ -2,7 +2,7 @@ import React, { Activity, useContext, useMemo } from "react";
 // The provider must come from the shared SDK runtime that modules import, not the host's own copy of
 // `../../sdk`, or module hooks would read a different React context.
 import { StudioWorkspaceTabProvider, type StudioWorkspaceTabHandle, type StudioWorkspaceTabTitle } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioResultState, StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
 import type { WorkspaceTab } from "./model";
 import { workspacePanelDomId, workspaceTabDomId } from "./WorkspaceTabStrip";
 
@@ -89,14 +89,15 @@ export class WorkspaceTabBoundary extends React.Component<BoundaryProps, Boundar
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <section className="error-state studio-workspace-tab-error" role="alert">
-        <strong>{this.props.title} stopped working in this tab.</strong>
-        <span>{this.state.error}</span>
-        <span className="studio-workspace-tab-error-actions">
-          <button type="button" onClick={() => this.setState({ error: null })}>Reload this tab</button>
-          <button type="button" onClick={this.props.onClose}>Close tab</button>
-        </span>
-      </section>
+      <StudioResultState
+        tone="danger"
+        title={`${this.props.title} stopped working in this tab.`}
+        description={this.state.error}
+        actions={<>
+          <StudioButton onClick={() => this.setState({ error: null })}>Reload this tab</StudioButton>
+          <StudioButton onClick={this.props.onClose}>Close tab</StudioButton>
+        </>}
+      />
     );
   }
 }

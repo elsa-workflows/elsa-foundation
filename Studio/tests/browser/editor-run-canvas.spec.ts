@@ -39,7 +39,7 @@ for (const theme of ["light", "dark"]) {
     if (dismissal === "manual") await toast.getByRole("button", { name: "Dismiss notification" }).click();
     await expect(toast).toHaveCount(0, { timeout: 10_000 });
     const runtime = page.getByRole("region", { name: "Test run summary" });
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed");
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Completed");
     await runtime.getByRole("button", { name: "Return to editing", exact: true }).click();
     await runtime.getByRole("button", { name: "Show execution", exact: true }).click();
     await expect(page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ })).toHaveAccessibleName(/Run state: Completed/);

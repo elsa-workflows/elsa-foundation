@@ -20,6 +20,7 @@ export * from "./feedback/StatusPill";
 export * from "./forms/Button";
 export * from "./forms/ChoiceFields";
 export * from "./forms/Field";
+export * from "./forms/StudioNewResourceDialog";
 export * from "./forms/SearchInput";
 export * from "./forms/SettingEditors";
 export * from "./inspector/Inspector";

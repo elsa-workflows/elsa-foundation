@@ -118,12 +118,13 @@ export function parseTaskFormSource(source: string, currentForm: TaskForm, contr
   }
 
   if (!isRecord(value)) throw new Error("JSON must contain a form object.");
-  rejectUnknownProperties(value, ["id", "version", "name", "provider", "fields"], "form source");
+  rejectUnknownProperties(value, ["id", "version", "name", "description", "provider", "fields"], "form source");
   if (value.id !== currentForm.id) throw new Error("Form identifier cannot be changed in source.");
   if (value.version !== currentForm.version || value.provider !== currentForm.provider) {
     throw new Error("Version and provider are system-managed and cannot be changed in source.");
   }
   if (typeof value.name !== "string") throw new Error("Form name must be a string.");
+  if (value.description !== undefined && (typeof value.description !== "string" || value.description.length > 2000)) throw new Error("Form description must be text of at most 2,000 characters.");
   if (!Array.isArray(value.fields)) throw new Error("Form fields must be an array.");
   if (value.fields.length > 100) throw new Error("A form can have at most 100 fields.");
 
@@ -183,5 +184,5 @@ export function parseTaskFormSource(source: string, currentForm: TaskForm, contr
     return parsed;
   });
 
-  return { id: currentForm.id, version: currentForm.version, name: value.name, provider: currentForm.provider, fields };
+  return { id: currentForm.id, version: currentForm.version, name: value.name, ...(typeof value.description === "string" && value.description ? { description: value.description } : {}), provider: currentForm.provider, fields };
 }

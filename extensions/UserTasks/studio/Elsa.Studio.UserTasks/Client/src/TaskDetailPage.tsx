@@ -1,7 +1,7 @@
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { History as HistoryIcon } from "lucide-react";
-import { StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioTimestamp, StudioShellBreadcrumbs, OverflowMenu, StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioPage, StudioPageHeader, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { actor, basicProvider, read, mutate, message, statusOf, type TaskActor, type TaskItem } from "./taskApi";
 import { resolveTaskFieldControl } from "./fieldControls";
 import { TaskStatus } from "./TaskStatus";
@@ -43,22 +43,11 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const [busy, setBusy] = useState(false); const [missing, setMissing] = useState(false); const [stale, setStale] = useState(false);
   const [targetKind, setTargetKind] = useState("user"); const [target, setTarget] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false); const [reassignOpen, setReassignOpen] = useState(false); const [reassignError, setReassignError] = useState("");
-  const historyDialog = useRef<HTMLDialogElement>(null); const reassignDialog = useRef<HTMLDialogElement>(null);
+  const assigneeField = useRef<HTMLInputElement>(null);
+  const taskTools = useRef<HTMLDivElement>(null);
   const owner = useMemo(() => ({ api, id }), [api, id]);
   const currentOwner = useRef(owner); currentOwner.current = owner;
   const content = useRef<HTMLDivElement>(null); const focused = useRef<string | null>(null);
-  useEffect(() => {
-    const dialog = historyDialog.current;
-    if (!dialog) return;
-    if (historyOpen && !dialog.open) dialog.showModal();
-    else if (!historyOpen && dialog.open) dialog.close();
-  }, [historyOpen]);
-  useEffect(() => {
-    const dialog = reassignDialog.current;
-    if (!dialog) return;
-    if (reassignOpen && !dialog.open) dialog.showModal();
-    else if (!reassignOpen && dialog.open) dialog.close();
-  }, [reassignOpen]);
   useStudioWorkspaceTitle(task?.title, "User task");
   useEffect(() => {
     if (!task?.id || focused.current === task.id) return;
@@ -161,7 +150,7 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
   const respondable = own && !terminal && !pending && task.actions.length > 0;
   const manageable = identity.canManage && !terminal && !pending;
   return frame(<>
-    <StudioPageHeader title={task.title} refresh={{ id: "user-task-detail", label: "Refresh task", onRefresh: refresh, autoRefresh: !pending, disabled: busy }} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<div className="user-task-detail-tools">
+    <StudioPageHeader title={task.title} refresh={{ id: "user-task-detail", label: "Refresh task", onRefresh: refresh, autoRefresh: !pending, disabled: busy }} description={task.description ? <span className="user-task-description">{task.description}</span> : undefined} actions={<div ref={taskTools} className="user-task-detail-tools">
       <StudioButton aria-controls="user-task-history-dialog" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}><HistoryIcon size={16} aria-hidden="true" />History</StudioButton>
       {manageable ? <OverflowMenu ariaLabel="Task actions" items={[{ id: "reassign", label: "Reassign task", onSelect: () => { setReassignError(""); setReassignOpen(true); }, disabled: busy || stale || Boolean(attempt.current) }]} /> : null}
     </div>}><TaskStatus status={task.status} /></StudioPageHeader>
@@ -178,19 +167,23 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
         {respondable ? task.actions.map((action, index) => <StudioButton variant={index === 0 ? "primary" : "default"} key={action} disabled={!canComplete || busy || Boolean(task.form && !Renderer) || Boolean(attempt.current && attempt.current.action !== action)} onClick={() => void act("complete", action)}>{attempt.current?.action === action ? `Retry ${action}` : action}</StudioButton>) : null}
       </div>}
     </section> : null}
-    <dialog ref={historyDialog} id="user-task-history-dialog" className="user-task-history-panel" aria-labelledby="user-task-history-title" onClose={() => setHistoryOpen(false)} onClick={event => { if (event.target === event.currentTarget) setHistoryOpen(false); }}>
-      <header className="user-task-dialog-header"><h2 id="user-task-history-title">Task history</h2><StudioButton variant="ghost" onClick={() => setHistoryOpen(false)}>Close</StudioButton></header>
+    <StudioDialog open={historyOpen} id="user-task-history-dialog" title="Task history" onClose={() => setHistoryOpen(false)}
+      footer={<StudioDialogFooter cancelLabel="Close" onCancel={() => setHistoryOpen(false)} />}>
       <ol className="user-task-history-list">{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}><strong>{entry.operation}{entry.action ? ` · ${entry.action}` : ""}</strong><span> · {taskPerson(identity, entry.actorId, entry.actorName)} · <StudioTimestamp value={entry.at} /></span></li>)}</ol>
-    </dialog>
-    {manageable ? <dialog ref={reassignDialog} className="user-task-reassign-dialog" aria-labelledby="user-task-reassign-title" onClose={() => setReassignOpen(false)} onCancel={event => { if (busyRef.current) event.preventDefault(); }}>
-      <header className="user-task-dialog-header"><h2 id="user-task-reassign-title">Reassign task</h2><StudioButton variant="ghost" disabled={busy} onClick={() => setReassignOpen(false)}>Close</StudioButton></header>
-      <p className="user-task-dialog-description">Choose a user or group to assign this task to.</p>
+    </StudioDialog>
+    {manageable ? <StudioDialog open={reassignOpen} title="Reassign task" description="Choose a user or group to assign this task to."
+      initialFocusRef={assigneeField} dismissDisabled={busy} dismissOnOutsideClick={false} onClose={() => setReassignOpen(false)}
+      onCloseAutoFocus={event => {
+        event.preventDefault();
+        taskTools.current?.querySelector<HTMLButtonElement>('[aria-label="Task actions"]')?.focus();
+      }}
+      footer={<StudioDialogFooter onCancel={() => setReassignOpen(false)} cancelDisabled={busy} confirmType="button"
+        confirmDisabled={!target.trim() || busy || stale || Boolean(attempt.current)} onConfirm={() => void act("reassign")} confirmLabel="Reassign" />}>
       {reassignError ? <StudioAlert tone="danger">{reassignError}</StudioAlert> : null}
       <fieldset className="user-task-reassign-fields" disabled={busy || stale || Boolean(attempt.current)}>
         <StudioField label="Assign to"><select value={targetKind} onChange={event => { setTargetKind(event.target.value); setReassignError(""); }}><option value="user">User</option><option value="group">Group</option></select></StudioField>
-        <StudioField label={targetKind === "user" ? "User ID" : "Group ID"}><input value={target} onChange={event => { setTarget(event.target.value); setReassignError(""); }} /></StudioField>
+        <StudioField label={targetKind === "user" ? "User ID" : "Group ID"}><input ref={assigneeField} value={target} onChange={event => { setTarget(event.target.value); setReassignError(""); }} /></StudioField>
       </fieldset>
-      <footer className="user-task-dialog-actions"><StudioButton variant="ghost" disabled={busy} onClick={() => setReassignOpen(false)}>Cancel</StudioButton><StudioButton variant="primary" disabled={!target.trim() || busy || stale || Boolean(attempt.current)} onClick={() => void act("reassign")}>Reassign</StudioButton></footer>
-    </dialog> : null}
+    </StudioDialog> : null}
   </>);
 }

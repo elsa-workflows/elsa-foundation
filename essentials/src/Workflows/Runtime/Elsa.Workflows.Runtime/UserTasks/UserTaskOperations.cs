@@ -217,7 +217,7 @@ internal sealed class UserTaskOperations(IUserTaskStore store, IUserTaskAccess a
     private static void ValidateDraftStructure(string id, UserTaskForm? form)
     {
         if (form is null || string.IsNullOrWhiteSpace(id) || id.Length > 256 || form.Id != id || string.IsNullOrWhiteSpace(form.Provider) ||
-            form.Name is null || form.Name.Length > 256 || form.Fields is null || form.Fields.Count > 100 || form.Fields.Any(field => field is null ||
+            form.Name is null || form.Name.Length > 256 || form.Description is { Length: > 2000 } || form.Fields is null || form.Fields.Count > 100 || form.Fields.Any(field => field is null ||
                 field.Key is null || field.Key.Length > 256 || field.Label is null || field.Label.Length > 256 || field.Kind is null || field.Kind.Length > 64 ||
                 field.ControlId is { Length: > 128 } || field.ControlId is not null && string.IsNullOrWhiteSpace(field.ControlId) ||
                 field.Configuration is { } configuration && (configuration.ValueKind != JsonValueKind.Object || configuration.GetRawText().Length > 16_384 || JsonDepth(configuration, 0) > 16) ||

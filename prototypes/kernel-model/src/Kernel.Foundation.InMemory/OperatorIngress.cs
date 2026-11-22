@@ -13,11 +13,11 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
         cancellationToken.ThrowIfCancellationRequested();
         var refused = new Admission(AdmissionOutcome.Refused);
         if (authorize?.Invoke(scope, kind) != true || !Durable.InMemoryStore.IsOutsideMessageId(id) ||
-            kind is Kinds.Recover or Kinds.Discard)
+            kind == Kinds.Recover)
             return new(refused);
 
         string? selection = null;
-        if (kind is Kinds.Terminate or Kinds.Delete)
+        if (kind is Kinds.Terminate or Kinds.Delete or Kinds.Discard)
         {
             OperatorCommand? command;
             try { command = payload is null ? null : JsonSerializer.Deserialize<OperatorCommand>(payload); }

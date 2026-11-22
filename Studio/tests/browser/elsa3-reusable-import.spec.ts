@@ -42,9 +42,9 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
   await expect(page.getByRole("heading", { name: "Import from Elsa 3" })).toBeVisible();
-  await expect(page.getByText("No Execute-Workflow fallback")).toBeVisible();
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
-  await page.getByRole("button", { name: "Analyze immutable collection" }).click();
+  await expect(page.getByText("Uses reusable activities directly")).toBeVisible();
+  await page.getByPlaceholder("Collection ID").fill("collection");
+  await page.getByRole("button", { name: "Analyze collection" }).click();
 
   await expect(page.getByText("100 / 102 versions")).toBeVisible();
   await expect(page.getByText("ELS3-REUSABLE-MISSING-REFERENCE", { exact: true }).first()).toBeVisible();
@@ -67,14 +67,14 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
   });
 
   await page.getByRole("button", { name: "Review exact import" }).click();
-  const review = page.getByRole("heading", { name: "4. Final atomic review" }).locator("xpath=ancestor::section[1]");
+  const review = page.getByRole("heading", { name: "4. Confirm import" }).locator("xpath=ancestor::section[1]");
   await expect(review).toContainText("Exact source versions2");
   await expect(review).toContainText("Activity Definitions2");
   await expect(review).toContainText("Activity Definition versions2");
   await expect(review).toContainText("Exact reusable rewrites1");
 
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
-  await expect(page.getByRole("heading", { name: "Durable import receipt" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Import results" })).toBeVisible();
   expect(state.applyBody).toMatchObject({
     planId: "plan",
     selectedSourceVersionIds: ["dependency-v1", "owner-v1"]
@@ -122,8 +122,8 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   });
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
-  await page.getByRole("button", { name: "Analyze immutable collection" }).click();
+  await page.getByPlaceholder("Collection ID").fill("collection");
+  await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
@@ -171,7 +171,7 @@ test("Elsa 3 collection upload is raw, bounded, and cancellable without acceptin
   await expect(page.getByText("Upload cancelled. No collection handle was accepted by Studio.")).toBeVisible();
   expect(uploadBody).toBe(rawCollection);
   await page.waitForTimeout(600);
-  await expect(page.getByText("Handle accepted")).toHaveCount(0);
+  await expect(page.getByText("Upload complete")).toHaveCount(0);
 });
 
 test("captures Classic light receipt screenshots when asked", async ({ page }) => {
@@ -229,13 +229,13 @@ test("captures Classic light receipt screenshots when asked", async ({ page }) =
   await page.goto("/workflows/activity-definitions/import-elsa3?theme=classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
-  await page.getByRole("button", { name: "Analyze immutable collection" }).click();
+  await page.getByPlaceholder("Collection ID").fill("collection");
+  await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
   await page.getByRole("button", { name: "Apply reviewed import" }).click();
-  const receipt = page.getByRole("region", { name: "Durable import receipt" })
-    .or(page.locator("section").filter({ has: page.getByRole("heading", { name: "Durable import receipt" }) }));
+  const receipt = page.getByRole("region", { name: "Import results" })
+    .or(page.locator("section").filter({ has: page.getByRole("heading", { name: "Import results" }) }));
   await expect(receipt).toBeVisible();
   await receipt.screenshot({ path: resolve(screenshotDir, filename) });
 });
@@ -248,11 +248,11 @@ test("Elsa 3 expired handles require a fresh collection without retaining an ana
   }, 410));
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
-  await page.getByPlaceholder("Authorized collection handle").fill("expired");
-  await page.getByRole("button", { name: "Analyze immutable collection" }).click();
+  await page.getByPlaceholder("Collection ID").fill("expired");
+  await page.getByRole("button", { name: "Analyze collection" }).click();
 
-  await expect(page.getByText("The immutable Elsa 3 collection expired. Upload the source again to create a fresh handle and run a new side-effect-free analysis.")).toBeVisible();
-  await expect(page.getByPlaceholder("Authorized collection handle")).toHaveValue("");
+  await expect(page.getByText("The immutable Elsa 3 collection expired. Upload the source again to create a fresh handle and run a new preview.")).toBeVisible();
+  await expect(page.getByPlaceholder("Collection ID")).toHaveValue("");
   await expect(page.getByText("Plan ID")).toHaveCount(0);
 });
 
@@ -418,7 +418,7 @@ function publicationReceipt() {
         diagnostics: [{
           code: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
           message: "Version 'activity-owner-v1' was not published because the version it uses was not published.",
-          remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new idempotency key."
+          remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new request ID."
         }]
       }
     ]

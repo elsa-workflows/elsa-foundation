@@ -1,9 +1,11 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 test("a module-owned field control is authored, previewed, saved, reopened, and published through the shared Slot", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html?custom-control");
   await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID" }).fill("ratings");
   await page.getByRole("textbox", { name: "Name" }).fill("Rating form");
   await page.getByRole("button", { name: "Rating", exact: true }).click();

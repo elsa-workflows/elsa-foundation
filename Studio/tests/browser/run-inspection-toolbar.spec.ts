@@ -83,7 +83,7 @@ for (const theme of ["light", "dark"]) test(`retains expanded evidence through R
   await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
   await page.getByRole("button", { name: "Refresh execution", exact: true }).click();
   const runtime = page.getByRole("region", { name: "Test run summary", exact: true });
-  await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed");
+  await expect(runtime.locator(".studio-status-chip")).toHaveText("Completed");
   await expect(runtime.getByText(/^Live updates paused/)).not.toContainText("The workflow keeps running");
   await expect(runtime.getByRole("button", { name: "Resume live updates", exact: true })).toBeEnabled();
   await page.getByRole("tab", { name: "Inspector", exact: true }).click();

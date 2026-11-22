@@ -1,4 +1,4 @@
-.feature-management-page {
+.feature-management-page, .feature-management-impact-dialog, .feature-management-settings-dialog {
   /*
    * Module-private alias block (see docs/design-tokens.md). The badge-tone palette is
    * promoted here to overridable module-private aliases so a theme can retint the badges.
@@ -13,40 +13,15 @@
   --fm-tone-experimental: var(--studio-warning, var(--warning, #d97706));
   --fm-tone-danger: var(--studio-danger, var(--danger, #dc2626));
   --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
+}
+
+.feature-management-page {
   display: flex;
   flex-direction: column;
   container-type: inline-size;
   container-name: feature-management;
 }
 
-.feature-management-inspector-heading button,
-.feature-management-section-heading button,
-.feature-management-dialog-heading button,
-.feature-management-dialog-actions button,
-.feature-management-bulk-actions button,
-.feature-management-feature-button {
-  border: 1px solid var(--border);
-  background: var(--studio-surface, var(--card));
-  color: var(--studio-text, var(--foreground));
-  border-radius: 5px;
-  min-height: 32px;
-  padding: 6px 11px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.feature-management-dialog-actions button.primary {
-  background: var(--studio-accent, var(--primary));
-  border-color: var(--studio-accent, var(--primary));
-  color: white;
-}
-
-.feature-management-inspector-heading button:disabled,
-.feature-management-section-heading button:disabled,
-.feature-management-dialog-heading button:disabled,
-.feature-management-dialog-actions button:disabled,
-.feature-management-bulk-actions button:disabled,
 .feature-management-switch:disabled {
   opacity: .55;
   cursor: not-allowed;
@@ -417,6 +392,7 @@
 }
 
 .feature-management-switch {
+  appearance: none;
   width: 28px;
   height: 16px;
   border-radius: 999px;
@@ -439,12 +415,12 @@
   background: white;
 }
 
-.feature-management-switch.enabled {
+.feature-management-switch:checked {
   background: var(--studio-accent, var(--primary));
   border-color: var(--studio-accent, var(--primary));
 }
 
-.feature-management-switch.enabled::after {
+.feature-management-switch:checked::after {
   left: 14px;
 }
 
@@ -898,61 +874,27 @@
   color: var(--danger, #dc2626);
 }
 
-.feature-management-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--background) 62%, transparent);
-  padding: 24px;
-}
-
-.feature-management-settings-dialog {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(760px, calc(100vw - 48px));
-  max-height: min(760px, calc(100dvh - 48px));
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--studio-surface, var(--card));
-  box-shadow: var(--studio-shadow-sm);
+.studio-dialog.feature-management-settings-dialog,
+.studio-dialog.feature-management-impact-dialog {
+  width: min(760px, calc(100vw - 32px));
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
 }
 
-.feature-management-impact-dialog {
-  width: min(960px, calc(100vw - 48px));
-  max-height: min(820px, calc(100vh - 48px));
-}
-
-.feature-management-dialog-heading,
-.feature-management-dialog-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--border);
-  padding: 14px 16px;
-}
-
-.feature-management-dialog-heading span,
-.feature-management-dialog-actions span {
-  color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 13px;
-}
-
-.feature-management-dialog-heading h3 {
-  margin: 2px 0 0;
-  font-size: 18px;
-  overflow-wrap: anywhere;
+.studio-dialog.feature-management-impact-dialog {
+  width: min(960px, calc(100vw - 32px));
 }
 
 .feature-management-dialog-body {
   min-height: 0;
   overflow: auto;
-  padding: 18px 20px;
+  padding: 2px;
+}
+
+.feature-management-dialog-note {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
 }
 
 .feature-management-impact-intro {
@@ -1092,24 +1034,6 @@
   overflow-wrap: anywhere;
 }
 
-.feature-management-dialog-actions {
-  border-top: 1px solid var(--border);
-  border-bottom: 0;
-}
-
-.feature-management-dialog-actions > div {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.feature-management-dialog-actions > span {
-  flex: 1 1 280px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .feature-management-inspector-badges {
   display: flex;
   gap: 6px;
@@ -1146,25 +1070,6 @@
   padding: 8px 12px;
 }
 
-.feature-management-browse-nav button {
-  min-height: 30px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--studio-text-muted, var(--muted-foreground));
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 5px 9px;
-}
-
-.feature-management-browse-nav button[aria-pressed="true"] {
-  border-color: var(--studio-border, var(--border));
-  background: var(--studio-surface, var(--card));
-  color: var(--studio-text, var(--foreground));
-}
-
-.feature-management-browse-nav button:focus-visible,
 .feature-management-capability-card:focus-visible,
 .feature-management-relationship-link:focus-visible {
   outline: 2px solid var(--studio-focus, var(--studio-accent, var(--primary)));
@@ -1361,16 +1266,6 @@
 }
 
 @media (max-width: 860px) {
-  .feature-management-dialog-backdrop {
-    padding: 12px;
-  }
-
-  .feature-management-settings-dialog,
-  .feature-management-impact-dialog {
-    width: calc(100vw - 24px);
-    max-height: calc(100dvh - 24px);
-  }
-
   .feature-management-list-toolbar {
     flex-wrap: wrap;
   }
@@ -1381,23 +1276,6 @@
 
   .feature-management-setting-summary-row {
     grid-template-columns: 1fr;
-  }
-
-  .feature-management-dialog-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .feature-management-dialog-actions > div {
-    justify-content: stretch;
-  }
-
-  .feature-management-dialog-actions > span {
-    flex: 0 1 auto;
-  }
-
-  .feature-management-dialog-actions button {
-    flex: 1;
   }
 
   .feature-management-impact-section dl > div,

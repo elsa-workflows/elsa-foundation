@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioWorkspaceTab,
   type StudioDialogApi, type StudioEndpointContext, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
+import { StudioAlert, CopyableIdentifier, formatStudioDateTime, StudioTimestamp, StatusChip, StudioButton, StudioPage, StudioPageHeader } from "@elsa-workflows/studio-ui";
 import { ExternalAuthenticationClient, identityAccessError, type IdentityLink, type IdentityLinks,
   type IdentitySession, type IdentitySessions, type IdentityUser, type IdentityUsers } from "./sdk";
 
@@ -9,7 +9,6 @@ import { useCancelledActionFocus } from "./useCancelledActionFocus";
 import { useActionFeedbackFocus } from "./useActionFeedbackFocus";
 
 const pageSize = 25;
-function date(value: string | null) { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : "Not recorded"; }
 function status(value: number) { return value === 0 ? "Active" : value === 1 ? "Disabled" : value === 2 ? "Locked" : "Unknown status"; }
 
 export function UserAccessPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
@@ -180,15 +179,15 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
   function revoke(session: IdentitySession) {
     if (!target || !session.canRevoke) return;
     const userId = target.id;
-    void mutate("Revoke session", `Revoke ${target.userName}'s ${session.connectionKey ?? session.provider} session created ${date(session.createdAt)}?\n\nIts Elsa cookie, access and refresh credentials will stop granting access.${session.current ? " This is your current session; you will need to sign in again." : " Other sessions will remain available."}`, async () => {
+    void mutate("Revoke session", `Revoke ${target.userName}'s ${session.connectionKey ?? session.provider} session created ${formatStudioDateTime(session.createdAt, "Not recorded")}?\n\nIts Elsa cookie, access and refresh credentials will stop granting access.${session.current ? " This is your current session; you will need to sign in again." : " Other sessions will remain available."}`, async () => {
       const result = await client.revokeSession(userId, session); return { ok: result.revoked, failure: result.failure };
     }, session.current ? "Current session revoked. Sign in to the selected backend again before continuing." : "Session revoked. Other sessions are unchanged.", { currentSession: session.current });
   }
 
   return <StudioPage className="external-auth-shell"><StudioPageHeader title="User access" headingLevel={2} description="Inspect linked identities and sessions. These actions preserve saved Elsa role assignments."
     actions={<StudioButton onClick={() => void refresh()} disabled={Boolean(busy || loadingUsers || reauthenticate)}>Refresh user access</StudioButton>} />
-    {directoryError ? <p role="alert" className="external-auth-error">{directoryError}</p> : null}
-    {error ? <p ref={feedback.errorRef} tabIndex={-1} role="alert" className="external-auth-error">{error}{needsRefresh ? " Refresh user access before another change." : ""}</p> : null}
+    {directoryError ? <StudioAlert tone="danger">{directoryError}</StudioAlert> : null}
+    {error ? <StudioAlert tone="danger" ref={feedback.errorRef} tabIndex={-1}>{error}{needsRefresh ? " Refresh user access before another change." : ""}</StudioAlert> : null}
     {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {loadingUsers && !visible ? <p role="status">Loading users…</p> : null}
     {visible ? <><div className="external-auth-workspace"><section className="external-auth-list" aria-label="Users">
@@ -210,10 +209,10 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
         {visible.linkManagementUnavailableReason ? <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.linkManagementUnavailableReason } })}</p> : null}
         {loadingAccess ? <p role="status">Loading user access…</p> : null}
         <section className="external-auth-user-section" aria-label="Identity links"><h3>Identity links</h3>
-          {!visible.canReadLinks ? <p className="external-auth-callout">You do not have permission to read identity links.</p> : linksError ? <p role="alert" className="external-auth-error">{linksError}</p> : links ? <>
+          {!visible.canReadLinks ? <p className="external-auth-callout">You do not have permission to read identity links.</p> : linksError ? <StudioAlert tone="danger">{linksError}</StudioAlert> : links ? <>
             {!links.items.length ? <p className="external-auth-empty">No identities are linked to this user.</p> : links.items.map(link => <article className="external-auth-user-entry" key={`${link.provider}:${link.issuer}:${link.subject}`}>
               <h4>{link.connectionDisplayName ?? link.provider}</h4><dl><dt>Provider key</dt><dd>{link.provider}</dd><dt>Issuer</dt><dd>{link.issuer ?? "Legacy issuer-less identity"}</dd>
-                <dt>Subject</dt><dd><CopyableIdentifier value={link.subject} label="External subject" /></dd><dt>Linked</dt><dd>{date(link.linkedAt)}</dd></dl>
+                <dt>Subject</dt><dd><CopyableIdentifier value={link.subject} label="External subject" /></dd><dt>Linked</dt><dd><StudioTimestamp value={link.linkedAt} format="date-time" fallback="Not recorded" /></dd></dl>
               {!link.connectionConfigured ? <p className="external-auth-muted">This provider is no longer configured on this backend.</p> : null}
               {!link.qualified ? <p className="external-auth-muted">Legacy links are read-only here.</p> : null}
               <StudioButton className="external-auth-danger-action" disabled={locked || !link.canRemove || !visible.canManageUsers || Boolean(visible.sessionAdministrationUnavailableReason)} onClick={() => remove(link)}>Remove link</StudioButton>
@@ -232,11 +231,11 @@ export function UserAccessPage({ context, dialogs }: { context: StudioEndpointCo
         </section>
         <section className="external-auth-user-section" aria-label="Sessions"><h3>Sessions</h3>
           {!visible.canReadSessions ? <p className="external-auth-callout">You do not have permission to read sessions.</p> : visible.sessionAdministrationUnavailableReason ?
-            <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.sessionAdministrationUnavailableReason } })} Link removal also requires this service.</p> : sessionsError ? <p role="alert" className="external-auth-error">{sessionsError}</p> : sessions ? <>
+            <p className="external-auth-callout">{identityAccessError({ payload: { error: visible.sessionAdministrationUnavailableReason } })} Link removal also requires this service.</p> : sessionsError ? <StudioAlert tone="danger">{sessionsError}</StudioAlert> : sessions ? <>
               {!sessions.items.length ? <p className="external-auth-empty">No retained sessions for this user.</p> : sessions.items.map(session => <article className="external-auth-user-entry" key={session.id}>
                 <h4>{session.connectionKey ?? session.provider}{session.current ? " · Current session" : ""}</h4><StatusChip>{session.state}</StatusChip>
-                <dl><dt>Session ID</dt><dd><CopyableIdentifier value={session.id} label="Session ID" /></dd><dt>Created</dt><dd>{date(session.createdAt)}</dd>
-                  <dt>Expires</dt><dd>{date(session.expiresAt)}</dd>{session.revokedAt ? <><dt>Revoked</dt><dd>{date(session.revokedAt)}</dd></> : null}</dl>
+                <dl><dt>Session ID</dt><dd><CopyableIdentifier value={session.id} label="Session ID" /></dd><dt>Created</dt><dd><StudioTimestamp value={session.createdAt} format="date-time" fallback="Not recorded" /></dd>
+                  <dt>Expires</dt><dd><StudioTimestamp value={session.expiresAt} format="date-time" fallback="Not recorded" /></dd>{session.revokedAt ? <><dt>Revoked</dt><dd><StudioTimestamp value={session.revokedAt} format="date-time" fallback="Not recorded" /></dd></> : null}</dl>
                 <StudioButton className="external-auth-danger-action" disabled={locked || !session.canRevoke || !visible.canRevokeTokens} onClick={() => revoke(session)}>Revoke session</StudioButton>
               </article>)}
               <Pager label="Sessions" skip={sessionSkip} count={sessions.items.length} total={sessions.totalCount} disabled={locked} previous={() => setSessionSkip(Math.max(0, sessionSkip - pageSize))} next={() => setSessionSkip(sessionSkip + pageSize)} />

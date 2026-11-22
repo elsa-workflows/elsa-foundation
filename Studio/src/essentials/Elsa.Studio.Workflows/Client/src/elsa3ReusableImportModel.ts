@@ -210,7 +210,7 @@ export function importReceiptApplyMessage(receipt: Elsa3ReusableImportReceipt) {
     const count = published === 0
       ? "None of the imported reusable versions were published."
       : `${published} of ${total} imported reusable versions are published.`;
-    return `${prefix}The commit is atomic; publishing is per version. ${count} To finish, re-upload the export and apply it under a new idempotency key.`;
+    return `${prefix}The commit is atomic; publishing is per version. ${count} To finish, re-upload the export and apply it under a new request ID.`;
   }
   return "The commit is atomic. Publishing is per version. Every imported reusable version is listed in the durable receipt.";
 }

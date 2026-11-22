@@ -45,6 +45,7 @@ export function PublishedFormSnapshot({ form, createdAt, latestVersion, actions 
         </div>
         <h2>Published version {form.version}</h2>
         <p>{form.id}</p>
+        {form.description ? <p>{form.description}</p> : null}
         {createdAt ? <p><StudioTimestamp value={createdAt} /></p> : null}
       </div>
       {actions ? <div className="user-task-actions">{actions}</div> : null}
