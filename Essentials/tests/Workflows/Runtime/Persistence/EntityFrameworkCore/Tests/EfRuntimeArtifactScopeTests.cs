@@ -1890,10 +1890,10 @@ public sealed partial class EfRuntimeArtifactScopeTests
     public async Task Corrupt_coordination_payloads_fail_closed_as_invalid_data()
     {
         static string E(string value) => Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(value);
-        var keyMismatch = $$"""{"leases":{"{{E("key")}}":{"id":"{{E("other")}}","token":"{{E("token")}}","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
-        var emptyTokens = $$"""{"leases":{"{{E("one")}}":{"id":"{{E("one")}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"},"{{E("two")}}":{"id":"{{E("two")}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
-        var defaultExpiry = $$"""{"leases":{"{{E("one")}}":{"id":"{{E("one")}}","token":"{{E("token")}}","expiresAt":"0001-01-01T00:00:00+00:00"}},"guard":null}""";
-        var emptyGuard = $$"""{"leases":{},"guard":{"operationId":"","token":"{{E("token")}}","expiresAt":"2030-01-01T00:00:00+00:00"}}""";
+        var keyMismatch = $$$"""{"leases":{"{{{E("key")}}}":{"id":"{{{E("other")}}}","token":"{{{E("token")}}}","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyTokens = $$$"""{"leases":{"{{{E("one")}}}":{"id":"{{{E("one")}}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"},"{{{E("two")}}}":{"id":"{{{E("two")}}}","token":"","expiresAt":"2030-01-01T00:00:00+00:00"}},"guard":null}""";
+        var defaultExpiry = $$$"""{"leases":{"{{{E("one")}}}":{"id":"{{{E("one")}}}","token":"{{{E("token")}}}","expiresAt":"0001-01-01T00:00:00+00:00"}},"guard":null}""";
+        var emptyGuard = $$$"""{"leases":{},"guard":{"operationId":"","token":"{{{E("token")}}}","expiresAt":"2030-01-01T00:00:00+00:00"}}""";
         var semanticReasons = new Dictionary<string, string>
         {
             [keyMismatch] = "The persisted workflow executable coordination contains an invalid lease.",
