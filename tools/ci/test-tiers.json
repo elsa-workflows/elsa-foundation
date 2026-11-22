@@ -266,6 +266,7 @@
     {
       "project": "Essentials/tests/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj",
       "tier": "pr",
+      "trait": "child-process",
       "medianMinutes": 0.02
     },
     {

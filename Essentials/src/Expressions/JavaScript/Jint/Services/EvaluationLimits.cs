@@ -41,8 +41,13 @@ internal sealed class EvaluationLimits(TimeSpan? timeout, int? maxStatements, lo
     private long _stretchStarted;
     private bool _statementInStretch;
 
-    /// <summary>Starts the count for one phase of the evaluation: the script, or writing what it left.</summary>
-    public static void Start(Engine engine) => engine.Constraints.Find<EvaluationLimits>()?.Start();
+    /// <summary>Starts user work after trusted setup: the script, or writing what it left.</summary>
+    public static void Start(Engine engine)
+    {
+        // The byte budget protects setup too. Only the optional call limit waits until all setup has finished.
+        engine.Constraints.Find<JintEvaluationThreads.StackBudgetConstraint>()?.StartCallDepthLimit();
+        engine.Constraints.Find<EvaluationLimits>()?.Start();
+    }
 
     /// <summary>
     /// Host work: .NET code that cannot run the script's code and builds nothing the script keeps. Its memory does not

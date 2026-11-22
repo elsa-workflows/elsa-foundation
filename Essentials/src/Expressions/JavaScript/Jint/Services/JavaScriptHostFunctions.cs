@@ -133,6 +133,9 @@ internal sealed class JavaScriptHostFunctions
         CancellationToken cancellationToken) =>
         new(engine, name, (_, arguments) =>
         {
+            // Issue #4901: a call reached without running a statement (from a default parameter) meets the stack and
+            // depth limits here, so the function's own errors are never thrown deeper than the stack budget.
+            JintEvaluationThreads.StackBudgetConstraint.CheckNow(engine);
             // The call is host work: its plumbing, the arguments' JSON and the function's own work are not the script's
             // memory. What can run the script's code (a stringify that falls back to the engine, a variable read) and the
             // value the script gets back are counted.
