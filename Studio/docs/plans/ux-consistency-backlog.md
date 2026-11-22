@@ -453,7 +453,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `StudioTabs` has a dense mode before migrating.
 - [x] **X8.8** (#5123) [seen] Dashboards and Questions "Mine / Shared with me": square 30px buttons with
   radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
-- [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
+- [x] **X8.9** (#5124, PR #5336) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
 - [x] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
   labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version"). (PR #5325)
@@ -490,7 +490,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
 - [x] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`; (PR #5320)
   action results belong in `api.notifications.notify`.
-- [ ] **X9.9** (#5137) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
+- [x] **X9.9** (#5137, PR #5336) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
   `EXT/Workflows.Dashboard/WorkflowRunHealthWidget.tsx:66`, `WorkflowDashboardUnavailable.tsx:5`.
 
 ### X10. Timestamps and identifiers
@@ -743,7 +743,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
   `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
-- [ ] **E16** (#5246) [source] Attention widget shows severity only as a border colour
+- [x] **E16** (#5246, PR #5336) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
 - [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
   `requiresBackend` (`EXT/Secrets/module.tsx:40–44`). **[check]** whether the legacy route is still
