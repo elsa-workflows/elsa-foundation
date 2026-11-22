@@ -31,9 +31,16 @@ public sealed class StructuralJsonWarningDurabilityTests
             : WorkflowExecutionHarness.NewProbeNode("node-child");
         var executable = WorkflowExecutionHarness.NewExecutable(
             StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(WarnedParent), child));
-        var run = await harness.RunAsync(executable);
+        // A notification can cancel the root before its child's already queued work is drained.
+        var run = await harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: notification && !fault);
         var parent = run.State("node-parent");
         Assert.Equal(fault ? ActivityExecutionStatus.Faulted : ActivityExecutionStatus.Cancelled, parent.Status);
+        if (notification && !fault)
+        {
+            Assert.Equal(WorkflowExecutionStatus.Cancelled, run.WorkflowState!.Status);
+            Assert.Single(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                .ListAllAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionHarness.WorkflowExecutionId)));
+        }
         var warning = Assert.Single(parent.Warnings!);
         Assert.Equal("json-unmatched-member", warning.Code);
         Assert.Equal("args.order[\"NAME\"]", warning.Details!["path"]);

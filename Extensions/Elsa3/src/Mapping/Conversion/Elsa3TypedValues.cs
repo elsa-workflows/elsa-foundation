@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Serialization.Core;
 
 namespace Elsa3.Mapping.Conversion;
 
@@ -111,7 +112,7 @@ internal static class Elsa3TypedValues
         {
             ["typeName"] = typeAlias,
             ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = literal }
-        });
+        }, JsonBaseline.Options);
 
     /// <summary>A literal-bound typed value of type <paramref name="typeAlias"/> holding <paramref name="literal"/> as JSON.</summary>
     public static JsonElement CreateLiteral(string typeAlias, JsonNode? literal) =>
@@ -119,7 +120,7 @@ internal static class Elsa3TypedValues
         {
             ["typeName"] = typeAlias,
             ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = literal }
-        });
+        }, JsonBaseline.Options);
 
     /// <summary>A typed value of type <paramref name="typeAlias"/> bound to a literal null (spec 267).</summary>
     public static JsonElement CreateNull(string typeAlias) =>
@@ -127,7 +128,7 @@ internal static class Elsa3TypedValues
         {
             ["typeName"] = typeAlias,
             ["expression"] = new JsonObject { ["type"] = Literal, ["value"] = null }
-        });
+        }, JsonBaseline.Options);
 
     /// <summary>Whether the property is a literal holding null: <c>{ expression: { type: "Literal", value: null } }</c>.</summary>
     public static bool IsNullLiteral(JsonElement value) =>
@@ -146,13 +147,54 @@ internal static class Elsa3TypedValues
         {
             ["typeName"] = typeAlias,
             ["expression"] = new JsonObject { ["type"] = expressionType, ["value"] = expression }
-        });
+        }, JsonBaseline.Options);
 
     /// <summary>The same typed value with its literal replaced by <paramref name="literal"/>.</summary>
-    public static JsonElement WithLiteral(JsonElement value, string literal)
+    public static JsonElement WithLiteral(JsonElement value, string literal) =>
+        WithExpression(value, Literal, JsonSerializer.SerializeToElement(literal, JsonBaseline.Options));
+
+    internal static JsonElement WithoutMemoryReference(JsonElement value) => RewriteWrapper(value, null, default, removeMemoryReference: true);
+
+    internal static JsonElement WithExpression(JsonElement value, string expressionType, JsonElement expressionValue, bool removeMemoryReference = false) =>
+        RewriteWrapper(value, expressionType, expressionValue, removeMemoryReference);
+
+    private static JsonElement RewriteWrapper(JsonElement value, string? expressionType, JsonElement expressionValue, bool removeMemoryReference)
     {
-        var node = JsonNode.Parse(value.GetRawText())?.AsObject() ?? new JsonObject();
-        node["expression"] = new JsonObject { ["type"] = Literal, ["value"] = literal };
-        return JsonSerializer.SerializeToElement(node);
+        if (value.ValueKind != JsonValueKind.Object) throw new JsonException("An Elsa 3 typed value must be an object.");
+        if (expressionType is null && !value.TryGetProperty("memoryReference", out _)) return value.Clone();
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new() { Encoder = JsonBaseline.Options.Encoder }))
+        {
+            writer.WriteStartObject();
+            var wroteExpression = false;
+            foreach (var property in value.EnumerateObject())
+            {
+                if (removeMemoryReference && property.Name == "memoryReference") continue;
+                writer.WritePropertyName(property.Name);
+                if (expressionType is not null && property.Name == "expression")
+                {
+                    WriteExpression(writer, property.Value); wroteExpression = true;
+                }
+                else writer.WriteRawValue(property.Value.GetRawText());
+            }
+            if (expressionType is not null && !wroteExpression)
+            {
+                writer.WritePropertyName("expression"); WriteExpression(writer, default);
+            }
+            writer.WriteEndObject();
+        }
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return document.RootElement.Clone();
+
+        void WriteExpression(Utf8JsonWriter writer, JsonElement original)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", expressionType);
+            writer.WritePropertyName("value"); writer.WriteRawValue(expressionValue.GetRawText());
+            if (original.ValueKind == JsonValueKind.Object)
+                foreach (var property in original.EnumerateObject().Where(property => property.Name is not ("type" or "value")))
+                { writer.WritePropertyName(property.Name); writer.WriteRawValue(property.Value.GetRawText()); }
+            writer.WriteEndObject();
+        }
     }
 }

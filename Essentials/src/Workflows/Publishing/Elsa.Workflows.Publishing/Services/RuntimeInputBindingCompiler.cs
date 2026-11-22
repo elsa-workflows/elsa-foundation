@@ -708,10 +708,7 @@ public sealed class RuntimeInputBindingCompiler(
 
     private static string? ReadVariableName(object? value)
     {
-        var contract = ConversionFor(targetType, input);
-        var element = value is JsonElement json ? json
-            : targetType.IsInstanceOfType(value) ? contract.Write(value, targetType)
-            : JsonValueConversion.SerializeToElement(value);
+        var element = value is JsonElement json ? json : JsonValueConversion.SerializeToElement(value);
         if (element.ValueKind != JsonValueKind.Object)
             return null;
         foreach (var member in new[] { "name", "Name" })

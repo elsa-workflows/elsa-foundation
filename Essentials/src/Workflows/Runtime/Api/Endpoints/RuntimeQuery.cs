@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Http;
 using System.Globalization;
+using System.Text.Json;
+using Elsa.Serialization.Core;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
 /// <summary>
-/// The mapper's lenient query helpers, kept for the two endpoints that bind values the constructor
-/// binder cannot: an unparseable value reads as absent, never as a zero or a failure.
+/// Helpers for query values outside the binding constructor. Temporal parameters are also declared
+/// as endpoint metadata so the shared API boundary rejects invalid supplied dates before dispatch.
 /// </summary>
 internal static class RuntimeQuery
 {
@@ -15,6 +17,10 @@ internal static class RuntimeQuery
     public static int? Int(HttpContext context, string name) =>
         int.TryParse(Value(context, name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 
-    public static DateTimeOffset? Date(HttpContext context, string name) =>
-        DateTimeOffset.TryParse(Value(context, name), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value) ? value : null;
+    public static DateTimeOffset? Date(HttpContext context, string name)
+    {
+        var text = Value(context, name);
+        return text is null ? null : (DateTimeOffset)JsonConversionContract.For(typeof(DateTimeOffset))
+            .Read(JsonSerializer.SerializeToElement(text, JsonBaseline.Options), typeof(DateTimeOffset))!;
+    }
 }

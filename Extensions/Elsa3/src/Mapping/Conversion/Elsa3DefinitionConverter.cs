@@ -218,7 +218,8 @@ internal sealed class Elsa3DefinitionConverter(
             (node, name) => plan.Find(node)?.Resolved?.Inputs
                 .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
                                          input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type,
-            node => AncestorScopeNames(plan, node)));
+            node => AncestorScopeNames(plan, node),
+            node => plan.Find(node)?.Resolved?.ActivityTypeKey));
     }
 
     /// <summary>
@@ -264,7 +265,7 @@ internal sealed class Elsa3DefinitionConverter(
     private static Elsa3WorkflowDefinition Clone(Elsa3WorkflowDefinition definition) =>
         // Never mutate the caller's Elsa 3 DTO. The clone is an importer-only transition object; successful mapping
         // publishes only ordinary Elsa 4 authored state.
-        JsonSerializer.SerializeToElement(definition).Deserialize<Elsa3WorkflowDefinition>()
+        JsonSerializer.SerializeToElement(definition, Elsa.Serialization.Core.JsonBaseline.Options).Deserialize<Elsa3WorkflowDefinition>(Elsa.Serialization.Core.JsonBaseline.Options)
         ?? throw new JsonException("Elsa 3 workflow definition clone produced no value.");
 
     private static IReadOnlyList<Elsa3MigrationDiagnostic> Ordered(IEnumerable<Elsa3MigrationDiagnostic> diagnostics) =>

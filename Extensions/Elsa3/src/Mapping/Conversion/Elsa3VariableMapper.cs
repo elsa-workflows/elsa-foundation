@@ -148,9 +148,11 @@ internal static class Elsa3VariableMapper
                 try
                 {
                     var scalarType = shape.ClrType!;
+                    var scalarKind = Nullable.GetUnderlyingType(scalarType) ?? scalarType;
                     JsonElement scalar;
-                    if (scalarType == typeof(bool) && bool.TryParse(value, out var boolean)) scalar = JsonSerializer.SerializeToElement(boolean, JsonBaseline.Options);
-                    else if (scalarType.IsPrimitive && scalarType != typeof(char) || scalarType == typeof(decimal))
+                    if (scalarKind == typeof(string)) scalar = JsonSerializer.SerializeToElement(value, JsonBaseline.Options);
+                    else if (scalarKind == typeof(bool) && bool.TryParse(value, out var boolean)) scalar = JsonSerializer.SerializeToElement(boolean, JsonBaseline.Options);
+                    else if (scalarKind.IsPrimitive && scalarKind != typeof(char) || scalarKind == typeof(decimal))
                     {
                         using var document = JsonDocument.Parse(value);
                         scalar = document.RootElement.Clone();
@@ -312,7 +314,11 @@ internal static class Elsa3VariableMapper
         {
             json = Elsa3LiteralConversion.Rewrite(value, type, options, report);
             var contract = JsonConversionContract.For(type);
-            var converted = contract.Read(json, type);
+            var converted = contract.Read(json, type, diagnostic => report(new(diagnostic.Code, diagnostic.Path,
+                $"JSON conversion of a starting value to {diagnostic.TargetType.Name} reported {diagnostic.Code}" +
+                (diagnostic.Converter is null ? "." : $" using {diagnostic.Converter}."),
+                "Check the literal against the target's exact JSON member names and scoped conversion contract.",
+                diagnostic.Code == "json-unmatched-coverage-unavailable" ? Elsa3MigrationDiagnosticSeverity.Info : Elsa3MigrationDiagnosticSeverity.Warning)));
             // Validate a typed copy; preserve every carried object member, including unknown keys.
             if (json.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) json = contract.Write(converted, type);
             return true;

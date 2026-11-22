@@ -175,8 +175,7 @@ public static class OpenTelemetryApi
         catch (InvalidTelemetryQueryException exception)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            context.Response.ContentType = "text/plain; charset=utf-8";
-            await context.Response.WriteAsync(exception.Message, context.RequestAborted);
+            await context.Response.WriteAsJsonAsync(new { message = exception.Message }, Elsa.Serialization.Core.JsonBaseline.Options, cancellationToken: context.RequestAborted);
             return;
         }
 

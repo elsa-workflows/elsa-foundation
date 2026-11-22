@@ -7,6 +7,7 @@ using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Internal;
 using Elsa3.Models;
 using Elsa.Serialization.Core;
+using System.Reflection;
 
 namespace Elsa3.Mapping.Services;
 
@@ -27,7 +28,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyDictionary<string, string>? memoryAliases = null,
         bool isReusable = false,
         Func<Elsa3Activity, string, TypeReference?>? inputTypeOf = null,
-        Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>>? ancestorScopeNames = null)
+        Func<Elsa3Activity, IReadOnlyList<(string Name, string ScopeNodeId)>>? ancestorScopeNames = null,
+        Func<Elsa3Activity, string?>? activityTypeKeyOf = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -103,7 +105,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 continue;
             }
 
-            if (!RewriteLiteral(input, ref property, diagnostics)) continue;
+            if (!RewriteLiteral(input, ref property, diagnostics, activityTypeKeyOf?.Invoke(property.Activity))) continue;
 
             if (property.Expression is not null)
             {
@@ -306,7 +308,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         return diagnostics;
     }
 
-    private bool RewriteLiteral(DiagnosticScope input, ref ActivityProperty property, List<Elsa3MigrationDiagnostic> diagnostics)
+    private bool RewriteLiteral(DiagnosticScope input, ref ActivityProperty property, List<Elsa3MigrationDiagnostic> diagnostics, string? activityTypeKey)
     {
         // An earlier script can have expanded this node's outcomes since CollectProperties took its snapshot.
         var current = property.Activity.AdditionalProperties[property.PropertyName];
@@ -321,7 +323,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         if (!Elsa3TypedValues.TryGetExpression(property.Value, out var kind, out var literal) ||
             !(kind.Equals("Literal", StringComparison.OrdinalIgnoreCase) || kind.Equals("Object", StringComparison.OrdinalIgnoreCase)))
         {
-            if (elementType == typeof(DateTime) || elementType == typeof(DateTimeOffset) || elementType == typeof(DateOnly))
+            var scalarElement = Nullable.GetUnderlyingType(elementType) ?? elementType;
+            if (scalarElement == typeof(DateTime) || scalarElement == typeof(DateTimeOffset) || scalarElement == typeof(DateOnly))
                 Report(Elsa3LiteralConversion.WallClock("$"));
             return true;
         }
@@ -340,17 +343,15 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 literal = document.RootElement.Clone();
             }
             var notes = new List<Elsa3LiteralConversion.Note>();
-            var converted = Elsa3LiteralConversion.Rewrite(literal, targetType, options, notes.Add);
+            var converted = Elsa3LiteralConversion.Rewrite(literal, targetType, options, notes.Add,
+                ConversionForInput(targetType, property.InputContract.StablePropertyKey, activityTypeKey));
             foreach (var note in notes) Report(note);
             if (notes.Any(note => note.Code == Elsa3ActivityDiagnosticCodes.LiteralDateInterpreted) &&
                 diagnostics.All(note => note.Code != Elsa3ImportDiagnosticCodes.DateInterpretationApplied))
                 diagnostics.Add(CreateDiagnostic(input, property, Elsa3ImportDiagnosticCodes.DateInterpretationApplied,
                     $"The workflow's date literals were converted with {options.DateInterpretation}" + (options.SourceTimeZone is null ? "." : $" '{options.SourceTimeZone}'."),
                     "Keep the same date interpretation when converting this workflow again.", property.JsonPath, null, Elsa3MigrationDiagnosticSeverity.Info));
-            var node = JsonNode.Parse(property.Value.GetRawText())!.AsObject();
-            node.Remove("memoryReference");
-            node["expression"]!["value"] = JsonNode.Parse(converted.GetRawText());
-            var rewritten = JsonSerializer.SerializeToElement(node, JsonBaseline.Options);
+            var rewritten = Elsa3TypedValues.WithExpression(property.Value, kind, converted, removeMemoryReference: true);
             property.Activity.AdditionalProperties[property.PropertyName] = rewritten;
             TryReadTypedValue(rewritten, out var memory, out var expression);
             property = property with { Value = rewritten, MemoryReferenceId = memory, Expression = expression };
@@ -369,6 +370,28 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 "Write a JSON value of the target member's type before import.", $"{property.JsonPath}.expression.value"));
             return false;
         }
+    }
+
+    private JsonConversionContract ConversionForInput(Type targetType, string inputKey, string? activityTypeKey)
+    {
+        var member = activityTypeKey is not null && typeRegistry.TryGetTypeOrDefault(activityTypeKey, out var activityType)
+            ? activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance).SingleOrDefault(property => InputKey(property) == inputKey)
+            : null;
+        return JsonConversionContract.For(targetType, member);
+    }
+
+    private static string? InputKey(PropertyInfo property)
+    {
+        // Read the public attribute metadata without loading or constructing any activity.
+        for (var type = property.DeclaringType; type is not null; type = type.BaseType)
+        {
+            var declared = type.GetProperty(property.Name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            var attribute = declared?.CustomAttributes.FirstOrDefault(attribute =>
+                attribute.AttributeType.FullName == "Elsa.Activities.Runtime.Core.Attributes.ActivityInputAttribute");
+            if (attribute is not null)
+                return attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == "Key").TypedValue.Value as string ?? property.Name;
+        }
+        return null;
     }
 
     private void LowerExpression(
@@ -780,11 +803,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     private static JsonElement Elsa3Literal(JsonElement original, string value)
-    {
-        var node = JsonNode.Parse(original.GetRawText())?.AsObject() ?? new JsonObject();
-        node["expression"] = new JsonObject { ["type"] = "Literal", ["value"] = value };
-        return JsonSerializer.SerializeToElement(node);
-    }
+        => Elsa3TypedValues.WithLiteral(original, value);
 
     private static string ArgumentAccess(string name) =>
         name.Length > 0 && (char.IsLetter(name[0]) || name[0] is '_' or '$') &&
@@ -1411,25 +1430,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     private static JsonElement StripMemoryReference(JsonElement value)
-    {
-        var node = JsonNode.Parse(value.GetRawText())?.AsObject()
-            ?? throw new ArgumentException("Elsa 3 typed value must be a JSON object.", nameof(value));
-        node.Remove("memoryReference");
-        return JsonSerializer.SerializeToElement(node);
-    }
+        => Elsa3TypedValues.WithoutMemoryReference(value);
 
     private static JsonElement CreateArgument(JsonElement original, string expressionType, JsonElement expressionValue)
-    {
-        var node = JsonNode.Parse(original.GetRawText())?.AsObject()
-            ?? throw new ArgumentException("Elsa 3 typed value must be a JSON object.", nameof(original));
-        node.Remove("memoryReference");
-        node["expression"] = new JsonObject
-        {
-            ["type"] = expressionType,
-            ["value"] = JsonNode.Parse(expressionValue.GetRawText()),
-        };
-        return JsonSerializer.SerializeToElement(node);
-    }
+        => Elsa3TypedValues.WithExpression(original, expressionType, expressionValue, removeMemoryReference: true);
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
         DiagnosticScope input,
