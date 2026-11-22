@@ -35,7 +35,7 @@ for (const mode of ["light", "dark"] as const) {
   test(`new tab follows the last tab and stays visible on overflow in ${mode}`, async ({ page }, info) => {
     await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), mode);
     await signIn(page);
-    await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+    await page.getByRole("link", { name: "Decisions", exact: true }).first().click();
     const list = page.getByRole("tablist", { name: "Open screens", exact: true });
     const tabs = list.getByRole("tab");
     const add = page.getByRole("button", { name: "New tab", exact: true });
@@ -84,7 +84,7 @@ for (const mode of ["light", "dark"] as const) {
     await expect.poll(async () => (await stripGeometry(page)).plusVisible).toBe(true);
     await capture(page, info, "overflow-start");
     await switcher.click();
-    await page.getByRole("menuitemradio", { name: "Workflows", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: "Decisions", exact: true }).click();
     await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
 
     await page.setViewportSize({ width: 360, height: 900 });
