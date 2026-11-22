@@ -205,8 +205,8 @@ for (const theme of ["light", "dark"] as const) {
     const settings = page.getByRole("button", { name: "Settings for input 1", exact: true });
     await expect(settings).toHaveAttribute("aria-expanded", "false");
     await settings.click();
-    const popover = page.locator(".decision-column-popover");
-    await expect(popover.getByRole("dialog", { name: "Input 1 settings" })).toBeVisible();
+    const popover = page.getByRole("dialog", { name: "Input 1 settings", exact: true });
+    await expect(popover).toBeVisible();
     await expect(popover.getByRole("textbox", { name: "Input 1 name" })).toBeFocused();
     expect(await popover.evaluate(element => element.closest(".decision-table-scroll"))).toBeNull();
     expect(await popover.evaluate(element => {
@@ -219,8 +219,8 @@ for (const theme of ["light", "dark"] as const) {
 
     const outputSettings = page.getByRole("button", { name: "Settings for output 1", exact: true });
     await outputSettings.click();
-    const outputPopover = page.locator(".decision-column-popover");
-    await expect(outputPopover.getByRole("dialog", { name: "Output 1 settings" })).toBeVisible();
+    const outputPopover = page.getByRole("dialog", { name: "Output 1 settings", exact: true });
+    await expect(outputPopover).toBeVisible();
     expect(await outputPopover.evaluate(element => {
       const bounds = element.getBoundingClientRect();
       return bounds.left >= 0 && bounds.right <= window.innerWidth && bounds.top >= 0 && bounds.bottom <= window.innerHeight;
@@ -348,8 +348,8 @@ test("keeps composed page menus within the viewport on a narrow screen", async (
   expect(Math.abs(scrolledIndex.left - scrolledIndex.scrollLeft)).toBeLessThan(2);
   const settings = page.getByRole("button", { name: "Settings for input 1", exact: true });
   await settings.click();
-  const popover = page.locator(".decision-column-popover");
-  await expect(popover.getByRole("dialog", { name: "Input 1 settings" })).toBeVisible();
+  const popover = page.getByRole("dialog", { name: "Input 1 settings", exact: true });
+  await expect(popover).toBeVisible();
   expect(await popover.evaluate(element => {
     const bounds = element.getBoundingClientRect();
     return bounds.left >= 0 && bounds.right <= window.innerWidth && bounds.top >= 0 && bounds.bottom <= window.innerHeight;
@@ -357,8 +357,8 @@ test("keeps composed page menus within the viewport on a narrow screen", async (
   await page.keyboard.press("Escape");
   const outputSettings = page.getByRole("button", { name: "Settings for output 1", exact: true });
   await outputSettings.click();
-  const outputPopover = page.locator(".decision-column-popover");
-  await expect(outputPopover.getByRole("dialog", { name: "Output 1 settings" })).toBeVisible();
+  const outputPopover = page.getByRole("dialog", { name: "Output 1 settings", exact: true });
+  await expect(outputPopover).toBeVisible();
   expect(await outputPopover.evaluate(element => {
     const bounds = element.getBoundingClientRect();
     return bounds.left >= 0 && bounds.right <= window.innerWidth && bounds.top >= 0 && bounds.bottom <= window.innerHeight;
@@ -501,11 +501,11 @@ test("Tab exits the data cells at both grid boundaries while browsing or editing
     await cell.click();
     await cell.press(key);
     await expect(cell).not.toBeFocused();
-    expect(await page.locator(":focus").evaluate(element => element.closest('[role="gridcell"]') === null)).toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.closest('[role="gridcell"]') === null)).toBe(true);
     await cell.click();
     await cell.press("Enter");
     await page.getByRole("textbox", { name: "Edit selected cell" }).press(key);
     await expect(page.getByRole("textbox", { name: "Edit selected cell" })).toHaveCount(0);
-    expect(await page.locator(":focus").evaluate(element => element.closest('[role="gridcell"]') === null)).toBe(true);
+    expect(await page.evaluate(() => document.activeElement?.closest('[role="gridcell"]') === null)).toBe(true);
   }
 });

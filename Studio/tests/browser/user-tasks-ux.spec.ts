@@ -315,7 +315,7 @@ for (const width of [360, 1280]) {
     await historyButton.click();
     const history = page.getByRole("dialog", { name: "Task history", exact: true });
     await expect(history).toContainText("created");
-    await expect(note).toHaveValue("Keep this response while inspecting history");
+    await expect(note).toHaveCount(0); // Modal history hides the response from assistive technology.
     await page.screenshot({ path: info.outputPath("task-history.png"), fullPage: true });
     const bounds = (await history.boundingBox())!;
     if (width <= 640) expect(bounds.y + bounds.height).toBeGreaterThanOrEqual(899);
