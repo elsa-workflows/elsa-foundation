@@ -231,8 +231,8 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
       </dl>
       {item.eligibility === "expired" ? <p className="wf-history-note">Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.</p> : item.eligibility === "unavailable" || item.eligibility === "unknown" ? <p className="wf-history-note">Current eligibility cannot be established. A missing handle does not prove consumption.</p> : null}
       <div className="wf-history-lifecycle-links">
-        {item.createdHistoryEventId ? <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.createdHistoryEventId! })}>Inspect creation event →</StudioButton> : <p>Creation event not captured{item.priorState === "CreationMetadata" ? "; creation metadata comes from the recorded handle" : ""}.</p>}
         {item.endedHistoryEventId ? <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.endedHistoryEventId! })}>Inspect {item.status.toLowerCase()} event →</StudioButton> : null}
+        {item.createdHistoryEventId ? <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.createdHistoryEventId! })}>Inspect creation event →</StudioButton> : <p>Creation event not captured{item.priorState === "CreationMetadata" ? "; creation metadata comes from the recorded handle" : ""}.</p>}
         {item.selectedBookmarkId && item.selectedBookmarkId !== bookmarkId ? <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: item.selectedBookmarkId! })}>Inspect winning bookmark →</StudioButton> : null}
         <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.lastHistoryEventId })}>Inspect last recorded transition →</StudioButton>
       </div>

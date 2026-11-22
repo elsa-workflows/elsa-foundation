@@ -45,6 +45,7 @@ it("links a retired competing handle to its winner and its own retirement event"
   api.getWorkflowHistoryBookmark.mockResolvedValue({ coverage: historyCoverage, bookmark: historyBookmark({ status: "Removed", eligibility: "not-active", selectedBookmarkId: "winner", endedHistoryEventId: "retired", endedAt: "2026-11-05T09:02:00Z" }), readAt: "now" });
   const select = vi.fn(); render(<HistoryInspection context={context} workflowExecutionId="run" selection={{ kind: "bookmark", id: "bookmark-1" }} onSelect={select} onBack={vi.fn()} />);
   await vi.waitFor(() => expect(container.textContent).toContain("Inspect winning bookmark")); click("Inspect winning bookmark");
+  expect(container.querySelector(".wf-history-lifecycle-links button")?.textContent).toBe("Inspect removed event →");
   expect(select).toHaveBeenLastCalledWith({ kind: "bookmark", id: "winner" }); click("Inspect removed event");
   expect(select).toHaveBeenLastCalledWith({ kind: "event", id: "retired" });
 });
@@ -55,6 +56,7 @@ it("retains a known end transition without inventing its missing end time or lif
   await vi.waitFor(() => expect(container.textContent).toContain("End time not recorded"));
   expect(container.textContent).toContain("Handle lifetimeUnknown");
   expect(container.textContent).toContain("Inspect consumed event");
+  expect(container.querySelector(".wf-history-lifecycle-links button")?.textContent).toBe("Inspect consumed event →");
   expect(container.textContent).not.toContain("No end transition recorded");
 });
 it("renders unknown totals honestly and retains loaded bookmark rows during the next page read", async () => {
