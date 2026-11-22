@@ -59,10 +59,9 @@ internal sealed partial class Elsa3ActivityNormalizer
             return true;
         }
         if (source.ValueKind == JsonValueKind.Object &&
-            (source.TryGetProperty("expression", out _) && !Elsa3TypedValues.TryGetExpression(source, out _, out _) ||
-             !Elsa3TypedValues.IsCaptured(source) &&
-             (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
-              !Elsa3TypedValues.TryGetExpression(source, out _, out _))))
+            (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
+             (source.TryGetProperty("expression", out _) || !Elsa3TypedValues.IsCaptured(source)) &&
+             !Elsa3TypedValues.TryGetExpression(source, out _, out _)))
         {
             context.Error(ValueOutsideContract, $"Member '{property}' has unsupported input/expression metadata.",
                 $"Set an explicit compatible value for '{property}' in the Elsa 3 workflow.", property);

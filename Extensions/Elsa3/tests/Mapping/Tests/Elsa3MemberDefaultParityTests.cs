@@ -142,6 +142,19 @@ public sealed class Elsa3MemberDefaultParityTests
     }
 
     [Theory]
+    [InlineData("{\"expression\":{\"type\":\"Literal\",\"value\":\"false\"}}")]
+    [InlineData("{\"expression\":{\"type\":\"Literal\",\"value\":\"false\"},\"memoryReference\":{\"id\":\"inclusive\"}}")]
+    [InlineData("{\"memoryReference\":{\"id\":\"inclusive\"}}")]
+    public async Task A_nonempty_wrapper_without_type_metadata_cannot_become_a_binding(string shape)
+    {
+        var node = Subject("Elsa.For", "outerBoundInclusive", shape, "unbound");
+        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "true" };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith(".outerBoundInclusive", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\",\"value\":null}}")]
     [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\"}}")]
     [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\",\"value\":\" \"}}")]
