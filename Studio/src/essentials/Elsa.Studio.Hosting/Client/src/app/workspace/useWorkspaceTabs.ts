@@ -4,6 +4,8 @@ import {
   isHomeRunDetailPath,
   recordHomeRunDetailOpened,
   requestStudioNavigation,
+  reviewStudioNavigation,
+  settleStudioNavigationReview,
   studioWorkspaceTabRequestedEvent,
   type StudioWorkspaceTabRequest,
   type StudioWorkspaceTabTitle
@@ -73,6 +75,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   // The active tab's newest location, kept current from every history write so a tab is never
   // restored from a stale address (screens update filters with replaceState and no event).
   const activeLocationRef = useRef(getActiveTab(state).location);
+  const navigationVersion = useRef(0);
   const acceptedLocationRef = useRef(currentRelativeLocation());
   // Where the active tab was before a screen pushed an entry the shell has not accepted yet. A screen
   // that opens a resource another tab shows pushes first; that tab keeps this location.
@@ -118,6 +121,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   const switchTo = useCallback((id: string, mode: "push" | "replace" = "push") => {
     const current = stateRef.current;
     if (id === current.activeId || !current.tabs.some(tab => tab.id === id)) return;
+    navigationVersion.current++;
     const outgoing = getActiveTab(current);
     const outgoingLocation = locationBeforePushRef.current ?? activeLocationRef.current;
     locationBeforePushRef.current = null;
@@ -170,17 +174,22 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
       switchTo(owner.id);
       return;
     }
-    if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
-    const qualified = optionsRef.current.qualifyPath(nextPath);
-    if (!qualified) return;
-    window.history.pushState(withHistoryTabId(null, stateRef.current.activeId), "", qualified);
-    accept(currentRelativeLocation());
-    if (isHomeRunDetailPath(locationPathname(qualified))) recordHomeRunDetailOpened();
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    const origin = acceptedLocationRef.current;
+    const version = ++navigationVersion.current;
+    const ownerId = stateRef.current.activeId;
+    settleStudioNavigationReview(reviewStudioNavigation(origin, nextPath), allowed => {
+      if (!allowed || version !== navigationVersion.current || ownerId !== stateRef.current.activeId || origin !== acceptedLocationRef.current) return;
+      const qualified = optionsRef.current.qualifyPath(nextPath);
+      if (!qualified) return;
+      window.history.pushState(withHistoryTabId(null, ownerId), "", qualified);
+      accept(currentRelativeLocation());
+      if (isHomeRunDetailPath(locationPathname(qualified))) recordHomeRunDetailOpened();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
   }, [accept, findShowing, switchTo]);
 
   /** Closes tabs, asking the active tab's guards with a `close` intent and keeping guarded background tabs. */
-  const closeMany = useCallback((ids: string[], fallbackId?: string) => {
+  const finishClose = useCallback((ids: string[], fallbackId: string | undefined, activeAllowed: boolean) => {
     const current = stateRef.current;
     const remove = new Set<string>();
     const kept: WorkspaceTab[] = [];
@@ -192,8 +201,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
         else remove.add(id);
         continue;
       }
-      const survivor = fallbackId ? current.tabs.find(candidate => candidate.id === fallbackId) : neighbourOf({ ...current, tabs: current.tabs.filter(candidate => !ids.includes(candidate.id) || candidate.id === id) }, id);
-      if (requestStudioNavigation(activeLocationRef.current, survivor?.location ?? homeLocation, "close")) remove.add(id);
+      if (activeAllowed) remove.add(id);
       else kept.push(tab);
     }
     if (ids.length === 1 && kept.length === 1 && kept[0].id !== current.activeId) {
@@ -217,6 +225,18 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
     writeAddress(incoming, "push");
     commit(next);
   }, [commit, switchTo, writeAddress]);
+
+  const closeMany = useCallback((ids: string[], fallbackId?: string) => {
+    const current = stateRef.current;
+    if (!ids.includes(current.activeId)) { finishClose(ids, fallbackId, false); return; }
+    const version = ++navigationVersion.current;
+    const origin = activeLocationRef.current;
+    const survivor = fallbackId ? current.tabs.find(tab => tab.id === fallbackId)
+      : neighbourOf({ ...current, tabs: current.tabs.filter(tab => tab.id === current.activeId || !ids.includes(tab.id)) }, current.activeId);
+    settleStudioNavigationReview(reviewStudioNavigation(origin, survivor?.location ?? homeLocation, "close"), allowed => {
+      if (version === navigationVersion.current && stateRef.current.activeId === current.activeId && activeLocationRef.current === origin) finishClose(ids, fallbackId, allowed);
+    });
+  }, [finishClose]);
 
   const close = useCallback((id: string) => closeMany([id]), [closeMany]);
   const closeOthers = useCallback((id: string) => closeMany(stateRef.current.tabs.filter(tab => tab.id !== id && !tab.pinned).map(tab => tab.id), id), [closeMany]);
@@ -256,6 +276,7 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
   // or Forward lands on another tab's entry, the visible screen never sees that address.
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
+      const version = ++navigationVersion.current;
       const qualified = optionsRef.current.qualifyPath(currentRelativeLocation());
       if (!qualified) {
         window.history.replaceState(window.history.state, "", acceptedLocationRef.current);
@@ -291,10 +312,35 @@ export function useWorkspaceTabs({ scope, qualifyPath, resourceKeyOf, titleOf, c
         return;
       }
       const nextPath = locationPathname(location);
-      if (nextPath !== locationPathname(unqualifyLocation(acceptedLocationRef.current)) && !requestStudioNavigation(acceptedLocationRef.current, currentRelativeLocation())) {
-        window.history.pushState(withHistoryTabId(null, current.activeId), "", acceptedLocationRef.current);
-        accept(acceptedLocationRef.current);
-        return;
+      const origin = acceptedLocationRef.current;
+      if (nextPath !== locationPathname(unqualifyLocation(origin))) {
+        const destination = currentRelativeLocation();
+        const decision = reviewStudioNavigation(origin, destination);
+        if (decision !== true) {
+          event.stopImmediatePropagation();
+          const targetState = window.history.state;
+          if (decision === false) {
+            window.history.pushState(withHistoryTabId(null, current.activeId), "", origin);
+            accept(origin);
+            return;
+          }
+          // Keep the mounted editor and browser address together while the shared dialog is open.
+          // Preserve the destination entry and its state so approval can finish the original traversal.
+          window.history.replaceState(withHistoryTabId(null, current.activeId), "", origin);
+          void decision.then(allowed => {
+            if (version !== navigationVersion.current || stateRef.current.activeId !== current.activeId || acceptedLocationRef.current !== origin || currentRelativeLocation() !== origin) return;
+            window.history.replaceState(withHistoryTabId(targetState, current.activeId), "", destination);
+            if (!allowed) {
+              window.history.pushState(withHistoryTabId(null, current.activeId), "", origin);
+              accept(origin);
+              return;
+            }
+            accept(location);
+            if (isHomeRunDetailPath(nextPath)) recordHomeRunDetailOpened();
+            window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+          });
+          return;
+        }
       }
       if (!entryTabId) window.history.replaceState(withHistoryTabId(window.history.state, current.activeId), "", currentRelativeLocation());
       accept(location);

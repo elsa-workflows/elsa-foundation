@@ -1,5 +1,5 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
-import { requestStudioNavigation, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { reviewStudioNavigation, settleStudioNavigationReview, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 export interface HomeWorkflowSummary {
   id: string;
@@ -165,10 +165,14 @@ export async function homeHasRun(api: ElsaStudioModuleApi, signal: AbortSignal) 
 }
 
 export function navigateStudioPath(href: string) {
-  if (!requestStudioNavigation(window.location.pathname, href)) return false;
-  window.history.pushState(window.history.state, "", qualifyStudioBackendPath(href));
-  window.dispatchEvent(new PopStateEvent("popstate"));
-  return true;
+  const origin = window.location.href;
+  const decision = reviewStudioNavigation(window.location.pathname, href);
+  settleStudioNavigationReview(decision, allowed => {
+    if (!allowed || window.location.href !== origin) return;
+    window.history.pushState(window.history.state, "", qualifyStudioBackendPath(href));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  return decision === true;
 }
 
 export function runStatusTone(status: string | undefined): "neutral" | "success" | "warning" | "danger" | "accent" {
