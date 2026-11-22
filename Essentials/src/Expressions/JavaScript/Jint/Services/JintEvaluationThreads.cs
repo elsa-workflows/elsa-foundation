@@ -68,16 +68,18 @@ internal static class JintEvaluationThreads
     {
         ArgumentNullException.ThrowIfNull(work);
         options ??= new FeatureOptions();
-        if (!ValidSettings(options))
+        // Validate the captured values, so concurrent host mutation cannot change a safety bound after validation.
+        var stackSize = options.EvaluationThreadStackBytes;
+        var budget = options.EvaluationStackBudgetBytes;
+        if (!ValidSettings(stackSize, budget))
             throw new ArgumentOutOfRangeException(nameof(options), "Jint thread stack must be 16–64 MiB and stack budget 64–512 KiB.");
 
-        var budget = options.EvaluationStackBudgetBytes;
         if (_current is { } current)
         {
             var used = UsedStack();
             if (current.Budget <= used)
                 throw new InsufficientExecutionStackException();
-            if (current.StackSize >= options.EvaluationThreadStackBytes)
+            if (current.StackSize >= stackSize)
             {
                 var previousBudget = current.Budget;
                 current.Budget = Math.Min(previousBudget, used + budget);
@@ -90,7 +92,7 @@ internal static class JintEvaluationThreads
         }
 
         var item = new WorkItem<T>(work, ExecutionContext.Capture(), budget);
-        Rent(options.EvaluationThreadStackBytes).Execute(item);
+        Rent(stackSize).Execute(item);
         item.Wait();
         return item.Result();
     }
@@ -108,8 +110,10 @@ internal static class JintEvaluationThreads
     internal static int CurrentStackSize => _current?.StackSize ?? 0;
 
     internal static bool ValidSettings(FeatureOptions options) =>
-        options.EvaluationThreadStackBytes is >= StackSize and <= 64 * 1024 * 1024 &&
-        options.EvaluationStackBudgetBytes is >= 64 * 1024 and <= StackBudget;
+        ValidSettings(options.EvaluationThreadStackBytes, options.EvaluationStackBudgetBytes);
+
+    private static bool ValidSettings(int stackSize, long budget) =>
+        stackSize is >= StackSize and <= 64 * 1024 * 1024 && budget is >= 64 * 1024 and <= StackBudget;
 
     // The address of a local, as a number: the stack grows down on every platform .NET supports.
     [MethodImpl(MethodImplOptions.NoInlining)]
