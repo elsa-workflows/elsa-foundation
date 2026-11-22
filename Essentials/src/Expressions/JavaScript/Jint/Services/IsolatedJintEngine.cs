@@ -62,6 +62,7 @@ internal static class IsolatedJintEngine
         stackBudget.Attach(engine);
         JintResultMaterializer.Initialize(engine);
         DefaultIntlToUtc(engine);
+        stackBudget.StartCallDepthLimit();
         return engine;
     }
 

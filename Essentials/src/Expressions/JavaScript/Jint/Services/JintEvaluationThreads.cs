@@ -176,6 +176,7 @@ internal static class JintEvaluationThreads
 
         private ErrorConstructor? _rangeError;
         private object? _callStack;
+        private bool _enforceCallDepth;
 
         /// <summary>Attaches the engine before any script runs, so a script cannot replace the error it throws.</summary>
         public void Attach(Engine engine)
@@ -184,6 +185,9 @@ internal static class JintEvaluationThreads
             _callStack = CallStackField.GetValue(engine);
             JintCallBudget.Install(_callStack!, this, CallStackCount);
         }
+
+        /// <summary>Starts the optional user-call limit after trusted setup; the stack budget is always active.</summary>
+        public void StartCallDepthLimit() => _enforceCallDepth = true;
 
         /// <summary>Checks the limits of <paramref name="engine"/> now, outside a statement (a host function's entry).</summary>
         public static void CheckNow(Engine engine) => engine.Constraints.Find<StackBudgetConstraint>()?.Check();
@@ -194,7 +198,7 @@ internal static class JintEvaluationThreads
                 return;
             if (IsEvaluationThread && UsedStack() > CurrentBudget)
                 throw new JavaScriptException(rangeError, StackBudgetExceededMessage);
-            if (maxCallDepth is { } max && CallStackCount(_callStack!) > max)
+            if (_enforceCallDepth && maxCallDepth is { } max && CallStackCount(_callStack!) > max)
                 throw (Exception)RecursionOverflow.Invoke([_callStack, string.Empty]);
         }
 
