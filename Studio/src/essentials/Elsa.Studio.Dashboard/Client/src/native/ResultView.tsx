@@ -1,6 +1,5 @@
 import React, { useId } from "react";
-import { TechnicalDetails } from "@elsa-workflows/studio-ui";
-import { StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { QueryCell, QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
 
 function cellText(cell?: QueryCell) {
@@ -82,9 +81,9 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
       {compactProvenance ? <>
         <p><strong>Coverage: {coverageStatus}.</strong></p>
         {freshnessWarnings}
-        <div className="named-result-details"><TechnicalDetails label="Result details"><div className="named-result-details-content">
+        <div className="named-result-details"><AdvancedSection label="Result details"><div className="named-result-details-content">
           <p>{interpretation}</p><p>{coverageDescription}</p>{refreshDetails}
-        </div></TechnicalDetails></div>
+        </div></AdvancedSection></div>
       </> : <>
         <p>{interpretation}</p>
         {freshnessWarnings}
