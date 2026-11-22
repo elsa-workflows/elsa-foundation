@@ -36,7 +36,11 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   const cases = () => page.getByRole("region", { name: "Cases", exact: true });
   async function selectOwner() {
     await page.locator('.wf-sequence-step[data-id="switch"]').press("Enter");
-    await page.getByRole("complementary", { name: "Inspector panel", exact: true }).getByRole("tab", { name: "Inspector", exact: true }).press("Enter");
+    const inspector = page.getByRole("complementary", { name: "Inspector panel", exact: true });
+    await inspector.getByRole("tab", { name: "Inspector", exact: true }).press("Enter");
+    // A captured Test Run opens Run data; configuration is the read-only authoring surface.
+    const configuration = inspector.getByRole("tab", { name: "Configuration", exact: true });
+    if (await configuration.count()) await configuration.press("Enter");
     await page.getByRole("tab", { name: "Slots", exact: true }).click();
     await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeVisible();
   }
