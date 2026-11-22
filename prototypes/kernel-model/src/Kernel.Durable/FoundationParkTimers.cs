@@ -5,7 +5,8 @@ namespace Kernel.Durable;
 
 internal sealed record ParkTimerRecipe(string Id, string Kind, string? Payload, long Due);
 internal sealed record ParkTimerRearm(Message Envelope, long? DoneSequence);
-internal sealed record ParkTimerOpen(IReadOnlyList<ParkTimerRecipe> Recipes, IReadOnlyList<ParkTimerRearm> Rearms, string? Dispositions);
+internal sealed record ParkTimerOpen(IReadOnlyList<ParkTimerRecipe> Recipes, IReadOnlyList<ParkTimerRearm> Rearms,
+    IReadOnlyList<InboxKey> Preserved, string? Dispositions);
 
 public sealed partial class InMemoryStore
 {
@@ -36,6 +37,7 @@ public sealed partial class InMemoryStore
         var keys = new HashSet<InboxKey>();
         var dispositions = new SortedDictionary<string, byte>(StringComparer.Ordinal);
         var rearms = new List<ParkTimerRearm>();
+        var preserved = new List<InboxKey>();
         var origin = CreationProtocol.Origin(row.Id, row.Creation);
         var bytes = 0L;
         lock (_gate)
@@ -43,7 +45,7 @@ public sealed partial class InMemoryStore
             foreach (var timer in recipes)
             {
                 if (timer.Id is not { Length: 65 } id || id[0] != '~' || id.AsSpan(1).IndexOfAnyExcept("0123456789ABCDEF") >= 0 ||
-                    string.IsNullOrEmpty(timer.Kind) || timer.Kind.StartsWith("kernel.", StringComparison.Ordinal) ||
+                    timer.Kind is null || timer.Kind.StartsWith("kernel.", StringComparison.Ordinal) ||
                     timer.Kind is Kinds.Start or Kinds.Event or Kinds.JobFinished or "child-finished")
                     return null;
                 var physical = origin + "#" + id;
@@ -56,6 +58,7 @@ public sealed partial class InMemoryStore
                 if (bytes > MaxRestoreBytes) return null;
 
                 var stored = Messages.GetValueOrDefault(key);
+                var beforeRearms = rearms.Count;
                 var digest = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(physical)));
                 var prior = previous.GetValueOrDefault(digest);
                 if (stored is not null && !SameTimer(stored, envelope) ||
@@ -78,6 +81,7 @@ public sealed partial class InMemoryStore
                 {
                     dispositions.Add(digest, SuppressedTimer);
                 }
+                if (stored is not null && rearms.Count == beforeRearms) preserved.Add(key);
 
                 void Rearm()
                 {
@@ -86,7 +90,7 @@ public sealed partial class InMemoryStore
                 }
             }
         }
-        return new(recipes, rearms, WriteTimerDispositions(dispositions));
+        return new(recipes, rearms, preserved, WriteTimerDispositions(dispositions));
     }
 
     private static bool SameTimer(MessageRow stored, Message envelope)

@@ -91,7 +91,8 @@ public sealed partial class InMemoryStore
         if (timers is null || timers.Dispositions != next.ParkTimerDispositions)
             throw InvalidDrain();
         var checkedTimers = PlanFoundationTimers(previous, mode, timers.Recipes);
-        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions || !checkedTimers.Rearms.SequenceEqual(timers.Rearms))
+        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions ||
+            !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
             throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
         if (expiry is null) return null;
         if (now >= expiry.At)

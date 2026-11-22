@@ -69,8 +69,11 @@ public static class StoreBatchRules
     private static void ValidateParkPages(CommitBatch batch)
     {
         HashSet<InboxKey>? changed = null;
+        HashSet<InboxKey>? preserved = null;
         foreach (var turn in batch.Turns)
         {
+            if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observed)
+                (preserved ??= []).UnionWith(observed.Preserved);
             if (turn.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
             {
                 changed ??= [];
@@ -85,6 +88,10 @@ public static class StoreBatchRules
                 rows.Any(row => !changed.Add(row.Cursor.Key)))
                 throw new StoreException(Failure.Definite, "A Park page must write a bounded set of distinct keys.");
         }
+        if (preserved is not null && ((changed is not null && preserved.Overlaps(changed)) ||
+            batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
+                .Concat(turn.FoundationReleasedHolds ?? []).Concat(turn.Sent.Select(message => message.InboxKey))).Any(preserved.Contains)))
+            throw new StoreException(Failure.Definite, "Other writes in a batch cannot change a wait that recovery preserves.");
         if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
                 turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])
                     .Concat(turn.Sent.Select(message => message.InboxKey))))
