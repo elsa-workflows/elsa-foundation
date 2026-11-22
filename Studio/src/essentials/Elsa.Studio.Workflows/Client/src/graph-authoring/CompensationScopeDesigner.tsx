@@ -323,7 +323,7 @@ export function CompensationScopeDesigner({
                   {readOnly ? (
                     <span className="wf-compensation-name">{name}</span>
                   ) : (
-                    <StudioField label={`Name of step ${index + 1}`}><input
+                    <StudioField className="wf-compensation-row-name" label={`Name of step ${index + 1}`}><input
                       className="wf-compensation-name-input"
                       aria-label={`Name of step ${index + 1}`}
                       aria-describedby={problemId}
