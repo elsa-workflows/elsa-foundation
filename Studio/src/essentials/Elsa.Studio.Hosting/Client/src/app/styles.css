@@ -3419,6 +3419,24 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   }
 }
 
+@media (max-width: 480px) {
+  /* Keep the brand link named while making room for the search field and Home. */
+  .sidebar-top .brand .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-search input[type="search"] {
+    min-width: 0;
+    padding-inline: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .sidebar {
     flex-direction: row;
