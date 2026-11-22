@@ -21,11 +21,11 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
-  await operate.getByRole("link", { name: "User Tasks", exact: true }).click();
+  await operate.getByRole("link", { name: "User tasks", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks(?:\?|$)/);
   expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "User Tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "User tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
   await capture(page, info, "tasks-empty");
   const who = await get("/runtime/user-task-identity");
   const suffix = `${info.project.name}-${Date.now()}`;
