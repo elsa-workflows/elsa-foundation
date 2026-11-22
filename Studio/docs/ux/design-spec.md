@@ -49,7 +49,8 @@ code.
    and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
    four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
-   Table headers use sentence case and the shared label size. Technical identifiers may use mono.
+   Keep the capitals in “Test Run” and “Executable Inspector”. Other UI labels use sentence case,
+   including “User tasks”. Table headers use sentence case and the shared label size. Technical identifiers may use mono.
    Omit kickers (small labels above the title) in dialogs and sections. Use the optional
    `StudioPageHeader` eyebrow “only when it adds information beyond the title/navigation”.
 
