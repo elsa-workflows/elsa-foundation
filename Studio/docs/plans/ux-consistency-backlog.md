@@ -155,9 +155,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
   `AnchoredPopover` + `role="menu"` code. **[check]** `OverflowMenu` already marks items
   `data-checkable`; read `KIT/disclosure/types.ts` to see what is really missing (group headings,
   radio items, split trigger) before adding anything.
-- [ ] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
+- [x] **K6. Page-size control and "Load more" in `StudioCollectionFooter`.** (#4997) [verified] The footer is a
   bare `<footer>` wrapper. `DefinitionPager`, Activity definitions, ETL and User access each build
-  their own page-size select.
+  their own page-size select. (PR #5269; only `DefinitionPager` was migrated. The Executables and Runs
+  footers still use `.wf-page-size`, so their "Rows" select now looks different from Definitions.)
 - [ ] **K7. Breadcrumbs for callback navigation.** (#4999) [verified] `StudioBreadcrumbs` takes
   `items[{ href, label }]`, `current` and `renderLink`. Try porting `ScopeBreadcrumb`
   (`.wf-breadcrumb`) with `renderLink` first; change the kit only if href-less items are required.
