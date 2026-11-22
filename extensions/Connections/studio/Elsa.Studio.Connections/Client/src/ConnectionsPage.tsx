@@ -142,7 +142,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
 
   return <StudioPage className="connections-shell" aria-label="Connections management">
     <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows." actions={        <div className="studio-page-actions" role="group" aria-label="Connection page actions">
-          <StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>
+          <StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />New connection</StudioButton>
           <StudioButton size="md" onClick={() => void load(appliedSearch)} disabled={loading}><RefreshCw size={14} aria-hidden="true" />Refresh</StudioButton>
         </div>} />
     <StudioCollectionToolbar>

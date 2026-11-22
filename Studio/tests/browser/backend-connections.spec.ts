@@ -38,7 +38,7 @@ test("keeps list, details and edit separate; persists personal metadata on reloa
   await page.getByRole("button",{name:/^My personal backend/}).click();
   await page.getByRole("button",{name:"Edit",exact:true}).click();
   await page.getByLabel("Name",{exact:true}).fill("Renamed backend");
-  await page.getByRole("button",{name:"Save changes"}).click();
+  await page.getByRole("button",{name:"Save"}).click();
   await expect(page.getByRole("heading",{name:"Renamed backend"})).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button",{name:"Renamed backend"})).toBeVisible();

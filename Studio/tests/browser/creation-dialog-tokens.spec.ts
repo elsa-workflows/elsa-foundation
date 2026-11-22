@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 for (const fixture of [
   // Create secret is a routed page since #3878, so only dialog-based creation stays here.
-  { path: "connection-secrets.html", opener: "Create connection", dialog: "Create connection", scope: ".studio-page-header" }
+  { path: "connection-secrets.html", opener: "New connection", dialog: "New connection", scope: ".studio-page-header" }
 ]) {
   test(`${fixture.dialog} retains desktop insets with the minimum host token contract`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });

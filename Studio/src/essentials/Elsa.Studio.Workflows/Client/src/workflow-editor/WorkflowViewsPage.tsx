@@ -163,7 +163,7 @@ function WorkflowViewEditDialog({ context, view, onClose, onSaved }: {
       {error ? <p role="alert">{error}</p> : null}
       <div className="wf-dialog-actions">
         <StudioButton disabled={busy} onClick={onClose}>Cancel</StudioButton>
-        <StudioButton disabled={busy || !name.trim()}>Update view</StudioButton>
+        <StudioButton disabled={busy || !name.trim()}>Save</StudioButton>
       </div>
     </form>
   </section></div>;

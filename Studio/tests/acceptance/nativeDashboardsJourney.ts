@@ -74,7 +74,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Search", exact: true }).click();
       await expect(page.getByRole("heading", { name: "No matching definitions", exact: true })).toBeVisible();
       await capture(page, info, "questions-empty");
-      await page.getByRole("button", { name: "Create question", exact: true }).first().press("Enter");
+      await page.getByRole("button", { name: "New question", exact: true }).first().press("Enter");
       await page.getByLabel("Name", { exact: true }).fill(`Started run quality ${suffix}`);
       await page.getByRole("textbox", { name: "Description", exact: true }).fill("A native question over this journey's three actual published workflow runs.");
       await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption("elsa.workflows.runs");
@@ -263,7 +263,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const confirmPrompt = page.waitForEvent("dialog"); const confirmedNavigation = dashboardNavigation.click();
       const confirmedDiscard = await confirmPrompt; expect(confirmedDiscard.type()).toBe("confirm"); await confirmedDiscard.accept(); await confirmedNavigation;
       await expect(page.getByRole("heading", { name: "Dashboards", level: 2, exact: true })).toBeVisible(); await capture(page, info, "question-navigation-confirmed");
-      await page.getByRole("button", { name: "Create dashboard", exact: true }).first().click();
+      await page.getByRole("button", { name: "New dashboard", exact: true }).first().click();
       await page.getByLabel("Name", { exact: true }).fill(`Private operations ${suffix}`);
       for (let index = 0; index < 2; index++) {
         await page.getByRole("button", { name: "Add saved question", exact: true }).click();
@@ -288,7 +288,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
         await picker.getByRole("button", { name: `Add ${saved.name}`, exact: true }).click();
       }
       const dashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
-      await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
+      await page.getByRole("button", { name: "Create", exact: true }).click();
       const dashboard = await (await dashboardResponse).json() as Resource; dashboardId = dashboard.id; resources.push({ kind: "dashboards", id: dashboard.id });
       expect(dashboard.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]); expect(new Set(dashboard.tiles.map(tile => tile.id)).size).toBe(4);
       expect(dashboard.tiles.map(tile => tile.size)).toEqual(["medium", "wide", "medium", "medium"]);
@@ -321,7 +321,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.goto("/dashboards");
       await expect(page.getByRole("link", { name: dashboard.name, exact: true })).toBeVisible();
       await captureDashboardAppearances(page, info, capture, "dashboards-collection", async name => {
-        await expect(page.getByRole("button", { name: "Create dashboard", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "New dashboard", exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: dashboard.name, exact: true })).toBeVisible();
         await capture(page, info, name);
       });
@@ -386,7 +386,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await tileSettings.getByLabel("Override value for workflow", { exact: true }).fill(seeded.definitionId);
       await capture(page, info, "dashboard-tile-settings"); await tileSettings.getByRole("button", { name: "Use tile settings", exact: true }).click();
       const layoutUpdated = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/dashboards/${dashboard.id}`));
-      await page.getByRole("button", { name: "Save changes", exact: true }).click(); expect((await layoutUpdated).ok()).toBe(true);
+      await page.getByRole("button", { name: "Save", exact: true }).click(); expect((await layoutUpdated).ok()).toBe(true);
       await expectResourceLocation("dashboards", dashboard.id);
       await expect(page.locator(".named-tile").first().locator(".named-line")).toHaveCount(3);
       const tileDrill = page.waitForResponse(response => response.url().includes(`/dashboards/${dashboard.id}/tiles/`) && response.url().endsWith("/drill"));
@@ -541,7 +541,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       const discardLate = await discardLateDraft; expect(discardLate.type()).toBe("confirm"); await discardLate.accept(); await closeLateDraft;
       await expect(page.getByRole("link", { name: saved.name, exact: true })).toBeVisible();
       await captureDashboardAppearances(page, info, capture, "questions-collection", async name => {
-        await expect(page.getByRole("button", { name: "Create question", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "New question", exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: saved.name, exact: true })).toBeVisible();
         await capture(page, info, name);
       });
@@ -577,7 +577,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await listOptions.getByLabel("Tile label", { exact: true }).fill("Run quality as a list");
       await listOptions.getByRole("button", { name: "Use tile settings", exact: true }).click();
       const listSavedResponse = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith(`/dashboards/${dashboardId}`));
-      await page.getByRole("button", { name: "Save changes", exact: true }).click();
+      await page.getByRole("button", { name: "Save", exact: true }).click();
       const listSavedReply = await listSavedResponse; expect(listSavedReply.ok()).toBe(true); const listLayout = await listSavedReply.json() as Resource;
       expect(listLayout.tiles.map(tile => tile.id)).toEqual(dashboard.tiles.map(tile => tile.id));
       expect(listLayout.tiles.map(tile => tile.questionId)).toEqual([saved.id, saved.id, saved.id, saved.id]);
@@ -611,7 +611,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await page.getByRole("button", { name: "Save question", exact: true }).click();
       const metricSavedReply = await metricSavedResponse; expect(metricSavedReply.ok()).toBe(true); const metricQuestion = await metricSavedReply.json() as Resource;
       expect(metricQuestion.definition).toMatchObject({ query: { groupBy: [] }, visualization: { kind: "metric", y: ["started"] } });
-      await page.goto("/dashboards"); await page.getByRole("button", { name: "Create dashboard", exact: true }).first().click();
+      await page.goto("/dashboards"); await page.getByRole("button", { name: "New dashboard", exact: true }).first().click();
       const longDashboardName = `Metric${"A".repeat(140)}${suffix.replaceAll("-", "")}`;
       await page.getByLabel("Name", { exact: true }).fill(longDashboardName);
       await page.getByRole("button", { name: "Add saved question", exact: true }).click();
@@ -623,7 +623,7 @@ export async function nativeDashboardsJourney(page: Page, info: TestInfo, captur
       await expect.poll(() => metricPicker.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       await metricPicker.getByRole("button", { name: `Add ${metricQuestion.name}`, exact: true }).click();
       const metricDashboardResponse = page.waitForResponse(response => response.request().method() === "POST" && /\/_elsa\/studio\/dashboards$/.test(response.url()));
-      await page.getByRole("button", { name: "Create dashboard", exact: true }).click();
+      await page.getByRole("button", { name: "Create", exact: true }).click();
       const metricDashboardReply = await metricDashboardResponse; expect(metricDashboardReply.ok()).toBe(true); const metricDashboard = await metricDashboardReply.json() as Resource;
       resources.push({ kind: "dashboards", id: metricDashboard.id }); expect(metricDashboard.tiles).toHaveLength(1); expect(metricDashboard.tiles[0].questionId).toBe(metricQuestion.id);
       await page.reload(); await expect(page.locator(".named-tile .named-metric strong")).toHaveText("4");

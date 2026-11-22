@@ -97,7 +97,7 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await expect(page.getByRole("status").filter({ hasText: `Published ${title} version 1. New tasks can use it.` })).toBeVisible();
   await page.goto("/workflows/definitions?backend=legacy");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await dialog.getByLabel("Display name").fill(title); await dialog.getByRole("radio", { name: "Flowchart", exact: true }).check();
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   const palette = page.getByRole("searchbox", { name: "Search activity palette" });

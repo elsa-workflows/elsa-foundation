@@ -238,7 +238,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
   const focusKey = focusName ? `secret:${focusName}` : focusCreate ? "create" : null;
   useEffect(() => {
     if (loading || !focusKey || focused.current === focusKey || tab?.isActive() === false || (focusCreate && descriptorsLoading)) return;
-    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="Create secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLButtonElement>("[data-secret-edit]") ?? []).find(element => element.dataset.secretEdit === focusName);
+    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="New secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLButtonElement>("[data-secret-edit]") ?? []).find(element => element.dataset.secretEdit === focusName);
     if (button) {
       // Row actions sit in the last column; on narrow tables keep the row's name in view instead of scrolling to them.
       const row = focusCreate ? null : button.closest("tr");
@@ -251,7 +251,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
   return (
     <StudioPage className="secrets-shell">
       <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked." actions={          <div className="studio-page-actions" role="group" aria-label="Secret page actions">
-            <StudioButton variant="primary" size="md" aria-label="Create secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> Create secret</StudioButton>
+            <StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> New secret</StudioButton>
             <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
           </div>} />
 
@@ -341,7 +341,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
               ))}
             </tbody>
           </table>
-        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />}
+        </StudioTableContainer> : <StudioCollectionEmptyState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => openEditor()} disabled={!descriptors}><Plus size={14} aria-hidden /> New secret</StudioButton>} />}
 
       </section>
 

@@ -159,7 +159,7 @@ describe("theme modes", () => {
   });
 });
 
-describe("Theme Builder edits", () => {
+describe("Theme builder edits", () => {
   const custom = twoModeTheme;
 
   it("adds an optional mode seeded from the dark palette and offers it", () => {

@@ -47,11 +47,11 @@ describe("workflow tag pages", () => {
     await click(editBreadcrumbs.querySelector('a[href="/workflows/tags"]'));
     await waitForText(container, "Region");
     expect(window.location.pathname).toBe("/workflows/tags");
-    await click(button(container, "Create tag"));
-    await waitForText(container, "Create workflow tag");
+    await click(button(container, "New tag"));
+    await waitForText(container, "New workflow tag");
     expect(window.location.pathname).toBe("/workflows/tags/new");
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
-    expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe("Create tag");
+    expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe("New tag");
     expect(button(container, "Cancel")).not.toBeNull();
   });
 
@@ -102,7 +102,7 @@ describe("workflow tag pages", () => {
     await vi.waitFor(() => expect(reads).toContain("/tags/region"));
     window.history.pushState({}, "", "/workflows/tags/new");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    await waitForText(container, "Create workflow tag");
+    await waitForText(container, "New workflow tag");
     resolve(response(tag));
     await new Promise(done => setTimeout(done, 20));
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");

@@ -93,8 +93,8 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await expect(page.getByRole("tablist", { name: "Activity inspector sections" })).toContainText("Version");
   await expect(page.getByRole("button", { name: /Publish|Deploy|Instances|Triggers|Schedule/i })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
-  const create = page.getByRole("dialog", { name: "Create Activity Definition" });
+  await page.getByRole("button", { name: "New activity definition" }).click();
+  const create = page.getByRole("dialog", { name: "New activity definition" });
   await expect(create.getByText("Implementation type")).toHaveCount(0);
   await create.getByRole("textbox", { name: "Display name" }).fill("Payment decision");
   const category = create.getByRole("combobox", { name: "Category" });
@@ -115,7 +115,7 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await sequenceCard.click();
   await expect(sequenceRadio).toBeChecked();
   expect(await cardBackground(sequenceCard)).not.toBe(await cardBackground(flowchartCard));
-  await create.getByRole("button", { name: "Create definition" }).click();
+  await create.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText("Created Payment decision.")).toBeVisible();
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({

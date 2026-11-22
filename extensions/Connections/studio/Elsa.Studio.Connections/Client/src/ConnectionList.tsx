@@ -20,7 +20,7 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
     icon={<Cable size={24} />}
     title={searched ? "No matching connections" : "No connections yet"}
     description={searched ? "Try a different name or clear your search." : "Connect a service to use it in your workflows."}
-    actions={searched ? <StudioButton onClick={onClear}>Clear search</StudioButton> : onCreate ? <StudioButton variant="primary" onClick={onCreate}><Plus size={14} aria-hidden />Create connection</StudioButton> : undefined} />;
+    actions={searched ? <StudioButton onClick={onClear}>Clear search</StudioButton> : onCreate ? <StudioButton variant="primary" onClick={onCreate}><Plus size={14} aria-hidden />New connection</StudioButton> : undefined} />;
   return (
     <StudioTableContainer>
       <table className="studio-table connections-table" aria-label="Connections" aria-busy={loading || undefined}>

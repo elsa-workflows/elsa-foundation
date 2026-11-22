@@ -133,7 +133,7 @@ describe("Connections page", () => {
     });
     const { host } = renderPage(context);
 
-    await waitFor(() => listCalls === 1 && findButton(host, "Create connection")?.disabled === false);
+    await waitFor(() => listCalls === 1 && findButton(host, "New connection")?.disabled === false);
     await createConnection(host, created.name);
 
     await waitFor(() => detailsButton(host) !== null);
@@ -347,7 +347,7 @@ function changeInput(input: HTMLInputElement, value: string) {
 }
 
 async function createConnection(host: HTMLElement, name: string) {
-  click(button(host, "Create connection"));
+  click(button(host, "New connection"));
   await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']") !== null);
   const input = host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']");
   if (!input) throw new Error("Create connection name input not found.");
