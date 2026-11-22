@@ -99,7 +99,8 @@ public sealed class Delivery(Message message, long seq)
     internal object? StarterAmbient;    // belongs to this local creator; never written
     internal string? UncheckedReference;
     internal long Seq = seq;         // allocated store sequence, or local post order until promotion
-    internal long InboxOrder => CompletedOrder == 0 ? Seq : 0; // F7 priority among eligible inputs
+    // F7 puts fresh completions first. Held completions keep their priority and newest-first order after a take.
+    internal long InboxOrder => Message.FoundationHeldJobResult ? -Seq : CompletedOrder == 0 ? Seq : long.MinValue;
     internal long ObservedOrder;     // in-memory order of first observation, for local/durable tie-breaking
     internal long ObservedAt;        // monotonic observation time, used when a command matures before trial selection
     internal long CompletedOrder;    // ordinal when the driver published its result in this owner
@@ -249,6 +250,9 @@ public sealed class TurnOutcome(string instance)
     public object? Pending;     // what the turns in memory left for the history, kept with the actor until it is written
     internal HashSet<InboxKey> Promoted = [];     // messages held in memory only, written with this outcome
     internal Dictionary<Delivery, Message>? HeldJobResults;
+
+    internal bool ConvertsHeldJobResult(Delivery item) => item.IsWorkerJobCompletion && !item.Message.FoundationJobResult &&
+        !Cancelled.Contains(item.Message.InboxKey);
 
     internal bool Durable => Window is not null || Replied.Exists(r => r.Rpc) || !InMemory && (Row is not null || Journal is not null || Cancelled.Count > 0 || Consumed.Exists(i => i.Durable) || Sent.Exists(m => !Volatile.Contains(m.InboxKey)));
 }

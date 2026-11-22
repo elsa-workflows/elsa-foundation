@@ -1254,7 +1254,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 read++;
                 _options.OnObservedDelivery?.Invoke(row);
             }
-            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts, suspect: Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0, cancellationToken: cancellationToken);
+            Hold(row.Message, row.Seq, durable: true, marked: false, attempts: row.Attempts,
+                suspect: !row.PersistedHold && Suspect(row, polled.Now), again: row.Seen > 0 || row.Trial > 0,
+                cancellationToken: cancellationToken, persistedHold: row.PersistedHold);
             if (!LeaseUsable()) return;
         }
         // Finding F1: caught up when a poll comes back short and every row this owner wrote meanwhile has come back with it.
@@ -1366,7 +1368,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
 
-    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null)
+    private void Hold(Message message, long seq, bool durable, bool marked, bool suspect = false, int attempts = 0, bool fresh = false, bool again = false, string? requestAddress = null, CancellationToken cancellationToken = default, object? starterAmbient = null, bool persistedHold = false)
     {
         if (message.ReplyTo is not null && (message.Kind == Kinds.JobFinished ||
             message.InboxScope == 0 && message.Kind is Kinds.Job or Kinds.Meet or Kinds.Publish or Kinds.JobDeadline))
@@ -1385,7 +1387,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 promoted.RecoveryOrdering |= again;
                 promoted.Seq = seq;
                 if (waiting is null) return;
-                if (promoted.CompletedOrder == 0 && waiting.Inbox.Remove(promoted)) Insert(waiting, promoted);
+                if ((promoted.CompletedOrder == 0 || promoted.Message.FoundationHeldJobResult) && waiting.Inbox.Remove(promoted)) Insert(waiting, promoted);
                 RefreshPoisonBoundary(waiting);
             }
             if (_slots.TryGetValue(Canonical(message.Target.Id), out var waiting)) { lock (waiting) Observe(waiting); }
@@ -1401,7 +1403,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var item = new Delivery(message, seq)
         {
             StarterAmbient = starterAmbient, RequestAddress = requestAddress, Durable = durable, Marked = marked, Suspect = suspect, Attempts = attempts,
-            Again = again, RecoveryOrdering = again, Taken = _cancelling.Contains(message.InboxKey),
+            Again = again, RecoveryOrdering = again, Held = persistedHold, Taken = _cancelling.Contains(message.InboxKey),
             ObservedOrder = Interlocked.Increment(ref _observed), ObservedAt = Now
         };
         _items[message.InboxKey] = item;
@@ -1510,7 +1512,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private List<Delivery> NextTrial()
     {
         if (TrialItems.Count > 0 || Blocked) return [];
-        var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect).OrderBy(i => i.Seq).ToList();
+        var suspects = _items.Values.Where(i => i.Durable && !i.Marked && !i.Taken && i.Suspect)
+            .OrderBy(i => i.Message.FoundationHeldJobResult ? i.InboxOrder : i.Seq).ToList();
         if (CanWithdrawJobTrials && suspects.Exists(i => i.Ticket && i.Key is not null) && TerminatePrecedesJobRetry(Now))
             suspects.RemoveAll(i => i.Ticket && i.Key is not null);
         if (suspects.Count == 0 || Has(Flaw.BumpAllInherited)) return suspects;
@@ -2687,10 +2690,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private void StageHeldJobResults(TurnOutcome unit)
     {
         if (unit.Held.Count == 0 || !_type.SupportsFoundationOperator(unit.Row) || Has(Flaw.HoldRetainsJobTicket)) return;
-        foreach (var item in unit.Held)
+        // Sequences in this commit increase. Persist this cohort in reverse so newest-first replay keeps the order offered to the actor.
+        for (var index = unit.Held.Count - 1; index >= 0; index--)
         {
-            if (!item.IsWorkerJobCompletion || item.Message.FoundationJobResult || unit.Cancelled.Contains(item.Message.InboxKey)) continue;
-            var message = item.Message with { Id = item.Message.Id + "/result", FoundationJobResult = true };
+            var item = unit.Held[index];
+            if (!unit.ConvertsHeldJobResult(item)) continue;
+            var message = item.Message with { Id = item.Message.Id + "/result", FoundationJobResult = true, FoundationHeldJobResult = true };
             (unit.HeldJobResults ??= []).Add(item, message);
             unit.Sent.Add(message);
             unit.Promoted.Add(message.InboxKey);
@@ -2958,7 +2963,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                         (held.Durable, held.Marked, held.AwaitPoll, held.Taken) = (true, false, true, false);
                         if (_slots.TryGetValue(Canonical(message.Target.Id), out var waiting))
                         {
-                            if (held.CompletedOrder == 0) waiting.Inbox.Remove(held);
+                            if (held.CompletedOrder == 0 || held.Message.FoundationHeldJobResult) waiting.Inbox.Remove(held);
                             if (!waiting.Inbox.Contains(held)) Insert(waiting, held);
                         }
                         continue;
@@ -2969,7 +2974,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     {
                         // Equal-priority completed results were inserted at the head in completion order.
                         // Keep their existing positions: re-inserting equal sequence numbers reverses that order.
-                        if (held.CompletedOrder == 0) slot.Inbox.Remove(held);
+                        if (held.CompletedOrder == 0 || held.Message.FoundationHeldJobResult) slot.Inbox.Remove(held);
                         if (!slot.Inbox.Contains(held)) Insert(slot, held);
                     }
                     if (held.Ticket && held.Key is not null && held.Cancel is null) StartJob(held, cancellationToken);

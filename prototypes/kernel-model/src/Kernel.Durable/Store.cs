@@ -32,7 +32,10 @@ public sealed record ActorLookup(string Requested, string Canonical, InstanceRow
 }
 
 /// <summary>A message row as a poll returns it.</summary>
-public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial);
+public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial)
+{
+    internal bool PersistedHold { get; init; }
+}
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
 public sealed record SubscriptionRow(
