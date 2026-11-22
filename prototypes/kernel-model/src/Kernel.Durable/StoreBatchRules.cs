@@ -18,7 +18,7 @@ public static class StoreBatchRules
         HashSet<InboxKey>? consumedControls = null;
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
-        ValidateParkPageClears(batch);
+        ValidateParkPages(batch);
         if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
         {
             var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
@@ -28,8 +28,8 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
-            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null ||
-                turn.Row is { ParkResolutionGeneration: > 0 } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null ||
+                turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
                 (turn.Row is null || releases.Distinct().Count() != releases.Count || releases.Any(removed!.Contains) ||
@@ -37,6 +37,9 @@ public static class StoreBatchRules
                 throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
             if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
                 throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
+            if ((batch.Seen.Count != 0 || batch.Trial.Count != 0) && turn.Sent.Any(message => ParkDrainEnvelope.IsInDomain(message) &&
+                    (batch.Seen.Contains(message.InboxKey) || batch.Trial.Contains(message.InboxKey))))
+                throw new StoreException(Failure.Definite, "A new Park control cannot also carry a poll or trial mark.");
             if (turn.Consumed.Concat(turn.Done).Any(key => key.Scope == ParkDrainEnvelope.Scope &&
                     !(consumedControls ??= []).Add(key)) ||
                 (turn.Held ?? []).Any(key => key.Scope == ParkDrainEnvelope.Scope))
@@ -63,20 +66,23 @@ public static class StoreBatchRules
         }
     }
 
-    private static void ValidateParkPageClears(CommitBatch batch)
+    private static void ValidateParkPages(CommitBatch batch)
     {
-        if (!batch.Turns.Any(turn => turn.FoundationParkClear is not null)) return;
-        var cleared = new HashSet<InboxKey>();
+        HashSet<InboxKey>? changed = null;
         foreach (var turn in batch.Turns)
-            if (turn.FoundationParkClear is { } page &&
-                (turn.OpensPark || turn.Delete ||
-                    page.Rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
-                    page.Rows.Any(row => !cleared.Add(row.Cursor.Key))))
-                throw new StoreException(Failure.Definite, "A clear must write one bounded page of distinct kept keys.");
-        if (batch.Seen.Concat(batch.Trial).Concat(batch.Turns.SelectMany(turn =>
+        {
+            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
+            if (rows is null) continue;
+            changed ??= [];
+            if ((turn.FoundationParkClear is not null && turn.FoundationRecoveryPage is not null) ||
+                turn.OpensPark || turn.Delete || rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
+                rows.Any(row => !changed.Add(row.Cursor.Key)))
+                throw new StoreException(Failure.Definite, "A Park page must write a bounded set of distinct keys.");
+        }
+        if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
                 turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])))
-            .Any(cleared.Contains))
-            throw new StoreException(Failure.Definite, "A cleared kept input cannot be changed elsewhere in the batch.");
+            .Any(changed.Contains))
+            throw new StoreException(Failure.Definite, "A Park page input cannot be changed elsewhere in the batch.");
     }
 
     /// <summary>
