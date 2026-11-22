@@ -97,9 +97,11 @@ Tests use xunit only. `[P]` = can run in parallel with other `[P]` tasks of the 
   `[AccessesUndeclaredVariables]` ("may write any visible variable"), from the authoring descriptor.
 - [x] T048 [P] Tests in `__tests__/` (vitest): the picker offers only declared variables in scope, the may-write set and
   the marker render from the descriptor. *`variableReferenceInputUi.test.tsx`.*
-- [ ] T049 Qualify FR-036's Run JavaScript may-write presentation on the composed host: real server analysis, literal /
+- [x] T049 Qualify FR-036's Run JavaScript may-write presentation on the composed host: real server analysis, literal /
   computed / no-write states, edit/save/reopen, nearest same-name scope, desktop/narrow and light/dark captures, and
-  independent visual inspection. *Journey: `scriptVariableWritesJourney.ts`; exact-head evidence and verdict on #4912.*
+  independent visual inspection. *Journey: `scriptVariableWritesJourney.ts`; composed CI passed 64/64 executions and the
+  independent reviewer inspected all 24 feature/reference captures. Exact heads and downloadable evidence on #4912.
+  Arguments authoring is a separate existing rendering defect, #5373, recorded on the coordinator's instruction.*
 
 ## Dependencies
 
