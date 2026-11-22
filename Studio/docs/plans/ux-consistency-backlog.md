@@ -161,7 +161,7 @@ Candidates reported by source readers. Confirm the need before building any of t
   `ad-contract-workbench-facts`).
 - [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
-- [ ] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4).
+- [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [ ] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`).
 - [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
   `DASH/native/NamedDashboards.tsx:524`).
@@ -327,7 +327,7 @@ Browser dialogs and busy labels (no kit prerequisite):
 - [ ] **X3.34** (#5070) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [ ] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
   `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`.
-- [ ] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without
+- [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
   `title` or `confirmLabel`; Secrets passes both (`SecretsPage.tsx:187, 202`).
 - [ ] **X3.37** (#5073) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
@@ -401,8 +401,8 @@ in scope.
 - [ ] **X6.1** (#5097) [source] `EXT/Agent/AgentsPage.tsx:187`.
 - [ ] **X6.2** (#5098) [source] `EXT/Agent/AgentPlayground.tsx:178–179` ("Reload draft", redundant `aria-label`).
 - [ ] **X6.3** (#5099) [source] `EXT/Agent/HumanReviewPage.tsx:108` and `AgentInvocationPage.tsx:97`.
-- [ ] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`.
-- [ ] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app).
+- [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
+- [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
 - [ ] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`.
 - [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu).
@@ -428,12 +428,12 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
-- [ ] **X7.3** (#5109) [seen] `secrets-badge` in Secrets.
+- [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
 - [ ] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance.
 - [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
-- [ ] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status`
+- [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
   (`EXT/Connections/connectionPresentation.tsx:12–16`).
 - [ ] **X7.7** (#5113) [source] `.decision-draft-status` pill (`EXT/Decisions/styles.css:22`).
 - [ ] **X7.8** (#5114) [check] `.etl-run-status` in ETL.
@@ -498,7 +498,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 Replace local date formatting with `StudioTimestamp`.
 
 - [ ] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`.
-- [ ] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by
+- [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [ ] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`.
 - [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
@@ -711,7 +711,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Extensions
 
-- [ ] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link
+- [x] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link (PR #5299)
   (`ConnectionList.tsx:39, 46`). Replace both with `studioRowInteraction` on the row. `needs: D12`
 - [ ] **E2** (#5232) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
   copy button → `CopyableIdentifier`.
@@ -734,7 +734,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`:257–258`). `needs: K2`
 - [ ] **E11** (#5241) [check] Forms list and editor share one route with no URL per form
   (`FormsPage.tsx:161`).
-- [ ] **E12** (#5242) [source] Collection footers word counts differently: "N shown"
+- [x] **E12** (#5242) [source] Collection footers word counts differently: "N shown" (PR #5299)
   (`ConnectionsPage.tsx:157`) against "N agents".
 - [ ] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
@@ -753,7 +753,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `decision-link` button (`DecisionsPage.tsx:193–199`), Forms a raw `user-task-link` button
   (`FormsPage.tsx:169–179`). Move each to `studioRowInteraction`. **[check]** keyboard access, and
   whether "Edit" only duplicates opening the row. `needs: D12`
-- [ ] **E19** (#5249) [source] Remove the "Search" submit button and search as the user types (D11):
+- [x] **E19** (#5249) [source] Remove the "Search" submit button and search as the user types (D11): (PR #5299)
   `EXT/Connections/ConnectionsPage.tsx:150–151`, `EXT/Secrets/SecretsPage.tsx:260–261`. `needs: D11`
 - [ ] **E20** (#5250) [source] Field markers (D13): drop "Comment (optional)"
   (`EXT/Agent/HumanReviewPage.tsx:114`) and the "Optional." descriptions (`AgentsPage.tsx:300`,
