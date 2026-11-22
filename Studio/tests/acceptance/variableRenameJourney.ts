@@ -70,11 +70,11 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await expect(views.getByRole("tab", { name: "Designer", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(inspectorSections.getByRole("tab", { name: "Inputs", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("button", { name: "Copy Node ID", exact: true })).toBeVisible();
-  const text = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
+  const text = page.getByRole("group", { name: "Text property", exact: true });
   await expect(text).toBeVisible();
   await expect(text).toContainText("variables.purchase.total");
   await expect(text).toContainText("variables['ord' + 'er']");
   // Go to moves focus into the flagged input's editor.
-  await expect(text.locator(":focus")).toHaveCount(1);
+  await expect(text.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
   await capture(page, info, "flagged-reference");
 }

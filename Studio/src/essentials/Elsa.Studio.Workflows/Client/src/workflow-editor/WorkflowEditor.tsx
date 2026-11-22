@@ -1183,9 +1183,9 @@ export function WorkflowEditor({
     let attempts = 0;
     const focusInput = () => {
       const row = [...(editorRootRef.current?.querySelectorAll<HTMLElement>(".wf-property-row") ?? [])]
-        .find(candidate => candidate.querySelector(".wf-property-row-header > label")?.textContent?.trim() === label);
+        .find(candidate => candidate.getAttribute("aria-label") === `${label} property`);
       const target = row && [...row.querySelectorAll<HTMLElement>("button, input, textarea, select, [contenteditable='true']")]
-        .find(element => !element.closest(".wf-property-row-header") && !element.matches(":disabled"));
+        .find(element => !element.closest(".wf-property-row-header, .studio-field-caption-actions, .studio-form-adornment") && !element.matches(":disabled"));
       if (target) target.focus();
       else if (++attempts < 30) requestAnimationFrame(focusInput);
     };
