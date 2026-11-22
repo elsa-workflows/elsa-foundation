@@ -1,4 +1,4 @@
-import { StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -436,7 +436,7 @@ function ActivityTestRunEvidence({
           <h3 id="activity-test-run-evidence-title">{copy.title}</h3>
           <p>{copy.description}</p>
         </div>
-        <span className="ad-badge ad-test-run-stage" role="status" aria-live="polite">{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</span>
+        <span role="status" aria-live="polite"><StatusChip>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
       </div>
       <p className="ad-selected-record ad-test-run-subject"><strong>{definitionLabel}</strong> · exact draft revision {view.draftRevision}</p>
       {view.failure ? (

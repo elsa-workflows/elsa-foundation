@@ -276,14 +276,14 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
     closeDrawer();
     requestAnimationFrame(() => manageButtonRef.current?.focus());
   };
-  const recycleBinEntry = (isCollapsed = false) => <button
+  const recycleBinEntry = (isCollapsed = false) => <StudioButton
     type="button"
     className="wf-recycle-bin-nav"
     aria-label="Recycle bin"
     aria-current={recycleBinSelected ? "page" : undefined}
     title={isCollapsed ? "Recycle bin" : undefined}
     onClick={selectRecycleBin}
-  ><Trash2 size={15} aria-hidden="true" /><span hidden={isCollapsed}>Recycle bin</span></button>;
+  ><Trash2 size={15} aria-hidden="true" /><span hidden={isCollapsed}>Recycle bin</span></StudioButton>;
   const collapseLabel = canBrowseFolders
     ? collapsed ? "Expand folders" : "Collapse folders"
     : collapsed ? "Expand workflows" : "Collapse workflows";
@@ -315,11 +315,11 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onSelec
             <div className="wf-folder-nav-heading">
               <strong hidden={collapsed}>{navigationTitle}</strong>
               <div className="wf-folder-nav-actions">
-                {canBrowseFolders && canManage && !collapsed ? <button type="button" title="Create folder" aria-label="Create folder" onClick={() => void createFolder()}><FolderPlus size={16} /></button> : null}
-                <button ref={folderToggleButtonRef} type="button" title={collapseLabel} aria-label={collapseLabel}
+                {canBrowseFolders && canManage && !collapsed ? <StudioButton type="button" title="Create folder" aria-label="Create folder" onClick={() => void createFolder()}><FolderPlus size={16} /></StudioButton> : null}
+                <StudioButton ref={folderToggleButtonRef} type="button" title={collapseLabel} aria-label={collapseLabel}
                   aria-expanded={!collapsed} aria-controls={folderTreeId} onClick={() => setCollapsed(current => !current)}>
                   {collapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
-                </button>
+                </StudioButton>
               </div>
             </div>
             <div id={folderTreeId} hidden={collapsed}><FolderTree {...treeProps} /></div>
@@ -548,7 +548,7 @@ function FolderTree(props: FolderTreeProps) {
     const key = `${kind}:${parentKey}`;
     const loading = loadingKeys.has(parentKey);
     return (
-      <button
+      <StudioButton
         type="button"
         role="treeitem"
         tabIndex={tabIndexFor(key)}
@@ -568,7 +568,7 @@ function FolderTree(props: FolderTreeProps) {
       >
         {announcement ? <span role="alert">{announcement} </span> : null}
         {loading ? "Loading folders…" : label}
-      </button>
+      </StudioButton>
     );
   };
 
@@ -604,7 +604,7 @@ function FolderTree(props: FolderTreeProps) {
             }}
           >
             <div className="wf-folder-tree-folder" style={{ paddingInlineStart: indentation }}>
-              <button
+              <StudioButton
                 type="button"
                 tabIndex={-1}
                 className="wf-folder-expand"
@@ -618,7 +618,7 @@ function FolderTree(props: FolderTreeProps) {
                   event.currentTarget.closest<HTMLElement>('[role="treeitem"]')?.focus();
                   void onToggle(folder);
                 }}
-              >{expanded.has(folder.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>
+              >{expanded.has(folder.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</StudioButton>
               <span className="wf-folder-tree-row"><Folder size={14} /><span className="wf-folder-tree-label" title={folder.name}>{folder.name}</span></span>
             </div>
             {expanded.has(folder.id) ? (
@@ -671,7 +671,7 @@ function WorkflowFolderBreadcrumb({ crumbs, state, error, selection, onSelect }:
   if (selection === "unfiled") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb">Unfiled</div>;
   if (state === "loading") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb" aria-busy="true"><span role="status">Loading folder path…</span></div>;
   if (state === "failed") return <div className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><span role="alert">{error}</span></div>;
-  return <nav className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><button type="button" onClick={() => onSelect("all")}>All workflows</button>{crumbs.map(folder => <span key={folder.id}><span aria-hidden="true">/</span><button type="button" onClick={() => onSelect({ id: folder.id })}>{folder.name}</button></span>)}</nav>;
+  return <nav className="wf-folder-breadcrumb" aria-label="Folder breadcrumb"><StudioButton type="button" onClick={() => onSelect("all")}>All workflows</StudioButton>{crumbs.map(folder => <span key={folder.id}><span aria-hidden="true">/</span><StudioButton type="button" onClick={() => onSelect({ id: folder.id })}>{folder.name}</StudioButton></span>)}</nav>;
 }
 
 function findFolder(roots: WorkflowFolder[], children: ReadonlyMap<string, WorkflowFolder[]>, id: string): WorkflowFolder | undefined {

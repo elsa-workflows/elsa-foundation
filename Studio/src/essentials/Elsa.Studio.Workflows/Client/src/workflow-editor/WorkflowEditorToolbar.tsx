@@ -1,7 +1,7 @@
 import "./WorkflowEditorToolbar.css";
 import { createContext, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
-import { StudioButton, AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, AnchoredPopover, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { StudioLink } from "../StudioLink";
 import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
@@ -148,7 +148,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           }}>{item.label}</StudioLink>} />
           <span className="wf-editor-title">
             <strong role="heading" aria-level={2} title={props.name}>{props.name}</strong>
-            <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
+            <StatusChip tone={props.templateMode ? "neutral" : "warning"}>{props.templateMode ? "Template" : "Draft"}</StatusChip>
           </span></>
       }
       metadata={

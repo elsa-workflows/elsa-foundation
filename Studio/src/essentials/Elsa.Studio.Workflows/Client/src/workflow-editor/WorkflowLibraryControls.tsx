@@ -171,14 +171,14 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
     {modifiedView ? <p className="wf-library-help">The current filters differ from the saved view. Save to update it or choose the view again to restore its filters.</p> : null}
-    {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <button type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</button></p> : null}
-    {error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</button></p> : null}
+    {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <StudioButton type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</StudioButton></p> : null}
+    {error ? <p role="alert">{error} <StudioButton type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</StudioButton></p> : null}
 
     {filtersOpen && (support.tags || support.folders || support.queryOptions) ? <div className="wf-library-filter-panel" id={filtersId}>
       {support.queryOptions ? <StudioField label="Publication"><select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
         <option value="">Any publication state</option><option value="published">Published</option>{location.publicationState && location.publicationState !== "published" ? <option value={location.publicationState}>Unsupported state: {location.publicationState}</option> : null}
       </select></StudioField> : null}
-      {support.tags && support.queryOptions ? <><form className="wf-library-control-row" onSubmit={searchTags}><StudioField label="Find tag"><input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></StudioField><button type="submit" disabled={catalogLoading}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</form>
+      {support.tags && support.queryOptions ? <><form className="wf-library-control-row" onSubmit={searchTags}><StudioField label="Find tag"><input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></StudioField><StudioButton type="submit" disabled={catalogLoading}>Find tags</StudioButton>{catalogCursor ? <StudioButton type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</StudioButton> : null}</form>
       {catalogResultsReady && !catalogLoading && catalogTerm.trim() && !filterTags.length ? <p role="status">No workflow tags match “{catalogTerm}”. Search for another tag, or clear the search and find tags to browse available tags.</p> : null}
       <p className="wf-library-help">Tag filter choices use the results of this search. Clear the search and find tags to browse available tags.</p>
       {(location.tagFilters ?? []).map((filter, index) => {
@@ -199,11 +199,11 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
             {filter.valueIds?.filter(id => !tag?.values.some(value => value.id === id)).map(id => <span key={id} role="alert">Unavailable value: {id}</span>)}
           </fieldset> : null}
           {!tag && !catalogLoading ? <span role="alert">Load this tag or repair this filter; it remains applied.</span> : null}
-          <button type="button" aria-label={`Remove tag filter ${index + 1}`} onClick={() => change({ tagFilters: location.tagFilters?.filter((_, position) => position !== index) })}>Remove</button>
+          <StudioButton type="button" aria-label={`Remove tag filter ${index + 1}`} onClick={() => change({ tagFilters: location.tagFilters?.filter((_, position) => position !== index) })}>Remove</StudioButton>
         </div>;
       })}
-      <div className="wf-library-control-row"><button type="button" disabled={!filterTags.length || (location.tagFilters?.length ?? 0) >= 16} onClick={() => change({ tagFilters: [...(location.tagFilters ?? []), { tagId: filterTags[0].id, operator: "exists" }] })}>Add tag filter</button>
-        {activeCount ? <button type="button" onClick={() => change({ tagFilters: [], publicationState: undefined })}>Clear filters</button> : null}
+      <div className="wf-library-control-row"><StudioButton type="button" disabled={!filterTags.length || (location.tagFilters?.length ?? 0) >= 16} onClick={() => change({ tagFilters: [...(location.tagFilters ?? []), { tagId: filterTags[0].id, operator: "exists" }] })}>Add tag filter</StudioButton>
+        {activeCount ? <StudioButton type="button" onClick={() => change({ tagFilters: [], publicationState: undefined })}>Clear filters</StudioButton> : null}
       </div>
       <p className="wf-library-help">All tag conditions must match. Selected alternatives within a condition match any value, unless “Every selected value” is chosen.</p>
       </> : null}

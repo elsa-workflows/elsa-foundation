@@ -876,7 +876,7 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/version=version-1/);
     await expect(versionRow).toHaveAttribute("aria-expanded", "true");
     const selected = page.getByLabel("Selected exact version");
-    await expect(selected.getByText("Immutable public contract")).toBeVisible();
+    await expect(selected.getByText("Published inputs, outputs and outcomes")).toBeVisible();
     const versionDetails = selected.locator("details.ad-version-details");
     await expect(versionDetails).toHaveJSProperty("open", false);
     await versionDetails.locator(":scope > summary").focus();
@@ -1055,7 +1055,7 @@ test("draft management dialog traps and restores focus, supports keyboard clone 
   await clone.focus();
   await page.keyboard.press("Space");
   await expect(clone).toBeChecked();
-  const version = dialog.getByRole("combobox", { name: "Exact immutable version" });
+  const version = dialog.getByRole("combobox", { name: "Published version" });
   await expect(version.locator("option")).toHaveCount(2);
   await version.selectOption("version-1");
   await expect(version).toHaveValue("version-1");
@@ -1475,7 +1475,7 @@ for (const theme of ["light", "dark"]) {
       await apply.click();
       await expect(apply).toBeDisabled();
       await member.getByRole("tab", { name: "Advanced", exact: true }).click();
-      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+      await expect(member.getByRole("combobox", { name: "Storage provider", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
       await general.click();
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
@@ -1871,7 +1871,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(page.getByText("Compared with latest published version")).toBeVisible();
   await expect(summarizedVersion).toHaveText("2.1.0");
   await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
   await expect(changesRegion).toBeVisible();

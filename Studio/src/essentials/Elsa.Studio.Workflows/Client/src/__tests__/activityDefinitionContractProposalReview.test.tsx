@@ -122,7 +122,7 @@ describe("Activity Definition contract proposal review", () => {
     const postJson = vi.fn(async (_url: string, body: unknown) => proposal((body as { expectedRevision: number }).expectedRevision));
     const harness = renderReview({ context: endpoint(postJson), draft: exactDraft() });
     await vi.advanceTimersByTimeAsync(900);
-    await vi.waitFor(() => expect(harness.container.querySelector("[aria-label='Exact proposal binding']")).not.toBeNull());
+    await vi.waitFor(() => expect(harness.container.querySelector("[aria-label='Draft used for this proposal']")).not.toBeNull());
     expect(harness.container.textContent).toContain("sha256:implementation-3");
 
     harness.render({ draft: exactDraft({ revision: 4, manifestFingerprint: "sha256:implementation-4" }), enabled: true });

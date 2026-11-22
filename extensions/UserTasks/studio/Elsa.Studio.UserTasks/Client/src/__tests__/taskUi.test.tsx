@@ -47,6 +47,16 @@ async function clickTaskAction(text: string) {
   await vi.waitFor(() => { item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === text); expect(item).toBeTruthy(); });
   await act(async () => item!.click());
 }
+async function startNewForm() {
+  await click("New form");
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  const name = dialog.querySelector<HTMLInputElement>("input")!;
+  const create = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(create.disabled).toBe(true);
+  await input(name, "Named form");
+  await input(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Form purpose");
+  await act(async () => create.click());
+}
 async function editFirstForm() {
   const button = container.querySelector<HTMLButtonElement>("tbody button.user-task-link");
   expect(button).toBeTruthy();
@@ -187,7 +197,7 @@ it("takes forms-only users directly to their permitted form workspace without re
   await act(async () => {});
   expect(container.textContent).toContain("Task forms");
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
-  await click("New form"); expect(container.textContent).toContain("Design the form");
+  await startNewForm(); expect(container.textContent).toContain("Named form");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
 });
 
@@ -243,7 +253,7 @@ it("keeps recipient preview responses out of the published form definition", asy
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true } : { items: [] });
   const post = vi.fn().mockImplementation(async (_path, request: { form: TaskForm }) => ({ tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }));
   await act(async () => root.render(<FormLifecyclePage api={api(get, post)} />));
-  await click("New form");
+  await startNewForm();
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Text input"); await click("Preview");
@@ -311,7 +321,7 @@ it("publishes a reusable basic form through the structured field editor", async 
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canManageForms: true, canReadForms: true } : { items: [] });
   const post = vi.fn().mockImplementation(async (_path: string, request: { form: TaskForm }) => ({ tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }));
   await act(async () => root.render(<FormsPage api={api(get, post)} />));
-  await click("New form");
+  await startNewForm();
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
   await click("Text input"); await input(field("Key"), "AccountID"); await input(field("Label"), "Account");
@@ -329,7 +339,7 @@ it.each(["hidden", "visible"] as const)("reconciles an accepted form publication
   const post = vi.fn(async (_path: string, request: { form: typeof form }) => { await delayed; published = true; return { tenantId: "tenant", form: request.form, createdAt: "2026-11-20T00:00:00Z", createdBy: "alice" }; });
   const context = api(get, post);
   const render = (mode: "hidden" | "visible") => act(() => root.render(<React.Activity mode={mode}><FormsPage api={context} /></React.Activity>));
-  await render("visible"); await vi.waitFor(() => expect([...container.querySelectorAll("button")].map(button => button.textContent)).toContain("New form")); await click("New form");
+  await render("visible"); await vi.waitFor(() => expect([...container.querySelectorAll("button")].map(button => button.textContent)).toContain("New form")); await startNewForm();
   const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
   await input(field("Form ID"), form.id); await input(field("Name"), form.name); await click("Text input"); await click("Publish");
   expect(post).toHaveBeenCalledTimes(1); expect(published).toBe(false);
@@ -528,7 +538,7 @@ it.each(["form", "task"])("does not toast a delayed %s mutation after leaving it
   const moduleApi = api(get, post);
   if (kind === "form") {
     await act(async () => root.render(<FormsPage api={moduleApi} />));
-    await click("New form");
+    await startNewForm();
     const field = (label: string) => [...container.querySelectorAll("label")].find(item => item.textContent?.startsWith(label))!.control as HTMLInputElement;
     await input(field("Form ID"), "purchase"); await input(field("Name"), "Purchase response");
     await click("Text input"); await click("Publish");
@@ -917,14 +927,15 @@ describe("inbox and form polish (#4068)", () => {
       history: [{ operation: "created", actorId: "workflow", at: "2026-11-02T12:00:00Z" }, { operation: "completed", action: "Approve", actorId: "alice", actorName: "Alice", at: "2026-11-02T12:01:00Z" }, { operation: "reassigned", actorId: "bob", actorName: "Bob Builder", at: "2026-11-02T12:02:00Z" }, { operation: "released", actorId: "erin", actorName: null, at: "2026-11-02T12:03:00Z" }] };
     const get = vi.fn().mockResolvedValue(completed);
     await act(async () => root.render(<TaskDetail api={api(get)} id="task" identity={identity} />));
-    await vi.waitFor(() => expect(container.textContent).toContain("Bob Builder"));
+    await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
     const note = container.querySelector("textarea")!;
     expect(note.disabled).toBe(true); expect(note.value).toBe("Done");
     expect(note.closest(".user-task-response")!.hasAttribute("data-final")).toBe(true);
     expect(container.querySelector(`label[for="${note.id}"]`)!.textContent).toBe("Note");
     expect(note.hasAttribute("aria-describedby")).toBe(false);
     expect(container.querySelector(".user-task-actions")).toBeNull();
-    expect([...container.querySelectorAll(".user-task-history-list li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder", "released · erin"]);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-controls="user-task-history-dialog"]')!.click());
+    expect([...document.querySelectorAll("#user-task-history-dialog .user-task-history-list li")].map(item => item.textContent!.split(" · ").slice(0, -1).join(" · "))).toEqual(["created · workflow", "completed · Approve · You", "reassigned · Bob Builder", "released · erin"]);
     expect(readsDirectory(get)).toBe(false);
   });
   it("keeps the required marker while the response can still be filled in", async () => {

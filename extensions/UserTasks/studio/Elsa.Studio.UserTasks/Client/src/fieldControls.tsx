@@ -91,8 +91,12 @@ function updateField(props: StudioUserTaskFieldControlEditorProps, update: Parti
 
 function ChoiceProperties(props: StudioUserTaskFieldControlEditorProps) {
   const field = fieldOf(props);
-  return <StudioField label="Choices, one per line"><textarea rows={4} value={field.choices?.join("\n") ?? ""} disabled={props.disabled}
-    onChange={event => updateField(props, { choices: event.target.value.split("\n") })} /></StudioField>;
+  return <><StudioField label="Display"><select value={field.presentation?.display ?? "dropdown"} disabled={props.disabled}
+    onChange={event => updateField(props, { presentation: { display: event.target.value as "dropdown" | "radio" } })}>
+    <option value="dropdown">Dropdown</option><option value="radio">Radio buttons</option>
+  </select></StudioField>
+    <StudioField label="Choices, one per line"><textarea rows={4} value={field.choices?.join("\n") ?? ""} disabled={props.disabled}
+    onChange={event => updateField(props, { choices: event.target.value.split("\n") })} /></StudioField></>;
 }
 
 function NumberProperties(props: StudioUserTaskFieldControlEditorProps) {

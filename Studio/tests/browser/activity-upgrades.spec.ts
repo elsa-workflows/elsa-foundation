@@ -36,7 +36,7 @@ test("broad upgrades select only explicit roots, show the authoritative closure,
   await page.getByRole("button", { name: "Add exact root" }).click();
   await expect(page.locator(".au-root-list > li")).toHaveCount(2);
   await page.getByLabel("Replacement target version").fill("dependency-v2");
-  await page.getByRole("button", { name: "Review authoritative plan" }).click();
+  await page.getByRole("button", { name: "Review upgrade plan" }).click();
 
   await expect(page.getByRole("heading", { name: "Selected dependency closure" })).toBeVisible();
   await expect(page.getByText("Bottom-up stage 1", { exact: true })).toBeVisible();
@@ -54,7 +54,7 @@ test("broad upgrades select only explicit roots, show the authoritative closure,
   await expect(page.getByText("No partial stage mutation was committed")).toBeVisible();
   await expect(page.getByText("hidden workflow-owner identity")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Selected dependency closure" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Durable apply receipt/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Upgrade result/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Apply stage 1 atomically" })).toBeDisabled();
   expect(await overflowOffenders(page)).toEqual([]);
 });
@@ -101,10 +101,10 @@ test("a lost child-stage response reconciles once, survives reload, hands off ex
   });
 
   await page.goto("/workflows/activity-definitions/upgrades?rootKind=ActivityVersion&rootId=activity-owner-v1&fromVersion=dependency-v1&toVersion=dependency-v2");
-  await page.getByRole("button", { name: "Review authoritative plan" }).click();
+  await page.getByRole("button", { name: "Review upgrade plan" }).click();
   await page.getByRole("button", { name: "Apply stage 1 atomically" }).click();
 
-  await expect(page.getByRole("heading", { name: /Durable apply receipt/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Upgrade result/ })).toBeVisible();
   expect(state.childApplyBodies).toHaveLength(1);
   const handoff = page.getByRole("heading", { name: "Awaiting separately reviewed publication" }).locator("xpath=ancestor::section[1]");
   await expect(handoff).toBeVisible();
@@ -176,10 +176,10 @@ test("an absent durable receipt allows one idempotent retry with the same key", 
   });
 
   await page.goto("/workflows/activity-definitions/upgrades?rootKind=WorkflowDraft&rootId=workflow-draft&fromVersion=dependency-v1&toVersion=dependency-v2");
-  await page.getByRole("button", { name: "Review authoritative plan" }).click();
+  await page.getByRole("button", { name: "Review upgrade plan" }).click();
   await page.getByRole("button", { name: "Apply stage 1 atomically" }).click();
-  await expect(page.getByText(/no receipt is visible/i)).toBeVisible();
-  await page.getByRole("button", { name: "Retry same idempotent stage" }).click();
+  await expect(page.getByText(/No result is available yet/i)).toBeVisible();
+  await page.getByRole("button", { name: "Retry this stage" }).click();
 
   await expect(page.getByText("Upgrade complete")).toBeVisible();
   expect(state.receiptReads).toBe(1);

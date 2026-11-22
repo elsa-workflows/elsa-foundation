@@ -1,4 +1,4 @@
-import { TechnicalDetails, StudioFactList } from "@elsa-workflows/studio-ui";
+import { StatusChip, TechnicalDetails, StudioFactList } from "@elsa-workflows/studio-ui";
 import { Check, X } from "lucide-react";
 import {
   contractMemberFacts,
@@ -43,13 +43,13 @@ function ProposalChange({
   return <article className={`ad-impact-group is-${impactClass}`} role="listitem">
     <header>
       <div><h4>{title}</h4><h5>{review.impact} compatibility impact</h5></div>
-      <span className={`ad-badge ${selected ? "is-design" : ""}`}>{selected ? "Selected" : "Not selected"}</span>
+      <StatusChip tone={selected ? "accent" : "neutral"}>{selected ? "Selected" : "Not selected"}</StatusChip>
     </header>
     <p>{review.impactReasons.join(" ")}</p>
     {review.supported ? <StudioFactList aria-label={`${title} structured comparison`}>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(isCommonFact)} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(isCommonFact)} />
-    </StudioFactList> : <div className="ad-unavailable-note"><strong>Unknown structured kind</strong><span>The opaque provider payload is intentionally not rendered. This change cannot be selected.</span></div>}
+    </StudioFactList> : <div className="ad-unavailable-note"><strong>Unsupported change</strong><span>Studio cannot display or apply this type of change.</span></div>}
     {review.supported ? <TechnicalDetails><StudioFactList>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(fact => !isCommonFact(fact))} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(fact => !isCommonFact(fact))} />

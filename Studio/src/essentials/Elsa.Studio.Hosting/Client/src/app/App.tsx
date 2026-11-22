@@ -1,5 +1,5 @@
 import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
-import { StudioIconButton, StudioPageHeader } from "./ui";
+import { StudioAlert, StudioButton, StudioIconButton, StudioPageHeader, StudioResultState } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -1884,7 +1884,27 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
   return ()=>reset.dispose();
  },[boot]);
- return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{const origin=currentRelativeLocation();if(boot?.connection.getSnapshot().active?.pendingWrites)return;settleStudioNavigationReview(reviewStudioNavigation(origin,"/"),allowed=>{if(allowed&&currentRelativeLocation()===origin&&!boot?.connection.getSnapshot().active?.pendingWrites)window.location.assign("/");});}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
+ function reloadAfterDraft() {
+   const origin = currentRelativeLocation();
+   if (boot?.connection.getSnapshot().active?.pendingWrites) return;
+   settleStudioNavigationReview(reviewStudioNavigation(origin, "/"), allowed => {
+     if (allowed && currentRelativeLocation() === origin && !boot?.connection.getSnapshot().active?.pendingWrites) window.location.assign("/");
+   });
+ }
+
+ const startupError = error ?? (manifestQuery.isError ? String(manifestQuery.error) : null);
+ return <>
+   {resetPending ? <StudioAlert tone="info">
+     Studio modules changed. Finish or reset the current draft, then reload Studio.
+     <StudioButton onClick={reloadAfterDraft}>Reload Studio</StudioButton>
+   </StudioAlert> : null}
+   {boot ? <ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest} /> :
+     <ThemeProvider storeContext={hostContext}>
+       {startupError ? <StudioResultState tone="danger" title="Studio modules could not load" description={startupError}
+         actions={<StudioButton onClick={() => window.location.reload()}>Reload Studio</StudioButton>} /> :
+         <SkeletonRows rows={3} label="Loading Studio modules" />}
+     </ThemeProvider>}
+ </>;
 }
 
 function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {
@@ -1904,7 +1924,16 @@ function ConnectionApplication({authManager,connections,modules,manifest}:{authM
   if(await reviewStudioNavigation(from,path) && from===currentRelativeLocation() && session===connections.getSnapshot().active && !session?.pendingWrites)window.location.assign(path);
  };
  if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
- {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ {(!initialized || snapshot.loading) && !initializationError ? <SkeletonRows rows={3} label="Connecting to backend" /> : <>
+   <StudioResultState
+     tone={initializationError || snapshot.error ? "danger" : "neutral"}
+     title={initializationError || snapshot.error ? "Backend connection failed" : "Choose a backend connection"}
+     description={initializationError ?? snapshot.error}
+     actions={<StudioButton onClick={() => window.location.assign("/")}>Return Home</StudioButton>}
+   />
+   <ShellContributions modules={modules} placement="notice" navigate={navigate} />
+   <ShellContributions modules={modules} placement="recovery" navigate={navigate} />
+ </>}
  </ShellFrame></ThemeProvider>;
  const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;

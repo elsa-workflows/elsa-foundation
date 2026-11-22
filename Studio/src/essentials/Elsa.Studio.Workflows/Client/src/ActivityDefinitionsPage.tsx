@@ -12,7 +12,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { StudioCollectionFooter, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioCollectionFooter, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
@@ -448,7 +448,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
           <div className="ad-disclosure-panel ad-advanced-filter-fields">
-            <StudioField label={<><span>Provider key</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
+            <StudioField label={<><span>Provider</span></>}><select value={selectedProviderKey} onChange={event => setSelectedProviderKey(event.target.value)}><option value="">All providers</option>{selectedProviderKey && !providers.some(provider => provider.providerKey === selectedProviderKey) ? <option value={selectedProviderKey}>{selectedProviderKey}</option> : null}{providers.map(provider => (<option key={provider.providerKey} value={provider.providerKey}>{provider.displayName || provider.providerKey}</option>))}</select></StudioField>
           </div>
         </details>
       </section>
@@ -506,8 +506,8 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               <p>{providerKey ? `Provider: ${providerKey} · ` : ""}Authority: {authorityKind}</p>
             </WorkflowListIdentifiers></span>
             <span role="cell" data-label="State" className="ad-collection-state">
-              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
-              {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}
+              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <StatusChip tone="warning">Draft</StatusChip> : null}
+              {definition.lifecycle.versionCount > 0 ? <StatusChip tone="success">Published</StatusChip> : null}
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount === 0 ? <span className="ad-status-copy">No versions yet</span> : null}
               {recommendedVersion ? <small title={`Exact recommended version ${recommendedVersion.full}`}>Recommended {recommendedVersion.short}</small> : definition.lifecycle.versionCount > 0 ? <small>No recommended version</small> : null}
             </span>
@@ -539,7 +539,7 @@ function ActivityDefinitionSkeleton() {
 function ActivityDefinitionFailure({ kind, cursorInvalid, onRetry }: { kind: ReturnType<typeof classifyActivityDefinitionReadFailure>; cursorInvalid: boolean; onRetry(): void }) {
   if (cursorInvalid) return <StudioResultState tone="danger" icon={<AlertTriangle size={22} aria-hidden />} title="Collection continuation is no longer valid" description="Restart paging to request a fresh authorized snapshot while keeping your filters and page size." actions={<StudioButton onClick={onRetry}>Restart paging</StudioButton>} />;
   const copy = {
-    unavailable: ["Unavailable contribution", "This backend does not advertise the Activity Definition management capability supported by Studio. No legacy activity fallback is used."],
+    unavailable: ["Activity definitions unavailable", "This backend does not support activity definition management."],
     forbidden: ["Activity Definitions unavailable", "This account cannot open the Activity Definitions collection. No identities or counts were loaded."],
     "not-found": ["Activity Definitions unavailable", "The requested collection is not available."],
     expired: ["Collection snapshot expired", "Restart paging to request a fresh authorized snapshot."],

@@ -969,7 +969,9 @@ function normalizeTemplateKind(value?: string | number | null) {
 
 function enumName<T extends string>(value: T | number | null | undefined, names: readonly T[]): T {
   if (typeof value === "number") return names[value] ?? (String(value) as T);
-  return (value ?? "") as T;
+  if (!value) return "" as T;
+  const normalized = value.toLowerCase();
+  return names.find(name => name.toLowerCase() === normalized) ?? value;
 }
 
 function projectRoot(projectId: string) {

@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioNotificationInput } from "@elsa-workflows/studio-sdk";
 import { newDecisionXml } from "../decisionXml";
 import type { DecisionAsset } from "../decisionsApi";
@@ -30,3 +30,13 @@ export function type(element: HTMLInputElement | HTMLTextAreaElement, value: str
 }
 export function select(element: HTMLSelectElement, value: string) { flushSync(() => { element.value = value; element.dispatchEvent(new Event("change", { bubbles: true })); }); }
 export function blur(element: HTMLElement) { flushSync(() => element.blur()); }
+
+export async function beginDecision() {
+  let dialog!: HTMLElement;
+  await vi.waitFor(() => { dialog = document.querySelector<HTMLElement>('[role="dialog"]')!; expect(dialog).toBeTruthy(); });
+  const create = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(create.disabled).toBe(true);
+  type(dialog.querySelector<HTMLInputElement>("input")!, "Named decision");
+  type(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Decision purpose");
+  click(create);
+}
