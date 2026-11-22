@@ -66,12 +66,14 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 - Absent or blank Elsa 3 members whose converted value differs (#3281, S-0).
 - Applying the input contract on every start: fixed by
   [#3731](https://github.com/elsa-workflows/elsa-foundation/pull/3731) (#3728).
-  `WorkflowStartDispatcher` validates every new start (API, triggers, BPMN, test runs, child workflows) with
+  `WorkflowStartDispatcher` validates every new native workflow start (API, triggers, BPMN native workers, test runs,
+  child workflows) with
   `IWorkflowExecutableInputValidator` in complete-bag mode, before the start policy and before the start command is
   enqueued. It fills declared defaults into the start payload and refuses a blank, unknown, duplicate or mistyped
   input, or a missing required one, with `WorkflowExecutableStartRejectedException` (category `Input`, rendered as
   `400`); the stimulus router reports such a start as `Refused`. S-2 extends that admission and does not add another
-  one (see *Admission* below).
+  one (see *Admission* below). Standalone BPMN model inputs use model-specific shared-validator callers and retain
+  model semantics.
 - The validator's type conversion (System.Text.Json defaults today). S-9 (spec 1207) moves it onto the shared
   data-boundary options; S-2 does not change it.
 - The serializer baseline: S-9 makes `IPayloadSerializer` keep explicit nulls (its FR-018). S-2 changes no serializer
@@ -79,12 +81,12 @@ variable reads; the Elsa 3 converter option; the stored representation of explic
 
 **Admission**: "admission" in this spec is #3731's input-contract step in `WorkflowStartDispatcher`. It already
 delivers FR-008 for an omitted required input and the declared-default half of FR-006 for workflow inputs, on every
-start path. S-2 adds four things to it:
+native start path. S-2 extends this normalization as follows:
 - an omitted optional input without a declared default materializes as `null` when nullable, otherwise as its type
   default (FR-006, FR-009);
-- workflow-input nullability, which comes from the input's type (FR-001a), is pinned in the input contract (FR-005),
-  so admission refuses an explicit `null` for a
-  non-nullable input unless default-on-null applies (FR-008, FR-013);
+- workflow-input nullability is derived from the input's type using the existing pinned contract. Normalization
+  applies the executable's default-on-null policy and reports `runtime.input.null-not-allowed` if a non-nullable
+  null remains (FR-001a, FR-005, FR-008, FR-013);
 - a workflow input declared both required and with a default is refused at publication, so admission never meets
   one (FR-034);
 - FR-008's "before the start checkpoint" holds for these new outcomes too: they are decided where #3731 decides, before
@@ -325,8 +327,7 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
 **Omitted members (D-10)**
 - **FR-005**: Requiredness and nullability MUST be separate properties of an activity input and of a workflow input:
   requiredness is declared, a workflow input's nullability comes from its type (FR-001a). A workflow input's
-  nullability MUST be pinned in the executable's input contract and its hash (today only requiredness and the
-  default are).
+  nullability MUST be pinned in the executable's input contract and its hash.
 - **FR-006**: An omitted member MUST take its declared default; an optional member without one MUST read `null` when
   nullable, and otherwise its type's default. A workflow input is completed at admission (`ExplicitNull` or the type
   default); an omitted nullable activity input stays `Absent`, which the activity reads as `null`. A non-nullable type without a type default (FR-001b:
@@ -342,9 +343,11 @@ input left unbound, and one workflow input supplied as `null`. After resume the 
   default (the activity definition contract editor), setting a default turns *Required* off.
 - **FR-008**: An omitted required workflow input, and an explicit `null` for a non-nullable workflow input without the
   default-on-null policy or whose type has no type default, MUST be refused at admission, before the start checkpoint, with a diagnostic naming the
-  member. No step runs and no work item is scheduled. This holds on every start path (API, triggers, BPMN, test runs,
-  child workflows). #3731 already does this for the omitted required input; S-2 adds the explicit-null refusal at the
-  same point.
+  member. No step runs and no work item is scheduled. This holds on every native workflow start path (API, triggers,
+  BPMN native workers, test runs, child workflows). #3731 already does this for the omitted required input. The
+  reconciled validator already rejects explicit null for non-nullable inputs. S-2 derives nullability from the type,
+  applies the pinned default-on-null policy, and uses `runtime.input.null-not-allowed` when null is still refused,
+  at the same admission boundary.
 - **FR-009**: After admission, every declared workflow input MUST have a value, so a later read never fails because a
   member was omitted. #3731 fills declared defaults; S-2 adds `null` or the type default for an optional input without
   one (FR-006).
