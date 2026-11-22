@@ -1,0 +1,30 @@
+{
+  "id": "workflow-scoped-variable-expression-v1",
+  "definitionId": "workflow-scoped-variable-expression",
+  "name": "workflow-scoped-variable-expression",
+  "description": "Test-owned scoped Variable expression with a workflow declaration sharing the same ID.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [
+    { "id": "source", "name": "source", "typeName": "String", "value": "outer scope" },
+    { "id": "destination", "name": "destination", "typeName": "String" }
+  ],
+  "inputs": [], "outputs": [], "outcomes": [], "customProperties": {},
+  "isLatest": true, "isPublished": true,
+  "options": { "usableAsActivity": false },
+  "root": {
+    "id": "scope", "nodeId": "scope", "type": "Elsa.Sequence", "version": 1,
+    "variables": [
+      { "id": "source", "name": "source", "typeName": "String", "value": "nearest scope" }
+    ],
+    "activities": [{
+      "id": "copy", "nodeId": "copy", "type": "Elsa.SetVariable", "version": 1,
+      "variable": { "id": "destination", "name": "destination", "typeName": "String" },
+      "value": {
+        "typeName": "String",
+        "expression": { "type": "Variable", "value": { "id": "source", "name": "stale name" } }
+      }
+    }]
+  }
+}

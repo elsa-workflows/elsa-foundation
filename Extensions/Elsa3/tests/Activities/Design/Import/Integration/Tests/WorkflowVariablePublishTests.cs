@@ -14,19 +14,21 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 /// </summary>
 public sealed class WorkflowVariablePublishTests(ITestOutputHelper output)
 {
-    [Fact]
-    public async Task A_Variable_expression_imports_publishes_and_reads_its_declared_variable()
+    [Theory]
+    [InlineData("workflow-variable-expression", "read through Variable")]
+    [InlineData("workflow-scoped-variable-expression", "nearest scope")]
+    public async Task A_Variable_expression_imports_publishes_and_reads_its_declared_variable(string fixture, string expected)
     {
         await using var host = await Elsa3ImportHost.StartAsync();
-        var import = await host.ImportSelectionAsync("import-variable-expression", ["workflow-variable-expression"]);
+        var import = await host.ImportSelectionAsync("import-variable-expression", [fixture]);
         Assert.True(import.Apply.StatusCode == HttpStatusCode.Created, import.Apply.Body.ToJsonString());
-        var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item("workflow-variable-expression-v1"), "workflowVersionId"));
+        var workflow = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item($"{fixture}-v1"), "workflowVersionId"));
 
         var run = await host.RunAsync(workflow);
 
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         Assert.Empty(run.Incidents);
-        Assert.Equal("\"read through Variable\"", Variable(run, "destination"));
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected), Variable(run, "destination"));
     }
 
     [Fact]

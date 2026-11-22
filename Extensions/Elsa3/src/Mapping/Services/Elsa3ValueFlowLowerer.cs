@@ -82,6 +82,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             AncestorScopeNames = ancestorScopeNames ?? (_ => [])
         };
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
+        var hasScriptWrites = properties.Any(property => TryReadVariableExpression(property.Value, out _)) &&
+            properties.Where(property => isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
+                .Any(property => property.Expression is not { Type: "Literal" } expression ||
+                    expressionRewriter.ScriptMayWriteVariables(expression.Value,
+                        ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient)));
 
         foreach (var property in properties)
         {
@@ -132,7 +137,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (isVariableExpression)
             {
                 LowerVariableExpression(input, property, variableDeclaration, variablesById, containerVariables,
-                    outputs, properties, inventory, plan, diagnostics);
+                    outputs, properties, inventory, plan, hasScriptWrites, diagnostics);
                 continue;
             }
 
@@ -347,6 +352,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyList<ActivityProperty> properties,
         Elsa3MemoryReferenceInventory inventory,
         Elsa3ConversionPlan? plan,
+        bool hasScriptWrites,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var path = $"{property.JsonPath}.expression.value.id";
@@ -396,10 +402,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             var loop = producers.FirstOrDefault(IsLoopVariable);
             var hasExplicitWrite = plan?.Nodes.Values.Any(node => node.Intrinsic?.Variable is { IsWorkflowScope: true } reference &&
                 StringComparer.Ordinal.Equals(reference.ReferenceKey, id)) == true;
-            if (loop is not null && (producers.Length > 1 || hasExplicitWrite))
+            if (loop is not null && (producers.Length > 1 || hasExplicitWrite || hasScriptWrites))
             {
                 Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
-                    $"Variable expression '{id}' reads a loop capture also written by another activity; no single loop value represents it faithfully.",
+                    $"Variable expression '{id}' reads a loop capture in a workflow with another possible write; no single loop value represents it faithfully.",
                     "Give each loop its own captured variable and copy the intended value into a separate variable before reading it.", id);
                 return;
             }
@@ -414,7 +420,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             else
             {
                 if (plan?.WorkflowVariableTypes.GetValueOrDefault(workflowMatches[0]) is { } variableType &&
-                    !CheckVariableType(variableType, producers.Length > 0))
+                    !CheckVariableType(variableType, !hasExplicitWrite && !hasScriptWrites && CapturedKindsFit(producers)))
                     return;
                 Bind(VariableReference.WorkflowScopeId, id);
             }
@@ -441,6 +447,26 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 $"Variable expression '{id}' reads a declaration of type '{variableType.Alias}', but input '{property.PropertyName}' requires '{target.Alias}'.",
                 "Use a variable whose declared type matches this input, or convert its value explicitly in a JavaScript expression before import.", id);
             return false;
+        }
+
+        bool CapturedKindsFit(IReadOnlyList<Elsa3MemoryOccurrence> producers)
+        {
+            if (producers.Count == 0 || property.InputContract?.Type is not { } target)
+                return false;
+            return producers.All(producer =>
+            {
+                var contract = inventory.PropertyContracts.FirstOrDefault(contract =>
+                    contract.Direction == Elsa3PropertyDirection.Output &&
+                    contract.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
+                    contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal));
+                if (contract is null)
+                    return false;
+                if (!IsUntyped(contract.Type, SimpleName(contract.Type.Alias)))
+                    return VariableTypeFits(contract.Type, target, false);
+                return target.CollectionKind == CollectionKind.Single &&
+                       Elsa3ScriptResultKinds.ScalarTarget(SimpleName(target.Alias)) is not null &&
+                       ResultRefusal(properties, producer, property) is null;
+            });
         }
     }
 
