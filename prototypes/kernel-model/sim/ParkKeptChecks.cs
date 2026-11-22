@@ -118,7 +118,7 @@ internal static class ParkKeptChecks
         const long openedAt = 1_701_400_020_000;
         var now = openedAt;
         var store = new InMemoryStore(1, () => now);
-        var actor = new Probe();
+        var actor = new Probe(withholdFaulted: true);
         var scope = new Contract.BoundScope("discard");
         Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor),
             new WorkerOptions { Monotonic = () => now - openedAt });
@@ -165,6 +165,7 @@ internal static class ParkKeptChecks
         check(opened, "discard Open commits its first private control without clearing any input");
         if (!opened) return;
         var firstControl = store.Messages[open.ParkDiscard!.Control];
+        if (!await CheckDiscardPageAuthority(store, drainer.Fences.Single(), open, parked.Park!, check)) return;
 
         await Step(drainer);
         var firstPage = store.Instances[id].ParkDiscard;
@@ -194,6 +195,10 @@ internal static class ParkKeptChecks
             store.Messages.Values.Count(item => item.Message.Id == "after-open" && item.Done) == 1 && actor.PoisonOffers == 1 &&
             store.Journal.Values.Count(item => item.Entries.Contains("\"discarded\"", StringComparison.Ordinal)) == 1,
             "Complete removes the outstanding control and journals once, and the late input is dropped without replay");
+        await ingress.SendAsync(scope, target, "after-complete", "update");
+        await Pump(successor);
+        check(store.Messages.Values.Count(item => item.Message.Id == "after-complete" && item.Done) == 1,
+            "author withholding cannot leave ordinary input pending after Park discards");
         now += (long)store.IngressDeduplicationWindow.TotalMilliseconds + 1;
         await store.SweepAsync();
         check(store.Messages.GetValueOrDefault(ticket.InboxKey) is
@@ -215,6 +220,56 @@ internal static class ParkKeptChecks
             worker.RunTurn(id);
             await worker.FlushAsync();
         }
+    }
+
+    private static async Task<bool> CheckDiscardPageAuthority(InMemoryStore store, PartitionFence fence, InstanceRow open,
+        InMemoryStore.FoundationParkMark park, Action<bool, string> check)
+    {
+        var drain = open.ParkDiscard!;
+        var page = store.ReadFoundationKeptPage(new(open.Id, open.Creation), park, drain.Cursor)!;
+        var envelope = ParkDrainEnvelope.For(open, park);
+        var nextControl = envelope.Issue(open, drain.Serial + 1);
+        var next = open with { Revision = open.Revision + 1,
+            ParkDiscard = new(page[^1].Cursor, page.Count, drain.Serial + 1, nextControl.InboxKey) };
+        var clear = new TurnCommit(open.Id, next, open.Revision, [drain.Control], [], [nextControl], [], [], null)
+        { FoundationParkClear = new(park, page) };
+        var rowless = new TurnCommit(open.Id, null, null, [drain.Control], [], [], [], [], null);
+        var recovered = await DefiniteRejection(() => Commit(fence, rowless));
+        check(recovered && store.Messages.ContainsKey(drain.Control) && store.Instances[open.Id] == open,
+            "a rowless commit cannot consume the outstanding control");
+        if (!recovered) return false;
+
+        var skippedPrefix = clear with { Row = next with { ParkDiscard = next.ParkDiscard! with { Cleared = 1 } },
+            FoundationParkClear = new(park, [page[^1]]) };
+        var refusedGap = await DefiniteRejection(() => Commit(fence, skippedPrefix));
+        check(refusedGap && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control),
+            "the fenced writer refuses a page that would skip rows below its cursor");
+        if (!refusedGap) return false;
+
+        var altered = page.ToArray();
+        altered[^1] = altered[^1] with { Reason = ParkKeepReason.Consumed };
+        var divergent = false;
+        try { await Commit(fence, clear with { FoundationParkClear = new(park, altered) }); }
+        catch (StoreException error) when (error.Failure == Failure.Unknown) { divergent = true; }
+        var rolledBack = divergent && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control)
+            && !store.Messages.ContainsKey(nextControl.InboxKey) && page.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason);
+        check(rolledBack, "one mismatched kept reason rolls back the entire page and checkpoint");
+        if (!rolledBack) return false;
+
+        var stale = await Commit(fence with { Epoch = fence.Epoch - 1 }, clear);
+        check(!stale.Landed && store.Instances[open.Id] == open && store.Messages.ContainsKey(drain.Control),
+            "a stale fence cannot clear kept inputs");
+        return true;
+
+        ValueTask<Committed> Commit(PartitionFence authority, TurnCommit turn) =>
+            store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
+    }
+
+    private static async Task<bool> DefiniteRejection(Func<ValueTask<Committed>> commit)
+    {
+        try { await commit(); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { return true; }
+        return false;
     }
 
     private static async Task CheckKeptPages(InMemoryStore store, PartitionFence fence, string id, long creation, Action<bool, string> check)
@@ -254,36 +309,13 @@ internal static class ParkKeptChecks
             store.ReadFoundationKeptPage(address with { Creation = creation + 1 }, park, null) is null,
             "a mismatched Park mark or creation is distinguishable from an empty page");
 
-        checkpoint = store.Instances[id];
-        var altered = front.ToArray();
-        altered[^1] = altered[^1] with { Reason = ParkKeepReason.Consumed };
-        var divergent = false;
-        try { await Clear(fence, altered); }
-        catch (StoreException error) when (error.Failure == Failure.Unknown) { divergent = true; }
-        var rolledBack = divergent && store.Instances[id] == checkpoint &&
-            store.Partitions[fence.Partition].Position == fence.Position &&
-            front.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason);
-        check(rolledBack, "one mismatched kept reason rolls back the entire page and checkpoint");
-        if (!rolledBack) return;
+        var clearWithoutDrain = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 2 },
+            checkpoint.Revision + 1, [], [], [], [], [], null) { FoundationParkClear = new(park, front) };
+        var refused = await DefiniteRejection(() => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+            false, [clearWithoutDrain], [], [])));
+        check(refused && front.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason),
+            "a parked row cannot clear inputs without an open drain");
 
-        var stale = await Clear(fence with { Epoch = fence.Epoch - 1 }, front);
-        check(!stale.Landed && store.Instances[id] == checkpoint && store.Messages[start].KeptBy == ParkKeepReason.Arrived,
-            "a stale fence cannot clear kept inputs");
-
-        var cleared = await Clear(fence, front);
-        var until = store.FoundationClock() + (long)store.IngressDeduplicationWindow.TotalMilliseconds;
-        check(cleared.Landed && store.Instances[id].Revision == checkpoint.Revision + 1 &&
-            store.Partitions[fence.Partition].Position == fence.Position + 1 &&
-            front.All(item => store.Messages[item.Cursor.Key] is { Done: true, KeptBy: null, Message.KeepUntil: var expires } && expires == until) &&
-            store.Messages[start].Message.Payload == widePayload && tail.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason),
-            "one fenced commit clears exactly the page and refreshes its window while the suffix stays kept");
-
-        ValueTask<Committed> Clear(PartitionFence authority, IReadOnlyList<ParkPageRow> page)
-        {
-            var turn = new TurnCommit(id, checkpoint with { Revision = checkpoint.Revision + 1 }, checkpoint.Revision, [],
-                [], [], [], [], "[\"page\"]") { FoundationParkClear = new(park, page) };
-            return store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
-        }
     }
 
     private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
@@ -342,12 +374,12 @@ internal static class ParkKeptChecks
         }
     }
 
-    private sealed class Probe : Contract.IActorType
+    private sealed class Probe(bool withholdFaulted = false) : Contract.IActorType
     {
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {

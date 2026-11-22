@@ -15,6 +15,7 @@ public static class StoreBatchRules
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<InboxKey>? consumedControls = null;
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
         ValidateParkPageClears(batch);
@@ -36,6 +37,10 @@ public static class StoreBatchRules
                 throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
             if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
                 throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
+            if (turn.Consumed.Concat(turn.Done).Any(key => key.Scope == ParkDrainEnvelope.Scope &&
+                    !(consumedControls ??= []).Add(key)) ||
+                (turn.Held ?? []).Any(key => key.Scope == ParkDrainEnvelope.Scope))
+                throw new StoreException(Failure.Definite, "Each protected control may be consumed only once and may not be held.");
             if (turn.Delete)
             {
                 if (turn.Expected is not { } expected)

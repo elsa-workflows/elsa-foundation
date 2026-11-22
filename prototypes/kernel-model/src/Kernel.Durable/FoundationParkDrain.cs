@@ -50,7 +50,9 @@ public sealed partial class InMemoryStore
         var before = previous?.ParkDiscard;
         var after = next?.ParkDiscard;
         if (before is not null && (turn.Delete || turn.FoundationKept is { Count: > 0 })) throw InvalidDrain();
-        if (!turn.Sent.Any(ParkDrainEnvelope.IsInDomain) && (next is null || turn.Delete || before == after &&
+        var takesOutstanding = turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain);
+        if (!takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(ParkDrainEnvelope.IsInDomain) &&
+            (next is null || turn.Delete || before == after &&
             (previous?.ParkDiscarded ?? false) == next.ParkDiscarded &&
             (previous?.ParkResolutionGeneration ?? 0) == next.ParkResolutionGeneration))
             return;
@@ -88,13 +90,19 @@ public sealed partial class InMemoryStore
         else if (turn.FoundationParkClear is not { } page || page.Park != park || next.ParkDiscarded ||
             after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
             after.Serial != before.Serial + 1 ||
-            before.Cursor is { } previousCursor && page.Rows[0].Cursor.CompareTo(previousCursor) <= 0)
+            !page.Rows.Select(row => row.Cursor).SequenceEqual(
+                ReadFoundationKeptPage(new(next.Id, next.Creation), park, before.Cursor)!.Select(row => row.Cursor)))
             throw InvalidDrain();
 
         if (controls.Length != 1 || controls[0].Due is not null || controls[0].KeepUntil is not null ||
             !envelope.MatchesIssued(controls[0], next, after))
             throw InvalidDrain();
     }
+
+    private bool IsOutstandingDrain(InboxKey key) =>
+        key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&
+        Instances.GetValueOrDefault(control.Message.Target.Id) is { ParkDiscard: { } drain } row &&
+        control.Message.TargetCreation == row.Creation && drain.Control == key;
 
     private static StoreException InvalidDrain() =>
         new(Failure.Definite, "A Park drain must consume its exact input and advance the same fenced checkpoint.");

@@ -45,7 +45,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
-        return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
+        return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>

@@ -293,7 +293,6 @@ public sealed partial class InMemoryStore
         _foundationEnds.Remove(address);
         _foundationHeaders.Remove(address);
         _foundationParks.Remove(address);
-        _foundationParks.Remove(address);
     }
 
     internal static bool IsOutsideMessageId(string id) => !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
