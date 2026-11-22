@@ -166,19 +166,36 @@ public sealed partial class InMemoryStore
         ParkRecoveryDeletion deletion, IReadOnlyDictionary<int, long> epochs, long now)
     {
         if (previous is not { Status: not InstanceStatus.Running, Retired: false, ParkRecovery: { Deletion: null } before } ||
-            next != (previous with { Revision = checked(previous.Revision + 1), ParkRecovery = before with { Deletion = deletion } }) ||
             turn.Delete || turn.OpensPark || turn.Journal is not null || turn.FoundationParkClear is not null ||
-            turn.FoundationKept is not null || turn.FoundationHeader is not null || turn.FoundationCascade is not null ||
-            turn.Sent.Count != 0 || turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
+            turn.FoundationKept is not null || turn.FoundationHeader is not null ||
+            turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
             turn.Unsubscribe || turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             turn.Consumed.Concat(turn.Done).ToArray() is not [var key] ||
-            Messages.GetValueOrDefault(key) is not { Done: false, Message: { Kind: Kinds.Delete, Operator.Selection: { } selection } input } ||
+            Messages.GetValueOrDefault(key) is not { Done: false, Message: { Operator: { } command } input } ||
             input.Target.Id != next.Id || input.TargetCreation != next.Creation || input.Due > now ||
-            input.Id != deletion.Operation || selection != deletion.Selection ||
-            !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
-            !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection, requireTerminal: true))
+            input.Id != deletion.Operation || command.Selection != deletion.Selection)
             throw InvalidDrain();
+
+        var expected = previous with { Revision = checked(previous.Revision + 1), ParkRecovery = before with { Deletion = deletion } };
+        if (deletion.ThenDelete)
+        {
+            if (!AuthorizesEndedRecoverThenDelete(previous, input))
+                throw InvalidDrain();
+            if (previous.Cascade is null && CascadeRegistry.From(previous).Count != 0)
+            {
+                if (turn.FoundationCascade is null || turn.Sent.Any(message => !message.CascadeOrigin && message.Kind != Kinds.Cascade))
+                    throw InvalidDrain();
+                expected = expected with { Jobs = null, Children = null, Cascade = next.Cascade };
+            }
+            else if (turn.FoundationCascade is not null || turn.Sent.Count != 0) throw InvalidDrain();
+        }
+        else if (input.Kind != Kinds.Delete || turn.FoundationCascade is not null || turn.Sent.Count != 0 ||
+            !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
+            !MatchesFoundationSelection(binding.Tenant, binding.Reference, deletion.Selection, requireTerminal: true))
+            throw InvalidDrain();
+
+        if (next != expected) throw InvalidDrain();
     }
 
     internal static string RecoveryCompleteJournal(ParkRecoveryDrain drain, bool retiring)

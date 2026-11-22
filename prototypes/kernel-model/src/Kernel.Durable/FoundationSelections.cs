@@ -29,6 +29,22 @@ public sealed partial class InMemoryStore
         }
     }
 
+    internal bool AuthorizesEndedRecoverThenDelete(InstanceRow row, Message input)
+    {
+        lock (_gate)
+        {
+            if (row is not { Status: not InstanceStatus.Running, ParkRecovery: not null } ||
+                !MatchesThenDeleteTarget(row, input)) return false;
+            if (input.Operator!.Selection is not { } selection) return true;
+            var identity = FoundationIdentity(row.Id, row.Creation);
+            if (_foundationParks.GetValueOrDefault(new(row.Id, row.Creation)) is not { } park) return false;
+            Span<byte> mark = stackalloc byte[SelectionBytes];
+            return TryOpenReadCursor(SelectionContext(identity.Tenant, identity.Reference), selection, mark) && mark[0] == 1 &&
+                BinaryPrimitives.ReadInt64LittleEndian(mark[1..]) == park.Revision &&
+                BinaryPrimitives.ReadInt64LittleEndian(mark[(1 + sizeof(long))..]) == park.At;
+        }
+    }
+
     private bool NamesFoundationPark(string tenant, string reference, string token)
     {
         Span<byte> mark = stackalloc byte[SelectionBytes];

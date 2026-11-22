@@ -101,7 +101,8 @@ internal sealed partial class ActorAdapter
             ParkRecovery = null, ParkCohort = null
         };
         return AdvanceClear(input, row, next, park, input.Taken[input.From].Message.Id, null, 0,
-            checked((row.ParkRecovery?.Serial ?? expiry?.Serial ?? 0) + 1), kind);
+            checked((row.ParkRecovery?.Serial ?? expiry?.Serial ?? 0) + 1), kind,
+            kind == Durable.ParkClearKind.Terminate && input.Taken[input.From].Message.Operator?.DeleteTarget is not null);
     }
 
     private Durable.TurnOutcome ContinueDiscard(Durable.TurnInput input)
@@ -116,20 +117,21 @@ internal sealed partial class ActorAdapter
         if (page is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         if (page.Count > 0)
-            return AdvanceClear(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Kind);
+            return AdvanceClear(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Kind, drain.ThenDelete);
 
         var completed = row with { ParkDiscard = null, ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null };
         if (drain.Kind == Durable.ParkClearKind.Terminate)
             completed = completed with { Status = Durable.InstanceStatus.Cancelled, Suspended = false };
         var outcome = ParkCheckpoint(input, row, completed);
-        if (drain.Kind == Durable.ParkClearKind.Delete)
+        if (drain.DeletesAtComplete)
         {
             if (outcome.Row!.Parent is not null) outcome.Sent.Add(Notice(outcome.Row, null, final: true));
             var retire = DeletionRefusal(Header(store.FoundationTurnHeader(row)), row.State, input.Services.Now) is null;
             outcome.Journal = Durable.InMemoryStore.ParkDeleteJournal(retire, drain);
             if (retire)
             {
-                outcome.Row = Durable.CreationProtocol.Retire(row, Durable.CascadeRegistry.ForRetirement(row));
+                var source = drain.ThenDelete ? row with { Status = Durable.InstanceStatus.Cancelled } : row;
+                outcome.Row = Durable.CreationProtocol.Retire(source, Durable.CascadeRegistry.ForRetirement(source));
                 outcome.Delete = outcome.Unsubscribe = true;
             }
             return outcome;
@@ -148,12 +150,12 @@ internal sealed partial class ActorAdapter
 
     private static Durable.TurnOutcome AdvanceClear(Durable.TurnInput input, Durable.InstanceRow row,
         Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, string operation, IReadOnlyList<Durable.ParkPageRow>? page,
-        long cleared, long serial, Durable.ParkClearKind kind)
+        long cleared, long serial, Durable.ParkClearKind kind, bool thenDelete)
     {
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
         var drain = new Durable.ParkDiscardDrain(operation, page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey)
         {
-            Kind = kind
+            Kind = kind, ThenDelete = thenDelete
         };
         var outcome = ParkCheckpoint(input, row, next with { ParkDiscard = drain });
         outcome.Sent.Add(control);

@@ -55,6 +55,7 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
 
 internal sealed record FoundationOperatorCommand(string? Selection)
 {
+    internal string? DeleteTarget { get; init; }
     internal ParkRecoveryMode? RecoverMode { get; init; }
     internal IReadOnlyList<string>? RecoverHandles { get; init; }
 }

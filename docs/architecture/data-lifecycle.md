@@ -117,6 +117,14 @@ public sealed record DeleteSelection(
   - Release 1 starts from empty databases (owner, 17 November), and every new run gets a creation once K3 lands, so release 1 never meets an ambiguous row.
 - **Observability.** A refusal adds no journal row, as for other no-op commands. It counts in a layer-3 metric, `elsa.kernel.delete.refused`, by reason: tenant, target, run, transition, not eligible, protected, ambiguous, and in progress (a delete reaching a drain that already ends in a delete).
 
+  The in-memory Foundation requires both operator permissions for `ThenDelete` and carries the selected
+  actor's exact reference as `ExpectedTarget`. The real Worker uses that pinned creation through delivery.
+  `--cascade-pages-check` covers Native retirement with its first bounded cascade page, a protected
+  running actor, and already ended actors with and without a child. `--park-drain-cascade-check` covers
+  parked and running Recover origins. `--park-recovery-check` covers taking over an ended Recover and
+  a competing `ThenDelete` that cascades while preserving the existing owner's operation.
+
+
 - **What stays after a delete:**
   - the retirement marker, for every id kind, caller keys included (proposed; built for generated ids and rows with a creation), with the retained cancellation obligation above;
   - the journal's deletion marker;

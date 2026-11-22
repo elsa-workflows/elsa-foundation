@@ -12,11 +12,14 @@ internal static class ParkDrainCascadeChecks
         await Run(parentTerminate: true, check, expiry: true);
         await TerminatePark(parentTerminate: false, check);
         await TerminatePark(parentTerminate: true, check);
+        await TerminatePark(parentTerminate: false, check, thenDelete: true);
+        await TerminatePark(parentTerminate: false, check, thenDelete: true, protectAtComplete: true);
         await ExistingCascade(check);
         await RefusedTerminateDoesNotWithdraw(check, drainAlreadyOpen: false);
         await RefusedTerminateDoesNotWithdraw(check, drainAlreadyOpen: true);
         await TerminateRunningRecovery(selected: true, check);
         await TerminateRunningRecovery(selected: false, check);
+        await TerminateRunningRecovery(selected: false, check, thenDelete: true);
         await ColdRecoveryJobSuffix(check);
         foreach (var cut in Enum.GetValues<OpenCut>()) await RecoverJobAtOpen(cut, check);
     }
@@ -116,14 +119,15 @@ internal static class ParkDrainCascadeChecks
         }
     }
 
-    private static async Task TerminatePark(bool parentTerminate, Action<bool, string> check)
+    private static async Task TerminatePark(bool parentTerminate, Action<bool, string> check,
+        bool thenDelete = false, bool protectAtComplete = false)
     {
         const long initial = 1_702_310_030_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(10) };
         var scope = new Contract.BoundScope("park-terminate");
         var probe = new Probe();
-        var edge = new InMemoryIngress(store, new Requests("park-terminate"), "park-terminate", (_, kind) => kind == Contract.Kinds.Terminate);
+        var edge = new InMemoryIngress(store, new Requests("park-terminate"), "park-terminate", (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
         var writes = new List<TurnCommit>();
         var refusedNotices = 0;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
@@ -171,7 +175,7 @@ internal static class ParkDrainCascadeChecks
 
         var reads = new ActorList(store, 10);
         var selection = (await reads.GetAsync(scope, child))!.Selection!;
-        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var payload = Json.Write(new Contract.OperatorCommand(selection, ThenDelete: thenDelete, ExpectedTarget: thenDelete ? child : null));
         if (parentTerminate)
         {
             await Send(parent, "end", "cancel");
@@ -186,11 +190,11 @@ internal static class ParkDrainCascadeChecks
         var opened = await reads.GetAsync(scope, child);
         var openedCorrectly = open is
             { Status: InstanceStatus.Faulted, ParkDiscard: { Kind: ParkClearKind.Terminate, Cursor: null, Cleared: 0 }, Children: null } &&
-            opened?.Park?.OpenResolution == "terminating" && Checkpoint(child).Park == parked.Park &&
+            open.ParkDiscard.ThenDelete == thenDelete && opened?.Park?.OpenResolution == "terminating" && Checkpoint(child).Park == parked.Park &&
             store.MatchesFoundationSelection(scope.Tenant, child.Id, selection) &&
             Kept() == count && Notices() == 0 && !store.Messages.ContainsKey(expiry) &&
             writes.Count(turn => turn.Instance == id && turn.FoundationCascade is not null && turn.Unsubscribe) == 1;
-        var source = parentTerminate ? "parent" : "operator";
+        var source = thenDelete ? "operator ThenDelete" : parentTerminate ? "parent" : "operator";
         check(openedCorrectly, $"{source}: Terminate Open preserves the Park mark, recalls expiry and hands off the subtree without an end notice" +
             (openedCorrectly ? "" : $" (drain {open.ParkDiscard}, revision {open.Revision}, children {open.Children}, kept {Kept()}, notices {Notices()}, " +
                 $"expiry still queued {store.Messages.ContainsKey(expiry)}, same Park {Checkpoint(child).Park == parked.Park})"));
@@ -204,6 +208,7 @@ internal static class ParkDrainCascadeChecks
             store.Messages.Values.Any(row => !row.Done && row.Message.Target.Id == id && row.Message.Id == "late"),
             $"{source}: the first page clears only its bounded kept prefix and withholds later arrivals");
 
+        probe.Protect = protectAtComplete;
         await owner.DisposeAsync();
         now += 20;
         var successor = Owner("park-terminate-successor");
@@ -214,15 +219,21 @@ internal static class ParkDrainCascadeChecks
             await next.RunAsync();
         }
 
-        var complete = Checkpoint(child);
+        var retire = thenDelete && !protectAtComplete;
+        var complete = store.ReadFoundationActor(scope.Tenant, child.Id).Actor;
+        var marker = store.Instances[id];
         var ending = writes.Where(turn => turn.Instance == id && turn.Journal?.Contains("\"terminated\"", StringComparison.Ordinal) == true).ToArray();
-        var completedCorrectly = complete is { Park: null, Row: { Status: InstanceStatus.Cancelled, ParkDiscard: null } } &&
-            complete.EndedAt == now && complete.Row.State == parked.Row.State && Kept() == 0 &&
+        var ended = retire
+            ? complete is null && marker is { Retired: true, Status: InstanceStatus.Cancelled } &&
+                store.Journal.Values.Where(row => row.Instance == id).ToArray() is [{ Revision: -1 }]
+            : complete is { Park: null, Row: { Status: InstanceStatus.Cancelled, ParkDiscard: null } } &&
+                complete.EndedAt == now && complete.Row.State == parked.Row.State;
+        var completedCorrectly = ended && Kept() == 0 &&
             Row(descendant).Status == InstanceStatus.Cancelled && Row(parent).Children is null && Notices() == 1 &&
             ending is [{ Sent: [var notice] }] && notice.Read<System.Text.Json.JsonElement>().GetProperty("Status").GetInt32() == (int)InstanceStatus.Cancelled &&
             store.Messages.Values.All(row => row.Message.Target.Id != id || row.Message.Kind != Kinds.Drain);
         check(completedCorrectly, $"{source}: takeover completes once as Cancelled, clears every kept key and emits the sole Cancelled notice" +
-            (completedCorrectly ? "" : $" (status {complete.Row.Status}, {complete.Row.ParkDiscard}, {Kept()} kept, " +
+            (completedCorrectly ? "" : $" (status {marker.Status}, {marker.ParkDiscard}, {Kept()} kept, " +
                 $"descendant {Row(descendant).Status}, {Notices()} final notices, {ending.Length} terminal writes, " +
                 $"pending {string.Join(", ", store.Messages.Values.Where(row => !row.Done && row.Message.Target.Id == id).Select(row => $"{row.Message.Kind}/{row.Message.Id}:{row.Seen}:{row.Trial}"))})"));
         var late = store.Messages.Values.SingleOrDefault(row => row.Message.Target.Id == id && row.Message.Id == "late");
@@ -430,7 +441,7 @@ internal static class ParkDrainCascadeChecks
         }
     }
 
-    private static async Task TerminateRunningRecovery(bool selected, Action<bool, string> check)
+    private static async Task TerminateRunningRecovery(bool selected, Action<bool, string> check, bool thenDelete = false)
     {
         const long initial = 1_702_310_060_000;
         var now = initial;
@@ -500,11 +511,15 @@ internal static class ParkDrainCascadeChecks
         check(prepared, $"{source}: the running Recover has already restored a large input and a kept suffix remains");
         if (!prepared) return;
 
-        var admission = await Send(child, "terminate", Contract.Kinds.Terminate, selected ? selection : null);
+        var termination = thenDelete
+            ? Json.Write(new Contract.OperatorCommand(null, ThenDelete: true, ExpectedTarget: child))
+            : selected ? selection : null;
+        var admission = await Send(child, "terminate", Contract.Kinds.Terminate, termination);
         for (var pass = 0; pass < 4 && Row(child).ParkDiscard is null; pass++) await Step(child);
         var opened = Row(child);
         var openedView = await reads.GetAsync(scope, child);
         var open = opened is { Status: InstanceStatus.Running, ParkRecovery: null, ParkDiscard.Kind: ParkClearKind.Terminate } &&
+            opened.ParkDiscard!.ThenDelete == thenDelete &&
             opened.ParkResolutionGeneration == recovering.ParkResolutionGeneration + 1 &&
             store.Messages.Values.All(row => row.Message.Target.Id != id || row.Message.Kind != Kinds.Drain ||
                 row.Message.InboxKey == opened.ParkDiscard!.Control) &&
@@ -537,14 +552,18 @@ internal static class ParkDrainCascadeChecks
             await active.WokenAsync(null);
             await active.RunAsync();
         }
-        check(Row(child) is { Status: InstanceStatus.Cancelled, ParkRecovery: null, ParkDiscard: null } &&
-            Row(parent).Children is null && (await reads.GetAsync(scope, child)) is { Park: null, Header.EndedAt: var ended } &&
-            ended == now && probe.UnexpectedOffers == priorOffers &&
+        var terminal = await reads.GetAsync(scope, child);
+        var marker = store.Instances[id];
+        var acceptedEnd = thenDelete ? terminal is null && marker.Retired &&
+            store.Journal.Values.Where(row => row.Instance == id).ToArray() is [{ Revision: -1 }]
+            : terminal is { Park: null, Header.EndedAt: var ended } && ended == now;
+        check(marker is { Status: InstanceStatus.Cancelled, ParkRecovery: null, ParkDiscard: null } &&
+            Row(parent).Children is null && acceptedEnd && probe.UnexpectedOffers == priorOffers &&
             writes.SelectMany(turn => turn.Sent).Count(message => message.Kind == Kinds.ChildFinished &&
                 message.Sender == id && message.Read<FoundationChildNotice>() is { Final: true, Status: InstanceStatus.Cancelled }) == 1 &&
             store.Messages.Values.All(row => row.Message.Target.Id != id || row.KeptBy is null && row.Done),
             $"{source}: takeover clears the suffix, the parent sees one Cancelled end, and no restored or late input reaches the model");
-        if (!selected)
+        if (!selected && !thenDelete)
             check(await Send(child, "terminate", Contract.Kinds.Terminate) is { Outcome: Contract.AdmissionOutcome.Duplicate },
                 "the accepted unselected Terminate remains a duplicate after the drain ends");
 
@@ -895,7 +914,8 @@ internal static class ParkDrainCascadeChecks
         }
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool Withholds(Contract.ActorHeader header) => false;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        internal bool Protect { get; set; }
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => Protect;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
             new([], restoreMany ? ManyJobs() : restoreTrial ? [new("trial", null)] : [], []);
 
