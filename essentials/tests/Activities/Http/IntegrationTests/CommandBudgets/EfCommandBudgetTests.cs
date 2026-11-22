@@ -4,10 +4,13 @@
 // The budgets live in ef-command-budgets.json next to this file. Lowering a budget is a normal change. Raising one
 // needs a stated reason in the pull request that raises it.
 using System.Text.Json;
+using System.Data.Common;
+using System.Diagnostics;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
 
@@ -60,13 +63,15 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<int> MeasureAsync(string workflow, PersistenceMode mode)
+    private async Task<int> MeasureAsync(string workflow, PersistenceMode mode)
     {
         var capture = new CommandCaptureInterceptor();
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, services =>
         {
             ReferenceWorkflowRuns.ComposeHost(services);
             services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(capture));
+            if (workflow == "writeline-sequence" && mode == PersistenceMode.Balanced)
+                services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(new ParentScheduleReadTrace(output)));
         });
 
         var commands = 0;
@@ -77,6 +82,19 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
             commands += capture.Commands.Count - before;
         });
         return commands;
+    }
+
+    private sealed class ParentScheduleReadTrace(ITestOutputHelper output) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("FROM \"elsa_runtime_activity_execution_state\"", StringComparison.Ordinal) &&
+                new StackTrace().GetFrames().Any(frame => frame.GetMethod()?.DeclaringType?.FullName?
+                    .Contains("WorkflowScheduleActivitySchedulerWorkHandler", StringComparison.Ordinal) == true))
+                output.WriteLine($"Terminal-parent schedule guard executed SQL: {command.CommandText}");
+            return ValueTask.FromResult(result);
+        }
     }
 
     private static Dictionary<string, Dictionary<string, int>> ReadBudgets() =>
