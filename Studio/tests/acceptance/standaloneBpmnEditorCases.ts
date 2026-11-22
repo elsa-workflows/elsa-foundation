@@ -60,7 +60,7 @@ async function savePublishAndConsume(j: TriggerJourney, authored: Authored, expe
 export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
   // Keep this producer distinct from earlier appearances while deliberately deduplicating its logical publication below.
   const defaultMessage = `worker default ${j.stamp}`;
-  const defaults = [{ ...input("message"), isNullable: true, defaultValue: defaultMessage, defaultSyntax: "Literal" },
+  const defaults = [{ ...input("message", "String", false), defaultValue: defaultMessage, defaultSyntax: "Literal" },
     { ...input("count", "Int32"), defaultValue: 7, defaultSyntax: "Literal" }];
   const producer = await j.echo("Original default worker producer", defaults);
   const logicalName = "Logical default worker publication";
@@ -98,12 +98,20 @@ export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
   await j.page.getByLabel("JSON value for service message", { exact: true }).fill("null");
   await j.page.getByRole("button", { name: "Apply service input mapping", exact: true }).press("Enter");
   await savePublishAndConsume(j, nullProcess, { message: null, count: 7 });
+  j.unverified.push({ state: "nullable process input consumption", reason: "The declared process contract must retain nullability through publication and actual worker execution." });
+  const nullableProcess = await process(j, "Nullable declared BPMN input", [input("message", "String", false)]);
+  await selectWorker(j, nullableProcess, logicalName);
+  await j.page.getByLabel("Service input message source", { exact: true }).selectOption("Input");
+  await j.page.getByLabel("Process input for service message", { exact: true }).selectOption("message");
+  await j.page.getByRole("button", { name: "Apply service input mapping", exact: true }).press("Enter");
+  await savePublishAndConsume(j, nullableProcess, { message: null, count: 7 }, [configured("message", null)]);
   for (let index = j.unverified.length - 1; index >= 0; index--) {
-    if (["worker default-only empty v2 mapping", "logical worker publication versus producer pin"].includes(j.unverified[index].state)) j.unverified.splice(index, 1);
+    if (["worker default-only empty v2 mapping", "logical worker publication versus producer pin", "nullable process input consumption"].includes(j.unverified[index].state)) j.unverified.splice(index, 1);
   }
   j.observed.push("All-omitted nonempty worker contract retained v2 inputs:{} and actual worker defaults",
     "Deduplicated logical service publication retained its different immutable producer pin through save/reopen/publish/execution",
-    "Literal null worker value survived the editor and genuine BPMN/native-worker execution without becoming an omitted default");
+    "Literal null worker value survived the editor and genuine BPMN/native-worker execution without becoming an omitted default",
+    "An optional nullable process input retained its contract through direct publication and consumed explicit null in the actual worker");
 }
 
 

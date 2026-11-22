@@ -131,8 +131,8 @@ async function inspectActualRun(journey: TriggerJourney, delivery: DeliveryView,
     await journey.page.getByRole("navigation", { name: "Run workspace views", exact: true }).getByRole("button", { name: "Diagram", exact: true }).click();
     await expect(journey.page.getByRole("region", { name: "Workflow run canvas", exact: true })).toBeVisible();
     await expect(journey.page.getByRole("tabpanel").getByText("Loading workflow run...", { exact: true })).toHaveCount(0);
-    await expect(journey.page.getByRole("tabpanel").getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
-    await expect(journey.page.getByRole("tabpanel").getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
+    await expect(journey.page.getByRole("tabpanel").getByText("Loading visible run data…", { exact: true })).toHaveCount(0);
+    await expect(journey.page.getByRole("tabpanel").getByText("Some visible run data could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
   }
   journey.requests.push({ kind: "actual-delivery-inspection-link", backend: "acceptance-primary", backendUrl: response.url(), studioUrl: journey.page.url(), executionId,
     sourceDeliveryId: delivery.id, recipientId, status: response.status() });
