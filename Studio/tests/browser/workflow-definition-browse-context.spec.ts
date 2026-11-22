@@ -473,7 +473,7 @@ for (const variant of searchStatusVariants) {
     await expectPriorPageIsDisplayOnly(page);
     await page.screenshot({ path: testInfo.outputPath(`${variant.name.replaceAll(" ", "-")}-failure.png`), fullPage: true });
 
-    await page.getByRole("button", { name: "Retry current search" }).click();
+    await page.getByRole("button", { name: "Retry" }).click();
     await expect.poll(async () => (await recordedSearchRequests(page, "latest")).length)
       .toBe(2);
     await expect(page.getByText("Latest workflow result", { exact: true })).toBeVisible();
