@@ -180,7 +180,7 @@ describe("native product recovery", () => {
 
     click(view, "Inspect revision r0");
     await waitUntil(() => view.textContent?.includes("Earlier description") === true);
-    expect(view.querySelector("details")?.open).toBe(false);
+    expect(view.querySelector('.named-history-technical button')?.getAttribute("aria-expanded")).toBe("false");
     click(view, "Restore revision r0");
     await waitUntil(() => view.textContent?.includes("Unsaved changes will be replaced") === true);
     expect(restore).not.toHaveBeenCalled();
