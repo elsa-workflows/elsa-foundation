@@ -18,7 +18,7 @@ public sealed class DispatchWorkflowHistoryOptionalSourceTests
         registrations.AddWorkflowRuntimeHistory(new() { Enabled = false });
         var featureRegistrations = new ServiceCollection(); new DispatchWorkflowRuntimeFeature().ConfigureServices(featureRegistrations);
         var executions = new InMemoryWorkflowExecutionStateStore();
-        var services = new ServiceCollection();
+        IServiceCollection services = new ServiceCollection();
         services.AddSingleton<IWorkflowExecutionStateStore>(executions);
         // Resolve the actual feature's owner and the actual default source extension, without unrelated
         // publication/partition services that independently require access. No synthetic source factory.
