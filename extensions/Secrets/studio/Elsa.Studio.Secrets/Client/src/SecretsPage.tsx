@@ -1,4 +1,4 @@
-import { StatusChip, StudioAlert, studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, SkeletonRows, studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, KeyRound, Plus, RefreshCw } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -238,9 +238,8 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
   const focusKey = focusName ? `secret:${focusName}` : focusCreate ? "create" : null;
   useEffect(() => {
     if (loading || !focusKey || focused.current === focusKey || tab?.isActive() === false || (focusCreate && descriptorsLoading)) return;
-    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="New secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLButtonElement>("[data-secret-edit]") ?? []).find(element => element.dataset.secretEdit === focusName);
+    const button = focusCreate ? collectionRoot.current?.closest(".secrets-shell")?.querySelector<HTMLButtonElement>('button[aria-label="New secret"]') : Array.from(collectionRoot.current?.querySelectorAll<HTMLAnchorElement>("[data-secret-open]") ?? []).find(element => element.dataset.secretOpen === focusName);
     if (button) {
-      // Row actions sit in the last column; on narrow tables keep the row's name in view instead of scrolling to them.
       const row = focusCreate ? null : button.closest("tr");
       button.focus(row ? { preventScroll: true } : undefined);
       row?.scrollIntoView?.({ block: "nearest", inline: "start" });
@@ -272,10 +271,10 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
       </StudioCollectionToolbar>
 
       {descriptorError ? (
-        <p className="secrets-field-error" role="alert">
+        <StudioAlert tone="danger">
           Secret options could not be refreshed.{descriptors ? " Previously loaded options remain available." : " Create a secret after retrying."}
-          {" "}<button type="button" onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</button>
-        </p>
+          {" "}<StudioButton onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</StudioButton>
+        </StudioAlert>
       ) : null}
       {error ? <StudioAlert tone="danger" dismiss={{ label: "Dismiss error", onDismiss: () => setError(null) }}>{error}</StudioAlert> : null}
       {!loading && !loadError && partialResult ? (
@@ -300,7 +299,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="secrets-empty"><span className="secrets-loading" role="status">Loading secrets…</span></td></tr>
+                <tr><td colSpan={7} className="secrets-empty"><SkeletonRows rows={3} label="Loading secrets" /></td></tr>
               ) : null}
               {!loading && loadError ? (
                 <tr><td colSpan={7} className="secrets-empty">
@@ -312,9 +311,9 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                   <td className="secrets-name-cell">
                     <div className="secrets-name-heading">
                       <a className="secrets-row-link studio-row-link" data-secret-open={secret.name} href={secretPath(browse, secret.name, undefined, undefined, location.href)} onClick={event => { const path = secretPath(browse, secret.name, undefined, undefined, location.href); if (isStudioWorkspaceTabClick(event) && openStudioWorkspaceTab(path)) { event.preventDefault(); return; } if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !navigate) return; event.preventDefault(); openEditor(secret.name); }}><strong>{secret.displayName || secret.name}</strong></a>
-                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /> : null}
+                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton externalValue name={secret.name} notifications={notifications} scope={context} /> : null}
                     </div>
-                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}
+                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><CopySecretNameButton name={secret.name} notifications={notifications} scope={context} /></div> : null}
                   </td>
                   <td>{labelType(descriptors, secret.typeName)}</td>
                   <td>{labelStore(descriptors, secret.storeName)}</td>
@@ -323,7 +322,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
                   <td><StudioTimestamp value={secret.updatedAt ?? secret.createdAt} fallback="Unavailable" invalidFallback="Unavailable" /></td>
                   <td>
                     <div className="secrets-row-actions">
-                      <StudioButton variant="default" size="sm" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => openEditor(secret.name)}>Edit</StudioButton>
+
                       <OverflowMenu
                         ariaLabel={`Actions for ${secret.name}`}
                         items={[

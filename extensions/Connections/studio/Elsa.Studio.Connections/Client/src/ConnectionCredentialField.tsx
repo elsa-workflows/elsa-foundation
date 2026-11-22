@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioField, StudioRadioGroup } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { pickConnectionSecrets } from "./connectionsApi";
@@ -45,7 +45,6 @@ export function ConnectionCredentialField({
   const selectId = useId();
   const statusId = useId();
   const detailsId = useId();
-  const radioName = useId();
   const source = value.source;
   const selectedName = value.source === "secret" ? value.existingSecretName : "";
   const selectedSecret = value.source === "secret" ? value.selectedSecret : undefined;
@@ -95,33 +94,14 @@ export function ConnectionCredentialField({
       <p id={detailsId} className="connection-credential-help">
         Choose an existing secret or enter a new value. Secret values are never loaded here.
       </p>
-      <div className="connection-credential-sources">
-        {allowUnchanged ? <label>
-          <input type="radio" name={radioName} value="unchanged" checked={source === "unchanged"}
-            onChange={() => { setTouched(false); onChange({ source: "unchanged" }); }} />
-          Keep stored credential
-        </label> : null}
-        <label>
-          <input
-            type="radio"
-            name={radioName}
-            value="secret"
-            checked={source === "secret"}
-            onChange={() => changeSource("secret")}
-          />
-          Existing secret
-        </label>
-        <label>
-          <input
-            type="radio"
-            name={radioName}
-            value="value"
-            checked={source === "value"}
-            onChange={() => changeSource("value")}
-          />
-          New value
-        </label>
-      </div>
+      <StudioRadioGroup<"unchanged" | "secret" | "value"> inline label={`${field.displayName} credential source`} value={source}
+        options={[
+          ...(allowUnchanged ? [{ value: "unchanged" as const, label: "Keep stored credential" }] : []),
+          { value: "secret", label: "Existing secret" }, { value: "value", label: "New value" }
+        ]} onChange={next => {
+          if (next === "unchanged") { setTouched(false); onChange({ source: next }); }
+          else changeSource(next);
+        }} />
 
       {source === "unchanged" ? <p>The stored credential will be kept.</p> : source === "secret" ? (
         <div className="connection-secret-picker">
@@ -134,9 +114,9 @@ export function ConnectionCredentialField({
               autoComplete="off"
               onChange={event => setSearch(event.target.value)}
             />
-            <button type="button" onClick={() => setRefreshAttempt(attempt => attempt + 1)}>
+            <StudioButton onClick={() => setRefreshAttempt(attempt => attempt + 1)}>
               {visibleState.status === "error" ? "Retry" : "Refresh secrets"}
-            </button>
+            </StudioButton>
           </div>
           <StudioField controlId={selectId} label={<>Existing secret for {field.displayName}</>}>
           <select

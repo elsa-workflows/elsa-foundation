@@ -63,7 +63,7 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
     formRef.current = element;
     if (initialField) initialField.current = element?.querySelector<HTMLElement>("[data-dialog-initial-focus]") ?? null;
   }} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
-    <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></p>
+    <div className="secrets-technical-name"><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></div>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={cannotClose}>
     <SecretEditorTabs active={active} onSelect={setActive}>
