@@ -508,7 +508,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 ### X9. Loading, empty and error states
 
-- [ ] **X9.1** (#5128) [source] Plain "Loading…" text → `SkeletonRows`:
+- [x] **X9.1** (#5128) [source] Plain "Loading…" text → `SkeletonRows`: (PR #5345)
   `EXT/Agent/AgentPlayground.tsx:107`, `HumanReviewPage.tsx:91`, `AgentInvocationPage.tsx:79`;
   `EXT/Secrets/SecretEditorPage.tsx:81`, `SecretsPage.tsx:305`;
   `EXT/UserTasks/TaskDetailPage.tsx:34, 150`, `FormsPage.tsx:53`;
@@ -519,7 +519,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [x] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and (PR #5309)
   `ActivityDefinitionCreateDialog.tsx:126` (`ad-inline-status`);
   `EXT/Connections/ConnectionList.tsx:32` (a `StudioResultState` titled "Loading connections…").
-- [ ] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`:
+- [x] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`: (PR #5345)
   `.ad-failure` (`WF/ActivityDefinitionWorkbench.tsx:204`),
   recovery and conflict cards (`WF/ActivityDefinitionDraftEditor.tsx:1068, 1069, 1079, 1134`),
   `.connections-notice` (`EXT/Connections/ConnectionsPage.tsx:136–141`),
@@ -685,7 +685,7 @@ Raw font sizes, weights, radii and colours:
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
-- [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
+- [x] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`. (PR #5345)
 - [x] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move (PR #5332)
   it to CSS with tokens.
 

@@ -161,7 +161,7 @@
   margin: 0;
 }
 .agent-playground__error {
-  color: var(--studio-danger, #b42318);
+  color: var(--studio-danger);
   margin: 0;
 }
 .agent-playground__text {
