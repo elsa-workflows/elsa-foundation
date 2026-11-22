@@ -16,7 +16,7 @@ Predicate input failure starts no body. Child faults retain a blocking incident;
 
 ## Conversion
 
-Supported Elsa 3 MatchAny literal forms continue to lower to native MatchAny. Recursive body conversion retains the ordered cases, conditions, case identities and Default. The former refusal solely for a populated MatchAny case is removed after runtime/publication support exists. Unknown/dynamic modes, malformed conditions and unsupported nested bodies retain their applicable diagnostics, paths and actionable guidance. Elsa 3 Done mappings use the existing case-label/Default mapping; no new compatibility mode or warning exception is introduced.
+Supported Elsa 3 MatchAny literal forms continue to lower to native MatchAny. Recursive body conversion retains the ordered cases, conditions, case identities and Default. The blanket populated-case refusal is removed after runtime/publication support exists. A Break without an intervening supported consuming loop wholly inside its case is refused with `ELS3-ACTIVITY-UNSUPPORTED-MODE` at its source location, even if a loop surrounds the Switch. This avoids converting Elsa 3's unhandled Break signal into native sibling cancellation. A supported case-local loop that consumes Break may convert under existing rules and must leave sibling work alive. Unknown/dynamic modes, malformed conditions and unsupported nested bodies retain diagnostics, paths and actionable guidance. Done mappings remain case-label/Default mappings; no compatibility mode or warning exception is introduced.
 
 ## Compatibility and versioning
 

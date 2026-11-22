@@ -27,7 +27,8 @@
 - [x] Every functional requirement has an acceptance scenario or edge-case/validation control.
 - [x] Normal all-body completion is distinguished from explicit Break/Finish/cancellation.
 - [x] Existing Switch fault behavior is retained rather than replaced by Parallel's policy.
+- [x] Native Break cancellation is separated from the explicit refusal of incompatible imported Break placements, with a safe case-local-loop control.
 
 ## Notes
 
-This is an author quality check, not coordinator agreement. Independent proposal review and the initiative pre-merge gate remain required. Runtime/Studio acceptance remains not run until implementation.
+This is an author quality check, not coordinator agreement. The spec's Approved status is the prepared final record required by the initiative workflow; the draft PR still requires human agreement and the pre-merge gate. Runtime/Studio acceptance remains not run until implementation.

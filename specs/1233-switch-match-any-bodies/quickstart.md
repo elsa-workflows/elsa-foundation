@@ -42,6 +42,8 @@ Use equivalent commands on the permitted Linux host. Record source, executable/t
 | Matching bodies write same variable | Existing unordered-write diagnostics/policy | MutuallyExclusive facts |
 | Elsa 3 nested import→publish→run | Both bodies retained/run; Done successor once after all | Drop body, condition, mode or slot identity |
 | Unsupported mode/condition/body | Stable localized refusal with guidance | Suppress diagnostic to succeed |
+| Elsa 3 root MatchAny Break plus bookmarked sibling | Deliberate localized UnsupportedMode refusal; no publish/run of changed behavior | Remove escaping-Break placement guard |
+| Elsa 3 case-local loop consumes Break | That loop ends; another selected bookmarked body remains live and is awaited | Treat every nested Break as Switch Break or blanket-refuse safe loops |
 | MatchFirst/outcome-only FlowSwitch | Existing behavior unchanged | Apply body coordination indiscriminately |
 
 Temporary mutation checks are restored before final checks and never committed. Retain representative failing controls and the restored-source passing results.

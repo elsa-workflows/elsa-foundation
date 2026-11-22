@@ -41,7 +41,9 @@ Elsa 3 reference tree: `be796b65e89a83941af78351582f988ed391d9f4` in `elsa-workf
 
 **Alternatives considered:** Waiting for all bodies before forwarding Break would allow an unrelated wait to block an intended early exit. Completing immediately without cancellation can strand bookmarks and allow later sibling effects. Refusing all MatchAny bodies capable of Break would add a broad restriction that native Switch does not otherwise impose. No new join/cancellation mode or runtime contract is required for the proposed rule.
 
-Elsa 3 control signals and imported Break/Finish must be checked in the implementation's composed tests; a source-level assumption alone cannot establish fidelity. Unsupported nested control constructs continue to follow the converter's existing faithful-or-refuse rule.
+**Imported Break disposition:** Elsa 3's [Break](https://github.com/elsa-workflows/elsa-core/blob/be796b65e89a83941af78351582f988ed391d9f4/core/src/modules/Elsa.Workflows.Core/Activities/Break.cs) sends a BreakSignal; CodeActivity installs [AutoCompleteBehavior](https://github.com/elsa-workflows/elsa-core/blob/be796b65e89a83941af78351582f988ed391d9f4/core/src/modules/Elsa.Workflows.Core/Behaviors/AutoCompleteBehavior.cs), which then completes the child normally. Switch has no Break signal handler: it removes that child's scheduled ID and still waits for its other bodies. A root MatchAny Switch with Break plus a bookmarked sibling therefore retains the wait in Elsa 3, whereas native FR-010 cancels it. The current converter accepts Break and warns only under Parallel, so removing the body refusal alone is not faithful.
+
+Refuse a Break that can escape a newly enabled imported MatchAny case: without a supported signal-consuming loop strictly between that Break and the owning case boundary, report the existing `ELS3-ACTIVITY-UNSUPPORTED-MODE` at the original Break/case path with control-flow restructuring guidance. An outer loop does not waive this bounded refusal. A supported loop wholly inside the case consumes its own Break, may still convert under existing rules, and must leave other selected cases alive. Aliases/replacements must not bypass semantic validation; unproven control boundaries remain refused. MatchFirst and existing conversion exceptions are not changed. This is faithful-or-refuse, not a new behavior-changing warning. Add both the refused root counterexample and the accepted case-local-loop sibling-wait control; check Finish with existing terminal rules separately.
 
 ## R-5: Publication and dependency analysis
 
@@ -53,7 +55,7 @@ Elsa 3 control signals and imported Break/Finish must be checked in the implemen
 
 ## R-6: Faithful conversion
 
-**Decision:** Replace only the MatchAny-body refusal in `Extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3SwitchValueSynthesisRewrite.cs` with normal recursive child conversion. Preserve both ItemId and ConditionProperty on the resulting slot. Keep Default, supported literal mode forms and established per-case condition lowering.
+**Decision:** Replace the blanket MatchAny-body refusal in `Extensions/Elsa3/src/Mapping/ActivityMap/Rewrites/Elsa3SwitchValueSynthesisRewrite.cs` with recursive child conversion plus R-4's explicit escaping-Break guard in the normalizer's control-placement validation. Preserve both ItemId and ConditionProperty on the resulting slot. Keep Default, supported literal mode forms and established per-case condition lowering.
 
 **Evidence:** `Elsa3NativeStructureBuilder.cs` already writes activity, stable case identity and condition together. `Elsa3BuiltInActivityMap.Entries.cs` maps Elsa 3 Switch Done onto case labels and Default. `Elsa3NodeRewriteTests.cs` currently tests the intentional refusal. `ExplicitOutcomesRunTests.cs` currently proves FlowSwitch only. `UnsupportedMode` is shared with dynamic/unknown mode and other unsupported constructs and must not be deleted.
 
