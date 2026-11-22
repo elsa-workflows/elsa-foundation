@@ -1,0 +1,24 @@
+.studio-radio-group {
+  display: grid;
+  gap: var(--studio-space-2);
+}
+.studio-radio-group[data-inline] {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--studio-space-4);
+}
+.studio-choice-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--studio-space-2);
+}
+.studio-choice-field > input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--studio-accent);
+  align-self: flex-start;
+  margin-block-start: .15em;
+}

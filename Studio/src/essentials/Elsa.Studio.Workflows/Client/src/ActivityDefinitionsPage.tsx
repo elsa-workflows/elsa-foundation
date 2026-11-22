@@ -436,14 +436,14 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
   return (
     <main className="studio-page ad-page ad-designed-collection" aria-labelledby="activity-definitions-title">
-      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." refresh={{ id: "activity-definitions", label: "Refresh activity definitions", onRefresh: refresh, refreshing: refreshPending, keepButtonStable: true, autoRefresh: true }} actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><button type="button" onClick={onImport}>Import from Elsa 3</button><button type="button" onClick={onPlanUpgrade}>Plan broad upgrade</button></div></details></div>} />
+      <StudioPageHeader title="Activity definitions" titleId="activity-definitions-title" description="Design reusable activities here. Drafts stay editable, while published versions remain in history." refresh={{ id: "activity-definitions", label: "Refresh activity definitions", onRefresh: refresh, refreshing: refreshPending, keepButtonStable: true, autoRefresh: true }} actions={<div className="studio-page-actions"><StudioButton variant="primary" size="md" onClick={() => setCreateOpen(true)}>New activity definition</StudioButton><details className="ad-collection-disclosure ad-tools-disclosure"><summary>Tools</summary><div className="ad-disclosure-panel"><StudioButton type="button" onClick={onImport}>Import from Elsa 3</StudioButton><StudioButton type="button" onClick={onPlanUpgrade}>Plan broad upgrade</StudioButton></div></details></div>} />
 
       <section className="studio-collection-toolbar ad-collection-filters" aria-label="Activity Definition filters">
         <StudioSearchInput aria-label="Search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" />
         <div className="studio-filter-group" role="group" aria-label="Activity definition collection">
-          <button type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</button>
-          <button type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</button>
-          <button type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</button>
+          <StudioButton type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</StudioButton>
+          <StudioButton type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</StudioButton>
+          <StudioButton type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</StudioButton>
         </div>
         <details className="ad-collection-disclosure ad-advanced-filters">
           <summary>Advanced filters</summary>
@@ -455,10 +455,10 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
       {authorizationInvalidating ? <div className="ad-inline-status" role="status">The access scope changed. Reloading the authorized collection while keeping your filters and page size.</div> : null}
       {!authorizationInvalidating && scopeRecoveryNotice ? <div className="ad-inline-status" role="status">The collection scope changed, so Studio restarted at the first page and kept your filters and page size.</div> : null}
-      {query.isError && data && failure !== "expired" && !invalidCursor ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><button type="button" onClick={refresh}>Retry</button></div> : null}
+      {query.isError && data && failure !== "expired" && !invalidCursor ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained data</strong><span>Last confirmed {formatTimestamp(lastConfirmedAt)}. Retry to request a new snapshot.</span></div><StudioButton type="button" onClick={refresh}>Retry</StudioButton></div> : null}
       {!data && !authorizationInvalidating && (query.isPending || query.isFetching) && !failure ? <ActivityDefinitionSkeleton /> : null}
       {!data && !authorizationInvalidating && failure ? <ActivityDefinitionFailure kind={failure} cursorInvalid={invalidCursor} onRetry={failure === "expired" || invalidCursor ? restartPaging : refresh} /> : null}
-      {archiveFailure ? <p className="ad-inline-status" role="alert">Couldn’t archive this Activity Definition: {archiveFailure.message} <button type="button" disabled={archivingDefinitionId !== null} onClick={() => void archiveDefinition(archiveFailure.definition, false)}>Retry archive</button></p> : null}
+      {archiveFailure ? <p className="ad-inline-status" role="alert">Couldn’t archive this Activity Definition: {archiveFailure.message} <StudioButton type="button" disabled={archivingDefinitionId !== null} onClick={() => void archiveDefinition(archiveFailure.definition, false)}>Retry archive</StudioButton></p> : null}
       {data && !query.isError && !authorizationInvalidating && data.items.length === 0 ? <StudioCollectionEmptyState
         icon={<Database size={24} aria-hidden />}
         title={defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}

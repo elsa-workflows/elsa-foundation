@@ -289,7 +289,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.goto("/security/secrets");
   const secretName = `DbConnectionString-${stamp}`;
   await page.getByRole("button", { name: "New secret", exact: true }).first().click();
-  const secret = page.getByRole("region", { name: "New secret", exact: true });
+  const secret = page.getByRole("dialog", { name: "New secret", exact: true });
   const technicalName = secret.getByLabel("Technical name", { exact: true });
   await technicalName.fill(` ${secretName} `);
   await technicalName.press("Tab");
@@ -425,7 +425,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
-  await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
+  await secretRow.locator(`a[data-secret-open="${secretName}"]`).click();
   const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");

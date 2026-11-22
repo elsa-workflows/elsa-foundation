@@ -30,7 +30,6 @@
   font-size: var(--studio-label-size);
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .connections-search,
 .connections-danger-actions { display: flex; align-items: center; gap: 0.5rem; }
@@ -185,27 +184,8 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
   font-size: var(--studio-label-size);
 }
 
-.connection-credential-sources {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 
-.connection-credential-sources label {
-  display: inline-flex;
-  min-height: 2.25rem;
-  align-items: center;
-  gap: 0.4rem;
-}
 
-.connection-credential-sources input[type="radio"] {
-  flex: 0 0 auto;
-  width: 1rem;
-  height: 1rem;
-  min-height: 0;
-  padding: 0;
-  accent-color: var(--connections-accent);
-}
 
 .connection-secret-picker {
   display: grid;

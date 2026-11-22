@@ -1532,10 +1532,10 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await selectSequenceStep(page, "Write line");
-  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   const removeConfirmation = page.getByRole("dialog");
   await expect(removeConfirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
-  await expect(removeConfirmation.getByRole("button", { name: "Remove", exact: true })).toHaveAttribute("data-tone", "danger");
+  await expect(removeConfirmation.getByRole("button", { name: "Delete", exact: true })).toHaveAttribute("data-tone", "danger");
   await removeConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await expectSavedRevision(page, 6);
@@ -1584,7 +1584,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await expectSavedRevision(page, 3);
 
   await selectSequenceStep(page, "Write line");
-  const removeInspectorActivity = page.getByRole("button", { name: "Remove", exact: true });
+  const removeInspectorActivity = page.getByRole("button", { name: "Delete", exact: true });
   await removeInspectorActivity.focus();
   await removeInspectorActivity.press("Enter");
   confirmation = page.getByRole("dialog");
@@ -1602,7 +1602,7 @@ test("Activity Definition provider contract proposals require review and apply a
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
   await expect(suggestions.getByText("Technical details", { exact: true }).first()).toBeAttached();
-  await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
+  await expect(suggestions.getByText("Technical details", { exact: true })).toHaveCount(2);
   await page.locator("details.ad-interface-suggestions > summary").click();
   await expect(page.getByText("Add input Currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
@@ -1721,7 +1721,7 @@ for (const theme of ["light", "dark"]) {
       const state = await mockActivityDefinitionAuthoring(page);
       await page.setViewportSize({ width, height: 900 });
       await createBrowserActivity(page, theme);
-      await expect(page.locator(".ad-draft-heading h1")).toHaveCSS("font-size", "16px");
+      await expect(page.locator("#activity-draft-title")).toHaveCSS("font-size", "16px");
       await page.locator("details.ad-authoring-advanced > summary").click();
       const toolbar = page.locator(".ad-authoring-toolbar-actions");
       const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];

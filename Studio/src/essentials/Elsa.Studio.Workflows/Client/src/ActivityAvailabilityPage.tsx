@@ -193,22 +193,22 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
               <span>Check the server logs for technical details.</span>
             </span>
             {loadError && (
-              <button type="button" className="availability-banner-action" onClick={retryLoad} disabled={retryingLoad}>
+              <StudioButton type="button" className="availability-banner-action" onClick={retryLoad} disabled={retryingLoad}>
                 {retryingLoad ? "Retrying…" : "Retry"}
-              </button>
+              </StudioButton>
             )}
           </div>
         )}
 
         <div className="availability-mode" role="group" aria-label="Activity availability mode">
-          <button type="button" className={draft.mode === "AllExcept" ? "active" : ""} onClick={() => updateMode("AllExcept")} disabled={loading || saving}>
+          <StudioButton type="button" className={draft.mode === "AllExcept" ? "active" : ""} onClick={() => updateMode("AllExcept")} disabled={loading || saving}>
             <EyeOff size={15} />
             <span><strong>All except</strong><em>Activities are available unless you turn them off</em></span>
-          </button>
-          <button type="button" className={draft.mode === "Only" ? "active" : ""} onClick={() => updateMode("Only")} disabled={loading || saving}>
+          </StudioButton>
+          <StudioButton type="button" className={draft.mode === "Only" ? "active" : ""} onClick={() => updateMode("Only")} disabled={loading || saving}>
             <Shield size={15} />
             <span><strong>Only</strong><em>Activities are hidden unless you turn them on</em></span>
-          </button>
+          </StudioButton>
         </div>
 
         <div className="availability-counts">
@@ -244,7 +244,7 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
           <div className="availability-section-head">
             <h3 className="wf-section-label"><Activity size={14} /> Activities</h3>
             <div className="availability-section-tools">
-              <button
+              <StudioButton
                 type="button"
                 className={`availability-filter-toggle${hiddenOnly ? " active" : ""}`}
                 aria-pressed={hiddenOnly}
@@ -253,7 +253,7 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
               >
                 <EyeOff size={13} />
                 Hidden only
-              </button>
+              </StudioButton>
               <StudioSearchInput className="availability-search" aria-label="Filter activities" value={search}
                 placeholder="Filter activities…" onChange={event => setSearch(event.target.value)} />
             </div>
@@ -303,7 +303,7 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
                       const selected = selectedRowId === rowId;
                       return (
                         <div className={`availability-activity-row${selected ? " selected" : ""}${locked ? " disabled" : ""}`} key={rowId}>
-                          <button
+                          <StudioButton
                             type="button"
                             className="availability-activity-open"
                             aria-expanded={selected}
@@ -318,7 +318,7 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
                               </span>
                               {activityDescription && <span className="availability-activity-description" title={activityDescription}>{activityDescription}</span>}
                             </span>
-                          </button>
+                          </StudioButton>
                           {state !== "Available" && (
                             <em className={`availability-state ${getAvailabilityStateClass(entry.state)}`}>{getAvailabilityStateLabel(entry.state)}</em>
                           )}
@@ -395,9 +395,9 @@ function ActivityAvailabilityDetails({
       <header className="availability-details-header">
         <ActivityIconChip icon={resolveActivityIcon(catalogItem)} />
         <h4>{activityName}</h4>
-        <button type="button" className="wf-icon-button availability-details-close" aria-label="Close details" onClick={onClose}>
+        <StudioButton type="button" className="wf-icon-button availability-details-close" aria-label="Close details" onClick={onClose}>
           <X size={14} />
-        </button>
+        </StudioButton>
       </header>
       <div className="availability-details-body">
         <p className="availability-details-status">

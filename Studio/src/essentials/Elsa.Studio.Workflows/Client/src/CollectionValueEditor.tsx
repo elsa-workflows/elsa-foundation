@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { StudioField } from "@elsa-workflows/studio-ui";
 import { type DragEvent, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from "lucide-react";
@@ -189,7 +190,7 @@ function CollectionRepeater({
                 )}
               </div>
               <div className="wf-collection-item-actions">
-                <button
+                <StudioButton
                   type="button"
                   className="wf-collection-item-button"
                   aria-label={`Move ${label} item ${index + 1} up`}
@@ -197,8 +198,8 @@ function CollectionRepeater({
                   onClick={() => moveItem(index, index - 1)}
                 >
                   <ChevronUp size={13} />
-                </button>
-                <button
+                </StudioButton>
+                <StudioButton
                   type="button"
                   className="wf-collection-item-button"
                   aria-label={`Move ${label} item ${index + 1} down`}
@@ -206,8 +207,8 @@ function CollectionRepeater({
                   onClick={() => moveItem(index, index + 1)}
                 >
                   <ChevronDown size={13} />
-                </button>
-                <button
+                </StudioButton>
+                <StudioButton
                   type="button"
                   className="wf-collection-item-button danger"
                   aria-label={`Remove ${label} item ${index + 1}`}
@@ -215,20 +216,20 @@ function CollectionRepeater({
                   onClick={() => removeAt(index)}
                 >
                   <Trash2 size={13} />
-                </button>
+                </StudioButton>
               </div>
             </li>
           ))}
         </ul>
       )}
-      <button
+      <StudioButton
         type="button"
         className="wf-collection-add"
         disabled={disabled}
         onClick={addItem}
       >
         <Plus size={13} /> Add item
-      </button>
+      </StudioButton>
     </div>
   );
 }
