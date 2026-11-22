@@ -420,9 +420,11 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
   await h.position(0, 9, sequence.items[0].activityExecutionId);
   const next = h.controls.getByRole("button", { name: "Next", exact: true });
   await next.focus(); await next.press("Enter"); await h.position(1, 9, sequence.items[1].activityExecutionId); await expect(next).toBeFocused();
-  await h.controls.locator("details summary").click();
+  await h.controls.getByText("Playback options", { exact: true }).click();
+  await h.controls.locator(".wf-playback-details > summary").click();
   await h.snap("playback-transport-next");
-  await h.controls.locator("details summary").click();
+  await h.controls.locator(".wf-playback-details > summary").click();
+  await h.controls.getByText("Playback options", { exact: true }).click();
   const forward = [sequence.items[0].activityExecutionId, sequence.items[1].activityExecutionId];
   for (let index = 2; index < sequence.items.length; index++) {
     await next.click(); await h.position(index, 9, sequence.items[index].activityExecutionId);
