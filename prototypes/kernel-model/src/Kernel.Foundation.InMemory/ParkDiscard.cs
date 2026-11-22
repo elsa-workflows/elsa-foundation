@@ -64,7 +64,7 @@ internal sealed partial class ActorAdapter
         if (page.Count > 0)
             return AdvanceDiscard(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Expired);
 
-        var completed = row with { ParkDiscard = null, ParkDiscarded = true };
+        var completed = row with { ParkDiscard = null, ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null };
         var outcome = ParkCheckpoint(input, row, completed);
         outcome.Journal = Durable.Json.Write(new { Outcome = drain.Expired ? "expired" : "discarded", drain.Operation, drain.Cleared });
         if (outcome.Row!.Parent is not null)

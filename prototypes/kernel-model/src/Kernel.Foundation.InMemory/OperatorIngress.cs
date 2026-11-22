@@ -27,8 +27,9 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
                 return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection));
             if (kind == Kinds.Recover)
             {
-                if (command is not { Mode: RecoverMode.Resume, Handles: null or { Count: 0 } }) return new(refused);
-                recoverMode = Durable.ParkRecoveryMode.Resume;
+                if (command is not { Mode: RecoverMode.Resume or RecoverMode.RetryAll, Handles: null or { Count: 0 } })
+                    return new(refused);
+                recoverMode = command.Mode == RecoverMode.RetryAll ? Durable.ParkRecoveryMode.RetryAll : Durable.ParkRecoveryMode.Resume;
             }
             selection = command.Selection;
         }

@@ -61,13 +61,15 @@ public sealed partial class InMemoryStore
             next != (previous with
             {
                 Revision = checked(previous.Revision + 1), Status = InstanceStatus.Running, Fault = null,
-                ParkResolutionGeneration = checked(previous.ParkResolutionGeneration + 1), ParkRecovery = recovery, ParkCohort = null
+                ParkResolutionGeneration = checked(previous.ParkResolutionGeneration + 1), ParkRecovery = recovery, ParkCohort = null,
+                ParkTimerDispositions = next.ParkTimerDispositions, ParkRestartedJobs = next.ParkRestartedJobs,
+                Jobs = next.Jobs, NextJobGeneration = next.NextJobGeneration
             }) || StoreBatchRules.AddressPartition(previous.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             turn.OpensPark || turn.Delete || turn.FoundationParkClear is not null ||
             turn.FoundationKept is not null || turn.FoundationHeader is not null ||
             turn.Held is { Count: > 0 } || turn.FoundationHeldPromotions is { Count: > 0 } ||
             turn.FoundationReleasedHolds is { Count: > 0 } ||
-            turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Unsubscribe ||
+            turn.Unsubscribed.Count != 0 || turn.Unsubscribe ||
             turn.Done is not [var request] || turn.Sent is not [var control] ||
             control.Due is not null || control.KeepUntil is not null ||
             Messages.GetValueOrDefault(request) is not { Done: false, Message: { Kind: "kernel.recover" } input } ||
@@ -82,10 +84,34 @@ public sealed partial class InMemoryStore
             !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
             throw InvalidDrain();
         var expiry = _foundationParkExpiries.GetValueOrDefault(address);
-        var recalled = expiry?.Armed is { } armed ? turn.Consumed is [var key] && key == armed : turn.Consumed.Count == 0;
-        if (!recalled || recovery.Serial != checked((expiry?.Serial ?? 0) + 1) ||
+        if (recovery.Serial != checked((expiry?.Serial ?? 0) + 1) ||
             !ParkDrainEnvelope.For(next, park).MatchesIssued(control, next, recovery.Serial, recovery.Control))
             throw InvalidDrain();
+        var timers = turn.FoundationRecoveryTimers;
+        if (timers is null || timers.Dispositions != next.ParkTimerDispositions)
+            throw InvalidDrain();
+        var checkedTimers = PlanFoundationTimers(previous, mode, timers.Recipes);
+        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions ||
+            !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
+            throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
+        var jobs = turn.FoundationRecoveryJobs;
+        var subscriptionRecipes = turn.FoundationRecoverySubscriptions ?? [];
+        if (jobs is null || jobs.Registry != next.Jobs || jobs.NextGeneration != next.NextJobGeneration || jobs.Restarts != next.ParkRestartedJobs ||
+            (long)timers.Recipes.Count + jobs.Recipes.Count + subscriptionRecipes.Count > MaxRestoreWaits)
+            throw InvalidDrain();
+        var checkedJobs = PlanFoundationJobs(previous, mode, jobs.Recipes, checkedTimers.Bytes);
+        if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
+            checkedJobs.Restarts != jobs.Restarts || !checkedJobs.Pending.SequenceEqual(jobs.Pending) ||
+            !checkedJobs.Retained.SequenceEqual(jobs.Retained) || !checkedJobs.RecalledDeadlines.SequenceEqual(jobs.RecalledDeadlines) ||
+            !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
+            throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
+        var subscriptions = PlanFoundationSubscriptions(previous, binding.Tenant, subscriptionRecipes, checkedJobs.Bytes);
+        if (subscriptions is null || !subscriptions.SequenceEqual(turn.Subscribed) || subscriptions.Any(row => RegisteredSubscription(row) is not null))
+            throw InvalidDrain();
+        var recalls = expiry?.Armed is { } armed ? jobs.RecalledDeadlines.Append(armed) : jobs.RecalledDeadlines;
+        if (!turn.Consumed.SequenceEqual(recalls)) throw InvalidDrain();
+        foreach (var message in jobs.Writes)
+            if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
         if (expiry is null) return null;
         if (now >= expiry.At)
             throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
@@ -152,7 +178,7 @@ public sealed partial class InMemoryStore
             if (page is not null || turn.Sent.Count != 0 || suspended ||
                 next != (previous with
                 {
-                    Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
+                    Revision = next.Revision, ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
                 }) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
                 !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })
@@ -160,7 +186,7 @@ public sealed partial class InMemoryStore
             return;
         }
 
-        if (next != (previous with { Revision = next.Revision, ParkRecovery = after }) ||
+        if (next != (previous with { Revision = next.Revision, ParkRecovery = after, Jobs = JobsAfterRecoveryPage(previous, page) }) ||
             turn.Sent is not [var control] || control.KeepUntil is not null ||
             after.Serial != checked(before.Serial + 1) || !envelope.MatchesIssued(control, next, after.Serial, after.Control))
             throw InvalidDrain();
@@ -186,12 +212,13 @@ public sealed partial class InMemoryStore
             return;
         }
         var restored = current.Where(row => before.Restores(row, previous.Status)).ToArray();
+        var paired = current.Count(row => row.PairedJobInput is not null);
         var gate = restored.LastOrDefault()?.Cursor.Key;
         if (after != (rescheduled with
             {
                 Cursor = current[^1].Cursor,
-                Restored = checked(before.Restored + restored.Length),
-                Cleared = checked(before.Cleared + current.Count - restored.Length), Gate = gate
+                Restored = checked(before.Restored + restored.Length + (running ? paired : 0)),
+                Cleared = checked(before.Cleared + current.Count - restored.Length + (running ? 0 : paired)), Gate = gate
             }))
             throw InvalidDrain();
     }

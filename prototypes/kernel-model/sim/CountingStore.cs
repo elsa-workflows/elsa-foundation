@@ -1,7 +1,8 @@
 namespace Kernel.Sim;
 
 /// <summary>Passes everything through and counts the commits.</summary>
-public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null) : IKernelStore
+public sealed class CountingStore(IKernelStore inner, Action committed, Action<CommitBatch, bool>? observeCommit = null,
+    Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
@@ -20,15 +21,16 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
         committed();
-        return observeCommit is null ? inner.CommitAsync(batch, cancellationToken) : ObserveAsync(batch, cancellationToken);
+        return observeCommit is null && beforeCommit is null ? inner.CommitAsync(batch, cancellationToken) : ObserveAsync(batch, cancellationToken);
     }
 
     // False marks a request about to execute. True marks the store's landed result, before the caller sees it.
     private async ValueTask<Committed> ObserveAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
-        observeCommit!(batch, false);
+        observeCommit?.Invoke(batch, false);
+        if (beforeCommit is not null) await beforeCommit(batch);
         var result = await inner.CommitAsync(batch, cancellationToken);
-        if (result.Landed) observeCommit(batch, true);
+        if (result.Landed) observeCommit?.Invoke(batch, true);
         return result;
     }
 

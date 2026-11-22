@@ -7,6 +7,7 @@ internal sealed partial class ActorAdapter
 {
     Durable.ParkPageCursor? Durable.IActorType.FirstUnheldRecoveryInput(Durable.InstanceRow row, Durable.ParkRelease release,
         Predicate<Durable.InboxKey> isHeld) => store.FirstUnheldRecoveryInput(row, release, isHeld);
+    bool Durable.IActorType.OwnsParkCatchUp(Durable.InstanceRow row, Durable.Message ticket) => store.OwnsParkCatchUp(row, ticket);
 
     private Durable.TurnOutcome OpenRecover(Durable.TurnInput input)
     {
@@ -22,30 +23,52 @@ internal sealed partial class ActorAdapter
         if (expiry is not null && input.Services.Now >= expiry.At)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ParkExpired");
 
-        Contract.RestorePlan plan;
+        Durable.ParkTimerRecipe[] timerRecipes;
+        Durable.ParkJobRecipe[] jobRecipes;
+        Durable.ParkSubscriptionRecipe[] subscriptionRecipes;
         bool withholds;
         try
         {
-            plan = actor.RestoreWaits(header, row.State);
+            var plan = actor.RestoreWaits(header, row.State);
+            const int sample = Durable.InMemoryStore.MaxRestoreWaits + 1;
+            subscriptionRecipes = plan.Subscriptions.Take(sample).Select(wait => new Durable.ParkSubscriptionRecipe(wait.Key, wait.Wait, wait.Keep)).ToArray();
+            timerRecipes = plan.Timers.Take(sample).Select(timer => new Durable.ParkTimerRecipe(timer.Id, timer.Kind, timer.Payload, timer.Due)).ToArray();
+            jobRecipes = plan.Jobs.Take(sample).Select(job => new Durable.ParkJobRecipe(job.Key, job.Arguments, job.Deadline)).ToArray();
             withholds = actor.Withholds(header with { Status = Contract.ActorStatus.Running, Fault = null, EndedAt = null });
         }
-        catch (Exception) { return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan"); }
-        if (plan is not { Timers.Count: 0, Jobs.Count: 0, Subscriptions.Count: 0 } || row.Jobs is not null)
-            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
+        catch (Exception) { return InvalidPlan(); }
+        if (timerRecipes.Length + jobRecipes.Length + subscriptionRecipes.Length > Durable.InMemoryStore.MaxRestoreWaits) return InvalidPlan();
+        var timers = store.PlanFoundationTimers(row, mode, timerRecipes);
+        if (timers is null) return InvalidPlan();
+        var jobs = store.PlanFoundationJobs(row, mode, jobRecipes, timers.Bytes);
+        if (jobs is null) return InvalidPlan();
+        var subscriptions = store.PlanFoundationSubscriptions(row, header.Tenant, subscriptionRecipes, jobs.Bytes);
+        if (subscriptions is null) return InvalidPlan();
+
+        Durable.TurnOutcome InvalidPlan() => Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
 
         var next = row with
         {
             Status = Durable.InstanceStatus.Running,
             Fault = null,
             ParkCohort = null,
+            ParkTimerDispositions = timers.Dispositions,
+            ParkRestartedJobs = jobs.Restarts,
+            Jobs = jobs.Registry,
+            NextJobGeneration = jobs.NextGeneration,
             ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1)
         };
         var serial = checked((expiry?.Serial ?? 0) + 1);
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
         next = next with { ParkRecovery = new(delivery.Message.Id, mode, null, serial, control.InboxKey) };
         var outcome = ParkCheckpoint(input, row, next);
+        outcome.FoundationRecoveryTimers = timers;
+        outcome.FoundationRecoveryJobs = jobs;
+        if (subscriptionRecipes.Length != 0) outcome.FoundationRecoverySubscriptions = subscriptionRecipes;
+        outcome.Subscribed.AddRange(subscriptions);
         outcome.FoundationWithholds = withholds;
         outcome.Sent.Add(control);
+        outcome.Cancelled.AddRange(jobs.RecalledDeadlines);
         if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
         outcome.ReplyTo(delivery, "started");
         return outcome;
@@ -82,7 +105,7 @@ internal sealed partial class ActorAdapter
                 ? release : (Durable.ParkRelease?)null;
             var completed = ParkCheckpoint(input, row, row with
             {
-                ParkRecovery = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
+                ParkRecovery = null, ParkTimerDispositions = null, ParkRestartedJobs = null, ParkCohort = cohort, EndedDuringParkRecovery = !running
             });
             completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
             return completed;
@@ -90,6 +113,7 @@ internal sealed partial class ActorAdapter
 
         var admitted = new List<Durable.ParkPageRow>(page.Count);
         var restored = 0;
+        var written = 0;
         var (rows, bytes) = (credit.Rows, credit.Bytes);
         Durable.InboxKey? gate = null;
         foreach (var item in page)
@@ -107,19 +131,27 @@ internal sealed partial class ActorAdapter
                 gate = item.Cursor.Key;
             }
             admitted.Add(item);
+            written++;
+            if (item.PairedJobInput is null) continue;
+            written++;
+            if (running) restored++;
         }
         if (admitted.Count == 0)
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);
         var continued = drain with
         {
             Cursor = admitted[^1].Cursor, Restored = checked(drain.Restored + restored),
-            Cleared = checked(drain.Cleared + admitted.Count - restored), Gate = gate
+            Cleared = checked(drain.Cleared + written - restored), Gate = gate
         };
         return NextPage(envelope.Issue(row, serial), continued, new(park, admitted));
 
         Durable.TurnOutcome NextPage(Durable.Message next, Durable.ParkRecoveryDrain state, Durable.ParkRecoveryPage? change)
         {
-            var outcome = ParkCheckpoint(input, row, row with { ParkRecovery = state with { Serial = serial, Control = next.InboxKey } });
+            var outcome = ParkCheckpoint(input, row, row with
+            {
+                ParkRecovery = state with { Serial = serial, Control = next.InboxKey },
+                Jobs = Durable.InMemoryStore.JobsAfterRecoveryPage(row, change)
+            });
             outcome.Sent.Add(next);
             outcome.FoundationRecoveryPage = change;
             return outcome;

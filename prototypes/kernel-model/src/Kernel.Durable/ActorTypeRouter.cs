@@ -28,6 +28,7 @@ public sealed class ActorTypeRouter(IActorType fallback, IReadOnlyDictionary<str
     public bool Withholds(InstanceRow row, ITurnServices services) => For(row.Model).Withholds(row, services);
     ParkPageCursor? IActorType.FirstUnheldRecoveryInput(InstanceRow row, ParkRelease release, Predicate<InboxKey> isHeld) =>
         For(row.Model).FirstUnheldRecoveryInput(row, release, isHeld);
+    bool IActorType.OwnsParkCatchUp(InstanceRow row, Message ticket) => For(row.Model).OwnsParkCatchUp(row, ticket);
 
     bool IActorType.SettlesWhileWithheld(InstanceRow row, Delivery delivery) => For(row.Model).SettlesWhileWithheld(row, delivery);
     public TurnOutcome? Command(TurnInput input) => For(input.Row?.Model ?? input.Spec?.Model).Command(input);

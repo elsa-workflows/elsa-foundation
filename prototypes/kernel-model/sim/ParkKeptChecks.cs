@@ -581,6 +581,563 @@ internal static class ParkKeptChecks
         }
     }
 
+    internal static async Task CheckInvalidTimerRecoveryPlan(Action<bool, string> check)
+    {
+        var now = 1_701_400_030_100L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new RestorePlanProbe();
+        var scope = new Contract.BoundScope("recover-invalid-plan");
+        var siblingRefused = false;
+        var worker = new Worker("recover-invalid-plan", 0, store, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => 0,
+            OnPreparedCheckpoint = (opening, _, _) =>
+            {
+                if (opening.FoundationRecoveryTimers?.Preserved is not [var key]) return;
+                var prior = store.Instances[opening.Instance];
+                var timer = store.Messages[key];
+                var fence = store.Partitions[0];
+                var sibling = new TurnCommit(opening.Instance, null, null, [key], [], [], [], [], null);
+                try
+                {
+                    store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [opening, sibling], [], []))
+                        .GetAwaiter().GetResult();
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite)
+                {
+                    siblingRefused = store.Instances[opening.Instance] == prior && store.Messages.GetValueOrDefault(key) == timer;
+                }
+            }
+        });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var admitted = await ingress.SendAsync(scope, target, "invalid-plan", Contract.Kinds.Recover, payload);
+        await Pump(owner);
+        var intact = admitted.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[parked.Row.Id] == parked.Row &&
+            store.Messages.Values.Any(row => row.Message.Id == "invalid-plan" && row.Done) &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Drain);
+        check(intact, "a null timer entry refuses Resume inside the worker and leaves the exact Park checkpoint intact");
+        if (!intact) return;
+
+        probe.ReturnInvalidJob = true;
+        await ingress.SendAsync(scope, target, "invalid-job", Contract.Kinds.Recover, payload);
+        await Pump(owner);
+        check(store.Instances[parked.Row.Id] == parked.Row &&
+            store.Subscriptions.Count == 0 && store.Messages.Values.Any(row => row.Message.Id == "invalid-job" && row.Done) &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Drain),
+            "a malformed unregistered job recipe refuses the whole Open without changing the preserved timer");
+        probe.ReturnInvalidJob = false;
+        probe.ReturnOversizeJobs = true;
+        await ingress.SendAsync(scope, target, "oversize-jobs", Contract.Kinds.Recover, payload);
+        await Pump(owner);
+        check(store.Instances[parked.Row.Id] == parked.Row &&
+            store.Messages.Values.Any(row => row.Message.Id == "oversize-jobs" && row.Done) &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Drain),
+            "individually valid unregistered job recipes still count against the aggregate Open budget");
+        if (store.Instances[parked.Row.Id] != parked.Row) return;
+        probe.ReturnOversizeJobs = false;
+        probe.ReturnPlan = true;
+        var timer = store.Messages.Values.Single(row => row.Message.Kind == "");
+        var original = timer.Message;
+        await ingress.SendAsync(scope, target, "valid-plan", Contract.Kinds.Recover, payload);
+        for (var step = 0; step < 3; step++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(siblingRefused, "a sibling consume cannot remove the timer that Open validates and preserves");
+        check(recovered is { Park: null, Row.Status: InstanceStatus.Running } && timer is { Done: false } &&
+            timer.Message == original && store.Messages.GetValueOrDefault(original.InboxKey) == timer,
+            "a valid originally admitted empty-kind timer keeps its exact pending envelope through Resume");
+    }
+
+    internal static async Task CheckRecoverKeptEvents(Action<bool, string> check)
+    {
+        var chain = FoundationEventIdentity.CatchUpId(InboxKey.Issued("0/α#17.0001"));
+        check(chain == "669604af03f392c8860a86731f4fa827b1ae0685646d98812ead016c36b9090a" &&
+            FoundationEventIdentity.CatchUpSuccessor(chain, 1) == "meet:1fb93a79fe43ec8fb11eb5c46635d14b6f4328b5e026c22a2061b254742486dc",
+            "chain and successor IDs match the canonical full-key and page encodings");
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check);
+        await CheckRecoverKeptEvents(count: 171, revoke: false, check);
+        await CheckRecoverKeptEvents(count: 1, revoke: true, check);
+        await CheckRecoverKeptEvents(count: 2, revoke: false, check, byteCut: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, sweepBackstep: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, repeatPublication: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, retryBeforeOpen: true);
+        await CheckRecoverKeptEvents(count: 1, revoke: false, check, zeroWindow: true);
+        await CheckRecoverKeptEvents(count: 4096, revoke: false, check, probePageWork: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false);
+        await CheckFailedCatchUp(check, recoverAfterFailure: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true, realMonotonic: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: false);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: true);
+    }
+
+    private static async Task CheckLostCatchUpStep(Action<bool, string> check, bool landedBeforeLoss)
+    {
+        var now = 1_701_400_030_200L;
+        var store = new InMemoryStore(2, () => now);
+        var probe = new KeepingRecoveryProbe();
+        var scope = new Contract.BoundScope("catch-up-lost-step");
+        var losses = 0;
+        var forward = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is [{ FoundationCatchUpStep: not null }] && landed == landedBeforeLoss &&
+                (!landedBeforeLoss || losses == 0))
+            {
+                losses++;
+                throw new StoreException(Failure.Unknown, "the page result was lost");
+            }
+        });
+        Worker TakeWorker(string name) => new(name, 0, forward, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0, MaxAttempts = 2 });
+        var worker = TakeWorker("first-catch-up-owner");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = store.AdmitFoundationStart(scope.Tenant, new Message("start", InstanceRef.In(0, "lost-step"), Kinds.Start,
+            Start: new StartSpec(probe.Type, "ready", null, Creation: new(1, 0, "start")), TargetCreation: 1))!;
+        var target = new Contract.Target.Ref(new Contract.ActorRef(reference));
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var id = store.Instances.Values.Single().Id;
+        var count = landedBeforeLoss ? InMemoryStore.ParkPageLimit + 1 : 1;
+        for (var index = 0; index < count; index++)
+            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"owed-{index:D3}", Contract.Kinds.Event, "payload",
+                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+        var mark = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(mark)));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        var key = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null).Key;
+        if (!landedBeforeLoss)
+        {
+            var other = (await store.TakeAsync(1, "other-partition", Defaults.Lease))!;
+            var local = worker.Fences.Single();
+            var foreign = await DefiniteRejection(() => store.CommitAsync(new(1, other.Epoch, other.Position,
+                Defaults.Lease, false, [], [], [key])));
+            var seenOnly = await DefiniteRejection(() => store.CommitAsync(new(0, local.Epoch, local.Position,
+                Defaults.Lease, false, [], [key], [])));
+            check(foreign && seenOnly && store.Messages[key] is { Seen: 0, Trial: 0, Attempts: 0 },
+                "a positional foreign fence and an ordinary Seen mark cannot hide a pending catch-up ticket");
+        }
+        await worker.PollAsync();
+        await worker.MeetAsync();
+        check(!worker.Owns && losses == 1 && (!landedBeforeLoss ?
+                store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 0, Trial: > 0 } :
+                !store.Messages.ContainsKey(key)),
+            "an unknown page leaves evidence only when the reserved ticket is still pending");
+
+        // A same-node take after reset advances the fence without treating ordinary job or model trials as deaths.
+        worker = TakeWorker("first-catch-up-owner");
+        await using var replacement = (await new DurableHost([worker]).ActivateAsync(0))!;
+        if (landedBeforeLoss)
+        {
+            check(store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) is
+                { Attempts: 0, Trial: 0, Message.ParkCatchUp.Page: 1 },
+                "a new take leaves the successor of an acknowledged-late page uncharged");
+            await Pump(replacement);
+            check(probe.Received.Count == count && probe.Received.Distinct().Count() == count,
+                "after an unknown landed page all entitled events still reach the model once");
+            return;
+        }
+        check(store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 1, Trial: 0 },
+            "the next fence charges an unresolved step even on a same-node take");
+        await worker.PollAsync();
+        await worker.MeetAsync();
+        now += (long)Defaults.Lease.TotalMilliseconds + 1;
+        worker = TakeWorker("different-catch-up-owner");
+        await using var last = (await new DurableHost([worker]).ActivateAsync(0))!;
+        check(store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 2, Trial: 0 },
+            "another owner charges the second abandoned step exactly once");
+        await Pump(last);
+        await store.SweepAsync();
+        check(losses == 2 && store.Instances[id] is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            store.Subscriptions.Count == 0 && store.FoundationEvents.Count == 0 && probe.Received.Count == 0,
+            "repeated unknown pre-commit outcomes eventually re-park and release sweep coverage");
+    }
+
+    private static async Task CheckFailedCatchUp(Action<bool, string> check, bool recoverAfterFailure,
+        bool delayedResponse = false, bool revoked = false, bool realMonotonic = false)
+    {
+        var now = 1_701_400_030_200L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new KeepingRecoveryProbe();
+        var scope = new Contract.BoundScope("catch-up-attempt");
+        var faults = 0;
+        CommitBatch? delayed = null;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var forward = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed || batch.Turns is not [{ FoundationCatchUpStep: not null } step]) return;
+            switch (faults)
+            {
+                case 0:
+                    faults++;
+                    throw new StoreException(Failure.Definite, "injected refusal before the step");
+                case 1 when !recoverAfterFailure:
+                    faults++;
+                    if (delayedResponse) delayed = batch;
+                    else now = step.FoundationCatchUpBefore!.Value;
+                    break;
+            }
+        }, beforeCommit: batch => ReferenceEquals(batch, delayed) ? new(release.Task) : default);
+        Worker NewOwner(string name) => new(name, 0, forward, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = realMonotonic ? static () => Environment.TickCount64 : static () => 0, MaxAttempts = 2,
+                Lease = realMonotonic ? TimeSpan.FromSeconds(1) : Defaults.Lease,
+                ParkCatchUpTimeout = delayedResponse && !realMonotonic ? TimeSpan.FromMilliseconds(30) : null
+            });
+        var worker = NewOwner("first-catch-up");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var id = store.Instances.Values.Single().Id;
+        var before = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var count = recoverAfterFailure ? 171 : 1;
+        for (var index = 0; index < count; index++)
+            await ingress.SendAsync(scope, new Contract.Target.Event("approval"), $"kept-{index:D4}", Contract.Kinds.Event, "owed",
+                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(before)));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        var originalControl = store.Instances[id].ParkRecovery!.Control;
+        var (key, _) = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null);
+        await CatchUpOnly(worker);
+        var unchanged = worker.Owns && faults == 1 && store.Messages.GetValueOrDefault(key) is
+            { Done: false, Attempts: 1, Message.ParkCatchUp.Page: 0 } &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Event);
+        check(unchanged, "a refused isolated step counts one fenced attempt and advances no delivery or cursor");
+        if (!unchanged) return;
+        await owner.DisposeAsync();
+        worker = NewOwner("second-catch-up");
+        await using var successor = (await new DurableHost([worker]).ActivateAsync(0))!;
+        try { await CatchUpOnly(worker).WaitAsync(TimeSpan.FromSeconds(5)); }
+        finally { release.TrySetResult(); }
+        if (recoverAfterFailure)
+        {
+            check(store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) is
+                { Done: false, Attempts: 0, Message.ParkCatchUp.Page: 1 },
+                "a successful retry writes a fresh next-page ticket with its full attempt budget");
+            await Pump(successor);
+            check(probe.Received.Count == count && probe.Received.Distinct().Count() == count &&
+                store.Instances[id] is { Status: InstanceStatus.Running, ParkRecovery: null },
+                "the successor completes all kept-event pages once after a prior failed step");
+            return;
+        }
+        check(worker.Owns && faults == 2 && store.Messages.GetValueOrDefault(key) is
+            { Done: false, Attempts: 2, Message.ParkCatchUp.Page: 0 } &&
+            store.Instances[id].ParkRecovery?.Control == originalControl &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Event),
+            realMonotonic ? "the default timeout leaves live lease time for a fenced failure write without a heartbeat" :
+            delayedResponse ? "the owner stops waiting on a stalled store request and records one failure" :
+                "the step deadline at equality writes no page and the successor counts its second failure");
+        if (delayed is not null)
+        {
+            var ejected = await DefiniteRejection(() => store.CommitAsync(delayed));
+            check(ejected && store.Messages.GetValueOrDefault(key) is { Attempts: 2, Done: false },
+                "the old request cannot apply after its attempt is counted, even before the database deadline");
+            now += 21;
+        }
+        if (revoked)
+        {
+            var oldWait = store.Subscriptions.Single();
+            var unbind = new TurnCommit(id, null, null, [], [], [], [], [oldWait], null);
+            var fence = worker.Fences.Single();
+            var result = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+                false, [unbind], [], []));
+            var newWait = oldWait with { FoundationIncarnation = Guid.NewGuid() };
+            await store.SubscribeAsync(newWait);
+            await CatchUpOnly(worker);
+            check(result.Landed && !store.Messages.ContainsKey(key) && store.Instances[id].ParkRecovery?.Control == originalControl &&
+                store.Subscriptions.Single().FoundationIncarnation == newWait.FoundationIncarnation,
+                "an exhausted superseded chain settles without re-parking the actor or removing a new wait");
+            return;
+        }
+        await worker.PollAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        check(store.Instances[id].ParkRecovery?.Control == originalControl,
+            "the open recovery cannot Complete ahead of an exhausted meet with active coverage");
+        await CatchUpOnly(worker);
+        check(store.Instances[id] is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: ParkKeepReason.Consumed } &&
+            !store.Messages.ContainsKey(originalControl) && store.Subscriptions.Count == 0 && probe.Received.Count == 0,
+            "the exhausted meet re-parks an open recovery and atomically removes its subscriptions");
+        await store.SweepAsync();
+        check(store.FoundationEvents.Count == 0, "the exhausted meet releases coverage of its expired publication");
+
+        static async Task CatchUpOnly(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.FlushAsync();
+            await owner.MeetAsync();
+            await owner.FlushAsync();
+        }
+    }
+
+    private static async Task CheckRecoverKeptEvents(int count, bool revoke, Action<bool, string> check, bool byteCut = false,
+        bool sweepBackstep = false, bool repeatPublication = false, bool probePageWork = false,
+        bool retryBeforeOpen = false, bool zeroWindow = false)
+    {
+        const long initial = 1_701_400_030_200;
+        var now = initial;
+        var comparisons = probePageWork ? new EventKeyComparisons() : null;
+        var store = new InMemoryStore(1, () => now, Flaw.None, comparisons ?? StringComparer.Ordinal);
+        var probe = new KeepingRecoveryProbe();
+        var scope = new Contract.BoundScope("recover-kept-event");
+        var verifyCollisions = count == 171;
+        Worker worker = null!;
+        Worker MakeWorker(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial,
+                OnPreparedCheckpoint = (opening, _, _) =>
+                {
+                    if (!verifyCollisions || opening.FoundationRecoverySubscriptions is null || opening.Row is not { } row) return;
+                    var prior = store.Instances[row.Id];
+                    var key = InboxKey.Issued(FormattableString.Invariant($"{CreationProtocol.Origin(row.Id, row.Creation)}#{row.Revision}.0001"));
+                    var collision = new Message(key.Id, new(row.Id), "ordinary").AsIssued();
+                    CheckCatchUpCollision(store, worker.Fences.Single(), opening, collision,
+                        () => store.Instances[row.Id] == prior && store.Subscriptions.Count == 0,
+                        "first ticket", check);
+                }
+            });
+        worker = MakeWorker("recover-kept-event");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var parked = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+        var publisher = new Contract.Target.Event(probePageWork ? "Approval" : "approval");
+        string[] expected = [.. Enumerable.Range(0, count).Select(index => $"owed-{index:D4}")];
+        foreach (var eventId in expected)
+            await ingress.SendAsync(scope, publisher, eventId, Contract.Kinds.Event,
+                byteCut && eventId == expected[0] ? new string('x', ParkRecoveryCredit.LimitBytes) : "payload",
+                new Contract.AddOptions(KeepFor: zeroWindow ? TimeSpan.Zero : TimeSpan.FromMilliseconds(20)));
+        if (zeroWindow)
+            check(store.FoundationEvents.Values.Single().KeepUntil == now,
+                "an explicit zero keep window includes its own acceptance timestamp");
+        if (retryBeforeOpen)
+        {
+            var key = (scope.Tenant + "_approval", expected[0]);
+            var original = store.FoundationEvents[key];
+            now += 21;
+            var retry = await ingress.SendAsync(scope, publisher, expected[0], Contract.Kinds.Event, "replacement",
+                new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(20)));
+            check(retry.Outcome == Contract.AdmissionOutcome.Duplicate && store.FoundationEvents[key] == original,
+                "a retry after the window leaves the unswept publication intact before there is any coverage");
+            now = initial;
+        }
+        await ingress.SendAsync(scope, publisher, "expired-before-open", Contract.Kinds.Event, "too old",
+            zeroWindow ? null : new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1)));
+        await Pump(owner);
+        if (!zeroWindow) now += 2;
+        var fixture = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
+            store.FoundationEvents.Count == count + 1 && store.Subscriptions.Count == 0 && probe.Received.Count == 0;
+        check(fixture, "a kept event is still available when the keeping wait's Park is unresolved");
+        if (!fixture) return;
+        if (sweepBackstep)
+        {
+            await store.SweepAsync();
+            now = initial;
+        }
+
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(parked!.Selection!)));
+        var id = store.Instances.Values.Single().Id;
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(id);
+        await worker.FlushAsync();
+        var opened = store.Instances[id].ParkRecovery is not null && store.Subscriptions.Count == 1 && probe.Received.Count == 0;
+        check(opened, "Open restores a keeping subscription and records its catch-up before delivering any event");
+        if (!opened) return;
+
+        var originalTicket = store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null).Message;
+        check(originalTicket.ParkCatchUp!.Chain == FoundationEventIdentity.CatchUpId(originalTicket.InboxKey),
+            "the Open records the canonical chain ID of its first issued ticket");
+        if (sweepBackstep)
+            check(originalTicket.ParkCatchUp!.Entitlement == initial + 2,
+                "the tenant sweep horizon keeps a later Open's entitlement above deleted windows after a clock step-back");
+        now += 21;
+        await store.SweepAsync();
+        check(store.FoundationEvents.Count == count && store.FoundationEvents.Values.All(evt => evt.Id != "expired-before-open"),
+            "the sweep retains owed events and deletes the event that expired before Open");
+
+        EventRow? firstPublication = null;
+        if (repeatPublication)
+        {
+            firstPublication = store.FoundationEvents.Values.Single();
+            var duplicate = await ingress.SendAsync(scope, publisher, firstPublication.Id, Contract.Kinds.Event, "replacement");
+            check(duplicate.Outcome == Contract.AdmissionOutcome.Duplicate && store.FoundationEvents.Values.Single() == firstPublication,
+                "an outside retry after receipt expiry preserves the covered publication and its incarnation");
+        }
+
+        if (revoke)
+        {
+            await Reserve(originalTicket);
+            var originalWait = store.Subscriptions.Single();
+            var replacement = originalWait with { FoundationIncarnation = Guid.NewGuid() };
+            var step = new TurnCommit(id, null, null, [originalTicket.InboxKey], [], [], [], [], null)
+            { FoundationCatchUpStep = originalTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
+            var unregister = new TurnCommit(id, null, null, [], [], [], [], [originalWait], null);
+            var fence = worker.Fences.Single();
+            var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, [step, unregister], [], []);
+            var committed = await store.CommitAsync(batch);
+            await store.SubscribeAsync(replacement);
+            await store.SweepAsync();
+            await Pump(owner);
+            check(committed.Landed && store.Subscriptions.Single().FoundationIncarnation == replacement.FoundationIncarnation &&
+                probe.Received.Count == 0 && store.FoundationEvents.Count == 0 && !store.Messages.ContainsKey(originalTicket.InboxKey),
+                "a catch-up step batched with unsubscribe leaves a later incarnation untouched and releases sweep coverage");
+            return;
+        }
+
+        if (count > InMemoryStore.ParkPageLimit || byteCut)
+        {
+            var firstPageSize = byteCut ? 1 : InMemoryStore.ParkPageLimit;
+            if (verifyCollisions)
+            {
+                await Reserve(originalTicket);
+                var nextId = FoundationEventIdentity.CatchUpSuccessor(originalTicket.ParkCatchUp.Chain, 1);
+                var successorCollision = (originalTicket with { Id = nextId, Kind = "ordinary", ParkCatchUp = null }).AsIssued();
+                var publication = store.FoundationEvents.Values.Single(row => row.Id == expected[0]);
+                var generated = new EventRoute(publication, store.Subscriptions.Single()).Delivery().Message;
+                var step = new TurnCommit(id, null, null, [originalTicket.InboxKey], [], [], [], [], null)
+                    { FoundationCatchUpStep = originalTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
+                bool Unchanged() => store.Messages.ContainsKey(originalTicket.InboxKey) && store.Messages.Values.All(row => row.Message.Kind != Kinds.Event);
+                CheckCatchUpCollision(store, worker.Fences.Single(), step, successorCollision, Unchanged, "page successor", check);
+                CheckCatchUpCollision(store, worker.Fences.Single(), step, generated with { Kind = "ordinary" }, Unchanged, "event delivery", check);
+            }
+            var comparisonsBefore = comparisons?.Count ?? 0;
+            await worker.PollAsync();
+            await worker.FlushAsync();
+            await worker.MeetAsync();
+            await worker.FlushAsync();
+            var successorTicket = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null)?.Message;
+            var paged = !store.Messages.ContainsKey(originalTicket.InboxKey) &&
+                store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == firstPageSize &&
+                successorTicket is { ParkCatchUp: { Page: 1, After: { } after } nextPage } && after.Event == expected[firstPageSize - 1] &&
+                successorTicket.InboxKey != originalTicket.InboxKey && nextPage.Chain == originalTicket.ParkCatchUp!.Chain &&
+                nextPage.Entitlement == originalTicket.ParkCatchUp.Entitlement;
+            check(paged, byteCut ? "a single event above the byte allowance goes alone in its fenced catch-up step" :
+                "one fenced catch-up step commits a bounded page and a distinct successor with the same entitlement");
+            if (comparisons is not null)
+            {
+                var used = comparisons.Count - comparisonsBefore;
+                check(paged && used <= 2 * InMemoryStore.ParkPageLimit + 4,
+                    $"a folded-key page over 4,096 events uses its index ({used} equality probes)");
+                return;
+            }
+            if (!paged) return;
+
+            var oldFence = worker.Fences.Single();
+            await owner.DisposeAsync();
+            var successor = MakeWorker("recover-kept-successor");
+            await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+            var staleStep = new TurnCommit(id, null, null, [successorTicket!.InboxKey], [], [], [], [], null)
+                { FoundationCatchUpStep = successorTicket.InboxKey, FoundationCatchUpExpected = 0, FoundationCatchUpBefore = now + 10_000 };
+            var stale = await store.CommitAsync(new(oldFence.Partition, oldFence.Epoch, oldFence.Position, Defaults.Lease, false, [staleStep], [], []));
+            check(!stale.Landed && store.Messages.ContainsKey(successorTicket.InboxKey), "a stale owner cannot advance the successor catch-up page");
+            await Complete(next);
+        }
+        else await Complete(owner);
+
+        await store.SweepAsync();
+        if (count > InMemoryStore.ParkPageLimit)
+        {
+            check(store.FoundationEvents.Count == count - InMemoryStore.ParkPageLimit,
+                "a tenant sweep removes at most one page of uncovered publications per call");
+            await store.SweepAsync();
+        }
+        check(probe.Received.SequenceEqual(expected) && store.Instances[id].ParkRecovery is null && store.FoundationEvents.Count == 0,
+            "catch-up delivers each owed event once in order and releases its sweep coverage");
+
+        if (firstPublication is not null)
+        {
+            check(probe.Payloads.SequenceEqual(["payload"]), "catch-up offers the original payload once");
+            var fresh = await ingress.SendAsync(scope, publisher, firstPublication.Id, Contract.Kinds.Event, "replacement");
+            var secondPublication = store.FoundationEvents.Values.SingleOrDefault();
+            await Complete(owner);
+            check(fresh.Outcome == Contract.AdmissionOutcome.Accepted && secondPublication is not null &&
+                secondPublication.FoundationIncarnation != firstPublication.FoundationIncarnation &&
+                probe.Payloads.SequenceEqual(["payload", "replacement"]),
+                "after sweep the outside key admits a fresh incarnation and delivers its own payload");
+        }
+
+        async Task Complete(IScopeActivation active)
+        {
+            for (var pass = 0; pass < 3; pass++)
+            {
+                await Pump(active);
+                now += 11;
+            }
+        }
+
+        async Task Reserve(Message ticket)
+        {
+            // Keep the ticket in the Worker's inbox when exercising the store's prepare checks directly.
+            await worker.PollAsync();
+            var fence = worker.Fences.Single();
+            var reserved = await store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease,
+                false, [], [], [ticket.InboxKey]));
+            check(reserved.Landed, "the exact pending catch-up step reserves a trial under its partition fence");
+        }
+    }
+
+    private static void CheckCatchUpCollision(InMemoryStore store, PartitionFence fence, TurnCommit original,
+        Message collision, Func<bool> unchanged, string description, Action<bool, string> check)
+    {
+        var send = new TurnCommit(collision.Target.Id, null, null, [], [], [collision], [], [], null);
+        foreach (var order in new TurnCommit[][] { [send, original], [original, send] })
+        {
+            var refused = false;
+            try
+            {
+                store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position, Defaults.Lease, false, order, [], [])).GetAwaiter().GetResult();
+            }
+            catch (StoreException error) when (error.Failure == Failure.Definite)
+            {
+                refused = true;
+            }
+            catch (ArgumentException)
+            {
+                // The old late duplicate insert throws after deleting the original page ticket.
+            }
+            var intact = unchanged() && !store.Messages.ContainsKey(collision.InboxKey) && store.Partitions[fence.Partition].Position == fence.Position;
+            check(refused && intact, $"a composed collision with the {description} refuses the entire fenced batch");
+            if (!intact) return;
+        }
+    }
+
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
         const long now = 1_701_400_029_000;
@@ -1121,18 +1678,386 @@ internal static class ParkKeptChecks
             store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
     }
 
-    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
+    internal static async Task CheckRecoverJobResult(Action<bool, string> check)
     {
-        const long now = 1_701_400_010_000;
+        await CaptureParkedCompletion(timed: false, check, recover: true);
+        await CaptureParkedCompletion(timed: true, check, recover: true);
+        await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true);
+        await CaptureParkedCompletion(timed: true, check, recover: true, endHoldingResult: true);
+        await CaptureParkedCompletion(timed: false, check, recover: true, endBeforeResult: true);
+        await CaptureParkedCompletion(timed: false, check, recover: true, pendingAtOpen: true, endBeforeResult: true);
+        await CheckRestartedJob(timed: false, check);
+        await CheckRestartedJob(timed: true, check);
+        await CheckRetryConsumedResult(retry: false, check);
+        await CheckRetryConsumedResult(retry: true, check);
+        await CheckPendingJobAfterPark(check);
+        await CheckRetryConsumedTicket(check);
+        await CheckRetryConsumedTicket(check, timed: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, releaseTicketBeforeEnd: true);
+        await CheckRetryConsumedTicket(check, timed: true, endBeforeTicket: true, restartAtOpen: true);
+    }
+
+    private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
+    {
+        var now = 1_701_400_012_000L;
+        const string key = "background";
+        const string recipe = "captured arguments and effect key";
+        var store = new InMemoryStore(1, () => now);
+        var actor = new ParkedJobProbe("result", timed, arguments: recipe);
+        var scope = new Contract.BoundScope("job-restart");
+        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var first = MakeOwner("before-restart");
+        var edge = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var oldGeneration = JobRegistry.Generation(row, key)!.Value;
+        var oldKey = InboxKey.Ticket(row.Id, key, row.Creation, oldGeneration);
+        var initialTicket = store.Messages[oldKey].Message.Read<JobTicket>();
+        await edge.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        await owner.DisposeAsync();
+
+        var successor = MakeOwner("restart-open");
+        await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+        await Pump(next);
+        var old = store.Messages.GetValueOrDefault(oldKey);
+        var parked = store.Instances[row.Id];
+        var retained = parked.Status == InstanceStatus.Faulted && old is { Done: true, KeptBy: ParkKeepReason.Arrived } &&
+            actor.Entries == 1 && actor.Completions == 0;
+        check(retained, "the successor keeps the old job ticket before Resume without entering its job code");
+        if (!retained) return;
+
+        // Restart takes the model's recipe, even if the old ticket contains different arguments.
+        old!.Message = old.Message with { Payload = Json.Write(old.Message.Read<JobTicket>() with { Arguments = "stale" }) };
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var admitted = await edge.SendAsync(scope, target, "restart-operation", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection)));
+        await successor.PollAsync();
+        await successor.LoadAsync();
+        await successor.FlushAsync();
+        successor.RunTurn(row.Id);
+        await successor.FlushAsync();
+        var open = store.Instances[row.Id];
+        var generation = oldGeneration + 1;
+        var currentKey = InboxKey.Ticket(row.Id, key, row.Creation, generation);
+        var restarted = admitted.Outcome == Contract.AdmissionOutcome.Accepted && open.ParkRecovery is not null &&
+            open.ParkRestartedJobs is not null && JobRegistry.Generation(open, key) == generation && open.NextJobGeneration == generation + 1 &&
+            store.Messages.GetValueOrDefault(currentKey) is { Done: false, Seen: 0, ReleasedBy: null } job &&
+            job.Message.Read<JobTicket>().Arguments == recipe && actor.Entries == 1;
+        check(restarted, "the fenced Open writes a new job generation from the captured recipe while the older ticket stays inert");
+        if (!restarted) return;
+        if (timed)
+        {
+            var replacement = store.Messages[currentKey].Message.Read<JobTicket>();
+            check(initialTicket.Timer is not null && replacement.Timer is not null && initialTicket.Timer != replacement.Timer &&
+                initialTicket.Deadline == replacement.Deadline && !store.Messages.ContainsKey(InboxKey.Issued(initialTicket.Timer)) &&
+                store.Messages.Values.Count(item => item is { Done: false, Message.Kind: Kinds.JobDeadline }) == 1,
+                "a timed restart atomically recalls the old deadline and preserves its time under the replacement's identity");
+        }
+
+        await next.DisposeAsync();
+        var finisher = MakeOwner("restart-after-take");
+        await using var finalOwner = (await new DurableHost([finisher]).ActivateAsync(0))!;
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(finalOwner);
+        }
+        check(store.Instances[row.Id] is { ParkRecovery: null, ParkRestartedJobs: null } &&
+            old is { Done: true, KeptBy: null, ReleasedBy: null } && actor.Entries == 2 && actor.Arguments.SequenceEqual([recipe, recipe]),
+            "the next owner clears the obsolete kept ticket and enters the replacement once after Complete");
+        var completion = finisher.JobCompletion(row.Id, key, row.Creation);
+        if (completion is null) return;
+        actor.Complete.SetResult();
+        await completion.WaitAsync(TimeSpan.FromSeconds(5));
+        await Pump(finalOwner);
+        check(actor.Completions == 1 && actor.Entries == 2 && store.Instances[row.Id].Jobs is null &&
+            !store.Messages.ContainsKey(currentKey), "the replacement result clears its own registry entry and reaches the actor once");
+    }
+
+    private static async Task CheckRetryConsumedResult(bool retry, Action<bool, string> check)
+    {
+        var now = 1_701_400_013_000L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new ParkedJobProbe("original", timed: true) { FaultOnResult = true };
+        var worker = new Worker("retry-job-result", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var scope = new Contract.BoundScope("retry-job-result");
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(begun.Actor!.Value);
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var driver = worker.JobCompletion(row.Id, "background", row.Creation)!;
+        probe.Complete.SetResult();
+        await driver.WaitAsync(TimeSpan.FromSeconds(5));
+        await Pump(owner);
+        var parked = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+        var resultKey = InboxKey.JobResult(row.Id, "background", row.Creation);
+        var kept = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } && probe.Entries == 1 &&
+            store.Messages.GetValueOrDefault(resultKey) is { KeptBy: ParkKeepReason.Consumed, Message.FoundationJobResult: true };
+        check(kept, "a fault while applying an authenticated timed result keeps the result as Consumed");
+        if (!kept) return;
+
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(parked!.Selection!, retry ? Contract.RecoverMode.RetryAll : Contract.RecoverMode.Resume)));
+        for (var index = 0; index < 3; index++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && probe.Entries == 1 &&
+            (retry ? probe.Completions == 1 && probe.Result == "original" : probe.Completions == 0),
+            $"{(retry ? "RetryAll replays" : "Resume clears")} the consumed result without executing its job again");
+        if (retry) return;
+
+        await ingress.SendAsync(scope, target, "park-again", "fault");
+        await Pump(owner);
+        var later = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+        await ingress.SendAsync(scope, target, "resume-again", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(later!.Selection!)));
+        for (var index = 0; index < 3; index++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && probe.Entries == 1 && probe.Completions == 0,
+            "a later Park cannot restart a deliberately discarded result through a leftover model recipe");
+    }
+
+    private static async Task CheckPendingJobAfterPark(Action<bool, string> check)
+    {
+        var now = 1_701_400_014_000L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new ParkedJobProbe("original", timed: true);
+        var scheduler = new HeldScheduler();
+        var adapter = new ActorAdapter(store, probe);
+        var worker = new Worker("resume-pending-job", 0, store, adapter,
+            new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var scope = new Contract.BoundScope("resume-pending-job");
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(begun.Actor!.Value);
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var ticketKey = InboxKey.Ticket(row.Id, "background", row.Creation);
+        var ticket = store.Messages[ticketKey];
+        var deadline = store.Messages.Values.Single(message => message.Message.Kind == Kinds.JobDeadline);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await worker.PollAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(row.Id);
+        await worker.FlushAsync();
+        var parked = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+        var queued = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
+            scheduler.Count == 1 && probe.Entries == 0 && ticket is { Done: false };
+        check(queued, "the same owner parks while its job callback is queued and the ticket remains pending");
+        if (!queued) return;
+
+        await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(parked!.Selection!)));
+        // Independent acceptance clocks can assign a command a lower order key than an outstanding ticket.
+        var command = store.Messages.Values.Single(item => item.Message.Id == "recover");
+        command.Seq = ticket.Seq - 1;
+        var parkedRow = store.Instances[row.Id];
+        var stimulus = new Delivery(command.Message, command.Seq) { Durable = true };
+        var staged = adapter.Command(new TurnInput(worker, new Slot { Row = parkedRow, Loaded = true }, row.Id, [stimulus], 0, null, now))!;
+        var openTurn = new TurnCommit(row.Id, staged.Row, staged.Expected, staged.Cancelled, [stimulus.Message.InboxKey], staged.Sent,
+            staged.Subscribed, staged.Unsubscribed, staged.Journal)
+        {
+            FoundationRecoveryTimers = staged.FoundationRecoveryTimers, FoundationRecoveryJobs = staged.FoundationRecoveryJobs,
+        };
+        var fence = worker.Fences.Single();
+        if (!await RefusesSiblingConsume(ticketKey, "job ticket")) return;
+        if (!await RefusesSiblingConsume(deadline.Message.InboxKey, "issued job deadline")) return;
+
+        await worker.PollAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(row.Id);
+        await worker.FlushAsync();
+        var open = store.Instances[row.Id];
+        var preserved = open.ParkRecovery is not null && open.ParkRestartedJobs is null && ticket is { Done: false } && probe.Entries == 0;
+        check(preserved, "Open preserves the pending ticket while its canceled scheduled callback has not run");
+        if (!preserved) return;
+
+        await Pump(owner);
+        probe.Complete.SetResult();
+        scheduler.RunAll();
+        await Pump(owner);
+        check(probe is { Entries: 1, Completions: 1, Result: "original" } && store.Instances[row.Id] is { ParkRecovery: null, Jobs: null },
+            "the superseded callback leaves the resubmitted pending job able to enter and settle exactly once");
+
+        async Task<bool> RefusesSiblingConsume(InboxKey key, string label)
+        {
+            var sibling = new TurnCommit(row.Id, null, null, [key], [], [], [], [], null);
+            var rejected = await DefiniteRejection(() => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position,
+                Defaults.Lease, false, [openTurn, sibling], [], [])));
+            check(rejected && store.Instances[row.Id] == parkedRow && store.Messages.ContainsKey(key) && !command.Done,
+                $"the fenced batch refuses a sibling consume of the {label} that Open preserves");
+            return rejected;
+        }
+    }
+
+    private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
+        bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false)
+    {
+        var now = 1_701_400_014_100L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new ParkedJobProbe("continued", timed)
+        {
+            BeforeDeadline = endBeforeTicket ? (releaseTicketBeforeEnd ? 0 : 1) : timed ? InMemoryStore.ParkPageLimit - 1 : 0,
+            EndBeforeTicket = endBeforeTicket
+        };
+        var scheduler = new HeldScheduler();
+        var first = new Worker("before-poison-ticket", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
+        var scope = new Contract.BoundScope("retry-consumed-ticket");
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node,
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        var row = store.Instances.Values.Single();
+        var key = InboxKey.Ticket(row.Id, "background", row.Creation);
+        store.Messages[key].Attempts = 3;
+        await owner.DisposeAsync();
+        scheduler.RunAll();
+
+        var pairedPages = 0;
+        var largestPage = 0;
+        var releasedTicket = false;
+        var pendingCallbacks = endBeforeTicket ? new HeldScheduler() : null;
+        var successor = new Worker("retry-poison-ticket", 0, store, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => 0,
+            JobScheduler = pendingCallbacks,
+            OnPreparedCheckpoint = (turn, _, _) =>
+            {
+                if (turn.FoundationRecoveryPage is not { } page) return;
+                largestPage = Math.Max(largestPage, page.Writes().Count());
+                if (page.Rows.Any(item => item.PairedJobInput?.Cursor.Key == key)) pairedPages++;
+                if (turn.Row?.Status == InstanceStatus.Running && page.Writes().Any(item => item.Cursor.Key == key)) releasedTicket = true;
+            }
+        });
+        await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+        await Pump(next);
+        var view = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+        var retained = view is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
+            store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed } && probe.Entries == 0;
+        check(retained, "an exhausted current ticket is kept as Consumed after the worker Park");
+        if (!retained) return;
+        if (timed)
+        {
+            now += endBeforeTicket ? 500 : 1500;
+            for (var pass = 0; pass < 24; pass++) await Pump(next);
+            var deadline = store.Messages.Values.Single(message => message.Message.Kind == Kinds.JobDeadline);
+            if (endBeforeTicket)
+                check(deadline is { Done: false } && deadline.Message.Due > now &&
+                    store.Messages.Values.Any(item => item is { Message.Kind: "end-before-job", KeptBy: ParkKeepReason.Arrived } &&
+                        item.Seq < store.Messages[key].Seq),
+                    "a large earlier arrival is kept while the timed ticket is poisoned and its absolute deadline is still ahead");
+            else
+                check(deadline.KeptBy == ParkKeepReason.Arrived && deadline.Seq < store.Messages[key].Seq &&
+                    store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < deadline.Seq) ==
+                        InMemoryStore.ParkPageLimit - 1,
+                    "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
+        }
+        await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(view!.Selection!,
+                restartAtOpen ? Contract.RecoverMode.Resume : Contract.RecoverMode.RetryAll)));
+        await Pump(next);
+        if (timed)
+        {
+            for (var pass = 0; pass < 24; pass++)
+            {
+                now += 11;
+                await Pump(next);
+            }
+            if (endBeforeTicket)
+            {
+                pendingCallbacks!.RunAll();
+                var currentKey = restartAtOpen ? InboxKey.Ticket(row.Id, "background", row.Creation, 1) : key;
+                var disposition = restartAtOpen ? "Open-created" : releaseTicketBeforeEnd ? "released" : "kept";
+                check(releasedTicket == releaseTicketBeforeEnd && probe is { Entries: 0, Completions: 0 } &&
+                    store.Instances[row.Id] is { Status: InstanceStatus.Finished, ParkRecovery: null, Jobs: null } &&
+                    store.Messages.GetValueOrDefault(currentKey) is { Done: true, KeptBy: null } &&
+                    store.Messages.Values.All(item => item.Message.Kind != Kinds.JobDeadline || item.Done),
+                    $"the terminal page clears the {disposition} ticket, its pending deadline and job registration together");
+                var terminal = await new ActorList(store, 10).GetAsync(scope, target.Actor);
+                await ingress.SendAsync(scope, target, "delete-after-kept-ticket", Contract.Kinds.Delete,
+                    Json.Write(new Contract.OperatorCommand(terminal!.Selection!)));
+                await Pump(next);
+                check(store.Instances[row.Id].Retired, "qualified Delete can retire the model that ended before its timed ticket was restored");
+                return;
+            }
+            check(probe is { Entries: 0, Completions: 1, JobError: "timeout" } &&
+                store.Instances[row.Id] is { ParkRecovery: null, Jobs: null } && !store.Messages.ContainsKey(key),
+                "the split-page deadline settles the same job generation once without entering the expired driver");
+            check(pairedPages == 1 && largestPage == InMemoryStore.ParkPageLimit - 1,
+                "the deadline and its later ticket share one fenced page within the row limit");
+            return;
+        }
+        var open = store.Instances[row.Id];
+        var preserved = JobRegistry.Generation(open, "background") == 0 && open.NextJobGeneration == row.NextJobGeneration &&
+            store.Messages[key] is { Done: false, KeptBy: null, ReleasedBy.Generation: 1, Attempts: 0 } && probe.Entries == 1;
+        check(preserved, "RetryAll restores the current consumed ticket and its original generation with a fresh poison budget");
+        if (!preserved) return;
+        var driver = successor.JobCompletion(row.Id, "background", row.Creation)!;
+        probe.Complete.SetResult();
+        await driver.WaitAsync(TimeSpan.FromSeconds(5));
+        for (var index = 0; index < 3; index++)
+        {
+            now += 11;
+            await Pump(next);
+        }
+        check(probe is { Entries: 1, Completions: 1, Result: "continued" } && store.Instances[row.Id] is { ParkRecovery: null, Jobs: null },
+            "the retried current ticket settles once and clears its registry entry");
+    }
+
+    private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check, bool recover = false,
+        bool pendingAtOpen = false, bool endHoldingResult = false, bool endBeforeResult = false)
+    {
+        var now = 1_701_400_010_000L;
         const string jobKey = "background";
         const int payloadLimit = 16 * 1024 * 1024 - 2 * 24 * 1024;
         var overhead = System.Text.Encoding.UTF8.GetByteCount(Json.Write(new JobFinished(jobKey, Json.Write(""), null)));
         var store = new InMemoryStore(1, () => now);
-        var actor = new ParkedJobProbe(new string('x', payloadLimit - overhead + 1), timed);
+        var actor = new ParkedJobProbe(new string('x', payloadLimit - overhead + 1), timed) { EndHoldingResult = endHoldingResult };
         var scope = new Contract.BoundScope("parked-job");
-        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        Message? competingTicket = null;
+        var attempted = false;
+        var refused = false;
+        Worker MakeOwner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions
+        {
+            Monotonic = () => 0,
+            OnPreparedCheckpoint = (opening, _, _) =>
+            {
+                if (attempted || competingTicket is not { } original || opening.FoundationRecoveryJobs is null) return;
+                attempted = true;
+                var prior = store.Instances[opening.Instance];
+                var fence = store.Partitions[0];
+                var sibling = new TurnCommit(opening.Instance, null, null, [], [], [original], [], [], null);
+                try
+                {
+                    store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [sibling, opening], [], []))
+                        .GetAwaiter().GetResult();
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite)
+                {
+                    refused = store.Instances[opening.Instance] == prior && !store.Messages.ContainsKey(original.InboxKey);
+                }
+            }
+        });
         var worker = MakeOwner("parked-job-first");
-        Contract.IIngress edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
         var start = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(start.Actor!.Value);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
@@ -1140,6 +2065,7 @@ internal static class ParkKeptChecks
         var row = store.Instances.Values.Single();
         var task = worker.JobCompletion(row.Id, jobKey, row.Creation)!;
         var ticket = InboxKey.Ticket(row.Id, jobKey, row.Creation);
+        if (pendingAtOpen) competingTicket = store.Messages[ticket].Message;
         var resultKey = InboxKey.JobResult(row.Id, jobKey, row.Creation);
         await edge.SendAsync(scope, target, "fault", "fault");
         await Pump(owner);
@@ -1148,6 +2074,15 @@ internal static class ParkKeptChecks
             "the fault parks the actor while the entered job and its counted ticket are outstanding");
         check(store.Messages.Values.Count(message => !message.Done && message.Message.Kind == Kinds.JobDeadline) == (timed ? 1 : 0),
             "the parked job still has its pending deadline if armed");
+
+        if (endBeforeResult)
+        {
+            await edge.SendAsync(scope, target, "end-before-job", "end-before-job", new string('x', ParkRecoveryCredit.LimitBytes));
+            await Pump(owner);
+            check(store.Messages.Values.Any(message => message is { Message.Id: "end-before-job", KeptBy: ParkKeepReason.Arrived }),
+                "the earlier large arrival is kept before the authenticated job result exists");
+            parked = store.Instances[row.Id];
+        }
 
         actor.Complete.SetResult();
         await task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -1161,11 +2096,63 @@ internal static class ParkKeptChecks
             "a fenced standalone conversion stores the bounded authenticated fault without rewriting the actor checkpoint");
 
         await owner.DisposeAsync();
-        await using var successor = (await new DurableHost([MakeOwner("parked-job-next")]).ActivateAsync(0))!;
-        await Pump(successor);
-        check(actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
-            store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived },
-            "a successor keeps the bounded result as an arrival and does not rerun the job");
+        var nextWorker = MakeOwner("parked-job-next");
+        await using var successor = (await new DurableHost([nextWorker]).ActivateAsync(0))!;
+        if (!pendingAtOpen)
+        {
+            await Pump(successor);
+            var kept = actor.Entries == 1 && actor.Completions == 0 && store.Instances[row.Id].Jobs == parked.Jobs &&
+                store.Messages.GetValueOrDefault(resultKey) is { Done: true, KeptBy: ParkKeepReason.Arrived };
+            check(kept, "a successor keeps the bounded result as an arrival and does not rerun the job");
+            if (!recover || !kept) return;
+        }
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var resultAdmission = await edge.SendAsync(scope, target, "recover-job", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection)));
+        if (pendingAtOpen)
+        {
+            // A lower order key for the external command models a result behind Open on a provider with separate clocks.
+            var command = store.Messages.Values.Single(item => item.Message.Id == "recover-job");
+            command.Seq = result!.Seq - 1;
+            await nextWorker.PollAsync();
+            await nextWorker.LoadAsync();
+            await nextWorker.FlushAsync();
+            nextWorker.RunTurn(row.Id);
+            await nextWorker.FlushAsync();
+            check(attempted && refused, "Open refuses a sibling insertion of the genuine ticket that result conversion removed");
+            if (!refused) return;
+            var preserved = store.Instances[row.Id] is { ParkRecovery: not null, ParkRestartedJobs: null } resumed &&
+                resumed.Jobs == parked.Jobs && result is { Done: false, ReleasedBy: null } && actor.Entries == 1;
+            check(preserved, "Open finds the pending result after its ticket has been removed and preserves the original generation");
+            if (!preserved) return;
+        }
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(successor);
+        }
+        var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor;
+        if (endHoldingResult || endBeforeResult)
+        {
+            check(resultAdmission.Outcome == Contract.AdmissionOutcome.Accepted && actor.Entries == 1 &&
+                actor.Completions == (endBeforeResult ? 0 : 1) &&
+                recovered is { Park: null, Row: { Status: InstanceStatus.Finished, Jobs: null, EndedDuringParkRecovery: true } } &&
+                result is { Done: true, Held: false, KeptBy: null },
+                endBeforeResult ? $"the terminal page settles a {(pendingAtOpen ? "pending untagged" : "still-kept")} result and its exact job registration together" :
+                    "the terminal page settles a held authenticated result and its exact job registration together");
+            if (recovered is null) return;
+            var terminal = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+            var deletion = await edge.SendAsync(scope, target, "delete-after-job", Contract.Kinds.Delete,
+                Json.Write(new Contract.OperatorCommand(terminal)));
+            await Pump(successor);
+            check(deletion.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[row.Id].Retired,
+                "the settled job result no longer protects the terminal actor from qualified Delete");
+            return;
+        }
+        check(resultAdmission.Outcome == Contract.AdmissionOutcome.Accepted && actor is { Entries: 1, Completions: 1 } &&
+            recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && !store.Messages.ContainsKey(ticket),
+            $"Resume uses the current-generation {(pendingAtOpen ? "pending" : "kept")} result once and never restarts the settled job");
     }
 
     private static async Task Pump(IScopeActivation owner)
@@ -1254,12 +2241,96 @@ internal static class ParkKeptChecks
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
-    private sealed class ParkedJobProbe(string value, bool timed) : Contract.IActorType
+    private sealed class KeepingRecoveryProbe : Contract.IActorType
+    {
+        public string Type => "keeping-recovery";
+        public List<string> Received { get; } = [];
+        public List<string?> Payloads { get; } = [];
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+            {
+                if (message.Kind == Contract.Kinds.Start) turn.Subscribe("approval", "waiting", keep: true);
+                else if (message.Kind == "fault") throw new InvalidOperationException("park with a keeping wait");
+                else if (message.Event is { } received)
+                {
+                    Received.Add(received.Id);
+                    Payloads.Add(message.Payload);
+                }
+            }
+            return default;
+        }
+
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], [new("approval", "waiting", true)]);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
+    private sealed class EventKeyComparisons : StringComparer
+    {
+        public int Count { get; private set; }
+        public override int Compare(string? left, string? right) => OrdinalIgnoreCase.Compare(left, right);
+        public override int GetHashCode(string value) => OrdinalIgnoreCase.GetHashCode(value);
+
+        public override bool Equals(string? left, string? right)
+        {
+            Count++;
+            return OrdinalIgnoreCase.Equals(left, right);
+        }
+    }
+
+    private sealed class RestorePlanProbe : Contract.IActorType
+    {
+        public string Type => "restore-plan";
+        public bool ReturnPlan { get; set; }
+        public bool ReturnInvalidJob { get; set; }
+        public bool ReturnOversizeJobs { get; set; }
+        private long _due;
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+                if (message.Kind == Contract.Kinds.Start)
+                {
+                    _due = turn.Now + 10_000;
+                    turn.State = turn.Send(turn.Header.Ref, "", "timer content", _due);
+                }
+                else if (message.Kind == "fault") throw new InvalidOperationException("park with a timer");
+            return default;
+        }
+
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state)
+        {
+            if (ReturnInvalidJob) return new([new(state, "", "timer content", _due)], [new(null!, null)], [new("approval", "waiting", false)]);
+            if (ReturnOversizeJobs)
+                return new([new(state, "", "timer content", _due)],
+                    [new("first", new string('x', 13 * 1024 * 1024)), new("second", new string('y', 13 * 1024 * 1024))], []);
+            return ReturnPlan ? new([new(state, "", "timer content", _due)], [], []) : new([null!], [], []);
+        }
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
+    private sealed class ParkedJobProbe(string value, bool timed, string? arguments = null) : Contract.IActorType
     {
         public string Type => "parked-job-check";
         public TaskCompletionSource Complete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int Entries { get; private set; }
         public int Completions { get; private set; }
+        public bool FaultOnResult { get; init; }
+        public bool EndHoldingResult { get; init; }
+        public int BeforeDeadline { get; init; }
+        public bool EndBeforeTicket { get; init; }
+        private bool _faulted;
+        private long? _deadline;
+        public string? Result { get; private set; }
+        public string? JobError { get; private set; }
+        public System.Collections.Concurrent.ConcurrentQueue<string?> Arguments { get; } = new();
         public bool Withholds(Contract.ActorHeader header) => false;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -1267,21 +2338,47 @@ internal static class ParkKeptChecks
             foreach (var message in turn.Inbox)
                 switch (message.Kind)
                 {
-                    case Contract.Kinds.Start: turn.StartJob("background", timeout: timed ? TimeSpan.FromSeconds(1) : null); break;
+                    case Contract.Kinds.Start:
+                        if (EndBeforeTicket)
+                            turn.Send(turn.Header.Ref, "end-before-job", new string('x', ParkRecoveryCredit.LimitBytes), turn.Now + 300);
+                        for (var index = 0; index < BeforeDeadline; index++)
+                            turn.Send(turn.Header.Ref, "before-job-deadline", null, turn.Now + 400);
+                        _deadline = timed ? turn.Now + 1000 : null;
+                        turn.StartJob("background", arguments, timeout: timed ? TimeSpan.FromSeconds(1) : null);
+                        break;
                     case "fault": throw new InvalidOperationException("park with a running job");
-                    case Contract.Kinds.JobFinished: Completions++; break;
+                    case "end-before-job":
+                        turn.End(Contract.ActorStatus.Finished);
+                        break;
+                    case Contract.Kinds.JobFinished:
+                        if (FaultOnResult && !_faulted)
+                        {
+                            _faulted = true;
+                            throw new InvalidOperationException("park while applying the job result");
+                        }
+                        var result = Json.Read<Contract.JobFinished>(message.Payload!);
+                        if (result.Result is { } serialized) Result = Json.Read<string>(serialized);
+                        JobError = result.Error;
+                        Completions++;
+                        if (EndHoldingResult)
+                        {
+                            turn.Hold(message);
+                            turn.End(Contract.ActorStatus.Finished);
+                        }
+                        break;
                 }
             return default;
         }
 
         public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
         {
+            Arguments.Enqueue(job.Arguments);
             Entries++;
             await Complete.Task.WaitAsync(cancellationToken);
             return value;
         }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new("background", arguments) { Deadline = _deadline }], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

@@ -71,6 +71,7 @@ public sealed record Message(
     internal EventMatch? ProjectedEvent { get; init; }
     internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
+    internal ParkCatchUpTicket? ParkCatchUp { get; init; }
     internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
@@ -78,6 +79,7 @@ public sealed record Message(
     internal bool FoundationHeldJobResult { get; init; }
     private WeakReference<Message>? _issuedTicket;
     internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
+    internal Message WithoutTicketAuthority() => this with { _issuedTicket = null };
 
     internal Message AsKernelTicket()
     {

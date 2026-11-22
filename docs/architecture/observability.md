@@ -927,7 +927,10 @@ Park decision.
   `Stale` arm. A kept publish ticket it reaches is restored with its committed cursor, as before the end, and its
   remaining steps run as an ended publisher's ticket's steps do (SB-7 run 6); a kept meet ticket is cleared ("A kept
   publish ticket is kernel work" above, sixth review R6-M7). Rows released before the end
-  stay eligible and meet the ordinary rule for a finished instance (consumed and dropped). At Complete the withholding
+  stay eligible and meet the ordinary rule for a finished instance (consumed and dropped). When a terminal page
+  settles a kept, released or Open-created job ticket, or an authenticated result, it also removes that exact generation's
+  registry entry. A ticket's still-pending issued deadline is settled in the same page unless an earlier terminal
+  page has already settled it. The metadata and row limit count both writes. At Complete the withholding
   ends, so the unreleased rows meet the same rule, and
   `ParkRecord.Resolution` is cleared, so the Park is resolved and no row keeps `KeptBy`. The end itself is the built
   one: its own turn writes the end status and terminal mark and sends the parent its one notice, so Complete sends
@@ -1809,7 +1812,17 @@ calls one new model hook.
         - an instance's meet ticket parks its instance, and Park removes the subscriptions, so their coverage entries
           and holds go with them. This park is outside the cohort deferral of the poison comparison, since the
           ticket is no model input: a stalled catch-up parks its instance at `MaxAttempts` even while a recover drain
-          is open, as a re-park of the open recover, as defined;
+          is open, as a re-park of the open recover, as defined. The in-memory recovery path records failed steps by
+          comparing the pending ticket key and its previous attempt count under the fence. When the owner stops
+          waiting, a committed page and the failed-attempt write compete on that exact row. A page that lands removes
+          the old ticket. A failed-attempt write that wins invalidates a late page with the previous count. Only a
+          chain retaining coverage can re-park the instance. An exhausted superseded chain settles without touching
+          the instance or its new waits. The step budget is capped at one lease and leaves a reserve inside the
+          current owner's local lease deadline for the failure write. The owner marks the ticket's trial at the
+          start of its isolated step in place of the ordinary seen mark. A take or retake charges a reservation
+          that still has its pending ticket at the previous epoch. A landed page removed that ticket and leaves the
+          successor uncharged. A known failed step clears the trial when it records the attempt, so a later take
+          cannot charge it again. The physical-provider deadline and query-cost cases remain at K4 and K12.
         - a start subscription's meet ticket has no instance to park: it is set aside as a dead letter with an alert,
           and its coverage entries are released, so the sweep may delete the events it still owed;
         - a turn's publish ticket parks its publishing instance. Park keeps the ticket, so the sweep's ticket check
@@ -2054,6 +2067,16 @@ calls one new model hook.
   each `Restarted(g + 1)` and moves the registry's entry for that key to g + 1, so every page that later reaches
   ticket g finds it of an obsolete generation and clears it. Ticket g is therefore never restored beside g + 1, and
   the job runs at most twice, once as g before the Park and once as g + 1 (fifth review).
+
+  For retry-all, a kept deadline whose current-generation ticket is still kept `Consumed` may sort before that
+  ticket. The page that releases the deadline also releases the paired ticket in the same fenced commit. The match
+  uses the creation, generation, issued deadline id and its original due time. Both rows count against the page
+  limit. If only one position remains, the page ends before the deadline. The cursor advances to the deadline's
+  position, and the later ticket is already released when a subsequent page reaches that position. The ticket is
+  exempt from handoff credit under the usual ticket rule. This lets the deadline settle the pending ticket as a
+  timeout while preserving the absolute due time and the current job generation. The in-memory reference store
+  projects the linkage from the metadata saved with each row at insertion. Physical provider projection and its
+  cost are part of K4 qualification.
 
   **The re-arm.** A timer is re-armed under its own full key from one durable source, whichever branch the
   disposition step's point lookup chose. The plan's `TimerSpec`, from the model's committed state, gives `Kind`,
