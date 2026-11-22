@@ -48,7 +48,8 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.goto(`/questions/${question.id}`);
     await expect(page.getByText(/^Parts of this definition are withheld under your current access\./)).toBeVisible();
     await expect(page.locator(".named-query-controls")).toHaveCount(0);
-    await page.getByRole("button", { name: "History", exact: true }).click();
+    await page.getByRole("button", { name: "Question actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "History", exact: true }).click();
     let history = page.getByRole("dialog", { name: "Definition history", exact: true });
     await history.getByRole("button", { name: `Inspect revision ${original.revision}`, exact: true }).click();
     await expect(history.getByText("Definition withheld under current access.", { exact: true })).toBeVisible();
@@ -75,8 +76,8 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
     await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("absolute");
     const from = new Date(Date.now() - 86_400_000).toISOString(), to = new Date(Date.now() + 3_600_000).toISOString();
-    await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(from);
-    await page.getByLabel("To (exclusive UTC instant)", { exact: true }).fill(to);
+    await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(from);
+    await page.getByLabel("End time (UTC, exclusive)", { exact: true }).fill(to);
     await page.getByRole("button", { name: "Validate question", exact: true }).click();
     const inFlight = await preview(); expect(inFlight.outcome).toBe("succeeded"); expect(inFlight.coverage?.status).toBe("unknown");
     expect(inFlight.rows).toHaveLength(1);
@@ -93,7 +94,8 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     expect(repaired.definition).toMatchObject({ query: { dataset: { id: "acme.processing.records" }, metrics: [{ alias: "count" }, { alias: "rate" }, { alias: "duration" }] } });
     await page.reload(); await preview(); await capture(page, info, "edge-repair-saved-reopened");
     await captureResultViews(page, info, capture, "edge-repair-saved-reopened", result);
-    await page.getByRole("button", { name: "History", exact: true }).click(); history = page.getByRole("dialog", { name: "Definition history", exact: true });
+    await page.getByRole("button", { name: "Question actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "History", exact: true }).click(); history = page.getByRole("dialog", { name: "Definition history", exact: true });
     await history.getByRole("button", { name: `Inspect revision ${original.revision}`, exact: true }).click();
     await expect(history.getByText("Definition withheld under current access.", { exact: true })).toBeVisible();
     await history.getByRole("button", { name: `Inspect revision ${question.revision}`, exact: true }).click();
@@ -147,8 +149,8 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await page.getByLabel("Result name", { exact: true }).fill("count");
     await page.getByRole("combobox", { name: "Time field", exact: true }).selectOption("startedAt");
     await page.getByRole("combobox", { name: "Time range", exact: true }).selectOption("absolute");
-    await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(new Date(Date.now() - 32 * 86_400_000).toISOString());
-    await page.getByLabel("To (exclusive UTC instant)", { exact: true }).fill(to);
+    await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(new Date(Date.now() - 32 * 86_400_000).toISOString());
+    await page.getByLabel("End time (UTC, exclusive)", { exact: true }).fill(to);
     await page.getByRole("combobox", { name: "Time bucket", exact: true }).selectOption("hour");
     const boundResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/questions/${question!.id}/preview`));
     await page.getByRole("button", { name: "Preview question", exact: true }).click();
@@ -160,7 +162,7 @@ export async function nativeDashboardEdgesJourney(page: Page, info: TestInfo, ca
     await timeControls.getByText(bounded.message, { exact: true }).scrollIntoViewIfNeeded();
     await expect(timeControls.getByText(bounded.message, { exact: true })).toBeInViewport();
     await capture(page, info, "edge-bounded-cost-rejection");
-    await page.getByLabel("From (inclusive UTC instant)", { exact: true }).fill(from);
+    await page.getByLabel("Start time (UTC, inclusive)", { exact: true }).fill(from);
     const retry = await preview(); expect(retry.outcome).toBe("succeeded"); await captureState("edge-bounded-cost-retry");
     const after = await counters(); expect(after.counts["session.send"] ?? 0).toBe(0); await boundary.verify(info, "edge-native");
     await attachDashboardJson(info, "native-edge-proof.json", { actualModuleDisabledAndRestored: true, explicitRepairSavedNewRevision: true, sameQuestion: original.id === question.id, oldHistoryWithheld: true, newHistoryAvailable: true, noEligibleDenominator: true, noEligibleValues: true, staleReason: "definition changed", priorResultGeneratedAtRetained: true, emptyBaselineCoverage: "unknown", boundedCostError: bounded.code, boundedCostRetrySucceeded: true, failureKind: "owned browser transport offline", failedValuesWithheld: true, transportRetrySucceeded: true, sdkSendsBefore: before.counts["session.send"] ?? 0, sdkSendsAfter: after.counts["session.send"] ?? 0 });

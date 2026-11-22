@@ -80,7 +80,7 @@ import { ReadOnlyFlowControls } from "./ReadOnlyFlowControls";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { READ_ONLY_READABLE_ZOOM } from "./readableFitViewport";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
-import { studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, AdvancedSection, CopyableIdentifier, OverflowMenu, StudioShellBreadcrumbs, StudioCollectionEmptyState, StudioPageHeader, StudioButton, StudioField, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import { StudioLink } from "../StudioLink";
@@ -1717,10 +1717,12 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     <>
       <div className="wf-detail-header" role="group" aria-label="Run workspace actions">
         <div className="wf-detail-header__identity">
-          <StudioBreadcrumbs items={[{ href: runHistoryBackLocation, label: "Runs" }]} current={<>
+          <><StudioShellBreadcrumbs items={[{ href: runHistoryBackLocation, label: "Runs" }]} current={runPageTitle}
+          renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />
+          <>
             <h2 className="wf-detail-header__title" title={runPageTitle}>{runPageTitle}</h2>
             {currentData ? <WorkflowStatusBadge status={currentData.details.instance.status} subStatus={currentData.details.instance.subStatus} /> : null}
-          </>} renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigate}>{item.label}</StudioLink>} />
+          </></>
         </div>
         <div className="wf-detail-header__actions">
           <StudioButton size="sm" aria-label="Refresh execution" title="Refresh execution" onClick={refreshWorkspace}><RefreshCw size={14} aria-hidden="true" /> Refresh</StudioButton>

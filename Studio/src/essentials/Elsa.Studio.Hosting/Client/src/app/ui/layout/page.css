@@ -39,7 +39,7 @@
   letter-spacing: normal;
 }
 .studio-page-header :is(h1, h2) > span { display: inline-flex; }
-.studio-page-header--compact :is(h1, h2) { font-size: var(--studio-section-title-size); }
+.studio-page-header--compact :is(h1, h2) { font-size: var(--studio-section-title-size); font-weight: 600; }
 .studio-page-header p {
   margin: var(--studio-space-1) 0 0;
   max-width: 80ch;

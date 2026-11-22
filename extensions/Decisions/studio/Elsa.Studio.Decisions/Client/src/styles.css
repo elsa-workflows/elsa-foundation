@@ -15,7 +15,7 @@
 .decision-editor-header .decision-draft-context { flex: 1 1 auto; width: auto; }
 .decision-editor-header .studio-breadcrumbs { display: inline-flex; flex: 0 1 auto; margin: 0; }
 .decision-editor-title { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; min-width: 0; }
-.decision-editor-title h1 { min-width: 0; margin: 0; font-size: 1.25rem; line-height: 1.3; overflow-wrap: anywhere; }
+.decision-editor-title h1 { min-width: 0; margin: 0; font-size: var(--studio-section-title-size); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .decision-editor-header .decision-version-picker { flex: 0 0 13rem; min-width: min(13rem, 100%); gap: .2rem; }
 .decision-editor-header .decision-version-picker label { gap: .2rem; color: var(--studio-text-muted); font-size: .75rem; }
 .decision-editor-header .decision-actions { justify-content: flex-end; }
@@ -146,7 +146,6 @@
   .decision-draft-context, .decision-draft-bar .decision-actions { width: 100%; }
   .decision-editor-header .decision-draft-context { align-items: flex-start; flex-basis: 100%; }
   .decision-editor-header .decision-actions { justify-content: flex-start; }
-  .decision-editor-title h1 { font-size: 1.1rem; }
   .decision-collection-toolbar > * { width: 100%; }
   .decision-collection-views { width: 100%; }
   .decision-assets th, .decision-assets td { min-width: 8rem; }

@@ -8,7 +8,7 @@ import { NamedDashboardsRoute } from "../NamedDashboards";
 import { QueryControls } from "../QueryControls";
 import { ResultView } from "../ResultView";
 import { initialDefinition, serializeTiles, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { beginNamedDraft, stubApi, waitUntil } from "../../__tests__/testSupport";
 import { createDashboardAuthoringController } from "../authoring";
 
 const dataset: DatasetDeclaration = { id: "acme.processing", ownerModuleId: "Acme.Processing", schemaRevision: "1", title: "Processing records", description: "Explicitly exposed processing records.", availability: "ready", fields: [{ id: "category", label: "Customer category", type: "string", filterOperators: ["eq", "ne", "in"], nullable: false, groupable: true, sortable: true, projectable: true, businessDimension: true }, { id: "duration", label: "Processing time", type: "decimal", filterOperators: ["gt"], nullable: true, groupable: false, sortable: true, projectable: true, aggregates: ["average"] }], metrics: [{ id: "processing.duration", revision: "1", label: "Average processing time", unit: "seconds", description: "Elapsed processing time for eligible records." }] };
@@ -64,7 +64,7 @@ describe("question query authoring hierarchy", () => {
     definition.query.time = { field: "createdAt", from: "", to: "", timeZone: "UTC", weekStart: "monday" };
     const view = render(<QueryControls definition={definition} datasets={[timedDataset]} disabled={false} onChange={vi.fn()} problems={[{ code: "required", path: "query.time.from", message: "Choose a start time." }]} validationAttempt={1} />);
     const timeSection = [...view.querySelectorAll<HTMLDetailsElement>("details")].find(item => item.dataset.queryPath === "query.time");
-    const start = [...view.querySelectorAll("label")].find(item => item.textContent === "From (inclusive UTC instant)")?.querySelector("input");
+    const start = [...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.querySelector("input");
 
     await waitUntil(() => timeSection?.open === true && document.activeElement === start);
     expect(timeSection?.open).toBe(true);
@@ -221,6 +221,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="create" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await beginNamedDraft("Source preview");
     await waitUntil(() => Boolean(view.querySelector(".named-query-controls option[value='acme.processing']")));
     const selected = view.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
     flushSync(() => { selected.value = dataset.id; selected.dispatchEvent(new Event("change", { bubbles: true })); });

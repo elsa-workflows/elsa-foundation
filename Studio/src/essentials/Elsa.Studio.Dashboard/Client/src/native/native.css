@@ -54,12 +54,6 @@
 .named-result-details > summary:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .named-result-details-content { display: grid; gap: .35rem; min-width: 0; padding: .75rem; background: var(--studio-surface); border-radius: var(--studio-radius-sm); }
 .named-result-details-content p { margin: 0; overflow-wrap: anywhere; }
-.named-dashboard-actions, .named-question-actions { position: relative; }
-.named-dashboard-actions[open], .named-question-actions[open] { z-index: 3; }
-.named-dashboard-actions > summary, .named-question-actions > summary { cursor: pointer; }
-.named-dashboard-actions > summary:focus-visible, .named-question-actions > summary:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
-.named-dashboard-actions > div, .named-question-actions > div { position: absolute; top: calc(100% + .35rem); right: 0; z-index: 2; display: grid; gap: .35rem; min-width: max-content; padding: .5rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
-.named-dashboard-actions > div > button, .named-question-actions > div > button { justify-content: flex-start; text-align: left; }
 .named-result-state { padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); }
 .named-metric { display: grid; gap: .35rem; padding: 1rem; background: var(--studio-surface-muted); border-radius: var(--studio-radius-md); }
 .named-metric strong { font-size: clamp(1.75rem, 4vw, 3rem); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }

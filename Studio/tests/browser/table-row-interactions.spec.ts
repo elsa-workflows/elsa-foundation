@@ -37,7 +37,7 @@ for (const theme of ["light", "dark"]) {
     const region = page.getByRole("region", { name: "Decisions table", exact: true });
     const table = page.locator("table.decision-assets");
     await expect(table).toHaveClass(/studio-table/);
-    await expect(table.locator("thead th")).toHaveCount(3);
+    await expect(table.getByRole("columnheader")).toHaveText(["Decision", "Status", "Updated", "Actions"]);
     await expect(region).toHaveAttribute("tabindex", "0");
     const styles = await page.evaluate(() => {
       const root = getComputedStyle(document.documentElement);

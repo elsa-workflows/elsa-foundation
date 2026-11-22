@@ -83,7 +83,8 @@ describe("Decisions Studio journeys", () => {
     const current = breadcrumb.querySelector<HTMLElement>('[aria-current="page"]')!;
     const link = breadcrumb.querySelector<HTMLAnchorElement>('a[href="/decisions"]')!;
     expect(title.textContent).toBe("Approval");
-    expect(current.contains(title)).toBe(true);
+    expect(current.textContent).toBe(title.textContent);
+    expect(current.contains(title)).toBe(false);
     expect(link.textContent).toBe("Decisions");
     await vi.waitFor(() => expect(document.activeElement).toBe(title));
 
