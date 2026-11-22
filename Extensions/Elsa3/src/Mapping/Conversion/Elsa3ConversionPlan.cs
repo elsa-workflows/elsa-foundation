@@ -90,7 +90,7 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     public Dictionary<string, string> SourceNames { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The Elsa 4 keys a null member was bound to Elsa 3's value for (spec 267), which count as bound when blank.</summary>
-    public HashSet<string> NullEmits { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> NullEmits { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Properties a rewrite strategy wrote under an Elsa 4 key. Removing the consumed Elsa 3 structure members keeps
