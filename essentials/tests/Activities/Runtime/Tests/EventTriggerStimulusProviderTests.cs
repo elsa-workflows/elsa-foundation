@@ -302,7 +302,8 @@ public sealed class EventTriggerStimulusProviderTests
             {
                 [nameof(Event.EventName)] = "order-shipped",
                 [nameof(Event.CorrelationId)] = correlationId,
-                [nameof(Event.CanStartWorkflow)] = canStartWorkflow
+                [nameof(Event.CanStartWorkflow)] = canStartWorkflow,
+                [nameof(Event.ExpiresAt)] = null
             });
         return Assert.IsType<Event>(activation.Activity);
     }
