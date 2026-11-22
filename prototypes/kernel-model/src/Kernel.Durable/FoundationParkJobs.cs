@@ -97,7 +97,8 @@ public sealed partial class InMemoryStore
                         if (stored is not null && (stored.Message.Kind != Kinds.JobDeadline || stored.Message.Due != deadline ||
                             stored.Message.Target.Id != row.Id || stored.Message.TargetCreation != row.Creation ||
                             stored.Message.Sender != row.Id || stored.Message.SenderCreation != row.Creation ||
-                            stored.Message.Read<JobDeadline>().Key != key)) return null;
+                            stored.JobTiming.JobKey != key && !(stored is { Done: true, KeptBy: null, JobTiming.JobKey: null })))
+                            return null;
                         if (stored is { Done: false } or { KeptBy: ParkKeepReason.Arrived } ||
                             stored is { KeptBy: ParkKeepReason.Consumed } &&
                             (mode == ParkRecoveryMode.RetryAll || markedSelection?.Contains(oldDeadline) == true))

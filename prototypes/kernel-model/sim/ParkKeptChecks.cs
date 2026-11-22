@@ -1701,6 +1701,7 @@ internal static class ParkKeptChecks
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry);
         await CheckRetryConsumedTicket(check, timed: true, missingDeadline: true);
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true);
+        await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true, doneDeadlineMarker: true);
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check)
@@ -1914,7 +1915,7 @@ internal static class ParkKeptChecks
 
     private static async Task CheckRetryConsumedTicket(Action<bool, string> check, bool timed = false,
         bool endBeforeTicket = false, bool releaseTicketBeforeEnd = false, bool restartAtOpen = false,
-        Contract.RecoverMode mode = Contract.RecoverMode.RetryAll, bool missingDeadline = false)
+        Contract.RecoverMode mode = Contract.RecoverMode.RetryAll, bool missingDeadline = false, bool doneDeadlineMarker = false)
     {
         var now = 1_701_400_014_100L;
         var store = new InMemoryStore(1, () => now);
@@ -1955,7 +1956,8 @@ internal static class ParkKeptChecks
             {
                 if (turn.FoundationRecoveryJobs?.DeadlineRearms is [var deadline])
                     rearmedDeadline = deadline.Envelope.InboxKey == originalDeadline?.Message.InboxKey &&
-                        deadline.Envelope.Due == originalDeadline?.Message.Due && deadline.DoneSequence is null;
+                        deadline.Envelope.Due == originalDeadline?.Message.Due &&
+                        deadline.DoneSequence == (doneDeadlineMarker ? originalDeadline!.Seq : null);
                 if (turn.FoundationRecoveryPage is not { } page) return;
                 largestPage = Math.Max(largestPage, page.Writes().Count());
                 if (page.Rows.Any(item => item.PairedJobInput?.Cursor.Key == key)) pairedPages++;
@@ -1986,6 +1988,12 @@ internal static class ParkKeptChecks
                     store.Messages.Values.Count(message => message.KeptBy == ParkKeepReason.Arrived && message.Seq < originalDeadline.Seq) ==
                         InMemoryStore.ParkPageLimit - 1,
                     "the expired deadline sorts at the page boundary ahead of its kept consumed ticket");
+        }
+        if (doneDeadlineMarker)
+        {
+            originalDeadline!.Done = true;
+            originalDeadline.Message = originalDeadline.Message with { Payload = null };
+            store.Messages.Add(originalDeadline.Message.InboxKey, originalDeadline);
         }
         var handles = mode == Contract.RecoverMode.Retry
             ? new[] { store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, key)! }
@@ -2023,7 +2031,8 @@ internal static class ParkKeptChecks
                 "the split-page deadline settles the same job generation once without entering the expired driver");
             if (missingDeadline)
                 check(rearmedDeadline && pairedPages == 0,
-                    $"{mode} re-arms the absent deadline at its original absolute time and exact key");
+                    doneDeadlineMarker ? $"{mode} replaces a payload-free deadline marker at the original absolute time and exact key" :
+                        $"{mode} re-arms the absent deadline at its original absolute time and exact key");
             else
                 check(pairedPages == 1 && largestPage == InMemoryStore.ParkPageLimit - 1,
                     "the deadline and its later ticket share one fenced page within the row limit");
