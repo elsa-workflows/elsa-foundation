@@ -5,6 +5,7 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
     Func<CommitBatch, ValueTask>? beforeCommit = null) : IKernelStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
+    string? IKernelStore.FoundationScheduleTenant(CreationAddress address) => inner.FoundationScheduleTenant(address);
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;

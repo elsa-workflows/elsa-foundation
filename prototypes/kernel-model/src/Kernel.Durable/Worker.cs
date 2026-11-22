@@ -16,6 +16,7 @@ public sealed record WorkerOptions
     public int PollLimit { get; init; } = 500;
     public int MaxBatch { get; init; } = 500;
     public int PassTurnBudget { get; init; } = 500;
+    public IReadOnlyDictionary<string, int>? TenantTurnWeights { get; init; }
 
     /// <summary>How many idle instances are kept in memory. Above it the least recently used are dropped, and loaded by key again when a message comes.</summary>
     public int MaxInstances { get; init; } = int.MaxValue;
@@ -119,7 +120,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     private readonly IActorType _type;
     private readonly WorkerOptions _options;
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
-    private readonly Queue<string> _passTurns = new();
+    private readonly PassTurnSchedule _passTurns;
     private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
     private readonly Dictionary<InboxKey, Delivery> _items = [];    // every message held, by id
     private readonly HashSet<Delivery> _timedJobs = [];
@@ -203,6 +204,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         _type = type;
         _options = options ?? new WorkerOptions();
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(_options.PassTurnBudget, nameof(WorkerOptions.PassTurnBudget));
+        var weights = _options.TenantTurnWeights is { } configured
+            ? new Dictionary<string, int>(configured, StringComparer.Ordinal) : new(StringComparer.Ordinal);
+        if (weights.Values.Any(weight => weight < 1))
+            throw new ArgumentOutOfRangeException(nameof(WorkerOptions.TenantTurnWeights), "Turn weights must be positive.");
+        _passTurns = new(weights);
         _gate = Has(Flaw.TrialPerPartition) ? new TrialGate() : _options.Gate ?? new TrialGate();
     }
 
@@ -278,7 +284,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.HasFencedEventStep || !Awaits(i)));
     public IEnumerable<string> Ready => ReadyForTurns(default).Select(turn => turn.Id);
 
-    private IEnumerable<(string Id, long Observed)> ReadyForTurns(CancellationToken cancellationToken)
+    private IEnumerable<(string Id, InstanceRow? Row, Delivery Oldest)> ReadyForTurns(CancellationToken cancellationToken)
     {
         var now = ReceiveJobPublications(cancellationToken);
         foreach (var (id, slot) in _slots)
@@ -287,37 +293,26 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 TrialItems.Count > 0 && !OnTrial(id) && !Spared(id)) continue;
             var deliverable = Deliverable(id, slot, now);
             if (deliverable.Count > 0)
-                yield return (id, deliverable.Min(item => item.ObservedOrder));
+                yield return (id, slot.Row, deliverable.MinBy(item => item.ObservedOrder)!);
         }
     }
 
     private int RefreshPassTurns(CancellationToken cancellationToken)
     {
         var generation = Volatile.Read(ref _generation);
-        var ready = ReadyForTurns(cancellationToken).ToDictionary(turn => turn.Id, turn => turn.Observed, StringComparer.Ordinal);
+        var ready = ReadyForTurns(cancellationToken).Select(turn => new PassTurnSchedule.ReadyTurn(
+            turn.Id, TurnTenant(turn.Id, turn.Row, turn.Oldest.Message), turn.Oldest.ObservedOrder)).ToList();
         lock (_turnSync)
-        {
-            if (generation != _generation) return 0;
-            var count = _passTurns.Count;
-            for (var i = 0; i < count; i++)
-            {
-                var id = _passTurns.Dequeue();
-                if (ready.Remove(id)) _passTurns.Enqueue(id);
-            }
-            foreach (var turn in ready.OrderBy(turn => turn.Value))
-                _passTurns.Enqueue(turn.Key);
-            return Math.Min(_options.PassTurnBudget, _passTurns.Count);
-        }
+            return generation == _generation ? _passTurns.Refresh(ready, _options.PassTurnBudget) : 0;
     }
+
+    private string TurnTenant(string id, InstanceRow? row, Message input) =>
+        row?.FoundationInlineBirth?.Tenant ?? input.Start?.FoundationInlineTenant ??
+        _store.FoundationScheduleTenant(new(id, row?.Creation ?? input.TargetCreation ?? 0)) ?? string.Empty;
 
     private string? RotatePassTurn()
     {
-        lock (_turnSync)
-        {
-            if (!_passTurns.TryDequeue(out var id)) return null;
-            _passTurns.Enqueue(id);
-            return id;
-        }
+        lock (_turnSync) return _passTurns.Next();
     }
 
     // What is in memory, for tests of invariant 9.

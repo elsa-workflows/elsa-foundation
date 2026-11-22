@@ -88,6 +88,12 @@ public sealed partial class InMemoryStore
         }
     }
 
+    string? IKernelStore.FoundationScheduleTenant(CreationAddress address)
+    {
+        if (address.Creation <= 0) return null;
+        lock (_gate) return _referenceBirths.GetValueOrDefault(address)?.Tenant;
+    }
+
     internal string? FoundationReferenceOf(string tenant, string? id, long creation)
     {
         lock (_gate)
