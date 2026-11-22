@@ -1119,6 +1119,15 @@ html[data-sidebar-color] :where(.sidebar .nav-section a:not(.active)):hover {
   min-width: 0;
 }
 
+.studio-shell-breadcrumb-outlet:empty,
+.studio-shell-breadcrumb-outlet:not(:empty) + .breadcrumb {
+  display: none;
+}
+
+.studio-shell-breadcrumb-outlet .studio-breadcrumbs {
+  margin-bottom: 0;
+}
+
 .breadcrumb {
   display: block;
   color: var(--muted-foreground);
@@ -3892,7 +3901,6 @@ html[data-theme-material] .structured-logs-tools button,
 html[data-theme-material] .structured-logs-tools input,
 html[data-theme-material] .structured-logs-tools select,
 html[data-theme-material] .structured-logs-tools > span:not(.structured-logs-status),
-html[data-theme-material] .otel-tabs button,
 html[data-theme-material] .otel-toolbar button,
 html[data-theme-material] .otel-toolbar input,
 html[data-theme-material] .otel-toolbar select,

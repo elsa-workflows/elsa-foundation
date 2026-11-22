@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField, StudioToggleButton } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioPageHeader, StudioField, StudioTimestamp, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext, StudioHostId } from "@elsa-workflows/studio-sdk";
@@ -446,20 +446,22 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
           <StudioToggleButton pressed={autoScroll} onClick={() => setAutoScroll(current => !current)}>
             Autoscroll
           </StudioToggleButton>
-          <StudioButton type="button" onClick={download} disabled={visibleLines.length === 0}>Download</StudioButton>
-          <StudioButton type="button" onClick={clear}>Clear</StudioButton>
+          <OverflowMenu ariaLabel="More console actions" items={[
+            { id: "download", label: "Download", onSelect: download, disabled: visibleLines.length === 0 },
+            { id: "clear", label: "Clear", onSelect: clear }
+          ]} />
         </div></>} />
       <div className="console-stream-lines" ref={viewportRef}>
         {renderedLines.length === 0 ? (
           <div className="console-stream-line stdout">
-            <span>{new Date().toLocaleTimeString()}</span>
+            <span aria-hidden="true" />
             <small>{selectedSource ? formatConsoleSourceLabel(selectedSource) : "All sources"}</small>
             <code>Console stream is ready.</code>
           </div>
         ) : null}
         {renderedLines.map(line => (
           <div className={`console-stream-line ${line.stream}`} key={line.id}>
-            <span>{new Date(line.timestamp).toLocaleTimeString()}</span>
+            <span><StudioTimestamp value={line.timestamp} format="time" /></span>
             <small>{line.sourceLabel ?? "local"}</small>
             <code>{line.renderedText}</code>
           </div>

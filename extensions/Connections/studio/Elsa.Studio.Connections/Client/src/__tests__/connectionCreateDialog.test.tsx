@@ -672,7 +672,7 @@ describe("connection credential creation", () => {
     expect(button(host, "New connection").disabled).toBe(true);
 
     endpointBUnavailable = false;
-    clickButton(host, "Search");
+    clickButton(host, "Retry");
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
     expect(host.textContent).not.toContain("Endpoint A Connection");
     expect(button(host, "New connection").disabled).toBe(false);
@@ -701,9 +701,9 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA, dialogs);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, action);
-    expect(dialogs.confirm).toHaveBeenCalledWith({ message: `${action} a.connection?`, tone: "danger" });
+    expect(dialogs.confirm).toHaveBeenCalledWith({ title: `${action} connection`, confirmLabel: action, message: `${action} a.connection?`, tone: "danger" });
 
     rerender(endpointB);
     await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
@@ -725,7 +725,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
     expect(endpointA.http.postJson).toHaveBeenCalledWith("/connections/a.connection/test", {});
 
@@ -749,7 +749,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
-    clickButton(host, "Details");
+    flushSync(() => host.querySelector<HTMLTableRowElement>("tr[data-studio-row-interactive]")!.click());
     clickButton(host, "Test");
 
     rerender(endpointB);

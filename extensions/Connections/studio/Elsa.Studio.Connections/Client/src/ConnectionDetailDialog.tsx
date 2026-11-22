@@ -2,7 +2,8 @@ import React, { useId, useRef } from "react";
 import { Ban, Cable, Pencil, ShieldCheck, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
-import { connectionDate, connectionSchemeLabel, ConnectionStatusBadge, connectionTypeLabel } from "./connectionPresentation";
+import { StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { connectionSchemeLabel, ConnectionStatusBadge, connectionTypeLabel } from "./connectionPresentation";
 
 export type ConnectionAction = "Test" | "Revoke" | "Delete" | "Edit";
 
@@ -38,8 +39,8 @@ export function ConnectionDetailDialog({ connection, descriptors, busy, notifica
         <dl className="connections-summary">
           <div><dt>Service</dt><dd>{connectionTypeLabel(descriptors, connection.typeName)}</dd></div>
           <div><dt>Authentication</dt><dd>{connectionSchemeLabel(descriptors, connection.authScheme)}</dd></div>
-          <div><dt>Last tested</dt><dd>{connectionDate(connection.lastTestedAt)}</dd></div>
-          <div><dt>Created</dt><dd>{connectionDate(connection.createdAt)}</dd></div>
+          <div><dt>Last tested</dt><dd><StudioTimestamp value={connection.lastTestedAt} fallback="Not tested yet" invalidFallback="Unavailable" /></dd></div>
+          <div><dt>Created</dt><dd><StudioTimestamp value={connection.createdAt} fallback="Unavailable" invalidFallback="Unavailable" /></dd></div>
         </dl>
         {settings.length ? <section className="connections-detail-section"><h3>Service settings</h3><dl className="connections-summary connections-settings">{settings.map(([name, value]) => {
           const field = settingFields.find(candidate => candidate.name === name);

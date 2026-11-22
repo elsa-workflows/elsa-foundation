@@ -1,6 +1,6 @@
-import { studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, studioRowInteraction, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, KeyRound, Plus, RefreshCw, X } from "lucide-react";
+import { AlertCircle, KeyRound, Plus, RefreshCw } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioNotificationApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, StudioButton, StudioSearchInput, type OverflowMenuItem , StudioPage, StudioPageHeader, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioTableContainer, StudioResultState, StudioTimestamp} from "@elsa-workflows/studio-ui";
 import { deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret } from "./secretsApi";
@@ -250,15 +250,13 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
 
   return (
     <StudioPage className="secrets-shell">
-      <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked." actions={          <div className="studio-page-actions" role="group" aria-label="Secret page actions">
-            <StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> New secret</StudioButton>
-            <StudioButton variant="default" size="md" onClick={() => void load(completedSearch)} disabled={loading || descriptorsLoading} aria-label="Refresh secrets"><RefreshCw size={15} aria-hidden /> Refresh</StudioButton>
-          </div>} />
+      <StudioPageHeader title="Secrets" headingLevel={2} description="Manage secret metadata; existing values stay masked."
+        refresh={{ id: "secrets", label: "Refresh secrets", refreshing: loading || descriptorsLoading, autoRefresh: true, onRefresh: () => load(attemptedSearch.current) }}
+        actions={<StudioButton variant="primary" size="md" aria-label="New secret" onClick={() => openEditor()} disabled={!descriptors}><Plus size={15} aria-hidden /> New secret</StudioButton>} />
 
       <StudioCollectionToolbar className="secrets-toolbar" aria-label="Secret filters">
-        <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => { event.preventDefault(); void load(search); }}>
-          <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search secrets" />
-          <StudioButton type="submit" className="secrets-search-action" size="md">Search</StudioButton>
+        <form className="secrets-search-wrap" role="search" aria-label="Secrets" onSubmit={event => event.preventDefault()}>
+          <StudioSearchInput className="secrets-search-control" aria-label="Search secrets" value={search} onChange={event => { setSearch(event.target.value); void loadSecrets(event.target.value); }} placeholder="Search secrets" />
         </form>
         <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={descriptors?.types.map(type => ({ value: type.name, label: type.displayName || type.name })) ?? []} />
         <FilterSelect label="Store" value={storeFilter} onChange={setStoreFilter} options={descriptors?.stores.map(store => ({ value: store.name, label: store.displayName || store.name })) ?? []} />
@@ -279,7 +277,7 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
           {" "}<button type="button" onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</button>
         </p>
       ) : null}
-      {error ? <SecretNotification message={error} onDismiss={() => setError(null)} /> : null}
+      {error ? <StudioAlert tone="danger" dismiss={{ label: "Dismiss error", onDismiss: () => setError(null) }}>{error}</StudioAlert> : null}
       {!loading && !loadError && partialResult ? (
         <p className="secrets-coverage">
           Only the first {MAX_SECRETS_PER_LOAD} results are loaded. Search by name or display name to find other secrets. Filters apply to loaded results.
@@ -364,20 +362,6 @@ export function SecretsPage({ context, dialogs, navigate, notifications }: { con
   );
 }
 
-function SecretNotification({ message, onDismiss }: { message: string; onDismiss(): void }) {
-  return (
-    <div className="secrets-notification secrets-alert">
-      <div className="secrets-notification-message" role="alert">
-        <AlertCircle size={16} aria-hidden />
-        <span>{message}</span>
-      </div>
-      <button type="button" className="secrets-notification-close" aria-label="Dismiss error" title="Dismiss" onClick={onDismiss}>
-        <X size={16} aria-hidden />
-      </button>
-    </div>
-  );
-}
-
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
   const id = useId();
   const combinedDescription = helpText ? (description ? `${helpText}. ${description}` : helpText) : description;
@@ -391,8 +375,10 @@ function FilterSelect({ label, value, options, helpText, description, onChange }
   );
 }
 
+const statusTones = { Active: "success", Retired: "warning", Expired: "warning", Revoked: "danger", Deleted: "danger" } as const;
+
 function StatusBadge({ status }: { status: SecretStatus }) {
-  return <span className={`secrets-badge ${status.toLowerCase()}`}>{status}</span>;
+  return <StatusChip tone={statusTones[status]}>{status}</StatusChip>;
 }
 
 function labelType(descriptors: SecretDescriptorsResponse | null, typeName: string) {

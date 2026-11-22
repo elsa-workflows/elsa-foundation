@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { Save, SlidersHorizontal, Star } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -13,7 +13,6 @@ import {
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
 import { StudioLink } from "../StudioLink";
-import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
@@ -218,13 +217,12 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
   context: StudioEndpointContext; location: WorkflowDefinitionBrowseLocation; existing?: WorkflowLibraryView;
   canShare: boolean; onClose(): void; onSaved(): void; onDeleted(): void;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const titleId = useId();
+  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(existing?.name ?? "");
   const [shared, setShared] = useState(canShare && (existing?.shared ?? false));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useDialogFocus(ref, busy ? null : onClose);
+  const cannotSave = busy || !name.trim() || (shared && !canShare);
   const save = async (replace: boolean) => {
     setBusy(true); setError("");
     try { await saveWorkflowView(context, { name: name.trim(), query: workflowBrowseQuery(location), shared, columns: location.columns ?? [], ...(replace ? { revision: existing?.revision } : {}) }, replace ? existing?.id : undefined); onSaved(); }
@@ -238,28 +236,41 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
     catch (caught) { setError(message(caught, "Couldn't delete this view.")); }
     finally { setBusy(false); }
   };
-  return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-    <form onSubmit={event => { event.preventDefault(); void save(false); }}>
-      <h3 id={titleId}>Save workflow view</h3>
-      <StudioField label="View name"><input aria-label="View name" required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} /></StudioField>
-      <label className="wf-library-check"><input type="checkbox" checked={shared} disabled={busy || !canShare} onChange={event => setShared(event.target.checked)} /> Share within this tenant</label>
-      {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
-      <p className="wf-library-help">Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access.</p>
-      {error ? <p role="alert">{error}</p> : null}
-      <StudioDialogFooter
-        className="wf-dialog-actions"
-        extra={<>
-          {error ? <StudioButton disabled={busy} onClick={onSaved}>Reload view list</StudioButton> : null}
-          {existing?.canDelete ? <StudioButton disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
-          {existing?.canEdit ? <StudioButton disabled={busy || !name.trim() || (shared && !canShare)} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
-        </>}
-        onCancel={onClose}
-        cancelDisabled={busy}
-        confirmLabel={busy ? "Saving…" : "Save as new view"}
-        confirmDisabled={busy || !name.trim() || (shared && !canShare)}
-      />
-    </form>
-  </section></div>;
+  return <StudioDialog
+    open
+    title="Save workflow view"
+    description="Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access."
+    onClose={onClose}
+    initialFocusRef={nameRef}
+    dismissDisabled={busy}
+    dismissOnOutsideClick={false}
+    onSubmit={event => {
+      event.preventDefault();
+      if (!cannotSave) void save(false);
+    }}
+    footer={<StudioDialogFooter
+      leading={existing && <>
+        {existing?.canDelete ? <StudioButton size="sm" variant="danger" disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
+        {existing?.canEdit ? <StudioButton size="sm" disabled={cannotSave} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
+      </>}
+      onCancel={onClose}
+      cancelDisabled={busy}
+      confirmLabel={busy ? "Saving…" : "Save as new view"}
+      confirmDisabled={cannotSave}
+    />}
+  >
+    <StudioField label="View name">
+      <input ref={nameRef} required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} />
+    </StudioField>
+    <label className="wf-library-check">
+      <input type="checkbox" checked={shared} disabled={busy || !canShare} onChange={event => setShared(event.target.checked)} />
+      Share within this tenant
+    </label>
+    {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
+    {error ? <StudioAlert tone="danger">
+      {error}{" "}<StudioButton size="sm" disabled={busy} onClick={onSaved}>Reload view list</StudioButton>
+    </StudioAlert> : null}
+  </StudioDialog>;
 }
 
 function mergeTags(current: WorkflowTag[], next: WorkflowTag[]) {

@@ -148,10 +148,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
-- [ ] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
+- [x] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
   (start in `H/App.tsx`) and whether a page can already supply a multi-level, clickable trail to it;
   the audit did not identify such a mechanism. Design it before any X2 item starts, and say what
-  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5`
+  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5` (PR #5293)
 
 Candidates reported by source readers. Confirm the need before building any of them.
 
@@ -161,7 +161,7 @@ Candidates reported by source readers. Confirm the need before building any of t
   `ad-contract-workbench-facts`).
 - [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
-- [ ] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4).
+- [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
 - [ ] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`).
 - [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
   `DASH/native/NamedDashboards.tsx:524`).
@@ -275,7 +275,7 @@ Workflows:
 - [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
 - [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
   `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
-- [ ] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`.
+- [x] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`. (PR #5296)
 - [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
   `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
 - [ ] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`).
@@ -327,7 +327,7 @@ Browser dialogs and busy labels (no kit prerequisite):
 - [ ] **X3.34** (#5070) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [ ] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
   `api.dialogs.confirm`; `:58` `window.alert` → inline `StudioAlert`.
-- [ ] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without
+- [x] **X3.36** (#5072) [source] `EXT/Connections/ConnectionsPage.tsx:115` calls `dialogs.confirm` without (PR #5299)
   `title` or `confirmLabel`; Secrets passes both (`SecretsPage.tsx:187, 202`).
 - [ ] **X3.37** (#5073) [verified] Use "…" not "..." in busy labels: `EXT/Secrets/SecretDialogs.tsx:135, 198`;
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
@@ -401,8 +401,8 @@ in scope.
 - [ ] **X6.1** (#5097) [source] `EXT/Agent/AgentsPage.tsx:187`.
 - [ ] **X6.2** (#5098) [source] `EXT/Agent/AgentPlayground.tsx:178–179` ("Reload draft", redundant `aria-label`).
 - [ ] **X6.3** (#5099) [source] `EXT/Agent/HumanReviewPage.tsx:108` and `AgentInvocationPage.tsx:97`.
-- [ ] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`.
-- [ ] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app).
+- [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
+- [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
 - [ ] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`.
 - [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu).
@@ -428,12 +428,12 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
-- [ ] **X7.3** (#5109) [seen] `secrets-badge` in Secrets.
+- [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
 - [ ] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance.
 - [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
-- [ ] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status`
+- [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
   (`EXT/Connections/connectionPresentation.tsx:12–16`).
 - [ ] **X7.7** (#5113) [source] `.decision-draft-status` pill (`EXT/Decisions/styles.css:22`).
 - [ ] **X7.8** (#5114) [check] `.etl-run-status` in ETL.
@@ -446,7 +446,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 - [ ] **X8.2** (#5117) [verified] `WF/ActivityDefinitionContractEditor.tsx:785` `.ad-member-tabs` → `StudioTabs`.
 - [ ] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`.
 - [ ] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist.
-- [ ] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`.
+- [x] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`. (PR #5298)
 - [ ] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`.
 - [ ] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`,
   `WorkflowEditor.tsx:1283`, `graph-authoring/GraphAuthoringWorkbench.tsx:148`. Check whether
@@ -498,7 +498,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 Replace local date formatting with `StudioTimestamp`.
 
 - [ ] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`.
-- [ ] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by
+- [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [ ] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`.
 - [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
@@ -507,7 +507,7 @@ Replace local date formatting with `StudioTimestamp`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
 - [ ] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
   "Nov 21, 2026".
-- [ ] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules.
+- [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
 - [ ] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`:
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
 - [ ] **X10.10** (#5148) [source] Identifiers shown as plain text → `CopyableIdentifier`:
@@ -597,9 +597,9 @@ Uppercase labels (`needs: D3`):
 - [ ] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
   `H/components/ThemeSwitcher.css:167`, `H/themes/layouts.css:76`, `H/themes/signal.css:26`,
   `H/themes/elsaCloud.css:24`.
-- [ ] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`.
-- [ ] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
-  LEVEL / SOURCE).
+- [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
+- [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
+  LEVEL / SOURCE). (PR #5298)
 - [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
 - [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
@@ -626,10 +626,11 @@ Raw font sizes, weights, radii and colours:
 
 - [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
   Many raw radii are `999px` pills; check each one before changing it.
+  Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294).
 - [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
-- [ ] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
-  [source] it uses a private `--cs-*` namespace.
+- [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
+  [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [ ] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`.
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
@@ -710,7 +711,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Extensions
 
-- [ ] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link
+- [x] **E1** (#5231) [source] Connections: a "Details" button duplicates the row link (PR #5299)
   (`ConnectionList.tsx:39, 46`). Replace both with `studioRowInteraction` on the row. `needs: D12`
 - [ ] **E2** (#5232) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
   copy button → `CopyableIdentifier`.
@@ -721,8 +722,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
   reads "1 loaded questions".
-- [ ] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
-  secondary ones into an overflow menu.
+- [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
+  secondary ones into an overflow menu. (PR #5292)
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
   page.
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
@@ -733,7 +734,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`:257–258`). `needs: K2`
 - [ ] **E11** (#5241) [check] Forms list and editor share one route with no URL per form
   (`FormsPage.tsx:161`).
-- [ ] **E12** (#5242) [source] Collection footers word counts differently: "N shown"
+- [x] **E12** (#5242) [source] Collection footers word counts differently: "N shown" (PR #5299)
   (`ConnectionsPage.tsx:157`) against "N agents".
 - [ ] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
@@ -752,7 +753,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `decision-link` button (`DecisionsPage.tsx:193–199`), Forms a raw `user-task-link` button
   (`FormsPage.tsx:169–179`). Move each to `studioRowInteraction`. **[check]** keyboard access, and
   whether "Edit" only duplicates opening the row. `needs: D12`
-- [ ] **E19** (#5249) [source] Remove the "Search" submit button and search as the user types (D11):
+- [x] **E19** (#5249) [source] Remove the "Search" submit button and search as the user types (D11): (PR #5299)
   `EXT/Connections/ConnectionsPage.tsx:150–151`, `EXT/Secrets/SecretsPage.tsx:260–261`. `needs: D11`
 - [ ] **E20** (#5250) [source] Field markers (D13): drop "Comment (optional)"
   (`EXT/Agent/HumanReviewPage.tsx:114`) and the "Optional." descriptions (`AgentsPage.tsx:300`,

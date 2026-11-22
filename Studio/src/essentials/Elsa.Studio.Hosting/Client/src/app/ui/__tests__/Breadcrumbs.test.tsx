@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StudioBreadcrumbs } from "../layout/Breadcrumbs";
+import { StudioBreadcrumbs, StudioShellBreadcrumbs, StudioShellBreadcrumbTarget } from "../layout/Breadcrumbs";
 import { StudioPageHeader } from "../layout/Page";
 
 const mounted: { root: ReturnType<typeof createRoot>; host: HTMLDivElement }[] = [];
@@ -44,6 +44,23 @@ describe("StudioBreadcrumbs", () => {
 
     expect(renderLink).toHaveBeenCalledOnce();
     expect(host.querySelector('[data-custom-link][href="/workflows/definitions"]')?.textContent).toBe("Definitions");
+  });
+
+  it("places the active route trail in the shell and leaves background routes out", () => {
+    const outlet = document.createElement("div");
+    const trail = <StudioShellBreadcrumbs items={[{ href: "/definitions", label: "Definitions" }]} current="Saved views" />;
+    const host = render(<StudioShellBreadcrumbTarget.Provider value={outlet}>
+      {trail}
+      <StudioShellBreadcrumbTarget.Provider value={null}>
+        <StudioShellBreadcrumbs items={[]} current="Background route" />
+      </StudioShellBreadcrumbTarget.Provider>
+    </StudioShellBreadcrumbTarget.Provider>);
+
+    expect(host.querySelector("nav")).toBeNull();
+    expect(outlet.querySelectorAll("nav")).toHaveLength(1);
+    expect(outlet.querySelector("a")?.getAttribute("href")).toBe("/definitions");
+    expect(outlet.querySelector('[aria-current="page"]')?.textContent).toBe("Saved views");
+    expect(render(trail).querySelector("nav")).not.toBeNull();
   });
 
   it("places an opt-in trail above the page title and apart from header actions", () => {

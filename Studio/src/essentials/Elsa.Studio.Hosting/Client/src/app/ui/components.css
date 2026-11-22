@@ -68,6 +68,14 @@
   padding: 9px 12px;
 }
 
+.studio-alert-dismissible {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--studio-space-2);
+  overflow-wrap: anywhere;
+}
+
 .studio-alert[data-tone="danger"] {
   border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-danger) 8%, var(--studio-surface));

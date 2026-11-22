@@ -274,10 +274,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
-  // The heading precedes the initial list/descriptor response; Enter cannot submit while Search is disabled.
-  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
+  await expect(search).toBeVisible();
   await search.fill(`absent-${stamp}`);
-  await search.press("Enter");
   await expect(page.getByRole("button", { name: /clear search/i })).toBeVisible();
   await capture(page, info, "no-matches");
   await page.getByRole("button", { name: /clear search/i }).press("Enter");
@@ -302,7 +300,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(secret).toBeHidden();
   await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
   const secretHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: "Secret created." }));
-  await expect(page.locator(".secrets-notification")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   await capture(page, info, "secret-created-toast");
   // Secrets uses the lowest first-party modal layer, so the shared toast must stay below it too.
   const createdSecretRow = page.getByRole("row").filter({ hasText: secretName });
@@ -345,7 +343,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
   const connectionHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` }));
-  await expect(page.locator(".connections-notice")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
   await expect(createdRow).toBeVisible();
   const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });
