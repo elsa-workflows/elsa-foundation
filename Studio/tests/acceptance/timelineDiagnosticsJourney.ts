@@ -169,7 +169,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     await technical.click({ timeout: 30_000 });
     await expect(lifecycle.getByText(expected!.bookmark.identity.bookmarkId, { exact: true })).toBeVisible();
     await technical.click({ timeout: 30_000 });
-    await frame(lifecycle.getByRole("button", { name: "Inspect creation event →", exact: true }));
+    await frame(lifecycle.locator(".wf-history-badge[data-status]"));
     return lifecycle;
   };
   // Each project starts at wall time before admitting any inspected run. The prior project
