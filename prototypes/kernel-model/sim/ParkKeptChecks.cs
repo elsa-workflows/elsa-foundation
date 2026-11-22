@@ -271,6 +271,8 @@ internal static class ParkKeptChecks
         await CheckTerminalCohort(takeover: true, check);
         await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check);
         await CheckDeleteAfterRecoveryEnd(protectAtComplete: true, check);
+        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true);
+        await CheckDeleteAfterRecoveryEnd(protectAtComplete: false, check, thenDelete: true, competes: true);
         await CheckTerminalCohort(takeover: false, check, cutAfter: false);
         await CheckTerminalCohort(takeover: false, check, cutAfter: true);
         await CheckTerminalChildNotice(keptBeforeResume: false, check);
@@ -497,16 +499,17 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckDeleteAfterRecoveryEnd(bool protectAtComplete, Action<bool, string> check)
+    private static async Task CheckDeleteAfterRecoveryEnd(bool protectAtComplete, Action<bool, string> check,
+        bool thenDelete = false, bool competes = false)
     {
         const long initial = 1_701_400_029_000;
         var now = initial;
         var store = new InMemoryStore(1, () => now);
-        var probe = new Probe { FaultOnAdvance = true, HoldTerminalInput = true };
+        var probe = new Probe { FaultOnAdvance = true, HoldTerminalInput = true, HonourTerminate = thenDelete };
         var scope = new Contract.BoundScope("terminal-recovery-delete");
         var replies = new Requests("terminal-recovery-delete");
         var ingress = new InMemoryIngress(store, replies, "terminal-recovery-delete",
-            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete or Contract.Kinds.Terminate);
         var landed = new List<TurnCommit>();
         var testedGuard = false;
         var wire = new CountingStore(store, () => { }, (batch, committed) =>
@@ -536,6 +539,13 @@ internal static class ParkKeptChecks
         await Pump(active);
         var target = new Contract.Target.Ref(probe.Child!.Value);
         var id = Checkpoint().Row.Id;
+        string? descendant = null;
+        if (thenDelete)
+        {
+            await ingress.SendAsync(scope, target, "spawn-descendant", "spawn");
+            await Pump(active);
+            descendant = store.FoundationTarget(scope.Tenant, probe.Child!.Value.Id)!.Id;
+        }
         await ingress.SendAsync(scope, target, "fault", "poison");
         await Pump(active);
         await ingress.SendAsync(scope, target, "advance", "advance");
@@ -561,26 +571,35 @@ internal static class ParkKeptChecks
         var selection = (await reads.GetAsync(scope, target.Actor))!.Selection!;
         var invalid = await ingress.SendAsync(scope, target, "old-park-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(park)));
         var oldRejected = invalid is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.StaleSelection };
-        var admitted = await ingress.SendAsync(scope, target, "after-end-delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selection)));
+        var owns = thenDelete && !competes;
+        var command = new Contract.OperatorCommand(owns ? park : selection, ThenDelete: owns, ExpectedTarget: owns ? target.Actor : null);
+        var admitted = await ingress.SendAsync(scope, target, "after-end-delete",
+            owns ? Contract.Kinds.Terminate : Contract.Kinds.Delete, Json.Write(command));
         await Step(first);
         var attached = Checkpoint();
-        var deletion = new ParkRecoveryDeletion("after-end-delete", selection);
+        var deletion = new ParkRecoveryDeletion("after-end-delete", command.Selection, owns);
         var preserves = oldRejected && admitted.Outcome == Contract.AdmissionOutcome.Accepted &&
             attached.Terminal == ended.Terminal && attached.Row == (ended.Row with
             {
                 Revision = ended.Row.Revision + 1,
-                ParkRecovery = drain! with { Deletion = deletion }
+                ParkRecovery = drain! with { Deletion = deletion },
+                Children = owns ? null : ended.Row.Children
             });
         check(preserves, "Delete rejects the old Park mark and attaches to the ended Recover under the model end's exact mark");
         if (!preserves) return;
 
         probe.ProtectAfterRecoveryEnd = true;
-        var second = ingress.RequestAsync(scope, target, "competing-ended-delete", Contract.Kinds.Delete,
-            Json.Write(new Contract.OperatorCommand(selection)), null, new Contract.RequestOptions(null, now + 1_000)).AsTask();
+        var secondCommand = new Contract.OperatorCommand(competes ? park : selection,
+            ThenDelete: competes, ExpectedTarget: competes ? target.Actor : null);
+        var second = ingress.RequestAsync(scope, target, "competing-ended-delete",
+            competes ? Contract.Kinds.Terminate : Contract.Kinds.Delete,
+            Json.Write(secondCommand), null, new Contract.RequestOptions(null, now + 1_000)).AsTask();
         await Step(first);
         var competing = await second.WaitAsync(TimeSpan.FromSeconds(5));
-        check(testedGuard && competing is { Error: "in progress", Item: "after-end-delete" } && Checkpoint().Row == attached.Row,
-            "a competing Delete sees the owning operation even after deletion protection begins");
+        var expectedAfter = competes ? attached.Row with { Revision = attached.Row.Revision + 1, Children = null } : attached.Row;
+        check(testedGuard && competing is { Error: "in progress", Item: "after-end-delete" } && Checkpoint().Row == expectedAfter,
+            competes ? "a competing ThenDelete returns in progress and discharges its subtree without taking over"
+                : "a competing Delete sees the owning operation even after deletion protection begins");
         probe.ProtectAfterRecoveryEnd = protectAtComplete;
         await active.DisposeAsync();
         now += 11;
@@ -591,18 +610,21 @@ internal static class ParkKeptChecks
             now += 11;
             await Step(cold);
         }
+        if (descendant is not null) await Pump(successor);
         var completed = store.Instances[id];
         var journal = store.Journal.Values.Where(row => row.Instance == id).ToArray();
         var receipt = journal.SingleOrDefault(row => row.Entries.Contains("after-end-delete", StringComparison.Ordinal));
         var noticeCount = landed.SelectMany(turn => turn.Sent).Count(message =>
             message.Kind == Kinds.ChildFinished && message.Sender == id && message.Read<FoundationChildNotice>().Final);
         check(completed.ParkRecovery is null && Kept() == 0 && noticeCount == 1 && receipt is not null &&
+            (descendant is null || store.Instances[descendant].Status == InstanceStatus.Cancelled) &&
             receipt.Entries.Contains("resume-ended-delete", StringComparison.Ordinal) &&
             (protectAtComplete
                 ? !completed.Retired && Checkpoint().Terminal == ended.Terminal && receipt.Entries.Contains("protected", StringComparison.Ordinal)
                 : completed.Retired && journal is [{ Revision: -1 }] && receipt.Entries.Contains("deleted", StringComparison.Ordinal)),
             protectAtComplete
                 ? "Complete preserves the model end mark when protection starts after an ended Recover is taken over"
+                : thenDelete ? "ThenDelete discharges the ended Recover subtree once with no second parent notice"
                 : "a cold successor settles the suffix and retires an ended Recover without sending a second parent notice");
 
         Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
@@ -2362,6 +2384,7 @@ internal static class ParkKeptChecks
         public int RecoveredArrivals { get; private set; }
         public bool FaultOnAdvance { get; init; }
         public bool HoldTerminalInput { get; init; }
+        public bool HonourTerminate { get; init; }
         public bool HoldTerminalNotices { get; init; }
         public int HeldChildOffers { get; private set; }
         public string[] TerminalQueryOffer { get; private set; } = [];
@@ -2382,6 +2405,12 @@ internal static class ParkKeptChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             Offers++;
+            if (HonourTerminate && turn.Header.Status == Contract.ActorStatus.Running &&
+                turn.Inbox is [{ Kind: Contract.Kinds.Terminate }])
+            {
+                turn.End(Contract.ActorStatus.Cancelled);
+                return default;
+            }
             if (turn.Inbox.Any(message => message.Kind == "terminal-query"))
                 TerminalQueryOffer = turn.Inbox.Select(message => message.Kind).ToArray();
             if (HoldSuspend && turn.Inbox is [var suspend] && suspend.Kind == Contract.Kinds.Suspend)

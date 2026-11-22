@@ -167,7 +167,7 @@ public static class CreationProtocol
         return null;
     }
 
-    internal static void Validate(TurnCommit turn, InstanceRow? previous)
+    internal static void Validate(TurnCommit turn, InstanceRow? previous, bool thenDelete = false)
     {
         if (previous is { Creation: > 0 } && turn.Delete && turn.Row is not { Retired: true })
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
@@ -186,9 +186,17 @@ public static class CreationProtocol
         {
             if (continuesRetired) return; // The cascade validator checks the source command and the exact next marker.
             if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) ||
-                row.Status == InstanceStatus.Running || row != Retire(previous, row.HeldCascade))
+                row.Status == InstanceStatus.Running ||
+                row != (thenDelete
+                    ? Retire(previous with
+                    {
+                        Status = previous.Status == InstanceStatus.Running || previous.ParkDiscard?.ThenDelete == true
+                            ? InstanceStatus.Cancelled : previous.Status,
+                        Cascade = row.Cascade, Children = null, Jobs = null
+                    })
+                    : Retire(previous, row.HeldCascade)))
                 RefuseWrite("invalid lifecycle retirement");
-            ValidateRetirementObligation(previous!, row.HeldCascade);
+            if (!thenDelete) ValidateRetirementObligation(previous!, row.HeldCascade);
             return;
         }
         if (row.HeldCascade is not null) RefuseWrite("only a retirement marker can hold an obligation");

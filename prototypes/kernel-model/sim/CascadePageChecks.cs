@@ -22,6 +22,10 @@ internal static class CascadePageChecks
         await RunAuthoredTerminate(check);
         await RefuseLegacyRebinding(check);
         await RunNative(check);
+        await RunNative(check, thenDelete: true);
+        await CheckDirectThenDelete(alreadyEnded: true, hasChild: false, protect: false, check);
+        await CheckDirectThenDelete(alreadyEnded: true, hasChild: true, protect: false, check);
+        await CheckDirectThenDelete(alreadyEnded: false, hasChild: true, protect: true, check);
         await RunModelCap(check);
     }
 
@@ -80,12 +84,14 @@ internal static class CascadePageChecks
         }
     }
 
-    private static async Task RunNative(Action<bool, string> check)
+    private static async Task RunNative(Action<bool, string> check, bool thenDelete = false)
     {
         const long now = 1_702_300_050_000;
         var store = new InMemoryStore(1, () => now);
         var scope = new Contract.BoundScope("native-cascade");
-        var ingress = new InMemoryIngress(store, new Requests("native-cascade"), "native-cascade", (_, kind) => kind == Contract.Kinds.Terminate);
+        var allowDelete = false;
+        var ingress = new InMemoryIngress(store, new Requests("native-cascade"), "native-cascade",
+            (_, kind) => kind == Contract.Kinds.Terminate || allowDelete && kind == Contract.Kinds.Delete);
         var reads = new ActorList(store, 10);
         var runtime = new PublicRuntime(ingress, reads);
         var count = CascadeProtocol.PageLimit + 1;
@@ -112,12 +118,33 @@ internal static class CascadePageChecks
             "Native starts 1001 live children bound to the exact parent creation");
         if (recipients.Count != count) return;
         var selection = (await reads.GetAsync(scope, root))!.Selection!;
-        await ingress.SendAsync(scope, new Contract.Target.Ref(root), "end", Contract.Kinds.Terminate, Json.Write(new Contract.OperatorCommand(selection)));
+        var target = new Contract.Target.Ref(root);
+        if (thenDelete)
+        {
+            var attempt = new Contract.OperatorCommand(selection, ThenDelete: true, ExpectedTarget: root);
+            var refused = await ingress.SendAsync(scope, target, "requires-delete", Contract.Kinds.Terminate, Json.Write(attempt));
+            var noDeletePermission = refused.Outcome == Contract.AdmissionOutcome.Refused;
+            allowDelete = true;
+            var wrong = attempt with { ExpectedTarget = new Contract.ActorRef("another-target") };
+            var mismatched = await ingress.SendAsync(scope, target, "wrong-target", Contract.Kinds.Terminate, Json.Write(wrong));
+            check(noDeletePermission && mismatched is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.TargetMismatch } &&
+                store.Instances[address] == parent && pages.Count == 0,
+                "PC-5 ThenDelete needs two permissions and pins the exact target before a model turn");
+        }
+        var command = new Contract.OperatorCommand(selection, ThenDelete: thenDelete, ExpectedTarget: thenDelete ? root : null);
+        var accepted = await ingress.SendAsync(scope, target, "end", Contract.Kinds.Terminate, Json.Write(command));
         await Pump();
-        check(store.Instances[address] is { Status: InstanceStatus.Cancelled, Cascade: null, Children: null } &&
+        var marker = store.Instances[address];
+        check(accepted.Outcome == Contract.AdmissionOutcome.Accepted &&
+            marker is { Status: InstanceStatus.Cancelled, Cascade: null, Children: null } && marker.Retired == thenDelete &&
             recipients.All(child => store.Instances[child.Id].Status == InstanceStatus.Cancelled) && pages.Count == 2 &&
             pages.SelectMany(page => page.Sent).Count(message => message.CascadeOrigin) == count,
-            "the real Native cascade ends every live child in two durable pages without repeating a send");
+            thenDelete ? "PC-5 the real Native ThenDelete sends two fenced cascade pages and cancels every child"
+                : "the real Native cascade ends every live child in two durable pages without repeating a send");
+        if (thenDelete)
+            check(pages.FirstOrDefault() is { Delete: true, Row: { Retired: true, Cascade.Cursor: CascadeProtocol.PageLimit } } &&
+                store.Journal.Values.Where(row => row.Instance == address).ToArray() is [{ Revision: -1 }],
+                "PC-5 ThenDelete retires with page one's durable cursor and one deletion marker in the same batch");
 
         async Task Pump()
         {
@@ -359,6 +386,47 @@ internal static class CascadePageChecks
         }
     }
 
+    private static async Task CheckDirectThenDelete(bool alreadyEnded, bool hasChild, bool protect, Action<bool, string> check)
+    {
+        const long now = 1_702_300_060_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("then-delete");
+        var probe = new Probe { Protect = protect };
+        var edge = new InMemoryIngress(store, new Requests("then-delete"), "then-delete",
+            (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
+        var birth = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        var address = store.FoundationTarget(scope.Tenant, actor.Id)!.Id;
+        var worker = new Worker("then-delete", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Step(worker, address);
+        if (hasChild)
+        {
+            await edge.SendAsync(scope, target, "child", "register-child");
+            await Step(worker, address);
+        }
+        var recipients = ChildRegistry.Read(store.Instances[address].Children);
+        if (alreadyEnded)
+        {
+            await edge.SendAsync(scope, target, "finish-with-registry", "finish");
+            await Step(worker, address);
+        }
+        var before = store.Instances[address];
+        var admission = await edge.SendAsync(scope, target, "then-delete-command", Contract.Kinds.Terminate,
+            Json.Write(new Contract.OperatorCommand(null, ThenDelete: true, ExpectedTarget: actor)));
+        await Step(worker, address);
+        var after = store.Instances[address];
+        var journal = store.Journal.Values.Where(row => row.Instance == address).ToArray();
+        var sent = recipients.Count(child => store.Messages.Values.Any(row => row.Message is { CascadeOrigin: true } message &&
+            message.Target.Id == child.Id && message.TargetCreation == child.Creation));
+        check(admission.Outcome == Contract.AdmissionOutcome.Accepted && (before.Status == InstanceStatus.Finished) == alreadyEnded &&
+            recipients.Count == (hasChild ? 1 : 0) && sent == recipients.Count && after.Retired == !protect &&
+            after.Status == (alreadyEnded ? InstanceStatus.Finished : InstanceStatus.Cancelled) &&
+            (protect ? journal.All(row => row.Revision != -1) : journal is [{ Revision: -1 }]),
+            $"PC-5 ThenDelete preserves the correct disposition and child binding for ended={alreadyEnded}, child={hasChild}, protected={protect}");
+    }
+
     private static async Task RunModelCap(Action<bool, string> check)
     {
         const long now = 1_702_300_070_000;
@@ -392,6 +460,7 @@ internal static class CascadePageChecks
         public string Type => "cascade-pages";
         public int Pulses { get; private set; }
         public bool CancelOnStart { get; set; }
+        public bool Protect { get; init; }
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox.Any(message => message.Kind == "register-child")) turn.State = turn.Start(new(Type, "leaf")).Id;
@@ -405,6 +474,7 @@ internal static class CascadePageChecks
                 turn.Start(new(Type, "leaf"));
                 turn.End(Contract.ActorStatus.Cancelled);
             }
+            if (turn.Inbox.Any(message => message.Kind == "finish")) turn.End(Contract.ActorStatus.Finished);
             if (turn.Inbox.Any(message => message.Kind == "stop")) turn.End(Contract.ActorStatus.Cancelled);
             if (turn.Inbox.Any(message => message.Kind == "ping")) Pulses++;
             if (turn.Inbox.Any(message => message.Kind == "oversize"))
@@ -415,7 +485,7 @@ internal static class CascadePageChecks
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool Withholds(Contract.ActorHeader header) => false;
-        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => Protect;
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
     }
 }

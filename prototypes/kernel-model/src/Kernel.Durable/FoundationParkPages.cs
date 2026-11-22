@@ -25,7 +25,7 @@ internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? S
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
 
-internal sealed record ParkRecoveryDeletion(string Operation, string Selection);
+internal sealed record ParkRecoveryDeletion(string Operation, string? Selection, bool ThenDelete = false);
 
 internal enum ParkRecoveryMode { Resume, Retry, RetryAll }
 

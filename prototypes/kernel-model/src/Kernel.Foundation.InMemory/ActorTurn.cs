@@ -159,6 +159,12 @@ internal sealed partial class ActorAdapter
             (_status, _output) = (status, output);
         }
 
+        internal void EnsureTerminated()
+        {
+            if (_row.Status == Durable.InstanceStatus.Running && _status != Contract.ActorStatus.Cancelled)
+                (_status, _output) = (Contract.ActorStatus.Cancelled, null);
+        }
+
         public void SetHeader(string typeData, IReadOnlyDictionary<string, string> labels)
         {
             HeaderLimits.ValidateTypeData(typeData);
