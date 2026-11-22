@@ -54,6 +54,8 @@ internal static class PrivateKindsChecks
         var kernelOutcome = new TurnCommit(actor, null, null, [], [], [job], [], [], null);
         var commit = await store.CommitAsync(new CommitBatch(0, lease.Epoch, lease.Position, TimeSpan.FromSeconds(10), false, [kernelOutcome], [], []));
         check(commit.Landed && store.Messages.ContainsKey(job.InboxKey), "the trusted StartJob ticket still lands");
+        await ComposedVolatile(returnsFromCommand: false, check);
+        await ComposedVolatile(returnsFromCommand: true, check);
 
         async Task Refused(Func<Task> act, string expectation)
         {
@@ -67,5 +69,41 @@ internal static class PrivateKindsChecks
                 check(true, expectation);
             }
         }
+    }
+
+    private static async Task ComposedVolatile(bool returnsFromCommand, Action<bool, string> check)
+    {
+        const string address = "0/volatile";
+        var store = new InMemoryStore(1, () => 1_700_000_000_000);
+        var type = new DirectOutcomeProbe(returnsFromCommand);
+        var worker = new Worker("volatile-kind", 0, store, type);
+        await using var active = (await new DurableHost([worker]).ActivateAsync(0))!;
+        worker.Post(new("boot", new(address), Kinds.Start, Start: new("probe", "none", Ephemeral: true)), fresh: true);
+        await active.RunAsync();
+        var parked = store.Instances.GetValueOrDefault(address);
+        check(type.Outcomes == 1 && parked is { Status: InstanceStatus.Faulted, Fault: "The outcome includes a private kernel kind with no issuer." } &&
+            !store.Messages.Values.Any(row => row.Message.Id == "invalid") && !worker.Messages.Any(item => item.Id.Id == "invalid"),
+            $"a directly composed volatile {(returnsFromCommand ? "command" : "authored turn")} parks before local handover");
+    }
+
+    private sealed class DirectOutcomeProbe(bool returnsFromCommand) : IActorType
+    {
+        internal int Outcomes { get; private set; }
+        public bool Withholds(InstanceRow row, ITurnServices services) => false;
+        public TurnOutcome? Command(TurnInput input) => returnsFromCommand ? Compose(input) : null;
+        public ValueTask<TurnOutcome> TurnAsync(TurnInput input) => new(Compose(input));
+
+        private TurnOutcome Compose(TurnInput input)
+        {
+            Outcomes++;
+            var message = new Message("invalid", new(input.Actor), "kernel.future-kind", Sender: input.Actor).AsIssued();
+            return new(input.Actor) { Consumed = [.. input.Taken], Sent = [message], Volatile = [message.InboxKey] };
+        }
+
+        public TurnOutcome Park(InstanceRow? row, string actor, IReadOnlyList<Delivery> taken, StartSpec? spec, string error) =>
+            new(actor) { Row = new(actor, "probe", "none", InstanceStatus.Faulted, "null", 1, null, Fault: error),
+                Status = InstanceStatus.Faulted, Consumed = [.. taken] };
+
+        public ValueTask<object?> ExecuteJobAsync(string model, IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

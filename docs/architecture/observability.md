@@ -582,12 +582,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
       `AddTerminalNotice` (`Turns.cs` 313–361). An outside add is answered with the error and writes no row; a turn
       that calls one of these throws at the call, so the sender's own turn fails by the ordinary fault rule and its
       commit carries nothing to the target.
-    - **Key admission**, `IKeyAdmission.AcceptAsync`, has its own deny-list in `KeyRequest.Validate` (existing
-      prototype behaviour, `KeyAdmission.cs` 29–30, called at 48–50), which names job, event and child-completion
-      kinds and does not call `RequireApplicationSend`, so under the prefix rule alone it would admit a keyed
-      `kernel.park-expiry` in scope 0. Proposed: `Validate` also applies the reserved-kind rule, so a keyed request
-      of a reserved kind is refused before any row is written. Key admission is a release 1 path, so this is a
-      release 1 change.
+    - **Key admission**, `IKeyAdmission.AcceptAsync`, calls `RequireApplicationSend` from `KeyRequest.Validate`.
+      This applies the same prefix rule before it changes a binding, receipt or delivery. The bound key ingress
+      makes the same check for inputs to an existing actor.
     - **Direct outcome composition.** An actor type can build `TurnOutcome.Sent` itself, with no call that could
       throw: existing prototype behaviour, `Turns.cs` 208, and the tree terminate is built that way
       (`WorkflowInstance.cs` 196). The commit-side check below refuses such a message as a definite error, so the

@@ -59,6 +59,7 @@ public sealed record Message(
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
+    internal bool KernelTicket { get; init; }
     internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
@@ -103,6 +104,8 @@ public static class Kinds
 
     internal static bool IsPrivateKernelKind(string kind) => kind.StartsWith("kernel.", StringComparison.Ordinal) &&
         !IsControl(kind) && kind is not ("kernel.recover" or "kernel.discard" or "kernel.migrate");
+
+    internal const string UnissuedPrivateKind = "The outcome includes a private kernel kind with no issuer.";
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
     public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"
