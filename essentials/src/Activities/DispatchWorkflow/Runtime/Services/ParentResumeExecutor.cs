@@ -93,7 +93,8 @@ public sealed class ParentResumeExecutor(
                     TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
                     schemaVersion: 1),
                 providerId: DispatchWorkflowConstants.ParentResumeProviderId,
-                bookmarkId: source is null ? null : payload.BookmarkId) { HistoryCausation = source?.Intent.HistoryCausation, ChildHistorySource = source },
+                bookmarkId: source is null ? null : payload.BookmarkId,
+                testRunDelivery: null) { HistoryCausation = source?.Intent.HistoryCausation, ChildHistorySource = source },
             cancellationToken: cancellationToken);
 
         if (result.Bookmark is { } resolvedBookmark)
