@@ -73,6 +73,8 @@ public sealed record Message(
     internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
     internal ParkCatchUpTicket? ParkCatchUp { get; init; }
+    internal FoundationPublishWork? FoundationPublish { get; init; }
+    internal bool HasFencedEventStep => ParkCatchUp is not null || FoundationPublish is not null;
     internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry or Kinds.Cascade;
     internal bool ActorAuthored { get; init; }
     internal bool CascadeOrigin { get; private init; }

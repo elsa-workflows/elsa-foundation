@@ -19,8 +19,13 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
             !Durable.FoundationMetadataLimits.FitsContent(payload, Durable.FoundationMetadataLimits.EventContentBytes))
             return new(new Admission(AdmissionOutcome.Refused));
         if (options?.DueAt is not null) return new(new Admission(AdmissionOutcome.Refused));
-        var accepted = store.PublishFoundationEvent(scope.Tenant, target.CorrelationKey, id, payload, options?.KeepFor, null, cancellationToken);
-        return new(new Admission(accepted == true ? AdmissionOutcome.Accepted : AdmissionOutcome.Duplicate));
+        var accepted = store.AdmitFoundationPublication(scope.Tenant, target.CorrelationKey, id, payload, options?.KeepFor, cancellationToken);
+        return new(new Admission(accepted.Duplicate ? AdmissionOutcome.Duplicate : AdmissionOutcome.Accepted)
+        {
+            Publication = accepted.Event is { FoundationIncarnation: { } incarnation } publication
+                ? new(publication.Key[(scope.Tenant.Length + 1)..], publication.Id, incarnation, (PublicationStatus)accepted.Status)
+                : null
+        });
     }
 
     public async ValueTask<Reply> RequestAsync(BoundScope scope, Target.Event target, string id, string? payload,

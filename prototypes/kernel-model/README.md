@@ -128,6 +128,10 @@ events versus live delivery, event expiry, duplicate publication and registratio
 The sequence cases use durable ingress. The legacy suite covers unwritten Ephemeral starts.
 Actor-managed start-on-match stays outside this replay.
 
+`--paged-publication-check` exercises typed outside sends on the in-memory store and Worker. It checks folded
+receipts, a 171-wait broadcast, the byte cut, lost outcomes, takeover accounting, rejection of an old page under
+a new reservation, and the dead-letter receipt. The fault driver activates the actual publisher's partition.
+
 `--cascade-pages-check` runs the live in-memory termination pages, including the 1,000-entry boundary,
 loss before and after a commit, a retirement marker continuing the original discharge, keyed reuse, and a
 Native Parallel with 1,001 parent-bound children. It also checks the application send cap independently.

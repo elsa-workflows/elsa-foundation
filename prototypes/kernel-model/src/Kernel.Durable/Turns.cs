@@ -253,6 +253,7 @@ public sealed class TurnOutcome(string instance)
     internal TimeSpan? FoundationCatchUpBudget;
     internal int? FoundationCatchUpExpected;
     internal ParkCatchUpFailure? FoundationCatchUpFailed;
+    internal long? FoundationPublicationSequence;
     internal CascadeCommit? FoundationCascade;
     public string Instance => instance;
     public InstanceRow? Row;

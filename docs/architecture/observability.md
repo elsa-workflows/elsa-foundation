@@ -1660,6 +1660,17 @@ calls one new model hook.
       before its first delivery (SB-5 run (x)). Each step is at-least-once: a step
       whose owner is lost runs again from the committed cursor, and a delivery it adds again is a duplicate by its
       digest identity. The step deadline and attempt count below apply per step.
+      - **Broadcast ordering (owner, 22 November).** Each wait receives broadcasts in match commit order.
+        Overlapping publications can commit their deliveries in different orders at different waits. The publish
+        receipt acknowledges acceptance. Direct messages retain FIFO from one sender to one target.
+        The SB-6 ordering run places two publication tickets on separate partitions. The first publication's
+        byte allowance lets it reach one wait before the second matches both. The first publication's next page
+        reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
+        that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
+        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 also
+        races two transactions matching the same wait. Pause the first while it assigns inbox order and let the
+        second try to commit. The resulting delivery order must follow commit visibility. If the provider serializes
+        order assignment for that wait, verify that the second transaction waits and that the first delivery stays first.
       - **A byte allowance per step (proposed, sixth review R6-M4).** `P_page` counts rows, and a delivery carries
         the whole payload, so 170 deliveries of a payload at the source limit would write about 2.6 GiB in one step.
         So each match step, which pages subscriptions, and each meet step, which pages matches, writes deliveries in
@@ -1962,6 +1973,14 @@ calls one new model hook.
         answers the existing incarnation; an admission after the sweep answers a new one, so a caller can tell a
         new publication from the old one, and every waiting subscription, a continuing keeping wait included,
         receives the new publication once, whatever is left of the old one's deliveries (case EI-1).
+      - **In-memory qualification.** The typed outside send inserts the event and its payload-free ticket under one
+        store lock. On each page the owner reserves the ticket, compares its sequence and attempt under the fence,
+        and commits the delivery rows, any start creators and references, and the cursor together. A continuing
+        ticket keeps its key and receives a new sequence, so a delayed request for the previous page cannot use
+        a reservation on the next one. At exhaustion the bound receipt reports `DeadLettered`. The focused
+        `--paged-publication-check` runs the real Worker. Provider locks and sizes remain at K4, step and fairness
+        costs at K12, and the alert, dead-letter listing and replay at K11. The turn publisher and the request/reply
+        route have separate cases.
       - **Cost.** One small ticket row per outside publish, inserted and consumed and kept `Done` for the window; the
         payload is written once, in the event row, which moves from after the match to the publish's own
         transaction. The delivery waits for the owner's next poll. The deliveries move from the caller to the owner

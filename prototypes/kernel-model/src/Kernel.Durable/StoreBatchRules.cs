@@ -12,6 +12,10 @@ public static class StoreBatchRules
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
             throw new StoreException(Failure.Definite, "A job trial clear requires supported, distinct keys in a separate fenced batch.");
+        if (batch.PublicationReservation is { } publication && (!supportsFoundationParkResolution ||
+            batch.Trial is not [var key] || key != publication.Key || batch.Seen.Count != 0 || batch.Turns.Count != 0 ||
+            batch.ClearJobTrials.Count != 0))
+            throw new StoreException(Failure.Definite, "A publication reservation requires its own fenced commit.");
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
@@ -22,6 +26,9 @@ public static class StoreBatchRules
         if (batch.Turns.Any(turn => turn.FoundationCatchUpFailed is not null) &&
             (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
             throw new StoreException(Failure.Definite, "A catch-up failure is recorded in its own fenced commit.");
+        if (batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null) &&
+            (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
+            throw new StoreException(Failure.Definite, "A publication page requires its own fenced commit.");
         if (batch.Turns.Any(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 }))
         {
             var restoring = batch.Turns.Where(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 })
@@ -43,7 +50,7 @@ public static class StoreBatchRules
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
-                turn.FoundationCatchUpExpected is not null || turn.FoundationCascade is not null || turn.Row?.Cascade is not null ||
+                turn.FoundationCatchUpExpected is not null || turn.FoundationPublicationSequence is not null || turn.FoundationCascade is not null || turn.Row?.Cascade is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&

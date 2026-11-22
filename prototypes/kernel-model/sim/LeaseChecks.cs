@@ -33,6 +33,7 @@ public static class LeaseChecks
         await ContractNativeChecks.Run(Check);
         await ContractHeldRequestChecks.Run(Check, flaw);
         await FoundationEventSendChecks.Run(Check);
+        await FoundationEventSendChecks.CheckPagedPublication(Check);
         await FoundationEventSendChecks.SubscriptionLifecycle(Check);
         await EventRequestChecks.Run(Check);
         await EventRequestChecks.Provenance(Check);
