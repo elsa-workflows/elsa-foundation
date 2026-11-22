@@ -169,7 +169,7 @@ for (const theme of ["light", "dark"]) {
     await feedback(page, row, row.locator(".studio-row-link"), info, "task-");
     await row.press("Enter");
     await expect(page.getByRole("region", { name: /^Review purchase request/ })).toBeVisible();
-    await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?forms&populated-forms&legacy-forms&theme=${theme}`);
     row = page.locator(".user-task-forms-table [data-studio-row-interactive]").first();
     await feedback(page, row, row.locator(".studio-row-link"), info, "form-");
     await row.locator("td").nth(1).click();

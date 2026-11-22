@@ -222,14 +222,14 @@ Every item in this section `needs: K15`.
   [source] `StudioBreadcrumbs` in `EXT/Decisions/DecisionsPage.tsx:215`,
   `WF/ActivityDefinitionWorkbench.tsx:256` and `WF/ActivityDefinitionDraftEditor.tsx:959`.
   `needs: D5`
-- [ ] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says
+- [x] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says (PR #5303)
   "Definitions › …". Make them agree.
-- [ ] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button →
+- [x] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button → (PR #5303)
   shell trail.
-- [ ] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost
+- [x] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost (PR #5303)
   "Back to task list"; `:34` [source] an `<a className="studio-button">` "Task inbox" →
   shell trail.
-- [ ] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon →
+- [x] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon → (PR #5303)
   shell trail.
 - [ ] **X2.6** (#5030) [verified] `EXT/FeatureManagement/module.tsx:1048` raw "Back" button.
 - [ ] **X2.7** (#5031) [source] `WF/ActivityDefinitionWorkbench.tsx:263` `StudioLink className="ad-back-to-designer"`
@@ -239,7 +239,7 @@ Every item in this section `needs: K15`.
   and the Agent create form (`AgentsPage.tsx:293–306`, Cancel or Escape only).
 - [ ] **X2.9** (#5033) [source] No breadcrumb on `WF/ActivityUpgradeWorkbenchPage.tsx:296` and
   `WF/Elsa3ReusableImportPage.tsx:479`, which are reachable only from Activity definitions.
-- [ ] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to
+- [x] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to (PR #5303)
   `StudioBreadcrumbs`. It navigates scopes inside one workflow, so D5 may not apply to it; ask before
   moving it into the shell. `needs: K7`
 - [ ] **X2.11** (#5035) [source] `WF/ActivityDataMemberBrowser.tsx:140` raw "Back" button.
@@ -484,7 +484,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   [check] `.etl-error`, `.external-auth-error`.
 - [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
-- [ ] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task
+- [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
 - [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
