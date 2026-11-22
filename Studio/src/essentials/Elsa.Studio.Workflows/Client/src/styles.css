@@ -84,7 +84,7 @@
   /* Eyebrow / label recipe — softened from the former uppercase + 800 texture.
      Flip --wf-label-transform to `none` for fully sentence-case labels. */
   --wf-label-weight: 600;
-  --wf-label-transform: uppercase;
+  --wf-label-transform: none;
   --wf-label-tracking: 0.04em;
 
   /* Activity icon accents — category tones honour the documented host override
@@ -329,7 +329,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -346,7 +346,7 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: var(--wf-label-tracking, 0);
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
 }
 
 .wf-page-context code {
@@ -1428,7 +1428,7 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -1503,7 +1503,7 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -1564,7 +1564,7 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -1609,7 +1609,7 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -3211,7 +3211,7 @@
   color: var(--wf-muted-text);
   font-size: 12px;
   font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -3843,7 +3843,7 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
   padding: 0 8px 6px 0;
 }
@@ -4246,7 +4246,7 @@
   font-weight: var(--wf-label-weight, 600);
   letter-spacing: 0.04em;
   padding: 5px 6px 3px;
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -4477,7 +4477,7 @@
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: var(--wf-label-weight, 600);
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -4915,7 +4915,7 @@
   color: var(--wf-muted-text);
   font-size: 10px;
   font-weight: var(--wf-label-weight, 600);
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -5079,7 +5079,7 @@ button.wf-reference-select {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: var(--wf-label-tracking, 0);
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
 }
 
 .wf-reference-collection .wf-identity-cell {
@@ -5137,7 +5137,7 @@ button.wf-reference-select {
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: var(--wf-label-weight, 600);
-  text-transform: var(--wf-label-transform, uppercase);
+  text-transform: var(--wf-label-transform, none);
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
@@ -6023,7 +6023,7 @@ button.wf-reference-select {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .wf-dictionary-head > span {
@@ -7438,7 +7438,7 @@ html[data-theme-material] .availability-search .wf-search {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .wf-bpmn-flow {

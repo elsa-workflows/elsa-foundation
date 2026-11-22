@@ -1,4 +1,4 @@
-import { studioRowInteraction, StudioCollectionEmptyState, StudioTableContainer, StudioResultState, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { StudioLoadingStatus, studioRowInteraction, StudioCollectionEmptyState, StudioTableContainer, StudioResultState, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React from "react";
 import { AlertCircle, Cable, RefreshCw, Search, Plus } from "lucide-react";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
@@ -27,11 +27,11 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
         <thead><tr><th>Name</th><th>Service</th><th>Authentication</th><th>Status</th><th>Last tested</th></tr></thead>
         <tbody>
           {loading || error ? <tr><td colSpan={5} className="connections-empty-cell">
-            <StudioResultState headingLevel={3} tone={error ? "danger" : "neutral"}
-              icon={error ? <AlertCircle size={24} /> : <Search size={24} />}
-              title={loading ? "Loading connections…" : "Connections could not be loaded"}
-              description={loading ? undefined : "Try loading the list again."}
-              actions={!loading && error ? <StudioButton onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</StudioButton> : undefined} />
+            {loading ? <StudioLoadingStatus>Loading connections…</StudioLoadingStatus> : <StudioResultState headingLevel={3} tone="danger"
+              icon={<AlertCircle size={24} />}
+              title="Connections could not be loaded"
+              description="Try loading the list again."
+              actions={<StudioButton onClick={onRetry}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />}
           </td></tr> : items.map(item => (
             <tr key={item.name} {...studioRowInteraction<HTMLTableRowElement>(() => onOpen(item.name))}>
               <td><div className="connections-name">

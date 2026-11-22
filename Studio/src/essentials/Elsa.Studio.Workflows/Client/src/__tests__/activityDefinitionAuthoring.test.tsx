@@ -2612,7 +2612,7 @@ describe("Activity Definition publication", () => {
     click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
-    const summary = [...rendered.container.querySelectorAll<HTMLElement>(".ad-publication-summary")].find(element => element.textContent?.includes("version-published"))!;
+    const summary = [...rendered.container.querySelectorAll<HTMLElement>(".studio-fact-list")].find(element => element.textContent?.includes("version-published"))!;
     expect(summary.textContent).toContain("version-published");
     expect(summary.textContent).not.toContain("No published head");
     // The action affordance no longer invites a repeat publish of the same version.
