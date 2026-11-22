@@ -191,8 +191,8 @@ export function ActivityDefinitionVersionLifecycleDialog({
     <StudioField className="ad-dialog-field" label={<><span>Reason </span></>}><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /><small>Required and recorded by the server</small></StudioField>
     <label className="ad-contract-check"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> I reviewed the exact identities, lifecycle preconditions, recommendation decision, and consequences above.</label>
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    <StudioDialogFooter onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Applying and reconciling…" : submitLabel(action)}
-      confirmDisabled={!canSubmit} onConfirm={() => void submit()} />
+    <StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Applying and reconciling…" : submitLabel(action)}
+      confirmVariant={action === "revoke" ? "danger" : "primary"} confirmDisabled={!canSubmit} onConfirm={() => void submit()} />
   </ActivityDefinitionManagementDialogShell>;
 }
 

@@ -113,7 +113,7 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
     initialFocusRef={displayNameRef} onEscapeKeyDown={event => {
       if (event.target instanceof HTMLElement && event.target.matches('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
     }}
-    footer={<StudioDialogFooter onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Creating…" : "Create"}
+    footer={<StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Creating…" : "Create"}
       confirmDisabled={!canSubmit} onConfirm={() => void submit()} />}
   >
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading authorized authoring providers…</div> : null}

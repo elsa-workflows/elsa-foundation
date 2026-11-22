@@ -295,8 +295,8 @@ export function ActivityDefinitionPublicationReview({
           : "The activity is not ready to publish. Review the readiness checks below or ask an administrator to resolve unavailable services, then check again."}</p>
         {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} embedded disabled={phase === "publishing" || phase === "unknown"} /> : null}
         <div className="ad-publication-blocker-actions">
-          {mode === "toolbar" ? <button type="button" onClick={() => setDialogOpen(false)}>Return to editor</button> : null}
-          <button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</button>
+          {mode === "toolbar" ? <StudioButton onClick={() => setDialogOpen(false)}>Return to editor</StudioButton> : null}
+          <StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><RefreshCw size={15} aria-hidden /> Check again</StudioButton>
         </div>
       </div> : null;
 
@@ -349,15 +349,15 @@ export function ActivityDefinitionPublicationReview({
         <GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}
       </button>
     </header> : null}
-    {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
+    {mode === "toolbar" && phase !== "success" && !publicationBlocked ? <div className="ad-publication-prepare-row"><StudioButton onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</StudioButton></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
     {!preflight ? blockerPanel : null}
-    {failure && (phase === "stale" || phase === "failed" || phase === "unknown") ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
+    {failure && (phase === "stale" || phase === "failed" || phase === "unknown") ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <StudioButton onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</StudioButton> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">
       <CheckCircle2 size={20} aria-hidden />
       <div><strong>Published immutable version {receipt.outcome.version}</strong><span>{recommendationMessage(recommendationEvidence, mode === "toolbar")}</span></div>
-      {onOpenWorkflows ? <button type="button" onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></button> : null}
-      {onOpenVersion ? <button type="button" onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></button> : null}
+      {onOpenWorkflows ? <StudioButton onClick={onOpenWorkflows}>Open workflows <ExternalLink size={15} aria-hidden /></StudioButton> : null}
+      {onOpenVersion ? <StudioButton onClick={() => onOpenVersion(receipt.outcome!.definitionVersionId)}>Open immutable version <ExternalLink size={15} aria-hidden /></StudioButton> : null}
     </div> : null}
     {phase === "success" && mode === "toolbar" ? <details className="ad-publication-technical-details"><summary>Publication review details</summary>{reviewDetails}</details> : reviewDetails}
   </section>;
@@ -379,9 +379,9 @@ export function ActivityDefinitionPublicationReview({
       description="Studio saves the current draft, then checks its impact and readiness before publication."
       closeLabel="Close publication review" dismissDisabled={!closeAllowed} onClose={() => setDialogOpen(false)}
       onCloseAutoFocus={event => { event.preventDefault(); reviewTriggerRef.current?.focus(); }}
-      footer={<StudioDialogFooter onCancel={() => setDialogOpen(false)} cancelDisabled={!closeAllowed}
+      footer={<StudioDialogFooter confirmType="button" onCancel={() => setDialogOpen(false)} cancelDisabled={!closeAllowed}
         cancelLabel={phase === "success" ? "Close" : "Cancel"}
-        confirmLabel={preflight && phase !== "success" ? phase === "publishing" ? "Publishing atomically…" : `Publish ${selectedVersion || "exact version"}` : undefined}
+        confirmLabel={preflight ? phase === "success" ? `Published ${selectedVersion}` : phase === "publishing" ? "Publishing atomically…" : `Publish ${selectedVersion || "exact version"}` : undefined}
         confirmDisabled={disabled || phase !== "review" || !preflight?.isPublishable || Boolean(versionError)}
         confirmProps={{ "aria-describedby": publicationBlocked ? blockedReasonId : undefined }} onConfirm={() => void publish()} />}
     >{reviewPanel}{preflight ? <p>Existing workflows keep the activity version they already use.</p> : null}</StudioDialog> : null}

@@ -177,7 +177,7 @@ export function ActivityDefinitionForkDialog({
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this target provider schema is unavailable. Forking is disabled.</div> : null}
     </> : <ForkReview preview={preview} />}
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    {preview ? <StudioDialogFooter leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
+    {preview ? <StudioDialogFooter confirmType="button" leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
       onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying atomically…" : "Apply reviewed fork"}
       confirmDisabled={submitting || !canApply} onConfirm={() => void apply()} />
       : <ActivityDefinitionManagementDialogActions submitting={submitting} submitLabel="Create fork preview" canSubmit={canPreview} onClose={onClose} onSubmit={requestPreview} />}

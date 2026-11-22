@@ -388,6 +388,7 @@ export function ActivityDefinitionTestRunDialog({
         {operationError ? <p className="ad-inline-error ad-test-run-operation-error" role="alert">{operationError}</p> : null}
 
         <StudioDialogFooter
+          confirmType="button"
           leading={<>
             {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
               <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}

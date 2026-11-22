@@ -25,6 +25,6 @@ export function ActivityDefinitionManagementDialogActions({
   onClose(): void;
   onSubmit(): Promise<void>;
 }) {
-  return <StudioDialogFooter onCancel={onClose} cancelDisabled={submitting}
+  return <StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting}
     confirmLabel={submitting ? "Applying atomically…" : submitLabel} confirmDisabled={!canSubmit} onConfirm={() => void onSubmit()} />;
 }
