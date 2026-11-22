@@ -26,7 +26,7 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   await page.goto("/security/secrets");
   const create = page.getByRole("button", { name: "New secret", exact: true }).first();
   await expect(create).toBeEnabled(); await create.press("Enter");
-  const editor = page.getByRole("region", { name: "New secret", exact: true });
+  const editor = page.getByRole("dialog", { name: "New secret", exact: true });
   const technicalName = editor.getByLabel("Technical name", { exact: true });
   await expect(technicalName).toBeFocused();
   await expect(page.getByRole("table", { name: "Secrets", exact: true })).toHaveCount(0);
@@ -69,7 +69,7 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   await editor.getByRole("button", { name: "Create", exact: true }).click();
   await expect(editor).toHaveCount(0);
   const row = page.getByRole("row").filter({ hasText: name });
-  await expect(row.getByRole("button", { name: `Edit ${name}`, exact: true })).toBeFocused();
+  await expect(row.locator(`a[data-secret-open="${name}"]`)).toBeFocused();
   await page.reload(); await expect(row).toBeVisible();
   await capture(page, info, "persisted-list");
 
@@ -89,8 +89,8 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   await edit.getByLabel("Description", { exact: true }).fill("");
   await edit.getByRole("button", { name: "Save", exact: true }).click();
   await expect(edit).toHaveCount(0);
-  await expect(row.getByRole("button", { name: `Edit ${name}`, exact: true })).toBeFocused();
-  await page.reload(); await row.getByRole("button", { name: `Edit ${name}`, exact: true }).click();
+  await expect(row.locator(`a[data-secret-open="${name}"]`)).toBeFocused();
+  await page.reload(); await row.locator(`a[data-secret-open="${name}"]`).click();
   await expect(edit.getByLabel("Display name", { exact: true })).toHaveValue(`${displayName} updated`);
   await expect(edit.getByLabel("Description", { exact: true })).toHaveValue("");
   await capture(page, info, "persisted-metadata");
@@ -100,7 +100,7 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   await section(edit, "Storage & lifetime"); await capture(page, info, "storage-390");
   await page.setViewportSize(viewport);
   await edit.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(row.getByRole("button", { name: `Edit ${name}`, exact: true })).toBeFocused();
+  await expect(row.locator(`a[data-secret-open="${name}"]`)).toBeFocused();
 
   // Exercise the other advertised store without resolving or exposing any existing material.
   await create.click(); await technicalName.fill(`Configuration-${stamp}`);

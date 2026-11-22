@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { StudioHttpError, type StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
-import { AdvancedSection, StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioAlert, StudioButton, StudioCheckboxField, StudioField } from "@elsa-workflows/studio-ui";
 import {
   connectionPickerLimit, listModelConnections, listModelProviders, readModelCapabilities,
   type ModelCapabilities, type ModelConnection, type ModelProvider
@@ -248,11 +248,9 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
       </fieldset>
 
       {providerSchemaVersion === continuitySchemaVersion ? (
-        <label className="agent-continuity">
-          <input type="checkbox" checked={manifest.allowContinuity === true} disabled={readOnly}
-            onChange={event => patch({ allowContinuity: event.target.checked })} />
-          <span>Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one.</span>
-        </label>
+        <StudioCheckboxField className="agent-continuity" checked={manifest.allowContinuity === true} disabled={readOnly}
+          onChange={allowContinuity => patch({ allowContinuity })}
+          label="Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one." />
       ) : null}
       </AdvancedSection>
     </div>
