@@ -27,7 +27,7 @@ internal static class TenantPassChecks
             await Pump(writer, 16);
 
             var loadedTenants = store.Instances.Values
-                .GroupBy(row => ((IKernelStore)store).FoundationScheduleTenant(new(row.Id, row.Creation)))
+                .GroupBy(row => ((IFoundationSchedulingStore)store).FoundationScheduleTenant(new(row.Id, row.Creation)))
                 .ToDictionary(group => group.Key ?? "", group => group.Count());
             check(loadedTenants.GetValueOrDefault(hot.Tenant) == hotActors &&
                   loadedTenants.GetValueOrDefault(quiet.Tenant) == 1,

@@ -258,6 +258,13 @@ public sealed class StoreException(Failure failure, string message, Exception? i
     public Failure Failure => failure;
 }
 
+// Optional local scheduling data. These observations never issue a database call.
+internal interface IFoundationSchedulingStore
+{
+    string? FoundationScheduleTenant(CreationAddress address);
+    ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere);
+}
+
 /// <summary>
 /// The durable layer's storage contract, stated by what each operation guarantees. It also keeps the built-in runtime's
 /// membership (<see cref="IMembership"/>): the node rows and which partitions nobody holds.
@@ -267,14 +274,9 @@ public interface IKernelStore : IMembership
     /// <summary>The shared Unix-millisecond source, when the built-in foundation can read it locally.</summary>
     Func<long>? FoundationClock { get; }
 
-    // The in-memory store keeps the tenant with the admitted exact creation.
-    // A provider supplies the tenant alongside the actor or the creation envelope it already loaded.
-    internal string? FoundationScheduleTenant(CreationAddress address) => null;
-
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
     bool SupportsCascadePages => false;
-    internal ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere) => null;
 
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;

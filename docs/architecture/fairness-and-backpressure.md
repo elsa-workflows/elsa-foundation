@@ -222,23 +222,27 @@ smaller and so make this less likely. A per-tenant share of a virtual partition'
    most one turn before every instance ahead of it in its tenant's queue has taken one. A cursor carries the rounds
    from pass to pass; a reset drops it with the rest of memory. The ordinal order of today starves high ids once a
    budget exists, so it goes.
-3. **An age hint for layer 1 (proposed).** `RunAsync` also reports the age of its oldest waiting deliverable message. The
-   built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
+3. **An age hint for layer 1 (K3, in-memory).** `RunWithAgeAsync` returns the next delay and the age of the oldest
+   deliverable message the current owner has observed, measured from its observation or due time, whichever is later.
+   The built-in runtime works in rounds: every scope with ready work gets one budgeted pass per round, and within a round
    the scopes go in order of their oldest waiting work, scope order breaking ties. The age orders a round and never
    gives one scope a second pass before every other ready scope has had one. Layer 1 learns an age and nothing about
-   tenants or messages.
+   tenants or messages. A node's shared Worker still coalesces its virtual scopes into one actual pass and reports
+   a separate age for each scope. An unknown age sorts after known ages.
 
 The per-target order rule is unchanged: a target's messages are handled in `seq` order, and one sender's messages to
 one target arrive in the order sent. The selection only chooses which instance takes the next turn.
 
 **Cost.** Keep the ready queues in memory. The K3 pass scans the ready actors and sorts newly ready actors by observation
 order before they join the queues. The in-memory store supplies the tenant from the admitted exact creation. There is
-no database call. K4 qualifies the tenant column and provider loads. The age hint adds one field to
-the result of `RunAsync`.
+no database call. K4 qualifies the tenant column and provider loads. The age hint scans locally ready messages after
+the pass and needs no database call.
 
 The in-memory `--pass-turn-budget-check` and `--tenant-pass-check` run the real Worker. They cover a perpetually
 productive actor, equal and weighted rounds, a cold owner, and a weight spread across passes when the tenant has one
-ready actor. The tests check per-actor order, the pass cap and the quiet tenant's first turn.
+ready actor. The tests check per-actor order, the pass cap and the quiet tenant's first turn. The
+`--scope-age-check` and runtime `scope-rounds` check cover future timers, a shared Worker and the built-in node's
+oldest-first rounds.
 
 **What it cannot do.** The poll stays first in, first out: one query, one index. A tenant's message beyond the poll
 window is not in memory, so the in-pass selection cannot reach it. The ingress threshold limits how far outside starts
@@ -307,7 +311,7 @@ and one `kernel.cascade` (proposed, fifth review R5-B2).
 **Later:** hard running-instance quotas, a poll per tenant, a per-tenant share of a virtual partition's depth, charging
 an outside publish for its matches, priorities, load-aware rebalancing and shuffle sharding.
 
-**Verification planned for release 1** (none of it exists):
+**Verification for release 1:**
 
 - Simulation invariants:
   - with deficit round robin and the rotation within a tenant, an instance at position k in its tenant's queue takes

@@ -9,7 +9,7 @@ namespace Kernel.Durable;
 /// updates are honoured, keys are create-only. It also keeps <see cref="Ghost"/>: things a correct kernel never does,
 /// seen from the one place that sees every write.
 /// </summary>
-public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore
+public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw flaws = Flaw.None) : IKernelStore, IFoundationSchedulingStore
 {
     private readonly StringComparer _foundationEventEquality = StringComparer.Ordinal;
 

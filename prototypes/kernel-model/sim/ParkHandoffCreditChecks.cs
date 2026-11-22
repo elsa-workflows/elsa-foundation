@@ -138,7 +138,7 @@ internal static class ParkHandoffCreditChecks
             await worker.LoadAsync();
             check(middle > old.Epoch && Row().ParkRecovery?.Restored == beforeSuffix && probe.HandedHere.Count == 0,
                 "HC-2 the first takeover stops after polling and before any handoff");
-            check(((IKernelStore)store).SampleParkDrains(oldNode, [old], _ => true) is null,
+            check(((IFoundationSchedulingStore)store).SampleParkDrains(oldNode, [old], _ => true) is null,
                 "HC-3 the store refuses a sample from the previous owner's fence");
             await second.DisposeAsync();
 

@@ -284,31 +284,37 @@ public sealed class Worker : IScopeActivation, ITurnServices
     public bool NeedsMeet => _meets.Exists(i => !i.Taken && (i.Message.HasFencedEventStep || !Awaits(i)));
     public IEnumerable<string> Ready => ReadyForTurns(default).Select(turn => turn.Id);
 
-    private IEnumerable<(string Id, InstanceRow? Row, Delivery Oldest)> ReadyForTurns(CancellationToken cancellationToken)
+    private IEnumerable<(string Id, InstanceRow? Row, List<Delivery> Inbox)> ReadyForTurns(CancellationToken cancellationToken) =>
+        ReadyForTurnsAt(ReceiveJobPublications(cancellationToken));
+
+    private IEnumerable<(string Id, InstanceRow? Row, List<Delivery> Inbox)> ReadyForTurnsAt(long now)
     {
-        var now = ReceiveJobPublications(cancellationToken);
         foreach (var (id, slot) in _slots)
         {
             if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn || Blocked ||
                 TrialItems.Count > 0 && !OnTrial(id) && !Spared(id)) continue;
             var deliverable = Deliverable(id, slot, now);
             if (deliverable.Count > 0)
-                yield return (id, slot.Row, deliverable.MinBy(item => item.ObservedOrder)!);
+                yield return (id, slot.Row, deliverable);
         }
     }
 
     private int RefreshPassTurns(CancellationToken cancellationToken)
     {
         var generation = Volatile.Read(ref _generation);
-        var ready = ReadyForTurns(cancellationToken).Select(turn => new PassTurnSchedule.ReadyTurn(
-            turn.Id, TurnTenant(turn.Id, turn.Row, turn.Oldest.Message), turn.Oldest.ObservedOrder)).ToList();
+        var ready = new List<PassTurnSchedule.ReadyTurn>();
+        foreach (var (id, row, inbox) in ReadyForTurns(cancellationToken))
+        {
+            var oldest = inbox.MinBy(item => item.ObservedOrder)!;
+            ready.Add(new(id, TurnTenant(id, row, oldest.Message), oldest.ObservedOrder));
+        }
         lock (_turnSync)
             return generation == _generation ? _passTurns.Refresh(ready, _options.PassTurnBudget) : 0;
     }
 
     private string TurnTenant(string id, InstanceRow? row, Message input) =>
         row?.FoundationInlineBirth?.Tenant ?? input.Start?.FoundationInlineTenant ??
-        _store.FoundationScheduleTenant(new(id, row?.Creation ?? input.TargetCreation ?? 0)) ?? string.Empty;
+        (_store as IFoundationSchedulingStore)?.FoundationScheduleTenant(new(id, row?.Creation ?? input.TargetCreation ?? 0)) ?? string.Empty;
 
     private string? RotatePassTurn()
     {
@@ -446,6 +452,31 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var next = await PassAsync(cancellationToken);
         if (!cancellationToken.IsCancellationRequested) Volatile.Write(ref _lastPass, _options.Monotonic());     // a completed pass, for the host's gate
         return next;
+    }
+
+    public async ValueTask<ScopePass> RunWithAgeAsync(CancellationToken cancellationToken = default)
+    {
+        var delay = await RunAsync(cancellationToken);
+        if (delay != TimeSpan.Zero || cancellationToken.IsCancellationRequested) return new(delay);
+        return new(delay, AgeOfReadyWork().TryGetValue(Partition, out var age) ? age : null);
+    }
+
+    internal Dictionary<int, TimeSpan> AgeOfReadyWork()
+    {
+        var now = Now;
+        var oldest = new Dictionary<int, TimeSpan>();
+        lock (_turnSync)
+        {
+            foreach (var (_, _, inbox) in ReadyForTurnsAt(now))
+            {
+                var partition = inbox[0].Message.Target.Partition;
+                var readyAt = inbox.Min(item => Math.Max(item.ObservedAt, item.Message.Due ?? item.ObservedAt));
+                var age = TimeSpan.FromMilliseconds(Math.Max(0, now - readyAt));
+                if (!oldest.TryGetValue(partition, out var previous) || age > previous)
+                    oldest[partition] = age;
+            }
+        }
+        return oldest;
     }
 
     private async ValueTask<TimeSpan?> PassAsync(CancellationToken cancellationToken)
@@ -1313,7 +1344,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 sampledFences = Fences;
                 heldHere = _items.Where(entry => entry.Value.HeldHere).Select(entry => entry.Key).ToHashSet();
             }
-            if (_store.SampleParkDrains(Node, sampledFences, heldHere.Contains) is { } sample && LeaseUsable() && generation == _generation)
+            if ((_store as IFoundationSchedulingStore)?.SampleParkDrains(Node, sampledFences, heldHere.Contains) is { } sample && LeaseUsable() && generation == _generation)
                 ParkDrainMetrics.Record(sample);
         }
 
