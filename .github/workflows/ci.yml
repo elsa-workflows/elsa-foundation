@@ -59,6 +59,128 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  s2-grouped-validation-composed-proof:
+    name: S-2 grouped fields and validation integration proof
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'weaver' && github.ref_name == 'agent/claude/3052-s2-null-missing-undefined'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8fcd9362ece4471af56a069d317df28a27a03314
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
+      - name: Verify the complete acceptance harness on Linux
+        run: python3 -m unittest discover -s tools/ux-acceptance -p 'test_*.py'
+      - name: Record workflow and tested-source provenance separately
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert source == '8fcd9362ece4471af56a069d317df28a27a03314'
+          record = {'workflowSha': os.environ['GITHUB_SHA'], 'testedSourceSha': source, 'workflowRun': os.environ['GITHUB_RUN_ID']}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 's2-grouped-workflow.json').write_text(json.dumps(record, indent=2) + '\n')
+          PY
+      - name: Exercise the changed journey on owned real hosts
+        env:
+          UX_PR_HEAD_SHA: 8fcd9362ece4471af56a069d317df28a27a03314
+        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/grouped-integration-ux-${{ github.run_id }}-${{ github.run_attempt }}" --journey "user task authoring and workflow result" --journey "activity validation explains and locates graph settings"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-ux-8fcd9362ece4471af56a069d317df28a27a03314-grouped-validation-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/grouped-integration-ux-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/s2-grouped-workflow.json
+          if-no-files-found: error
+          retention-days: 14
+  s2-rename-composed-proof:
+    name: S-2 and S-7 composed integration proof
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'weaver' && github.ref_name == 'agent/claude/3052-s2-null-missing-undefined'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8fcd9362ece4471af56a069d317df28a27a03314
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
+      - name: Record workflow and tested-source provenance separately
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert source == '8fcd9362ece4471af56a069d317df28a27a03314'
+          record = {'workflowSha': os.environ['GITHUB_SHA'], 'testedSourceSha': source, 'workflowRun': os.environ['GITHUB_RUN_ID']}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 's2-s7-workflow.json').write_text(json.dumps(record, indent=2) + '\n')
+          PY
+      - name: Exercise the changed journey on owned real hosts
+        env:
+          UX_PR_HEAD_SHA: 8fcd9362ece4471af56a069d317df28a27a03314
+        run: python3 tools/ux-acceptance/run.py --output "$RUNNER_TEMP/integration-ux-${{ github.run_id }}-${{ github.run_attempt }}" --journey "variable rename updates script reads and lists the rest" --journey "script variable may-write analysis survives editing and reopening"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-ux-8fcd9362ece4471af56a069d317df28a27a03314-s2-s7-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/integration-ux-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/s2-s7-workflow.json
+          if-no-files-found: error
+          retention-days: 14
+  s2-trigger-composed-proof:
+    name: S-2 trigger mapping integration proof
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'weaver' && github.ref_name == 'agent/claude/3052-s2-null-missing-undefined'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8fcd9362ece4471af56a069d317df28a27a03314
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-studio
+      - name: Install Chromium
+        uses: ./.github/actions/install-chromium
+        with:
+          working-directory: Studio
+      - name: Record workflow and tested-source provenance separately
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert source == '8fcd9362ece4471af56a069d317df28a27a03314'
+          record = {'workflowSha': os.environ['GITHUB_SHA'], 'testedSourceSha': source, 'workflowRun': os.environ['GITHUB_RUN_ID']}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 's2-trigger-workflow.json').write_text(json.dumps(record, indent=2) + '\n')
+          PY
+      - name: Exercise the changed journey on owned real hosts
+        env:
+          UX_PR_HEAD_SHA: 8fcd9362ece4471af56a069d317df28a27a03314
+        run: python3 tools/ux-acceptance/standalone.py --output "$RUNNER_TEMP/trigger-integration-ux-${{ github.run_id }}-${{ github.run_attempt }}" --journey "standalone trigger associations and inputs" --studio-shape application
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-ux-8fcd9362ece4471af56a069d317df28a27a03314-trigger-mapping-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/trigger-integration-ux-${{ github.run_id }}-${{ github.run_attempt }}
+            ${{ runner.temp }}/s2-trigger-workflow.json
+          if-no-files-found: error
+          retention-days: 14
   plan-scope:
     name: Select focused validation
     runs-on: ubuntu-latest
