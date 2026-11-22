@@ -64,8 +64,12 @@ explicitly exposed by the owning structure. Identity is independent of the displ
   `ConditionalOccurrence`, `AvailabilityUnknown`, `UnavailableProducer`, then `EarlierProducerRun` (the
   structure holding producer and consumer, or one around it, does not state that no earlier run of the
   producer can lead to this input, as on a Flowchart cycle or in a Sequence on a BPMN gateway loop), then
-  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable, and
-  expression authoring may still bind it as a portable parameter.
+  `NoTypedResult` (the producer declares no typed whole result). Its identity stays inspectable.
+  Expression authoring uses a separate, server-admitted canonical portable-parameter offer: an
+  `EarlierProducerRun` direct refusal can still have a portable offer under the existing parameter
+  rules. `NoTypedResult` proves absence of a declared whole result and remains refused; uncertain or
+  missing shape metadata alone does not prove that absence. The client never infers permission from
+  a null direct binding or a reason code.
 - To read a conditional producer optionally, the client sends a focused query whose source is the
   scope-free binding with `isOptional: true`, for example
   `{"expressionType":"ActivityResult","value":{"producerNodeId":"fetch","projectionKey":"$result","isOptional":true}}`.
@@ -202,6 +206,16 @@ Selection in a supported text editor uses the installed syntax adapter's inserti
 nested member, bind the existing whole-source role/projection as a portable parameter and let the adapter
 insert escaped member access; this does not require new portable-parameter wire fields. The basic
 language-neutral member binding and explicit expression lowering remain separate contracts.
+
+For portable insertion the metadata query supplies the installed `expressionType` and, when focused,
+an existing whole `parameterSource` plus the literal `memberPath`. Direct `source` and portable
+`parameterSource` modes are mutually exclusive. The answer advertises `expressionParametersEnabled`,
+echoes the syntax, and supplies a canonical parameter offer and its exact `parameterPath`; a focused
+answer must match the current resource, consuming input, document/base revision and pinned snapshot.
+The path describes metadata traversal only and never becomes a persisted parameter member kind.
+Older servers omit the capability or return false: Studio preserves the expression and explains that
+compatible insertion is unavailable. Portable metadata support does not enable native MemberReads or
+override the source admission, owner restrictions or protected-path rules.
 
 Choose a legal alias without replacing a different existing parameter. Reuse an alias only when its
 binding is identical; otherwise allocate a distinct alias and preserve all existing manual source,

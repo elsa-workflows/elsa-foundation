@@ -19,14 +19,14 @@ const folder = {
   lastModifiedAt: "2026-10-20T00:00:00Z"
 };
 
-function definition(id: string, name: string) {
+function definition(id: string, name: string, deletedAt: string | null = null) {
   return {
     id,
     name,
     description: visualStudy ? minimalWorkflowDescriptions[minimalWorkflowNames.indexOf(name)] ?? "Browser workflow fixture" : "Browser workflow fixture",
     createdAt: "2026-10-20T00:00:00Z",
     lastModifiedAt: "2026-10-20T00:00:00Z",
-    deletedAt: null,
+    deletedAt,
     draftId: longIdentifiers ? `draft-${"immutable-identifier-".repeat(7)}` : `draft-${id}`,
     draftSourceVersionId: longIdentifiers ? `source-${"published-version-".repeat(6)}` : null,
     latestVersionId: longIdentifiers ? `latest-${"immutable-version-".repeat(6)}` : savedVersion ? `version-${id}` : null,
@@ -101,7 +101,9 @@ const context = {
         recordDefinitionPageRequest(url);
         const query = new URL(url, window.location.origin).searchParams;
         const searchTerm = query.get("searchTerm") ?? "";
-        const response: DefinitionPage = visualStudy && !searchTerm ? { items: minimalWorkflowNames.map((name, index) => definition(`wf-study-${index + 1}`, name)), nextContinuationToken: null } : searchTerm === "renewal"
+        const response: DefinitionPage = query.get("state") === "deleted"
+          ? { items: [definition("workflow-deleted", "Deleted workflow", "2026-10-19T00:00:00Z")], nextContinuationToken: null }
+          : visualStudy && !searchTerm ? { items: minimalWorkflowNames.map((name, index) => definition(`wf-study-${index + 1}`, name)), nextContinuationToken: null } : searchTerm === "renewal"
           ? query.get("continuationToken") === continuationToken
             ? { items: [definition("workflow-page-two", "Second page renewal")], nextContinuationToken: null }
             : { items: [definition("workflow-page-one", "First page renewal")], nextContinuationToken: continuationToken }

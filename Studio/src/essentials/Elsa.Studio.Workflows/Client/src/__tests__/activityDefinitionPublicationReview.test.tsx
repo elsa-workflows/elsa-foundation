@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { StudioActivityDiagnosticFocusResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionPublicationReview } from "../ActivityDefinitionPublicationReview";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
@@ -16,6 +16,48 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionPublicationReview toolbar mode", () => {
+  it("reopens failure details without retrying until the explicit prepare action", async () => {
+    const postJson = vi.fn(async () => { throw new TypeError("private transport detail"); });
+    const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
+    const harness = renderReview({ postJson, flushExactSavedRevision });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("Publication preflight could not be confirmed"));
+    click(buttonByText(harness.container, "Close publication review"));
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    const summary = harness.container.querySelector('.ad-publication-toolbar-status[role="alert"]')!;
+    expect(summary.textContent).toContain("Review could not be prepared");
+    expect(summary.textContent).not.toContain("error");
+    const details = buttonByText(summary, "View details");
+    details.focus();
+    click(details);
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+    expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    expect(document.activeElement).toBe(buttonByText(harness.container, "Review & publish"));
+    click(buttonByText(harness.container, "Review & publish"));
+    expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Prepare publication"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows real deduplicated severity counts and opens retained publication issues", async () => {
+    const diagnostic = { code: "activity.graph.output", severity: "Error", message: "Connect the declared output.", subject: { kind: "ActivityDraft", id: "draft-1" }, location: null, metadata: {} };
+    const postJson = vi.fn(async () => ({ ...publicationPreflight(), isPublishable: false, diagnostics: [diagnostic, diagnostic, { ...diagnostic, code: "activity.note", severity: "Warning", message: "Review the output type." }] }));
+    const harness = renderReview({ postJson });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    click(buttonByText(harness.container, "Close publication review"));
+    const summary = harness.container.querySelector(".ad-publication-toolbar-status")!;
+    expect(summary.textContent).toContain("Publication blocked · 1 error · 1 warning");
+    click(buttonByText(summary, "View issues"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-blockers")).not.toBeNull());
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(harness.container.textContent).toContain(diagnostic.message);
+  });
+
   it.each(["Error", "error"])("leads with deduplicated actionable blockers and explains the disabled publish action (%s)", async severity => {
     const diagnostic = {
       code: "agent.manifest.model", severity,
@@ -32,16 +74,58 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(blockers.textContent).toContain(diagnostic.message);
     expect(blockers.textContent).toContain(diagnostic.remediation);
     expect(blockers.querySelectorAll(".ad-publication-diagnostics li")).toHaveLength(1);
-    const summary = harness.container.querySelector(".ad-publication-summary")!;
+    const summary = harness.container.querySelector(".studio-fact-list")!;
     expect(blockers.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const publish = buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement;
     expect(publish.disabled).toBe(true);
     expect(publish.getAttribute("aria-describedby")).toBe(blockers.id);
     expect(harness.container.querySelector(".ad-publication-version")).toBeNull();
-    expect(blockers.querySelector<HTMLDetailsElement>(".ad-publication-diagnostic-details")?.open).toBe(false);
+    expect(blockers.querySelector(".studio-technical-details")?.getAttribute("data-open")).toBe("false");
     click(buttonByText(blockers, "Choose model connection"));
     await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(diagnostic, expect.any(HTMLButtonElement)));
     expect(harness.container.querySelector("[role='dialog']")).toBeNull();
+  });
+
+  it("retains safe structured validation refusals, navigates to the setting, and invalidates on draft edits", async () => {
+    const post = vi.fn(async () => { throw graphRefusal(); });
+    const harness = renderReview({ postJson: post });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("The output value source is missing or is not a valid expression."));
+    expect(harness.container.textContent).not.toContain("PRIVATE");
+    expect(harness.container.textContent).not.toContain("could not be confirmed");
+    expect(harness.container.querySelector(".ad-publication-confirmation")).toBeNull();
+    click(buttonByText(harness.container, "Close publication review"));
+    click(buttonByText(harness.container, "View issues"));
+    expect(post).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Edit output value source"));
+    await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(expect.objectContaining({
+      location: { providerKey: "elsa.activity-graph", jsonPointer: "/outputMappings/1/source" },
+      subject: { kind: "ActivityDraft", id: "draft-1", revision: 3 }
+    }), expect.any(HTMLButtonElement)));
+    harness.render(4);
+    await waitFor(() => expect(harness.container.textContent).toContain("Review is out of date"));
+    click(harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!);
+    expect(harness.container.textContent).not.toContain("Edit output value source");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("reopens an existing service failure without clearing it or retrying", async () => {
+    const post = vi.fn(async () => { throw new TypeError("private server details"); });
+    const flush = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
+    const harness = renderReview({ postJson: post, flushExactSavedRevision: flush });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.textContent).toContain("Publication preflight could not be confirmed"));
+    click(buttonByText(harness.container, "Close publication review"));
+    const retained = buttonByText(harness.container, "View details");
+    expect(retained.closest(".is-attention")).not.toBeNull();
+    click(retained);
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
+    expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
+    expect(harness.container.textContent).not.toContain("private server details");
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(flush).toHaveBeenCalledTimes(1);
+    click(buttonByText(harness.container, "Prepare publication"));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
   });
 
   it("rechecks blocked material and restores publication after correction", async () => {
@@ -68,8 +152,8 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const issue = harness.container.querySelector(".ad-publication-diagnostics li")!;
     expect(issue.querySelector("strong")?.textContent).toBe(message);
     expect(issue.querySelector("code")?.textContent).toBe(code);
-    expect(issue.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
-    expect(issue.querySelector("button")).toBeNull();
+    expect(issue.querySelector(".studio-technical-details")?.getAttribute("data-open")).toBe("false");
+    expect(issue.querySelector("button:not([aria-expanded])")).toBeNull();
   });
 
   it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {
@@ -87,7 +171,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const readiness = harness.container.querySelector(".ad-publication-readiness")!;
     expect(readiness.textContent).toContain("Checks from the earlier review");
     expect(readiness.textContent).not.toContain("Ready to publish");
-    expect(harness.container.querySelector(".ad-publication-summary")?.textContent).toContain("Blocked");
+    expect(harness.container.querySelector(".studio-fact-list")?.textContent).toContain("Blocked");
     expect(harness.container.querySelector(".ad-publication-blockers")?.textContent).toContain("Publication did not complete");
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -111,7 +195,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).not.toContain("Other impact · additive");
     expect(harness.container.querySelector('[role="dialog"]')?.textContent).toContain("Ready to publish");
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("");
@@ -130,11 +214,11 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
     const impact = harness.container.querySelector(".ad-publication-impact")!;
-    expect(impact.closest("details")?.open).toBe(false);
+    expect(impact.closest(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
     const readiness = harness.container.querySelector(".ad-publication-readiness")!;
-    expect(readiness.closest("details")?.open).toBe(false);
+    expect(readiness.closest(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
     expect(harness.container.textContent).toContain("Publish the first version for use in workflows.");
-    expect(buttonByText(harness.container, "Publish 1.0.0").closest("details")).toBeNull();
+    expect(buttonByText(harness.container, "Publish 1.0.0").closest(".studio-disclosure-fold")).toBeNull();
   });
 
   it("keeps changes to an existing version and failed readiness checks visible", async () => {
@@ -142,8 +226,10 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const harness = renderReview({ postJson: async () => ({ ...preflight, hasBaseline: true, isPublishable: false }) });
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(harness.container.querySelector(".ad-publication-impact")).not.toBeNull());
-    expect(harness.container.querySelector(".ad-publication-impact")?.closest("details")).toBeNull();
-    expect(harness.container.querySelector(".ad-publication-readiness")?.closest("details")).toBeNull();
+    const changesDisclosure = harness.container.querySelector(".ad-publication-impact")?.closest(".studio-disclosure-fold");
+    expect(changesDisclosure?.querySelector("button[aria-expanded]")?.textContent).toBe("Changes");
+    expect(changesDisclosure?.getAttribute("data-open")).toBe("false");
+    expect(harness.container.querySelector(".ad-publication-readiness")?.closest(".studio-disclosure-fold")).toBeNull();
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -169,19 +255,19 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(buttonByText(harness.container, "Publishing atomically…")).toBeTruthy());
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!.focus();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(harness.container.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
     expect(publicationPending).toHaveBeenCalledWith(true);
     expect(publicationPending).not.toHaveBeenCalledWith(false);
 
     await waitFor(() => expect(publishRequest).not.toBeNull());
     resolvePublish(publicationReceipt(publishRequest));
-    await waitFor(() => expect(harness.container.textContent).toContain("Published immutable version 1.0.0"));
-    expect(harness.container.textContent).toContain("First version published. Existing workflows are unaffected.");
-    expect(harness.container.textContent).not.toContain("Publish the first version for use in workflows.");
+    await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
+    expect(harness.container.textContent).toContain("View publication");
+    expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true, false]);
     await harness.unmount();
   });
 
@@ -207,7 +293,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(harness.container.textContent).toContain("Reconcile authoritative status"));
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(harness.container.textContent).not.toContain("private transport detail");
     expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true]);
@@ -232,12 +318,12 @@ function renderReview({
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root: Root = createRoot(container);
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
+  const render = (revision = 3) => flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionPublicationReview
     context={context}
     definitionId="definition-1"
     draftId="draft-1"
-    currentRevision={3}
-    currentSignature="signature-3"
+    currentRevision={revision}
+    currentSignature={`signature-${revision}`}
     disabled={false}
     flushExactSavedRevision={flushExactSavedRevision}
     onPublicationPending={onPublicationPending}
@@ -246,6 +332,7 @@ function renderReview({
     onOpenVersion={vi.fn()}
     mode="toolbar"
   /></QueryClientProvider>));
+  render();
   let mounted = true;
   const unmount = () => {
     if (!mounted) return;
@@ -255,7 +342,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount, onFocusDiagnostic };
+  return { container: document.body, unmount, onFocusDiagnostic, render };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {
@@ -378,4 +465,15 @@ async function waitFor(assertion: () => void) {
       await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
+}
+
+function graphRefusal() {
+  return new StudioHttpError(400, "PRIVATE", null, {
+    errorCode: "activity-data.invalid", diagnostics: [{
+      code: "ActivityDataSelection/activity.graph.output.source-invalid", severity: "Error", message: "PRIVATE",
+      subject: { kind: "ActivityDraft", id: "draft-1" },
+      location: { providerKey: "elsa.activity-graph", referenceKey: "PRIVATE" },
+      metadata: { authoredPath: "/outputMappings/1/source", secret: "PRIVATE" }, remediation: "PRIVATE"
+    }]
+  });
 }

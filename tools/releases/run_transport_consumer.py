@@ -54,8 +54,8 @@ def main() -> None:
     feed.mkdir()
     consumer.mkdir()
     projects = [
-        repo / "Essentials/src/Workflows/Publishing/Releases/Core/Elsa.Workflows.Publishing.Releases.Core.csproj",
-        repo / "Essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj",
+        repo / "essentials/src/Workflows/Publishing/Releases/Core/Elsa.Workflows.Publishing.Releases.Core.csproj",
+        repo / "essentials/src/Workflows/Publishing/Releases/Elsa.Workflows.Publishing.Releases/Elsa.Workflows.Publishing.Releases.csproj",
     ]
     for project in projects:
         run("dotnet", "pack", str(project), "--configuration", "Release", "--output", str(feed), cwd=repo)

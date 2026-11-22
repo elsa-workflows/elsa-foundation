@@ -50,7 +50,8 @@ for (const surface of ["logs", "logs-panel"]) {
         await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
       }
     }
-    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    await page.getByRole("button", { name: "More structured log actions" }).click();
+    await page.getByRole("menuitem", { name: "Clear", exact: true }).click();
     const empty = table.getByRole("row").filter({ hasText: "No structured logs received yet." });
     await expect(empty.getByRole("cell")).toHaveAttribute("aria-colspan", "6");
     await expect(table.getByRole("columnheader")).toHaveCount(6);

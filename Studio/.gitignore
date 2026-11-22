@@ -17,6 +17,7 @@ src/*/*/wwwroot/
 *.user
 *.suo
 .idea/
+.junie/
 .vscode/
 
 # Local dev-only visual harness for the studio client

@@ -1,0 +1,11 @@
+ 4:26  up 16 days, 14:26, 1 user, load averages: 2.87 13.51 23.18
+PHASE settled 1166 ms
+PHASE steady 6274 ms
+PHASE handled 3 6382 ms
+PHASE before kill 198352 ms
+PHASE killed 198353 ms
+FAIL   crash: a crashed node's scopes are taken over, and their messages handled once  (198935 ms)
+         the case did not end within 120 s
+built-in on in-memory: 0 passed, 1 required failed, 0 reference differ
+
+[exited with code 0]

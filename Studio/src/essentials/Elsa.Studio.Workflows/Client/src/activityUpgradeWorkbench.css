@@ -577,7 +577,7 @@
   font-size: var(--studio-label-size);
   font-weight: 800;
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .au-handoff-list {

@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import { StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { QueryCell, QueryColumn, QueryResult, QueryRow, Visualization } from "./types";
 
 function cellText(cell?: QueryCell) {
@@ -56,7 +56,7 @@ function NumericSeries({ rows, column, categories, kind }: { rows: QueryRow[]; c
   </figure>;
 }
 
-export function ResultView({ result, visualization, stale = false, outdated = false, onDrill }: { result: QueryResult; visualization: Visualization; stale?: boolean; outdated?: boolean; onDrill?(row: QueryRow): void }) {
+export function ResultView({ result, visualization, stale = false, outdated = false, compactProvenance = false, onDrill }: { result: QueryResult; visualization: Visualization; stale?: boolean; outdated?: boolean; compactProvenance?: boolean; onDrill?(row: QueryRow): void }) {
   if (result.outcome !== "succeeded") return <section className="named-result-state" role="status"><h3>{result.outcome === "cancelled" ? "Query cancelled" : result.outcome === "denied" ? "Access unavailable" : result.outcome === "limitExceeded" ? "Query limit reached" : result.outcome === "incompatible" ? "Question needs repair" : "Results unavailable"}</h3><p>{result.message ?? "Review the definition, source availability and your current access before retrying."}</p></section>;
   const columns = result.columns ?? [];
   const rows = result.rows ?? [];
@@ -65,13 +65,31 @@ export function ResultView({ result, visualization, stale = false, outdated = fa
   const bindingsValid = selected.every(Boolean);
   const categories = rows.map((row, index) => visualization.x ? cellText(row.values[visualization.x]) : String(index + 1));
   const canMetric = bindingsValid && valueColumns.length === 1 && rows.length === 1;
+  const interpretation = result.interpretation || "Results of the validated question.";
+  const coverageStatus = result.coverage?.status ?? "unknown";
+  const coverageDescription = result.coverage?.description ?? "Collection and retention completeness has not been established.";
+  const freshnessWarnings = <>
+    {stale ? <p role="status"><strong>Stale result.</strong> The last refresh failed; these are the last successful values.</p> : null}
+    {outdated ? <p role="status"><strong>Stale result. Definition changed.</strong> These values answer the previous definition. Preview or refresh to answer the current definition.</p> : null}
+  </>;
+  const refreshDetails = <>
+    {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{new Date(result.generatedAt).toLocaleString()}</time></p> : null}
+    {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{period.from}</time> to <time dateTime={period.to}>{period.to}</time> ({period.timeZone}; end exclusive)</p>)}
+  </>;
   return <section className="named-result" aria-label={visualization.label || "Question results"}>
-    <div className="named-result-provenance"><p>{result.interpretation || "Results of the validated question."}</p>
-      {stale ? <p role="status"><strong>Stale result.</strong> The last refresh failed; these are the last successful values.</p> : null}
-      {outdated ? <p role="status"><strong>Stale result. Definition changed.</strong> These values answer the previous definition. Preview or refresh to answer the current definition.</p> : null}
-      <p><strong>Coverage: {result.coverage?.status ?? "unknown"}.</strong> {result.coverage?.description ?? "Collection and retention completeness has not been established."}</p>
-      {result.generatedAt ? <p>Last successful refresh: <time dateTime={result.generatedAt}>{new Date(result.generatedAt).toLocaleString()}</time></p> : null}
-      {result.periods?.map(period => <p key={period.role}>{period.role}: <time dateTime={period.from}>{period.from}</time> to <time dateTime={period.to}>{period.to}</time> ({period.timeZone}; end exclusive)</p>)}
+    <div className="named-result-provenance">
+      {compactProvenance ? <>
+        <p><strong>Coverage: {coverageStatus}.</strong></p>
+        {freshnessWarnings}
+        <div className="named-result-details"><AdvancedSection label="Result details"><div className="named-result-details-content">
+          <p>{interpretation}</p><p>{coverageDescription}</p>{refreshDetails}
+        </div></AdvancedSection></div>
+      </> : <>
+        <p>{interpretation}</p>
+        {freshnessWarnings}
+        <p><strong>Coverage: {coverageStatus}.</strong> {coverageDescription}</p>
+        {refreshDetails}
+      </>}
     </div>
     {rows.length === 0 ? <p role="status">No authorized records matched this question. This is an empty result, not an observed zero.</p> : <>
       {visualization.kind === "metric" ? canMetric ? <div className="named-metric"><span>{valueColumns[0].label}</span><strong>{cellText(rows[0].values[valueColumns[0].id])}</strong><span>{valueColumns[0].unit}</span></div> : <p role="status">A metric needs one result row and one value column. Choose those bindings or use a table.</p> : null}

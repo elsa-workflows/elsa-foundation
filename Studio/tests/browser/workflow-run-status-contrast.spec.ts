@@ -47,7 +47,7 @@ async function measureRenderedBadgeContrast(page: import("@playwright/test").Pag
       return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
     };
 
-    return Array.from(document.querySelectorAll<HTMLElement>(".wf-status-badge")).map(badge => {
+    return Array.from(document.querySelectorAll<HTMLElement>('[role="table"][aria-label="Workflow runs"] .studio-status-chip')).map(badge => {
       const bounds = badge.getBoundingClientRect();
       const x = Math.min(Math.round(bounds.left + window.scrollX + 3), image.width - 1);
       const y = Math.min(Math.round(bounds.top + window.scrollY + bounds.height / 2), image.height - 1);
@@ -68,7 +68,7 @@ async function measureRenderedBadgeContrast(page: import("@playwright/test").Pag
 
       return {
         label: badge.textContent?.trim() ?? "",
-        status: badge.dataset.status ?? "",
+        status: badge.textContent?.trim().toLowerCase() ?? "",
         foreground,
         background: `rgb(${background.join(", ")})`,
         contrast
@@ -105,7 +105,7 @@ for (const mode of modes) {
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", mode);
 
       for (const status of statuses) {
-        await expect(page.locator(`.wf-status-badge[data-status="${status.toLowerCase()}"]`)).toHaveText(status);
+        await expect(page.getByRole("table", { name: "Workflow runs" }).getByText(status, { exact: true })).toHaveText(status);
       }
 
       const badges = await measureRenderedBadgeContrast(page);

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gate 2, sixth review: executable evidence for R6-B1 (NT-1) and R6-B2 (PI-1),
+       on the real Native model, WorkflowInstance and InMemoryStore. Project references only, so the
+       harness rebuilds from the prototype source at any revision. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Kernel.Review6</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kernel.Native brings Kernel.Workflows, Kernel.Durable, Kernel.Runtime and Kernel.Graph. -->
+    <ProjectReference Include="../../models/Native.Legacy/Kernel.Native.Legacy.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.Native" />
+  </ItemGroup>
+</Project>

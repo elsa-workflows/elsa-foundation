@@ -66,6 +66,12 @@ export function findBpmnElement(owner: ActivityNode | null | undefined, elementI
   return readBpmnElements(owner).find(element => element.elementId === elementId) ?? null;
 }
 
+export function findBpmnElementForActivity(owner: ActivityNode | null | undefined, activityNodeId: string | null | undefined): BpmnElement | null {
+  if (!owner || !activityNodeId) return null;
+  const matchingElements = readBpmnElements(owner).filter(element => element.childNodeId === activityNodeId);
+  return matchingElements.length === 1 ? matchingElements[0]! : null;
+}
+
 export function buildBpmnCanvas(
   scope: CanvasScope,
   catalog: ActivityCatalogItem[],
@@ -419,7 +425,7 @@ function isContainerCatalogItem(catalogItem: ActivityCatalogItem) {
   return !!readStructureDesignFacet(catalogItem);
 }
 
-function defaultBpmnPosition(index: number): XYPosition {
+export function defaultBpmnPosition(index: number): XYPosition {
   return { x: (index % 5) * 220, y: Math.floor(index / 5) * 140 };
 }
 

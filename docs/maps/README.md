@@ -108,7 +108,8 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 
 - The check regenerates the solution filters into a scratch directory and byte-compares them with the committed
   `Elsa.Server.*.slnf` files, as `-- solution-filters-check` does: they are the only generated files left on `main`.
-  CI runs the filter check in the `Generated maps fresh` job, beside the generator self-tests.
+  CI runs the filter check in the `Generated maps` job, beside the generator self-tests; `Build & test` requires it on a
+  pull request.
 - The dependency map and the documentation maps cannot go stale on `main`, because none is committed: the
   calculator derives the dataset per commit (spec 259). The copy on `generated-maps` describes
   the commit its `Source-Commit:` trailer names; a local `-- all` describes your working tree.

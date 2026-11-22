@@ -21,7 +21,7 @@ class RetainedMigrationGeneratorTests(unittest.TestCase):
         for module in ("Runtime", "WorkflowsDesign"):
             assembly = {"Runtime": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
                         "WorkflowsDesign": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore"}[module]
-            base = self.root / "Essentials/src" / module / "Persistence/EntityFrameworkCore"
+            base = self.root / "essentials/src" / module / "Persistence/EntityFrameworkCore"
             base.mkdir(parents=True)
             (base / (assembly + ".csproj")).write_text("<Project />")
             for provider in ("Sqlite", "SqlServer", "PostgreSql", "MySql"):

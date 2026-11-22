@@ -10,7 +10,7 @@ import type {
   WorkflowInput
 } from "../workflowTypes";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
-import { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./editorHelpers";
+import { formatExecutableRunError, getExecutableReferenceStatus, readExecutableRunWorkflowExecutionId } from "./executableRunHelpers";
 import type { ExecutableRunState } from "./editorTypes";
 
 export interface ExecutableWorkflowRunTarget {

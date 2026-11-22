@@ -60,7 +60,7 @@ def main():
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     root = Path(tempfile.mkdtemp(prefix='elsa-model-broadcast-')); control = root / 'probe'; control.mkdir()
     for name in ('appsettings.json', 'appsettings.Development.json', 'shells.json'):
-        shutil.copyfile(REPO / 'Essentials/apps/Elsa.Workbench' / name, root / name)
+        shutil.copyfile(REPO / 'apps/Elsa.Workbench' / name, root / name)
     (root / 'packages').mkdir()
     shells = json.loads((root / 'shells.json').read_text()); features = shells['CShells']['Shells']['default']['Features']
     features.update({'ActivitiesBpmnHosting': {'AdmitNewExecutions': True}, 'ActivitiesBpmnHostingApi': {}, 'WorkflowsRuntimeResumption': {'SweepIntervalSeconds': .2}})

@@ -1,5 +1,7 @@
 # Recovering a workflow after a crash
 
+> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+
 **Who this is for:** contributors working on the Elsa 4 runtime who need to know what happens to a running workflow when the server process dies, and what brings it back.
 
 **In one sentence:** saving state to a database (*durable storage*) is only half the job; something must also pick that state up again and carry on (*durable resumption*). This page explains how the runtime does that, which crash windows it covers, and the rules every part of it follows.

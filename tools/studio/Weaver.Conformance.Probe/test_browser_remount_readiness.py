@@ -6,11 +6,11 @@ import unittest
 
 
 class BrowserRemountReadinessTests(unittest.TestCase):
-    def run_control(self, scenario, *, old_driver=False):
+    def run_control(self, scenario, *, old_driver=False, navigation="left"):
         tool = Path(__file__).resolve().parent
         source = (tool / "browser.mjs").read_text()
         start = source.index('  await expect(dock()).toHaveCount(0);', source.index('async function consumedIntentRemount'))
-        end = source.index('  await page.getByLabel("Search modules", { exact: true }).fill("");', start)
+        end = source.index('  await page.getByLabel("Search Studio", { exact: true }).fill("");', start)
         actions = source[start:end]
         if old_driver:
             actions = actions.replace('  await expect(page.getByRole("button", { name: "Weaver", exact: true })).toBeEnabled();\n', '')
@@ -21,12 +21,12 @@ import {createRequire} from 'node:module';
 const require=createRequire(new URL('../../../Studio/package.json',import.meta.url));
 const {chromium,expect:baseExpect}=require('@playwright/test');
 const expect=baseExpect.configure({timeout:1500});
-const scenario=SCENARIO,oldDriver=OLD_DRIVER;
+const scenario=SCENARIO,oldDriver=OLD_DRIVER,navigation=NAVIGATION;
 let connect,connected,featuresRequests=0;
 const connectionSeen=new Promise(resolve=>connected=resolve);
-const html=`<!doctype html><input type="search" aria-label="Search modules"><script>
+const html=`<!doctype html><input type="search" aria-label="Search Studio"><script>
 fetch('/connection').then(()=>{
- document.body.innerHTML='<button>Weaver</button><input type="search" aria-label="Search modules"><nav aria-label="Settings"><a href="/settings">Settings</a></nav>';
+ document.body.innerHTML='<button>Weaver</button><input type="search" aria-label="Search Studio"><nav aria-label="${navigation === "top" ? "Search results" : "Settings"}"><a href="/settings">Settings</a></nav>';
  document.querySelector('input').addEventListener('input',event=>{
   const nav=document.querySelector('nav');
   nav.innerHTML='<a href="/settings">Settings</a>';
@@ -80,22 +80,27 @@ try {
 }finally{
  connect?.end();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
 }
-'''.replace("SCENARIO", json.dumps(scenario)).replace("OLD_DRIVER", json.dumps(old_driver)).replace("ACTIONS", json.dumps(actions))
+'''.replace("SCENARIO", json.dumps(scenario)).replace("OLD_DRIVER", json.dumps(old_driver)).replace("NAVIGATION", json.dumps(navigation)).replace("ACTIONS", json.dumps(actions))
         result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=tool,
                                 capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "passed")
 
     def test_replacement_shell_is_ready_before_filtering(self):
-        self.run_control("ready")
+        for navigation in ("left", "top"):
+            with self.subTest(navigation=navigation):
+                self.run_control("ready", navigation=navigation)
 
     def test_old_driver_loses_filter_in_replacement_shell(self):
-        self.run_control("ready", old_driver=True)
+        for navigation in ("left", "top"):
+            with self.subTest(navigation=navigation):
+                self.run_control("ready", old_driver=True, navigation=navigation)
 
     def test_absent_ready_shell_and_absent_features_still_fail(self):
-        for scenario in ("never-ready", "missing-features"):
-            with self.subTest(scenario=scenario):
-                self.run_control(scenario)
+        for navigation in ("left", "top"):
+            for scenario in ("never-ready", "missing-features"):
+                with self.subTest(scenario=scenario, navigation=navigation):
+                    self.run_control(scenario, navigation=navigation)
 
 
 if __name__ == "__main__":

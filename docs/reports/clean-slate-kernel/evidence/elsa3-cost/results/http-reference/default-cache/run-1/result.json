@@ -1,0 +1,64 @@
+{
+  "Provider": "sqlite",
+  "Workflow": "http-reference",
+  "Config": "default-cache",
+  "Run": 1,
+  "SetupCommands": 218,
+  "WindowCommands": 19,
+  "InFlowCommands": 15,
+  "BackgroundCommands": 4,
+  "SaveChanges": 2,
+  "TransactionsStarted": 1,
+  "TransactionsCommitted": 1,
+  "Phases": [
+    {
+      "Phase": "request",
+      "InstanceId": "b7c546e3b7a95282",
+      "CommandsUntilReturn": 15,
+      "CommandsAfterReturn": 4
+    }
+  ],
+  "CommandsByPhase": {
+    "request": 19
+  },
+  "CommandsByContext": {
+    "ManagementElsaDbContext": 3,
+    "RuntimeElsaDbContext": 16
+  },
+  "CommandsByKind": {
+    "NonQuery": 1,
+    "Reader": 18
+  },
+  "CommandsByCategory": {
+    "activity execution records": 1,
+    "bookmark queue": 4,
+    "definitions": 1,
+    "execution log": 10,
+    "instance state": 2,
+    "triggers": 1
+  },
+  "CommandsByLeadOp": {
+    "INSERT": 12,
+    "SELECT": 7
+  },
+  "StatementsByContextOpTable": {
+    "ManagementElsaDbContext INSERT WorkflowInstances": 1,
+    "ManagementElsaDbContext SELECT WorkflowDefinitions": 1,
+    "ManagementElsaDbContext SELECT WorkflowInstances": 1,
+    "RuntimeElsaDbContext INSERT ActivityExecutionRecords": 1,
+    "RuntimeElsaDbContext INSERT WorkflowExecutionLogRecords": 10,
+    "RuntimeElsaDbContext SELECT BookmarkQueueItems": 4,
+    "RuntimeElsaDbContext SELECT Triggers": 1
+  },
+  "SaveChangesByContextPhase": {
+    "ManagementElsaDbContext request": 1,
+    "RuntimeElsaDbContext request": 1
+  },
+  "RecurringTasksPushedOut": [
+    "Elsa.Workflows.Runtime.Tasks.TriggerBookmarkQueueRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.PurgeBookmarkQueueRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.RestartInterruptedWorkflowsTask",
+    "Elsa.Workflows.Runtime.Tasks.ProcessWorkflowDispatchOutboxRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.RefreshWorkflowDefinitionActivityRegistryTask"
+  ]
+}

@@ -5,10 +5,14 @@ internal static class ParkR15Checks
 {
     internal sealed class AliasStore(IKernelStore inner) : IKernelStore
     {
+        public Func<long>? FoundationClock => inner.FoundationClock;
+
         public int TrialWrites;
         public bool SupportsCommitWindow => inner.SupportsCommitWindow;
         public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
         public bool CommitClockAvailable => inner.CommitClockAvailable;
+        public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+        public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
         public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
         {
             TrialWrites += batch.Trial.Count;

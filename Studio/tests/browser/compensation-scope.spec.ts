@@ -24,6 +24,12 @@ test("authors steps by keyboard and keeps each row's pairing readable", async ({
   await expect(page.getByTestId("fixture-steps")).toHaveText("Reserve inventory|Reserve delivery|Confirm");
   await page.getByRole("button", { name: "Move Confirm up", exact: true }).press("Enter");
   await expect(page.getByTestId("fixture-steps")).toHaveText("Reserve inventory|Confirm|Reserve delivery");
+  await expect(page.getByRole("button", { name: "Move Confirm up", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("fixture-steps")).toHaveText("Confirm|Reserve inventory|Reserve delivery");
+  await expect(page.getByRole("button", { name: "Move Confirm down", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("fixture-steps")).toHaveText("Reserve inventory|Confirm|Reserve delivery");
   await page.getByRole("button", { name: "Remove compensation for Reserve inventory", exact: true }).press("Enter");
   await expect(rows.nth(0)).toHaveAccessibleName("Step 1, Reserve inventory, no compensation");
 

@@ -8,7 +8,7 @@ export function initialize(host: StudioModuleHostContext): StudioModuleInstance 
  const extension = host.configuration.extensions as Record<string, unknown> | undefined;
  const settings = extension?.backends as {configuration:BackendRuntimeConfig["backends"];profileApiPath:string} | undefined;
  if (!settings?.profileApiPath) throw new Error("Backend management runtime configuration is unavailable.");
- const connections = new BackendConnections({backendBaseUrl:host.configuration.backendBaseUrl as string,hostId:host.configuration.hostId as string,backends:settings.configuration,profileApiPath:settings.profileApiPath},host.host,host.authManager,host.identity);
+ const connections = new BackendConnections({backendBaseUrl:host.configuration.backendBaseUrl as string,hostId:host.configuration.hostId as string,backends:settings.configuration,profileApiPath:settings.profileApiPath},host.host,host.authManager,host.identity,host.dialogs);
  return {
   connection:connections,
   shell:[

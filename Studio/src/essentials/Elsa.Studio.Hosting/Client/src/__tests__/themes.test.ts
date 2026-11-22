@@ -100,7 +100,7 @@ describe("theme presets", () => {
     const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["drift", "not-a-built-in", ...retiredThemeIds] });
     const drift = store.themes.find(theme => theme.id === "drift");
 
-    // The definition stays listed (so the Theme Builder can re-enable it) but is not selectable.
+    // The definition stays listed (so the Theme builder can re-enable it) but is not selectable.
     expect(drift?.enabled).toBe(false);
     expect(getSelectableThemes(store).some(theme => theme.id === "drift")).toBe(false);
     expect(findSelectableTheme(store, "drift").id).not.toBe("drift");

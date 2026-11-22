@@ -1,5 +1,5 @@
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
-import type { ActivityDataBinding, ActivityDataContextResult, ActivityDataShape, ActivityDataSourceFacts, ActivityDataType } from "./api/activityDataSelection";
+import { readActivityDataParameterSource, type ActivityDataBinding, ActivityDataContextResult, ActivityDataShape, ActivityDataSourceFacts, ActivityDataType } from "./api/activityDataSelection";
 import { describeOutput, describeReferenceFinding, describeUnavailableSource, type ActivityDataProducerDescription } from "./activityDataSelection";
 
 /** Pure, currently unwired member-picker model (spec 1215, #4309 S2). No function constructs an authored binding. */
@@ -25,6 +25,7 @@ export interface ActivityDataPickerLabels {
   describeActivity(nodeId: string): ActivityDataProducerDescription | null;
   describeScope?(scopeId: string): string | null;
   readOnly?: boolean;
+  expressionType?: string;
 }
 export interface ActivityDataPickerOption {
   source: ActivityDataSourceFacts;
@@ -91,25 +92,25 @@ export function groupActivityDataSources(result: ActivityDataContextResult, labe
   const nearest = new Map<string, string>();
   for (const source of result.sources) {
     if (protectedShape(source.shape)) continue;
-    const identity = sourceIdentity(source.binding);
+    const identity = sourceFactIdentity(source, labels);
     const family = familyOf(source, identity);
     const scope = identity?.scope;
     const option: ActivityDataPickerOption = {
       source, label: sourceLabel(source, labels), disambiguation: null,
       shadowed: family === "variables" && !!scope && nearest.has(source.displayName) && nearest.get(source.displayName) !== scope,
-      typeLabel: activityDataTypeLabel(source.type), unavailableReason: sourceReason(result, source)
+      typeLabel: activityDataTypeLabel(source.type), unavailableReason: sourceReason(result, source, labels)
     };
     if (family === "variables" && scope && !nearest.has(source.displayName)) nearest.set(source.displayName, scope);
     families.find(group => group.family === family)!.options.push(option);
   }
   for (const family of families) for (const option of family.options) {
     const duplicate = family.options.some(other => other !== option && other.label === option.label);
-    const identity = sourceIdentity(option.source.binding);
+    const identity = sourceFactIdentity(option.source, labels);
     if (duplicate || identity?.role === "ActivityResult" && labels.describeActivity(identity.key)?.sharesLabel) {
       const sameScope = family.options.some(other => other !== option && other.label === option.label &&
-        sourceIdentity(other.source.binding)?.scope === identity?.scope);
+        sourceFactIdentity(other.source, labels)?.scope === identity?.scope);
       const sameScopeLabel = identity?.scope && family.options.some(other => {
-        const otherScope = sourceIdentity(other.source.binding)?.scope;
+        const otherScope = sourceFactIdentity(other.source, labels)?.scope;
         return other !== option && other.label === option.label && otherScope && otherScope !== identity.scope &&
           scopeLabel(otherScope, labels) === scopeLabel(identity.scope!, labels);
       });
@@ -128,26 +129,29 @@ export function activityDataMemberBrowser(result: ActivityDataContextResult, sou
   const candidates = result.sources.filter(source => source.id === sourceId);
   const source = candidates.length === 1 ? candidates[0] : undefined;
   const shape = source?.shape;
-  const identity = sourceIdentity(source?.binding ?? null);
+  const identity = source ? sourceFactIdentity(source, labels) : null;
   const value = record(source?.binding?.value);
-  const returnedPath = source?.binding ? readActivityDataMemberReference(source.binding)?.memberPath ?? [] : [];
-  const unsupported = identity?.role === "ActivityResult" && value?.producerScopeId != null ||
-    identity?.role === "WorkflowRequest" && value?.path != null;
+  const returnedPath = labels.expressionType ? source?.parameterPath ?? [] : source?.binding ? readActivityDataMemberReference(source.binding)?.memberPath ?? [] : [];
+  // Expression insertion offers whole values only where the server does not enable member reads (owner decision, 17 Nov).
+  const navigable = !labels.expressionType || result.memberReadsEnabled === true;
+  const unsupported = !labels.expressionType && (identity?.role === "ActivityResult" && value?.producerScopeId != null ||
+    identity?.role === "WorkflowRequest" && value?.path != null);
   const reason = !current(result, labels) ? "This input cannot select data here."
-    : result.memberReadsEnabled !== true ? "Member selection is not enabled on this server."
+    : (labels.expressionType ? result.expressionParametersEnabled !== true : result.memberReadsEnabled !== true) ? (labels.expressionType ? "This server does not support expression data insertion." : "Member selection is not enabled on this server.")
+    : !navigable && path.length > 0 ? "Member selection is not enabled on this server."
     : !isActivityDataMemberPath(path, true) ? "The member path exceeds the supported bounds."
     : !source ? "This source is no longer available unambiguously."
     : JSON.stringify(returnedPath) !== JSON.stringify(path) ? "Load the current member path before browsing it."
     : protectedShape(shape) ? "This source is protected."
-    : sourceReason(result, source) ?? (unsupported ? "This source does not support member selection." : null);
+    : sourceReason(result, source, labels) ?? (unsupported ? "This source does not support member selection." : null);
   const container = shape?.kind !== "scalar" && shape?.kind !== "collection";
-  const allowLiteral = !reason && container && (shape?.kind === "map" || shape?.state !== "known");
-  const members = reason || !container ? [] : (shape?.members ?? []).flatMap(member => {
+  const allowLiteral = !reason && navigable && container && (shape?.kind === "map" || shape?.state !== "known");
+  const members = reason || !container || !navigable ? [] : (shape?.members ?? []).flatMap(member => {
     const memberPath = appendActivityDataMember(path, member.serializedName);
     return memberPath && !protectedShape(member.shape) ? [{ ...member, memberPath, key: JSON.stringify(memberPath) }] : [];
   });
   return { members, allowLiteral, reason, state: reason ? "unavailable" : shape?.state ?? "unknown",
-    information: reason ?? (shape?.kind === "collection" ? "Collections are selected as a whole; indexing and fan-out are not supported."
+    information: reason ?? (!navigable ? null : shape?.kind === "collection" ? "Collections are selected as a whole; indexing and fan-out are not supported."
       : shape?.kind === "scalar" ? "This value has no object members."
       : allowLiteral ? "Enter one exact member name. Dots and empty names are kept literally; names are case-sensitive."
       : shape?.state === "known" ? null : "The member shape is not known."),
@@ -230,7 +234,19 @@ function referenceSourceLabel(source: ActivityDataSourceFacts | undefined, ident
   return identity.role === "Variable" ? `${label} (${scopeLabel(identity.scope!, labels)})` : label;
 }
 
-function sourceReason(result: ActivityDataContextResult, source: ActivityDataSourceFacts): string | null {
+function sourceFactIdentity(source: ActivityDataSourceFacts, labels: ActivityDataPickerLabels): SourceIdentity | null {
+  if (!labels.expressionType) return sourceIdentity(source.binding);
+  const parameter = readActivityDataParameterSource(source.parameterSource);
+  switch (parameter?.kind) {
+    case "ActivityResult": return { role: "ActivityResult", key: parameter.producerNodeId, projection: parameter.projectionKey };
+    case "Variable": return { role: "Variable", key: parameter.variableKey, scope: parameter.declaringScopeNodeId };
+    case "WorkflowRequest": return { role: "WorkflowRequest", key: parameter.memberKey };
+    default: return null;
+  }
+}
+function sourceReason(result: ActivityDataContextResult, source: ActivityDataSourceFacts, labels?: ActivityDataPickerLabels): string | null {
+  if (labels?.expressionType) return result.expressionParametersEnabled === true && result.expressionType === labels.expressionType && source.parameterSource
+    ? null : source.activityResultSource ? describeUnavailableSource(source.reasonCode, source.activityResultSource.projectionKey) : "This source is not offered as an expression parameter.";
   const identity = sourceIdentity(source.binding);
   if (!source.binding) return source.activityResultSource ? describeUnavailableSource(source.reasonCode, source.activityResultSource.projectionKey)
     : "This source cannot be selected for this input.";
@@ -245,7 +261,7 @@ function sourceReason(result: ActivityDataContextResult, source: ActivityDataSou
 }
 function current(result: ActivityDataContextResult, labels: ActivityDataPickerLabels) {
   return (result.state === "supported" || result.state === "empty") && !!result.target && !labels.readOnly &&
-    result.target.isSensitive !== true && result.target.isCredential !== true;
+    (labels.expressionType ? result.expressionParametersEnabled === true && result.expressionType === labels.expressionType : result.target.isSensitive !== true) && result.target.isCredential !== true;
 }
 function protectedShape(shape: ActivityDataShape | null | undefined) { return shape?.isSensitive === true || shape?.isCredential === true; }
 function sameIdentity(a: SourceIdentity, b: SourceIdentity | null) { return !!b && a.role === b.role && a.key === b.key && a.scope === b.scope && a.projection === b.projection; }

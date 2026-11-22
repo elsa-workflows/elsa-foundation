@@ -2,15 +2,67 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
+import { CodeMirrorStudioCodeEditor } from "../engines/CodeMirrorStudioCodeEditor";
 import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
-import type { StudioCodeDocument, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
+import type { StudioCodeDocument, StudioCodeEditorController, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
 });
 
 describe("StudioCodeEditor", () => {
+  it("carries the loading textarea selection into the rich editor's first insertion", async () => {
+    let resolveEditor!: (editor: { default: typeof CodeMirrorStudioCodeEditor }) => void;
+    const loading = new Promise<{ default: typeof CodeMirrorStudioCodeEditor }>(resolve => { resolveEditor = resolve; });
+    const register = vi.fn<(controller: StudioCodeEditorController | null) => void>();
+    const onChange = vi.fn();
+    const { container, unmount } = renderEditor({
+      document: codeDocument({ value: "0" }),
+      languageAdapter: { language: "javascript", displayName: "JavaScript", loadEditor: () => loading },
+      actions: <button type="button">Insert data</button>,
+      documentEditing: { historyValue: {}, onController: register },
+      onChange
+    });
+
+    try {
+      const textarea = editorInput(container);
+      textarea.focus();
+      textarea.setSelectionRange(0, 1, "backward");
+      container.querySelector("button")!.focus();
+      expect(register).not.toHaveBeenCalled();
+
+      resolveEditor({ default: CodeMirrorStudioCodeEditor });
+      await vi.waitFor(() => expect(register).toHaveBeenCalledOnce());
+      const controller = register.mock.calls[0]![0]!;
+      const captured = controller.capture()!;
+      expect(captured).toMatchObject({ source: "0", selection: { anchor: 1, head: 0 } });
+      expect(controller.apply({ expected: captured, insert: "args.data", historyValue: {} })).toBe(true);
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ value: "args.data" }), expect.objectContaining({
+        origin: "insertion"
+      }));
+    } finally {
+      unmount();
+    }
+  });
+
+  it("does not hand off an untouched fallback cursor during expansion", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const fallbackSelection: NonNullable<StudioCodeEditorEngineProps["fallbackSelection"]> = { current: null };
+    const props: StudioCodeEditorEngineProps = {
+      document: codeDocument({ value: "args.data" }), profile: "expanded", session: { id: "untouched-fallback" },
+      fallbackSelection, readOnly: false, theme: "studio", minHeight: "220px",
+      ariaLabel: "Expression", diagnostics: [], onChange() {}
+    };
+    flushSync(() => root.render(<FallbackCodeEditor {...props} />));
+    editorInput(host).focus();
+    flushSync(() => root.unmount());
+    host.remove();
+    expect(fallbackSelection.current).toBeNull();
+  });
+
   it("renders the fallback editor for unsupported languages and emits document changes", () => {
     const document = codeDocument({ language: "liquid", value: "{{ total }}" });
     const onChange = vi.fn();

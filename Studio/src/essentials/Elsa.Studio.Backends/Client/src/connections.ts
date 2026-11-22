@@ -1,8 +1,8 @@
 import {
-  anonymousAuthSession, createBackendAuthProviderManager, requestStudioNavigation, StudioHttpError,
+  anonymousAuthSession, createBackendAuthProviderManager, reviewStudioNavigation, StudioHttpError,
   studioBackendCapabilitiesChangedEvent, StudioBackendConnection as PreparedBackend,
   studioConnectionError as connectionError,
-  type AuthProviderManager, type AuthSession, type StudioBackendProfile, type StudioEndpointContext
+  type AuthProviderManager, type AuthSession, type StudioDialogApi, type StudioBackendProfile, type StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
 export { StudioBackendConnection as PreparedBackend, studioConnectionError as connectionError } from "@elsa-workflows/studio-sdk";
 import type { BackendRuntimeConfig } from "./runtime";
@@ -39,7 +39,7 @@ export function validatePersonalProfiles(value: unknown): StudioBackendProfile[]
     if (!entry || typeof entry !== "object") throw new Error("Invalid backend profile.");
     const item = entry as Record<string, unknown>;
     if (Object.keys(item).some(key => !["id","name","baseUrl","environment","authenticationProfile"].includes(key))
-      || typeof item.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(item.id) || item.id === "legacy" || ids.has(item.id)
+      || typeof item.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(item.id) || item.id === "default" || ids.has(item.id)
       || typeof item.name !== "string" || !item.name.trim() || item.name.length > 80
       || typeof item.baseUrl !== "string" || !/^https?:\/\//.test(item.baseUrl)
       || !["Development","Test","Production"].includes(item.environment as string)
@@ -83,10 +83,11 @@ export class BackendConnections {
   readonly allowPersonal: boolean;
 
   constructor(readonly config: BackendRuntimeConfig, readonly hostContext: StudioEndpointContext, readonly hostManager: AuthProviderManager | null,
-    readonly hostIdentity: AuthSession, private readonly commitNavigation: (url:string) => void = url => window.location.assign(url)) {
+    readonly hostIdentity: AuthSession, readonly dialogs: Pick<StudioDialogApi, "confirm">,
+    private readonly commitNavigation: (url:string) => void = url => window.location.assign(url)) {
     const declared = config.backends?.profiles ?? [];
     this.configured = declared.length ? declared.map(item => ({...item,baseUrl:canonicalBackendUrl(item.baseUrl),source:"configuration" as const})) : [
-      {id:"legacy",name:"Default backend",baseUrl:canonicalBackendUrl(config.backendBaseUrl ?? ""),environment:"Development",source:"configuration"}
+      {id:"default",name:"Default backend",baseUrl:canonicalBackendUrl(config.backendBaseUrl ?? ""),environment:"Development",source:"configuration"}
     ];
     this.defaultId = config.backends?.defaultId ?? this.configured[0].id;
     this.allowPersonal = config.backends?.allowPersonalProfiles !== false;
@@ -179,27 +180,36 @@ export class BackendConnections {
     try { await prepared.refreshCapabilities(); return prepared; }
     catch (error) { prepared.dispose(); throw error; }
   }
-  private guard() {
+  private assertCanSwitch() {
     this.assertActive();
     if (this.snapshot.active?.pendingWrites) throw new Error("Wait for backend changes to finish before switching.");
-    if (!requestStudioNavigation(`${window.location.pathname}${window.location.search}`,"/settings/backends")) throw new Error("The backend was not changed. Finish or discard the current draft first.");
   }
   async connect(id:string,signInReturn=false) {
     if (this.snapshot.busy) return;
-    const operation = ++this.operation;
     const profile = this.snapshot.profiles.find(item => item.id === id);
     if (!profile) { this.update({error:"This backend profile is no longer available."}); return; }
-    this.update({error:null,signInProfile:null});
+    const operation = ++this.operation;
+    const previous = this.snapshot.active;
+    const from = window.location.href;
+    const current = () => operation === this.operation && previous === this.snapshot.active
+      && this.snapshot.profiles.includes(profile) && window.location.href === from;
+    this.signInCandidate = null;
+    this.update({busy:true,error:null,signInProfile:null});
     let candidate: PreparedBackend | null = null;
     try {
-      this.guard();
-      if (profile.environment === "Production" && !signInReturn && !window.confirm(`Connect to production backend “${profile.name}”?`)) return;
-      this.update({busy:true});
-      candidate = await this.prepare(profile);
-      if (operation !== this.operation) { candidate.dispose(); return; }
-      this.guard();
+      this.assertCanSwitch();
+      if (profile.environment === "Production" && !signInReturn) {
+        const confirmed = await this.dialogs.confirm({title:"Connect to production?",message:`Connect to production backend “${profile.name}”?`,confirmLabel:"Connect"});
+        if (!confirmed || !current()) return;
+        this.assertCanSwitch();
+      }
+      candidate = await this.prepare(profile,operation);
+      if (!current()) return;
+      this.assertCanSwitch();
+      const approved = await reviewStudioNavigation(window.location.pathname + window.location.search + window.location.hash,"/settings/backends");
+      if (!approved || !current()) return;
+      this.assertCanSwitch();
       // A beforeunload prompt may cancel location.assign. End the old lifetime only once the document leaves.
-      const previous = this.snapshot.active;
       window.addEventListener("pagehide",() => {if (!previous?.pendingWrites) previous?.dispose();},{once:true});
       try {sessionStorage.setItem(selectionKey,profile.id);} catch { /* Selection remains explicit in the committed URL. */ }
       this.commitNavigation(`/?backend=${encodeURIComponent(profile.id)}`);
@@ -209,13 +219,26 @@ export class BackendConnections {
   cancelConnection() { this.operation++; this.signInCandidate = null; this.update({busy:false,signInProfile:null}); }
   async signIn() {
     const candidate = this.signInCandidate;
-    if (!candidate) return;
-    this.guard();
-    sessionStorage.setItem(pendingKey,JSON.stringify({id:candidate.profile.id,baseUrl:candidate.profile.baseUrl,time:Date.now()}));
-    const url = new URL("/settings/backends",window.location.origin);
-    if (this.snapshot.active) url.searchParams.set("backend",this.snapshot.active.profile.id);
-    url.searchParams.set("backendConnect",candidate.profile.id);
-    await candidate.manager.login({returnUrl:url.toString()});
+    if (!candidate || this.snapshot.busy) return;
+    const operation = this.operation;
+    const previous = this.snapshot.active;
+    const from = window.location.href;
+    this.update({busy:true,error:null});
+    try {
+      this.assertCanSwitch();
+      const approved = await reviewStudioNavigation(window.location.pathname + window.location.search + window.location.hash,"/settings/backends");
+      if (!approved || candidate !== this.signInCandidate || previous !== this.snapshot.active || window.location.href !== from) return;
+      this.assertCanSwitch();
+      sessionStorage.setItem(pendingKey,JSON.stringify({id:candidate.profile.id,baseUrl:candidate.profile.baseUrl,time:Date.now()}));
+      const url = new URL("/settings/backends",window.location.origin);
+      if (previous) url.searchParams.set("backend",previous.profile.id);
+      url.searchParams.set("backendConnect",candidate.profile.id);
+      await candidate.manager.login({returnUrl:url.toString()});
+    } catch (error) {
+      if (operation === this.operation) this.update({error:connectionError(error)});
+    } finally {
+      if (operation === this.operation) this.update({busy:false});
+    }
   }
   async inspect(id:string) {
     const profile = this.snapshot.profiles.find(item => item.id === id);

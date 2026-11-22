@@ -57,11 +57,11 @@ describe("workflow definition browse boundaries", () => {
       await waitForCondition(() => expect(container.querySelector("[data-folder-id='folder-target']")).not.toBeNull());
       await click(container.querySelector("[data-folder-id='folder-target']"));
     } else if (key === "lifecycle") {
-      await click(button(container, "Deleted"));
+      await click(button(container, "Recycle bin"));
     } else if (key === "page") {
       await click(button(container, "Next"));
     } else {
-      await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+      await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     }
 
     await waitForCondition(() => expect(requests.some(isTransitionRequest)).toBe(true));

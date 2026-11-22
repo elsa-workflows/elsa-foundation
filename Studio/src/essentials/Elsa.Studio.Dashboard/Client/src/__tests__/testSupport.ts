@@ -1,4 +1,5 @@
-import { vi } from "vitest";
+import { flushSync } from "react-dom";
+import { expect, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
 import { homeLayoutLocalStoragePrefix } from "../homeLayout";
 
@@ -83,4 +84,25 @@ export async function waitUntil(predicate: () => boolean) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   throw new Error("Condition was not met before the test timeout.");
+}
+
+export async function beginNamedDraft(name: string) {
+  await waitUntil(() => document.querySelector('[role="dialog"] input[required]') !== null);
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+  const input = dialog.querySelector<HTMLInputElement>("input[required]")!;
+  const create = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(create.disabled).toBe(true);
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, name);
+  flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+  flushSync(() => create.click());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+}
+
+export function selectResourceAction(container: HTMLElement, label: string, action: string) {
+  const menu = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  expect(menu).toBeTruthy();
+  flushSync(() => menu!.click());
+  const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent?.trim() === action);
+  expect(item).toBeTruthy();
+  flushSync(() => item!.click());
 }

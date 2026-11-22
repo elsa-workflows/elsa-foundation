@@ -30,19 +30,35 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     public TurnOutcome? Command(TurnInput input)
     {
-        var (row, first) = (input.Row, input.Taken[0]);
+        var (row, first) = (input.Row, input.Taken[input.From]);
+        if (first.Message.CascadeOrigin && !CreationProtocol.MatchesCascadeParent(row, first.Message))
+            return CreationProtocol.Refuse(input.Actor, row, input.Taken, "WrongParent");
         // The persisted protocol remains authoritative when a cold model drops either metadata interface.
         // Refuse before controls or the ordinary terminal drain can consume a protected query/Delete.
         if (row is { IdentityMetadataRequired:true } && _models[row.Model] is not IStateFreeTerminalMetadata)
             return IdentityMetadataTurn.Unavailable(input);
-        if (row is { Creation: > 0 } && first.Message.Kind == WorkflowKinds.ChildFinished)
+        if (input.Creation > 0 && first.Message.Kind == WorkflowKinds.ChildFinished)
         {
             try
             {
-                if (first.Message.Payload is null || first.Message.Read<ChildFinished>() is not { } finished)
+                if (row is not { Creation: > 0 } || first.Message.Payload is null || first.Message.Read<ChildFinished>() is not { } finished
+                    || !CreationProtocol.HasTerminalNoticeId(first.Message, finished.Child, finished.Creation) || first.Message.Target.Id != input.Actor
+                    || first.Message.TargetCreation != row.Creation || first.Message.SenderCreation != finished.Creation
+                    || finished.Child != first.Message.Sender || finished.Creation <= 0
+                    || finished.Status is not (InstanceStatus.Finished or InstanceStatus.Cancelled or InstanceStatus.Faulted))
                     return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion");
-                if (!ChildRegistry.Read(row.Children).Contains(new(finished.Child, finished.Creation)))
+                var children = ChildRegistry.Read(row.Children);
+                if (!children.Remove(new(finished.Child, finished.Creation)))
                     return CreationProtocol.Refuse(input.Actor, row, input.Taken, "UnknownChildCreation");
+                if (row.Status != InstanceStatus.Running)
+                {
+                    // Exhaustion is a host failure: retain the genuine pending input and registry, with no model/Park entry.
+                    if (row.Revision == long.MaxValue) throw new OverflowException($"Revision exhausted for child completion at {row.Id}.");
+                    // A terminal parent still owns its registry. A late result closes that entry without re-entering the model.
+                    var next = row with { Revision = row.Revision + 1, Children = ChildRegistry.Write(children) };
+                    return new(input.Actor) { Row = next, Expected = row.Revision, Revision = next.Revision, Status = row.Status,
+                        Consumed = [first], Journal = Journal(row.History, [WorkflowKinds.ChildFinished]) };
+                }
             }
             catch (System.Text.Json.JsonException) { return CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidChildCompletion"); }
         }
@@ -121,12 +137,14 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
     internal static string? RemainingJobs(InstanceRow row, IReadOnlyList<Delivery> taken)
     {
         if (row.Jobs is null) return null;
-        var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion) && i.Message.Target.Id == row.Id)
+        var consumed = taken.Where(i => (i.IsDurableJobTicket || i.IsWorkerJobCompletion || i.Message.FoundationJobResult)
+                && i.Message.Target.Id == row.Id)
             .Select(i => i.Message.InboxKey).ToHashSet();
         if (consumed.Count == 0) return row.Jobs;
-        var jobs = DurableKeyJson.ReadKeys(row.Jobs);
-        if (jobs.RemoveAll(key => consumed.Contains(InboxKey.Ticket(row.Id, key, row.Creation))) == 0) return row.Jobs;
-        return jobs.Count == 0 ? null : DurableKeyJson.WriteKeys(jobs);
+        var jobs = JobRegistry.Read(row.Jobs);
+        if (jobs.RemoveAll(job => consumed.Contains(InboxKey.Ticket(row.Id, job.Key, row.Creation, job.Generation)) ||
+            consumed.Contains(InboxKey.JobResult(row.Id, job.Key, row.Creation, job.Generation))) == 0) return row.Jobs;
+        return JobRegistry.Write(jobs);
     }
 
     /// <summary>Decision 4: an instance kept in memory past its short wait is written as it is, at the revision it has.</summary>
@@ -148,7 +166,8 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
             // Only an ended instance is deleted. What arrives for it afterwards is dropped as for a missing target.
             return row.Status == InstanceStatus.Running || row.StateVersion > _models[row.Model].StateVersion ||
                 (_models[row.Model] is IModelMetadata metadata && (row.IdentityOnly ? ((IStateFreeTerminalMetadata)metadata).ProtectsIdentityDeletion(TerminalIdentity.From(row), input.Services.Now, new ClockObservation(new DurableTurn(input).Clock)) : metadata.ProtectsDeletion(ReadState(row, _models[row.Model], input.Services), input.Services.Now, new DurableTurn(input).Clock))) ? new TurnOutcome(instance) { Consumed = [item], State = input.State, Status = row.Status }
-                : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 || CreationProtocol.IsPhysicalAddress(row.Id) ? CreationProtocol.Retire(row) : null,
+                : new TurnOutcome(instance) { Delete = true, Row = row.Creation > 0 || CreationProtocol.IsPhysicalAddress(row.Id)
+                        ? CreationProtocol.Retire(row, input.Services.SupportsCascadePages ? CascadeRegistry.ForRetirement(row) : null) : null,
                     Expected = row.Revision, Consumed = [item], Unsubscribe = true, Status = row.Status, Journal = Json.Write(new[] { "deleted" }) };
         var suspended = item.Message.Kind == Kinds.Suspend;
         if (row.Status != InstanceStatus.Running) return new TurnOutcome(instance) { Consumed = [item], Status = row.Status };
@@ -175,16 +194,20 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         }
         if (running) next = WorkflowCommitClock.End(next);
         var children = !input.Services.Has(Flaw.TerminateRootOnly) ? ChildRegistry.Read(row.Children) : [];
+        var jobs = JobRegistry.Read(row.Jobs);
         var unit = new TurnOutcome(instance)
         {
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
-            Journal = Journal(row.History, ["terminated"]),
-            Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
-                TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued()).ToList(),
-            Cancelled = (row.Jobs is { } jobs ? DurableKeyJson.ReadKeys(jobs) : []).Select(key => InboxKey.Ticket(instance, key, row.Creation)).ToList(),
+            Journal = Journal(row.History, ["terminated"])
         };
-        foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
+        if (input.Services.SupportsCascadePages)
+            return CascadeProtocol.Open(unit, new([.. jobs], [.. children]));
+        unit.Sent.InsertRange(0, children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id),
+            Kinds.Terminate, Sender: instance, TargetCreation: child.Creation > 0 ? child.Creation : null,
+            SenderCreation: row.Creation).AsIssued().AsCascadeTerminate()));
+        unit.Cancelled.AddRange(jobs.Select(job => InboxKey.Ticket(instance, job.Key, row.Creation, job.Generation)));
+        foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         return unit;
     }
 
@@ -194,7 +217,7 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
 
     /// <summary>The parent's notice that a child ended.</summary>
     internal static Message Finished(InstanceRow row, string? output) =>
-        new Message($"{Origin(row)}#{row.Revision}.end", new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
+        new Message(CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision), new InstanceRef(row.Parent!), WorkflowKinds.ChildFinished, Json.Write(new ChildFinished(row.Id, row.Status, output, row.Creation)), row.Id,
             TargetCreation: row.ParentCreation > 0 ? row.ParentCreation : null, SenderCreation: row.Creation).AsIssued();
 
     private static string Origin(InstanceRow row) => CreationProtocol.Origin(row.Id, row.Creation);

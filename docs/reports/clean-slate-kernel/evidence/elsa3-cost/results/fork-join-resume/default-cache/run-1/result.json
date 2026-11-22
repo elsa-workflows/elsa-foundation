@@ -1,0 +1,78 @@
+{
+  "Provider": "sqlite",
+  "Workflow": "fork-join-resume",
+  "Config": "default-cache",
+  "Run": 1,
+  "SetupCommands": 218,
+  "WindowCommands": 32,
+  "InFlowCommands": 24,
+  "BackgroundCommands": 8,
+  "SaveChanges": 5,
+  "TransactionsStarted": 2,
+  "TransactionsCommitted": 2,
+  "Phases": [
+    {
+      "Phase": "start",
+      "InstanceId": "1de17dac4aa2d08a",
+      "CommandsUntilReturn": 13,
+      "CommandsAfterReturn": 4
+    },
+    {
+      "Phase": "resume",
+      "InstanceId": "1de17dac4aa2d08a",
+      "CommandsUntilReturn": 11,
+      "CommandsAfterReturn": 4
+    }
+  ],
+  "CommandsByPhase": {
+    "resume": 15,
+    "start": 17
+  },
+  "CommandsByContext": {
+    "ManagementElsaDbContext": 7,
+    "RuntimeElsaDbContext": 25
+  },
+  "CommandsByKind": {
+    "NonQuery": 3,
+    "Reader": 29
+  },
+  "CommandsByCategory": {
+    "activity execution records": 2,
+    "bookmark queue": 8,
+    "bookmarks": 5,
+    "definitions": 2,
+    "execution log": 10,
+    "instance state": 5
+  },
+  "CommandsByLeadOp": {
+    "DELETE": 1,
+    "INSERT": 14,
+    "SELECT": 16,
+    "UPDATE": 1
+  },
+  "StatementsByContextOpTable": {
+    "ManagementElsaDbContext INSERT WorkflowInstances": 1,
+    "ManagementElsaDbContext SELECT WorkflowDefinitions": 2,
+    "ManagementElsaDbContext SELECT WorkflowInstances": 3,
+    "ManagementElsaDbContext UPDATE WorkflowInstances": 1,
+    "RuntimeElsaDbContext DELETE Bookmarks": 1,
+    "RuntimeElsaDbContext INSERT ActivityExecutionRecords": 2,
+    "RuntimeElsaDbContext INSERT Bookmarks": 1,
+    "RuntimeElsaDbContext INSERT WorkflowExecutionLogRecords": 10,
+    "RuntimeElsaDbContext SELECT BookmarkQueueItems": 8,
+    "RuntimeElsaDbContext SELECT Bookmarks": 3
+  },
+  "SaveChangesByContextPhase": {
+    "ManagementElsaDbContext resume": 1,
+    "ManagementElsaDbContext start": 1,
+    "RuntimeElsaDbContext resume": 1,
+    "RuntimeElsaDbContext start": 2
+  },
+  "RecurringTasksPushedOut": [
+    "Elsa.Workflows.Runtime.Tasks.TriggerBookmarkQueueRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.PurgeBookmarkQueueRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.RestartInterruptedWorkflowsTask",
+    "Elsa.Workflows.Runtime.Tasks.ProcessWorkflowDispatchOutboxRecurringTask",
+    "Elsa.Workflows.Runtime.Tasks.RefreshWorkflowDefinitionActivityRegistryTask"
+  ]
+}

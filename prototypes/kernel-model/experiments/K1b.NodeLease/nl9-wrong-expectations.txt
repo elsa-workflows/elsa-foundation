@@ -1,0 +1,16 @@
+$ x nodelease sqlserver <conn> case=mutual rcsi=0 mutation=rr expect=none
+sqlserver: READ COMMITTED, locking; case mutual; take AT REPEATABLE READ (the negative); expect none
+sessions waiting before the release: yes; 5044 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: failed: Transient mssql 1205
+engine deadlocks counted: 1; owners of 1 to 5: 1:a@1 2:a@1 3:a@2 4:a@2 5:-@0
+nodelease negative: DEADLOCKED, broken by the engine; expected none, forced: NOT AS EXPECTED
+exit 1
+$ x nodelease sqlserver <conn> case=mutual rcsi=0 expect=deadlock
+sqlserver: READ COMMITTED, locking; case mutual; take as built; expect deadlock
+sessions waiting before the release: yes; 114 ms
+  a's take of {3, 4}: took 3 4
+  b's take of {1, 2}: took 1 2
+engine deadlocks counted: 0; owners of 1 to 5: 1:b@2 2:b@2 3:a@2 4:a@2 5:-@0
+nodelease: no deadlock; every outcome landed or was refused; expected a deadlock, forced: NOT AS EXPECTED
+exit 1

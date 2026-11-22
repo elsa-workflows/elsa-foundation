@@ -1,4 +1,6 @@
+import { StudioAlert, StudioLoadingStatus } from "@elsa-workflows/studio-ui";
 import { useExecutionFocusRequest } from "./executionFocus";
+import { LoaderCircle } from "lucide-react";
 import type { StudioEndpointContext, StudioExpressionEditorContribution, StudioBackendSession, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { findExecutableNodeFacts } from "../executableGraph";
 import { resolveRuntimeActivityLabel } from "../runtimeActivityDisplay";
@@ -21,9 +23,9 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   const scopeChoiceFocus = useExecutionFocusRequest();
   const graph = canvas.graph;
   const details = canvas.details;
-  if (!canvas.attached) return <p role="status">Attach the unchanged Test Run snapshot to inspect its run data.</p>;
-  if (canvas.error) return <p role="status">{canvas.error}</p>;
-  if (!graph || !details) return <p role="status">Loading execution evidence…</p>;
+  if (!canvas.attached) return <StudioAlert>Attach the version used for this Test Run to inspect its run data.</StudioAlert>;
+  if (canvas.error) return <StudioAlert tone="danger">{canvas.error}</StudioAlert>;
+  if (!graph || !details) return <StudioLoadingStatus>Loading run data…</StudioLoadingStatus>;
   const labelFor = (execution: ActivityExecutionStateSummary) => resolveRuntimeActivityLabel(
     findExecutableNodeFacts(graph, execution)?.presentation,
     catalog.find(item => item.activityTypeKey === execution.activityType), execution.activityType);
@@ -32,7 +34,7 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
   // A child inside a pinned reusable boundary may have no node in the outer authored graph.
   const boundaryChild = execution && !findExecutableNodeFacts(graph, execution) ? execution : null;
   const identity = boundaryChild ?? authoredFacts;
-  if (!identity) return <p role="status">This canvas element has no executable activity evidence.</p>;
+  if (!identity) return <StudioAlert>This canvas element has no executable activity data.</StudioAlert>;
   const selected = execution?.executableNodeId === identity.executableNodeId ? execution : null;
   const prepared = selection.prepared;
   const inspected = prepared?.execution?.executableNodeId === identity.executableNodeId ? prepared.execution : selected;
@@ -47,14 +49,12 @@ export function AttachedRunActivityInspector({ context, canvas, selection, activ
       {selection.scopes.map(item => <button type="button" key={item.execution.activityExecutionId} onClick={() => {
         void selection.choose(item.execution, graph, labelFor, true, item.label).then(ready => { if (ready) onEnter(item.execution); });
       }}>{item.label}</button>)}
+      {selection.loading ? <span className="wf-execution-loading" role="status" aria-live="polite" aria-label={selection.execution ? "Loading requested execution" : "Resolving execution scope"}><LoaderCircle size={14} className="wf-execution-loading-spinner" /><span className="sr-only">{selection.execution ? "Loading requested execution" : "Resolving execution scope"}</span></span> : null}
     </nav>
     {scope ? <ExecutionScopeNavigator choiceFocus={scopeChoiceFocus} captureFocusOperation={selection.captureFocusOperation} context={context} execution={scope.execution} label={labelFor(scope.execution)} refreshKey={canvas.refreshKey}
       initialPage={prepared?.scopePage?.executionId === scope.execution.activityExecutionId ? prepared.scopePage.page : undefined}
       onSelect={value => { void selection.choose(value, graph, labelFor, true); }} onUnavailable={selection.unavailable} onIncident={choose} /> : null}
-    <div className="wf-execution-transition" role="status" aria-live="polite">
-      {selection.loading ? selection.execution ? "Loading requested execution… Showing the previous execution." : "Resolving execution scope…"
-        : selection.error ? <>{selection.error} {selection.execution ? "Showing the previous execution. " : null}{selection.canRetry ? <button type="button" onClick={() => { void selection.retry(); }}>Retry selection</button> : null}</> : null}
-    </div>
+    {selection.error ? <div className="wf-execution-error" role="alert">{selection.error} {selection.execution ? "Showing the previous execution. " : null}{selection.canRetry ? <button type="button" onClick={() => { void selection.retry(); }}>Retry selection</button> : null}</div> : null}
     <div className="wf-execution-content" aria-busy={selection.loading}>
     {(!selection.loading && !selection.error || selection.execution) ? <ActivityExecutionInspectionPanel
       key={`${details.instance.workflowExecutionId}:${identity.executableNodeId}`}

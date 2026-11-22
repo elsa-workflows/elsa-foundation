@@ -36,3 +36,10 @@ export function createActivityExpressionDocument({
     contextVersion
   };
 }
+
+/** Binding-only changes invalidate tooling even when the source string is unchanged. */
+export function advanceActivityExpressionRevision(previous: { key: string; version: number } | undefined, source: string, ownerValue: unknown) {
+  const key = JSON.stringify([source, ownerValue], (_name, value) => value && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) : value);
+  return previous?.key === key ? previous : { key, version: (previous?.version ?? -1) + 1 };
+}

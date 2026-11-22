@@ -15,7 +15,7 @@ import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hos
 import { HomePage } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage";
 import { createHomeLayoutScope, homeLayoutLocalStoragePrefix, homeLayoutRoute } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout";
 import { registerCoreHomeWidgets } from "../../src/essentials/Elsa.Studio.Dashboard/Client/src/widgets/registerCoreHomeWidgets";
-import { register as registerWorkflowDashboardWidgets } from "../../../Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module";
+import { register as registerWorkflowDashboardWidgets } from "../../../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module";
 import { createWidgetHost } from "./homeFixture";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";

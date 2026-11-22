@@ -1,14 +1,18 @@
 # Implementation Plan: Timeline workspace and durable run history
 
+**Current delivery record**: the final delivery receipt supersedes dated preparation/pending statements below. Runtime history, timers and all four provider migrations are landed; the coherent Studio contribution is #4368. The selected acceptance corpus is54 cases across desktop/320/390 and light/dark, with420 PNG/ARIA pairs,48 native oracles and54 traces, preserving each original source head. Owner-authorized CI skipping does not waive exact-source independent review, actual local qualification, sanitized immutable download verification or resulting-main checks.
+
 **Branch**: `agent/codex/3849-history-slice-*` | **Updated**: 2026-11-12 | **Spec**: [spec.md](spec.md)
 
 **Authority**: End-to-end owner instruction on [#3849](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6645438505), amended by the [9 November re-slicing decision](https://github.com/elsa-workflows/elsa-foundation/pull/3850#issuecomment-6739905865). #3850 is closed without merge and remains a prototype/evidence reference. Deliver small stacked PRs in the [slice order](slices.md), each with its own qualification and review. This explicit owner instruction supersedes the former single-PR plan; it does not reduce the parent acceptance criteria.
 
-Review/merge follows the current organization [standing self-merge protocol](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#standing-self-merge-codex-and-claude). Independent correctness, repository-standards and acceptance lenses review the exact slice head without seeing each other's output; record numbered rounds and inherited findings, fix in additive commits and repeat within the governing cap. Preserve the closed prototype's four recorded rounds rather than presenting them as acceptance of the new stack. Required checks, actual independent UI inspection and all holds/protections remain gates. No paused program scope changes.
+Review/merge for this feature uses the explicit current owner instruction: independent correctness, standards and actual acceptance inspect the exact source, findings are corrected and reviewed to convergence, then the owner may admin self-merge with CI intentionally skipped. Earlier prototype/review rounds remain historical and do not qualify a later source. Actual human holds and incomplete product acceptance still stop integration.
 
-## Resumption baseline
+Owner delivery amendment for this feature: the current explicit instruction authorizes admin self-merge after clean independent self-review loops, skips CI as a merge gate, and permits corrective test/review continuation without repeat count-approval questions. See the [recorded owner exception](https://github.com/elsa-workflows/elsa-foundation/issues/3849#issuecomment-6903547912). Actual local qualification, source-bound composed UX, cumulative findings/failed-run attribution, exact reviewed heads and resulting-main verification remain required. This scoped amendment supersedes the CI/count/protected-merge wording above for #3849 only; it changes no shared workflow, credential or repository rule.
 
-Start from `main` `dff7c490d0e5501b22d4ba89beb389c956d4f423`. Compact Inputs (#4108 and its #4174 journey correction), run-canvas visibility work, the Decisions inventory correction, and newer checkpoint/read-path changes are present. Preserve them. The activity Data view must reuse the landed input-row/value-evidence implementation and tests rather than restore the old #3881 files. Historical source or passing receipts are not current-source acceptance. See [landed work and slice checkpoints](slices.md).
+## Historical resumption baseline (12 November)
+
+The resumed stack initially started from `main` `dff7c490d0e5501b22d4ba89beb389c956d4f423`. Compact Inputs (#4108 and its #4174 journey correction), run-canvas visibility work, the Decisions inventory correction, and newer checkpoint/read-path changes are present. Preserve them. The activity Data view must reuse the landed input-row/value-evidence implementation and tests rather than restore the old #3881 files. Historical source or passing receipts are not current-source acceptance. See [landed work and slice checkpoints](slices.md).
 
 ## Summary
 

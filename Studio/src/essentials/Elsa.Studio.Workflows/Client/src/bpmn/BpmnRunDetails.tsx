@@ -121,8 +121,8 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
         onClick={event => { if (session.disposed || session.context !== context || linkScope(session) !== scope) event.preventDefault(); }}>Open native attempt</a>
       <details><summary>Pinned native executable</summary><div className="wf-bpmn-identifiers">
         <CopyableIdentifier label="Executable" value={attempt.workerExecutable.artifactId} /><CopyableIdentifier label="Definition" value={attempt.workerExecutable.definitionId} />
-        <CopyableIdentifier label="Definition version" value={attempt.workerExecutable.definitionVersionId} /><CopyableIdentifier label="Artifact version" value={attempt.workerExecutable.artifactVersion} />
-        <CopyableIdentifier label="Artifact hash" value={attempt.workerExecutable.artifactHash} />
+        <CopyableIdentifier label="Definition version" value={attempt.workerExecutable.definitionVersionId} /><CopyableIdentifier label="Executable version" value={attempt.workerExecutable.artifactVersion} />
+        <CopyableIdentifier label="Executable hash" value={attempt.workerExecutable.artifactHash} />
       </div></details>
     </li>)}</ul></section> : null}
     {inspection.settlements.length ? <section><h3>Settlement</h3><ul>{inspection.settlements.map((item, index) => <li key={`${item.kind}:${item.executionId}:${index}`}>
@@ -131,7 +131,7 @@ export function BpmnRunDetails({ client, session, executionId }: { client: Clien
     <details><summary>Run identifiers</summary><div className="wf-bpmn-identifiers">
       <CopyableIdentifier label="BPMN run" value={executionId} /><CopyableIdentifier label="Executable" value={inspection.execution.executable.artifactId} />
       <CopyableIdentifier label="Definition" value={inspection.execution.executable.definitionId} /><CopyableIdentifier label="Definition version" value={inspection.execution.executable.definitionVersionId} />
-      <CopyableIdentifier label="Artifact version" value={inspection.execution.executable.artifactVersion} /><CopyableIdentifier label="Artifact hash" value={inspection.execution.executable.artifactHash} />
+      <CopyableIdentifier label="Executable version" value={inspection.execution.executable.artifactVersion} /><CopyableIdentifier label="Executable hash" value={inspection.execution.executable.artifactHash} />
       <CopyableIdentifier label="Material incarnation" value={inspection.execution.materialIncarnationId} />
       <CopyableIdentifier label="Authority system" value={inspection.authority.systemIdentity} /><CopyableIdentifier label="Root initiator" value={inspection.authority.rootInitiator} />
       {inspection.source ? <><CopyableIdentifier label="Source reference" value={inspection.source.sourceReferenceId} /><CopyableIdentifier label="Source version" value={inspection.source.sourceId} /></> : null}

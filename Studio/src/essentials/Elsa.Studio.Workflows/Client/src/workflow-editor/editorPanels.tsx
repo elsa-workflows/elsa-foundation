@@ -1,6 +1,6 @@
-import { Suspense, type ReactNode } from "react";
-import { AlertCircle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
-import { CopyableIdentifier, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { Suspense, useState, type ReactNode } from "react";
+import { AlertCircle, AlertTriangle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
+import { CopyableIdentifier, DisclosureFold, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
@@ -17,11 +17,12 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { LazyWorkflowTestRunControls } from "./lazyTestDriveUi";
 import type { TestRunObservation } from "./useTestRunObservation";
 import { StudioLink } from "../StudioLink";
+import { isWarningSeverity } from "./publicationReview";
 
 /**
  * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
  * structural, merged by the caller) overrides the draft's own list when provided, so the footer never
- * says "No validation errors" while the promotion gate would refuse. Each error offers a "Repair" jump
+ * says "No validation errors" while the promotion gate would refuse. Each entry offers a "Repair" jump
  * for unresolved-variable references and a "Go to" jump for any error that resolves to a node.
  */
 export function ValidationPanel({
@@ -64,12 +65,19 @@ export function ValidationPanel({
 
   const repairItems = collectVariableRepairItems(errors);
   const repairByError = new Map(repairItems.map(item => [item.error, item]));
+  const warningCount = errors.filter(error => isWarningSeverity(error.severity)).length;
+  const errorCount = errors.length - warningCount;
+  const summary = warningCount === errors.length
+    ? `${warningCount} warning${warningCount === 1 ? "" : "s"} · publishing is not blocked`
+    : warningCount > 0
+      ? `${errorCount} error${errorCount === 1 ? "" : "s"} · ${warningCount} warning${warningCount === 1 ? "" : "s"}`
+      : `${errors.length} validation issue${errors.length === 1 ? "" : "s"}`;
 
   return (
     <div className="wf-validation">
       <div className="wf-validation-summary">
-        <AlertCircle size={14} />
-        {errors.length} validation issue{errors.length === 1 ? "" : "s"}
+        {errorCount === 0 ? <AlertTriangle size={14} /> : <AlertCircle size={14} />}
+        {summary}
         {repairItems.length > 0 ? (
           <span className="wf-validation-variable-count"> · {repairItems.length} invalid variable reference{repairItems.length === 1 ? "" : "s"}</span>
         ) : null}
@@ -79,8 +87,9 @@ export function ValidationPanel({
           const repair = repairByError.get(error);
           const nodeId = repair?.path.nodeId ?? parseValidationErrorPath(error.path).nodeId;
           const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
+          const warning = isWarningSeverity(error.severity);
           return (
-            <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
+            <li key={index} className={`wf-validation-item${repair ? " repairable" : ""}${warning ? " warning" : ""}`}>
               <span className="wf-validation-message" title={nodeId ?? undefined}>{error.message ?? "Validation issue."}</span>
               {startNodeFix ? (
                 <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>
@@ -122,11 +131,13 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   observation?: TestRunObservation;
   executionControls?: ReactNode;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   if (!testRun) {
     return (
       <div className="wf-runtime-panel">
         {executionControls}
-        <div className="wf-empty">Run the draft to see Runtime Evidence.</div>
+        <div className="wf-empty">Run the draft to see its run data.</div>
       </div>
     );
   }
@@ -154,73 +165,89 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   const equivalent = !stale && !rejected && publishedEquivalent && publishedEquivalent.artifactId === view.artifactId
     ? publishedEquivalent
     : null;
+
+  // Build the "Run details" disclosure summary line from activity/incident counts
+  const detailsSummary = [
+    typeof activityCount === "number" ? formatEvidenceCount(activityCount, "activity") : null,
+    typeof incidentCount === "number" ? formatEvidenceCount(incidentCount, "incident") : null
+  ].filter(Boolean).join(" · ");
+
   return (
     <div className="wf-runtime-panel">
       <section className="wf-runtime-card" aria-label="Test run summary" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
-        <header className="wf-runtime-heading">
-          <h3>{stale ? "Earlier test run" : "Latest test run"}</h3>
+        {/* Tier 1 — compact status + outcome */}
+        <div className="wf-runtime-status-outcome">
           <WorkflowStatusBadge status={summary.status} />
-        </header>
+          <span className="wf-runtime-outcome" aria-live="polite">{summary.description}</span>
+        </div>
+
+        {/* Primary action */}
         {workflowExecutionId || view.artifactId ? (
           <div className="wf-runtime-actions">
             {workflowExecutionId ? <StudioButton size="sm" variant="primary" onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
             {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
           </div>
         ) : null}
+
         {executionControls}
-        <p className="wf-runtime-outcome" aria-live="polite">{summary.description}</p>
-        <p className="wf-runtime-note">Temporary test · your draft is unchanged</p>
-        {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
-        {runState.driverActionError ? <div className="wf-test-drive-error" role="alert">{runState.driverActionError}</div> : null}
-        {rejected && view.reason ? <RejectedReason reason={view.reason} activityLabels={activityLabels} /> : null}
-        {acceptedWithIncidents ? (
-          <div className="wf-runtime-incident-warning" role="status">
-            <AlertCircle size={14} aria-hidden="true" />
-            <span>{incidentCount != null && incidentCount > 0
-              ? `The test run was accepted and recorded ${incidentCount} incident${incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
-              : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
-            {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
-          </div>
-        ) : null}
-        {equivalent ? (
-          <div className="wf-runtime-equivalence">
-            <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.
-          </div>
-        ) : null}
-        {typeof activityCount === "number" || typeof incidentCount === "number" ? (
-          <p className="wf-runtime-note">{[
-            typeof activityCount === "number" ? formatEvidenceCount(activityCount, "activity") : null,
-            typeof incidentCount === "number" ? formatEvidenceCount(incidentCount, "incident") : null
-          ].filter(Boolean).join(" · ")}</p>
-        ) : null}
-        {ActionResult && runState.driverActionResult ? (
-          <Suspense fallback={<p role="status">Loading Test Run response…</p>}>
-            <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
-          </Suspense>
-        ) : null}
-        {!rejected && context && onRunViewUpdated && "view" in testRun ? (
-          <LazyWorkflowTestRunControls
-            context={context}
-            testRun={runState}
-            stimulusEditors={stimulusEditors ?? []}
-            onRunViewUpdated={onRunViewUpdated}
-            onWaitDraftUpdated={onWaitDraftUpdated}
-            observation={observation}
-            showExecutionStatus={!execution}
-          />
-        ) : null}
+
+        {/* Tier 2 — collapsible run details */}
+        <DisclosureFold
+          className="wf-runtime-details"
+          label="Run details"
+          summary={detailsSummary || null}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+        >
+          <p className="wf-runtime-note">Temporary test · your draft is unchanged</p>
+          {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
+          {runState.driverActionError ? <div className="wf-test-drive-error" role="alert">{runState.driverActionError}</div> : null}
+          {rejected && view.reason ? <RejectedReason reason={view.reason} activityLabels={activityLabels} /> : null}
+          {acceptedWithIncidents ? (
+            <div className="wf-runtime-incident-warning" role="status">
+              <AlertCircle size={14} aria-hidden="true" />
+              <span>{incidentCount != null && incidentCount > 0
+                ? `The test run was accepted and recorded ${incidentCount} incident${incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
+                : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
+              {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
+            </div>
+          ) : null}
+          {equivalent ? (
+            <div className="wf-runtime-equivalence">
+              <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.
+            </div>
+          ) : null}
+          {ActionResult && runState.driverActionResult ? (
+            <Suspense fallback={<p role="status">Loading Test Run response…</p>}>
+              <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
+            </Suspense>
+          ) : null}
+          {!rejected && context && onRunViewUpdated && "view" in testRun ? (
+            <LazyWorkflowTestRunControls
+              context={context}
+              testRun={runState}
+              stimulusEditors={stimulusEditors ?? []}
+              onRunViewUpdated={onRunViewUpdated}
+              onWaitDraftUpdated={onWaitDraftUpdated}
+              observation={observation}
+              showExecutionStatus={!execution}
+            />
+          ) : null}
+        </DisclosureFold>
+
+        {/* Tier 3 — technical details */}
         <TechnicalDetails key={view.testRunId}>
           <div className="wf-runtime-identifiers">
             <CopyableIdentifier label="Test run ID" value={view.testRunId} />
             {workflowExecutionId ? <CopyableIdentifier label="Run ID" value={workflowExecutionId} /> : null}
-            {view.artifactId ? <CopyableIdentifier label="Artifact ID" value={view.artifactId} /> : null}
+            {view.artifactId ? <CopyableIdentifier label="Executable ID" value={view.artifactId} /> : null}
           </div>
           <dl className="wf-runtime-meta">
             <div><dt>Dispatch</dt><dd>{view.commandDispatchStatus ?? view.status}</dd></div>
             {execution?.subStatus ? <div><dt>Execution detail</dt><dd>{execution.subStatus}</dd></div> : null}
             <div><dt>Started by</dt><dd>{runState.startLabel ?? "Direct start"}</dd></div>
             {runState.workflowInputNames?.length ? <div><dt>Inputs</dt><dd>{runState.workflowInputNames.join(", ")}</dd></div> : null}
-            <div><dt>Evidence expires</dt><dd>{view.expiresAt ? formatDate(view.expiresAt) : "Not provided"}</dd></div>
+            <div><dt>Run data expires</dt><dd>{view.expiresAt ? formatDate(view.expiresAt) : "Not provided"}</dd></div>
           </dl>
         </TechnicalDetails>
       </section>
@@ -238,7 +265,7 @@ function formatEvidenceCount(count: number, label: string) {
 
 function runtimeSummary(view: WorkflowTestRunView, observation: TestRunObservation | undefined, prepared: boolean, runtimeIssue: boolean) {
   if (isRejectedTestRun(view)) return { status: "Rejected", description: "The server rejected this test run." };
-  if (view.status === "Expired" || observation?.status === "expired") return { status: "Expired", description: "Test run evidence has expired." };
+  if (view.status === "Expired" || observation?.status === "expired") return { status: "Expired", description: "Test Run data has expired." };
   const execution = observation?.details?.instance;
   const terminal = ["Completed", "Faulted", "Cancelled"].includes(execution?.status ?? "");
   if (!terminal && (view.status === "StopRequested" || view.status === "Stopped" && execution))

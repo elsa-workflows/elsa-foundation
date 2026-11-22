@@ -101,7 +101,14 @@ const definitions = [
 export function DefinitionVersionsFixture() {
   const parameters = new URLSearchParams(window.location.search);
   const scenario = parameters.get("scenario");
-  writeAppearancePreferences({ themeId: "classic", mode: parameters.get("theme") === "dark" ? "dark" : "light", navigation: "left" });
+  const theme = parameters.get("theme");
+  const workspaceStyle = parameters.get("workspaceStyle");
+  writeAppearancePreferences({
+    themeId: theme === "space" ? "space" : "classic",
+    ...(workspaceStyle === "linen" || workspaceStyle === "minimal" ? { workspaceStyle } : {}),
+    mode: theme === "dark" || parameters.get("appearance") === "dark" ? "dark" : "light",
+    navigation: "left"
+  });
   setDialogs({ confirm: async () => false, prompt: async () => null, alert: async () => undefined });
   const context = useMemo(() => ({
     baseUrl: "definition-versions-browser",

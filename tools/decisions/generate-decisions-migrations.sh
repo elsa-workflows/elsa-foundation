@@ -13,7 +13,7 @@ Usage:
   bash tools/decisions/generate-decisions-migrations.sh <MigrationName> [Sqlite|PostgreSql|SqlServer|MySql]
 
 The provider defaults to Sqlite. Each context retains its own migration set under
-Extensions/Decisions/src/Persistence/EntityFrameworkCore/Migrations/Decisions/<Provider>/.
+extensions/Decisions/src/Persistence/EntityFrameworkCore/Migrations/Decisions/<Provider>/.
 USAGE
 }
 
@@ -39,16 +39,16 @@ case "$provider" in
   *) fail "Unsupported Decisions provider '$provider'." ;;
 esac
 context="Decisions${provider}DbContext"
-project_rel="Extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
+project_rel="extensions/Decisions/src/Persistence/EntityFrameworkCore/Elsa.Decisions.Persistence.EntityFrameworkCore.csproj"
 project="${project_rel}"
-project_dir="$root/Extensions/Decisions/src/Persistence/EntityFrameworkCore"
+project_dir="$root/extensions/Decisions/src/Persistence/EntityFrameworkCore"
 context_source="$project_dir/${context}.cs"
-tooling="Extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj"
-factory_source="Extensions/Decisions/src/Tooling/${context}Factory.cs"
+tooling="extensions/Decisions/src/Tooling/Elsa.Decisions.Tooling.csproj"
+factory_source="extensions/Decisions/src/Tooling/${context}Factory.cs"
 output_dir="Migrations/Decisions/$provider"
 namespace="Elsa.Decisions.Persistence.EntityFrameworkCore.Migrations.Decisions.$provider"
 destination="$project_dir/$output_dir"
-expected_destination="$root/Extensions/Decisions/src/Persistence/EntityFrameworkCore/Migrations/Decisions/$provider"
+expected_destination="$root/extensions/Decisions/src/Persistence/EntityFrameworkCore/Migrations/Decisions/$provider"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 
 [[ "$destination" == "$expected_destination" ]] || fail "Unexpected Decisions migration destination."
@@ -65,8 +65,8 @@ grep -Fq "ModuleDesignTimeFactory<$context>" "$factory_source" ||
   fail "The Decisions tooling factory does not target the supported context."
 
 # Refuse redirected destinations and non-directory path components before restore/build/scaffolding.
-for path in "$root/Extensions" "$root/Extensions/Decisions" "$root/Extensions/Decisions/src" \
-            "$root/Extensions/Decisions/src/Persistence" "$project_dir" \
+for path in "$root/extensions" "$root/extensions/Decisions" "$root/extensions/Decisions/src" \
+            "$root/extensions/Decisions/src/Persistence" "$project_dir" \
             "$project_dir/Migrations" "$project_dir/Migrations/Decisions" "$destination"; do
   [[ ! -L "$path" ]] || fail "Migration path components must not be symlinks: $path."
   [[ ! -e "$path" || -d "$path" ]] || fail "Migration path component is not a directory: $path."

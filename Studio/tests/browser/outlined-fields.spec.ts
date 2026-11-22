@@ -29,6 +29,27 @@ for (const theme of builtInThemeDefinitions) for (const mode of allThemeModes) {
     expect(await page.locator(".studio-form-control [data-studio-field-control]:disabled").evaluateAll(elements => elements.every(element => getComputedStyle(element).opacity === "1"))).toBe(true);
     await expect(page.getByLabel("Read only", { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel("Invalid", { exact: true })).toHaveAttribute("aria-invalid", "true");
+
+    // Focus changes the existing notched border, including hover and invalid fields.
+    for (const label of ["Focused", "Select", "Description", "Read only", "Invalid"]) {
+      const control = page.getByLabel(label, { exact: true });
+      const frame = control.locator("xpath=ancestor::fieldset[1]");
+      const before = await frame.boundingBox();
+      await control.focus();
+      await control.hover();
+      const focusStyle = await frame.evaluate(element => {
+        const style = getComputedStyle(element);
+        const probe = document.createElement("span");
+        probe.style.color = "var(--studio-focus-ring-solid, var(--studio-accent))";
+        element.append(probe);
+        const color = getComputedStyle(probe).color; probe.remove();
+        return { border: style.borderColor, focus: color, outline: style.outlineStyle };
+      });
+      expect(focusStyle.outline).toBe("none");
+      expect(focusStyle.border).toBe(focusStyle.focus);
+      expect(await frame.boundingBox()).toEqual(before);
+    }
+    await page.getByLabel("Focused", { exact: true }).focus();
     await capture(page, info, `${theme.id}-${mode}-states`);
     const draft = page.getByLabel("Invalid", { exact: true });
     await draft.fill("Recovered draft"); await expect(draft).not.toHaveAttribute("aria-invalid", "true");
@@ -45,6 +66,7 @@ for (const style of workspaceStyles) for (const mode of ["light", "dark"] as con
     await page.goto(`/outlined-fields.html?theme=classic&mode=${mode}&style=${style.id}&rtl=1`);
     await page.evaluate(() => { document.documentElement.style.setProperty("--studio-body-size", "28px"); document.documentElement.style.setProperty("--studio-small-size", "24px"); });
     await expect(page.getByLabel("Populated", { exact: true })).toHaveValue("Draft value");
+    await page.getByLabel("Description", { exact: true }).focus();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await capture(page, info, `${style.id}-${mode}-narrow-rtl`);
   });
@@ -54,7 +76,11 @@ test("Outlined forced colours preserve field and keyboard focus", async ({ page 
   await page.goto("/outlined-fields.html");
   const field = page.getByLabel("Populated", { exact: true }); await field.focus();
   await expect(field).toBeFocused();
-  expect(await field.evaluate(element => getComputedStyle(element.closest("fieldset")!).outlineStyle)).toBe("solid");
+  const frame = field.locator("xpath=ancestor::fieldset[1]");
+  await expect(frame).toHaveCSS("forced-color-adjust", "none");
+  const highlight = await page.evaluate(() => { const probe = document.createElement("span"); probe.style.color = "Highlight"; document.body.append(probe); const color = getComputedStyle(probe).color; probe.remove(); return color; });
+  await expect(frame).toHaveCSS("border-color", highlight);
+  await expect(frame).toHaveCSS("outline-style", "none");
   await capture(page, info, "forced-colours");
 });
 

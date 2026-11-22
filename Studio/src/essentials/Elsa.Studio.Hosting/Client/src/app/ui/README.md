@@ -46,6 +46,10 @@ A field keeps its label, optional help, and control together; use a supported sh
 <StudioButton variant="primary" size="md" type="submit">Create service</StudioButton>
 ```
 
+For an on/off control, use `StudioToggleButton` with its boolean `pressed` state and the same label in both states.
+
+For a compact icon-only action, use `StudioIconButton` with a required `aria-label` and a single decorative icon.
+
 For a configured optional section, start it open, show the set count, and allow the author to collapse it. Pass only the host's actual error/force-open state; the disclosure contract owns how those states remain visible.
 
 ```tsx
@@ -84,11 +88,15 @@ Use `StudioPage`, `StudioPageHeader`, `StudioCollectionToolbar`, `StudioSearchIn
 `StudioResultState`, and `StudioCollectionFooter` for page structure. The host owns
 outer gutters and the main landmark; modules own data, authorization, counts and
 cursor semantics. These primitives have no SDK, routing, query, or dialog provider dependency.
+`StudioCollectionFooter` accepts an optional `summary`, a controlled `pageSize` field and a
+`loadMore` action. Existing summary content and custom controls can still be supplied as children.
 
 The [module UI guide](../../../../../../../docs/module-ui.md) contains the public
 imports, a complete collection example, state/accessibility requirements, and the
 standalone stylesheet setup. The [React host example](../../../../../../../examples/react-host/README.md)
 exercises the same published styles without copying internal CSS.
+
+Use `StudioDialog` with `StudioDialogFooter` for module-owned modal forms (see Create Workflow).
 
 Use the injected `api.dialogs.confirm` for confirmation; it resolves `true` for
 confirmation and `false` for cancel or dismissal. Only confirmation calls the
