@@ -445,7 +445,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `ActivityDefinitionDraftEditor.tsx:777`).
 - [ ] **X8.2** (#5117) [verified] `WF/ActivityDefinitionContractEditor.tsx:785` `.ad-member-tabs` → `StudioTabs`.
 - [ ] **X8.3** (#5118) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx:393` `.wf-boundary-pane-tabs`.
-- [ ] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist.
+- [x] **X8.4** (#5119) [verified] `H/App.tsx:1180–1190` `bottom-panel-tab-list` hand-rolled tablist. (PR #5310)
 - [x] **X8.5** (#5120) [verified] `EXT/Diagnostics.OpenTelemetry/module.tsx:244`. (PR #5298)
 - [ ] **X8.6** (#5121) [verified] `EXT/ExtensionBuilder/extension-builder/BottomDock.tsx:134`.
 - [ ] **X8.7** (#5122) [source] `PanelTabList` (`.wf-panel-tab-list`) in `WorkflowInstances.tsx:2540`,
@@ -542,8 +542,8 @@ the designer header is a documented exception.
   `WorkflowLibraryControls.tsx` (7), `InspectorPanel.tsx` (6).
 - [ ] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9),
   `BpmnInterchangeCommands.tsx` (6).
-- [ ] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
-  `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`.
+- [x] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
+  `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`. (PR #5310)
 - [ ] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
   `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`.
@@ -592,8 +592,8 @@ Uppercase labels (`needs: D3`):
   `:275`; `WF/activityContractEditor.css:280–281`; `WF/activityDefinitionDependencyExplorer.css:29`;
   `WF/activityUpgradeWorkbench.css:578–580`.
 - [ ] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`.
-- [ ] **X13.4** (#5187) [verified] `H/weaver/weaver.css:37`; [source] `H/weaver/weaverControls.css:191, 251`.
-- [ ] **X13.5** (#5188) [verified] `BACK/backends.css:39`.
+- [x] **X13.4** (#5187) [verified] `H/weaver/weaver.css:37`; [source] `H/weaver/weaverControls.css:191, 251`. (PR #5310)
+- [x] **X13.5** (#5188) [verified] `BACK/backends.css:39`. (PR #5310)
 - [ ] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
   `H/components/ThemeSwitcher.css:167`, `H/themes/layouts.css:76`, `H/themes/signal.css:26`,
   `H/themes/elsaCloud.css:24`.
@@ -774,10 +774,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   closes the least recently used clean tab. Use 12 tabs and preserve unsaved tabs even above the cap. `needs: D10`
 - [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
   **[check]** how it behaves at narrow widths.
-- [ ] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
+- [x] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
   `H/components/ThemeSwitcher.tsx:57, 105`, `H/workspace/WorkspaceTabStrip.tsx:295–317`,
   `H/weaver/WeaverSurface.tsx:305–323`, the Backends switcher popover → `OverflowMenu` /
-  `AnchoredPopover`. None of these was captured in the running app.
+  `AnchoredPopover`. None of these was captured in the running app. (PR #5310)
 - [ ] **H7** (#5258) [source] Redundant `label={<><span>…</span></>}` wrappers and duplicate `aria-label` on
   `StudioField`: `H/modules/PackageFeedsPage.tsx:351–354`, `H/modules/ThemeBuilderPage.tsx:403–431`.
 - [ ] **H8** (#5259) [source] `H/modules/ThemeBuilderPage.tsx:479–491` deletes an asset from a button.
