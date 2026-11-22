@@ -196,7 +196,9 @@ public sealed partial class InMemoryStore
                 action.Entries.Jobs.Select(job => job.Key).Distinct(StringComparer.Ordinal).Count() != action.Entries.Jobs.Length ||
                 action.Entries.Children.Distinct().Count() != action.Entries.Children.Length)
                 throw InvalidCascade();
-            if (previous is { ParkDiscard: not null } draining &&
+            if (previous is { } draining &&
+                (draining.ParkDiscard is not null ||
+                    draining is { ParkRecovery: not null, Status: not InstanceStatus.Running } && next.ParkRecovery == draining.ParkRecovery) &&
                 (turn.Consumed.Concat(turn.Done).ToArray() is not [var input] ||
                     Messages.GetValueOrDefault(input) is not { Done: false, Message: { } source } ||
                     !AuthorizesDrainingTerminate(draining, source) ||
@@ -259,6 +261,7 @@ public sealed partial class InMemoryStore
             var stored = Messages[key];
             stored.KeptBy = null;
             stored.Message = stored.Message with { KeepUntil = until };
+            stored.DropDonePayload();
         }
     }
 

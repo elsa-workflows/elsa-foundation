@@ -141,7 +141,7 @@ public sealed partial class InMemoryStore
         {
             var key = rearm.Envelope.InboxKey;
             if (rearm.DoneSequence.HasValue) Messages.Remove(key);
-            Messages.Add(key, new(rearm.Envelope, ++_seq, 0));
+            Messages.Add(key, StoreMessage(rearm.Envelope, ++_seq, 0));
         }
     }
 }
