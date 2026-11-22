@@ -488,9 +488,12 @@ internal sealed class EtlConnectorOutputProcessor
         if (route.Body.Key != store.KeyFor(identity) || route.Body.ByteLength <= 0 || route.Body.ByteLength > maxBytes)
             throw new EtlEffectException("etl.output-read-conflict", "The retained ETL route body reference is invalid.");
         var bytes = await store.ReadAsync(_snapshotRoot, identity, maxBytes, route.Body.ByteLength, cancellationToken);
-        if (bytes is null || RouteHash(route.Kind, bytes) != route.Body.ContentHash)
+        bool matches;
+        try { matches = bytes is not null && RouteHash(route.Kind, bytes) == route.Body.ContentHash; }
+        catch (System.Text.Json.JsonException) { matches = false; }
+        if (!matches)
             throw new EtlEffectException("etl.output-read-conflict", "The retained ETL route body failed integrity verification.");
-        return bytes;
+        return bytes!;
     }
 
     private static string? ValidateInput(EtlConnectorPartitionLease? lease, EtlConnectorRunAdmission? admission,
