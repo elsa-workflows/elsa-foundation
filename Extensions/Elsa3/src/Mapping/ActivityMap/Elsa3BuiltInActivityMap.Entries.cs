@@ -44,7 +44,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 Carry("Start", "Start") with { OnNull = NullUnbound },
                 Carry("End", "End") with { OnNull = NullUnbound },
                 Carry("Step", "Step", ForZeroStepFaults) with { OnNull = NullRefused("Elsa 3 ran the loop with a step of 0, so it never advanced.") },
-                DefaultFlip("OuterBoundInclusive", "EndInclusive", "true"),
+                DefaultFlip("OuterBoundInclusive", "EndInclusive", "true") with { OnLiteralNull = NullEmits("false"), OnBlank = NullEmits("false") },
                 Slot("Body", "For.Body"),
                 Lost("CurrentValue")
             ],
@@ -171,7 +171,12 @@ internal sealed partial class Elsa3BuiltInActivityMap
         SendHttpRequest("FlowSendHttpRequest", flow: true),
         Catalog("WriteHttpResponse", Http + "WriteHttpResponse",
             [
-                Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt) with { OnNull = NullUnbound },
+                Narrow("StatusCode", "StatusCode", Elsa3ValueContract.PositiveHttpResponseStatus) with
+                {
+                    OnNull = NullUnbound,
+                    OnLiteralNull = NullRefused("Elsa 3 assigns raw status 0; Elsa 4 would replace it with 200."),
+                    OnBlank = NullRefused("Blank enum text is not a supported legacy HTTP response status; it must not become 200.")
+                },
                 Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant, OnNull = NullAsNull },
                 Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType) with { OnNull = NullAsNull },
                 Narrow("ResponseHeaders", "Headers", Elsa3ValueContract.HttpResponseHeaders) with { OnNull = NullRefused("Elsa 3 faults on null response headers.") }
@@ -185,11 +190,18 @@ internal sealed partial class Elsa3BuiltInActivityMap
         var members = new List<Elsa3MemberRule>
         {
             Carry("Url", "Url") with { OnNull = NullRequired },
-            Narrow("Method", "Method", Elsa3ValueContract.HttpMethodSupported) with { OnNull = NullUnbound },
-            Narrow("Content", "Content", Elsa3ValueContract.StringOnly) with { OnNull = NullAsNull },
+            Narrow("Method", "Method", Elsa3ValueContract.HttpMethodSupported) with
+            {
+                OnNull = NullUnbound, OnLiteralNull = NullUnbound,
+                OnBlank = NullRefused("Elsa 3 passes the authored blank to HttpMethod; Elsa 4 would normalize it to GET.")
+            },
+            Narrow("Content", "Content", Elsa3ValueContract.HttpRequestContent) with { OnNull = NullAsNull },
             DefaultFlip("ContentType", "ContentType", "application/json", whenBound: "Content") with
             {
-                OnNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content")
+                OnNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content"),
+                OnAbsent = NullRefused("Elsa 3 sends no body without a content type; Elsa 4 can send the bound Content.", whenBound: "Content"),
+                OnLiteralNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content"),
+                OnBlank = NullRefused("Elsa 3.6's JSON writer sends application/json without a charset parameter; Elsa 4 appends charset=utf-8, changing the request header.", whenBound: "Content")
             },
             Removed("Authorization", warning: HttpAuthorizationUseConnection),
             Removed("DisableAuthorizationHeaderValidation", "true", warning: AuthHeaderUnvalidated),
@@ -202,7 +214,12 @@ internal sealed partial class Elsa3BuiltInActivityMap
         };
         if (flow)
         {
-            members.Add(Carry("ExpectedStatusCodes", "ExpectedStatusCodes") with { OnNull = NullEmits("[200]") });
+            members.Add(Narrow("ExpectedStatusCodes", "ExpectedStatusCodes", Elsa3ValueContract.NonemptyHttpStatusCodes) with
+            {
+                OnNull = NullEmits("[200]"), OnAbsent = NullEmits("[200]"),
+                OnLiteralNull = NullRefused("Elsa 3 selects Done for every response with a cleared list; Elsa 4 selects Failed for non-2xx responses."),
+                OnBlank = NullRefused("Elsa 3 evaluates this blank to a cleared list and selects Done for every response; Elsa 4 selects Failed for non-2xx responses.")
+            });
         }
         else
         {
@@ -229,14 +246,23 @@ internal sealed partial class Elsa3BuiltInActivityMap
 
     private static IEnumerable<Elsa3ActivityMapEntry> SchedulingActivities() =>
     [
-        Catalog("Delay", Scheduling + "Delay", [DefaultFlip("TimeSpan", "Duration", "00:01:00")]),
+        Catalog("Delay", Scheduling + "Delay", [DefaultFlip("TimeSpan", "Duration", "00:01:00") with
+        {
+            OnLiteralNull = NullEmits("00:00:00"), OnBlank = NullEmits("00:00:00")
+        }]),
         Catalog("Timer", Scheduling + "Timer",
-            [Narrow("Interval", "Interval", Elsa3ValueContract.LiteralTimeSpanToString, "00:01:00"), StartOnly()]),
+            [Narrow("Interval", "Interval", Elsa3ValueContract.PositiveLiteralTimeSpan, "00:01:00") with
+            {
+                OnLiteralNull = NullRefused("Elsa 3 evaluates this interval to zero; Elsa 4 requires a positive recurring interval."),
+                OnBlank = NullRefused("Elsa 3 can evaluate a blank interval to zero; Elsa 4 requires a positive recurring interval.")
+            }, StartOnly()]),
         Catalog("Cron", Scheduling + "Cron",
             [
                 Narrow("CronExpression", "Expression", Elsa3ValueContract.LiteralOnly) with
                 {
-                    OnNull = NullRefused("Elsa 3 runs a Cron without an expression as a disabled trigger, which Elsa 4 has no counterpart for.")
+                    OnNull = NullRefused("Elsa 3.6 completes without scheduling for a blank expression; the converted Cron contract requires an expression."),
+                    OnAbsent = NullRefused("Elsa 3.6 completes without scheduling for a missing expression; the converted Cron contract requires an expression."),
+                    OnBlank = NullRefused("Elsa 3.6 completes without scheduling for a blank expression; the converted Cron contract requires an expression.")
                 },
                 StartOnly()
             ]),
@@ -297,7 +323,12 @@ internal sealed partial class Elsa3BuiltInActivityMap
     [
         Catalog("RunJavaScript", RunJavaScript,
             [
-                Narrow("Script", "script", Elsa3ValueContract.ScriptBody) with { OnNull = NullRefused("Elsa 3 runs nothing without a script, and Elsa 4 requires one.") },
+                Narrow("Script", "script", Elsa3ValueContract.ScriptBody) with
+                {
+                    OnNull = NullRefused("Elsa 3 runs nothing without a script; the converted catalog input requires a bound script."),
+                    OnAbsent = NullRefused("Elsa 3 runs nothing without a script; the converted catalog input requires a bound script."),
+                    OnBlank = NullRefused("Elsa 3 runs nothing for a blank script; the converted catalog input requires a bound script.")
+                },
                 Carry("PossibleOutcomes", "possibleOutcomes") with { OnNull = NullAsNull },
                 CarryOutput("Result", "result")
             ]),

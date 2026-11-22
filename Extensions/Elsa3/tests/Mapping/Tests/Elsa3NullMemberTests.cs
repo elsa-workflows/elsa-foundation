@@ -205,14 +205,14 @@ public sealed class Elsa3NullMemberTests
     }
 
     [Fact]
-    public async Task A_deliberate_null_converts_as_a_JSON_null_does()
+    public async Task A_deliberate_null_keeps_the_delivered_table_except_the_named_declared_default_amendment()
     {
         var script = Input(await ConvertAsync("Elsa.RunJavaScript", "possibleOutcomes", LiteralNull, "script=return 1;"), "possibleOutcomes");
         var delay = Input(await ConvertAsync("Elsa.Delay", "timeSpan", LiteralNull, ""), "Duration");
 
         Assert.Null(script.Value.Value);
         Assert.Equal("Literal", script.Value.ExpressionType);
-        Assert.Equal("00:01:00", Text(delay));
+        Assert.Equal("00:00:00", Text(delay));
     }
 
     [Fact]

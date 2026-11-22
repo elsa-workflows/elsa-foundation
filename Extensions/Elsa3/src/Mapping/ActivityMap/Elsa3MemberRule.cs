@@ -30,7 +30,17 @@ public sealed record Elsa3MemberRule(
     string? Projection = null,
     string? BehaviourWarning = null,
     string? WhenBound = null,
-    Elsa3NullConversion? OnNull = null);
+    Elsa3NullConversion? OnNull = null)
+{
+    /// <summary>Conversion of a missing input or a supported defaulted Elsa 3 input wrapper.</summary>
+    public Elsa3NullConversion? OnAbsent { get; init; }
+
+    /// <summary>Conversion of authored blank text that reaches this member's legacy conversion.</summary>
+    public Elsa3NullConversion? OnBlank { get; init; }
+
+    /// <summary>Conversion of a resolved Literal expression with a null or omitted value.</summary>
+    public Elsa3NullConversion? OnLiteralNull { get; init; }
+}
 
 /// <summary>What a JSON <c>null</c> member converts to (spec 267).</summary>
 /// <param name="Rule">How it converts.</param>
@@ -139,5 +149,17 @@ public enum Elsa3ValueContract
     /// A RunJavaScript body (plan D-16): rewritten in script mode, its Elsa 3 reads bound through the activity's
     /// <c>arguments</c> input and its completion value returned.
     /// </summary>
-    ScriptBody
+    ScriptBody,
+
+    /// <summary>A nonempty legacy HTTP status list; cleared lists have incompatible non-2xx routing.</summary>
+    NonemptyHttpStatusCodes,
+
+    /// <summary>A positive literal recurring interval, without changing generic custom-map time span conversion.</summary>
+    PositiveLiteralTimeSpan,
+
+    /// <summary>A literal HTTP response status whose raw positive value the target retains.</summary>
+    PositiveHttpResponseStatus,
+
+    /// <summary>Legacy request text whose body presence the target can retain.</summary>
+    HttpRequestContent
 }
