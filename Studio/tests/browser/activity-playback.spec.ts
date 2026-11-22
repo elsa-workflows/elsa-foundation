@@ -62,6 +62,7 @@ for (const [speed, interval] of [["0.5", 2000], ["1", 1000], ["2", 500], ["4", 2
     await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) }); await page.goto("/activity-playback.html");
     const playback = page.getByRole("region", { name: "Activity playback", exact: true });
     await expect(playback).toContainText("Step 1 of 200"); await page.clock.pauseAt(clockStart);
+    await playback.getByText("Playback options", { exact: true }).click();
     await playback.getByRole("combobox", { name: "Playback speed" }).selectOption(speed);
     await playback.getByRole("button", { name: "Play", exact: true }).click();
     await page.clock.runFor(interval - 1); await expect(playback).toContainText("Step 1 of 200");

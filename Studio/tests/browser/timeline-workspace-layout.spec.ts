@@ -13,6 +13,7 @@ for (const width of [320, 1440]) {
     // the documented public host styling contract; its existing SDK data stays unchanged.
     await root.evaluate(element => element.setAttribute("data-workspace-style", "minimal"));
     try {
+      await timeline.getByText("Filter events", { exact: true }).click();
       const search = timeline.getByRole("searchbox", { name: "Search recorded events", exact: true });
       const submit = timeline.getByRole("button", { name: "Search", exact: true });
       const surfaces: Array<[string, Locator]> = [

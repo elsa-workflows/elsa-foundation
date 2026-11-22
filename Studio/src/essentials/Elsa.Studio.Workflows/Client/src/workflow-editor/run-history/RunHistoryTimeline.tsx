@@ -50,6 +50,7 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
   return <section className="wf-run-history" aria-label="Run timeline" aria-busy={history.loading}>
     <header className="wf-history-heading"><div><h3><ListTree size={18} aria-hidden="true" /> Timeline</h3><p>Recorded order · {historyZone()}</p></div>
       <StudioButton type="button" onClick={() => { onManualNavigation?.(); history.refresh(); }} aria-label="Refresh run history"><RefreshCw size={14} aria-hidden="true" /></StudioButton></header>
+    <details className="wf-history-filters"><summary><span>Filter events</span> · {filters.activityExecutionId ? filters.activityExecutionId === selectedActivityExecutionId ? selectedActivityLabel || "Selected execution" : "Specific execution" : "Entire run"} · {filters.detail === "all" ? "All events" : "Highlights"}{filters.search || filters.category || filters.name ? " · active" : ""}</summary>
     <StudioCollectionToolbar className="wf-history-controls">
       <StudioField label="Scope"><select aria-label="History scope" value={filters.activityExecutionId ?? ""} onChange={event => change({ activityExecutionId: event.target.value || null, includeDescendants: false })}>
         <option value="">Entire run</option>
@@ -68,6 +69,7 @@ export function RunHistoryTimeline({ context, workflowExecutionId, filters, onFi
       <StudioButton type="submit">Search</StudioButton>
       {filters.search || filters.category || filters.name || filters.activityExecutionId ? <StudioButton type="button" onClick={() => { onManualNavigation?.(); setSearch(""); onFiltersChange({ ...defaultHistoryFilters, detail: filters.detail }); }}>Clear filters</StudioButton> : null}
     </form>
+    </details>
     {filters.name ? <p className="wf-history-note">Kind filter: {filters.name} <StudioButton type="button" onClick={() => change({ name: "" })}>Remove kind filter</StudioButton></p> : null}
     <div className="wf-history-reading-controls"><StudioButton type="button" aria-pressed={history.following} onClick={() => { onManualNavigation?.(); history.setFollowing(!history.following); }}>{history.following ? "Pause live updates" : "Resume live updates"}</StudioButton>
       <StudioButton type="button" aria-pressed={followEnd} onClick={() => { onManualNavigation?.(); setFollowEnd(!followEnd); }}>{followEnd ? "Following latest" : "Follow latest"}</StudioButton>
@@ -104,7 +106,7 @@ export function ActivityHistoryJournal({ context, workflowExecutionId, activityE
     <label className="wf-history-checkbox"><input type="checkbox" checked={includeDescendants} onChange={event => setIncludeDescendants(event.target.checked)} />Include descendants</label>
     {history.error ? <p role="status">{history.error} <StudioButton type="button" onClick={history.refresh}>Retry journal</StudioButton></p> : null}
     {value ? <><HistoryCoverage coverage={value.page.coverage} readAt={value.page.readAt} scopeComplete={value.page.scopeComplete} scopeLimitation={value.page.scopeLimitation} />
-      <HistoryEventList compact unloadedAfterSequence={value.next ? value.snapshotUpperSequence : undefined} items={value.items} selectedEventId={selectedEventId} onSelect={event => onSelectEvent?.(event)} />
+      <HistoryEventList compact hideActivityExecutionId={includeDescendants ? undefined : activityExecutionId} unloadedAfterSequence={value.next ? value.snapshotUpperSequence : undefined} items={value.items} selectedEventId={selectedEventId} onSelect={event => onSelectEvent?.(event)} />
       {!value.items.length ? <p>No recorded events in this activity range.</p> : null}
       {value.pending.length ? <StudioButton type="button" onClick={history.showNew}>Show {value.pending.length} new journal events</StudioButton> : null}
       {value.next ? <StudioButton type="button" disabled={history.loading} onClick={history.loadMore}>Load more journal events</StudioButton> : null}

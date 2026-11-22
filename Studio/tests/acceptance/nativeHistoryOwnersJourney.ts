@@ -106,7 +106,11 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   expect(bookmarks.items[0]).toMatchObject({ status: "Consumed", bookmark: { identity: { bookmarkId: consumed.bookmarkId } } });
 
   await openEvent(requested, "Child run dispatch requested");
-  await expect(details.getByRole("button", { name: `Open related run ${childRunId} →`, exact: true })).toBeVisible();
+  if (info.project.name.startsWith("desktop-")) {
+    const events = page.getByRole("list", { name: "Run history events", exact: true }).getByRole("button");
+    await expect(events.nth(2), "The primary chronology keeps several neighboring events visible without dismissing chrome").toBeInViewport();
+  }
+  await expect(details.getByRole("button", { name: "Open related run →", exact: true })).toBeVisible();
   await capture(page, info, "child-dispatch");
   await details.getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
   const views = page.getByRole("tablist", { name: "Activity execution views", exact: true });
@@ -123,9 +127,12 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
   const consumedBadge = lifecycle.locator('[data-status="Consumed"]');
   await expect(consumedBadge).toHaveCount(1); await consumedBadge.scrollIntoViewIfNeeded();
-  await expect(consumedBadge).toBeInViewport(); await capture(page, info, "child-consumed-bookmark");
+  await expect(consumedBadge).toBeInViewport();
+  await expect(lifecycle.getByText("Created", { exact: true }), "Creation time is part of the primary lifecycle answer").toBeInViewport();
+  await expect(lifecycle.getByRole("button", { name: "Inspect consumed event →", exact: true }), "Consumption evidence is available before technical identifiers").toBeInViewport();
+  await capture(page, info, "child-consumed-bookmark");
   await openEvent(requested, "Child run dispatch requested");
-  await details.getByRole("button", { name: `Open related run ${childRunId} →`, exact: true }).click();
+  await details.getByRole("button", { name: "Open related run →", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(childRunId)}\\?view=timeline`));
   await waitCapturedPlaybackReady(page);
   await openEvent(settled, "Child run settled"); await capture(page, info, "child-settlement");

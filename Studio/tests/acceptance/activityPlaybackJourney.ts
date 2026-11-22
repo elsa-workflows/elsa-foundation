@@ -253,6 +253,7 @@ export async function playbackLiveWaitJourney(page: Page, info: TestInfo, captur
   expect(created).toBeTruthy(); expect(consumed).toBeTruthy();
   const actualWait = Date.parse(consumed.occurredAt!) - Date.parse(created.occurredAt!);
   expect(actualWait).toBeGreaterThanOrEqual(52 * 60_000); expect(actualWait).toBeLessThan(53 * 60_000);
+  await page.getByRole("region", { name: "Run timeline", exact: true }).getByText("Filter events", { exact: true }).click();
   await page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("combobox", { name: "History category", exact: true }).selectOption("BookmarkLifecycle");
   await expect(page.getByText(/Handle lifetime 52m/)).toBeVisible(); await h.snap("playback-live-recorded-wait", page.getByRole("region", { name: "Run timeline", exact: true }).getByRole("button").filter({ hasText: /Handle lifetime 52m/ }));
   // Verify the source duration before introducing a presentation clock. Playback crosses this
@@ -262,6 +263,7 @@ export async function playbackLiveWaitJourney(page: Page, info: TestInfo, captur
   const presentationStart = new Date(Date.now() + 60_000);
   await page.clock.install({ time: new Date(presentationStart.getTime() - 60_000) }); await page.clock.pauseAt(presentationStart);
   await h.seek(waitPosition - 1, 4);
+  await h.controls.getByText("Playback options", { exact: true }).click();
   await h.controls.getByRole("combobox", { name: "Playback speed" }).selectOption("1");
   await h.controls.getByRole("button", { name: "Play", exact: true }).click();
   await page.clock.runFor(999); await h.position(waitPosition - 1, 4);
@@ -438,6 +440,7 @@ export async function playbackTransportJourney(page: Page, info: TestInfo, captu
     autoplay.push(sequence.items[index].activityExecutionId);
   }
   expect(autoplay).toEqual(forward); await expect(h.controls.getByRole("button", { name: "Replay", exact: true })).toBeEnabled();
+  await h.controls.getByText("Playback options", { exact: true }).click();
   for (const [speed, cadence] of [["0.5", 2000], ["1", 1000], ["2", 500], ["4", 250]] as const) {
     await h.seek(0, 9); await h.controls.getByRole("combobox", { name: "Playback speed" }).selectOption(speed);
     await h.controls.getByRole("button", { name: "Play", exact: true }).click();

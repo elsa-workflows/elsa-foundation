@@ -154,9 +154,9 @@ function EventIcon({ event }: { event: RuntimeHistoryEvent }) {
   return <Activity {...props} />;
 }
 
-export function HistoryEventList({ items, selectedEventId, onSelect, labelForEvent, compact = false, unloadedAfterSequence }: {
+export function HistoryEventList({ items, selectedEventId, onSelect, labelForEvent, compact = false, unloadedAfterSequence, hideActivityExecutionId }: {
   items: RuntimeHistoryEvent[]; selectedEventId?: string | null; onSelect(event: RuntimeHistoryEvent): void;
-  labelForEvent?(event: RuntimeHistoryEvent): string | null; compact?: boolean; unloadedAfterSequence?: number;
+  labelForEvent?(event: RuntimeHistoryEvent): string | null; compact?: boolean; unloadedAfterSequence?: number; hideActivityExecutionId?: string;
 }) {
   const creations = new Map(items.filter(event => event.name === "BookmarkCreated" && event.bookmarkId).map(event => [event.bookmarkId, event]));
   return <ol className={`wf-history-events${compact ? " wf-history-events-compact" : ""}`} aria-label={compact ? "Activity journal events" : "Run history events"}>
@@ -177,7 +177,7 @@ export function HistoryEventList({ items, selectedEventId, onSelect, labelForEve
           <time dateTime={occurredAt ?? undefined} title={historyInstant(occurredAt)}>{historyClock(occurredAt)}</time>
           <span className="wf-history-event-icon"><EventIcon event={event} /></span>
           <span className="wf-history-event-body"><strong>{historyEventLabel(event)}</strong>
-            {labelForEvent?.(event) ? <small>{labelForEvent(event)}</small> : event.activityExecutionId ? <small>Execution {event.activityExecutionId}</small> : null}
+            {labelForEvent?.(event) ? <small>{labelForEvent(event)}</small> : event.activityExecutionId && event.activityExecutionId !== hideActivityExecutionId ? <small>Execution {event.activityExecutionId}</small> : null}
             {event.metadata["history.status"] ? <small>{event.metadata["history.status"]}</small> : null}
             {reason ? <small>{reason}</small> : null}
             {age ? <small><Clock3 size={12} aria-hidden="true" /> Handle lifetime {age}</small> : null}

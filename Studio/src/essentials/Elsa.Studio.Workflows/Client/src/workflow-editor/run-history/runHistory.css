@@ -630,3 +630,24 @@
   max-height: none;
   overflow: visible;
 }
+
+.wf-history-filters {
+  flex: 0 0 auto;
+  padding: 10px 16px 0;
+  font-size: var(--studio-label-size);
+}
+
+.wf-history-filters > summary {
+  cursor: pointer;
+}
+
+.wf-history-filters .wf-history-controls,
+.wf-history-filters .wf-history-search {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.wf-history-filters > summary:focus-visible {
+  outline: 2px solid var(--studio-selection-mark);
+  outline-offset: 3px;
+}

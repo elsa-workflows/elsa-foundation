@@ -70,6 +70,7 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   const timeline = views.getByRole("button", { name: "Timeline", exact: true });
   const region = page.getByRole("region", { name: "Run timeline", exact: true });
   await expect(timeline).toHaveAttribute("aria-pressed", "true");
+  await region.getByText("Filter events", { exact: true }).click();
   await region.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
   const entries = region.getByRole("list", { name: "Run history events", exact: true }).getByRole("button");
   const firstRow = entries.nth(history.items.findIndex(item => item.historyEventId === firstEvent.historyEventId));

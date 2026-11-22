@@ -128,7 +128,7 @@ function HistoryEventInspection({ context, workflowExecutionId, historyEventId, 
       {event.metadata["history.selectedBookmarkId"] ? <p><StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: event.metadata["history.selectedBookmarkId"] })}>Inspect selected bookmark →</StudioButton></p> : null}
       <p><StudioButton type="button" aria-expanded={showSuccessors} onClick={() => setShowSuccessors(value => !value)}>Find causal successors in this run</StudioButton></p>
       {showSuccessors ? <CausalSuccessors context={context} workflowExecutionId={workflowExecutionId} historyEventId={event.historyEventId} onSelect={onSelect} /> : null}
-      {relatedRun && navigate ? <p><StudioButton type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(relatedRun)}?view=timeline`)}>Open related run {relatedRun} →</StudioButton></p> : null}
+      {relatedRun && navigate ? <p><StudioButton type="button" onClick={() => navigate(`/workflows/instances/${encodeURIComponent(relatedRun)}?view=timeline`)}>Open related run →</StudioButton></p> : null}
       {valueIds.length ? <div><p>{valueIds.length} phase-specific value reference{valueIds.length === 1 ? "" : "s"}. Values load only when requested through their existing inspection policy.</p>
         <ul>{valueIds.map(id => <li key={id}><code>{id}</code>{event.activityExecutionId ? <StudioButton ref={element => { if (element) valueTriggers.current.set(id, element); else valueTriggers.current.delete(id); }} type="button" aria-expanded={valueTarget === id} onClick={() => setValueTarget(valueTarget === id ? null : id)}>Inspect recorded value →</StudioButton> : <span> Owning execution unavailable.</span>}</li>)}</ul>
       </div> : null}
@@ -192,16 +192,10 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
     {resource.error ? <p role="status">{resource.error} <StudioButton type="button" onClick={resource.retry}>Retry bookmark</StudioButton></p> : null}
     {item && bookmark && resource.value ? <>
       <p><span className="wf-history-badge" data-status={item.status}>{item.status}</span> · current eligibility: {bookmarkEligibilityLabel(item.eligibility)}</p>
-      <dl className="wf-history-facts"><HistoryFact label="Bookmark ID" value={bookmark.identity.bookmarkId} />
-        <dt>Owning execution</dt><dd>{onActivity ? <StudioButton type="button" onClick={() => onActivity(bookmark.identity.activityExecutionId)}>{bookmark.identity.activityExecutionId} →</StudioButton> : bookmark.identity.activityExecutionId}</dd>
-        <HistoryFact label="Stimulus type" value={bookmark.stimulusType} /><HistoryFact label="Stimulus hash" value={bookmark.stimulusHash} />
-        <HistoryFact label="Resume target" value={bookmark.identity.resumeTargetId} />
+      <dl className="wf-history-facts">
         <HistoryFact label="Created" value={item.priorState === "Unknown" ? "Not recorded" : historyInstant(bookmark.createdAt)} />
         <HistoryFact label="Ended" value={item.endedAt ? historyInstant(item.endedAt) : item.endedHistoryEventId || ["Consumed", "Removed", "Superseded"].includes(item.status) ? "End time not recorded" : "No end transition recorded"} />
         <HistoryFact label="Recorded reason" value={item.reason} /><HistoryFact label="Handle lifetime" value={age || "Unknown"} />
-        <HistoryFact label="Expiry" value={bookmark.expiresAt ? historyInstant(bookmark.expiresAt) : "No expiry"} />
-        <HistoryFact label="Eligibility observed" value={historyInstant(item.eligibilityObservedAt)} />
-        {item.eligibilityReason ? <HistoryFact label="Eligibility reason" value={item.eligibilityReason.replaceAll("-", " ")} /> : null}
       </dl>
       {item.eligibility === "expired" ? <p className="wf-history-note">Expiry makes this handle unmatchable. It does not wake, time out or cancel the activity.</p> : item.eligibility === "unavailable" || item.eligibility === "unknown" ? <p className="wf-history-note">Current eligibility cannot be established. A missing handle does not prove consumption.</p> : null}
       <div className="wf-history-lifecycle-links">
@@ -210,6 +204,14 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
         {item.selectedBookmarkId && item.selectedBookmarkId !== bookmarkId ? <StudioButton type="button" onClick={() => onSelect({ kind: "bookmark", id: item.selectedBookmarkId! })}>Inspect winning bookmark →</StudioButton> : null}
         <StudioButton type="button" onClick={() => onSelect({ kind: "event", id: item.lastHistoryEventId })}>Inspect last recorded transition →</StudioButton>
       </div>
+      <details className="wf-history-technical"><summary>Technical details</summary><dl className="wf-history-facts"><HistoryFact label="Bookmark ID" value={bookmark.identity.bookmarkId} />
+        <dt>Owning execution</dt><dd>{onActivity ? <StudioButton type="button" onClick={() => onActivity(bookmark.identity.activityExecutionId)}>{bookmark.identity.activityExecutionId} →</StudioButton> : bookmark.identity.activityExecutionId}</dd>
+        <HistoryFact label="Stimulus type" value={bookmark.stimulusType} /><HistoryFact label="Stimulus hash" value={bookmark.stimulusHash} />
+        <HistoryFact label="Resume target" value={bookmark.identity.resumeTargetId} />
+        <HistoryFact label="Expiry" value={bookmark.expiresAt ? historyInstant(bookmark.expiresAt) : "No expiry"} />
+        <HistoryFact label="Eligibility observed" value={historyInstant(item.eligibilityObservedAt)} />
+        {item.eligibilityReason ? <HistoryFact label="Eligibility reason" value={item.eligibilityReason.replaceAll("-", " ")} /> : null}
+      </dl></details>
       <BookmarkLifecycleEvents context={context} workflowExecutionId={workflowExecutionId} bookmarkId={bookmarkId} onSelect={onSelect} />
       <HistoryCoverage coverage={resource.value.coverage} readAt={resource.value.readAt} />
     </> : resource.status === "loading" ? <p role="status">Loading exact bookmark lifecycle…</p> : null}
@@ -218,7 +220,7 @@ function HistoryBookmarkInspection({ context, workflowExecutionId, bookmarkId, o
 
 function BookmarkLifecycleEvents({ context, workflowExecutionId, bookmarkId, onSelect }: { context: StudioEndpointContext; workflowExecutionId: string; bookmarkId: string; onSelect(selection: RunHistorySelection): void }) {
   // A bookmark's directly linked lifecycle is available above; use the shared bounded event reader for its retained history.
-  return <div className="wf-history-note">Bookmark {bookmarkId} belongs to run {workflowExecutionId}. <BookmarkEventJournal context={context} workflowExecutionId={workflowExecutionId} bookmarkId={bookmarkId} onSelect={onSelect} /></div>;
+  return <div className="wf-history-note">Recorded bookmark events. <BookmarkEventJournal context={context} workflowExecutionId={workflowExecutionId} bookmarkId={bookmarkId} onSelect={onSelect} /></div>;
 }
 
 function BookmarkEventJournal({ context, workflowExecutionId, bookmarkId, onSelect }: { context: StudioEndpointContext; workflowExecutionId: string; bookmarkId: string; onSelect(selection: RunHistorySelection): void }) {
