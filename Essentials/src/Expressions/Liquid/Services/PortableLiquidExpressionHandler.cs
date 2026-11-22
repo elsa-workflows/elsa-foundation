@@ -78,7 +78,7 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
             if (!bool.TryParse(rendered.Trim(), out var value))
                 throw new InvalidOperationException($"Liquid rendered '{rendered}' for a Boolean expression result.");
 
-            return JsonSerializer.SerializeToElement(value);
+            return JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
         }
 
         if (NumericAliases.Contains(resultTypeAlias))
@@ -93,14 +93,15 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
             && TryParseJson(rendered, out var structuredValue))
             return structuredValue;
 
-        return JsonSerializer.SerializeToElement(rendered);
+        return JsonSerializer.SerializeToElement(rendered, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static bool TryParseJson(string value, out JsonElement result)
     {
         try
         {
-            result = JsonSerializer.Deserialize<JsonElement>(value);
+            using var document = JsonDocument.Parse(value);
+            result = document.RootElement.Clone();
             return true;
         }
         catch (JsonException)
