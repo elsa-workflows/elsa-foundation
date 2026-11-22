@@ -581,6 +581,68 @@ internal static class ParkKeptChecks
         }
     }
 
+    internal static async Task CheckInvalidTimerRecoveryPlan(Action<bool, string> check)
+    {
+        var now = 1_701_400_030_100L;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new RestorePlanProbe();
+        var scope = new Contract.BoundScope("recover-invalid-plan");
+        var siblingRefused = false;
+        var worker = new Worker("recover-invalid-plan", 0, store, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => 0,
+            OnPreparedCheckpoint = (opening, _, _) =>
+            {
+                if (opening.FoundationRecoveryTimers?.Preserved is not [var key]) return;
+                var prior = store.Instances[opening.Instance];
+                var timer = store.Messages[key];
+                var fence = store.Partitions[0];
+                var sibling = new TurnCommit(opening.Instance, null, null, [key], [], [], [], [], null);
+                try
+                {
+                    store.CommitAsync(new(0, fence.Epoch, fence.Position, Defaults.Lease, false, [opening, sibling], [], []))
+                        .GetAwaiter().GetResult();
+                }
+                catch (StoreException error) when (error.Failure == Failure.Definite)
+                {
+                    siblingRefused = store.Instances[opening.Instance] == prior && store.Messages.GetValueOrDefault(key) == timer;
+                }
+            }
+        });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "fault");
+        await Pump(owner);
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        var admitted = await ingress.SendAsync(scope, target, "invalid-plan", Contract.Kinds.Recover, payload);
+        await Pump(owner);
+        var intact = admitted.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[parked.Row.Id] == parked.Row &&
+            store.Messages.Values.Any(row => row.Message.Id == "invalid-plan" && row.Done) &&
+            store.Messages.Values.All(row => row.Message.Kind != Kinds.Drain);
+        check(intact, "a null timer entry refuses Resume inside the worker and leaves the exact Park checkpoint intact");
+        if (!intact) return;
+
+        probe.ReturnPlan = true;
+        var timer = store.Messages.Values.Single(row => row.Message.Kind == "");
+        var original = timer.Message;
+        await ingress.SendAsync(scope, target, "valid-plan", Contract.Kinds.Recover, payload);
+        for (var step = 0; step < 3; step++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(siblingRefused, "a sibling consume cannot remove the timer that Open validates and preserves");
+        check(recovered is { Park: null, Row.Status: InstanceStatus.Running } && timer is { Done: false } &&
+            timer.Message == original && store.Messages.GetValueOrDefault(original.InboxKey) == timer,
+            "a valid originally admitted empty-kind timer keeps its exact pending envelope through Resume");
+    }
+
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
         const long now = 1_701_400_029_000;
@@ -1250,6 +1312,32 @@ internal static class ParkKeptChecks
 
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
+        public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
+        public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
+    }
+
+    private sealed class RestorePlanProbe : Contract.IActorType
+    {
+        public string Type => "restore-plan";
+        public bool ReturnPlan { get; set; }
+        private long _due;
+
+        public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
+        {
+            foreach (var message in turn.Inbox)
+                if (message.Kind == Contract.Kinds.Start)
+                {
+                    _due = turn.Now + 10_000;
+                    turn.State = turn.Send(turn.Header.Ref, "", "timer content", _due);
+                }
+                else if (message.Kind == "fault") throw new InvalidOperationException("park with a timer");
+            return default;
+        }
+
+        public bool Withholds(Contract.ActorHeader header) => false;
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            ReturnPlan ? new([new(state, "", "timer content", _due)], [], []) : new([null!], [], []);
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }

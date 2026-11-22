@@ -241,6 +241,7 @@ public sealed class TurnOutcome(string instance)
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;
+    internal ParkTimerOpen? FoundationRecoveryTimers;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
@@ -418,7 +419,9 @@ public sealed class DurableTurn
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
-        var id = store.MessageHandle(FormattableString.Invariant($"send:{Origin}#{Revision}.{_ordinal++:D4}"));
+        var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
+        var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
+            ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);
         _sent.Add(new Message(id, target, kind, payload, Id, Due: dueAt, TargetCreation: targetCreation, SenderCreation: _input.Creation)
             { ActorAuthored = true, StorageId = Origin + "#" + id }.AsIssued());
         return id;

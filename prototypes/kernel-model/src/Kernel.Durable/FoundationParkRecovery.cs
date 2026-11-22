@@ -61,7 +61,8 @@ public sealed partial class InMemoryStore
             next != (previous with
             {
                 Revision = checked(previous.Revision + 1), Status = InstanceStatus.Running, Fault = null,
-                ParkResolutionGeneration = checked(previous.ParkResolutionGeneration + 1), ParkRecovery = recovery, ParkCohort = null
+                ParkResolutionGeneration = checked(previous.ParkResolutionGeneration + 1), ParkRecovery = recovery, ParkCohort = null,
+                ParkTimerDispositions = next.ParkTimerDispositions
             }) || StoreBatchRules.AddressPartition(previous.Id) is not { } partition || !epochs.ContainsKey(partition) ||
             turn.OpensPark || turn.Delete || turn.FoundationParkClear is not null ||
             turn.FoundationKept is not null || turn.FoundationHeader is not null ||
@@ -86,6 +87,13 @@ public sealed partial class InMemoryStore
         if (!recalled || recovery.Serial != checked((expiry?.Serial ?? 0) + 1) ||
             !ParkDrainEnvelope.For(next, park).MatchesIssued(control, next, recovery.Serial, recovery.Control))
             throw InvalidDrain();
+        var timers = turn.FoundationRecoveryTimers;
+        if (timers is null || timers.Dispositions != next.ParkTimerDispositions)
+            throw InvalidDrain();
+        var checkedTimers = PlanFoundationTimers(previous, mode, timers.Recipes);
+        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions ||
+            !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
+            throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
         if (expiry is null) return null;
         if (now >= expiry.At)
             throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
@@ -152,7 +160,7 @@ public sealed partial class InMemoryStore
             if (page is not null || turn.Sent.Count != 0 || suspended ||
                 next != (previous with
                 {
-                    Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
+                    Revision = next.Revision, ParkRecovery = null, ParkTimerDispositions = null, ParkCohort = remaining, EndedDuringParkRecovery = !running
                 }) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 } ||
                 !running && ReadEndedFoundationRecoveryPage(address, park, release.Generation, limit: 1) is not { Count: 0 })

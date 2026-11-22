@@ -2473,9 +2473,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
         }
         var units = _queue.GetRange(0, Math.Min(_queue.Count, _options.MaxBatch));     // rows per flush are capped
-        var changing = units.Exists(unit => unit.FoundationRecoveryPage is not null)
-            ? units.Where(unit => unit.FoundationRecoveryPage is not null)
-                .SelectMany(unit => unit.FoundationRecoveryPage!.Rows.Select(row => row.Cursor.Key)).ToHashSet()
+        var changing = units.Exists(unit => unit.FoundationRecoveryPage is not null || unit.FoundationRecoveryTimers is { Rearms.Count: > 0 })
+            ? units.SelectMany(unit => (unit.FoundationRecoveryPage?.Rows.Select(row => row.Cursor.Key) ?? [])
+                .Concat(unit.FoundationRecoveryTimers?.Rearms.Select(rearm => rearm.Envelope.InboxKey) ?? [])).ToHashSet()
             : null;
         var markable = changing is null ? _items.Values.AsEnumerable()
             : _items.Values.Where(item => !changing.Contains(item.Message.InboxKey));
@@ -2759,7 +2759,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             OpensPark = unit.OpensPark,
             FoundationKept = kept,
             FoundationParkClear = unit.FoundationParkClear,
-            FoundationRecoveryPage = unit.FoundationRecoveryPage
+            FoundationRecoveryPage = unit.FoundationRecoveryPage,
+            FoundationRecoveryTimers = unit.FoundationRecoveryTimers
         };
     }
 
@@ -2964,6 +2965,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var row in page.Rows)
             {
                 var key = row.Cursor.Key;
+                if (_items.TryGetValue(key, out var cached)) Forget(cached);
+                else if (_polling && !Has(Flaw.PollRace)) _consumed.Add(key);
+            }
+            _woken = true;
+        }
+        if (unit.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
+        {
+            foreach (var rearm in timers.Rearms)
+            {
+                var key = rearm.Envelope.InboxKey;
                 if (_items.TryGetValue(key, out var cached)) Forget(cached);
                 else if (_polling && !Has(Flaw.PollRace)) _consumed.Add(key);
             }
