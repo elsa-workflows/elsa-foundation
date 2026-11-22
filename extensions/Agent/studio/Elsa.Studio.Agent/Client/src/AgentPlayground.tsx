@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FlaskConical, Play, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioRadioGroup, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
@@ -193,13 +193,11 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         {continuity ? (
           <fieldset className="agent-playground__conversation" disabled={active || starting}>
             <legend>Conversation</legend>
-            <label><input type="radio" name="conversation" checked={continuation === null} onChange={() => setSelected(null)} /> Fresh conversation</label>
-            {conversations.items.map(item => (
-              <label key={item.conversationId}>
-                <input type="radio" name="conversation" checked={continuation?.conversationId === item.conversationId}
-                  onChange={() => setSelected(item.conversationId)} /> Continue conversation at revision {item.revision}
-              </label>
-            ))}
+            <StudioRadioGroup label="Conversation" value={continuation?.conversationId ?? ""}
+              onChange={id => setSelected(id || null)} options={[
+                { value: "", label: "Fresh conversation" },
+                ...conversations.items.map(item => ({ value: item.conversationId, label: `Continue conversation at revision ${item.revision}` }))
+              ]} />
             {conversations.items.length === 0 ? <p className="agent-playground__hint">Conversations accepted by runs of this revision can be continued here.</p> : null}
           </fieldset>
         ) : null}

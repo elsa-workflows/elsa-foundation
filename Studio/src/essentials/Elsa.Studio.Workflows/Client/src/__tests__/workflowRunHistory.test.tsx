@@ -453,7 +453,7 @@ describe("workflow run history", () => {
     const container = render(context(getJson, deleteJson), vi.fn());
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
-    expect(container.querySelector("input[aria-label='Select all workflow runs on this page']")).toBeNull();
+    expect(findInput(container, "Select all workflow runs on this page")).toBeNull();
     expect(container.querySelector("button[aria-label^='Actions for workflow run']")).toBeNull();
     expect(buttonByTextOptional(container, "Delete selected")).toBeNull();
     expect(deleteJson).not.toHaveBeenCalled();
@@ -483,7 +483,7 @@ describe("workflow run history", () => {
     click(buttonByText(container, "Refresh"));
     await waitFor(() => expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("1 workflow run selected"));
     expect(input(container, "Select workflow run execution-2").checked).toBe(true);
-    expect(container.querySelector("input[aria-label='Select workflow run execution-1']")).toBeNull();
+    expect(findInput(container, "Select workflow run execution-1")).toBeNull();
   });
 
   it("selects visible runs, confirms exact IDs, cancels without a request, and preserves row keyboard inspection", async () => {
@@ -573,7 +573,7 @@ describe("workflow run history", () => {
     openMoreFilters(container);
     fill(input(container, "Workflow run execution id"), "filtered-run");
     click(buttonByText(container, "Apply filters"));
-    await waitFor(() => expect(container.querySelector("[aria-label='Select workflow run filtered-run']")).not.toBeNull());
+    await waitFor(() => expect(findInput(container, "Select workflow run filtered-run")).not.toBeNull());
     expect(input(container, "Select workflow run filtered-run").checked).toBe(false);
     expect(container.querySelector(".wf-run-deletion-toolbar")).toBeNull();
   });
@@ -784,8 +784,17 @@ const deletionCapabilities = {
   }]
 };
 
-function input(container: HTMLElement, label: string) {
-  return container.querySelector<HTMLInputElement>(`input[aria-label='${label}']`)!;
+function findInput(container: HTMLElement, name: string) {
+  return [...container.querySelectorAll("input")].find(candidate => {
+    const label = candidate.getAttribute("aria-label") ?? Array.from(candidate.labels ?? []).map(item => item.textContent?.trim()).join(" ");
+    return label === name;
+  }) ?? null;
+}
+
+function input(container: HTMLElement, name: string) {
+  const match = findInput(container, name);
+  if (!match) throw new Error(`Input not found: ${name}`);
+  return match;
 }
 
 function button(container: HTMLElement, label: string) {

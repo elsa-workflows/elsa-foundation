@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
-import { StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { RevealToggle, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { SecretFormField } from "./SecretFormField";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
@@ -19,14 +18,14 @@ interface CreateSecretFormProps {
   onStateChange?(state: SecretEditorState): void;
 }
 
-/** Retained for contextual creation hosts; collection navigation uses the standalone form page. */
-export function CreateSecretDialog(props: CreateSecretFormProps) {
+export function CreateSecretDialog(props: CreateSecretFormProps & { notice?: React.ReactNode }) {
   const initialField = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const { onStateChange } = props;
   const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
   return <StudioDialog open title="New secret" onClose={props.onCancel} dismissDisabled={busy} dismissOnOutsideClick={false}
     initialFocusRef={initialField} className="secrets-create-shell">
+    {props.notice}
     <CreateSecretForm {...props} initialField={initialField} onStateChange={report} />
   </StudioDialog>;
 }
@@ -235,9 +234,8 @@ function SecretValueField({ label, value, typeName, editorHint, onChange, disabl
   const inputId = useId();
   const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
-  const toggle = multiline ? undefined : <button type="button" disabled={disabled} aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
-    {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-  </button>;
+  const toggle = multiline ? undefined : <RevealToggle label={visible ? "Hide value" : "Show value"} controlsId={inputId}
+    disabled={disabled} checked={visible} onCheckedChange={setVisible} />;
   return <SecretFormField label={label} controlId={inputId} hint={hint} error={error} disabled={disabled} trailing={toggle}>
     {attributes => multiline
       ? <textarea {...attributes} data-secret-field="value" value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
