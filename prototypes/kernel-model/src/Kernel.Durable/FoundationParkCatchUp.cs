@@ -13,13 +13,18 @@ internal readonly record struct CatchUpPosition(string Key, string Wait, string 
     }
 }
 
-internal sealed record ParkCatchUpTicket(string Chain, long Page, long Entitlement, CatchUpPosition? After = null);
+internal sealed record StartCatchUpRegistration(string Tenant, string Key, string Wait, Guid Incarnation);
+internal sealed record ParkCatchUpTicket(string Chain, long Page, long Entitlement, CatchUpPosition? After = null,
+    StartCatchUpRegistration? Start = null)
+{
+    internal bool Starts => Start is not null;
+}
 internal sealed record ParkCatchUpFailure(InboxKey Key, int Attempts, int Limit);
 
 public sealed partial class InMemoryStore
 {
     private sealed record CatchUpCoverage(SubscriptionRow Wait, ParkCatchUpTicket Ticket);
-    private sealed record CatchUpStep(ParkCatchUpTicket Ticket, IReadOnlyList<EventDelivery> Deliveries, Message? Next);
+    private sealed record CatchUpStep(ParkCatchUpTicket Ticket, IReadOnlyList<EventWrite> Writes, Message? Next, long? EventSerial = null);
     private sealed record FoundationSubscriptionInsert(IReadOnlyList<SubscriptionRow> Rows, Message? Ticket);
     private readonly Dictionary<Guid, CatchUpCoverage> _foundationCatchUpCoverage = [];
     private readonly Dictionary<int, HashSet<InboxKey>> _parkCatchUpTrials = [];
@@ -29,6 +34,9 @@ public sealed partial class InMemoryStore
     private static Message CatchUpMessage(string id, string actor, long creation, ParkCatchUpTicket ticket) =>
         new Message(id, new(actor), Kinds.Meet, Sender: actor, TargetCreation: creation, SenderCreation: creation)
             { ParkCatchUp = ticket }.AsIssued().AsKernelTicket();
+
+    private long CatchUpEntitlement(string tenant, long now) =>
+        Math.Max(now, checked(_foundationSweepHorizon.GetValueOrDefault(tenant, long.MinValue) + 1));
 
     private FoundationSubscriptionInsert? PrepareFoundationSubscriptionInsert(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, long now,
         IReadOnlySet<SubscriptionRow>? removed, IReadOnlySet<string>? cleared)
@@ -72,8 +80,7 @@ public sealed partial class InMemoryStore
         var suffix = restoring ? "0001" : "keep";
         var origin = CreationProtocol.Origin(row.Id, row.Creation);
         var first = InboxKey.Issued(FormattableString.Invariant($"{origin}#{row.Revision}.{suffix}"));
-        var horizon = _foundationSweepHorizon.GetValueOrDefault(keeping.FoundationTenant!, long.MinValue);
-        var ticket = new ParkCatchUpTicket(FoundationEventIdentity.CatchUpId(first), 0, Math.Max(now, checked(horizon + 1)));
+        var ticket = new ParkCatchUpTicket(FoundationEventIdentity.CatchUpId(first), 0, CatchUpEntitlement(keeping.FoundationTenant!, now));
         return new(rows, CatchUpMessage(first.Id, row.Id, row.Creation, ticket));
 
         bool Reserve(SubscriptionRow subscription)
@@ -95,7 +102,7 @@ public sealed partial class InMemoryStore
         if (insert.Ticket is { } ticket) Messages.Add(ticket.InboxKey, new(ticket, ++_seq, 0));
     }
 
-    private CatchUpStep? PrepareParkCatchUp(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, IReadOnlySet<Guid>? revoked)
+    private CatchUpStep? PrepareParkCatchUp(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, IReadOnlySet<Guid>? revoked, bool isolated)
     {
         if (turn.FoundationCatchUpFailed is { } failed)
         {
@@ -114,11 +121,13 @@ public sealed partial class InMemoryStore
             turn.Held is { Count: > 0 } || turn.FoundationReleasedHolds is { Count: > 0 } ||
             turn.FoundationCatchUpExpected is not { } expected || turn.FoundationCatchUpBefore is null ||
             Messages.GetValueOrDefault(key) is not { Done: false, Message: { ParkCatchUp: { } ticket, Kind: Kinds.Meet } source } stored ||
-            expected != stored.Attempts ||
+            expected != stored.Attempts || ticket.Starts && (!isolated || !source.HasIssuedTicket) ||
             source.Target.Id != turn.Instance || !epochs.TryGetValue(source.Target.Partition, out var epoch) || stored.Trial != epoch)
             throw new StoreException(Failure.Definite, "A catch-up step must consume its exact ticket under its partition's fence.");
 
-        var deliveries = new List<EventDelivery>();
+        var writes = new List<EventWrite>();
+        var keys = new HashSet<InboxKey>();
+        var serial = _eventSerial;
         var bytes = 0L;
         var matched = 0;
         CatchUpPosition? last = null;
@@ -126,23 +135,34 @@ public sealed partial class InMemoryStore
         foreach (var (publication, wait) in CatchUpMatches(ticket, source, revoked).Take(ParkPageLimit))
         {
             var delivery = MatchRoute(publication, wait).Delivery(partitions);
-            var estimatedBytes = CatchUpDeliveryBytes(delivery.Message);
+            ValidateEventIdentity(delivery);
+            var nextSerial = serial;
+            var write = !Messages.ContainsKey(delivery.Message.InboxKey) && keys.Add(delivery.Message.InboxKey)
+                ? PrepareEventWrite(delivery, ref nextSerial) : null;
+            var estimatedBytes = write is null ? CatchUpDeliveryBytes(delivery.Message) : PublicationWriteBytes(write);
             if (matched != 0 && bytes + estimatedBytes > ParkRecoveryCredit.LimitBytes)
             {
                 needsNext = true;
                 break;
             }
-            ValidateEventIdentity(delivery);
-            if (!Messages.ContainsKey(delivery.Message.InboxKey)) deliveries.Add(delivery);
+            if (write is not null)
+            {
+                writes.Add(write);
+                serial = nextSerial;
+            }
             matched++;
             bytes += estimatedBytes;
             last = new(wait.Key, wait.Wait, publication.Id);
         }
-        if (!needsNext && matched < ParkPageLimit) return new(ticket, deliveries, null);
-        var next = ticket with { Page = checked(ticket.Page + 1), After = last };
-        var successor = CatchUpMessage(FoundationEventIdentity.CatchUpSuccessor(next.Chain, next.Page), turn.Instance,
-            source.TargetCreation!.Value, next);
-        return new(ticket, deliveries, successor);
+        Message? successor = null;
+        if (needsNext || matched == ParkPageLimit)
+        {
+            var next = ticket with { Page = checked(ticket.Page + 1), After = last };
+            successor = CatchUpMessage(FoundationEventIdentity.CatchUpSuccessor(next.Chain, next.Page), turn.Instance,
+                source.TargetCreation!.Value, next);
+        }
+        _ = checked(_seq + writes.Count + (serial - _eventSerial) + (successor is null ? 0 : 1));
+        return new(ticket, writes, successor, ticket.Starts ? serial : null);
     }
 
     private void ValidateParkCatchUpFailure(TurnCommit turn, ParkCatchUpFailure failed, IReadOnlyDictionary<int, long> epochs)
@@ -165,9 +185,16 @@ public sealed partial class InMemoryStore
                 throw InvalidCatchUpFailure();
         }
         else if (turn.Row is not null || turn.Unsubscribe || turn.Journal is not null || turn.Sent.Count != 0 ||
-            turn.Done.Count != 0 || (failed.Attempts < failed.Limit ? turn.Consumed.Count != 0 :
-                turn.Consumed is not [var consumed] || consumed != failed.Key))
+            !SettlesCatchUpFailure(turn, failed, envelope.ParkCatchUp.Starts))
             throw InvalidCatchUpFailure();
+    }
+
+    private static bool SettlesCatchUpFailure(TurnCommit turn, ParkCatchUpFailure failed, bool starts)
+    {
+        if (failed.Attempts < failed.Limit) return turn.Done.Count == 0 && turn.Consumed.Count == 0;
+        var kept = starts ? turn.Done : turn.Consumed;
+        var other = starts ? turn.Consumed : turn.Done;
+        return other.Count == 0 && kept is [var key] && key == failed.Key;
     }
 
     internal bool OwnsParkCatchUp(InstanceRow actor, Message source)
@@ -189,7 +216,10 @@ public sealed partial class InMemoryStore
         if (failed.Attempts < failed.Limit)
             ticket.Attempts++;
         else if (turn.Row is null)
+        {
+            if (ticket.Message.ParkCatchUp!.Starts) ticket.ParkDeadLetter = true;
             ApplyParkCatchUp(new(ticket.Message.ParkCatchUp!, [], null));
+        }
     }
 
     private void MarkParkCatchUpTrial(InboxKey key, MessageRow ticket)
@@ -236,8 +266,10 @@ public sealed partial class InMemoryStore
 
     private IEnumerable<(EventRow Publication, SubscriptionRow Wait)> CatchUpMatches(ParkCatchUpTicket ticket, Message source, IReadOnlySet<Guid>? revoked)
     {
-        var waits = _foundationCatchUpCoverage.Where(pair => revoked?.Contains(pair.Key) != true &&
-                pair.Value.Ticket.Chain == ticket.Chain && pair.Value.Wait.Instance == source.Target.Id && pair.Value.Wait.Creation == source.TargetCreation)
+        var waits = _foundationCatchUpCoverage.Where(pair => revoked?.Contains(pair.Key) != true && pair.Value.Ticket.Chain == ticket.Chain &&
+                (ticket.Start is { } start ? pair.Value.Wait.Start is not null && pair.Value.Wait.FoundationIncarnation == start.Incarnation &&
+                    pair.Value.Wait.FoundationTenant == start.Tenant && pair.Value.Wait.Key == start.Key && pair.Value.Wait.Wait == start.Wait :
+                    pair.Value.Wait.Instance == source.Target.Id && pair.Value.Wait.Creation == source.TargetCreation))
             .Select(pair => pair.Value.Wait).OrderBy(wait => wait.Key, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal);
         foreach (var wait in waits)
         {
@@ -282,7 +314,11 @@ public sealed partial class InMemoryStore
         foreach (var step in steps)
         {
             if (step.Next is { } next) Reserve(next);
-            foreach (var delivery in step.Deliveries) Reserve(delivery.Message);
+            foreach (var write in step.Writes)
+            {
+                Reserve(write.Delivery);
+                if (write.Creator is { } creator) Reserve(creator);
+            }
         }
 
         void Reserve(Message message)
@@ -315,7 +351,8 @@ public sealed partial class InMemoryStore
 
     private void ApplyParkCatchUp(CatchUpStep step)
     {
-        foreach (var delivery in step.Deliveries) InsertEventDelivery(delivery);
+        foreach (var write in step.Writes) ApplyEventWrite(write);
+        if (step.EventSerial is { } serial) _eventSerial = serial;
         if (step.Next is { } next) Messages.Add(next.InboxKey, new(next, ++_seq, 0));
         var cursor = step.Next?.ParkCatchUp?.After;
         var passed = _foundationCatchUpCoverage.Where(pair => pair.Value.Ticket.Chain == step.Ticket.Chain &&

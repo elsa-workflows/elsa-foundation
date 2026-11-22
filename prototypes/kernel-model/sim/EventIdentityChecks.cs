@@ -31,6 +31,7 @@ internal static class EventIdentityChecks
         await CheckRestoredWait(RestoreAt.AfterMatch, check, keep: true);
         await FoundationEventSendChecks.KeepingSubscription(check);
         await FoundationEventSendChecks.KeepingSubscriptionBatch(check);
+        await FoundationEventSendChecks.StartRegistrationCatchUp(check);
         await FoldedRegistration(check);
         await LegacyTicket(doneDelivery: false, check);
         await LegacyTicket(doneDelivery: true, check);

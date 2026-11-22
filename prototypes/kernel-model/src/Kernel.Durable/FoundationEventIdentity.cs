@@ -66,6 +66,15 @@ internal static class FoundationEventIdentity
         return "meet:" + Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    internal static string StartCatchUpId(SubscriptionRow subscription, Guid incarnation)
+    {
+        using var hash = VersionedHash((byte)'S');
+        AppendName(hash, subscription.Key);
+        AppendName(hash, subscription.Wait);
+        AppendIncarnation(hash, incarnation);
+        return "meet:" + Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
     private static void AppendNumber(IncrementalHash hash, long value)
     {
         Span<byte> bytes = stackalloc byte[sizeof(long)];

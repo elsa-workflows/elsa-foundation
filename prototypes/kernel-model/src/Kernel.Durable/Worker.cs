@@ -2506,7 +2506,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     }
 
     private static bool CanParkOnEventFailure(Message message) =>
-        message.ParkCatchUp is not null || message.FoundationPublish?.Authored is not null;
+        message.ParkCatchUp is { Starts: false } || message.FoundationPublish?.Authored is not null;
 
     private bool OwnsFailedEventStep(InstanceRow row, Message message) =>
         message.FoundationPublish?.Owns(row, message) == true || _type.OwnsParkCatchUp(row, message);
@@ -2898,7 +2898,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var kept = PrepareKeptInputs(unit);
         var durable = unit.Consumed.Where(i => i.Durable);
         bool Retained(Delivery item) => item.Message.KeepUntil is not null || kept?.ContainsKey(item.Message.InboxKey) == true ||
-            unit.FoundationPublicationSequence is not null && unit.FoundationCatchUpFailed is { } failed &&
+            (unit.FoundationPublicationSequence is not null || item.Message.ParkCatchUp is { Starts: true }) && unit.FoundationCatchUpFailed is { } failed &&
             failed.Attempts >= failed.Limit && failed.Key == item.Message.InboxKey;
         var consumed = durable.Where(i => !Retained(i)).Select(i => i.Message.InboxKey);
         var done = durable.Where(Retained).Select(i => i.Message.InboxKey);

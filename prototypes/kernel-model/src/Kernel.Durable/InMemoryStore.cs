@@ -324,7 +324,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (batch.Turns.Count != 1) throw InvalidPublicationPage();
                         publicationPage = PreparePublicationPage(turn, epochs);
                     }
-                    else if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
+                    else if (PrepareParkCatchUp(turn, epochs, revoked, batch.Turns.Count == 1) is { } catchUp &&
                         !(catchUpSteps ??= []).TryAdd(turn.FoundationCatchUpStep!.Value, catchUp))
                         throw new StoreException(Failure.Definite, "A catch-up ticket can advance only once per batch.");
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
@@ -817,19 +817,31 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
             var row = new SubscriptionRow(key, "", wait, start) { FoundationTenant = tenant };
             if (start is not null) RequireSameSubscriptionScope(row);
-            if (RegisteredSubscription(row) is { } previous)
+            var previous = RegisteredSubscription(row);
+            if (previous is not null)
             {
-                RemoveRegisteredSubscription(previous);
+                if (start is null)
+                {
+                    RemoveRegisteredSubscription(previous);
+                    return;
+                }
+                if (previous.FoundationIncarnation is not null && previous.Start == start) return;
                 row = row with { Key = previous.Key, Wait = previous.Wait };
             }
             if (start is null) return;
 
-            AddRegisteredSubscription(row);
-
             var now = clock();
-            foreach (var @event in FoundationEvents.Values.Where(@event => @event.FoundationTenant == tenant &&
-                _foundationEventEquality.Equals(@event.Key, row.Key) && @event.KeepUntil >= now).OrderBy(@event => @event.Id, StringComparer.Ordinal))
-                InsertEventDelivery(MatchRoute(@event, row).Delivery(partitions));
+            var incarnation = Guid.NewGuid();
+            row = row with { FoundationKeepsEvents = true, FoundationIncarnation = incarnation, FoundationRegisteredAt = now };
+            var id = FoundationEventIdentity.StartCatchUpId(row, incarnation);
+            var address = InstanceRef.In(InstanceRef.Spread(id, partitions), "start-registrar");
+            var work = new ParkCatchUpTicket(FoundationEventIdentity.CatchUpId(InboxKey.Issued(id)), 0,
+                CatchUpEntitlement(tenant, now), Start: new(tenant, row.Key, row.Wait, incarnation));
+            var ticket = CatchUpMessage(id, address.Id, 0, work);
+            if (Messages.ContainsKey(ticket.InboxKey) || _seq == long.MaxValue)
+                throw new StoreException(Failure.Definite, "The event start catch-up ticket cannot be inserted.");
+            if (previous is not null) RemoveRegisteredSubscription(previous);
+            InsertFoundationSubscriptions(new([row], ticket));
         }
     }
 
