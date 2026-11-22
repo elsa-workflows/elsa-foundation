@@ -494,3 +494,18 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await testInfo.attach(`decision-test-recovery-${theme}-${width}.png`, { path: successScreenshot, contentType: "image/png" });
   });
 }
+test("Tab exits the data cells at both grid boundaries while browsing or editing", async ({ page }) => {
+  const grid = await openGrid(page, "light");
+  const cells = grid.getByRole("gridcell");
+  for (const [cell, key] of [[cells.first(), "Shift+Tab"], [cells.last(), "Tab"]] as const) {
+    await cell.click();
+    await cell.press(key);
+    await expect(cell).not.toBeFocused();
+    expect(await page.locator(":focus").evaluate(element => element.closest('[role="gridcell"]') === null)).toBe(true);
+    await cell.click();
+    await cell.press("Enter");
+    await page.getByRole("textbox", { name: "Edit selected cell" }).press(key);
+    await expect(page.getByRole("textbox", { name: "Edit selected cell" })).toHaveCount(0);
+    expect(await page.locator(":focus").evaluate(element => element.closest('[role="gridcell"]') === null)).toBe(true);
+  }
+});

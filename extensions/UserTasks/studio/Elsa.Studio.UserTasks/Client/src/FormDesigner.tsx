@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
 import { Copy, GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
 import { ContributedTaskForm } from "./TaskForm";
 import { createFieldRowId, duplicateTaskField, validateTaskFields } from "./formDesignerModel";
@@ -115,8 +115,11 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
   };
   const applySourceForm = (nextForm: TaskForm) => {
     const rowsByKey = new Map(rows.map(row => [row.field.key, row]));
+    const nextKeys = new Set(nextForm.fields.map(field => field.key));
     const nextRows = nextForm.fields.map((field, index) => {
-      const existing = rowsByKey.get(field.key) ?? rows[index];
+      const atIndex = rows[index];
+      const renamed = atIndex && !nextKeys.has(atIndex.field.key) ? atIndex : undefined;
+      const existing = rowsByKey.get(field.key) ?? renamed;
       return { id: existing?.id ?? createFieldRowId(), field: structuredClone(field) };
     });
     publishFields(nextRows);
@@ -291,8 +294,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                   <StudioField label="Help text"><textarea rows={2} value={selectedRow.field.help ?? ""} disabled={canvasDisabled} onChange={event => updateField(selectedRow.id, { help: event.target.value || undefined })} /></StudioField>
                   {selectedControl?.status === "available" && selectedControl.control ? <>
                     <h4>{selectedControl.control.label} properties</h4>
-                    {selectedControl.control.propertiesEditor ? <>{selectedControl.control.propertiesLabel ? <details className="user-task-designer__advanced">
-                      <summary>{selectedControl.control.propertiesLabel}</summary>
+                    {selectedControl.control.propertiesEditor ? <>{selectedControl.control.propertiesLabel ? <AdvancedSection label={selectedControl.control.propertiesLabel}>
                       <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
                         if (typeof value !== "object" || value === null) return;
                         const candidate = value as Partial<TaskField>;
@@ -302,7 +304,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                         }
                         updateField(selectedRow.id, update);
                       }} />
-                    </details> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
+                    </AdvancedSection> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
                       if (typeof value !== "object" || value === null) return;
                       const candidate = value as Partial<TaskField>;
                       const update: Partial<TaskField> = {};

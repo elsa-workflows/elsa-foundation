@@ -140,3 +140,20 @@ for (const appearance of ["light", "dark"] as const) {
   await page.screenshot({ path: testInfo.outputPath(`form-source-narrow-${appearance}.png`), animations: "disabled" });
   });
 }
+test("inserting a field before an existing source field preserves independent canvas identities", async ({ page }) => {
+  await page.goto("/form-designer.html");
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "Intake form");
+  await page.getByRole("button", { name: "Text input", exact: true }).click();
+  await page.getByRole("tab", { name: "Source", exact: true }).click();
+  const source = page.locator("[data-studio-code-editor] .cm-content");
+  const form = JSON.parse(await source.innerText());
+  form.fields.unshift({ ...form.fields[0], key: "first", label: "New first field" });
+  await source.fill(JSON.stringify(form, null, 2));
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await page.getByRole("tab", { name: "Designer", exact: true }).click();
+  await page.getByRole("button", { name: "Select New first field", exact: true }).click();
+  await page.getByRole("textbox", { name: "Label", exact: true }).fill("Changed first field");
+  await expect(page.getByRole("button", { name: "Select Text field 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select Changed first field", exact: true })).toHaveCount(1);
+});

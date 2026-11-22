@@ -149,7 +149,7 @@ describe("native form designer", () => {
     expect(container.querySelector(".user-task-designer__palette .user-task-designer__panel-content > small")?.textContent).toBe("0 fields in form · maximum 100");
     await click("Text input");
     expect(container.querySelector(".user-task-designer__palette .user-task-designer__panel-content > small")?.textContent).toBe("1 field in form · maximum 100");
-    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
+    expect(container.querySelector(".studio-advanced-section button[aria-expanded]")?.textContent).toBe("Validation");
 
     const selectType = async (kind: string) => {
       const select = container.querySelector<HTMLSelectElement>(".user-task-designer__properties select");
@@ -160,22 +160,22 @@ describe("native form designer", () => {
       });
     };
 
-    const advanced = container.querySelector<HTMLDetailsElement>(".user-task-designer__advanced");
+    const advanced = container.querySelector<HTMLButtonElement>(".studio-advanced-section button[aria-expanded]");
     expect(advanced).toBeTruthy();
-    advanced!.open = true;
+    await act(() => advanced!.click());
     await selectType("boolean");
-    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
+    expect(container.querySelector(".studio-advanced-section button[aria-expanded]")?.textContent).toBe("Validation");
     expect(container.textContent).toContain("Must be checked");
     await selectType("date");
-    expect(container.querySelector(".user-task-designer__advanced")).toBeNull();
+    expect(container.querySelector(".studio-advanced-section")).toBeNull();
     await selectType("number");
-    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
-    expect(container.querySelectorAll('.user-task-designer__advanced input[type="number"]')).toHaveLength(2);
+    expect(container.querySelector(".studio-advanced-section button[aria-expanded]")?.textContent).toBe("Validation");
+    expect(container.querySelectorAll('.studio-advanced-section input[type="number"]')).toHaveLength(2);
     await selectType("multiline");
-    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
+    expect(container.querySelector(".studio-advanced-section button[aria-expanded]")?.textContent).toBe("Validation");
     await selectType("choice");
-    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Choices");
-    expect(container.querySelector(".user-task-designer__advanced textarea")?.getAttribute("rows")).toBe("4");
+    expect(container.querySelector(".studio-advanced-section button[aria-expanded]")?.textContent).toBe("Choices");
+    expect(container.querySelector(".studio-advanced-section textarea")?.getAttribute("rows")).toBe("4");
   });
 
   it("offers only supported presentation settings and clears incompatible settings on type changes", async () => {
