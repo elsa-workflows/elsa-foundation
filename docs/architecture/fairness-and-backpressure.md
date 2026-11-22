@@ -170,6 +170,10 @@ also means a `done = true` update is no longer HOT, so it writes an entry in eve
 delete writes no index entry and leaves dead tuples for vacuum. All of this is unmeasured: the release 1 cost runs
 measure the query plan and the scan cost under update and delete churn, with WRITES.md's method.
 
+The K3 in-memory store counts due, undone rows up to the supplied cap under its own clock. The
+`--backlog-store-check` fixture covers a timer maturing, a retained Done row, partition isolation, and a stale
+owner or position leaving every stored estimate unchanged. The physical index and query plans qualify at K4.
+
 **The pressure list (decision 2).** The owner writes its estimate into a new `backlog` column of the virtual partition's
 fence row, with its next commit, which already updates that row, so this adds bytes and no round trip; it adds one
 assignment to the owned commit SQL on all four engines ([COMMIT-SQL.md](../../prototypes/kernel-model/COMMIT-SQL.md)). Under the node lease amendment (19 November) the
@@ -178,7 +182,9 @@ seen marks while messages arrive, and its last commit before the partition falls
 When a sampled estimate crosses the low- or high-water mark and the partition has had no commit for one heartbeat
 interval, the owner sends a fenced commit with no journal rows that writes it, so a partition whose commits stall
 still publishes its depth within one heartbeat interval; a partition whose estimate stays on one side of the marks
-writes nothing.
+writes nothing. The K3 store accepts an estimate with ordinary writes or in a fence-only commit and returns
+a snapshot filtered at the low-water mark. The Worker's estimate sampling and publication policy requires its
+own qualification.
 Ingress nodes keep a list of the virtual partitions above the low-water mark. Under the built-in runtime, the heartbeat
 already queries the partition rows for free ones (`EfStore.HeartbeatAsync`), and that query can return the list as
 well. Another runtime refreshes it with one query per node per interval:

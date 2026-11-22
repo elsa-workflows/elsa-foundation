@@ -193,6 +193,9 @@ public sealed record CommitBatch(
 
     internal FoundationPublicationReservation? PublicationReservation { get; init; }
 
+    /// <summary>Optional due-depth estimates written under the exact fences of this batch.</summary>
+    internal IReadOnlyDictionary<int, int>? DueBacklog { get; init; }
+
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
     /// fenced partition's; in the owned-set form each partition moves by <see cref="PositionsIn"/>.
@@ -263,6 +266,12 @@ internal interface IFoundationSchedulingStore
 {
     string? FoundationScheduleTenant(CreationAddress address);
     ParkDrainSample? SampleParkDrains(string node, IReadOnlyList<PartitionFence> owned, Func<InboxKey, bool> handedOffHere);
+}
+
+internal interface IDueBacklogStore
+{
+    // Count pending due rows using the store's clock, stopping at a positive cap.
+    ValueTask<int> CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
