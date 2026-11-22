@@ -45,7 +45,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
-        return checkpoint.Park is not null && row.ParkRecovery is null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
+        if (row.ParkRecovery is not null)
+            return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
+        return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
@@ -213,7 +215,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
             ValidateTerminalEnvelope(nextRow, nextHeader);
-            if (nextRow.Status != Durable.InstanceStatus.Running && nextRow.ParkCohort is not null)
+            if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
+                store.FirstUnheldRecoveryInput(nextRow, cohort, key =>
+                    outcome.Consumed.Exists(input => input.Message.InboxKey == key) || outcome.Cancelled.Contains(key)) is null))
                 outcome.Row = nextRow with { ParkCohort = null };
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);

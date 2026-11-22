@@ -1625,6 +1625,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         foreach (var item in slot.Inbox)
         {
             if (item.Taken || !item.Message.IsControl || item.Message.Kind == Kinds.Suspend && Has(Flaw.SuspendDuringTrial)) continue;
+            if (slot.CurrentRow?.ParkRecovery is not null && item.Held && HeldCommandStimulus(slot, item, now) == 0) continue;
             var at = item.Message.Due ?? item.ObservedAt;
             if (at > now) continue;
             item.RecoveryOrdering = true;
@@ -1678,7 +1679,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // inbox onto the current command's eligible inputs, keeping their ordinary actor order, then the
         // command itself. It must encounter an unmarked predecessor before it can reach that command.
         IEnumerable<Delivery> inputs = slot.Inbox.Where(i => Eligible(i) && InFront(i));
-        if (head is not null)
+        if (!suspended && RecoveryRelease(slot.CurrentRow) is not null)
             inputs = inputs.OrderBy(item => item, Comparer<Delivery>.Create((left, right) => CompareRecoveryInputs(left, right, slot)));
         if (control is not null && !onTrial && !cohortFirst) inputs = inputs.Append(control);
         var selectedOnly = false;
@@ -1723,7 +1724,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
         .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&
-            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !DiscardedAt(item, slot) && CreationError(slot, item.Message) is null)
+            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !DiscardedAt(item, slot) &&
+            !WithheldByRecovery(item, slot) && CreationError(slot, item.Message) is null)
         .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
     // A qualified terminate also frees its ordinary predecessors to run. The dispatcher still selects them first.

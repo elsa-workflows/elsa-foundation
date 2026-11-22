@@ -23,7 +23,12 @@ internal sealed partial class ActorAdapter
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ParkExpired");
 
         Contract.RestorePlan plan;
-        try { plan = actor.RestoreWaits(header, row.State); }
+        bool withholds;
+        try
+        {
+            plan = actor.RestoreWaits(header, row.State);
+            withholds = actor.Withholds(header with { Status = Contract.ActorStatus.Running, Fault = null, EndedAt = null });
+        }
         catch (Exception) { return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan"); }
         if (plan is not { Timers.Count: 0, Jobs.Count: 0, Subscriptions.Count: 0 } || row.Jobs is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "Plan");
@@ -39,7 +44,7 @@ internal sealed partial class ActorAdapter
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
         next = next with { ParkRecovery = new(delivery.Message.Id, mode, null, serial, control.InboxKey) };
         var outcome = ParkCheckpoint(input, row, next);
-        outcome.FoundationWithholds = actor.Withholds(header with { Status = Contract.ActorStatus.Running, Fault = null, EndedAt = null });
+        outcome.FoundationWithholds = withholds;
         outcome.Sent.Add(control);
         if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
         outcome.ReplyTo(delivery, "started");
@@ -56,7 +61,8 @@ internal sealed partial class ActorAdapter
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         var serial = checked(drain.Serial + 1);
         var credit = store.FoundationRecoveryCredit(row, input.RecoveryHandedOff);
-        if (row.Suspended || actor.Withholds(Header(checkpoint)) || !credit.CanRead)
+        if (row.Status == Durable.InstanceStatus.Running &&
+            (row.Suspended || RecoveryWithholds(Header(checkpoint)) || !credit.CanRead))
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);
 
         var release = new Durable.ParkRelease(row.Creation, row.ParkResolutionGeneration);
@@ -108,4 +114,9 @@ internal sealed partial class ActorAdapter
         }
     }
 
+    private bool RecoveryWithholds(Contract.ActorHeader header)
+    {
+        try { return actor.Withholds(header); }
+        catch (Exception) { return true; }
+    }
 }

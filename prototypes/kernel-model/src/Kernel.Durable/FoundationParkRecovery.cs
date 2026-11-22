@@ -143,11 +143,12 @@ public sealed partial class InMemoryStore
             throw InvalidDrain();
         var envelope = ParkDrainEnvelope.For(previous, park);
         if (!envelope.Matches(input.Message, previous, before.Control)) throw InvalidDrain();
+        var suspended = previous.Status == InstanceStatus.Running && previous.Suspended;
 
         if (next.ParkRecovery is not { } after)
         {
             ParkRelease? remaining = FirstUnheldRecoveryInput(previous, release, _ => false) is null ? null : release;
-            if (page is not null || turn.Sent.Count != 0 || previous.Suspended ||
+            if (page is not null || turn.Sent.Count != 0 || suspended ||
                 next != (previous with { Revision = next.Revision, ParkRecovery = null, ParkCohort = remaining }) ||
                 ReadFoundationRecoveryPage(address, park, release.Generation, after: before.Cursor, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();
@@ -164,7 +165,7 @@ public sealed partial class InMemoryStore
             if (control.Due is null || after != rescheduled) throw InvalidDrain();
             return;
         }
-        if (previous.Suspended || page.Park != park || control.Due is not null) throw InvalidDrain();
+        if (suspended || page.Park != park || control.Due is not null) throw InvalidDrain();
 
         var current = ReadFoundationRecoveryPage(address, park, release.Generation, before.Cursor, page.Rows.Count);
         if (current is null) throw InvalidDrain();

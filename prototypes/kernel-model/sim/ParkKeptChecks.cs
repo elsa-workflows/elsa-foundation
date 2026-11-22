@@ -262,15 +262,25 @@ internal static class ParkKeptChecks
 
     internal static async Task CheckRecoverArrivals(Action<bool, string> check)
     {
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false);
+        await CheckRecoverArrivals(check, faultOnAdvance: true, throwOnOpen: false);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
+    }
+
+    private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
+        bool holdAdvance = false, bool holdControl = false)
+    {
         const long initial = 1_701_400_028_000L;
         var now = initial;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
-        var probe = new Probe(withholdFaulted: true);
+        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = faultOnAdvance, HoldAdvance = holdAdvance, HoldSuspend = holdControl };
         var scope = new Contract.BoundScope("recover-arrivals");
         var worker = new Worker("recover-arrivals", 0, store, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => now - initial });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
-            (_, kind) => kind == Contract.Kinds.Recover);
+            (_, kind) => kind == Contract.Kinds.Recover || holdControl && kind == Contract.Kinds.Suspend);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
         var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(started.Actor!.Value);
@@ -278,7 +288,9 @@ internal static class ParkKeptChecks
         var shortWindow = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1));
         await ingress.SendAsync(scope, target, "fault", "poison", options: shortWindow);
         await Pump(owner);
-        await ingress.SendAsync(scope, target, "keep", "advance", options: shortWindow);
+        await ingress.SendAsync(scope, target, "keep", "advance",
+            faultOnAdvance ? new string('x', ParkRecoveryCredit.LimitBytes) : null, options: shortWindow);
+        if (faultOnAdvance) await ingress.SendAsync(scope, target, "suffix", "advance", options: shortWindow);
         await Pump(owner);
         now += 3;
         await store.SweepAsync();
@@ -291,14 +303,83 @@ internal static class ParkKeptChecks
         if (!retained) return;
 
         var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
-        var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
-            Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume)));
-        for (var pass = 0; pass < 3; pass++)
+        var command = Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume));
+        if (throwOnOpen)
+        {
+            probe.ThrowOnRunningWithholds = true;
+            await ingress.SendAsync(scope, target, "bad-resume", Contract.Kinds.Recover, command);
+            var escaped = false;
+            try { await Pump(owner); }
+            catch (InvalidOperationException error) when (error.Message == "withholding probe failed") { escaped = true; }
+            var afterFailure = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+            check(!escaped && afterFailure.Row == parked.Row && afterFailure.Park == parked.Park &&
+                store.FoundationExpiry(afterFailure.Row)?.Armed is not null &&
+                store.Messages.Values.Any(row => row.Message.Id == "bad-resume" && row.Done),
+                "a failing withholding predicate settles Resume and preserves the original Park");
+            if (escaped) return;
+            probe.ThrowOnRunningWithholds = false;
+        }
+        probe.PausePages = holdControl;
+        var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+        if (holdControl)
+        {
+            await Pump(owner);
+            var drain = store.Instances[parked.Row.Id].ParkRecovery;
+            var delayed = drain is not null && store.Messages.GetValueOrDefault(drain.Control)?.Message.Due > now;
+            check(delayed, "the held-command fixture pauses the open recovery page");
+            if (!delayed) return;
+            var suspend = await ingress.SendAsync(scope, target, "suspend", Contract.Kinds.Suspend);
+            await Pump(owner);
+            check(suspend.Outcome == Contract.AdmissionOutcome.Accepted && probe.SuspendOffers == 1,
+                "a held command is not repeatedly offered without a fresh stimulus");
+            await ingress.SendAsync(scope, target, "still-withheld", "late");
+            await Pump(owner);
+            check(probe.SuspendOffers == 1, "an arrival withheld until Complete cannot wake the held command");
+            probe.PausePages = false;
+        }
+        if (holdAdvance)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+            var opened = store.Instances[parked.Row.Id].ParkRecovery is not null;
+            check(opened, "the held-cohort fixture opens before the late arrival");
+            if (!opened) return;
+            await ingress.SendAsync(scope, target, "late", "late");
+            // Exercise the store contract where later acceptance may have a lower ordering tuple.
+            store.Messages.Values.Single(row => row.Message.Id == "late").Seq =
+                store.Messages.Values.Single(row => row.Message.Id == "keep").Seq - 1;
+        }
+        for (var pass = 0; pass < 5; pass++)
         {
             await Pump(owner);
             now += 11;
         }
         var restored = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        if (holdControl)
+        {
+            check(restored is { Park: null, Row.ParkRecovery: null } && probe.RecoveredArrivals == 1,
+                "a new page can run while a public command remains held");
+            return;
+        }
+        if (faultOnAdvance)
+        {
+            check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+                restored is { Park: null, EndedAt: not null, Row: { Status: InstanceStatus.Faulted, ParkRecovery: null } } &&
+                probe.RecoveredArrivals == 1 && store.Messages.Values.All(row => row.KeptBy is null),
+                "a model that ends Faulted can finish recovery and clear the kept suffix");
+            return;
+        }
+        if (holdAdvance)
+        {
+            check(probe.LateOffer.SequenceEqual(["advance", "late"]), "a held cohort member precedes the late arrival in the model inbox");
+            check(restored is { Park: null, Row.ParkCohort: null } &&
+                store.Messages.Values.All(row => row.Done || row.ReleasedBy is null),
+                "the turn consuming the last held cohort member clears the durable mark");
+            return;
+        }
         check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
             restored is { Park: null, Row: { Status: InstanceStatus.Running, State: "advanced" } } &&
             probe.PoisonOffers == 1 && probe.RecoveredArrivals == 1 &&
@@ -908,13 +989,29 @@ internal static class ParkKeptChecks
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
         public int RecoveredArrivals { get; private set; }
+        public bool FaultOnAdvance { get; init; }
+        public bool ThrowOnRunningWithholds { get; set; }
+        public bool HoldAdvance { get; init; }
+        public string[] LateOffer { get; private set; } = [];
+        public bool PausePages { get; set; }
+        public bool HoldSuspend { get; init; }
+        public int SuspendOffers { get; private set; }
         public Contract.ActorRef? Child { get; private set; }
         public List<Contract.ChildFinished> Notices { get; } = [];
-        public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
+        public bool Withholds(Contract.ActorHeader header) => ThrowOnRunningWithholds && header.Status == Contract.ActorStatus.Running
+            ? throw new InvalidOperationException("withholding probe failed")
+            : PausePages && header.Status == Contract.ActorStatus.Running ||
+                withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             Offers++;
+            if (HoldSuspend && turn.Inbox is [var suspend] && suspend.Kind == Contract.Kinds.Suspend)
+            {
+                SuspendOffers++;
+                turn.Hold(suspend);
+                return default;
+            }
             if (turn.Inbox.Any(message => message.Kind == "poison"))
             {
                 PoisonOffers++;
@@ -925,8 +1022,15 @@ internal static class ParkKeptChecks
                 else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
             if (turn.Inbox.Any(message => message.Kind == "advance"))
             {
+                if (HoldAdvance && !turn.Inbox.Any(message => message.Kind == "late"))
+                {
+                    turn.Hold(turn.Inbox.Single(message => message.Kind == "advance"));
+                    return default;
+                }
+                if (HoldAdvance) LateOffer = turn.Inbox.Select(message => message.Kind).ToArray();
                 RecoveredArrivals++;
                 turn.State = "advanced";
+                if (FaultOnAdvance) turn.End(Contract.ActorStatus.Faulted);
             }
             else turn.State = "saved";
             return default;
