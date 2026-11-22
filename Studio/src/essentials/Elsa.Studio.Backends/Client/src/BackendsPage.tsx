@@ -1,14 +1,14 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Plus, Server } from "lucide-react";
 import { qualifyStudioBackendPath, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, AnchoredPopover, StudioBreadcrumbs, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, AnchoredPopover, StudioShellBreadcrumbs, StudioPageHeader, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
 export const backendNavigation = {id:"backends",label:"Backends",path:"/settings/backends",activePathPrefix:"/settings/backends",placement:"settings" as const,order:20};
 
 function BackendBreadcrumbs({items,current,navigate}:{items:StudioBreadcrumbLink[];current:React.ReactNode;navigate:(path:string)=>void}) {
-  return <StudioBreadcrumbs items={items} current={current} renderLink={item => {
+  return <StudioShellBreadcrumbs items={items} current={current} renderLink={item => {
     const href = qualifyStudioBackendPath(item.href);
     return <a href={href} onClick={event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -105,20 +105,20 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
     finally {if (mounted.current) setChecking(false);}
   }
   return <section className="backends-page" aria-label={`${profile.name} backend`}>
-    <div className="backends-heading"><div><BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
-      <h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
+    <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
+    <StudioPageHeader compact headingLevel={2} title={profile.name} description={profile.baseUrl} actions={<>
       <StudioButton variant="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.disposed && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.disposed && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</StudioButton>
       <StudioButton type="button" disabled={checking || snapshot.busy} onClick={() => {void inspect();}}>{checking ? "Checking…" : "Test connection"}</StudioButton>
       {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" onClick={() => navigate(`${detailPath}/edit`)}>Edit</StudioButton> : null}
       {active && featureManagementAvailable ? <StudioButton type="button" onClick={() => navigate("/features?target=server")}>Manage features</StudioButton> : null}
-    </div></div>
+    </>} />
     {error ? <StudioAlert tone="warning">{error}</StudioAlert> : null}
     <StudioTabs baseId={tabsId} tabs={[{id:"connection",label:"Connection"},{id:"capabilities",label:"Capabilities"}]} activeTab={tab} onSelect={setTab} ariaLabel="Backend details" />
     <StudioTabPanel baseId={tabsId} index={0} hidden={tab !== "connection"}>
       <dl className="backend-properties"><div><dt>Backend API URL</dt><dd className="backend-url">{profile.baseUrl}</dd></div><div><dt>Environment</dt><dd className={profile.environment === "Production" ? "backend-production" : ""}>{profile.environment}</dd></div><div><dt>Managed by</dt><dd>{profile.source === "configuration" ? "Studio configuration" : "You · personal profile"}</dd></div><div><dt>Connection</dt><dd>{active ? snapshot.active?.discoveryError ? "Unavailable" : "Active in this tab" : "Inactive"}</dd></div></dl>
       <p className="backend-note">{profile.source === "configuration" ? "This profile is managed in your Studio host configuration." : connections.hostIdentity.status === "authenticated" ? "This is a personal profile scoped to your Studio host, user and tenant." : "This personal profile is saved in this browser for the anonymous demo session."}</p>
       {!active && featureManagementAvailable ? <p className="backend-note">Connect to this backend before managing its features and per-feature settings.</p> : null}
-      {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" className="backend-remove" disabled={active} onClick={() => { if (window.confirm(`Remove connection profile “${profile.name}”? Backend data is unchanged.`)) void connections.remove(profile.id).then(() => navigate("/settings/backends")).catch(error => setError(connectionError(error))); }}>Remove backend</StudioButton> : null}
+      {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" className="backend-remove" disabled={active} onClick={() => { if (window.confirm(`Delete connection profile “${profile.name}”? Backend data is unchanged.`)) void connections.remove(profile.id).then(() => navigate("/settings/backends")).catch(error => setError(connectionError(error))); }}>Delete profile</StudioButton> : null}
     </StudioTabPanel>
     <StudioTabPanel baseId={tabsId} index={1} hidden={tab !== "capabilities"}>
       <p className="backend-note">API functionality advertised by this backend. Feature enablement and settings are managed separately in Features.</p>

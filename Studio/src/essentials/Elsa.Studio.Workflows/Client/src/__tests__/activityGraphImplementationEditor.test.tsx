@@ -142,7 +142,7 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
     click(rendered.container.querySelector("button[aria-label='Redo Activity Graph edit']")!);
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Approve order");
     confirmOnce();
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
     await vi.waitFor(() => expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([]));
     click(rendered.container.querySelector("button[aria-label='Undo Activity Graph edit']")!);
     expect(rendered.onChange.mock.calls.at(-1)![0].activityPresentation).toEqual([{ nodeId: "write-line-1", displayName: "Approve order", description: "Keep this context" }]);
@@ -344,13 +344,13 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     click(rendered.container.querySelector("[data-graph-node-id='write-line-2']")!);
     expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
     confirmOnce();
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
 
     await vi.waitFor(() => expect(rendered.onChange).toHaveBeenCalledTimes(1));
     expect(rendered.onChange.mock.calls[0][0].payload.rootActivity.structure.payload.activities)
       .toEqual([expect.objectContaining({ nodeId: "write-line-1" })]);
     expect(rendered.container.querySelector("[data-graph-node-id='write-line-2']")).toBeNull();
-    expect(() => buttonByText(rendered.container, "Remove")).toThrow();
+    expect(() => buttonByText(rendered.container, "Delete")).toThrow();
   });
 
   it("asks the Studio dialog before removing a selected activity", async () => {
@@ -362,11 +362,11 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     ]));
 
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
 
     await vi.waitFor(() => expect(confirm).toHaveBeenCalledWith({
-      message: "Remove this activity and any nested graph content? This change will autosave.",
-      confirmLabel: "Remove",
+      message: "Delete this activity and any nested graph content? This change will autosave.",
+      confirmLabel: "Delete",
       tone: "danger"
     }));
     expect(rendered.onChange).not.toHaveBeenCalled();
@@ -383,7 +383,7 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     ]));
 
     click(rendered.container.querySelector("[data-graph-node-id='write-line-1']")!);
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
     await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
 
     rendered.acknowledge(sequenceImplementationValue([
@@ -986,7 +986,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
 
     click(rendered.container.querySelector("[data-graph-node-id='task-1']")!);
     confirmOnce();
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const layout = onChange.mock.calls.at(-1)?.[0].layout as Array<{ nodeId: string }>;
@@ -1151,7 +1151,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
 
     click(rendered.container.querySelector("[data-graph-node-id='gateway-1']")!);
     confirmOnce();
-    click(buttonByText(rendered.container, "Remove"));
+    click(buttonByText(rendered.container, "Delete"));
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
 
     const payload = lastPayload(onChange);

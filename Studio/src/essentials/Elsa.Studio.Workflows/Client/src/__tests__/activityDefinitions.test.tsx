@@ -77,7 +77,7 @@ describe("Activity Definitions experience", () => {
     expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("New activity definition");
     click(createActivity);
     await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
-    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!);
+    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')!);
     expect(buttonByText(rendered.container, "Browse built-in activities")).toBeTruthy();
 
     const tools = rendered.container.querySelector<HTMLDetailsElement>(".ad-tools-disclosure")!;
@@ -185,7 +185,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Versions");
     expect(new URLSearchParams(window.location.search).get("section")).toBe("versions");
     expect(window.history.state.elsaActivityDefinitions.collection.searchInput).toBe("invoice");
-    click(elementByText(rendered.container, "Activity Definitions"));
+    click(elementByText(rendered.container, "Activity definitions"));
     await waitForText(rendered.container, "Invoice evaluator");
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
     await rendered.unmount();
@@ -956,7 +956,7 @@ describe("Activity Definitions experience", () => {
     const details = rendered.container.querySelector<HTMLDetailsElement>(".ad-technical-disclosure")!;
     expect(details.open).toBe(false);
     expect(details.textContent).toContain("Contoso.InvoiceEvaluator");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
@@ -985,7 +985,7 @@ describe("Activity Definitions experience", () => {
     const postJson = vi.fn();
     const rendered = renderOverview({ drafts, versions, actions, definitionView, postJson });
     await waitForText(rendered.container, "Build your activity");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
     expect(primaryAction.textContent?.trim()).toBe("Open drafts");
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit draft"))).toBe(false);
@@ -1024,7 +1024,7 @@ describe("Activity Definitions experience", () => {
       actions: [{ action: "create-draft", allowed: true }], postJson
     });
     await waitForText(rendered.container, "No open drafts");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("section")).toBe("editor"));
@@ -1043,7 +1043,7 @@ describe("Activity Definitions experience", () => {
       activityEditors: [graphContribution()]
     });
     await waitForText(rendered.container, "No open drafts");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
 
@@ -1658,7 +1658,7 @@ describe("Activity Definitions experience", () => {
     });
     await waitForText(rendered.container, "Activity Definition unavailable");
     expect(rendered.container.textContent).not.toContain("First evaluator");
-    click(buttonByText(rendered.container, "Try again"));
+    click(buttonByText(rendered.container, "Retry"));
     await waitForText(rendered.container, "First evaluator");
     await rendered.unmount();
   }, 15000);
@@ -2010,7 +2010,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson);
 
     await waitForText(rendered.container, "Couldn't load Activity Definitions");
-    expect(buttonByText(rendered.container, "Try again")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Retry")).toBeTruthy();
     expect(rendered.container.textContent).not.toContain("Restart paging");
     await rendered.unmount();
   });
@@ -2072,7 +2072,7 @@ function renderPage(
   const render = () => <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>;
   flushSync(() => root.render(render()));
   return {
-    container,
+    container: document.body,
     baseUrl,
     setBaseUrl(baseUrl: string) {
       context = { ...context, baseUrl };

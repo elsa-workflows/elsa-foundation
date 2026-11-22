@@ -36,7 +36,7 @@ test.describe("backend connections against composed hosts",()=>{
     await expect(page).toHaveURL(/backend=authoring/);
     await expect(page.getByRole("status").filter({hasText:/fetch|reach|network|failed/i})).toBeVisible();
     page.once("dialog",dialog=>dialog.accept());
-    await page.getByRole("button",{name:"Remove backend",exact:true}).click();
+    await page.getByRole("button",{name:"Delete profile",exact:true}).click();
     await expect(page.getByRole("heading",{name:"Backends",exact:true,level:2})).toBeVisible();
     await expect(page.getByRole("button",{name:"Renamed qualification backend",exact:true})).toHaveCount(0);
   });

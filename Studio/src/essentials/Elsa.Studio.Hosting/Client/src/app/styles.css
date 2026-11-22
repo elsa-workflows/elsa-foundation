@@ -418,15 +418,11 @@ select option:disabled {
 
 .studio-auth-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 22px;
+  font-family: inherit;
+  font-size: var(--studio-page-title-size);
   font-weight: 650;
   letter-spacing: -0.015em;
   line-height: 1.2;
-}
-
-.studio-auth-card--error .studio-auth-title {
-  color: var(--auth-danger-text);
 }
 
 .studio-auth-copy {
@@ -471,34 +467,6 @@ select option:disabled {
   .studio-auth-progress::after {
     transform: none;
   }
-}
-
-.studio-auth-retry {
-  min-height: 40px;
-  margin-top: var(--spacing-lg);
-  padding: 0 var(--spacing-xl);
-  border: 0;
-  border-radius: 10px;
-  background: color-mix(in oklch, var(--primary), black 30%);
-  color: var(--primary-foreground);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter var(--transition-fast), transform var(--transition-fast);
-}
-
-.studio-auth-retry:hover {
-  filter: brightness(1.08);
-}
-
-.studio-auth-retry:active {
-  transform: translateY(1px);
-}
-
-.studio-auth-retry:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
 }
 
 /* The bar is 45% of the track wide, so the track is 100% / 45% = 222% of the bar: that offset puts the bar just past the far edge. */
@@ -705,7 +673,6 @@ html[data-nav-mode="left"][data-sidebar-backdrop="starfield"]:not([data-theme-ap
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   margin: 10px 10px 4px;
   opacity: 0.6;
 }
@@ -1860,7 +1827,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 720;
-  text-transform: uppercase;
 }
 
 .host-health-tile strong {
@@ -2406,7 +2372,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .modules-upload-dialog-heading h3 {
@@ -2754,7 +2719,6 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
-  text-transform: uppercase;
 }
 
 .modules-source-nav-heading strong {
@@ -3452,6 +3416,24 @@ html[data-nav-mode="top"] .topbar-actions .user-menu {
 
   .modules-upload-dialog {
     width: min(460px, 100%);
+  }
+}
+
+@media (max-width: 480px) {
+  /* Keep the brand link named while making room for the search field and Home. */
+  .sidebar-top .brand .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar .sidebar-search input[type="search"] {
+    min-width: 0;
+    padding-inline: 0;
   }
 }
 

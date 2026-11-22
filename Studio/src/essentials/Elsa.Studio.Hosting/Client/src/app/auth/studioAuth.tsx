@@ -1,3 +1,4 @@
+import { StudioButton } from "../ui/forms/Button";
 import React from "react";
 import {
   AuthProvider,
@@ -111,7 +112,7 @@ function StudioSignInStatus({ failed = false, onRetry }: { failed?: boolean; onR
             : "Signing in…"}
         </p>
         {failed ? (
-          <button type="button" className="studio-auth-retry" onClick={onRetry}>Try again</button>
+          <StudioButton variant="primary" onClick={onRetry}>Retry</StudioButton>
         ) : (
           <span className="studio-auth-progress" aria-hidden="true" />
         )}

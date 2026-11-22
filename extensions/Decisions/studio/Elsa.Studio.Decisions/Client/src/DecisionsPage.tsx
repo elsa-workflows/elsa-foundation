@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, Upload } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, SkeletonRows, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer, StudioField, OverflowMenu, StudioTabs, StudioTabPanel, StudioTimestamp, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import { can, cloneVersion, createDecision, exportDecision, failureMessage, getDecision, isConflict, listDecisions, listRecycleBin, publishDecision, purgeDecision, recycleDecision, restoreDecision, saveDecision, unpublishDecision, validateDecision, version, versions, type DecisionAsset, type DecisionVersion, type Diagnostic } from "./decisionsApi";
 import { decodeDecisionXml, newDecisionXml, parseTable } from "./decisionXml";
 import { TableEditor } from "./TableEditor";
@@ -198,7 +198,7 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
               <table className="studio-table decision-assets"><thead><tr><th scope="col">Decision</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
                 <tbody>{filtered.map(item => <tr key={item.id} {...studioRowInteraction<HTMLTableRowElement>(() => navigate(path(item.id)))}><th scope="row"><button className="decision-link studio-row-link" onClick={() => navigate(path(item.id))}>{item.name}</button>{item.description ? <p className="decision-muted">{item.description}</p> : null}</th>
                   <td>{item.publishedVersionId ? "Published · Draft available" : "Unpublished"}{item.isSensitive ? " · Protected" : ""}</td><td><StudioTimestamp value={item.updatedAt} fallback="—" invalidFallback="Invalid Date" /></td>
-                  <td><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Delete", destructive: true, disabled: busy || loading || !can(api, "decisions:manage"), onSelect: () => void recycle(item, true) }]} /></td></tr>)}</tbody>
+                  <td><OverflowMenu ariaLabel={`Actions for ${item.name}`} items={[{ id: "delete", label: "Move to recycle bin", destructive: true, disabled: busy || loading || !can(api, "decisions:manage"), onSelect: () => void recycle(item, true) }]} /></td></tr>)}</tbody>
               </table>
             </StudioTableContainer> : null}
       </StudioTabPanel>
@@ -217,14 +217,16 @@ export function DecisionsPage({ api, navigate, assetId, versionId, isNew = false
     </> : <div className="decision-editor-workspace">
       <header className="decision-draft-bar decision-editor-header">
         <div className="decision-draft-context">
-          <StudioBreadcrumbs items={[{ href: path(), label: "Decisions" }]} current={<span className="decision-editor-title">
-            <h1 id="decision-title" ref={heading} tabIndex={-1} title={editorTitle}>{editorTitle}</h1>
-            {editorStatus ? <span className="decision-draft-status">{editorStatus}</span> : null}
-          </span>} renderLink={item => <a href={item.href} aria-disabled={busy || caseBusy || undefined} onClick={event => {
+          <><StudioShellBreadcrumbs items={[{ href: path(), label: "Decisions" }]} current={editorTitle}
+          renderLink={item => <a href={item.href} aria-disabled={busy || caseBusy || undefined} onClick={event => {
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             void leave(item.href, () => { focusCollectionOnLoad.current = true; });
           }}>{item.label}</a>} />
+          <span className="decision-editor-title">
+            <h1 id="decision-title" ref={heading} tabIndex={-1} title={editorTitle}>{editorTitle}</h1>
+            {editorStatus ? <span className="decision-draft-status">{editorStatus}</span> : null}
+          </span></>
           {shown ? <StudioField className="decision-version-picker" label="View"><select aria-label="Decision version" value={published?.id ?? "draft"} disabled={busy} onChange={event => void leave(path(shown.id, event.target.value === "draft" ? undefined : event.target.value))}><option value="draft">Current draft</option>{availableVersions.map(item => <option key={item.id} value={item.id}>Version {item.number}</option>)}</select></StudioField> : null}
         </div>
         {!routePending && (isNew || shown) ? <div className="decision-actions">

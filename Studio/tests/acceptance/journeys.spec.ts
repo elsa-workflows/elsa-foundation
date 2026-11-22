@@ -336,7 +336,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(name).toBeFocused();
   await name.fill("invalid name");
   await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
+  await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption(secretName);
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(name).toHaveAttribute("aria-invalid", "true");

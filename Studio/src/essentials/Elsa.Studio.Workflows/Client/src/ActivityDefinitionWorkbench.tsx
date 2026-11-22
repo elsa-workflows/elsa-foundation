@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -200,8 +200,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   if (!detail && detailQuery.isPending && !detailFailure) return <main className="ad-page ad-workbench" aria-busy="true"><div className="ad-skeleton" role="status">Loading the Activity Definition workbench…</div></main>;
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
-      <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
-      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Try again</button></section>
+      <StudioShellBreadcrumbs items={[{ label: "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
+      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</button></section>
     </main>;
   }
   if (!detail) return null;
@@ -251,24 +251,23 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
-    <header className="ad-workbench-header ad-definition-header">
-      <div className="ad-definition-identity">
-        <StudioBreadcrumbs items={[{ href: "/workflows/activity-definitions", label: "Activity Definitions" }]} current={
-          <h1 id="activity-definition-title">{detail.definition.displayName}</h1>
-        } renderLink={item => <StudioLink href={item.href} navigateToStudioPath={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>{item.label}</StudioLink>} />
-        {detail.definition.description ? <p>{detail.definition.description}</p> : null}
-      </div>
-      <div className="ad-header-actions">
-        {returnDesignerHref ? <StudioLink className="ad-back-to-designer" href={returnDesignerHref} navigateToStudioPath={returnToDesigner}><ArrowLeft size={15} aria-hidden /> Back to designer</StudioLink> : null}
-        {designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
+    <StudioShellBreadcrumbs items={[
+      { href: "/workflows/activity-definitions", label: "Activity definitions" },
+      ...(returnDesignerHref ? [{ href: returnDesignerHref, label: "Designer" }] : [])
+    ]} current={detail.definition.displayName} renderLink={item =>
+      <StudioLink href={item.href} navigateToStudioPath={item.href === returnDesignerHref ? returnToDesigner :
+        () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>{item.label}</StudioLink>
+    } />
+    <StudioPageHeader compact headingLevel={2} title={detail.definition.displayName} titleId="activity-definition-title"
+      description={detail.definition.description} actions={<>
+        {designOwned ? <StudioButton type="button" variant="primary" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
           <Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}
-        </button> : null}
-        {canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}
-        <button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
+        </StudioButton> : null}
+        {canFork ? <StudioButton type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</StudioButton> : null}
+        <StudioButton type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
           <RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}
-        </button>
-      </div>
-    </header>
+        </StudioButton>
+      </>} />
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}
     {startError ? <div className="ad-inline-error" role="alert">{startError}</div> : null}
@@ -280,7 +279,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
       {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
       {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} publicationReviewRequested={requestedPublicationReview} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onReviewPublication={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null, publicationReview: true })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
       {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
-      {activeSection === "relationships" ? <Suspense fallback={<div className="ad-inline-status" role="status">Loading dependency explorer…</div>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
+      {activeSection === "relationships" ? <Suspense fallback={<StudioLoadingStatus>Loading dependency explorer…</StudioLoadingStatus>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
     </section>
     {designOwned ? <details className="ad-technical-disclosure"><summary>Advanced</summary><IdentityDetails detail={detail} provider={provider} />{canCreateDraft ? <button type="button" onClick={() => setDraftDialogSource(null)}>Create parallel draft</button> : null}</details> : null}
   </main>
@@ -319,9 +318,9 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
       <div><dt>Recommended version</dt><dd>{detail.lifecycle.recommendation ? displayActivityDefinitionVersion(detail.lifecycle.recommendation.version) : "None"}</dd></div>
     </dl>
     {isActivityDefinitionEnumValue(detail.lifecycle.recommendation?.lifecycle, "Active") ? versionQuery.isError
-      ? <div className="ad-inline-error" role="alert">Activity details could not be loaded. <button type="button" onClick={() => void versionQuery.refetch()}>Try again</button></div>
+      ? <div className="ad-inline-error" role="alert">Activity details could not be loaded. <button type="button" onClick={() => void versionQuery.refetch()}>Retry</button></div>
       : versionQuery.data?.contract ? <HistoricalContract contract={versionQuery.data.contract} compact />
-      : <div className="ad-inline-status" role="status">Loading activity details…</div>
+      : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>
       : <p>No recommended active version is available. Choose a version to inspect its inputs and outputs.</p>}
   </div>;
 
@@ -374,8 +373,8 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
 }
 
 function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query: ReturnType<typeof useActivityDefinitionDrafts> | ReturnType<typeof useActivityDefinitionVersions>; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; empty: string; onRetry(): void }) {
-  if (privacyFailure) return <div className="ad-inline-error" role="alert"><span>{privacyFailure === "unavailable" ? "This backend does not advertise this supported management collection. No fallback is used." : privacyFailure === "not-found" ? "This collection is no longer available. No identities or counts are shown." : "This account cannot open this collection. No identities or counts are shown."}</span> <button type="button" onClick={onRetry}>Try again</button></div>;
-  if (query.isPending) return <div className="ad-inline-status" role="status">Loading authorized rows…</div>;
+  if (privacyFailure) return <div className="ad-inline-error" role="alert"><span>{privacyFailure === "unavailable" ? "This backend does not advertise this supported management collection. No fallback is used." : privacyFailure === "not-found" ? "This collection is no longer available. No identities or counts are shown." : "This account cannot open this collection. No identities or counts are shown."}</span> <button type="button" onClick={onRetry}>Retry</button></div>;
+  if (query.isPending) return <StudioLoadingStatus>Loading authorized rows…</StudioLoadingStatus>;
   if (query.isError && !query.data) return <div className="ad-inline-error" role="alert">This collection could not be confirmed. No unconfirmed rows are shown.</div>;
   if (query.isError && query.data) return <div className="ad-inline-error" role="alert">Refresh failed; retained rows remain visible as stale evidence.</div>;
   if (query.data?.items.length === 0) return <div className="ad-inline-status" role="status">{empty}</div>;
@@ -384,7 +383,7 @@ function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query
 
 function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft" | "version"; selected: boolean; query: ReturnType<typeof useActivityDefinitionDraft> | ReturnType<typeof useActivityDefinitionVersion>; failure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null }) {
   if (!selected) return null;
-  if (query.isPending) return <div className="ad-inline-status" role="status">Loading the exact selected {kind}…</div>;
+  if (query.isPending) return <StudioLoadingStatus>Loading the exact selected {kind}…</StudioLoadingStatus>;
   if (failure) return <div className="ad-inline-error" role="alert">The exact selected {kind} could not be confirmed. No unconfirmed identity is shown.</div>;
   return null;
 }
@@ -414,7 +413,7 @@ function SelectedVersion({ item, compact, standalone = false, actionLabel, actio
   return <section className="ad-version-detail" aria-label="Selected exact version">
     {standalone ? <header className="ad-version-detail-heading"><strong>Version {compact ? displayActivityDefinitionVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><span>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</span></header> : null}
     {!compact ? actions : null}
-    {item.contract ? <HistoricalContract contract={item.contract} compact={compact} /> : <div className="ad-inline-status" role="status">Loading activity details…</div>}
+    {item.contract ? <HistoricalContract contract={item.contract} compact={compact} /> : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>}
     <details className="ad-technical-details ad-version-details"><summary>Version details</summary>
       {compact ? actions : null}
       <dl className="ad-version-identifiers">

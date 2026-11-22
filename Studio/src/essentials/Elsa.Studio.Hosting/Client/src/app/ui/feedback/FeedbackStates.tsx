@@ -40,6 +40,10 @@ export function EmptyState({
   );
 }
 
+export function StudioLoadingStatus({ children }: { children: React.ReactNode }) {
+  return <div className="studio-loading-status" role="status">{children}</div>;
+}
+
 /**
  * Shimmering placeholder rows for content that is still loading. The rows fade in after a
  * short delay (see the `.studio-skeleton` styles), so responses that resolve quickly never

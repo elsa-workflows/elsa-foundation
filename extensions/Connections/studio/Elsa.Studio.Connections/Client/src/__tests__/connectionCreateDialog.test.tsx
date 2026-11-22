@@ -48,7 +48,7 @@ describe("connection editing", () => {
     expect(button(container, "Save").disabled).toBe(true);
     changeText(container, "New value for API key", "   ");
     expect(button(container, "Save").disabled).toBe(true);
-    chooseRadio(container, "Existing Secret");
+    chooseRadio(container, "Existing secret");
     expect(button(container, "Save").disabled).toBe(true);
     chooseRadio(container, "Keep stored credential");
     expect(button(container, "Save").disabled).toBe(false);
@@ -117,7 +117,7 @@ describe("connection credential creation", () => {
     expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe(field === "name" ? "false" : "true");
     expect(container.querySelector(".studio-advanced-section")?.textContent?.includes("Error")).toBe(field !== "name");
     expect(control<HTMLInputElement>(container, "Name").value).toBe("retained.connection");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for API key").value).toBe("payments.api");
+    expect(control<HTMLSelectElement>(container, "Existing secret for API key").value).toBe("payments.api");
     expect(control<HTMLInputElement>(container, "Base URL").value).toBe("https://api.example");
     expect(container.textContent).not.toContain(rawSecretValue);
     const correction = control<HTMLInputElement>(container, label);
@@ -131,7 +131,7 @@ describe("connection credential creation", () => {
   it("explains missing required credentials and clears their error when supplied", async () => {
     const { container } = renderApiKeyDialog();
     await waitFor(() => container.textContent?.includes("Payments API") === true);
-    const picker = control<HTMLSelectElement>(container, "Existing Secret for API key");
+    const picker = control<HTMLSelectElement>(container, "Existing secret for API key");
     flushSync(() => picker.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(picker.getAttribute("aria-invalid")).toBe("true");
     expect(container.textContent).toContain("API key is required.");
@@ -149,7 +149,7 @@ describe("connection credential creation", () => {
     expect(input.getAttribute("aria-invalid")).not.toBe("true");
   });
 
-  it("puts the required API key before optional settings and keeps the existing Secret path metadata-only", async () => {
+  it("puts the required API key before optional settings and keeps the existing secret path metadata-only", async () => {
     const { container, calls } = renderApiKeyDialog();
 
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -185,7 +185,7 @@ describe("connection credential creation", () => {
     await waitFor(() => container.textContent?.includes("Payments API") === true);
     changeText(container, "Name", "api.connection");
     changeSelect(container, "Auth scheme", "bearer");
-    await waitFor(() => control<HTMLSelectElement>(container, "Existing Secret for Access token").options.length > 1);
+    await waitFor(() => control<HTMLSelectElement>(container, "Existing secret for Access token").options.length > 1);
     chooseSecret(container, "Access token", "payments.api");
     expect(button(container, "Create").disabled).toBe(true);
     expect(container.textContent).toContain("Enter the Base URL above or configure Allowed hosts in More options.");
@@ -365,7 +365,7 @@ describe("connection credential creation", () => {
     expect(placement.closest(".studio-advanced-section")).toBeNull();
   });
 
-  it("defaults to existing Secrets and sends only reference fields", async () => {
+  it("defaults to existing secrets and sends only reference fields", async () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     const postJson = vi.fn(async (url: string, body: unknown) => {
       calls.push({ url, body });
@@ -431,9 +431,9 @@ describe("connection credential creation", () => {
     changeText(container, "Name", "provider.connection");
     chooseSecret(container, "Access token", "payments.api");
     chooseSecret(container, "Signing key", "signing.key");
-    changeText(container, "Search Secrets for Access token", "no-match");
+    changeText(container, "Search secrets for Access token", "no-match");
     await waitFor(() => container.textContent?.includes("Showing up to 50 matches") === true);
-    const selected = control<HTMLSelectElement>(container, "Existing Secret for Access token");
+    const selected = control<HTMLSelectElement>(container, "Existing secret for Access token");
     expect(selected.value).toBe("payments.api");
     expect(selected.textContent).toContain("Payments API · payments.api");
     expect(button(container, "Create").disabled).toBe(false);
@@ -461,8 +461,8 @@ describe("connection credential creation", () => {
     });
     const { container } = renderDialog({ context: endpointContext(postJson) });
 
-    changeText(container, "Search Secrets for Access token", "pay");
-    changeText(container, "Search Secrets for Access token", "payments");
+    changeText(container, "Search secrets for Access token", "pay");
+    changeText(container, "Search secrets for Access token", "payments");
     expect(calls.filter(call => call.url === "/secrets/picker")).toHaveLength(2);
 
     await vi.advanceTimersByTimeAsync(249);
@@ -488,8 +488,8 @@ describe("connection credential creation", () => {
     chooseSecret(container, "Access token", "payments.api");
     chooseRadio(container, "New value");
     changeText(container, "New value for Access token", "discard-this-value");
-    chooseRadio(container, "Existing Secret");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Access token").value).toBe("");
+    chooseRadio(container, "Existing secret");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Access token").value).toBe("");
     expect(button(container, "Create").disabled).toBe(true);
     chooseSecret(container, "Access token", "payments.api");
     chooseSecret(container, "Signing key", "signing.key");
@@ -528,7 +528,7 @@ describe("connection credential creation", () => {
     chooseSecret(container, "Access token", "payments.api");
     changeSelect(container, "Auth scheme", "basic");
 
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Password").value).toBe("");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Password").value).toBe("");
     const username = control<HTMLInputElement>(container, "Username (required)");
     const password = Array.from(container.querySelectorAll("legend")).find(item => item.textContent === "Password (required)")!;
     expect(username.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
@@ -560,8 +560,8 @@ describe("connection credential creation", () => {
     const { container } = renderDialog({ context: endpointContext(postJson), onCancel });
 
     expect(document.activeElement).toBe(control<HTMLInputElement>(container, "Name"));
-    await waitFor(() => container.textContent?.includes("Secrets read permission") === true);
-    expect(container.textContent).toContain("Access to existing Secrets is denied.");
+    await waitFor(() => container.textContent?.includes("secrets read permission") === true);
+    expect(container.textContent).toContain("Access to existing secrets is denied.");
     expect(container.textContent).not.toContain(rawSecretValue);
     clickButton(container, "Retry");
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -583,7 +583,7 @@ describe("connection credential creation", () => {
       .mockResolvedValue(pickerResponse());
     const { container } = renderDialog({ context: endpointContext(postJson) });
 
-    await waitFor(() => container.textContent?.includes("Existing Secrets could not be loaded.") === true);
+    await waitFor(() => container.textContent?.includes("Existing secrets could not be loaded.") === true);
     expect(container.textContent).not.toContain("provider failure details");
     clickButton(container, "Retry");
     await waitFor(() => container.textContent?.includes("Payments API") === true);
@@ -604,8 +604,8 @@ describe("connection credential creation", () => {
     clickButton(container, "Create");
 
     await waitFor(() => container.textContent?.includes("The selected secret is unavailable") === true);
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Access token").value).toBe("payments.api");
-    expect(control<HTMLSelectElement>(container, "Existing Secret for Signing key").value).toBe("signing.key");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Access token").value).toBe("payments.api");
+    expect(control<HTMLSelectElement>(container, "Existing secret for Signing key").value).toBe("signing.key");
     expect(button(container, "Create").disabled).toBe(false);
   });
 
@@ -1073,7 +1073,7 @@ function changeSelect(container: HTMLElement, labelText: string, value: string) 
 }
 
 function chooseSecret(container: HTMLElement, labelText: string, value: string) {
-  changeSelect(container, `Existing Secret for ${labelText}`, value);
+  changeSelect(container, `Existing secret for ${labelText}`, value);
 }
 
 function chooseRadio(container: HTMLElement, labelText: string) {

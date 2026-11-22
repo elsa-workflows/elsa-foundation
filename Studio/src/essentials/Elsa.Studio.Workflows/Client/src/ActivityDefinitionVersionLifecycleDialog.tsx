@@ -1,5 +1,5 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
-import { useMemo, useRef, useState } from "react";
+import { StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
@@ -22,7 +22,6 @@ import {
   setActivityDefinitionRecommendation
 } from "./api/activityDefinitionLifecycle";
 import { ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 export function ActivityDefinitionVersionLifecycleDialog({
   context,
@@ -47,8 +46,6 @@ export function ActivityDefinitionVersionLifecycleDialog({
   const [reviewed, setReviewed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   const candidatesQuery = useQuery({
     queryKey: [...activityDesignKeys.definitionVersions({ definitionId: definition.definition.definitionId, limit: 100 }), "lifecycle-candidates"],
@@ -123,7 +120,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
           reason: reason.trim(),
           recommendationDecision: recommendationDecision()
         });
-        if (result.versionId !== version.version.versionId || result.lifecycle !== targetLifecycle) {
+        if (result.versionId !== version.version.versionId || !isActivityDefinitionEnumValue(result.lifecycle, targetLifecycle)) {
           throw new Error("The lifecycle response did not match the exact reviewed version transition.");
         }
       }
@@ -149,9 +146,7 @@ export function ActivityDefinitionVersionLifecycleDialog({
   };
 
   return <ActivityDefinitionManagementDialogShell
-    dialogRef={dialogRef}
     title={dialogTitle(action)}
-    kicker="Reviewed exact-version mutation"
     submitting={submitting}
     onClose={onClose}
   >
@@ -196,7 +191,8 @@ export function ActivityDefinitionVersionLifecycleDialog({
     <StudioField className="ad-dialog-field" label={<><span>Reason </span></>}><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} /><small>Required and recorded by the server</small></StudioField>
     <label className="ad-contract-check"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> I reviewed the exact identities, lifecycle preconditions, recommendation decision, and consequences above.</label>
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    <footer><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "Applying and reconciling…" : submitLabel(action)}</button></footer>
+    <StudioDialogFooter confirmType="button" onCancel={onClose} cancelDisabled={submitting} confirmLabel={submitting ? "Applying and reconciling…" : submitLabel(action)}
+      confirmVariant={action === "revoke" ? "danger" : "primary"} confirmDisabled={!canSubmit} onConfirm={() => void submit()} />
   </ActivityDefinitionManagementDialogShell>;
 }
 
@@ -217,7 +213,7 @@ async function reconcilesAppliedState(
       return currentDefinition.lifecycle.head?.versionId === definition.lifecycle.head?.versionId &&
         currentDefinition.lifecycle.recommendation?.versionId === version.version.versionId;
     }
-    if (currentVersion.lifecycle !== targetLifecycle) return false;
+    if (!isActivityDefinitionEnumValue(currentVersion.lifecycle, targetLifecycle)) return false;
     if (!decision) return true;
     const expectedRecommendation = decision.disposition === "Clear" ? null : decision.replacementVersionId ?? null;
     return (currentDefinition.lifecycle.recommendation?.versionId ?? null) === expectedRecommendation;

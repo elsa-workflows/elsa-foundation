@@ -1,7 +1,7 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, EyeOff, ListChecks, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
+import { Activity, AlertTriangle, EyeOff, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   useActivityAvailabilityDiagnostics,
@@ -176,7 +176,7 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
 
   return (
     <section className="studio-page wf-page availability-page">
-      <StudioPageHeader headingLevel={2} title={<><ListChecks size={18} /> Activity availability</>} description={<>Control which activities can be added to new workflows. Host baseline rules always take precedence.</>} actions={<><div className="studio-page-actions">
+      <StudioPageHeader headingLevel={2} title="Activity availability" description={<>Control which activities can be added to new workflows. Host baseline rules always take precedence.</>} actions={<><div className="studio-page-actions">
           {dirty && !saving && <span className="wf-chip availability-dirty">Unsaved changes</span>}
           <StudioButton type="button" variant="primary" onClick={save} disabled={loading || saving || !dirty}>
             <Save size={15} />

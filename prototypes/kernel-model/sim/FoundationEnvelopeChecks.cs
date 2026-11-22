@@ -25,6 +25,8 @@ internal static class FoundationEnvelopeChecks
         var refused = new List<(string Case, Contract.ActorRef Ref)>();
         foreach (var scenario in invalidLabels)
             refused.Add((scenario, await Admit(scenario, scenario)));
+        var metadataAtCap = await Admit("meta-fit", "meta-fit");
+        var metadataAboveCap = await Admit("meta-over", "meta-over");
         for (var step = 0; step < 12; step++)
         {
             await owner.WokenAsync(null);
@@ -56,6 +58,36 @@ internal static class FoundationEnvelopeChecks
                 !store.Messages.Values.Any(item => item.Message.Target.Id == row.Id && item.Message.Kind == "do-not-commit"),
                 $"an excess {scenario} parks the actor and rolls back its header, checkpoint and staged send");
         }
+
+        var validMetadata = store.ReadFoundationActor(scope.Tenant, metadataAtCap.Id).Actor!.Row;
+        var invalidMetadata = store.ReadFoundationActor(scope.Tenant, metadataAboveCap.Id).Actor!;
+        var kindAtCap = new string('é', 128);
+        var nameAtCap = new string('é', 512);
+        check(store.Messages.Values.Any(item => item.Message.Target.Id == validMetadata.Id && item.Message.Kind == kindAtCap) &&
+            invalidMetadata.Park is not null && !store.Messages.Values.Any(item =>
+                item.Message.Target.Id == invalidMetadata.Row.Id && item.Message.Kind == "before-metadata"),
+            "an authored send accepts 256 kind bytes and one extra byte rolls back the turn");
+
+        var target = new Contract.Target.Ref(metadataAtCap);
+        var beforeRefusals = store.Messages.Count;
+        var badId = await ingress.SendAsync(scope, target, nameAtCap + "x", "ok");
+        var badKind = await ingress.SendAsync(scope, target, "same-id", kindAtCap + "x");
+        var invalidKind = await ingress.SendAsync(scope, target, "same-id", "broken\ud800");
+        check(badId.Outcome == Contract.AdmissionOutcome.Refused && badKind.Outcome == Contract.AdmissionOutcome.Refused &&
+            invalidKind.Outcome == Contract.AdmissionOutcome.Refused && store.Messages.Count == beforeRefusals,
+            "ordinary ingress refuses names and kinds outside their text budgets before reserving a delivery");
+        var atLimit = await ingress.SendAsync(scope, target, nameAtCap, kindAtCap);
+        var retryKind = await ingress.SendAsync(scope, target, "same-id", "ok");
+        check(atLimit.Outcome == Contract.AdmissionOutcome.Accepted && retryKind.Outcome == Contract.AdmissionOutcome.Accepted,
+            "ordinary ingress accepts exact text budgets and reuses an ID after validation refused the first input");
+
+        var specAtLimit = new Contract.StartSpec(model.Type, "probe", "0");
+        var badKey = await ingress.SendAsync(scope, new Contract.Target.Key(nameAtCap + "x", specAtLimit), "key-op", Contract.Kinds.Start);
+        var badOperation = await ingress.SendAsync(scope, new Contract.Target.Key(nameAtCap, specAtLimit), nameAtCap + "x", Contract.Kinds.Start);
+        var goodKey = await ingress.SendAsync(scope, new Contract.Target.Key(nameAtCap, specAtLimit), "key-op", Contract.Kinds.Start);
+        check(badKey.Outcome == Contract.AdmissionOutcome.Refused && badOperation.Outcome == Contract.AdmissionOutcome.Refused &&
+            goodKey.Outcome == Contract.AdmissionOutcome.Accepted,
+            "keyed admission enforces both name bounds before it creates a binding or receipt");
 
         async Task<Contract.ActorRef> Admit(string id, string input)
         {
@@ -316,6 +348,12 @@ internal static class FoundationEnvelopeChecks
         {
             var input = turn.Inbox.FirstOrDefault(message => message.Kind == Contract.Kinds.Start);
             if (input?.Payload is null) return default;
+            if (input.Payload is "meta-fit" or "meta-over")
+            {
+                turn.Send(turn.Header.Ref, "before-metadata", dueAt: turn.Now + 1);
+                turn.Send(turn.Header.Ref, new string('é', 128) + (input.Payload == "meta-over" ? "x" : ""), dueAt: turn.Now + 1);
+                return default;
+            }
             if (input.Payload.StartsWith("label", StringComparison.Ordinal))
             {
                 var cap = new string('é', 512);
