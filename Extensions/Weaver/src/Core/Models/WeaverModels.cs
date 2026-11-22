@@ -687,7 +687,7 @@ public sealed record WeaverProposalRecord(WeaverActionProposal Proposal)
 /// both: <see cref="Canonical"/> is the canonical JSON text (sorted keys, raw scalars) the digest was taken over, and a
 /// store keeps it byte-identical, so a recorded fingerprint stays verifiable after any number of restarts.
 /// </summary>
-/// <param name="Digest">The lowercase hexadecimal SHA-256 of <see cref="Canonical"/> as UTF-8.</param>
+/// <param name="Digest">The lowercase JsonHashInput digest of the JSON value in <see cref="Canonical"/>.</param>
 public sealed record WeaverDisclosureSnapshotRecord(string Digest, string Canonical)
 {
     /// <summary>The snapshot's recorded size in bytes; it counts toward the session's disclosure size limit.</summary>

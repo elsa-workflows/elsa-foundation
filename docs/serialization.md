@@ -91,6 +91,7 @@ for Elsa-owned contracts only. Workflow-data conversions never enter that list.
 | `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeArtifactJson.cs` | `modifier:CreateResolver, converter:JsonStringEnumConverter, converter:LosslessUtf16StringConverter` | Owned durable executable projection and lossless identity strings. | ADR 0091 decision 7 |
 | `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs` | `converter:JsonStringEnumConverter` | Owned durable bookmark state uses enum names. | ADR 0091 decision 7 |
 | `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerStateStore.cs` | `converter:JsonStringEnumConverter` | Owned durable scheduler state uses enum names. | ADR 0091 decision 7 |
+| `Extensions/Weaver/src/Elsa.Weaver/Services/WeaverInvocationIntegrity.cs` | `converter:JsonStringEnumConverter` | Retained disclosure snapshots use enum labels with matching readers; raw JSON and ordinary numeric tokens remain data. Their digest alone uses JsonHashInput. | ADR 0091 decision 7; spec 1207 FR-021a |
 | `Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsMySqlDbContext.cs` | `storage:json` | Provider normalizes secret column text; secrets are not workflow data. | ADR 0091 decision 7 |
 | `Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs` | `storage:jsonb` | Provider normalizes secret column text; secrets are not workflow data. | ADR 0091 decision 7 |
 

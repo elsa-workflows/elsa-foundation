@@ -8,6 +8,17 @@ namespace Elsa.Weaver.Services;
 /// <summary>Canonical, immutable identities for the exact module preparation reviewed by the user.</summary>
 internal static class WeaverInvocationIntegrity
 {
+    // Retained snapshots are data, not canonical hash bytes. This owner-only wire deviation
+    // carries the same enum labels as the hash projection and preserves raw JSON leaves.
+    internal static JsonSerializerOptions SnapshotOptions { get; } = CreateSnapshotOptions();
+
+    private static JsonSerializerOptions CreateSnapshotOptions()
+    {
+        var options = Elsa.Serialization.Core.JsonBaseline.CreateCopy();
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        options.MakeReadOnly();
+        return options;
+    }
     public static JsonElement Freeze(JsonElement value)
     {
         if (value.ValueKind == JsonValueKind.Undefined)
@@ -25,15 +36,10 @@ internal static class WeaverInvocationIntegrity
     public static string Digest<T>(T value) => Elsa.Serialization.Core.JsonHashInput.Hash(value);
 
     /// <summary>The canonical JSON text retained with the digest; carried values remain readable through the shared baseline.</summary>
-    public static string Canonical<T>(T value) => Encoding.UTF8.GetString(CanonicalBytes(value));
+    public static string Canonical<T>(T value) => JsonSerializer.Serialize(value, SnapshotOptions);
 
     /// <summary>The digest of recorded canonical JSON text, exactly as <see cref="Digest{T}"/> computes it for the value it was written from.</summary>
     public static string DigestCanonical(string canonical) => Elsa.Serialization.Core.JsonHashInput.HashJson(canonical);
-
-    private static byte[] CanonicalBytes<T>(T value)
-    {
-        return Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(Elsa.Serialization.Core.JsonHashInput.SerializeToElement(value));
-    }
 
     public static string PreparedDigest(WeaverPreparedToolInvocation value) => Digest(new
     {

@@ -8,7 +8,7 @@ namespace Elsa.Weaver.Services;
 
 /// <summary>Bounded transcript dependencies; current execution context and original targets are kept elsewhere.</summary>
 /// <remarks>
-/// A snapshot's identity is the digest of its canonical JSON. The bounds count distinct identities and their canonical
+/// A snapshot's identity is the digest of its canonical JSON value. The bounds count distinct identities and their retained
 /// size, the same text and size the session records once per distinct snapshot, so a repeated snapshot never counts twice.
 /// </remarks>
 internal sealed class WeaverDisclosureHistory
@@ -109,7 +109,7 @@ internal sealed class WeaverDisclosureHistory
     private static WeaverDisclosureSnapshot Freeze(WeaverDisclosureSnapshot snapshot)
         => new(Array.AsReadOnly(snapshot.Context.Select(attachment => attachment with
         {
-            Content = attachment.Content is null ? null : JsonSerializer.SerializeToElement(attachment.Content).Clone(),
+            Content = attachment.Content is null ? null : JsonSerializer.SerializeToElement(attachment.Content, Elsa.Serialization.Core.JsonBaseline.Options).Clone(),
             References = new ReadOnlyDictionary<string, string>(attachment.References.ToDictionary()),
             WeaverScopes = Array.AsReadOnly(attachment.WeaverScopes.ToArray())
         }).ToArray()), Array.AsReadOnly(snapshot.ToolResults.Select(result => result with
@@ -151,7 +151,7 @@ internal sealed class WeaverDisclosureHistory
         try
         {
             if (WeaverInvocationIntegrity.DigestCanonical(record.Canonical) != record.Digest
-                || JsonSerializer.Deserialize<WeaverDisclosureSnapshot>(record.Canonical, Elsa.Serialization.Core.JsonBaseline.Options) is not { Context: not null, ToolResults: not null } read)
+                || JsonSerializer.Deserialize<WeaverDisclosureSnapshot>(record.Canonical, WeaverInvocationIntegrity.SnapshotOptions) is not { Context: not null, ToolResults: not null } read)
                 return null;
             var snapshot = Freeze(read);
             if (WeaverInvocationIntegrity.Digest(snapshot) != record.Digest) return null;

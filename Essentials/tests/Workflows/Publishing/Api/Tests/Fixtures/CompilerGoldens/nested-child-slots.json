@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:f3670c4029eefdc526e4f240c8882b0cb3969f16af400218b485af47b619ec29",
-    "artifactId": "artifact-f3670c4029ee",
+    "artifactHash": "sha256:d2317674ac5fd069897e35fc34c56eae766b3f1d81dffdb25ec43c992ea0f74a",
+    "artifactId": "artifact-d2317674ac5f",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -29,7 +29,7 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+                "typeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
@@ -69,7 +69,7 @@
             "descriptor": {
               "consumerKey": "elsa.clr-activity",
               "payload": {
-                "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+                "typeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
               },
               "schemaVersion": "1"
             },
@@ -108,7 +108,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
+        "typeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
       },
       "schemaVersion": "1"
     },

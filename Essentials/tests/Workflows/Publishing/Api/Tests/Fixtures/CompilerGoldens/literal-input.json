@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:3901eac25fcc001e18f8f54c868128d879963727e1849b52e72405a3c64eb25c",
-    "artifactId": "artifact-3901eac25fcc",
+    "artifactHash": "sha256:e61bec8961bdad4547982aeed74f8a2989a2a72329385762ec072292cc4ad581",
+    "artifactId": "artifact-e61bec8961bd",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -22,7 +22,7 @@
     "descriptor": {
       "consumerKey": "elsa.clr-activity",
       "payload": {
-        "TypeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
+        "typeAlias": "Elsa.Workflows.Publishing.Api.Tests.TestWriteLineActivity"
       },
       "schemaVersion": "1"
     },
