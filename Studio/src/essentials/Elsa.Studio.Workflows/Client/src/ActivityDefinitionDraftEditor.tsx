@@ -68,7 +68,8 @@ const ActivityGraphVariablesEditor = lazy(() => import("./ActivityGraphImplement
 
 type ManagementSection = "drafts" | "versions" | "overview" | "relationships";
 
-export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, versionId, allowStartEditing = false, readOnly = false, openPublicationReviewOnMount = false, onManage, onDraftStarted, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+export function ActivityDefinitionDraftEditor({ agentWorkspace = false, context, definitionId, draftId, versionId, allowStartEditing = false, readOnly = false, openPublicationReviewOnMount = false, onManage, onDraftStarted, activityEditors, propertyEditors = [], expressionEditors = [], graphAuthoringPanels = [], inputEditors = [], recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+  agentWorkspace?: boolean;
   context: StudioEndpointContext;
   definitionId: string;
   draftId?: string;
@@ -126,7 +127,7 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   if (failed || !initialDraft || initialDraft.definitionId !== definitionId || version && version.versionId !== (ownClone?.version.versionId ?? versionId)) return <main className="ad-page ad-draft-editor"><button type="button" className="ad-back" onClick={() => onBack()}><ArrowLeft size={16} /> {onManage ? "Activity Definitions" : "Activity Definition"}</button><section className="ad-failure" role="alert"><AlertTriangle size={22} /><h1>Activity {draftId ? "draft" : "version"} unavailable</h1><p>Studio could not confirm the exact authorized {draftId ? "draft" : "version"}. No provider state is shown.</p><button type="button" onClick={() => void (draftId ? query.refetch() : versionQuery.refetch())}>Retry</button></section></main>;
 
   const designAuthoringAllowed = !definitionQuery.isError && definitionQuery.data?.definition.contentAuthority.kind.toLowerCase() === "design" && definitionQuery.data?.actions.some(action => action.action === "create-draft" && action.allowed) === true;
-  return <LoadedActivityDefinitionDraftEditor key={`${scope}:${definitionId}:${ownClone || !draftId ? `version:${version?.versionId}` : `draft:${draftId}`}`} context={context} initialDraft={initialDraft} initialVersion={version} readOnly={readOnly} allowStartEditing={allowStartEditing && designAuthoringAllowed && !readOnly} openPublicationReviewOnMount={openPublicationReviewOnMount} onManage={onManage} onDraftStarted={draft => {
+  return <LoadedActivityDefinitionDraftEditor agentWorkspace={agentWorkspace} key={`${scope}:${definitionId}:${ownClone || !draftId ? `version:${version?.versionId}` : `draft:${draftId}`}`} context={context} initialDraft={initialDraft} initialVersion={version} readOnly={readOnly} allowStartEditing={allowStartEditing && designAuthoringAllowed && !readOnly} openPublicationReviewOnMount={openPublicationReviewOnMount} onManage={onManage} onDraftStarted={draft => {
     if (!version) return;
     queryClient.setQueryData(activityDesignKeys.fullDefinitionDraft(draft.draftId), draft);
     setStarted({ draft, version, scope });
@@ -135,7 +136,8 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   }} blockAuthoringAllowed={designAuthoringAllowed} definitionDisplayName={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || undefined} definitionLabel={definitionQuery.data?.definition.displayName?.trim() || version?.definition.displayName?.trim() || initialDraft.presentationLabel?.trim() || generatedDraftLabel(initialDraft)} activityEditors={activityEditors} propertyEditors={propertyEditors} expressionEditors={expressionEditors} graphAuthoringPanels={graphAuthoringPanels} inputEditors={inputEditors} recoverySettings={recoverySettings} identity={identity} onNavigationGuardChange={onNavigationGuardChange} onBack={onBack} onOpenDraft={onOpenDraft} onOpenVersion={onOpenVersion} onOpenStudioPath={onOpenStudioPath} />;
 }
 
-function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVersion, allowStartEditing, readOnly, openPublicationReviewOnMount, onManage, onDraftStarted, blockAuthoringAllowed, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialDraft, initialVersion, allowStartEditing, readOnly, openPublicationReviewOnMount, onManage, onDraftStarted, blockAuthoringAllowed, definitionDisplayName, definitionLabel, activityEditors, propertyEditors, expressionEditors, graphAuthoringPanels, inputEditors, recoverySettings, identity, onNavigationGuardChange, onBack, onOpenDraft, onOpenVersion, onOpenStudioPath }: {
+  agentWorkspace: boolean;
   context: StudioEndpointContext;
   initialDraft: ActivityDefinitionDraftView;
   initialVersion?: ActivityDefinitionVersionView;
@@ -954,7 +956,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       <WorkflowEditorToolbarFrame
         className="ad-workbench-header"
         identity={<><StudioShellBreadcrumbs
-          items={[{ href: "/workflows/activity-definitions", label: onManage ? "Activity Definitions" : "Activity Definition" }]}
+          items={[{ href: agentWorkspace ? "/agents" : "/workflows/activity-definitions", label: agentWorkspace ? "Agents" : onManage ? "Activity Definitions" : "Activity Definition" }]}
           current={draftHeaderTitle(definitionDisplayName, draft)}
           renderLink={item => <StudioLink href={item.href} aria-disabled={revisionSensitiveActionsBlocked || undefined} tabIndex={revisionSensitiveActionsBlocked ? -1 : undefined} onClick={event => {
             if (revisionSensitiveActionsBlocked) { event.preventDefault(); return; }

@@ -341,7 +341,7 @@ page with header actions (dashboard, question); straight into the editor (decisi
 
 Decided (D6): a name-and-description dialog, then the editor opens.
 
-- [ ] **X4.1** (#5077) [source] Agent: `EXT/Agent/AgentsPage.tsx:163, 293–306` inline form that replaces the
+- [x] **X4.1** (#5077) [source] Agent: `EXT/Agent/AgentsPage.tsx:163, 293–306` inline form that replaces the (PR #5329)
   list; primary "Create and edit" before Cancel. `needs: D6`
 - [ ] **X4.2** (#5078) [seen] Secret: remove the whole-page card on Create secret. [source] `CreateSecretDialog`
   also exists in `SecretDialogs.tsx:24`; keep one flow, which D6 makes the dialog. **[check]** that the
@@ -398,14 +398,14 @@ Definitions and Runs use the header split-button with an interval menu [seen]. M
 page-level refresh to `StudioPageHeader refresh=`. Per-widget refresh in `DASH/WidgetFrame.tsx` is not
 in scope.
 
-- [ ] **X6.1** (#5097) [source] `EXT/Agent/AgentsPage.tsx:187`.
-- [ ] **X6.2** (#5098) [source] `EXT/Agent/AgentPlayground.tsx:178–179` ("Reload draft", redundant `aria-label`).
-- [ ] **X6.3** (#5099) [source] `EXT/Agent/HumanReviewPage.tsx:108` and `AgentInvocationPage.tsx:97`.
+- [x] **X6.1** (#5097) [source] `EXT/Agent/AgentsPage.tsx:187`. (PR #5329)
+- [x] **X6.2** (#5098) [source] `EXT/Agent/AgentPlayground.tsx:178–179` ("Reload draft", redundant `aria-label`). (PR #5329)
+- [x] **X6.3** (#5099) [source] `EXT/Agent/HumanReviewPage.tsx:108` and `AgentInvocationPage.tsx:97`. (PR #5329)
 - [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
 - [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
 - [x] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`. (PR #5320)
-- [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
-  menu).
+- [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
+  menu). (PR #5325)
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
 - [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
   searching for a `StudioButton` labelled "Refresh" outside `KIT`.
@@ -455,8 +455,8 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
 - [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
-- [ ] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
-  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version").
+- [x] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
+  labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version"). (PR #5325)
 - [x] **X8.11** (#5126) [source] `EXT/Decisions/DecisionsPage.tsx:184–185` uses `StudioTabs` for Active / (PR #5320)
   Recycle bin where `PeerViewSwitch` is the peer-view primitive.
 
@@ -501,14 +501,14 @@ Replace local date formatting with `StudioTimestamp`.
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
-- [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
-  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`.
+- [x] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
+  `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`. (PR #5325)
 - [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
 - [ ] **X10.6** (#5144) [verified] Identity `UserAccessPage.tsx:12`.
 - [x] **X10.7** (#5145) [seen] Questions list shows "11/21/2026, 1:29:59 AM" where other lists show
   "Nov 21, 2026". (PR #5311)
 - [x] **X10.8** (#5146) [check] Console, OpenTelemetry and Structured logs modules. (PR #5298)
-- [ ] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`:
+- [x] **X10.9** (#5147) [source] Drop the local `formatDate` fallbacks beside `StudioTimestamp`: (PR #5329)
   `EXT/Agent/AgentsPage.tsx:178, 314`, `EXT/Secrets/SecretsPage.tsx:325, 407`.
 - [ ] **X10.10** (#5148) [source] Identifiers shown as plain text → `CopyableIdentifier`:
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
@@ -560,7 +560,7 @@ the designer header is a documented exception.
 - [x] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567` (PR #5316)
   [source]). "Advanced" appears three times with three class names.
 - [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
-- [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
+- [x] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on (PR #5329)
   `closest("details")`; keep that focus behaviour working.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
 - [x] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`), (PR #5320)
@@ -665,7 +665,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (D9). `needs: G1` (PR #5300)
 - [x] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
   `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`). (PR #5311)
-- [ ] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected".
+- [x] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected". (PR #5329)
 - [ ] **X14.10** (#5211) [check] Extension Builder tooltip "Requires canBuild".
 
 ## Phase 2: per-screen items
@@ -687,7 +687,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **W7** (#5219) [verified] 15px toolbar icons at `WF/workflow-editor/WorkflowEditorToolbar.tsx:186, 189`; (PR #5322)
   [source] `WorkflowDefinitions.tsx:791, 862`; the kit rule is 16px. Also 14px and 15px in
   `EXT/Connections/ConnectionsPage.tsx:145–146` and `EXT/Secrets/SecretsPage.tsx:253–255`.
-- [ ] **W8** (#5220) [seen] Clicking an agent in Agents opens the Activity definitions workbench, and the
+- [x] **W8** (#5220) [seen] Clicking an agent in Agents opens the Activity definitions workbench, and the (PR #5329)
   sidebar selection jumps to Library.
 - [x] **W9** (#5221) [source] `WF/ActivityDefinitionsPage.tsx:495–496`: "Rows per page" select in the filter (PR #5322)
   toolbar. `needs: K6`
@@ -727,7 +727,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
   page.
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
-- [ ] **E9** (#5239) [source] Agent review: "Deny" is a default-styled button beside primary "Approve"
+- [x] **E9** (#5239) [source] Agent review: "Deny" is a default-styled button beside primary "Approve" (PR #5329)
   (`HumanReviewPage.tsx:121–122`). `needs: K2`
 - [x] **E10** (#5240) [source] Decisions: recycle-bin rows use inline buttons (`DecisionsPage.tsx:208`) while (PR #5320)
   active rows use `OverflowMenu`; "Unpublish" and "Move to recycle bin" are default buttons
@@ -755,7 +755,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   whether "Edit" only duplicates opening the row. `needs: D12`
 - [x] **E19** (#5249) [source] Remove the "Search" submit button and search as the user types (D11): (PR #5299)
   `EXT/Connections/ConnectionsPage.tsx:150–151`, `EXT/Secrets/SecretsPage.tsx:260–261`. `needs: D11`
-- [ ] **E20** (#5250) [source] Field markers (D13): drop "Comment (optional)"
+- [x] **E20** (#5250) [source] Field markers (D13): drop "Comment (optional)" (PR #5329)
   (`EXT/Agent/HumanReviewPage.tsx:114`) and the "Optional." descriptions (`AgentsPage.tsx:300`,
   `AgentEditor.tsx:248`). `EXT/Connections/ConnectionCreateDialog.tsx:312` already uses the
   "(required)" suffix. **[check]** whether `StudioField` should render the suffix itself.

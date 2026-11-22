@@ -541,7 +541,10 @@ public sealed class DurableTurn
         _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = foundationTenant });
         if (keep) _kept.Add(_subscribed[^1]);
     }
-    public void Unsubscribe(string key, string wait) => _unsubscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation));
+    public void Unsubscribe(string key, string wait) => Unsubscribe(key, wait, null);
+
+    internal void Unsubscribe(string key, string wait, string? tenant) => _unsubscribed.Add(
+        new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = tenant });
 
     // NATIVE N1: the publish is a ticket to self, so "the inbox alone says what is owed" holds for it too.
     public string Publish(string key, string? payload, TimeSpan keep) => Publish(key, payload, keep, null, null);
