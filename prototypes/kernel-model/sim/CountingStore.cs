@@ -6,6 +6,7 @@ public sealed class CountingStore(IKernelStore inner, Action committed, Action<C
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

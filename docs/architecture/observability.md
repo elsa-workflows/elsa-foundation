@@ -561,6 +561,13 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **The check.** Termination is feasible for every admitted registry: each page is bounded by `P_cascade` and moves
     the cursor by at least one entry, so a list of n entries ends in ⌈n / `P_cascade`⌉ page commits. The review's
     10,001 children end in 11.
+  - **In-memory live path.** The ending commit moves the live registry to the durable obligation and sends the
+    first page. Qualified Delete carries forward an existing discharge. The Worker handles the outstanding
+    control at an ended row or its retirement marker and the store checks the exact successor before applying
+    the page. `--cascade-pages-check` covers the 1,000, 1,001 and 10,001 entry boundaries, job and result
+    settlement, lost outcomes, Delete and keyed reuse, and the real Native tree with 1,001 live children. This
+    evidence covers live discharge and its transfer on Delete. Starting from a held retirement marker, Park
+    terminate paths, and `ThenDelete` have separate cases. Physical provider encoding and cost remain at K4 and K12.
 - **Which path each fan-out takes.** A combiner's FailFast is the application send above. Release 1's parallel
   ForEach runs its bodies as frames inside one instance ([large fan-out](large-fan-out.md)), so its FailFast cancels
   frames in the model and sends no kernel terminate; a body's child workflow is cancelled through its parent's

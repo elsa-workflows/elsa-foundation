@@ -43,7 +43,7 @@ public static class StoreBatchRules
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
-                turn.FoundationCatchUpExpected is not null ||
+                turn.FoundationCatchUpExpected is not null || turn.FoundationCascade is not null || turn.Row?.Cascade is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
@@ -67,7 +67,7 @@ public static class StoreBatchRules
                     marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
                     marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
                     marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,
-                        History:History.Minimal,Creation:marker.Creation,Retired:true)))
+                        History:History.Minimal,Creation:marker.Creation,Retired:true) { Cascade = marker.Cascade }))
                     throw new StoreException(Failure.Definite,"A row-bearing Delete must be a canonical retirement marker.");
             }
             if (turn.Row is { } value) ValidateIdentity(value);

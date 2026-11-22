@@ -193,16 +193,20 @@ public sealed class WorkflowInstance(IEnumerable<IExecutionModel> models) : IAct
         }
         if (running) next = WorkflowCommitClock.End(next);
         var children = !input.Services.Has(Flaw.TerminateRootOnly) ? ChildRegistry.Read(row.Children) : [];
+        var jobs = JobRegistry.Read(row.Jobs);
         var unit = new TurnOutcome(instance)
         {
             Row = next, Expected = row.Revision, Consumed = [item], Status = next.Status, Revision = next.Revision, Unsubscribe = running,
-            Journal = Journal(row.History, ["terminated"]),
-            Sent = children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id), Kinds.Terminate, Sender: instance,
-                TargetCreation: child.Creation > 0 ? child.Creation : null, SenderCreation: row.Creation).AsIssued().AsCascadeTerminate()).ToList(),
-            Cancelled = JobRegistry.Read(row.Jobs).Select(job => InboxKey.Ticket(instance, job.Key, row.Creation, job.Generation)).ToList(),
+            Journal = Journal(row.History, ["terminated"])
         };
-        foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         if (running && row.Parent is not null) unit.Sent.Add(Finished(next, null));
+        if (input.Services.SupportsCascadePages)
+            return CascadeProtocol.Open(unit, new([.. jobs], [.. children]));
+        unit.Sent.InsertRange(0, children.Select((child, i) => new Message($"{Origin(row)}#{next.Revision}.{i:D4}", new InstanceRef(child.Id),
+            Kinds.Terminate, Sender: instance, TargetCreation: child.Creation > 0 ? child.Creation : null,
+            SenderCreation: row.Creation).AsIssued().AsCascadeTerminate()));
+        unit.Cancelled.AddRange(jobs.Select(job => InboxKey.Ticket(instance, job.Key, row.Creation, job.Generation)));
+        foreach (var ticket in unit.Cancelled) input.Services.Cancelling(ticket);
         return unit;
     }
 

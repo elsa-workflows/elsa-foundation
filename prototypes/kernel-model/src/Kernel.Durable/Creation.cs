@@ -76,7 +76,8 @@ public static class CreationProtocol
     private static bool IsPhysicalRetirement(TurnCommit turn) => turn.Row is { Creation: 0, Retired: true } row &&
         StringComparer.Ordinal.Equals(turn.Instance,row.Id) && IsPhysicalAddress(row.Id) && row.Status != InstanceStatus.Running && turn.Delete &&
         turn.Expected is { } expected && expected < long.MaxValue && row.Revision == expected + 1 &&
-        row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+        row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true)
+            { Cascade = row.Cascade };
 
     private static bool Qualified(StartSpec? spec) => spec?.Creation is not null || (spec?.ParentCreation ?? 0) != 0;
     public static bool Qualified(Message message) => message.SenderCreation != 0 || message.TargetCreation is not null || Qualified(message.Start);
@@ -95,6 +96,7 @@ public static class CreationProtocol
         if (previous is { Retired: false })
             return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start, kind, payload)
                 ? previous.PendingStart == message ? null : "ExistingCreation" : "StartConflict";
+        if (previous?.Cascade is not null) return "ObligationOutstanding";
         var high = previous?.Creation ?? 0;
         if (high == long.MaxValue) return "CreationExhausted";
         return creation.Previous == high && creation.Generation == high + 1 ? null : "RetiredOrConflictingCreation";
@@ -120,7 +122,7 @@ public static class CreationProtocol
     }
 
     public static InstanceRow Retire(InstanceRow row) => new(row.Id, "", "", row.Status, "null", row.Revision + 1, null,
-        History: History.Minimal, Creation: row.Creation, Retired: true);
+        History: History.Minimal, Creation: row.Creation, Retired: true) { Cascade = row.Cascade };
 
     /// <summary>
     /// The creation-header facts a committed row satisfies on its own, with no creator, predecessor or turn in view.
@@ -138,6 +140,7 @@ public static class CreationProtocol
     public static string? HeaderError(InstanceRow row, bool born)
     {
         if (row.Creation < 0 || row.ParentCreation < 0) return "negative creation identity";
+        if (row.Cascade is not null && row.Status == InstanceStatus.Running) return "a running actor cannot discharge a terminal cascade";
         if (row.Creation == 0 && (row.StartIntent is not null || row.ParentCreation != 0 || row.PendingStart is not null)) return "legacy row cannot carry a partial creation header";
         if (row.Creation > 0 && (row.Parent is null ? row.ParentCreation != 0 : row.ParentCreation <= 0)) return "incomplete exact parent address";
         if (row.PendingStart is { } pending && (string.IsNullOrEmpty(pending.Id) || row.Status != InstanceStatus.Running)) return "invalid held start continuation";
@@ -151,7 +154,8 @@ public static class CreationProtocol
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
         if (turn.Row is not { } row) return;
         if (HeaderError(row, born: previous is null or { Retired: true }) is { } header) RefuseWrite(header);
-        if (row is { Creation: 0, Retired: true } && !IsPhysicalRetirement(turn)) RefuseWrite("legacy row cannot carry a partial creation header");
+        var continuesRetired = row.Retired && previous is { Retired: true } && turn.FoundationCascade?.Input is not null;
+        if (row is { Creation: 0, Retired: true } && !continuesRetired && !IsPhysicalRetirement(turn)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.PendingStart is { } pending && (previous is { Retired: false } && previous.PendingStart != pending ||
             previous?.PendingStart != pending && turn.Held?.Contains(pending) != true &&
             !(row.FoundationInlineBirth?.Creator == pending && turn.FoundationHeldPromotions?.Contains(pending) == true &&
@@ -161,6 +165,7 @@ public static class CreationProtocol
             !turn.Consumed.Concat(turn.Done).Contains(retained)) RefuseWrite("held start cleared without consuming its delivery");
         if (row.Retired)
         {
+            if (continuesRetired) return; // The cascade validator checks the registered control and the exact next marker.
             if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) || row.Status == InstanceStatus.Running || row != Retire(previous))
                 RefuseWrite("invalid lifecycle retirement");
             return;
@@ -168,6 +173,7 @@ public static class CreationProtocol
         if (previous is { Retired: true, Creation: 0 }) RefuseWrite("physical run identity is retired");
         if (previous is { Retired: true })
         {
+            if (previous.Cascade is not null) RefuseWrite("ObligationOutstanding");
             if (previous.Creation == long.MaxValue || row.Creation != previous.Creation + 1)
                 RefuseWrite("creation did not advance the retained high-water mark");
         }

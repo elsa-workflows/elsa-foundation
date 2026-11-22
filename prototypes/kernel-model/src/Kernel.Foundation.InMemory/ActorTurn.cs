@@ -173,14 +173,8 @@ internal sealed partial class ActorAdapter
             var wasRunning = _row.Status == Durable.InstanceStatus.Running;
             var ended = wasRunning && _status != Contract.ActorStatus.Running;
             var outcome = _turn.Outcome((Durable.InstanceStatus)_status);
-            var cascades = outcome.Consumed.Any(delivery => delivery.Message.Kind == Contract.Kinds.Terminate) ||
-                ended && _status == Contract.ActorStatus.Cancelled;
-            if (cascades)
-            {
-                foreach (var child in _children) _turn.CascadeTerminate(child);
-                foreach (var job in Durable.JobRegistry.Read(_turn.Jobs()))
-                    CancelJob(job.Key);
-            }
+            var cascades = _status != Contract.ActorStatus.Running && (outcome.Consumed.Any(delivery =>
+                delivery.Message.Kind == Contract.Kinds.Terminate) || ended && _status == Contract.ActorStatus.Cancelled);
 
             outcome.Replied.RemoveAll(reply => _repliedAfterEmit.Contains(reply.Message));
             for (var i = 0; i < outcome.Replied.Count; i++)
@@ -191,8 +185,10 @@ internal sealed partial class ActorAdapter
                 if (message.Read<Completion>().Final) _children.Remove(new(message.Sender!, message.SenderCreation));
             }
 
+            var cascade = cascades ? new Durable.CascadeRegistry(_turn.MoveJobsToCascade(), [.. _children]) : null;
             var row = _row with { State = State ?? "null", FoundationNullState = State is null,
-                Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(), Children = Durable.ChildRegistry.Write(_children) };
+                Revision = _turn.Revision, Status = (Durable.InstanceStatus)_status, Jobs = _turn.Jobs(),
+                Children = cascades ? null : Durable.ChildRegistry.Write(_children) };
             if (ended)
             {
                 if (row.Parent is not null) _turn.AddTerminalNotice(Notice(row, _output is null ? null : Durable.Json.Write(_output), final: true));
@@ -208,7 +204,8 @@ internal sealed partial class ActorAdapter
             if (row.FoundationInlineBirth is not null)
             {
                 var until = _input.Unwritten ? _input.Until : InlineUntil();
-                if (ended && (_input.Row is null || _input.CheckpointTime < until) && _turn.SentCount == 0 && _turn.SubscribedCount == 0 &&
+                if (ended && cascade is null or { Count: 0 } && (_input.Row is null || _input.CheckpointTime < until) &&
+                    _turn.SentCount == 0 && _turn.SubscribedCount == 0 &&
                     outcome.Held.Count == 0 && outcome.Consumed.TrueForAll(item => !item.Durable))
                     return outcome;
 
@@ -221,7 +218,8 @@ internal sealed partial class ActorAdapter
                     return _turn.Seal(outcome, row with { FoundationInlineHeader = outcome.FoundationHeader }, State, null);
                 }
             }
-            return _turn.Seal(outcome, row, State, journal);
+            var sealedTurn = _turn.Seal(outcome, row, State, journal);
+            return cascade is null ? sealedTurn : Durable.CascadeProtocol.Open(sealedTurn, cascade);
         }
 
         private long InlineUntil()

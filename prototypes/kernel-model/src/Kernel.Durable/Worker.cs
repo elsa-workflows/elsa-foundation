@@ -252,6 +252,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     public bool CreationIdentityAvailable => _store.CreationIdentityAvailable;
     public bool CommitClockAvailable => _store.CommitClockAvailable;
+    bool ITurnServices.SupportsCascadePages => _store.SupportsCascadePages;
     /// <summary>The shared foundation reading when available, or the worker's elapsed-time estimate for a remote store.</summary>
     public long Now => Has(Flaw.WallClockTimers) ? _options.WallClock!() : _foundationClock?.Invoke() ?? _anchor + _options.Monotonic();
 
@@ -341,6 +342,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         public long Now => admittedAt ?? worker.Now;
         public bool CreationIdentityAvailable => worker.CreationIdentityAvailable;
         public bool CommitClockAvailable => worker.CommitClockAvailable;
+        bool ITurnServices.SupportsCascadePages => worker._store.SupportsCascadePages;
         public int Partitions => worker.Partitions;
         public TimeSpan ShortWait => worker.ShortWait;
         public bool Has(Flaw flaw) => worker.Has(flaw);
@@ -1936,9 +1938,20 @@ public sealed class Worker : IScopeActivation, ITurnServices
         (slot.Busy, slot.Used) = (true, ++_used);
         var request = due[0].Message;
         var creationError = CreationError(slot, request);
+        if (request.Kind == Kinds.Cascade && creationError is null or "RetiredCreation" &&
+            slot.Row is { } discharging && due is [var control] && CascadeProtocol.Matches(discharging, request))
+        {
+            Enqueue(Bound(CascadeProtocol.Continue(discharging, control), slot), cancellationToken);
+            return;
+        }
         if (creationError is not null)
         {
             Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, creationError), slot), cancellationToken);
+            return;
+        }
+        if (request.Kind == Kinds.Cascade)
+        {
+            Enqueue(Bound(CreationProtocol.Refuse(instance, slot.Row, due, "InvalidControl"), slot), cancellationToken);
             return;
         }
         var creator = slot.Row is null or { Retired: true } ? due.FindIndex(i => i.Message.Start is not null) : -1;
@@ -2600,7 +2613,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 var unit = units[i];
                 // The marks ride with the first of these commits that lands.
                 outcome = await CommitAsync([unit], marks, trial, generation, cancellationToken);
-                if (outcome == Outcome.Refused && unit.Slot is { } slot)
+                if (outcome == Outcome.Refused && unit.FoundationCascade?.Input is null && unit.Slot is { } slot)
                 {
                     slot.RollbackTurn?.Invoke();
                     var preserve = slot.Unwritten && slot.Row?.FoundationInlineBirth is not null;
@@ -2805,6 +2818,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var unit in units)
             {
                 if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
+                if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed && unit.FoundationCascade is not null)
+                {
+                    unit.Cancelled.AddRange(removed);
+                    _woken = true;
+                }
                 Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit, fenced);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
@@ -2879,7 +2897,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationCatchUpStep = unit.FoundationCatchUpStep,
             FoundationCatchUpBefore = unit.FoundationCatchUpBefore,
             FoundationCatchUpExpected = unit.FoundationCatchUpExpected,
-            FoundationCatchUpFailed = unit.FoundationCatchUpFailed
+            FoundationCatchUpFailed = unit.FoundationCatchUpFailed,
+            FoundationCascade = unit.FoundationCascade
         };
     }
 
@@ -3041,6 +3060,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// <summary>The commit landed (or there was nothing to write): now, and only now, memory follows.</summary>
     private void Apply(TurnOutcome unit, Queue<long>? seqs, bool handOver, CancellationToken cancellationToken, ReplyRelease release, IReadOnlySet<int>? fenced = null)
     {
+        if (unit.Row is { } ending && unit.FoundationCascade is { Input: null } cascade)
+            foreach (var job in cascade.Entries.Jobs)
+                if (_items.GetValueOrDefault(InboxKey.Ticket(ending.Id, job.Key, ending.Creation, job.Generation))?.Cancel is { } cancel)
+                {
+                    try { cancel.Cancel(); }
+                    catch (AggregateException) { } // A callback's cancellation handler cannot undo the landed end.
+                }
         if (unit.CreationRefused && release is ReplyRelease.WriteFree or ReplyRelease.EphemeralWriteFree)
             _lifecycle?.WriteFreeRefusal(unit.Consumed);
         // A command can mature while the last recovery checkpoint awaits acknowledgement. Capture

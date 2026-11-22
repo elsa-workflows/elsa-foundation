@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -82,6 +83,7 @@ public interface ITurnServices
     long Now { get; }
     bool CommitClockAvailable { get; }
     bool CreationIdentityAvailable { get; }
+    internal bool SupportsCascadePages => false;
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -251,6 +253,7 @@ public sealed class TurnOutcome(string instance)
     internal TimeSpan? FoundationCatchUpBudget;
     internal int? FoundationCatchUpExpected;
     internal ParkCatchUpFailure? FoundationCatchUpFailed;
+    internal CascadeCommit? FoundationCascade;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
@@ -425,13 +428,6 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
-    internal void CascadeTerminate(CreationAddress child)
-    {
-        Send(IssuedAt(_ordinal++), new(child.Id), Kinds.Terminate, null,
-            new SendOptions(TargetCreation: child.Creation > 0 ? child.Creation : null));
-        _sent[^1] = _sent[^1].AsCascadeTerminate();
-    }
-
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
@@ -569,6 +565,14 @@ public sealed class DurableTurn
     {
         var index = _jobs.FindIndex(job => job.Key == key);
         return index >= 0 ? _jobs[index].Generation : null;
+    }
+
+    internal ImmutableArray<JobRegistration> MoveJobsToCascade()
+    {
+        foreach (var key in _started.Keys.ToArray()) CancelJob(key);
+        var entries = _jobs.ToImmutableArray();
+        _jobs.Clear();
+        return entries;
     }
 
     public void CancelJob(string key) =>

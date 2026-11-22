@@ -73,7 +73,7 @@ public sealed record Message(
     internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
     internal ParkCatchUpTicket? ParkCatchUp { get; init; }
-    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
+    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry or Kinds.Cascade;
     internal bool ActorAuthored { get; init; }
     internal bool CascadeOrigin { get; private init; }
     internal bool FoundationJobResult { get; init; }
@@ -120,6 +120,7 @@ public static class Kinds
     public const string Event = "event";
     internal const string JobDeadline = "kernel.job-deadline";
     internal const string Drain = "kernel.drain";
+    internal const string Cascade = "kernel.cascade";
     internal const string ParkExpiry = "kernel.park-expiry";
     public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"

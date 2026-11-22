@@ -204,6 +204,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public Action<int>? Locking { get; set; }
 
     public bool SupportsCommitWindow => true;
+    bool IKernelStore.SupportsCascadePages => true;
     public bool SupportsJobTrialClear => true;
 
     // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
@@ -262,6 +263,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<string, Message>? initialExpiries = null;
             Dictionary<string, Message>? catchUpOpens = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
+            Dictionary<string, CascadeInputs>? cascades = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -271,6 +273,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 HashSet<string>? childReferences = null;
                 long? expiryFrom = null, expiryUntil = null;
                 var revoked = CatchUpRevocations(batch);
+                var earlier = batch.Turns.Any(turn => turn.FoundationCascade is not null) ? new HashSet<InboxKey>() : null;
+                var competing = earlier is not null
+                    ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
+                        .Concat(turn.Sent.Select(message => message.InboxKey)))
+                        .Concat(batch.Seen).Concat(batch.Trial).Concat(batch.ClearJobTrials).ToHashSet()
+                    : [];
                 foreach (var turn in batch.Turns)
                 {
                     if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
@@ -283,6 +291,15 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
+                    if (PrepareCascade(turn, previous, epochs, earlier, competing) is { } cascade)
+                    {
+                        if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
+                        (cascades ??= new(StringComparer.Ordinal)).Add(turn.Instance, cascade);
+                        earlier!.UnionWith(cascade.Pending);
+                        earlier.UnionWith(cascade.Kept);
+                    }
+                    earlier?.UnionWith(turn.Consumed);
+                    earlier?.UnionWith(turn.Done);
                     if (turn.Row is { Retired: false } owner && previous?.Creation == owner.Creation &&
                         previous.NextJobGeneration is { } oldGeneration &&
                         (owner.NextJobGeneration is null || owner.NextJobGeneration.Value < oldGeneration))
@@ -415,6 +432,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 ApplyParkCatchUpFailure(turn);
                 if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
                 foreach (var id in turn.Consumed) Messages.Remove(id);
+                if (cascades?.GetValueOrDefault(turn.Instance) is { } cascade && turn.FoundationCascade is not null)
+                    ApplyCascade(cascade, now);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
                 ApplyFoundationRecoveryPage(turn, now);
@@ -494,7 +513,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var (address, checkpoint, receiptPosition) in deletes)
                     if (_watchedDeletes!.Remove(address, out var watch))
                         watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault(slot) : null });
-            return new(new Committed(fenced, now, seqs) { ParkExpiries = armedExpiries ?? [] });
+            return new(new Committed(fenced, now, seqs)
+            {
+                ParkExpiries = armedExpiries ?? [],
+                CascadeRemovals = cascades?.ToDictionary(page => page.Key, page => page.Value.All, StringComparer.Ordinal)
+            });
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
             void Diverged(string what)
