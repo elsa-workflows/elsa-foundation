@@ -390,7 +390,7 @@ _Avoid_: Run when referring specifically to the persisted record identity
 
 **Executable**:
 A content-addressed, runnable workflow artifact identified by its Artifact Hash and dispatched for Published Runs. An Executable carries its own Execution Material, so it can be executed and inspected without resolving its source Workflow Definition; one or more Source References point at it.
-Studio labels the identifier “Executable ID” and uses “Executable” on the identity chip.
+In Studio, label the identifier “Executable ID” and the identity chip “Executable”.
 _Avoid_: Run, workflow instance, publish record
 
 **Source Reference**:
@@ -407,7 +407,7 @@ _Avoid_: Layout, design metadata, activity descriptors
 
 **Artifact Hash**:
 The content identity of an Executable, computed over Execution Material only. Two Executables with the same Artifact Hash are behaviorally identical regardless of visual layout.
-Studio labels this value “Executable hash”. The domain term and the `ArtifactHash` field follow [ADR 0038](../docs/adr/0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md).
+In Studio, label this value “Executable hash”. The domain term and the `ArtifactHash` field follow [ADR 0038](../docs/adr/0038-artifact-hash-is-purely-behavioral-and-executables-are-content-addressed.md).
 _Avoid_: Checksum over layout, version number
 
 **Layout Sidecar**:
