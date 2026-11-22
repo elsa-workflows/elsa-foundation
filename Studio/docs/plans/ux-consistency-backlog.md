@@ -425,12 +425,12 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 - [x] **X7.1** (#5107) [verified] `WF/workflow-editor/DefinitionVersionCells.tsx:23` (also `:32`, `:35`) (PR #5322)
   `wf-status-badge`. See also W6.
-- [ ] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`,
+- [x] **X7.2** (#5108) [source] `WorkflowStatusBadge` in `ActivityExecutionBrowser.tsx:78`, (PR #5334)
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
 - [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
 - [x] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance. (PR #5304)
-- [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
+- [x] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip` (PR #5334)
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
 - [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
@@ -486,7 +486,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
 - [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
-- [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
+- [x] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right: (PR #5334)
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
 - [x] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`; (PR #5320)
   action results belong in `api.notifications.notify`.
@@ -497,7 +497,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
 
 Replace local date formatting with `StudioTimestamp`.
 
-- [ ] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`.
+- [x] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`. (PR #5334)
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
 - [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
@@ -520,12 +520,12 @@ Counts are raw `<button` occurrences. Canvas and context-toolbar buttons may be 
 the designer header is a documented exception.
 
 - [ ] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20).
-- [ ] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19).
+- [x] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19). (PR #5334)
 - [ ] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12).
 - [ ] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and
   20px `.ad-primary-action` buttons.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
-- [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
+- [x] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11). (PR #5334)
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
 - [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
@@ -537,7 +537,7 @@ the designer header is a documented exception.
   (6), `WF/ActivityDefinitionsPage.tsx` (8), `WF/ActivityDataChooser.tsx` (10),
   `WF/ActivityDataMemberBrowser.tsx` (7), `WF/CollectionValueEditor.tsx` (4),
   `WF/DictionaryValueEditor.tsx` (3), `WF/WorkflowLazyBoundary.tsx` (2).
-- [ ] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9),
+- [x] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9), (PR #5334)
   `ActivityExecutionBrowser.tsx` (9), `WorkflowFolderNavigation.tsx` (8),
   `WorkflowLibraryControls.tsx` (7), `InspectorPanel.tsx` (6).
 - [ ] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9),
@@ -699,13 +699,13 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
 - [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
-- [ ] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`.
+- [x] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`. (PR #5334)
 - [ ] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with
   inconsistent parenting; Upgrades and Elsa 3 import have no nav entry.
 - [ ] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a
   trailing space, a duplicate `aria-label` and a `<small>Optional</small>`. Under D13 the optional
   marker goes. `needs: D13`
-- [ ] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in
+- [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
 
