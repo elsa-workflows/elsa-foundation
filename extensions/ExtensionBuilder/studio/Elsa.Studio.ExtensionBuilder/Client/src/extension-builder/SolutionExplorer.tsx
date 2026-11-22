@@ -1,5 +1,5 @@
 import { FilePlus2, GitBranch, PackageCheck, Pencil, RefreshCcw, Trash2 } from "lucide-react";
-import { StatusChip, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StatusChip, StudioField } from "@elsa-workflows/studio-ui";
 import type {
   ExtensionBuilderCapabilities,
   ExtensionProject,
@@ -122,7 +122,7 @@ export function SolutionExplorer({
 
         <div className="extension-builder-file-create">
           <StudioField label="New file path"><input aria-label="New file path" placeholder="Activities/MyActivity.cs" value={newFilePath} disabled={busy || !canEdit} onChange={event => onNewFilePathChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && newFilePath.trim()) onCreateFile(); }} /></StudioField>
-          <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Requires canEditFiles"} aria-label="Create file" onClick={onCreateFile}>
+          <button type="button" className="studio-icon-button" disabled={busy || !canEdit || !newFilePath.trim()} title={canEdit ? "Create file" : "Editing requires file permission"} aria-label="Create file" onClick={onCreateFile}>
             <FilePlus2 size={14} />
           </button>
         </div>
@@ -150,8 +150,7 @@ export function SolutionExplorer({
         </div>
 
         {availableTemplates.length > 0 ? (
-          <details className="extension-builder-explorer-details">
-            <summary>{advanced ? "Apply template" : "New file from template"}</summary>
+          <div className="extension-builder-explorer-details"><AdvancedSection label={advanced ? "Apply template" : "New file from template"}>
             <StudioField label={<><span>Template</span></>}><select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
                 const template = availableTemplates.find(item => item.id === event.target.value);
                 if (template) onTemplateDraftChange(createTemplateApplicationDraft(template, templateDraft));
@@ -167,31 +166,29 @@ export function SolutionExplorer({
                   parameters: { ...templateDraft.parameters, [parameter.name]: event.target.value }
                 })} /></StudioField>
             ))}
-            <button type="button" className="studio-button" disabled={busy || !canEdit || !selectedTemplate} title={canEdit ? "Apply template" : "Requires canEditFiles"} onClick={onApplyTemplate}>
+            <button type="button" className="studio-button" disabled={busy || !canEdit || !selectedTemplate} title={canEdit ? "Apply template" : "Editing requires file permission"} onClick={onApplyTemplate}>
               <FilePlus2 size={15} />
               Apply
             </button>
-          </details>
+          </AdvancedSection></div>
         ) : null}
 
         {advanced ? (
-          <details className="extension-builder-explorer-details">
-            <summary>Working copy</summary>
+          <div className="extension-builder-explorer-details"><AdvancedSection label="Working copy">
             <StudioField label={<><span>Working branch</span></>}><input aria-label="Working branch" value={workingBranchName} disabled={busy || !canEdit} onChange={event => onWorkingBranchNameChange(event.target.value)} /></StudioField>
             <label className="extension-builder-checkbox">
               <input type="checkbox" aria-label="Allow default branch editing" checked={allowProtectedBranchEdit} disabled={busy || !canEdit} onChange={event => onAllowProtectedBranchEditChange(event.target.checked)} />
               <span>Allow default branch editing</span>
             </label>
-            <button type="button" className="studio-button" disabled={busy || !canEdit || !workingBranchName.trim()} title={canEdit ? "Open working branch" : "Requires canEditFiles"} onClick={onSelectWorkingCopy}>
+            <button type="button" className="studio-button" disabled={busy || !canEdit || !workingBranchName.trim()} title={canEdit ? "Open working branch" : "Editing requires file permission"} onClick={onSelectWorkingCopy}>
               <GitBranch size={15} />
               Open working branch
             </button>
-          </details>
+          </AdvancedSection></div>
         ) : null}
 
         {advanced || projects.length === 0 ? (
-          <details className="extension-builder-explorer-details" open={projects.length === 0}>
-            <summary>Add project</summary>
+          <div className="extension-builder-explorer-details"><AdvancedSection key={projects.length === 0 ? "empty" : "configured"} label="Add project" defaultOpen={projects.length === 0}>
             {projects.length === 0 ? <p className="extension-builder-muted">A project is the build target. Add one to pack this solution into a NuGet package.</p> : null}
             <StudioField label={<><span>Template</span></>}><select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
                 {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
@@ -199,7 +196,7 @@ export function SolutionExplorer({
             <StudioField label={<><span>Project name</span></>}><input aria-label="Project name" value={projectDraft.name} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, name: event.target.value })} /></StudioField>
             <StudioField label={<><span>Package id</span></>}><input aria-label="Package id" value={projectDraft.packageId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageId: event.target.value })} /></StudioField>
             <StudioField label={<><span>Initial version</span></>}><input aria-label="Initial version" value={projectDraft.packageVersion} disabled={busy || !canCreate} onChange={event => onProjectDraftChange({ ...projectDraft, packageVersion: event.target.value })} /></StudioField>
-            <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create project" : "Requires canCreateWorkspace"} onClick={onCreateProject}>
+            <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create project" : "Creating a workspace requires workspace permission"} onClick={onCreateProject}>
               <PackageCheck size={15} />
               Create project
             </button>
@@ -215,7 +212,7 @@ export function SolutionExplorer({
                 </button>
               </div>
             ) : null}
-          </details>
+          </AdvancedSection></div>
         ) : null}
       </div>
     </aside>

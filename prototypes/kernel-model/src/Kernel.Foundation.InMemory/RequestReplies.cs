@@ -27,6 +27,7 @@ internal static class RequestReplies
             return new(null, null, Error: refusal.Result switch
             {
                 "StaleSelection" => "stale selection",
+                "ResolutionOpen" => "resolution open",
                 "Protected" => "protected",
                 "ProtectionUnavailable" => "protection unavailable",
                 "OperatorUnavailable" => "operator unavailable",

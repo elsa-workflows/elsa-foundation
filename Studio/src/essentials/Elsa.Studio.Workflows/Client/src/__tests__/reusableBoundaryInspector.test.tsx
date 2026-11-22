@@ -121,7 +121,7 @@ describe("ReusableBoundaryInspector", () => {
     await waitFor(() => expect(getActivityExecutionDescendants).toHaveBeenCalledTimes(1));
     const tabs = [...container.querySelectorAll<HTMLElement>("[role=tab]")];
     expect(container.querySelector('[role="tablist"][aria-label="Activity details"]')).not.toBeNull();
-    expect(tabs.map(tab => [tab.getAttribute("aria-label"), tab.getAttribute("aria-selected")]))
+    expect(tabs.map(tab => [tab.querySelector("span")?.textContent, tab.getAttribute("aria-selected")]))
       .toEqual([["Steps", "true"], ["Definition", "false"]]);
     await waitFor(() => expect(container.querySelector('[role="treeitem"]')?.textContent).toContain("Write Line"));
     expect(container.querySelector('[role="treeitem"]')?.textContent).toContain("Completed");
@@ -231,7 +231,7 @@ describe("ReusableBoundaryInspector", () => {
     vi.mocked(getActivityExecutionDescendants).mockReturnValue(descendantsDeferred.promise);
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-    expect(container.querySelector('[role="tab"][aria-label="Steps"][aria-selected="true"]')).not.toBeNull();
+    expect(container.querySelector('[role="tab"][data-tab-id="evidence"][aria-selected="true"]')).not.toBeNull();
     click(button(container, "Definition"));
 
     await waitFor(() => {
@@ -308,7 +308,7 @@ describe("ReusableBoundaryInspector", () => {
     click(button(container, "Outer Reusable"));
     await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
     await expectSnapshotSequence(container, 10);
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("aria-label")).toBe("Steps");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.querySelector("span")?.textContent).toBe("Steps");
     expect(button(container, "Load more steps").hasAttribute("disabled")).toBe(false);
   });
 
@@ -386,7 +386,7 @@ describe("ReusableBoundaryInspector", () => {
     click(technical.querySelector("summary")!);
     click(button(technical, "Previous attempt"));
 
-    await waitFor(() => expect(container.querySelector('[role="tab"][aria-label="Steps"]')?.getAttribute("aria-selected")).toBe("true"));
+    await waitFor(() => expect(container.querySelector('[role="tab"][data-tab-id="evidence"]')?.getAttribute("aria-selected")).toBe("true"));
     await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Previous Attempt"));
     const tabpanel = container.querySelector<HTMLElement>('[role="tabpanel"]');
     await waitFor(() => expect(document.activeElement).toBe(tabpanel));
