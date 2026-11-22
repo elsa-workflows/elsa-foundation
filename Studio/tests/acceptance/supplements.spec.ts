@@ -405,7 +405,7 @@ test("restricted principal settings access", async ({ page }, info) => {
   // Loaded from the real runtime settings response (not the pre-load disabled state), then read-only for this reader.
   await expect(pane.getByText(/^Maximum allowed by Host Policy: /)).toBeVisible();
   await expect(pane.getByText("Current user can view settings but cannot change them.", { exact: true })).toBeVisible();
-  const save = pane.getByRole("button", { name: "Save changes", exact: true });
+  const save = pane.getByRole("button", { name: "Save", exact: true });
   await expect(save).toBeDisabled();
   for (const role of ["radio", "combobox"] as const) {
     const controls = pane.getByRole(role);

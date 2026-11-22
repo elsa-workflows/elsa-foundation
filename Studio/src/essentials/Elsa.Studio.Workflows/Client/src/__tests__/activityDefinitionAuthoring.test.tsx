@@ -378,14 +378,14 @@ describe("Activity Definition authoring", () => {
         throw new Error(`Unexpected GET ${url}`);
       }
     });
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Retain my activity");
 
     rendered.rerender();
 
     expect(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")?.value).toBe("Retain my activity");
-    expect(buttonByText(rendered.container, "Create definition")).toBeTruthy();
+    expect(buttonByText(rendered.container, "Create")).toBeTruthy();
     await rendered.unmount();
   });
 
@@ -462,14 +462,14 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     expect(rendered.container.querySelector("select[name='provider']")).toBeNull();
     expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true);
 
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='category']")!, "Finance");
-    click(buttonByText(rendered.container, "Create definition"));
+    click(buttonByText(rendered.container, "Create"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     expect(postJson).toHaveBeenCalledWith("/design/activities/definitions", {
@@ -544,7 +544,7 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
 
     const displayName = rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!;
@@ -584,8 +584,8 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
-    await waitForText(rendered.container, "Create Activity Definition");
+    click(buttonByText(rendered.container, "New activity definition"));
+    await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
     await waitFor(() => expect(rendered.container.querySelector("select[name='provider']")).not.toBeNull());
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
@@ -596,7 +596,7 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     openDetails(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
-    const createDefinition = buttonByText(rendered.container, "Create definition") as HTMLButtonElement;
+    const createDefinition = buttonByText(rendered.container, "Create") as HTMLButtonElement;
     await waitFor(() => expect(createDefinition.disabled).toBe(false));
     click(createDefinition);
 
@@ -624,12 +624,12 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Display name");
     expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")).toBeNull();
-    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(true);
+    expect(buttonByText(rendered.container, "Create").hasAttribute("disabled")).toBe(true);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Run a script");
-    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(false);
+    expect(buttonByText(rendered.container, "Create").hasAttribute("disabled")).toBe(false);
     await rendered.unmount();
   });
 
@@ -647,7 +647,7 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Generated identity");
@@ -658,7 +658,7 @@ describe("Activity Definition authoring", () => {
       advanced.open = false;
       advanced.dispatchEvent(new Event("toggle", { bubbles: true }));
     });
-    click(buttonByText(rendered.container, "Create definition"));
+    click(buttonByText(rendered.container, "Create"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     expect(postJson.mock.calls[0]?.[1]).not.toHaveProperty("activityTypeKey");

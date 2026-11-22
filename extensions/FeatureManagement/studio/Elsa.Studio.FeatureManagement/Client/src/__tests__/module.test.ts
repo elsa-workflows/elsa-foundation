@@ -116,7 +116,7 @@ describe("feature management module", () => {
     const toggle = page.container.querySelector<HTMLInputElement>(".feature-management-settings-dialog input[type='checkbox']");
     expect(toggle?.checked).toBe(true);
     await click(toggle);
-    await click(buttonByText(page.container.querySelector(".feature-management-settings-dialog")!, "Save draft"));
+    await click(buttonByText(page.container.querySelector(".feature-management-settings-dialog")!, "Save"));
     let review = await openImpactReview(page.container);
     const row = impactRowText(review, "WorkflowsDesignApi");
     expect(row).toContain("Workflow organization");
@@ -639,12 +639,12 @@ describe("feature management module", () => {
     const dialog = container.querySelector(".feature-management-settings-dialog");
     const timeoutInput = dialog?.querySelector("input[type='number']") as HTMLInputElement | null;
     const timestampSwitch = dialog?.querySelector(".feature-management-setting.boolean .feature-management-setting-switch-input") as HTMLInputElement | null;
-    expect(dialog?.textContent).toContain("Save draft");
+    expect(dialog?.textContent).toContain("Save");
     expect(timestampSwitch?.checked).toBe(true);
     expect(timeoutInput?.value).toBe("5");
 
     await changeInput(timeoutInput, "12");
-    await click(buttonByText(dialog!, "Save draft"));
+    await click(buttonByText(dialog!, "Save"));
 
     const updatedSettingsSection = container.querySelector("[aria-label='Feature settings']");
     expect(container.querySelector(".feature-management-settings-dialog")).toBeNull();
@@ -1332,11 +1332,11 @@ describe("feature impact review", () => {
     await openImpactReview(container);
     await click(buttonByText(container, "Edit settings"));
     const settingsDialog = Array.from(container.querySelectorAll("[role='dialog']"))
-      .find(dialog => dialog.textContent?.includes("Save draft"));
+      .find(dialog => dialog.textContent?.includes("Save"));
     const modeLabel = Array.from(settingsDialog?.querySelectorAll("label") ?? [])
       .find(label => label.textContent?.includes("Mode"));
     await changeInput(modeLabel?.control as HTMLInputElement | null, "fast");
-    await click(buttonByText(settingsDialog!, "Save draft"));
+    await click(buttonByText(settingsDialog!, "Save"));
 
     expect(impactReviewRegion(container)).toBeNull();
     expect(container.textContent).toContain("Unsaved changes");
@@ -1390,7 +1390,7 @@ describe("feature impact review", () => {
 
     try {
       let dialog = await openSettingsDialog();
-      await click(buttonByText(dialog, "Save draft"));
+      await click(buttonByText(dialog, "Save"));
       expect(container.textContent).not.toContain("Unsaved changes");
       expectControlUnavailableByText(container, "Review changes");
 
@@ -1399,14 +1399,14 @@ describe("feature impact review", () => {
       await changeInput(capacityInput, "257");
       await click(buttonByText(dialog, "Reset changes"));
       expect(capacityInput?.value).toBe("256");
-      await click(buttonByText(dialog, "Save draft"));
+      await click(buttonByText(dialog, "Save"));
       expect(container.textContent).not.toContain("Unsaved changes");
       expectControlUnavailableByText(container, "Review changes");
 
       dialog = await openSettingsDialog();
       capacityInput = dialog.querySelector("input[type='number']") as HTMLInputElement | null;
       await changeInput(capacityInput, "257");
-      await click(buttonByText(dialog, "Save draft"));
+      await click(buttonByText(dialog, "Save"));
       expect(container.textContent).toContain("Unsaved changes");
 
       const review = await openImpactReview(container);
@@ -1436,7 +1436,7 @@ describe("feature impact review", () => {
       const existingSettingInput = existingSettingLabel?.control as HTMLInputElement | null;
       expect(existingSettingInput?.value).toBe("preserve me");
       await changeInput(existingSettingInput, "");
-      await click(buttonByText(dialog, "Save draft"));
+      await click(buttonByText(dialog, "Save"));
       expect(container.textContent).toContain("Unsaved changes");
 
       const clearReview = await openImpactReview(container);
@@ -2227,12 +2227,12 @@ async function editSettingValue(container: Element, featureId: string, settingLa
   await click(buttonByText(container, "Edit settings"));
 
   const dialog = Array.from(container.querySelectorAll("[role='dialog']"))
-    .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save draft")) ?? null;
+    .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save")) ?? null;
   const settingField = Array.from(dialog?.querySelectorAll("label") ?? [])
     .find(label => label.textContent?.includes(settingLabel));
   const input = settingField?.control as HTMLInputElement | null;
   await changeInput(input, value);
-  await click(buttonByText(dialog!, "Save draft"));
+  await click(buttonByText(dialog!, "Save"));
 }
 
 function expectControlUnavailable(container: Element, selector: string) {
@@ -2462,7 +2462,7 @@ describe("feature capability browsing", () => {
       await click(buttonByText(page.container, "Edit settings"));
       const dialog = page.container.querySelector(".feature-management-settings-dialog");
       await changeInput(dialog?.querySelector<HTMLInputElement>("input[type='number']") ?? null, "12");
-      await click(buttonByText(dialog!, "Save draft"));
+      await click(buttonByText(dialog!, "Save"));
 
       await click(buttonByText(page.container, "Capabilities"));
       expect(page.container.querySelector(".feature-management-capability-card")?.textContent).toContain("1 pending change");

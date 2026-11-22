@@ -1,13 +1,12 @@
-import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Inbox, LayoutList, Menu, Move, PanelLeftClose, PanelLeftOpen, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderPen, FolderPlus, Inbox, LayoutList, Menu, Move, PanelLeftClose, PanelLeftOpen, Trash2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog } from "@elsa-workflows/studio-ui";
 import { createWorkflowFolder, deleteEmptyWorkflowFolder, getWorkflowFolder, getWorkflowFolderMutationSupport, isWorkflowFolderBrowsingAvailable } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { WorkflowFolderDeletionDialog } from "./WorkflowFolderDeletionDialog";
 import { notifySuccess, useNotificationGuard } from "./notifications";
 import { getDialogs } from "./dialogs";
-import { useDialogFocus } from "./useDialogFocus";
 import { useWorkflowFolderTree, workflowFolderRootKey, workflowFolderTreeKey } from "./useWorkflowFolderTree";
 
 const RenameWorkflowFolderDialog = lazy(() => import("./WorkflowFolderMutationDialogs").then(module => ({ default: module.RenameWorkflowFolderDialog })));
@@ -680,11 +679,16 @@ function findFolder(roots: WorkflowFolder[], children: ReadonlyMap<string, Workf
 }
 
 function FolderDrawer({ children, createAction, onClose, title, managing = false }: { children: ReactNode; createAction?: ReactNode; onClose(): void; title: string; managing?: boolean }) {
-  const ref = useRef<HTMLElement | null>(null);
-  const id = useId();
-  useDialogFocus(ref, onClose);
-  return <div className="wf-folder-drawer-backdrop" role="presentation"><aside ref={ref} id="workflow-folder-picker" className="wf-folder-drawer" role="dialog" aria-modal="true" aria-labelledby={id}><div><strong id={id}>{managing ? "Manage workflow folders" : title}</strong><button type="button" aria-label={title === "Workflows" ? "Close workflow navigation" : "Close folder picker"} onClick={onClose}><X size={16} aria-hidden="true" /></button></div>
+  return <StudioDialog
+    open
+    id="workflow-folder-picker"
+    className="wf-tokens wf-folder-picker-dialog"
+    title={managing ? "Manage workflow folders" : title}
+    closeLabel={title === "Workflows" ? "Close workflow navigation" : "Close folder picker"}
+    onClose={onClose}
+    dismissOnOutsideClick={false}
+  >
     {!managing ? createAction : null}
     {children}
-  </aside></div>;
+  </StudioDialog>;
 }

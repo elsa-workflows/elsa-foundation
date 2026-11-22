@@ -348,7 +348,7 @@ function ActivityDefinitionGraphAuthoringFixture() {
             metadata={<span>Unsaved changes</span>}
             actions={<div className="ad-header-actions ad-authoring-toolbar-actions">
               <span ref={setCanvasToolsHost} className="wf-canvas-command-host" />
-              <button type="button" onClick={() => setCreateOpen(true)}>Create Activity Definition</button>
+              <button type="button" onClick={() => setCreateOpen(true)}>New activity definition</button>
               <button type="button" onClick={() => setTestRunOpen(true)}>Test Run</button>
               <button type="button">Save now</button>
               <details className="ad-authoring-history"><summary>History</summary></details>

@@ -1,6 +1,6 @@
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
@@ -12,7 +12,7 @@ import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { getCreateMetadataEdits } from "./createWorkflowMetadata";
 
-export function CreateWorkflowDialog({ context, title = "Create Workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
+export function CreateWorkflowDialog({ context, title = "New workflow", submitLabel = "Create", draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit, onTemplates }: {
   context?: StudioEndpointContext;
   title?: string;
   submitLabel?: string;
@@ -245,10 +245,10 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
           onChange={event => onChange({ ...draft, description: event.target.value, metadataEdited: { ...getCreateMetadataEdits(draft), description: true } })}
         /></StudioField>
       {catalogState === "failed" ? (
-        <div className="wf-alert" id="wf-activity-catalog-error" role="alert">
-          <span>{catalogError || "Couldn't load starting activities."}</span>
-          <button type="button" onClick={onRetryCatalog}>Retry</button>
-        </div>
+        <StudioAlert tone="danger" id="wf-activity-catalog-error">
+          {catalogError || "Couldn't load starting activities."}{" "}
+          <StudioButton size="sm" onClick={onRetryCatalog}>Retry</StudioButton>
+        </StudioAlert>
       ) : catalogState !== "ready" ? (
         <p className="wf-muted" id="wf-activity-catalog-loading" role="status">Loading available starting activities…</p>
       ) : null}
@@ -265,7 +265,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
       {catalogState === "ready" && draft.starter !== "http" && !starterReady ? (
         <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
       ) : null}
-      {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
+      {submitError ? <StudioAlert tone="danger" ref={submitErrorRef} tabIndex={-1}>{submitError}</StudioAlert> : null}
     </StudioDialog>
   );
 }

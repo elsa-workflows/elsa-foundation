@@ -114,7 +114,7 @@ for (const width of [360, 1280]) for (const theme of ["light", "dark"]) {
     await expect(empty).toBeVisible();
     expect((await empty.boundingBox())!.width).toBeGreaterThan(width - 64);
     expect((await empty.boundingBox())!.height).toBeGreaterThanOrEqual(140);
-    await expect(page.getByRole("button", { name: "Create connection", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "New connection", exact: true })).toBeVisible();
     await page.goto(`/collection-ux.html?view=connections&searched&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No matching connections", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Clear search", exact: true })).toBeVisible();
@@ -223,11 +223,11 @@ test("connection empty state creates and returns to populated list without anoth
   const empty = page.locator(".studio-collection-empty");
   await expect(empty).toBeVisible();
   expect((await empty.boundingBox())!.height).toBeGreaterThanOrEqual(140);
-  await empty.getByRole("button", { name: "Create connection", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  await empty.getByRole("button", { name: "New connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("example");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Details for Example", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Example/ })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search connections", exact: true })).toBeFocused();
 

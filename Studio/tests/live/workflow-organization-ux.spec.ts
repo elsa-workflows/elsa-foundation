@@ -22,8 +22,8 @@ test("separate folder and chip-tag flows persist without changing authored workf
   await folder.getByRole("button", { name: "Create", exact: true }).click();
   const folderCreated = await (await folderCreatedResponse).json() as { id: string };
   await expect(folder).toBeHidden();
-  await page.getByRole("group", { name: "Workflow definition page actions", exact: true }).getByRole("button", { name: "Create workflow", exact: true }).click();
-  const create = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await page.getByRole("group", { name: "Workflow definition page actions", exact: true }).getByRole("button", { name: "New workflow", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "New workflow", exact: true });
   await create.getByLabel("Display name").fill(name);
   await create.getByRole("radio", { name: "Sequence", exact: true }).focus();
   await page.keyboard.press("Space");

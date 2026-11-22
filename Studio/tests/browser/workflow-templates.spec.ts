@@ -140,7 +140,7 @@ test("shows first-template onboarding and keeps built-in starters in a keyboard-
 
   await page.getByRole("searchbox", { name: "Search templates", exact: true }).fill("");
   await starters.getByRole("button", { name: "Use", exact: true }).first().click();
-  const useDialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  const useDialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   await expect(useDialog).toBeVisible();
   await useDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 

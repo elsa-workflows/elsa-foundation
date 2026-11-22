@@ -89,6 +89,12 @@ html[data-workspace-style] .studio-button[data-variant="danger"] {
   filter: brightness(.92);
 }
 
+.studio-button[data-studio-toggle][aria-pressed="true"] {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent);
+  color: var(--studio-accent-text);
+}
+
 .studio-button[data-size="sm"] {
   min-height: 26px;
   padding: 0 9px;

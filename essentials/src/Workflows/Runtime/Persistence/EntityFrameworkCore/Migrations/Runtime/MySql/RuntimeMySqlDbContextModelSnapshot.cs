@@ -620,6 +620,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<int>("FailureCount")
                         .HasColumnType("int");
 
+                    b.Property<bool>("HistoryPending")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("HistoryRetired")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<long>("HistoryRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -693,11 +703,26 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "DueTimeUtcTicks", "TimerIdOrderKey");
 
+                    b.HasIndex("ScopeKeyHash", "HistoryRetired", "ClaimOrderKey")
+                        .HasDatabaseName("IX_runtime_timer_live_claim");
+
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdHash")
                         .IsUnique();
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "TimerIdOrderKey")
                         .HasDatabaseName("IX_elsa_runtime_durable_timer_ScopeKeyHash_WorkflowExecutionId~1");
+
+                    b.HasIndex("ScopeKeyHash", "HistoryPending", "WorkflowExecutionIdHash", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_history_pending");
+
+                    b.HasIndex("ScopeKeyHash", "HistoryRetired", "DueTimeUtcTicks", "TimerIdOrderKey")
+                        .HasDatabaseName("IX_runtime_timer_live_due");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryPending", "HistoryRetired", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_run_history_pending");
+
+                    b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "HistoryRetired", "HistoryRevision", "TimerIdHash")
+                        .HasDatabaseName("IX_runtime_timer_run_history_active");
 
                     b.ToTable("elsa_runtime_durable_timer", (string)null);
                 });
@@ -973,6 +998,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
+
+                    b.Property<string>("TimerHistoryOwnerJson")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()

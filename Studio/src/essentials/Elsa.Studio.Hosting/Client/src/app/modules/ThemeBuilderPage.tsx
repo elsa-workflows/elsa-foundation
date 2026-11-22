@@ -310,7 +310,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   if (!store || !draft) {
     return (
       <section className="studio-page theme-builder-page">
-        <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>Loading Theme Store definitions.</>} />
+        <StudioPageHeader headingLevel={2} title={<>Theme builder</>} description={<>Loading Theme Store definitions.</>} />
         {!store && error ? (
           <StudioAlert tone="danger">
             {error}{" "}
@@ -325,7 +325,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   return (
     <section className="studio-page theme-builder-page">
-      <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
+      <StudioPageHeader headingLevel={2} title={<>Theme builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
             <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
               <RefreshCcw size={15} /> Refresh
@@ -380,7 +380,7 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
             </div>
           </div>
 
-          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} baseId={viewsBaseId} ariaLabel="Theme Builder views" />
+          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} baseId={viewsBaseId} ariaLabel="Theme builder views" />
           {builderTabs.map((item, index) => item.id !== tab ? (
             <StudioTabPanel key={item.id} baseId={viewsBaseId} index={index} hidden>{null}</StudioTabPanel>
           ) : null)}

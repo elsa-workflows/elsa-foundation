@@ -7,6 +7,8 @@ export interface StudioDialogProps {
   open: boolean;
   onClose(): void;
   title: React.ReactNode;
+  id?: string;
+  closeLabel?: string;
   description?: React.ReactNode;
   children?: React.ReactNode;
   footer?: React.ReactNode;
@@ -18,6 +20,7 @@ export interface StudioDialogProps {
   /** Retain a dialog name when a legacy caller only supplies a visible message. */
   hideTitle?: boolean;
   hideCloseButton?: boolean;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
   onCloseAutoFocus?: (event: Event) => void;
 }
 
@@ -25,6 +28,8 @@ export function StudioDialog({
   open,
   onClose,
   title,
+  id,
+  closeLabel = "Close dialog",
   description,
   children,
   footer,
@@ -35,6 +40,7 @@ export function StudioDialog({
   dismissOnOutsideClick = true,
   hideTitle = false,
   hideCloseButton = false,
+  onEscapeKeyDown,
   onCloseAutoFocus
 }: StudioDialogProps) {
   const opener = useRef<HTMLElement | null>(null);
@@ -43,7 +49,7 @@ export function StudioDialog({
     <Dialog.Title className={hideTitle ? "studio-dialog-sr-only" : "studio-dialog-title"}>{title}</Dialog.Title>
     {!hideCloseButton ? (
       <Dialog.Close asChild>
-        <StudioButton className="studio-dialog-close" variant="ghost" aria-label="Close dialog" disabled={dismissDisabled}>
+        <StudioButton className="studio-dialog-close" variant="ghost" aria-label={closeLabel} disabled={dismissDisabled}>
           <X size={16} aria-hidden="true" />
         </StudioButton>
       </Dialog.Close>
@@ -59,11 +65,12 @@ export function StudioDialog({
         <Dialog.Overlay className="studio-dialog-overlay" />
         <Dialog.Content
           asChild
+          {...(id ? { id } : {})}
           className={className ? `studio-dialog ${className}` : "studio-dialog"}
           aria-modal="true"
           data-has-close={!hideCloseButton || undefined}
           {...(!hasDescription ? { "aria-describedby": undefined } : {})}
-          onEscapeKeyDown={event => { if (dismissDisabled) event.preventDefault(); }}
+          onEscapeKeyDown={event => { if (dismissDisabled) event.preventDefault(); else onEscapeKeyDown?.(event); }}
           onPointerDownOutside={event => { if (dismissDisabled || !dismissOnOutsideClick) event.preventDefault(); }}
           onOpenAutoFocus={event => {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

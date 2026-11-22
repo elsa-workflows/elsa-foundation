@@ -23,20 +23,20 @@
   gap: var(--studio-space-2);
 }
 
-.studio-breadcrumbs a {
+.studio-breadcrumbs :is(a, .studio-breadcrumb-action) {
   min-width: 0;
   color: var(--studio-text-muted);
   overflow-wrap: anywhere;
   text-decoration: none;
 }
 
-.studio-breadcrumbs a:hover {
+.studio-breadcrumbs :is(a, .studio-breadcrumb-action):hover {
   color: var(--studio-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.studio-breadcrumbs a:focus-visible {
+.studio-breadcrumbs :is(a, .studio-breadcrumb-action):focus-visible {
   border-radius: var(--studio-radius-sm);
   outline: 2px solid var(--studio-focus);
   outline-offset: 2px;
@@ -56,4 +56,15 @@
   color: var(--studio-text);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.studio-breadcrumb-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.studio-breadcrumb-current .studio-breadcrumb-action {
+  color: inherit;
 }

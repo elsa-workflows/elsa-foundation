@@ -1,9 +1,9 @@
-import { studioRowInteraction, StudioField, StudioPageHeader, StudioResizeHandle } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioField, StudioPageHeader, StudioResizeHandle, StudioTabPanel, StudioTabs, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
-type OTelSignalTab = "overview" | "traces";
+const signalTabs = [{ id: "overview", label: "Overview" }, { id: "traces", label: "Traces" }];
 type OTelLoadStatus = "idle" | "loading" | "ready" | "empty" | "unavailable" | "unauthorized" | "failed" | "missing";
 type SpanStatus = "Unset" | "Ok" | "Error";
 type ResourceStatus = "Unknown" | "Active" | "Stale";
@@ -219,6 +219,7 @@ export function OpenTelemetryPanel() {
 }
 
 export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponentProps["navigate"] } = {}) {
+  const tabsId = useId();
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -239,22 +240,20 @@ export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponen
         >Browse Diagnostics</a>
       </aside>
 
-      <div className="otel-tabs" role="tablist" aria-label="OpenTelemetry signals">
-        {(["overview", "traces"] as OTelSignalTab[]).map(tab => (
-          <button type="button" role="tab" aria-selected={state.activeTab === tab} className={state.activeTab === tab ? "active" : ""} onClick={() => state.setActiveTab(tab)} key={tab}>
-            {getSignalTabLabel(tab)}
-          </button>
-        ))}
-      </div>
-
-      {state.activeTab === "overview" ? <OverviewPanel state={state} /> : null}
-      {state.activeTab === "traces" ? <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} /> : null}
+      <StudioTabs tabs={signalTabs} activeTab={state.activeTab} onSelect={state.setActiveTab} ariaLabel="OpenTelemetry signals" baseId={tabsId} />
+      {signalTabs.map((tab, index) => (
+        <StudioTabPanel baseId={tabsId} index={index} hidden={state.activeTab !== tab.id} className="otel-signal-panel" key={tab.id}>
+          {state.activeTab === tab.id && (tab.id === "overview"
+            ? <OverviewPanel state={state} />
+            : <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} />)}
+        </StudioTabPanel>
+      ))}
     </section>
   );
 }
 
 function useOpenTelemetry() {
-  const [activeTab, setActiveTab] = useState<OTelSignalTab>("traces");
+  const [activeTab, setActiveTab] = useState("traces");
   const [filters, setFilters] = useState<OTelFilters>(defaultFilters);
   const [storageRead, setStorageRead] = useState<OTelRead<OTelStorageDiagnostics>>({ status: "loading", data: null, message: "Loading stored data." });
   const [resourcesRead, setResourcesRead] = useState<OTelRead<OTelResourceCollection>>({ status: "loading", data: null, message: "Loading resource metadata." });
@@ -447,9 +446,9 @@ function OverviewPanel({ state }: { state: OTelState }) {
               <strong>{resource.serviceName || "Unknown"}</strong>
               {resource.id ? <span>Resource ID: {resource.id}</span> : null}
               <span>Resource status: {resource.status}</span>
-              {[resource.serviceInstanceId ? `Instance: ${resource.serviceInstanceId}` : null,
-                resource.telemetrySdkLanguage ? `Telemetry SDK language: ${resource.telemetrySdkLanguage}` : null,
-                resource.lastSeen ? `Last seen: ${formatDateTime(resource.lastSeen)}` : null].filter(Boolean).map(value => <span key={value}>{value}</span>)}
+              {resource.serviceInstanceId && <span>Instance: {resource.serviceInstanceId}</span>}
+              {resource.telemetrySdkLanguage && <span>Telemetry SDK language: {resource.telemetrySdkLanguage}</span>}
+              {resource.lastSeen && <span>Last seen: <StudioTimestamp value={resource.lastSeen} format="date-time" /></span>}
             </div>
           ))}
         </div>
@@ -541,11 +540,11 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
             const serviceNames = getServiceNames(trace.resourceIds, state.resourcesById);
             return (
               <div role="row" aria-selected={trace.traceId === state.selectedTraceId} className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} {...studioRowInteraction<HTMLDivElement>(() => state.setSelectedTraceId(trace.traceId))} key={trace.traceId}>
-                <time role="cell" title={trace.startTime}>{formatTime(trace.startTime)}</time>
+                <span role="cell"><StudioTimestamp value={trace.startTime} format="time" /></span>
                 <span role="cell" title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
                 <strong role="cell" title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
                 <span role="cell">{formatDuration(trace.durationMs)}</span>
-                <span role="cell">{trace.spanCount}</span>
+                <span role="cell">{trace.spanCount}<span className="otel-compact-span-label" aria-hidden="true"> {trace.spanCount === 1 ? "span" : "spans"}</span></span>
                 <span role="cell"><StatusChip status={trace.status} /></span>
               </div>
             );
@@ -626,10 +625,10 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
   return (
     <header className="otel-trace-detail-header">
       <div>
-        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans · {trace.status}</span>
+        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} {trace.spanCount === 1 ? "span" : "spans"} · {trace.status}</span>
         <h3>{trace.name ?? trace.traceId}</h3>
         <p>{trace.traceId}</p>
-        <time dateTime={trace.startTime}>{formatDateTime(trace.startTime)}</time>
+        <StudioTimestamp value={trace.startTime} format="date-time" />
       </div>
       <div>
         <button type="button" onClick={() => void onCopy()}>Copy JSON</button>
@@ -674,7 +673,7 @@ function SpanInspector({ span, id }: { span: OTelSpan; id: string }) {
         <DetailRow name="Span ID" value={span.spanId} />
         <DetailRow name="Parent" value={span.parentSpanId} />
         <DetailRow name="Service" value={span.serviceName} />
-        <DetailRow name="Started" value={formatDateTime(span.startTime)} />
+        <DetailRow name="Started" value={<StudioTimestamp value={span.startTime} format="date-time" />} />
         <DetailRow name="Duration" value={formatDuration(span.durationMs)} />
         <DetailRow name="Status description" value={span.statusDescription} />
       </dl>
@@ -694,7 +693,7 @@ function StatusChip({ status }: { status: SpanStatus }) {
   return <span className="otel-status-chip" data-status={status.toLowerCase()}>{status}</span>;
 }
 
-function DetailRow({ name, value }: { name: string; value?: string | null }) {
+function DetailRow({ name, value }: { name: string; value?: React.ReactNode }) {
   if (!value) return null;
   return <><dt>{name}</dt><dd>{value}</dd></>;
 }
@@ -879,19 +878,9 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationMs * 10) / 10}ms`;
 }
 
-function formatTime(timestamp: string) {
-  return new Date(timestamp).toLocaleTimeString();
-}
 
-function formatDateTime(timestamp: string) {
-  return new Date(timestamp).toLocaleString();
-}
 
 function formatValue(value: unknown) {
   if (value == null) return "";
   return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function getSignalTabLabel(tab: OTelSignalTab) {
-  return tab === "overview" ? "Overview" : "Traces";
 }
