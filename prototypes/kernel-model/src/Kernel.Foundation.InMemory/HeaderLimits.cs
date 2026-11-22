@@ -1,11 +1,12 @@
 using System.Text;
+using Durable = Kernel.Durable;
 
 namespace Kernel.Foundation.InMemory;
 
 /// <summary>The opaque actor metadata budget, expressed in UTF-8 bytes before provider encoding.</summary>
 internal static class HeaderLimits
 {
-    internal const int MaxTypeBytes = 1_024;
+    internal const int MaxTypeBytes = Durable.FoundationMetadataLimits.NameBytes;
     internal const int MaxTypeDataBytes = 16_384;
     internal const int MaxLabels = 4;
     internal const int MaxLabelBytes = 1_024;
@@ -21,7 +22,7 @@ internal static class HeaderLimits
         ValidateTypeData(typeData);
     }
 
-    private static bool FitsType(string type) => Encoding.UTF8.GetByteCount(type) <= MaxTypeBytes;
+    private static bool FitsType(string type) => Durable.FoundationMetadataLimits.FitsName(type);
 
     private static bool FitsTypeData(string typeData) => Encoding.UTF8.GetByteCount(typeData) <= MaxTypeDataBytes;
 

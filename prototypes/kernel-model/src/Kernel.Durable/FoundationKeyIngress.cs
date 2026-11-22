@@ -19,6 +19,9 @@ public sealed partial class InMemoryStore
         StartSpec? spec, long? due, TimeSpan? keepFor, string? replyTo = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
+        if (!FoundationMetadataLimits.FitsName(key) || !FoundationMetadataLimits.FitsName(id, preservesCodeUnits: true) ||
+            spec is null && !FoundationMetadataLimits.FitsKind(kind))
+            return new(KeyAdmissionOutcome.Conflict);
         if (spec is null) Kinds.RequireApplicationSend(kind);
         var window = FoundationIngressWindow(keepFor);
         var qualified = tenant + "_" + key;

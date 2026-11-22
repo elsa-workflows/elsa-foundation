@@ -295,7 +295,8 @@ public sealed partial class InMemoryStore
         _foundationParks.Remove(address);
     }
 
-    internal static bool IsOutsideMessageId(string id) => !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
+    internal static bool IsOutsideMessageId(string id) => FoundationMetadataLimits.FitsName(id) &&
+        !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
 
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>

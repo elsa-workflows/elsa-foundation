@@ -54,7 +54,8 @@ internal sealed class OrdinaryIngress(Durable.InMemoryStore store)
         });
     }
 
-    private static bool IsOrdinary(string kind) => !kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+    private static bool IsOrdinary(string kind) => Durable.FoundationMetadataLimits.FitsKind(kind) &&
+        !kind.StartsWith("kernel.", StringComparison.Ordinal) &&
         kind is not (Kinds.Start or Kinds.JobFinished or Kinds.Event or Kinds.ChildFinished);
 
     private static Durable.StartSpec Start(StartSpec spec) =>
