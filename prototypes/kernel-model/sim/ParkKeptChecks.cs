@@ -833,9 +833,11 @@ internal static class ParkKeptChecks
         await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
         await CheckLostCatchUpStep(check, landedBeforeLoss: false);
         await CheckLostCatchUpStep(check, landedBeforeLoss: true);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: false, secondPage: true);
+        await CheckLostCatchUpStep(check, landedBeforeLoss: true, secondPage: true);
     }
 
-    private static async Task CheckLostCatchUpStep(Action<bool, string> check, bool landedBeforeLoss)
+    private static async Task CheckLostCatchUpStep(Action<bool, string> check, bool landedBeforeLoss, bool secondPage = false)
     {
         var now = 1_701_400_030_200L;
         var store = new InMemoryStore(2, () => now);
@@ -864,7 +866,7 @@ internal static class ParkKeptChecks
         await ingress.SendAsync(scope, target, "fault", "fault");
         await Pump(owner);
         var id = store.Instances.Values.Single().Id;
-        var count = landedBeforeLoss ? InMemoryStore.ParkPageLimit + 1 : 1;
+        var count = landedBeforeLoss || secondPage ? InMemoryStore.ParkPageLimit + 1 : 1;
         for (var index = 0; index < count; index++)
             await StoreMatchedEvent(store, scope, "approval", $"owed-{index:D3}", "payload", now + 20);
         var mark = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
@@ -875,7 +877,7 @@ internal static class ParkKeptChecks
         worker.RunTurn(id);
         await worker.FlushAsync();
         var key = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null).Key;
-        if (!landedBeforeLoss)
+        if (!landedBeforeLoss && !secondPage)
         {
             var other = (await store.TakeAsync(1, "other-partition", Defaults.Lease))!;
             var local = worker.Fences.Single();
@@ -885,6 +887,24 @@ internal static class ParkKeptChecks
                 Defaults.Lease, false, [], [key], [])));
             check(foreign && seenOnly && store.Messages[key] is { Seen: 0, Trial: 0, Attempts: 0 },
                 "a positional foreign fence and an ordinary Seen mark cannot hide a pending catch-up ticket");
+        }
+        if (secondPage)
+        {
+            var first = store.Messages[key].Message.ParkCatchUp!;
+            await worker.PollAsync();
+            await worker.MeetAsync();
+            var successor = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is { Page: 1 })?.Message;
+            var advanced = successor is not null && successor.InboxKey != key &&
+                successor.ParkCatchUp!.Chain == first.Chain &&
+                successor.Id == FoundationEventIdentity.CatchUpSuccessor(first.Chain, 1) &&
+                store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == InMemoryStore.ParkPageLimit;
+            check(advanced, "CC-1 step one consumes its ticket and stores a distinct successor in the same chain");
+            if (!advanced) return;
+            key = successor!.InboxKey;
+            now += 21;
+            await store.SweepAsync();
+            check(store.FoundationEvents.Values.Any(row => row.Id == "owed-170") && store.Messages.ContainsKey(key),
+                "CC-1 an inter-page sweep keeps the expired suffix through the original coverage entry");
         }
         injectRecoveryLoss = true;
         await worker.PollAsync();
@@ -897,8 +917,27 @@ internal static class ParkKeptChecks
         // A same-node take after reset advances the fence without treating ordinary job or model trials as deaths.
         worker = TakeWorker("first-catch-up-owner");
         await using var replacement = (await new DurableHost([worker]).ActivateAsync(0))!;
+        if (secondPage)
+        {
+            check(landedBeforeLoss
+                    ? !store.Messages.Values.Any(row => row.Message.ParkCatchUp is not null)
+                    : store.Messages.GetValueOrDefault(key) is { Done: false, Attempts: 1, Trial: 0 },
+                "CC-1 a lost final page leaves either its committed removal or one charged pending step");
+            injectRecoveryLoss = false;
+            await Pump(replacement);
+            await store.SweepAsync();
+            await store.SweepAsync();
+            check(probe.Received.Count == count && probe.Received.Distinct().Count() == count &&
+                store.FoundationEvents.Count == 0 && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+                "CC-1 the retaken final page delivers the suffix once and releases its sweep coverage");
+            return;
+        }
         if (landedBeforeLoss)
         {
+            now += 21;
+            await store.SweepAsync();
+            check(store.FoundationEvents.Values.Any(row => row.Id == "owed-170"),
+                "CC-1 the sweep still keeps the suffix when step one's landed answer was lost");
             check(store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) is
                 { Attempts: 0, Trial: 0, Message.ParkCatchUp.Page: 1 },
                 "a new take leaves the successor of an acknowledged-late page uncharged");
