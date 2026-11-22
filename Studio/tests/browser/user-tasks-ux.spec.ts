@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function openFormAction(page: Page, row: Locator, action: "Edit" | "View") {
@@ -85,6 +86,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("button", { name: "Purchase response", exact: true })).toBeFocused();
 
     await createForm.click();
+
+    await confirmNewResource(page, "form", "New form");
     if (!(await formId.isVisible())) await page.getByRole("button", { name: "Expand properties panel" }).click();
     await expect(formId).toBeEnabled();
     await formId.fill("new-form");
@@ -184,16 +187,16 @@ for (const width of [360, 1440]) {
 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
-    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
     await expect(page.getByText("1 form shown", { exact: true })).toBeVisible();
     await expect(row.getByRole("button", { name: "Unsaved designer copy", exact: true })).toBeFocused();
     await openFormAction(page, row, "Edit");
     await versionsTab.click();
     await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
-    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true })).toBeVisible();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
     await expect(row).toContainText("Published · Draft");
-    await expect(page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByRole("table", { name: "Task forms" }).locator("tbody tr")).toHaveCount(1);
   });
 }
 
@@ -220,7 +223,7 @@ test("unapplied form source stays put when Versions is selected", async ({ page 
 
 test("legacy form pages add history without adding duplicate collection rows", async ({ page }, info) => {
   await page.goto("/user-tasks-ux.html?forms&backend=legacy&legacy-forms");
-  const table = page.getByRole("table", { name: "Reusable task forms" });
+  const table = page.getByRole("table", { name: "Task forms" });
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByText("2 forms shown", { exact: true })).toBeVisible();
   const newsletter = table.getByRole("row").filter({ hasText: "newsletter-signup" });
@@ -241,7 +244,7 @@ test("legacy form pages add history without adding duplicate collection rows", a
   await expect(history).not.toContainText("Travel details");
   await history.getByRole("button", { name: "Select version 1", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeVisible();
-  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByText("2 forms shown", { exact: true })).toBeVisible();
   await expect(newsletter.getByRole("button", { name: "Open form newsletter-signup", exact: true })).toBeFocused();
@@ -265,7 +268,7 @@ test("read-only form readers can inspect published versions", async ({ page }) =
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 });
 
@@ -337,8 +340,8 @@ for (const width of [360, 1280]) {
 
 test("reassignment stays permission-gated and reports errors before closing on success", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?task=purchase");
-  await page.getByRole("button", { name: "Task actions" }).click();
-  await expect(page.getByRole("menuitem", { name: "Reassign task", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh task", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Task actions", exact: true })).toHaveCount(0);
 
   await page.goto("/user-tasks-ux.html?manage&reassign-error&task=purchase");
   await page.getByRole("button", { name: "Task actions" }).click();
@@ -375,6 +378,7 @@ test("completed task responses remain framed and read-only without response acti
   await page.goto("/user-tasks-ux.html?forms&form-error");
   await expect(page.getByRole("button", { name: "More forms", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "New form", exact: true }).first().click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("purchase");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Purchase response");
   await page.getByRole("button", { name: "Text input", exact: true }).click();

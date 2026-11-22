@@ -1,3 +1,4 @@
+import { StudioTabs, tabElementIds } from "@elsa-workflows/studio-ui";
 import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
@@ -94,9 +95,6 @@ export function ReusableBoundaryInspector({
   const evidenceControllerRef = useRef<AbortController | null>(null);
   const instanceId = useId();
   const activeFrame = frames.at(-1)!;
-  const paneId = `${instanceId}-boundary-pane`;
-  const stepsTabId = `${instanceId}-steps-tab`;
-  const definitionTabId = `${instanceId}-definition-tab`;
 
   useEffect(() => {
     setFrames([createFrame(inspection)]);
@@ -390,39 +388,11 @@ export function ReusableBoundaryInspector({
       ) : null}
 
       <div className="wf-boundary-controls">
-        <div className="wf-boundary-pane-tabs" role="tablist" aria-label="Activity details">
-          <button
-            type="button"
-            role="tab"
-            id={stepsTabId}
-            aria-controls={paneId}
-            aria-label="Steps"
-            aria-selected={activeFrame.activePane === "evidence"}
-            data-selected={activeFrame.activePane === "evidence"}
-            tabIndex={activeFrame.activePane === "evidence" ? 0 : -1}
-            onClick={() => setPane("evidence")}
-            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
-          >
-            <span>Steps</span>
-            {activeFrame.evidence.committedThroughSequence !== null
-              ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small>
-              : null}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id={definitionTabId}
-            aria-controls={paneId}
-            aria-label="Definition"
-            aria-selected={activeFrame.activePane === "structure"}
-            data-selected={activeFrame.activePane === "structure"}
-            tabIndex={activeFrame.activePane === "structure" ? 0 : -1}
-            onClick={() => setPane("structure")}
-            onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
-          >
-            Definition
-          </button>
-        </div>
+        <StudioTabs compact baseId={instanceId} ariaLabel="Activity details" activeTab={activeFrame.activePane}
+          tabs={[
+            { id: "evidence", label: "Steps", panelIndex: 0, trailing: activeFrame.evidence.committedThroughSequence !== null ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small> : undefined },
+            { id: "structure", label: "Definition", panelIndex: 0 }
+          ]} onSelect={id => setPane(id === "structure" ? "structure" : "evidence")} />
         <AuthorizedBoundaryDefinitionLink
           context={context}
           definitionId={boundary.definitionId}
@@ -434,10 +404,10 @@ export function ReusableBoundaryInspector({
       <div
         ref={scrollRef}
         className="wf-boundary-pane-scroll"
-        id={paneId}
+        id={tabElementIds(instanceId, 0).panelId}
         role="tabpanel"
         tabIndex={0}
-        aria-labelledby={activeFrame.activePane === "evidence" ? stepsTabId : definitionTabId}
+        aria-labelledby={tabElementIds(instanceId, activeFrame.activePane === "evidence" ? 0 : 1).tabId}
         onScroll={event => {
           const scrollTop = event.currentTarget.scrollTop;
           updateFrame(activeFrame.key, frame => ({ ...frame, scrollTop }));
@@ -1270,29 +1240,6 @@ function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, Math.max(0, length - 1))}…` : value;
 }
 
-function moveBoundaryTab(
-  event: ReactKeyboardEvent<HTMLButtonElement>,
-  activePane: BoundaryPane,
-  selectPane: (pane: BoundaryPane) => void
-) {
-  const panes: BoundaryPane[] = ["evidence", "structure"];
-  const currentIndex = panes.indexOf(activePane);
-  const nextIndex = event.key === "ArrowRight" || event.key === "ArrowDown"
-    ? (currentIndex + 1) % panes.length
-    : event.key === "ArrowLeft" || event.key === "ArrowUp"
-      ? (currentIndex + panes.length - 1) % panes.length
-      : event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? panes.length - 1
-          : null;
-  const nextPane = nextIndex === null ? null : panes[nextIndex];
-  if (!nextPane) return;
-  event.preventDefault();
-  if (nextPane !== activePane) selectPane(nextPane);
-  const tabIndex = nextPane === "evidence" ? 0 : 1;
-  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("[role='tab']")[tabIndex]?.focus();
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);

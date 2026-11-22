@@ -631,14 +631,11 @@ function LoadedActivityDefinitionDraftEditor({ agentWorkspace, context, initialD
     let result = unsupportedDiagnosticFocus();
     try {
       if (providerEditorRef.current && contribution?.focusDiagnosticLocation) result = await contribution.focusDiagnosticLocation({
-        location: { providerKey: draft.provider.providerKey, jsonPointer: "/rootActivity", referenceKey: nodeId },
+        location: { providerKey: draft.provider.providerKey, jsonPointer: "/rootActivity/inputs", referenceKey: nodeId },
         subject: { kind: "ActivityDraft", id: draft.draftId }, editorElement: providerEditorRef.current
       });
     } catch { /* Preserve the graph and explain unsupported or stale navigation. */ }
     if (result.kind === "focused") {
-      const editor = providerEditorRef.current;
-      editor?.querySelector<HTMLButtonElement>('button[aria-label="Expand inspector panel"]')?.click();
-      [...(editor?.querySelectorAll<HTMLButtonElement>('.wf-inspector [role="tab"]') ?? [])].find(tab => tab.textContent === "Inputs")?.click();
       setFocusAnnouncement("Opened the Set Output step in the designer.");
     } else {
       setActiveView("outputs");

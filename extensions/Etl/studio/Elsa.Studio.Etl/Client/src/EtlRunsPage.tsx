@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StatusChip, type StudioStatusTone } from "@elsa-workflows/studio-ui";
 import { appendUnique } from "./paging";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioBackendSession, StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -33,6 +33,10 @@ interface RequestFailure {
 }
 
 interface EtlRunsPageProps { context: StudioEndpointContext; dialogs: StudioDialogApi; backendSession?: StudioBackendSession }
+
+const runStatusTones: Record<string, StudioStatusTone> = {
+  preparing:"accent", running:"accent", succeeded:"success", businessError:"warning", faulted:"danger", cancelled:"neutral"
+};
 
 export function EtlRunsPage(props: EtlRunsPageProps) {
   return <EtlRunsWorkbench key={etlBackendScope(props.backendSession)} {...props} />;
@@ -431,7 +435,7 @@ function EtlRunsWorkbench({ context, dialogs, backendSession }: EtlRunsPageProps
   }
 
   return <section className="studio-page etl-shell etl-runs-page" aria-label="ETL runs">
-    <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description={<>Runtime</>} actions={<><StudioButton type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
+    <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description="Monitor pipeline runs and inspect their progress, outputs and failures." actions={<><StudioButton type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
         {runsLoading && visibleRuns.length > 0 ? "Refreshing…" : "Refresh"}
       </StudioButton></>} />
     {returnTo && sessionActive() ? <p><a href={returnTo} onClick={event => { if (!sessionActive()) event.preventDefault(); }}>Back to native run</a></p> : null}
@@ -447,7 +451,7 @@ function EtlRunsWorkbench({ context, dialogs, backendSession }: EtlRunsPageProps
           {visibleRuns.map(run => <li key={run.runId}>
             <button type="button" className="etl-run-select" aria-pressed={selectedRunId === run.runId} onClick={() => selectRun(run.runId)}>
               <span><code>{run.runId}</code><small>{run.selection}</small></span>
-              <span className="etl-run-status">{etlRunStatusLabel(run.status)}</span>
+              <StatusChip tone={runStatusTones[run.status] ?? "neutral"}>{etlRunStatusLabel(run.status)}</StatusChip>
               <span className="etl-run-counts">{run.acceptedRecords} accepted · {run.rejectedRecords} rejected · {run.filteredRecords} filtered</span>
             </button>
           </li>)}
