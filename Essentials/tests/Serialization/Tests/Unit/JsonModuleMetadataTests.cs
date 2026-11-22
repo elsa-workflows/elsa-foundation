@@ -58,8 +58,8 @@ namespace Elsa.Serialization.Tests.Unit
     }
 
     [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
-    [JsonSerializable(typeof(OwnerA.Dto))]
-    [JsonSerializable(typeof(OwnerB.Dto))]
+    [JsonSerializable(typeof(OwnerA.Dto), TypeInfoPropertyName = "OwnerADto")]
+    [JsonSerializable(typeof(OwnerB.Dto), TypeInfoPropertyName = "OwnerBDto")]
     [JsonSerializable(typeof(List<OwnerA.Dto>))]
     [JsonSerializable(typeof(string))]
     internal partial class OwnedContext : JsonSerializerContext;

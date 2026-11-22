@@ -77,12 +77,22 @@ public sealed class JsonOpaqueHashProjectionTests
     }
 
     [Fact]
-    public void Hash_metadata_does_not_retain_a_collectible_type_nested_in_a_BCL_generic()
+    public async Task Hash_metadata_does_not_retain_a_collectible_type_nested_in_a_BCL_generic()
     {
         var type = ExerciseCollectibleContract();
-        for (var round = 0; round < 12 && type.IsAlive; round++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
+        // .NET's reflection member-accessor cache expires after one second and evicts on
+        // its next access (ReflectionEmitCachingMemberAccessor.Cache.cs). Allow that
+        // transient framework cache to expire before testing Elsa's metadata lifetime.
+        await Task.Delay(TimeSpan.FromMilliseconds(1500));
+        _ = JsonSerializer.SerializeToElement(new LifetimeCanary(), new JsonSerializerOptions
+        {
+            TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
+        });
+        for (var round = 0; round < 12; round++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
         Assert.False(type.IsAlive);
     }
+
+    private sealed class LifetimeCanary { public string Name { get; } = "canary"; }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference ExerciseCollectibleContract()
