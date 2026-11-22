@@ -89,10 +89,13 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
             CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("FROM \"elsa_runtime_activity_execution_state\"", StringComparison.Ordinal) &&
-                new StackTrace().GetFrames().Any(frame => frame.GetMethod()?.DeclaringType?.FullName?
-                    .Contains("WorkflowScheduleActivitySchedulerWorkHandler", StringComparison.Ordinal) == true))
-                output.WriteLine($"Terminal-parent schedule guard executed SQL: {command.CommandText}");
+            if (command.CommandText.Contains("FROM \"elsa_runtime_activity_execution_state\"", StringComparison.Ordinal))
+            {
+                var scheduleFrame = new StackTrace(true).GetFrames().FirstOrDefault(frame =>
+                    frame.GetMethod()?.DeclaringType?.FullName?.Contains("WorkflowScheduleActivitySchedulerWorkHandler", StringComparison.Ordinal) == true);
+                if (scheduleFrame is not null)
+                    output.WriteLine($"Schedule handler activity-state SQL at {scheduleFrame}: {command.CommandText}");
+            }
             return ValueTask.FromResult(result);
         }
     }
