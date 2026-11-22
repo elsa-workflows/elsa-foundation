@@ -1,8 +1,11 @@
 namespace Kernel.Durable;
 
+internal enum ParkClearKind { Discard, Expiry, Terminate }
+
 internal sealed record ParkDiscardDrain(string Operation, ParkPageCursor? Cursor, long Cleared, long Serial, InboxKey Control)
 {
-    internal bool Expired { get; init; }
+    internal ParkClearKind Kind { get; init; }
+    internal bool Expired => Kind == ParkClearKind.Expiry;
 }
 
 internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long ParkAt, long Generation)
@@ -112,7 +115,9 @@ public sealed partial class InMemoryStore
             (previous?.ParkResolutionGeneration ?? 0) == next.ParkResolutionGeneration))
             return null;
 
-        if (next is not { Status: InstanceStatus.Faulted, Retired: false } ||
+        var terminating = before?.Kind == ParkClearKind.Terminate || after?.Kind == ParkClearKind.Terminate;
+        var terminal = terminating && after is null;
+        if (next is not { Retired: false } || next.Status != (terminal ? InstanceStatus.Cancelled : InstanceStatus.Faulted) ||
             previous is not { Status: InstanceStatus.Faulted, Retired: false } || previous.Creation != next.Creation ||
             next.Revision != previous.Revision + 1 ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
@@ -130,6 +135,8 @@ public sealed partial class InMemoryStore
 
         var controls = turn.Sent.Where(IsParkControl).ToArray();
         var envelope = ParkDrainEnvelope.For(next, park);
+        if (terminating && (turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }))
+            throw InvalidDrain();
         if (input.Kind == Kinds.ParkExpiry && after is null)
         {
             if (before is not null || next != (previous with { Revision = next.Revision }) ||
@@ -155,7 +162,21 @@ public sealed partial class InMemoryStore
                 if (now < expiry.At)
                     throw new StoreException(Failure.WindowExpired, "The Park expiry is no longer due at the commit clock.");
             }
-            else if ((expiry?.Armed is not null) != recalled ||
+            else if ((expiry?.Armed is not null) != recalled)
+                throw InvalidDrain();
+            else if (after.Kind == ParkClearKind.Terminate)
+            {
+                if (!AuthorizesDrainingTerminate(previous, input) || previous.Cascade is not null ||
+                    next != (previous with
+                    {
+                        Revision = next.Revision, ParkDiscard = after, ParkResolutionGeneration = next.ParkResolutionGeneration,
+                        Jobs = null, Children = null, Cascade = next.Cascade
+                    }) || !turn.Unsubscribe || turn.Journal is not null ||
+                    turn.FoundationCascade is null && CascadeRegistry.From(previous).Count != 0 ||
+                    turn.Sent.Count != controls.Length + turn.Sent.Count(message => message.CascadeOrigin || message.Kind == Kinds.Cascade))
+                    throw InvalidDrain();
+            }
+            else if (after.Kind != ParkClearKind.Discard ||
                 input is not { Kind: "kernel.discard", Operator.Selection: { } selection } ||
                 !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
                 !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
@@ -168,13 +189,23 @@ public sealed partial class InMemoryStore
             if (!next.ParkDiscarded || controls.Length != 0 || turn.FoundationParkClear is not null ||
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, after: null, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();
+            if (terminal && (turn.Unsubscribe || !MatchesTerminateNotice(turn.Sent, next) || next != (previous with
+                {
+                    Revision = next.Revision, Status = InstanceStatus.Cancelled, Suspended = false, ParkDiscard = null,
+                    ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null
+                })))
+                throw InvalidDrain();
             return null;
         }
         else if (turn.FoundationParkClear is not { } page || page.Park != park || next.ParkDiscarded ||
-            after.Operation != before.Operation || after.Expired != before.Expired || after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
+            after.Operation != before.Operation || after.Kind != before.Kind || after.Cursor != page.Rows[^1].Cursor || after.Cleared != before.Cleared + page.Rows.Count ||
             after.Serial != before.Serial + 1 ||
             !page.Rows.Select(row => row.Cursor).SequenceEqual(
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, before.Cursor)!.Select(row => row.Cursor)))
+            throw InvalidDrain();
+
+        if (terminating && before is not null && (turn.Sent.Count != 1 || turn.Journal is not null || turn.Unsubscribe ||
+            next != (previous with { Revision = next.Revision, ParkDiscard = after })))
             throw InvalidDrain();
 
         if (controls.Length != 1 || controls[0].Due is not null || controls[0].KeepUntil is not null ||
@@ -185,6 +216,13 @@ public sealed partial class InMemoryStore
         bool ValidExpiryInput() => expiry is not null && inputs.Length == 1 && turn.Consumed.Contains(selected) &&
             ParkDrainEnvelope.For(previous, park).MatchesExpiry(input, previous, expiry);
     }
+
+    private static bool MatchesTerminateNotice(IReadOnlyList<Message> sent, InstanceRow row) => row.Parent is null
+        ? sent.Count == 0
+        : sent is [var notice] && notice.Kind == Kinds.ChildFinished && notice.Target.Id == row.Parent &&
+            notice.TargetCreation == row.ParentCreation && notice.Sender == row.Id &&
+            CreationProtocol.HasTerminalNoticeId(notice, row.Id, row.Creation) &&
+            notice.Id == CreationProtocol.TerminalNoticeId(row.Id, row.Creation, row.Revision);
 
     private bool IsOutstandingDrain(InboxKey key) =>
         key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&

@@ -10,6 +10,8 @@ internal static class ParkDrainCascadeChecks
         await Run(parentTerminate: true, check);
         await Run(parentTerminate: false, check);
         await Run(parentTerminate: true, check, expiry: true);
+        await TerminatePark(parentTerminate: false, check);
+        await TerminatePark(parentTerminate: true, check);
     }
 
     private static async Task Run(bool parentTerminate, Action<bool, string> check, bool expiry = false)
@@ -107,9 +109,134 @@ internal static class ParkDrainCascadeChecks
         }
     }
 
+    private static async Task TerminatePark(bool parentTerminate, Action<bool, string> check)
+    {
+        const long initial = 1_702_310_030_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(10) };
+        var scope = new Contract.BoundScope("park-terminate");
+        var probe = new Probe();
+        var edge = new InMemoryIngress(store, new Requests("park-terminate"), "park-terminate", (_, kind) => kind == Contract.Kinds.Terminate);
+        var writes = new List<TurnCommit>();
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed) writes.AddRange(batch.Turns);
+        });
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial });
+        var worker = Owner("park-terminate");
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var parent = (await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "parent")),
+            "parent", Contract.Kinds.Start)).Actor!.Value;
+        await Step(worker, parent);
+        var child = await Spawn(parent);
+        var descendant = await Spawn(child);
+        var parentId = Row(parent).Id;
+        var id = Row(child).Id;
+        await Send(child, "park", "park");
+        await Step(worker, child);
+        var parked = Checkpoint(child);
+        var expiry = store.FoundationExpiry(parked.Row)!.Armed!.Value;
+        const int count = 2 * InMemoryStore.ParkPageLimit + 1;
+        for (var index = 0; index < count - 1; index++)
+            await Send(child, $"kept-{index}", "unexpected");
+        await Step(worker, child);
+
+        var reads = new ActorList(store, 10);
+        var selection = (await reads.GetAsync(scope, child))!.Selection!;
+        var payload = Json.Write(new Contract.OperatorCommand(selection));
+        if (parentTerminate)
+        {
+            await Send(parent, "end", "cancel");
+            for (var step = 0; step < 3 && Row(parent).Status == InstanceStatus.Running; step++)
+                await Step(worker, parent);
+        }
+        else
+            await Send(child, "operator", Contract.Kinds.Terminate, payload);
+        await Step(worker, child);
+
+        var open = Row(child);
+        var opened = await reads.GetAsync(scope, child);
+        var openedCorrectly = open is
+            { Status: InstanceStatus.Faulted, ParkDiscard: { Kind: ParkClearKind.Terminate, Cursor: null, Cleared: 0 }, Children: null } &&
+            opened?.Park?.OpenResolution == "terminating" && Checkpoint(child).Park == parked.Park &&
+            store.MatchesFoundationSelection(scope.Tenant, child.Id, selection) &&
+            Kept() == count && Notices() == 0 && !store.Messages.ContainsKey(expiry) &&
+            writes.Count(turn => turn.Instance == id && turn.FoundationCascade is not null && turn.Unsubscribe) == 1;
+        var source = parentTerminate ? "parent" : "operator";
+        check(openedCorrectly, $"{source}: Terminate Open preserves the Park mark, recalls expiry and hands off the subtree without an end notice" +
+            (openedCorrectly ? "" : $" (drain {open.ParkDiscard}, revision {open.Revision}, children {open.Children}, kept {Kept()}, notices {Notices()}, " +
+                $"expiry still queued {store.Messages.ContainsKey(expiry)}, same Park {Checkpoint(child).Park == parked.Park})"));
+        if (!openedCorrectly) return;
+
+        await Send(child, "another", Contract.Kinds.Terminate, payload);
+        await Send(child, "late", "unexpected");
+        await Step(worker, child);
+        var boundary = Row(child);
+        check(boundary.ParkDiscard is { Cleared: InMemoryStore.ParkPageLimit } && Kept() == count - InMemoryStore.ParkPageLimit &&
+            store.Messages.Values.Any(row => !row.Done && row.Message.Target.Id == id && row.Message.Id == "late"),
+            $"{source}: the first page clears only its bounded kept prefix and withholds later arrivals");
+
+        await owner.DisposeAsync();
+        now += 20;
+        var successor = Owner("park-terminate-successor");
+        await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+        for (var step = 0; step < 12; step++)
+        {
+            await next.WokenAsync(null);
+            await next.RunAsync();
+        }
+
+        var complete = Checkpoint(child);
+        var ending = writes.Where(turn => turn.Instance == id && turn.Journal?.Contains("\"terminated\"", StringComparison.Ordinal) == true).ToArray();
+        var completedCorrectly = complete is { Park: null, Row: { Status: InstanceStatus.Cancelled, ParkDiscard: null } } &&
+            complete.EndedAt == now && complete.Row.State == parked.Row.State && Kept() == 0 &&
+            Row(descendant).Status == InstanceStatus.Cancelled && Notices() == 1 &&
+            ending is [{ Sent: [var notice] }] && notice.Read<System.Text.Json.JsonElement>().GetProperty("Status").GetInt32() == (int)InstanceStatus.Cancelled &&
+            store.Messages.Values.All(row => row.Message.Target.Id != id || row.Message.Kind != Kinds.Drain);
+        check(completedCorrectly, $"{source}: takeover completes once as Cancelled, clears every kept key and emits the sole Cancelled notice" +
+            (completedCorrectly ? "" : $" (status {complete.Row.Status}, {complete.Row.ParkDiscard}, {Kept()} kept, " +
+                $"descendant {Row(descendant).Status}, {Notices()} final notices, {ending.Length} terminal writes, " +
+                $"pending {string.Join(", ", store.Messages.Values.Where(row => !row.Done && row.Message.Target.Id == id).Select(row => $"{row.Message.Kind}/{row.Message.Id}:{row.Seen}:{row.Trial}"))})"));
+        var late = store.Messages.Values.SingleOrDefault(row => row.Message.Target.Id == id && row.Message.Id == "late");
+        var deliveryCommit = late is null ? -1 : writes.FindIndex(turn => turn.Consumed.Concat(turn.Done).Contains(late.Message.InboxKey));
+        check(probe.UnexpectedOffers == 0 && late is { Done: true } && ending is [var finalTurn] &&
+            deliveryCommit > writes.IndexOf(finalTurn),
+            $"{source}: after Complete the later input is consumed without any model turn");
+
+        int Kept() => store.Messages.Values.Count(row => row.KeptBy is not null && row.Message.Target.Id == id);
+        int Notices() => writes.SelectMany(turn => turn.Sent).Count(message =>
+            message.Kind == Kinds.ChildFinished && message.Sender == id && message.Target.Id == parentId &&
+            message.Read<System.Text.Json.JsonElement>().GetProperty("Final").GetBoolean());
+
+        async Task<Contract.ActorRef> Spawn(Contract.ActorRef from)
+        {
+            await Send(from, "spawn-" + from.Id, "spawn");
+            await Step(worker, from);
+            var result = new Contract.ActorRef(Row(from).State);
+            await Step(worker, result);
+            return result;
+        }
+
+        ValueTask<Contract.Admission> Send(Contract.ActorRef actor, string operation, string kind, string? body = null) =>
+            edge.SendAsync(scope, new Contract.Target.Ref(actor), operation, kind, body);
+        InMemoryStore.ActorCheckpoint Checkpoint(Contract.ActorRef actor) => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        InstanceRow Row(Contract.ActorRef actor) => Checkpoint(actor).Row;
+
+        async Task Step(Worker node, Contract.ActorRef actor)
+        {
+            await node.PollAsync();
+            await node.LoadAsync();
+            await node.FlushAsync();
+            node.RunTurn(store.FoundationTarget(scope.Tenant, actor.Id)!.Id);
+            await node.FlushAsync();
+        }
+    }
+
     private sealed class Probe : Contract.IActorType
     {
         public string Type => "park-cascade";
+        public int UnexpectedOffers { get; private set; }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
@@ -118,6 +245,7 @@ internal static class ParkDrainCascadeChecks
                 {
                     case "spawn": turn.State = turn.Start(new(Type, "child")).Id; break;
                     case "park": throw new InvalidOperationException("The fixture parks the parent.");
+                    case "unexpected": UnexpectedOffers++; break;
                     case "cancel":
                     case Contract.Kinds.Terminate: turn.End(Contract.ActorStatus.Cancelled); break;
                 }

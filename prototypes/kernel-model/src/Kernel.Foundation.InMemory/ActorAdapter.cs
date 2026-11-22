@@ -30,7 +30,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
         if (!SupportsFoundationOperator(row)) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
-            return row.ParkDiscard is not null && store.AuthorizesDrainingTerminate(row, message);
+            return store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
             if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
@@ -51,10 +51,11 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
+        row.ParkDiscard?.Kind != Durable.ParkClearKind.Terminate &&
+        (row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
             : SettlesEndedChildNotice(row, delivery.Message) ||
-                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null);
 
     private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
         message.Kind == Contract.Kinds.ChildFinished && row is
@@ -159,8 +160,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 Consumed = [.. input.Taken], Journal = Durable.Json.Write(new[] { "delete" }), Delete = true, Unsubscribe = true
             };
         }
-        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
-            message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
+        if (message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is { } park)
+            return OpenParkTerminate(input, row, park);
+        if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
         if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
         {
