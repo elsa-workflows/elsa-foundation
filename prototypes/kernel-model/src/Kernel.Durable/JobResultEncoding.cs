@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 internal static class JobResultEncoding
 {
     // Reserve M and F for the projected and unprojected fields of the 16 MiB row.
-    private const int Limit = 16 * 1024 * 1024 - 2 * 24 * 1024;
+    private const int Limit = FoundationMetadataLimits.MessageContentBytes;
     internal const string Error = "result too large";
     private static readonly JsonSerializerOptions Options = new() { Converters = { new BoundedString() } };
 

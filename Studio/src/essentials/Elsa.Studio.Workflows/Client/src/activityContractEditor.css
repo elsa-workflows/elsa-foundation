@@ -268,7 +268,7 @@
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .04em;
 }
 
@@ -417,11 +417,6 @@
   margin-bottom: 12px;
 }
 
-.ad-contract-workbench-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
 
 .ad-contract-workbench-classification {
   display: grid;
@@ -489,7 +484,6 @@
   }
 
   .ad-contract-workbench-member .ad-contract-fields,
-  .ad-contract-workbench-facts,
   .ad-contract-workbench-classification {
     grid-template-columns: minmax(0, 1fr);
   }

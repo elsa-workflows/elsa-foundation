@@ -17,7 +17,7 @@ const result = (marker = "42"): QueryResult => ({ outcome: "succeeded", columns:
 const cleanups: (() => void)[] = [];
 function mount(content: React.ReactNode) {
   const view = document.createElement("div"); document.body.append(view); const root = createRoot(view);
-  flushSync(() => root.render(content)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return view;
+  flushSync(() => root.render(content)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return document.body;
 }
 function action(view: HTMLElement, text: string) {
   const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === text);

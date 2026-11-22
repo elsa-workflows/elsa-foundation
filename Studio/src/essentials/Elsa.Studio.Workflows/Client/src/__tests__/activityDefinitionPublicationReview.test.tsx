@@ -74,7 +74,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(blockers.textContent).toContain(diagnostic.message);
     expect(blockers.textContent).toContain(diagnostic.remediation);
     expect(blockers.querySelectorAll(".ad-publication-diagnostics li")).toHaveLength(1);
-    const summary = harness.container.querySelector(".ad-publication-summary")!;
+    const summary = harness.container.querySelector(".studio-fact-list")!;
     expect(blockers.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const publish = buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement;
     expect(publish.disabled).toBe(true);
@@ -171,7 +171,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const readiness = harness.container.querySelector(".ad-publication-readiness")!;
     expect(readiness.textContent).toContain("Checks from the earlier review");
     expect(readiness.textContent).not.toContain("Ready to publish");
-    expect(harness.container.querySelector(".ad-publication-summary")?.textContent).toContain("Blocked");
+    expect(harness.container.querySelector(".studio-fact-list")?.textContent).toContain("Blocked");
     expect(harness.container.querySelector(".ad-publication-blockers")?.textContent).toContain("Publication did not complete");
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });

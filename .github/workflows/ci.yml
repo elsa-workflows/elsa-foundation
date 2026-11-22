@@ -1794,6 +1794,7 @@ jobs:
           $SIM --held-job-result-check
           $SIM --park-kept-check
           $SIM --private-kinds-check
+          $SIM --metadata-envelope-check
           $SIM --contract-jobs --seed 1 --tree-stall
           expect_contract_failure() {
             local expected="$1"
