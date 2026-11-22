@@ -519,12 +519,12 @@ Replace local date formatting with `StudioTimestamp`.
 Counts are raw `<button` occurrences. Canvas and context-toolbar buttons may be legitimately custom;
 the designer header is a documented exception.
 
-- [ ] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20).
+- [x] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20). (PR #5337)
 - [ ] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19).
-- [ ] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12).
+- [x] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12). (PR #5337)
 - [ ] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and
   20px `.ad-primary-action` buttons.
-- [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
+- [x] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12). (PR #5337)
 - [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
@@ -540,7 +540,7 @@ the designer header is a documented exception.
 - [ ] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9),
   `ActivityExecutionBrowser.tsx` (9), `WorkflowFolderNavigation.tsx` (8),
   `WorkflowLibraryControls.tsx` (7), `InspectorPanel.tsx` (6).
-- [ ] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9),
+- [x] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9), (PR #5337)
   `BpmnInterchangeCommands.tsx` (6).
 - [x] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
   `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`. (PR #5310)
@@ -601,7 +601,7 @@ Uppercase labels (`needs: D3`):
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
 - [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
-- [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
+- [x] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`, (PR #5337)
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
 - [ ] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules).
 
@@ -627,7 +627,7 @@ Raw font sizes, weights, radii and colours:
 - [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
   Many raw radii are `999px` pills; check each one before changing it.
   Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294).
-- [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
+- [x] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`, (PR #5337)
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
 - [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
@@ -673,7 +673,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 ### Workflows module
 
 - [x] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400. (PR #5322)
-- [ ] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless
+- [x] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless (PR #5337)
   in one and outlined in the other; the ⋯ button is borderless in one and boxed in the other.
   **[check]** palette category headings appear to differ in size.
 - [x] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil (PR #5322)
@@ -697,12 +697,12 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   components; use the kit components directly.
 - [x] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying (PR #5328)
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
-- [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
+- [x] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456, (PR #5337)
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
 - [ ] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`.
 - [ ] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with
   inconsistent parenting; Upgrades and Elsa 3 import have no nav entry.
-- [ ] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a
+- [x] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a (PR #5337)
   trailing space, a duplicate `aria-label` and a `<small>Optional</small>`. Under D13 the optional
   marker goes. `needs: D13`
 - [ ] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in
