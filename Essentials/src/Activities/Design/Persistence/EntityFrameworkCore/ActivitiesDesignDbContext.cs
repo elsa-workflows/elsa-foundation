@@ -547,10 +547,10 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
     private static bool JsonEquals<TValue>(TValue? left, TValue? right, JsonSerializerOptions options) =>
         left is null || right is null
             ? left is null && right is null
-            : string.Equals(JsonSerializer.Serialize(left, options), JsonSerializer.Serialize(right, options), StringComparison.Ordinal);
+            : Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, options), JsonSerializer.SerializeToElement(right, options));
 
     private static int JsonHashCode<TValue>(TValue value, JsonSerializerOptions options) =>
-        value is null ? 0 : StringComparer.Ordinal.GetHashCode(JsonSerializer.Serialize(value, options));
+        value is null ? 0 : StringComparer.Ordinal.GetHashCode(Elsa.Serialization.Core.JsonHashInput.Hash(JsonSerializer.SerializeToElement(value, options)));
 
     private static TValue JsonSnapshot<TValue>(TValue value, JsonSerializerOptions options) =>
         value is null ? value : JsonSerializer.Deserialize<TValue>(JsonSerializer.Serialize(value, options), options)!;

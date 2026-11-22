@@ -10,4 +10,7 @@
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

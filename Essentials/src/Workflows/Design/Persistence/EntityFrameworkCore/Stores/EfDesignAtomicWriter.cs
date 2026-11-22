@@ -77,11 +77,9 @@ public sealed class EfDesignAtomicWriter(
         ArgumentNullException.ThrowIfNull(stage);
         var tenantId = EfDesignSupport.OperationTenant(access);
         string requestFingerprint;
-        string legacyRequestFingerprint;
         try
         {
             requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
-            legacyRequestFingerprint = EfDesignSupport.LegacyFingerprint(operationKind, request);
         }
         catch (DesignPersistenceException) { throw; }
         catch (Exception exception) when (IsSerializationFailure(exception))
@@ -93,7 +91,7 @@ public sealed class EfDesignAtomicWriter(
         if (existing is not null)
         {
             ValidateMarkerIdentity(existing, operationKind, key.Value);
-            return ResolveExisting(existing, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
+            return ResolveExisting(existing, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
         }
         // Attempt setup is deliberately rerun after every transient write conflict. Providers can
         // invalidate locks, snapshots, and other preflight observations while a transaction is
@@ -185,7 +183,7 @@ public sealed class EfDesignAtomicWriter(
                 await CleanupAsync(transaction, exception, operationKind, rollback: false);
                 db.ChangeTracker.Clear();
                 return await ReconcileAfterCommitAsync<T>(
-                    tenantId, operationKind, key.Value, requestFingerprint, legacyRequestFingerprint, exception, resultCodec);
+                    tenantId, operationKind, key.Value, requestFingerprint, exception, resultCodec);
             }
             transactionDisposed = true;
             await CleanupAsync(
@@ -218,7 +216,7 @@ public sealed class EfDesignAtomicWriter(
                 ValidateMarkerIdentity(winner, operationKind, key.Value);
                 // The local stage lost the marker race. The concurrent winner owns publication;
                 // classify this caller as a replay so it cannot emit duplicate post-commit events.
-                return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
+                return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
             }
             throw EfDesignSupport.ProviderFailure(operationKind, exception);
         }
@@ -297,7 +295,6 @@ public sealed class EfDesignAtomicWriter(
         string operationKind,
         string operationKey,
         string requestFingerprint,
-        string legacyRequestFingerprint,
         Exception commitException,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
@@ -312,7 +309,7 @@ public sealed class EfDesignAtomicWriter(
                 if (winner is not null)
                 {
                     ValidateMarkerIdentity(winner, operationKind, operationKey);
-                    return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
+                    return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
                 }
             }
             catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
@@ -358,12 +355,10 @@ public sealed class EfDesignAtomicWriter(
         DesignOperationEntity existing,
         string operationKind,
         string requestFingerprint,
-        string legacyRequestFingerprint,
         DesignAtomicWriteStatus matchingStatus,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
-        if (!StringComparer.Ordinal.Equals(existing.RequestFingerprint, requestFingerprint) &&
-            !StringComparer.Ordinal.Equals(existing.RequestFingerprint, legacyRequestFingerprint))
+        if (!StringComparer.Ordinal.Equals(existing.RequestFingerprint, requestFingerprint))
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Conflict, default);
         var value = DeserializeResult(resultCodec, existing.ResultJson);
         if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", existing.ResultFingerprint, existing.ResultJson)

@@ -36,7 +36,7 @@ internal static class AgentRetentionRules
         if (query.PageSize is < 1 or > 128) throw new ArgumentOutOfRangeException(nameof(query));
         if (query.AfterHandle is not null) AgentTurnDocumentRules.Token(query.AfterHandle);
     }
-    internal static string Snapshot(AgentTurnDocument document) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(document, Json))).ToLowerInvariant();
+    internal static string Snapshot(AgentTurnDocument document) => Elsa.Serialization.Core.JsonHashInput.Hash(document);
     internal static AgentRetentionCandidate Candidate(AgentTurnDocument document, string snapshot) => new(document.Handle, document.Identity, document.Status,
         document.Deadline, document.DeliveryProtocol, document.Deliveries?.ToArray(), document.Applications?.ToArray(), snapshot) { Conversation = document.Conversation, AdmissionGeneration = document.AdmissionGeneration };
     internal static bool Matches(AgentTurnDocument document, AgentRetentionCandidate expected, string snapshot) =>

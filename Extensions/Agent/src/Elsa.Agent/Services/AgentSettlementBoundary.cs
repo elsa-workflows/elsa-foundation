@@ -86,14 +86,14 @@ internal sealed class AgentSettlementBoundary(IWorkflowExecutionStateStore workf
     internal static RuntimePostCommitIntent Intent(AgentCancelledPayload payload)
     {
         var value = JsonSerializer.SerializeToElement(payload, Json);
-        var key = "agent-cancel:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload, Json))).ToLowerInvariant();
+        var key = "agent-cancel:" + Elsa.Serialization.Core.JsonHashInput.Hash(payload);
         return new(key, payload.Identity.WorkflowExecutionId, CancelKind, payload.CancelledAt, payload.Identity.ActivityExecutionId, key, value);
     }
 
     internal static RuntimePostCommitIntent Intent(AgentAppliedPayload payload)
     {
         var value = JsonSerializer.SerializeToElement(payload, Json);
-        var key = "agent-applied:" + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(payload, Json))).ToLowerInvariant();
+        var key = "agent-applied:" + Elsa.Serialization.Core.JsonHashInput.Hash(payload);
         return new(key, payload.Identity.WorkflowExecutionId, AppliedKind, payload.AppliedAt, payload.Identity.ActivityExecutionId, key, value);
     }
 

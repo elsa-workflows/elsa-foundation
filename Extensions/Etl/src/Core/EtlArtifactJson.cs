@@ -36,7 +36,7 @@ public static class EtlArtifactJson
     /// This method does not reorder arbitrary JSON object members.
     /// </remarks>
     public static string Hash(JsonElement document) =>
-        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(document, Options))).ToLowerInvariant();
+        Elsa.Serialization.Core.JsonHashInput.Hash(document);
 
     /// <summary>Builds the versioned, length-framed artifact identity used by publication and runtime readers.</summary>
     public static string CreateArtifactId(int formatVersion, string definitionId, int definitionVersion, string contentHash)

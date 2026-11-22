@@ -76,8 +76,8 @@ internal sealed class BpmnCatalog(IWorkflowExecutableSourceReferenceStore source
         RuntimeStorePageRequest.ValidateLimit(request.Limit, nameof(request.Limit));
         RuntimeStorePageRequest.ValidateContinuationToken(request.ContinuationToken, nameof(request.ContinuationToken));
         if (request.ArtifactId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(request.ArtifactId);
-        var binding = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[]
-            { scope.Value, identity.ActorId, identity.TenantId, request.ArtifactId, request.Limit.ToString(CultureInfo.InvariantCulture) })));
+        var binding = Elsa.Serialization.Core.JsonHashInput.Hash(new[]
+            { scope.Value, identity.ActorId, identity.TenantId, request.ArtifactId, request.Limit.ToString(CultureInfo.InvariantCulture) }).ToUpperInvariant();
         if (request.ContinuationToken is null) return (identity, scope, new(binding, null, clock.GetUtcNow().UtcTicks));
         try
         {

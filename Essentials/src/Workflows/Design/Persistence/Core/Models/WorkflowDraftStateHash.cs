@@ -21,5 +21,7 @@ public static class WorkflowDraftStateHash
 
     /// <summary>The hash of a draft whose stored state source is <paramref name="stateSource"/>.</summary>
     public static string Compute(string? stateSource) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(stateSource ?? string.Empty)));
+        string.IsNullOrEmpty(stateSource)
+            ? Elsa.Serialization.Core.JsonHashInput.HashFramed(ReadOnlySpan<byte>.Empty)
+            : Elsa.Serialization.Core.JsonHashInput.HashJson(stateSource);
 }

@@ -36,6 +36,8 @@ public static class JsonHashInput
 
     /// <summary>Serializes a component of an explicit hash projection with the fixed hash settings.</summary>
     public static JsonElement SerializeToElement<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
+    /// <summary>Serializes a component using an explicitly selected CLR contract and the fixed hash settings.</summary>
+    public static JsonElement SerializeToElement(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, Options);
 
     /// <summary>Gets canonical UTF-8 bytes for a JSON component of an existing framed or keyed hash protocol.</summary>
     public static byte[] CanonicalBytes(JsonElement value) => JsonCanonicalForm.GetBytes(value);
@@ -67,7 +69,7 @@ public static class JsonHashInput
             ReferenceHandler = null,
             TypeInfoResolver = new DefaultJsonTypeInfoResolver()
         };
-        options.Converters.Add(new JsonStringEnumConverter());
+        options.Converters.Add(new JsonStringEnumConverter(namingPolicy: null, allowIntegerValues: true));
         options.MakeReadOnly();
         return options;
     }

@@ -18,7 +18,7 @@ public static class ExecutableActivityTemplateBehaviorHasher
         string providerFingerprint,
         IReadOnlyDictionary<string, string> compatibilityMetadata)
     {
-        var behavior = JsonSerializer.SerializeToElement(new
+        var behavior = Elsa.Serialization.Core.JsonHashInput.SerializeToElement(new
         {
             schemaVersion = "1",
             root,
@@ -30,43 +30,8 @@ public static class ExecutableActivityTemplateBehaviorHasher
             providerFingerprint,
             compatibilityMetadata = compatibilityMetadata.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray()
         });
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, behavior);
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()))}";
+        return "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(behavior);
     }
 
-    public static string ComputeCanonicalValueHash(object value)
-    {
-        var element = JsonSerializer.SerializeToElement(value);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(writer, element);
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()))}";
-    }
-
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(x => x.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            default:
-                element.WriteTo(writer);
-                break;
-        }
-    }
+    public static string ComputeCanonicalValueHash(object value) => "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(value);
 }

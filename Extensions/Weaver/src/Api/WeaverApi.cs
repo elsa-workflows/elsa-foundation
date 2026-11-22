@@ -397,7 +397,7 @@ public static class WeaverApi
         }
         sessionId = session!.Id;
         var evaluator = context.RequestServices.GetRequiredService<IWeaverPolicyEvaluator>();
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, WeaverJsonContext.WireContext.WeaverMessageRequest)));
+        var fingerprint = Elsa.Serialization.Core.JsonHashInput.Hash(request).ToUpperInvariant();
         if (!string.IsNullOrWhiteSpace(request.RequestId))
         {
             var existing = (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).FirstOrDefault(x => x.Role == WeaverRole.User && x.RequestId == request.RequestId);

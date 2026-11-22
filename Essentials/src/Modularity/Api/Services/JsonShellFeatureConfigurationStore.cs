@@ -196,7 +196,8 @@ public sealed class JsonShellFeatureConfigurationStore(
     private string CreateRevision(string value)
     {
         var key = string.IsNullOrWhiteSpace(Options.RevisionKey) ? s_processRevisionKey : Encoding.UTF8.GetBytes(Options.RevisionKey);
-        return Convert.ToHexStringLower(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(value)));
+        using var document = JsonDocument.Parse(value);
+        return Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(document.RootElement, key));
     }
 
     private FeatureManagementOptions Options => options.Value;

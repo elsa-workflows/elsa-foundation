@@ -82,9 +82,5 @@ internal static class AuthoringSchemaExporter
     /// Computes the canonical <c>sha256:&lt;lowercase hex&gt;</c> fingerprint of a snapshot,
     /// following the descriptor-document fingerprint pattern of the design APIs.
     /// </summary>
-    internal static string ComputeFingerprint<TSnapshot>(TSnapshot snapshot)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, new JsonSerializerOptions(Elsa.Serialization.Core.JsonBaseline.Options));
-        return $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
-    }
+    internal static string ComputeFingerprint<TSnapshot>(TSnapshot snapshot) => "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(snapshot);
 }

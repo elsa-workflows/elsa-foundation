@@ -19,24 +19,42 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 /// </summary>
 public static class GitCanonicalJson
 {
-    private static readonly JsonSerializerOptions IndentedOptions = new(Elsa.Serialization.Core.JsonBaseline.Options) { WriteIndented = true };
-
     /// <summary>The compact canonical serialization of <paramref name="state"/> — the hash preimage.</summary>
     public static string ToCompact(WorkflowDefinitionState state, IPayloadSerializer serializer) =>
         serializer.Serialize(state);
 
     /// <summary>The indented on-disk rendering of a compact canonical string (pure-whitespace transform).</summary>
-    public static string Indent(string compact) =>
-        JsonNode.Parse(compact)!.ToJsonString(IndentedOptions);
+    public static string Indent(string compact) => RenderOuterDocument(compact, indented: true);
 
     /// <summary>The compact canonical form recovered from an on-disk (indented) file's text.</summary>
-    public static string CompactFromFile(string fileText) =>
-        JsonNode.Parse(fileText)!.ToJsonString();
+    public static string CompactFromFile(string fileText) => RenderOuterDocument(fileText, indented: false);
 
     /// <summary>Lowercase hex SHA-256 of a canonical (compact) string.</summary>
     public static string Sha256Hex(string compact) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(compact))).ToLowerInvariant();
+        JsonHashInput.HashJson(compact);
 
     /// <summary>The content hash of a file's canonical form (convenience for the source).</summary>
-    public static string HashFile(string fileText) => Sha256Hex(CompactFromFile(fileText));
+    public static string HashFile(string fileText) => JsonHashInput.HashJson(fileText);
+
+    private static string RenderOuterDocument(string json, bool indented)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 1000 });
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = indented, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+        {
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                writer.WriteStartObject();
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    writer.WritePropertyName(property.Name);
+                    // The serializer already rendered owned wrappers. Never re-encode a carried value to indent it.
+                    writer.WriteRawValue(property.Value.GetRawText(), skipInputValidation: true);
+                }
+                writer.WriteEndObject();
+            }
+            else writer.WriteRawValue(document.RootElement.GetRawText(), skipInputValidation: true);
+        }
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 }

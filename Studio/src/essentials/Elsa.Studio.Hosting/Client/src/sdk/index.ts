@@ -3,6 +3,7 @@ export * from "./backends";
 export * from "./backendConnection";
 export * from "./moduleHost";
 export * from "./notifications";
+export * from "./timeZone";
 import type {StudioConnectionController, StudioModuleHostContext, StudioModuleInstance, StudioShellContribution} from "./moduleHost";
 import type { StudioBackendAwareContribution, StudioBackendSession } from "./backends";
 import type { ComponentType } from "react";

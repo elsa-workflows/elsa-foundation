@@ -86,7 +86,8 @@ internal sealed class ShellFeatureStore(
                 : JsonSerializer.SerializeToElement(ComposedConfiguration(settings, id));
         }
         var rawState = node?.ToJsonString() ?? JsonSerializer.Serialize(values);
-        var revision = Convert.ToHexString(HMACSHA256.HashData(RevisionKey, Encoding.UTF8.GetBytes(rawState))).ToLowerInvariant();
+        using var revisionDocument = JsonDocument.Parse(rawState);
+        var revision = Convert.ToHexStringLower(Elsa.Serialization.Core.JsonHashInput.HashKeyed(revisionDocument.RootElement, RevisionKey));
         return new(ShellName, revision, values, shellConfiguration);
     }
 

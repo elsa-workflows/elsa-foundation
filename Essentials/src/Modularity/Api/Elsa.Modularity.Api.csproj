@@ -24,4 +24,7 @@
     <PackageReference Include="ValenceWorks.MinimalEndpoints" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../Serialization/Core/Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
 </Project>

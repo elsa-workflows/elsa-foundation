@@ -80,7 +80,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         if (key.Length > 256 || key.Any(char.IsControl)) throw new ArgumentException("Operation keys must have 1–256 characters without control characters.");
     }
     private static string ClientKeyHash(string key) => EfDesignSupport.LookupHash("workflow-library-client-key\0" + key);
-    private static string Fingerprint(object material) => EfDesignSupport.LookupHash(JsonSerializer.Serialize(material, Json));
+    private static string Fingerprint(object material) => Elsa.Serialization.Core.JsonHashInput.Hash(material);
     private static void ValidateStoredId(string id, string prefix)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);

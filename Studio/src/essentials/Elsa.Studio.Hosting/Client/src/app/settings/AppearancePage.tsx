@@ -1,5 +1,6 @@
 import { StudioPageHeader } from "../ui";
 import React from "react";
+import { formatStudioDate, resolveStudioTimeZone } from "../../sdk/timeZone";
 import { StudioButton } from "../ui/forms/Button";
 import { useTheme } from "../components/ThemeProvider";
 import {
@@ -53,15 +54,27 @@ export function AppearancePage({
     navModePreference,
     setNavModePreference,
     sidebarColorPreference,
-    setSidebarColorPreference
+    setSidebarColorPreference,
+    timeZone,
+    setTimeZone
   } = useTheme();
   const defaultThemeId = store.defaultThemeId || availableThemes[0]?.id;
   const sidebarColorTitle = navMode === "top" ? "Navigation bar color" : "Sidebar color";
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
+  const zones = [...new Set(["UTC", timeZone === "browser" ? "UTC" : timeZone, ...Intl.supportedValuesOf("timeZone")])];
 
   return (
     <section className="studio-page settings-page" aria-labelledby="settings-appearance-title">
       <StudioPageHeader headingLevel={2} title={<>Appearance</>} titleId="settings-appearance-title" description={<>Choose your workspace, colors and mode independently.</>} actions={<><span className="settings-scope">This browser</span></>} />
+
+      <AppearanceCard title="Time zone" description="Show and enter dates in this zone. Elsa stores instants in UTC.">
+        <label htmlFor="studio-time-zone">Time zone</label>
+        <select id="studio-time-zone" value={timeZone} onChange={event => setTimeZone(event.currentTarget.value)}>
+          <option value="browser">Browser ({resolveStudioTimeZone("browser")})</option>
+          {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
+        </select>
+        <p><time dateTime={new Date().toISOString()}>{formatStudioDate(new Date(), timeZone)}</time></p>
+      </AppearanceCard>
 
       <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
         <RadioCardGroup

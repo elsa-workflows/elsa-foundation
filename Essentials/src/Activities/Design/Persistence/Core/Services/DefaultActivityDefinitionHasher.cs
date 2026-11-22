@@ -30,11 +30,6 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         nameof(Primitives.Entities.Entity.CreatedAt),
         nameof(Primitives.Entities.Entity.RowNumber),
     };
-    private static readonly JsonSerializerOptions options = new(Elsa.Serialization.Core.JsonBaseline.Options)
-    {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
     public string Hash(IActivityDefinition definition, IActivityDefinitionVersion version)
     {
         var payload = new
@@ -43,13 +38,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
             Version = ProjectVersion(version),
         };
 
-        var json = JsonSerializer.Serialize(payload, options);
-
-        var canonical = Canonicalise(json);
-        var bytes = Encoding.UTF8.GetBytes(canonical);
-        var digest = SHA256.HashData(bytes);
-
-        return Convert.ToHexString(digest);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(payload).ToUpperInvariant();
     }
 
     // Projects the definition to a plain object containing only the content-bearing fields.
@@ -81,42 +70,4 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal)
             && !string.Equals(facet.Kind, "elsa.activity-palette", StringComparison.Ordinal));
 
-    private static string Canonicalise(string json)
-    {
-        var node = JsonNode.Parse(json)
-            ?? throw new InvalidOperationException("Hasher: input JSON parsed to null.");
-        var sorted = SortNode(node);
-        return sorted.ToJsonString();
-    }
-
-    private static JsonNode SortNode(JsonNode node)
-    {
-        return node switch
-        {
-            JsonObject obj => SortObject(obj),
-            JsonArray arr => SortArray(arr),
-            _ => node.DeepClone(),
-        };
-    }
-
-    private static JsonObject SortObject(JsonObject src)
-    {
-        var dest = new JsonObject();
-        foreach (var key in src.Select(kv => kv.Key)
-                                .Where(k => !ExcludedPropertyNames.Contains(k))
-                                .OrderBy(k => k, StringComparer.Ordinal))
-        {
-            var value = src[key];
-            dest[key] = value is null ? null : SortNode(value);
-        }
-        return dest;
-    }
-
-    private static JsonArray SortArray(JsonArray src)
-    {
-        var dest = new JsonArray();
-        foreach (var item in src)
-            dest.Add(item is null ? null : SortNode(item));
-        return dest;
-    }
 }
