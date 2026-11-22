@@ -28,7 +28,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         internal ParkKeepReason? KeptBy;
         internal int KeptPayloadBytes;
         internal bool ParkDeadLetter;
-        public Message Message = message.StoreStartInputOnce ? message with { Payload = null } : message;
+        public Message Message = message.StoreStartInputOnce ? message with { Payload = null, StoredEnvelope = null } : message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
         public bool Done, Held;
@@ -470,7 +470,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 .Where(m => epochs.TryGetValue(m.Message.Target.Partition, out var epoch) && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
                 .OrderBy(m => m.Message.DeliveryOrder(m.Seq)).Take(limit)
                 .Select(m => new Stored(m.Message is { StoreStartInputOnce: true, Start: { } start }
-                    ? m.Message with { Payload = start.Input } : m.Message,
+                    ? m.Message with { Payload = start.Input, StoredEnvelope = m.Message } : m.Message,
                     m.Seq, m.Seen, m.Attempts, m.Trial)
                 {
                     PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&

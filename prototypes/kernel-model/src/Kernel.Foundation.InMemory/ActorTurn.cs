@@ -126,12 +126,7 @@ internal sealed partial class ActorAdapter
             _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
         }
 
-        public void Unsubscribe(string key, string wait)
-        {
-            HeaderLimits.RequireName(key, nameof(key));
-            HeaderLimits.RequireName(wait, nameof(wait));
-            _turn.Unsubscribe(Qualify(key), wait);
-        }
+        public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
 
         public string Publish(string key, string? payload, TimeSpan keepFor)
         {

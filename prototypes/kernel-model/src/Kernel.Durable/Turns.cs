@@ -363,6 +363,10 @@ public sealed class DurableTurn
     {
         Kinds.RequireApplicationSend(kind);
         FoundationMetadataLimits.RequireKind(kind, nameof(kind));
+        if (!FoundationMetadataLimits.FitsTarget(target.Id))
+            throw new MetadataLimitExceeded(nameof(target), FoundationMetadataLimits.TargetBytes);
+        if (!FoundationMetadataLimits.FitsSender(receivedAt))
+            throw new MetadataLimitExceeded(nameof(receivedAt), FoundationMetadataLimits.SenderBytes);
         var id = Send(IssuedAt(_ordinal), target, kind, payload, options, receivedAt, boundMessage: true);
         _ordinal++;
         return id;

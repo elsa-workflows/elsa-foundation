@@ -55,10 +55,13 @@ internal sealed class EventIngress(Durable.InMemoryStore store, Durable.Requests
     {
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
-        HeaderLimits.RequireName(correlationKey, nameof(correlationKey));
-        HeaderLimits.RequireName(wait, nameof(wait));
-        HeaderLimits.RequireContent(spec?.Input, nameof(spec), Durable.FoundationMetadataLimits.EventStartInputBytes);
-        if (spec is not null) HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+        if (spec is not null)
+        {
+            HeaderLimits.RequireName(correlationKey, nameof(correlationKey));
+            HeaderLimits.RequireName(wait, nameof(wait));
+            HeaderLimits.RequireContent(spec.Input, nameof(spec), Durable.FoundationMetadataLimits.EventStartInputBytes);
+            HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
+        }
         var start = spec is null ? null : new Durable.StartSpec(spec.Type, spec.TypeData, spec.Input,
             Ephemeral: spec.Ephemeral, History: (Durable.History)spec.History);
         store.SetFoundationEventStart(scope.Tenant, correlationKey, wait, start);

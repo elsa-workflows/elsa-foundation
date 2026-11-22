@@ -6,6 +6,8 @@ internal static class FoundationMetadataLimits
 {
     internal const int NameBytes = 1_024;
     internal const int KindBytes = 256;
+    internal const int TargetBytes = NameBytes + 70;
+    internal const int SenderBytes = NameBytes + 160;
     internal const int TypeDataBytes = 16 * 1_024;
     internal const int MessageContentBytes = 16 * 1_024 * 1_024 - 2 * 24 * 1_024;
     internal const int StartContentBytes = MessageContentBytes - (TypeDataBytes - NameBytes);
@@ -18,6 +20,8 @@ internal static class FoundationMetadataLimits
         Fits(value, NameBytes, preservesCodeUnits);
 
     internal static bool FitsKind(string value) => Fits(value, KindBytes, preservesCodeUnits: false);
+    internal static bool FitsTarget(string value) => Fits(value, TargetBytes, preservesCodeUnits: false);
+    internal static bool FitsSender(string? value) => FitsOptional(value, SenderBytes);
 
     internal static void RequireKind(string value, string parameter)
     {
@@ -39,8 +43,7 @@ internal static class FoundationMetadataLimits
         const int issuedIdBytes = 2 * NameBytes + 160;
         return FitsKind(message.Kind) &&
             Fits(message.Id, scope == 0 ? NameBytes : issuedIdBytes, issued) && Fits(id, issuedIdBytes, issued) &&
-            Fits(message.Target.Id, NameBytes + 70, preservesCodeUnits: false) &&
-            FitsOptional(message.Sender, NameBytes + 160) && FitsOptional(message.ReplyTo, NameBytes + 160) &&
+            FitsTarget(message.Target.Id) && FitsSender(message.Sender) && FitsOptional(message.ReplyTo, SenderBytes) &&
             FitsOptional(match, 64) && FitsComposedContent(message);
     }
 
@@ -48,7 +51,7 @@ internal static class FoundationMetadataLimits
     {
         if (message.Start is not { } start) return !message.StoreStartInputOnce && FitsContent(message.Payload);
 
-        if (!FitsName(start.Model) || !FitsContent(start.Definition, TypeDataBytes) || !FitsOptional(start.Parent, NameBytes + 70) ||
+        if (!FitsName(start.Model) || !FitsContent(start.Definition, TypeDataBytes) || !FitsOptional(start.Parent, TargetBytes) ||
             !FitsOptional(start.Creation?.Intent, NameBytes) || !FitsContent(start.Input, StartContentBytes))
             return false;
 
@@ -61,17 +64,8 @@ internal static class FoundationMetadataLimits
 
     private static bool Fits(string value, int limit, bool preservesCodeUnits)
     {
-        if (value.Length > limit || Encoding.UTF8.GetByteCount(value) > limit) return false;
-        if (preservesCodeUnits) return true;
-
-        for (var index = 0; index < value.Length; index++)
-        {
-            if (!char.IsSurrogate(value[index])) continue;
-            if (!char.IsHighSurrogate(value[index]) || index + 1 == value.Length || !char.IsLowSurrogate(value[index + 1]))
-                return false;
-            index++;
-        }
-        return true;
+        return value.Length <= limit && Encoding.UTF8.GetByteCount(value) <= limit &&
+            (preservesCodeUnits || !DurableKeyJson.HasUnpairedSurrogate(value));
     }
 }
 

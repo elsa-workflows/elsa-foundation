@@ -55,6 +55,7 @@ public sealed record Message(
     public long InboxScope { get; private init; }
     internal bool BindFoundationChild { get; init; }
     internal bool StoreStartInputOnce { get; init; }
+    internal Message? StoredEnvelope { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
     internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind == Kinds.Drain;
     internal bool ActorAuthored { get; init; }

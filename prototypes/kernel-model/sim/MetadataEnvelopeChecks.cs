@@ -15,9 +15,10 @@ internal static class MetadataEnvelopeChecks
         var fullStart = new string('s', startBytes);
         var fullEvent = new string('<', eventBytes);
         var model = new Probe(fullEvent);
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(1, () => now) { ObserveLifecycles = true };
         var scope = new Contract.BoundScope("metadata");
-        var worker = new Worker("metadata", 0, store, new ActorAdapter(store, model), new WorkerOptions { Monotonic = () => 0 });
+        var worker = new Worker("metadata", 0, store, new ActorAdapter(store, model),
+            new WorkerOptions { Monotonic = () => 0, Lifecycle = store.Lifecycle });
         Contract.IIngress ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
         await using var activation = (await new DurableHost([worker]).ActivateAsync(0))!;
         var normal = new Contract.StartSpec(model.Type, "test");
@@ -26,6 +27,9 @@ internal static class MetadataEnvelopeChecks
         var overPublisher = await Start("over-publisher", normal with { Input = "publish-over" });
         var badJob = await Start("over-job", normal with { Input = "job-over" });
         var handledJob = await Start("handled-job", normal with { Input = "job-handled" });
+        var handledStart = await Start("handled-start", normal with { Input = "start-handled" });
+        store.AdmitGeneratedFoundationStart(scope.Tenant, "old-type-data",
+            new StartSpec(model.Type, new string('t', 16 * 1_024 + 1), "previously admitted"), null, null);
         await Pump();
         check(Checkpoint(publisher).Status == InstanceStatus.Running &&
             store.FoundationEvents.Values.Any(e => e.Key == "metadata_signal" && e.Payload == fullEvent),
@@ -42,6 +46,11 @@ internal static class MetadataEnvelopeChecks
             !store.Messages.Values.Any(row => row.Message.Target.Id == handled.Id &&
                 row.Message.Kind is Kinds.Job or Kinds.JobDeadline),
             "an actor that handles a job limit can commit its fallback without retaining a ticket or timer");
+        check(Checkpoint(handledStart) is { Status: InstanceStatus.Running, Children: null, State: "used fallback" },
+            "an actor can catch the typed TypeData limit before staging an oversized child");
+        check(store.Lifecycle!.Drain().Any(change => change.Refused?.Any(message => message.Id == "old-type-data") == true) &&
+            store.Messages.Values.All(item => item.Message.Id != "old-type-data"),
+            "lifecycle observation records the durable refusal of a projected typed start");
 
         var target = new Contract.Target.Ref(live);
         var oversized = await ingress.SendAsync(scope, target, "body", "ordinary", fullMessage + "x");
@@ -71,13 +80,28 @@ internal static class MetadataEnvelopeChecks
         check(startTooWide && store.Subscriptions.Single(s => s.Key == "metadata_new-life").Start?.Input?.Length == 64 * 1_024,
             "event start registration fits exactly within its reserved input and refuses the next byte");
 
+        store.SetFoundationEventStart(scope.Tenant, "old-start", Probe.LegacyWait, new(model.Type, "old-start"));
+        var existing = Checkpoint(live);
+        await store.SubscribeAsync(new SubscriptionRow("metadata_old-wait", existing.Id, Probe.LegacyWait, Creation: existing.Creation)
+            { FoundationTenant = scope.Tenant });
+        var oldStartRemoved = true;
+        try { await ingress.SetStartAsync(scope, "old-start", Probe.LegacyWait, null); }
+        catch (Contract.MetadataLimitExceeded) { oldStartRemoved = false; }
+        await ingress.SendAsync(scope, target, "drop-old-wait", "update", "unsubscribe-legacy");
+        await Pump();
+        check(oldStartRemoved && store.Subscriptions.All(s => s.Wait != Probe.LegacyWait),
+            "both public unsubscribe paths can remove legacy waits above the new registration limit");
+
         var prior = Checkpoint(live);
         var fence = worker.Fences.Single();
         var composedTurn = new DurableTurn(new TurnInput(worker, new Slot(), prior.Id, [], 0, new("probe", "definition"), now));
         var senderAtLimit = new string('x', 1_024 + 160);
         var overSender = false;
         try { composedTurn.SendFromReceivedAddress(senderAtLimit + "x", new(prior.Id), "ok", null); }
-        catch (MetadataLimitExceeded) { overSender = true; }
+        catch (MetadataLimitExceeded error)
+        {
+            overSender = error.ParamName == "receivedAt" && error.LimitBytes == senderAtLimit.Length;
+        }
         var issued = composedTurn.SendFromReceivedAddress(senderAtLimit, new(prior.Id), "ok", null);
         check(overSender && composedTurn.SentCount == 1 && issued.EndsWith(".0000", StringComparison.Ordinal),
             "a send from a received address rejects excess sender bytes before staging or assigning an ordinal");
@@ -124,6 +148,7 @@ internal static class MetadataEnvelopeChecks
 
     private sealed class Probe(string fullEvent) : Contract.IActorType
     {
+        internal static readonly string LegacyWait = new('w', 1_025);
         private readonly string _overJob = new('<', 3 * 1_024 * 1_024);
 
         public string Type => "metadata";
@@ -146,6 +171,15 @@ internal static class MetadataEnvelopeChecks
                             return default;
                         }
                         break;
+                    case "start-handled":
+                        try { turn.Start(new Contract.StartSpec(Type, new string('t', 16 * 1_024 + 1))); }
+                        catch (Contract.MetadataLimitExceeded)
+                        {
+                            turn.State = "used fallback";
+                            return default;
+                        }
+                        break;
+                    case "unsubscribe-legacy": turn.Unsubscribe("old-wait", LegacyWait); break;
                 }
             turn.State = "saved";
             return default;

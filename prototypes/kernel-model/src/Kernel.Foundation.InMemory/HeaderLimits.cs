@@ -19,7 +19,7 @@ internal static class HeaderLimits
     internal static void ValidateStart(string type, string typeData, string? input)
     {
         RequireName(type, nameof(type));
-        ValidateTypeData(typeData);
+        RequireContent(typeData, nameof(typeData), MaxTypeDataBytes);
         RequireContent(input, nameof(input), Durable.FoundationMetadataLimits.StartContentBytes);
     }
 
