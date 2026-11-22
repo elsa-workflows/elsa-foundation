@@ -364,8 +364,7 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14).
 - [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
-  (`WF/ActivityDefinitionForkDialog.tsx:194`). Change the case only; the verb in the two dialog titles
-  waits for the open point in D1. Leave "Test Run"
+  (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
   (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
 - [ ] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
   `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14`
