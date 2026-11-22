@@ -12,8 +12,40 @@ internal static class ParkRetryChecks
         await CheckTargetSelection(Contract.RecoverMode.RetryAll, check);
         await CheckBoundsAndInterruption(check);
         await CheckLegacyTimerSelection(check);
+        await CheckBoundaryEventSelection(check);
         await CheckLegacyEventSelection(check, selected: 0);
         await CheckLegacyEventSelection(check, selected: 1);
+    }
+
+    private static async Task CheckBoundaryEventSelection(Action<bool, string> check)
+    {
+        const int limit = FoundationMetadataLimits.NameBytes;
+        var name = new string('k', limit);
+        var fixture = new Fixture { EventWaits = [name], EventWaitName = new string('w', limit) };
+        var (store, _, owner) = await fixture.ActivateAsync();
+        await using var activation = owner;
+        var scope = new Contract.BoundScope(new string('t', 64));
+        var target = await fixture.StartRunningAsync(owner, scope, name, keyed: true);
+        var publication = await fixture.Publish(scope, name, new string('e', limit), "boundary event");
+        await fixture.Finish(owner);
+        var read = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var key = store.Messages.Values.Single(row => row.Message.Kind == Kinds.Event).Message.InboxKey;
+        var valid = publication.Outcome == Contract.AdmissionOutcome.Accepted && read.Park is not null &&
+            key is { Id.Length: 67, Match.Length: 64, Scope: InboxKey.EventDeliveryScope } &&
+            store.Messages.GetValueOrDefault(key) is { Done: true, KeptBy: ParkKeepReason.Consumed };
+        check(valid, "S-2 maximum event names produce an authentic 64-byte match in a consumed input");
+        if (!valid) return;
+
+        var parked = new Parked(scope, target, read.Row, read.Park!, store.SealFoundationSelection(scope.Tenant, read)!);
+        var page = store.ReadFoundationKeptPage(new(read.Row.Id, read.Row.Creation), parked.Park, after: null);
+        var handle = fixture.Handle(parked, key);
+        check(InMemoryStore.FitsFoundationRetryHandles([handle]) && page is [var head] && head.Cursor.Key == key,
+            "S-2 the event handle preserves the full digest-bearing key at the page head");
+        var retry = await fixture.Retry(parked, "select-boundary-event", [handle]);
+        await fixture.Finish(owner);
+        check(retry.Outcome == Contract.AdmissionOutcome.Accepted && fixture.Delivered.SequenceEqual(["boundary event"]) &&
+            store.Instances[read.Row.Id] is { Status: InstanceStatus.Running, ParkRecovery: null } &&
+            store.Messages.Values.All(row => row.KeptBy is null), "S-2 Retry completes after delivering the boundary event once");
     }
 
     private static async Task CheckTargetSelection(Contract.RecoverMode mode, Action<bool, string> check)
@@ -318,6 +350,7 @@ internal static class ParkRetryChecks
         internal int RecoveredFaults { get; private set; }
         internal Contract.TimerSpec? Timer { get; set; }
         internal IReadOnlyList<string> EventWaits { get; init; } = [];
+        internal string EventWaitName { get; init; } = "wait";
         private int _eventOffers;
 
         internal Fixture()
@@ -377,6 +410,9 @@ internal static class ParkRetryChecks
         internal ValueTask<Contract.Admission> Submit(Contract.BoundScope scope, Contract.Target.Ref target,
             string operation, string kind, string? payload = null) => _ingress.SendAsync(scope, target, operation, kind, payload);
 
+        internal ValueTask<Contract.Admission> Publish(Contract.BoundScope scope, string key, string operation, string payload) =>
+            _ingress.SendAsync(scope, new Contract.Target.Event(key), operation, Contract.Kinds.Event, payload);
+
         internal ValueTask<Contract.Admission> Retry(Parked parked, string operation, IReadOnlyList<string> handles) =>
             _ingress.SendAsync(parked.Scope, parked.Target, operation, Contract.Kinds.Recover,
                 Json.Write(new Contract.OperatorCommand(parked.Selection, Contract.RecoverMode.Retry, handles)));
@@ -414,7 +450,7 @@ internal static class ParkRetryChecks
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
-                foreach (var correlation in EventWaits) turn.Subscribe(correlation, "wait");
+                foreach (var correlation in EventWaits) turn.Subscribe(correlation, EventWaitName);
             foreach (var input in turn.Inbox.Where(message => message.Kind == Contract.Kinds.Event))
             {
                 if (++_eventOffers == 1) throw new InvalidOperationException("Park before applying the event");

@@ -2310,6 +2310,7 @@ internal static class ParkKeptChecks
         await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
+        await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check, wide: true);
         await CheckPendingJobAfterPark(check);
         await CheckRetryConsumedTicket(check);
         await CheckRetryConsumedTicket(check, timed: true);
@@ -2611,25 +2612,29 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckRetryConsumedResult(Contract.RecoverMode mode, Action<bool, string> check)
+    private static async Task CheckRetryConsumedResult(Contract.RecoverMode mode, Action<bool, string> check, bool wide = false)
     {
         var now = 1_701_400_013_000L;
         var store = new InMemoryStore(1, () => now);
-        var probe = new ParkedJobProbe("original", timed: true) { FaultOnResult = true };
+        const int limit = FoundationMetadataLimits.NameBytes;
+        var jobKey = wide ? new string('j', limit) : "background";
+        var probe = new ParkedJobProbe("original", timed: true, key: jobKey) { FaultOnResult = true };
         var worker = new Worker("retry-job-result", 0, store, new ActorAdapter(store, probe), new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
-        var scope = new Contract.BoundScope("retry-job-result");
+        var scope = new Contract.BoundScope(wide ? new string('t', 64) : "retry-job-result");
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
-        var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var spec = new Contract.StartSpec(probe.Type, "ready");
+        Contract.Target start = wide ? new Contract.Target.Key(new string('k', limit), spec) : new Contract.Target.Start(spec);
+        var begun = await ingress.SendAsync(scope, start, "start", Contract.Kinds.Start);
         var target = new Contract.Target.Ref(begun.Actor!.Value);
         await Pump(owner);
         var row = store.Instances.Values.Single();
-        var driver = worker.JobCompletion(row.Id, "background", row.Creation)!;
+        var driver = worker.JobCompletion(row.Id, jobKey, row.Creation)!;
         probe.Complete.SetResult();
         await driver.WaitAsync(TimeSpan.FromSeconds(5));
         await Pump(owner);
         var parked = await new ActorList(store, 10).GetAsync(scope, target.Actor);
-        var resultKey = InboxKey.JobResult(row.Id, "background", row.Creation);
+        var resultKey = InboxKey.JobResult(row.Id, jobKey, row.Creation);
         var kept = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } && probe.Entries == 1 &&
             store.Messages.GetValueOrDefault(resultKey) is { KeptBy: ParkKeepReason.Consumed, Message.FoundationJobResult: true };
         check(kept, "a fault while applying an authenticated timed result keeps the result as Consumed");
@@ -2638,7 +2643,15 @@ internal static class ParkKeptChecks
         var handles = mode == Contract.RecoverMode.Retry
             ? new[] { store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, resultKey)! }
             : null;
-        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+        if (wide)
+        {
+            var checkpoint = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+            var page = store.ReadFoundationKeptPage(new(row.Id, row.Creation), checkpoint.Park!, after: null);
+            check(resultKey is { Scope: > limit, Match: null } && resultKey.Id.Length > 2 * limit &&
+                InMemoryStore.FitsFoundationRetryHandles(handles) && page is [var head] && head.Cursor.Key == resultKey,
+                "S-2 maximum caller and job names produce a bounded handle for the full issued key at the page head");
+        }
+        var admitted = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(parked!.Selection!, mode, handles)));
         for (var index = 0; index < 3; index++)
         {
@@ -2646,9 +2659,11 @@ internal static class ParkKeptChecks
             await Pump(owner);
         }
         var recovered = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
-        check(recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null } } && probe.Entries == 1 &&
+        check(admitted.Outcome == Contract.AdmissionOutcome.Accepted &&
+            recovered is { Park: null, Row: { Status: InstanceStatus.Running, Jobs: null, ParkRecovery: null } } && probe.Entries == 1 &&
             (mode == Contract.RecoverMode.Resume ? probe.Completions == 0 : probe.Completions == 1 && probe.Result == "original"),
-            $"{mode} {(mode == Contract.RecoverMode.Resume ? "clears" : "replays")} the consumed result without executing its job again");
+            wide ? "S-2 Retry completes after delivering the wide job result once" :
+                $"{mode} {(mode == Contract.RecoverMode.Resume ? "clears" : "replays")} the consumed result without executing its job again");
         if (mode != Contract.RecoverMode.Resume) return;
 
         await ingress.SendAsync(scope, target, "park-again", "fault");
@@ -3203,7 +3218,7 @@ internal static class ParkKeptChecks
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
 
-    private sealed class ParkedJobProbe(string value, bool timed, string? arguments = null) : Contract.IActorType
+    private sealed class ParkedJobProbe(string value, bool timed, string? arguments = null, string key = "background") : Contract.IActorType
     {
         public string Type => "parked-job-check";
         public TaskCompletionSource Complete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -3231,7 +3246,7 @@ internal static class ParkKeptChecks
                         for (var index = 0; index < BeforeDeadline; index++)
                             turn.Send(turn.Header.Ref, "before-job-deadline", null, turn.Now + 400);
                         _deadline = timed ? turn.Now + 1000 : null;
-                        turn.StartJob("background", arguments, timeout: timed ? TimeSpan.FromSeconds(1) : null);
+                        turn.StartJob(key, arguments, timeout: timed ? TimeSpan.FromSeconds(1) : null);
                         break;
                     case "fault": throw new InvalidOperationException("park with a running job");
                     case "end-before-job":
@@ -3265,7 +3280,7 @@ internal static class ParkKeptChecks
             return value;
         }
 
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new("background", arguments) { Deadline = _deadline }], []);
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [new(key, arguments) { Deadline = _deadline }], []);
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
