@@ -257,6 +257,9 @@ export function VariableWritesSummary({
   workflowState?: WorkflowDefinitionState;
   scriptWrites?: ScriptBodyWriteSet | null;
 }) {
+  if (descriptor.declaresAccessesUndeclaredVariables === true) {
+    return <p className="wf-variable-writes" role="note">May write any visible variable</p>;
+  }
   if (scriptWrites) {
     if (scriptWrites.mayWriteEveryVisibleVariable) {
       return <p className="wf-variable-writes" role="note">May write any visible variable (its script writes by a computed name)</p>;

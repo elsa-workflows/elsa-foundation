@@ -131,6 +131,26 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("setVariable('Total', 1);")]
     [InlineData("setTotal(1);")]
     [InlineData("getVariable('Order').Status = 'Paid';")]
+    [InlineData("getVariable('Order').Lines.push(1); return 1;")]
+    [InlineData("getOrder().Lines['push'](1); return 1;")]
+    [InlineData("const o = getVariable('Order'); o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = variables.Order; const lines = o.Lines; lines.push(1); return 1;")]
+    [InlineData("const o = getVariable('Order'); delete o.Status; return 1;")]
+    [InlineData("const o = getVariable('Order'); o.Count++; return 1;")]
+    [InlineData("const o = getVariable('Order'); Object.assign(o, { Status: 'Paid' }); return 1;")]
+    [InlineData("const o = getVariable('Order'); function write() { o.Status = 'Paid'; } write(); return 1;")]
+    [InlineData("function write() { o.Status = 'Paid'; } const o = getVariable('Order'); write(); return 1;")]
+    [InlineData("let o = getVariable('Order'); o.Status = 'Paid'; o = {}; return 1;")]
+    [InlineData("let o = {}; o = getVariable('Order'); o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); if (false) o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order') || {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("(getVariable('Order').Lines || []).push(1); return 1;")]
+    [InlineData("const { Lines } = getVariable('Order'); Lines.push(1); return 1;")]
+    [InlineData("let o = getVariable('Order'); while (false) o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); for (; false;) o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("let o = getVariable('Order'); function reset() { o = {}; } o.Status = 'Paid'; return 1;")]
+    [InlineData("function write() { o.Status = 'Paid'; } let o = getVariable('Order'); write(); o = {}; return 1;")]
+    [InlineData("let Lines; ({ Lines } = getVariable('Order')); Lines.push(1); return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -141,6 +161,28 @@ public sealed class Elsa3VariableWriteConversionTests
         Assert.False(result.Succeeded);
         var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
         Assert.Contains("reusable workflow", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("const o = getVariable('Order'); return o.Status;")]
+    [InlineData("const o = getVariable('Order'); return o;")]
+    [InlineData("return getVariable('Order').Lines.join(',');")]
+    [InlineData("const o = getVariable('Order'); { const o = {}; o.Status = 'Paid'; } return 1;")]
+    [InlineData("const o = getVariable('Order'); function change(o) { o.Status = 'Paid'; } change({}); return 1;")]
+    [InlineData("let o = getVariable('Order'); o = {}; o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); Object.assign({}, o); return 1;")]
+    [InlineData("const o = getVariable('Order'); o.Lines.slice().push(1); return 1;")]
+    [InlineData("const o = getVariable('Order'); return Object.assign(o);")]
+    [InlineData("const o = getVariable('Order'); return Object.assign(o, {}, null, undefined, 1, true, '');")]
+    [InlineData("const o = getVariable('Order'); return o.Lines.push();")]
+    [InlineData("const { Lines } = { Lines: [] }; Lines.push(1); return 1;")]
+    [InlineData("const o = getVariable('Order') && {}; o.Status = 'Paid'; return 1;")]
+    public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root, variables: [Order]), isReusable: true);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Fact]

@@ -210,7 +210,8 @@ export function toActivityDescriptor(activity: ActivityCatalogItem): StudioActiv
     ports: (activity.ports ?? []) as StudioActivityDescriptor["ports"],
     isContainer: Boolean(activity.containerStructure),
     isBrowsable: activity.available !== false,
-    ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {})
+    ...(readAccessesUndeclaredVariables(activity) ? { accessesUndeclaredVariables: true } : {}),
+    ...(readDeclaresAccessesUndeclaredVariables(activity) ? { declaresAccessesUndeclaredVariables: true } : {})
   };
 }
 
@@ -222,5 +223,15 @@ function readAccessesUndeclaredVariables(activity: ActivityCatalogItem) {
     const { kind, payload } = facet as { kind?: unknown; payload?: unknown };
     return kind === "elsa.variable-access" && !!payload && typeof payload === "object" &&
       (payload as { accessesUndeclaredVariables?: unknown }).accessesUndeclaredVariables === true;
+  });
+}
+
+function readDeclaresAccessesUndeclaredVariables(activity: ActivityCatalogItem) {
+  return (activity.designFacets ?? []).some(facet => {
+    if (!facet || typeof facet !== "object") return false;
+    const { kind, payload } = facet as { kind?: unknown; payload?: unknown };
+    if (kind !== "elsa.variable-access" || !payload || typeof payload !== "object") return false;
+    const access = payload as { accessesUndeclaredVariables?: unknown; declared?: unknown };
+    return access.accessesUndeclaredVariables === true && access.declared === true;
   });
 }

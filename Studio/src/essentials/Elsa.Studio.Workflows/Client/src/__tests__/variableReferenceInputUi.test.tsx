@@ -560,4 +560,16 @@ describe("catalog descriptor", () => {
 
     expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
   });
+
+  it.each([false, true])("keeps an explicit C# marker broader than analyzed script writes (computed: %s)", computed => {
+    const descriptor = toActivityDescriptor(catalogItem({
+      designFacets: [{ kind: "elsa.variable-access", schemaVersion: "1", payload: { accessesUndeclaredVariables: true, declared: true } }]
+    }));
+    expect(descriptor.declaresAccessesUndeclaredVariables).toBe(true);
+    const container = renderPanel(descriptor, {
+      scriptWrites: { variables: [], mayWriteEveryVisibleVariable: computed }
+    });
+
+    expect(container.querySelector(".wf-variable-writes")?.textContent).toBe("May write any visible variable");
+  });
 });

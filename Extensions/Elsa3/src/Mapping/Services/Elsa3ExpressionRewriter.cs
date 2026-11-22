@@ -732,6 +732,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// </summary>
         private readonly Dictionary<HashSet<string>, HashSet<string>> _dateAliases = new(ReferenceEqualityComparer.Instance);
 
+        // Keep object provenance separate from date inference and keyed by the declaring lexical scope.
+        private readonly Dictionary<HashSet<string>, Dictionary<string, (Node Value, HashSet<string>[] Scopes)>> _variableAliasInitializers = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<(HashSet<string> Scope, string Name)> _checkingVariableAliases = [];
+        private readonly Dictionary<HashSet<string>, Dictionary<string, bool>> _mutableVariableAliases = new(ReferenceEqualityComparer.Instance);
+
         /// <summary>
         /// Per declaring scope, the names the script assigns again after declaring them: an assignment, an update, a
         /// second initialized declaration of the same var (var d = new Date(); ... var d = 'x'), or a var loop head.
@@ -783,6 +788,15 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                                 initialized[declaring] = seen = new HashSet<string>(StringComparer.Ordinal);
                             if (!seen.Add(name))
                                 Mark(name);
+                        }
+
+                        foreach (var alias in VariableAliasBindings(declarator.Id))
+                        {
+                            if (Resolve(alias) is not { } aliasScope)
+                                continue;
+                            if (!_variableAliasInitializers.TryGetValue(aliasScope, out var aliases))
+                                _variableAliasInitializers[aliasScope] = aliases = new(StringComparer.Ordinal);
+                            aliases[alias] = (declarator.Init, scopes.ToArray());
                         }
 
                         break;
@@ -993,6 +1007,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         public void Visit(Node node)
         {
+            var aliasesBeforeFunction = node is IFunction && Mode == Elsa3JavaScriptMode.Script && !WritesVariables
+                ? VariableAliasState() : null;
             var scope = CachedScope(node);
             if (scope is not null)
             {
@@ -1014,6 +1030,8 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             }
             finally
             {
+                if (aliasesBeforeFunction is not null)
+                    RestoreVariableAliases(aliasesBeforeFunction);
                 if (function is not null)
                 {
                     _functions.RemoveAt(_functions.Count - 1);
@@ -1216,6 +1234,62 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
 
         private void VisitNode(Node node)
         {
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && MutatesSessionVariable(node))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    "JavaScript mutates a reusable workflow's variable.",
+                    ReusableVariableWriteGuidance));
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && node is IfStatement branch)
+            {
+                Visit(branch.Test);
+                var before = VariableAliasState();
+                Visit(branch.Consequent);
+                var consequent = VariableAliasState();
+                RestoreVariableAliases(before);
+                if (branch.Alternate is not null) Visit(branch.Alternate);
+                MergeVariableAliases(consequent);
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && node is ConditionalExpression conditional)
+            {
+                Visit(conditional.Test);
+                var before = VariableAliasState();
+                Visit(conditional.Consequent);
+                var consequent = VariableAliasState();
+                RestoreVariableAliases(before);
+                Visit(conditional.Alternate);
+                MergeVariableAliases(consequent);
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && node is LogicalExpression logical)
+            {
+                Visit(logical.Left);
+                var beforeRight = VariableAliasState();
+                Visit(logical.Right);
+                MergeVariableAliases(beforeRight);
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && node is WhileStatement loop)
+            {
+                Visit(loop.Test);
+                var beforeBody = VariableAliasState();
+                Visit(loop.Body);
+                MergeVariableAliases(beforeBody);
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables && node is ForStatement forLoop)
+            {
+                if (forLoop.Init is not null) Visit(forLoop.Init);
+                if (forLoop.Test is not null) Visit(forLoop.Test);
+                var beforeBody = VariableAliasState();
+                Visit(forLoop.Body);
+                if (forLoop.Update is not null) Visit(forLoop.Update);
+                MergeVariableAliases(beforeBody);
+                return;
+            }
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
                 node is UpdateExpression update && ContainsAmbientRoot(update.Argument))
             {
@@ -1502,10 +1576,21 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             if (node is AssignmentExpression { Left: Identifier assigned } assignmentToName)
             {
                 Visit(assignmentToName.Right);
+                if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables)
+                    SetVariableAlias(assigned.Name, assignmentToName.Operator == Operator.Assignment && IsSessionValue(assignmentToName.Right));
                 Visit(assignmentToName.Left);
                 // s += d joins the date's local text (FR-022). A reassigned name is never a date alias (see _dateAliases).
                 if (assignmentToName.Operator == Operator.AdditionAssignment && IsKnownDate(assignmentToName.Right))
                     ZoneDependent(assignmentToName, DateUse.LocalFormat, null);
+                return;
+            }
+            if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables &&
+                node is AssignmentExpression { Left: ObjectPattern or ArrayPattern } destructuring)
+            {
+                Visit(destructuring.Right);
+                foreach (var name in VariableAliasBindings(destructuring.Left))
+                    SetVariableAlias(name, IsSessionValue(destructuring.Right));
+                Visit(destructuring.Left);
                 return;
             }
 
@@ -1523,6 +1608,11 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                 foreach (var declarator in declaration.Declarations)
                 {
                     Visit(declarator);
+                    if (Mode == Elsa3JavaScriptMode.Script && !WritesVariables)
+                    {
+                        foreach (var name in VariableAliasBindings(declarator.Id))
+                            SetVariableAlias(name, declarator.Init is not null && IsSessionValue(declarator.Init));
+                    }
                     // An alias of a known date that is never assigned again is a known date (FR-022). Elsa 3 scripts mostly
                     // declare with var, so var counts as well as const and let.
                     if (declarator.Id is Identifier alias && declarator.Init is { } init && IsKnownDate(init) &&
@@ -1797,6 +1887,148 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         private bool IsSessionVariable(Elsa3AmbientReferenceKind kind, string name) =>
             resolve(new Elsa3AmbientReference(kind, name)) is { Succeeded: true, VariableName: not null, Binding: VariableExpressionParameterBinding variable } &&
             !IsReadAsCopy(variable);
+
+        private bool IsSessionValue(Node node)
+        {
+            switch (node)
+            {
+                case Identifier alias:
+                    return alias.Name == "variables" && !IsDeclared(alias.Name) ||
+                           IsVariableAlias(alias.Name);
+                case MemberExpression { Object: Identifier { Name: "variables" } } member when !IsDeclared("variables"):
+                    var name = MemberName(member);
+                    return name is null || IsSessionVariable(Elsa3AmbientReferenceKind.Variable, name);
+                case MemberExpression member:
+                    return IsSessionValue(member.Object);
+                case CallExpression { Callee: Identifier reader } call when !IsDeclared(reader.Name):
+                    if (reader.Name == "getVariable" && call.Arguments.Count == 1 && call.Arguments[0] is not SpreadElement)
+                        return call.Arguments[0] is not Literal { Value: string variable } || IsSessionVariable(Elsa3AmbientReferenceKind.Variable, variable);
+                    return call.Arguments.Count == 0 && TryGetAccessorName(reader.Name, "get", out var accessor) &&
+                           IsSessionVariable(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor);
+                case ChainExpression chain:
+                    return IsSessionValue(chain.Expression);
+                case SequenceExpression sequence:
+                    return sequence.Expressions.Count > 0 && IsSessionValue(sequence.Expressions[^1]);
+                case ConditionalExpression conditional:
+                    return IsSessionValue(conditional.Consequent) || IsSessionValue(conditional.Alternate);
+                case LogicalExpression logical:
+                    return logical.Operator == Operator.LogicalAnd ? IsSessionValue(logical.Right) :
+                        IsSessionValue(logical.Left) || IsSessionValue(logical.Right);
+                default:
+                    return false;
+            }
+        }
+
+        private bool IsVariableAlias(string name)
+        {
+            if (DeclaringScope(name) is not { } scope)
+                return false;
+            if (_reassigned.TryGetValue(scope, out var changed) && changed.Contains(name) &&
+                _mutableVariableAliases.TryGetValue(scope, out var current) && current.TryGetValue(name, out var aliasesVariable))
+                return aliasesVariable;
+            if (
+                !_variableAliasInitializers.TryGetValue(scope, out var aliases) || !aliases.TryGetValue(name, out var initializer) ||
+                !_checkingVariableAliases.Add((scope, name)))
+                return false;
+
+            // Use the initializer's lexical environment, including when a hoisted function is visited before it.
+            var previous = _scopes.ToArray();
+            _scopes.Clear();
+            _scopes.AddRange(initializer.Scopes);
+            try { return IsSessionValue(initializer.Value); }
+            finally
+            {
+                _scopes.Clear();
+                _scopes.AddRange(previous);
+                _checkingVariableAliases.Remove((scope, name));
+            }
+        }
+
+        private void SetVariableAlias(string name, bool aliasesVariable)
+        {
+            if (DeclaringScope(name) is not { } scope) return;
+            if (!_mutableVariableAliases.TryGetValue(scope, out var aliases))
+                _mutableVariableAliases[scope] = aliases = new(StringComparer.Ordinal);
+            aliases[name] = aliasesVariable;
+        }
+
+        private Dictionary<HashSet<string>, Dictionary<string, bool>> VariableAliasState() =>
+            _mutableVariableAliases.ToDictionary(item => item.Key, item => new Dictionary<string, bool>(item.Value, StringComparer.Ordinal));
+
+        private void RestoreVariableAliases(Dictionary<HashSet<string>, Dictionary<string, bool>> state)
+        {
+            _mutableVariableAliases.Clear();
+            MergeVariableAliases(state);
+        }
+
+        private void MergeVariableAliases(Dictionary<HashSet<string>, Dictionary<string, bool>> state)
+        {
+            foreach (var (scope, names) in state)
+            {
+                if (!_mutableVariableAliases.TryGetValue(scope, out var aliases))
+                    _mutableVariableAliases[scope] = aliases = new(StringComparer.Ordinal);
+                foreach (var (name, aliasesVariable) in names)
+                    aliases[name] = aliases.GetValueOrDefault(name) || aliasesVariable;
+            }
+        }
+
+        private static IEnumerable<string> VariableAliasBindings(Node pattern) => pattern switch
+        {
+            Identifier name => [name.Name],
+            AssignmentPattern assignment => VariableAliasBindings(assignment.Left),
+            ArrayPattern array => array.Elements.Where(item => item is not null).SelectMany(item => VariableAliasBindings(item!)),
+            ObjectPattern value => value.Properties.OfType<Property>().SelectMany(property => VariableAliasBindings(property.Value)),
+            _ => []
+        };
+
+        private static string? MemberName(MemberExpression member) =>
+            !member.Computed && member.Property is Identifier property ? property.Name :
+            member.Computed && member.Property is Literal { Value: string literal } ? literal : null;
+
+        private bool MutatesSessionVariable(Node node) => node switch
+        {
+            AssignmentExpression assignment => IsSessionMutationTarget(assignment.Left),
+            UpdateExpression update => IsSessionMutationTarget(update.Argument),
+            UnaryExpression { Operator: Operator.Delete } deletion => IsSessionMutationTarget(deletion.Argument),
+            CallExpression { Callee: MemberExpression member } call => MutatesSessionVariable(call, member),
+            _ => false
+        };
+
+        private bool MutatesSessionVariable(CallExpression call, MemberExpression member)
+        {
+            var method = MemberName(member);
+            if (method is "push" or "unshift" or "splice" or "copyWithin")
+                return call.Arguments.Count > 0 && IsSessionValue(member.Object);
+            if (method is "pop" or "shift" or "sort" or "reverse" or "fill")
+                return IsSessionValue(member.Object);
+            if (member.Object is not Identifier global || IsDeclared(global.Name) || call.Arguments.Count < 2 ||
+                !IsSessionValue(call.Arguments[0]))
+                return false;
+            if (global.Name == "Object" && method == "assign")
+                return call.Arguments.Skip(1).Any(source => !IsEmptyAssignmentSource(source));
+            return global.Name == "Object" && method is "defineProperty" or "defineProperties" ||
+                   global.Name == "Reflect" && method is "set" or "deleteProperty" or "defineProperty";
+        }
+
+        private bool IsEmptyAssignmentSource(Node source) => source switch
+        {
+            Literal literal => literal.Value is not string text || text.Length == 0,
+            ObjectExpression value => value.Properties.Count == 0,
+            ArrayExpression value => value.Elements.Count == 0,
+            Identifier { Name: "undefined" } => !IsDeclared("undefined"),
+            _ => false
+        };
+
+        private bool IsSessionMutationTarget(Node node) => node switch
+        {
+            MemberExpression member => IsSessionValue(member.Object),
+            AssignmentPattern assignment => IsSessionMutationTarget(assignment.Left),
+            RestElement rest => IsSessionMutationTarget(rest.Argument),
+            ArrayPattern array => array.Elements.Any(element => element is not null && IsSessionMutationTarget(element)),
+            ObjectPattern value => value.Properties.Any(property => property is Property item
+                ? IsSessionMutationTarget(item.Value) : IsSessionMutationTarget(property)),
+            _ => false
+        };
 
         /// <summary>
         /// A Run JavaScript body reads a loop's item or index through args, as a copy: Elsa 4 freezes a loop value in a body
