@@ -1,3 +1,4 @@
+import { expectQualifiedTimelineCoverage } from "./expectQualifiedTimelineCoverage";
 import { waitCapturedPlaybackReady } from "./waitCapturedPlaybackReady";
 import { expect, request, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import { writeFileSync } from "node:fs";
@@ -101,7 +102,8 @@ export async function historyOccurrenceQualificationJourney(page: Page, info: Te
     const review = details.activities.find(item => item.authoredActivityId === "review");
     expect(review?.status).toBe("Suspended");
     const frozen = await api<OccurrencePage>(admin, `${occurrencePath}?limit=50`);
-    expect(["available", "partial"]).toContain(frozen.state);
+    expect(frozen.state).toBe("available");
+    expectQualifiedTimelineCoverage(frozen.coverage);
     expect(frozen.sequenceToken).toBeTruthy(); expect(frozen.totalCount).not.toBeNull();
     expect(frozen.coverage.capturedFromStart).toBe(true);
     expect(frozen.coverage.hasGaps).toBe(false); expect(frozen.items.length).toBeGreaterThanOrEqual(3);

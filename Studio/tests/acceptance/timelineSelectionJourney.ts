@@ -1,3 +1,4 @@
+import { expectQualifiedTimelineCoverage } from "./expectQualifiedTimelineCoverage";
 import { waitCapturedPlaybackReady } from "./waitCapturedPlaybackReady";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import type { RuntimeHistoryPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/runtimeHistoryTypes";
@@ -55,8 +56,7 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
     versionId: submitted.version.id, ...published, workflowExecutionId: run.workflowExecutionId, first, second }, null, 2), contentType: "application/json" });
 
   const history = await api<RuntimeHistoryPage>(`${path}/history?limit=100`);
-  expect(["captured", "partial"]).toContain(history.coverage.state);
-  expect(history.coverage.capturedFromStart).toBe(true);
+  expectQualifiedTimelineCoverage(history.coverage);
   expect(history.nextContinuationToken).toBeNull();
   const firstEvent = history.items.find(item => item.activityExecutionId === first.activityExecutionId && item.name === "ActivityCompleted")!;
   const secondEvent = history.items.find(item => item.activityExecutionId === second.activityExecutionId && item.name === "ActivityCompleted")!;
