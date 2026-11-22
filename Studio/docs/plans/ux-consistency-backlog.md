@@ -98,7 +98,7 @@ The audit reviewed the following composed Studio states at 360–390px widths. T
 
 ### Visual coverage follow-up
 
-The narrow viewport table above also records the A2 menu, dock, activity authoring and Decisions evidence. The run detail review exercised Timeline, Activity, Issues and Details on a published workflow at both widths. See the [run tab evidence on #5262](https://github.com/elsa-workflows/elsa-foundation/issues/5262) and the [five optional extension captures](https://github.com/elsa-workflows/elsa-foundation/pull/5326#issuecomment-7072814127).
+The narrow viewport table above also records the A2 menu, dock, activity authoring and Decisions evidence. The run detail review exercised Timeline, Activity, Issues and Details on a published workflow at both widths. See the [run tab evidence on #5262](https://github.com/elsa-workflows/elsa-foundation/issues/5262#issuecomment-7072982431) and the [five optional extension captures](https://github.com/elsa-workflows/elsa-foundation/pull/5326#issuecomment-7072814127).
 
 ## Path shorthand
 
