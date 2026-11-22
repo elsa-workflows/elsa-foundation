@@ -41,7 +41,9 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
     await api(`/design/workflows/definitions/${submitted.definition.id}`, "DELETE", undefined, cleanupRequestTimeout);
   });
 
-  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+  const designerUrl = new URL(page.url());
+  designerUrl.searchParams.set("definition", submitted.definition.id);
+  await page.goto(designerUrl.toString());
   await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
   await page.locator('.wf-sequence-step[data-id="message"]').click();
   const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
