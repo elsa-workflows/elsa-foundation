@@ -113,8 +113,7 @@
   opacity: 0.48;
 }
 
-.structured-logs-tools button:hover:not(:disabled),
-.structured-logs-tools button.active {
+.structured-logs-tools button:where(:not([aria-pressed="true"])):hover:not(:disabled) {
   border-color: var(--sl-accent);
   background: color-mix(in srgb, var(--sl-accent) 10%, transparent);
   color: var(--sl-accent);

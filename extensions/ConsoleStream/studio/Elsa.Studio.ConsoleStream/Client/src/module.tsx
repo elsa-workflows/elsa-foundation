@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioField, StudioToggleButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext, StudioHostId } from "@elsa-workflows/studio-sdk";
@@ -419,14 +419,12 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
       <StudioPageHeader className={page ? undefined : "studio-page-header--compact"} headingLevel={2} title={<>{target.label} console</>} description={<>{getConsolePanelDetail(selectedSource, sourcesState, queuedLineCount)}</>} actions={<><div className="console-stream-tools">
           <div className="console-stream-hosts" role="group" aria-label="Console host">
             {Object.values(consoleTargetDefinitions).map(host => (
-              <StudioButton
-                type="button"
-                className={host.id === hostId ? "active" : ""}
-                aria-pressed={host.id === hostId}
+              <StudioToggleButton
+                pressed={host.id === hostId}
                 onClick={() => setHostId(host.id)}
                 key={host.id}>
                 {host.label}
-              </StudioButton>
+              </StudioToggleButton>
             ))}
           </div>
           <StudioField label="Console source"><select
@@ -442,12 +440,12 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>
           <span>stderr</span>
-          <StudioButton type="button" className={paused ? "active" : ""} onClick={togglePaused} aria-pressed={paused}>
-            {paused ? "Resume" : "Pause"}
-          </StudioButton>
-          <StudioButton type="button" className={autoScroll ? "active" : ""} onClick={() => setAutoScroll(current => !current)} aria-pressed={autoScroll}>
+          <StudioToggleButton pressed={paused} onClick={togglePaused}>
+            Pause
+          </StudioToggleButton>
+          <StudioToggleButton pressed={autoScroll} onClick={() => setAutoScroll(current => !current)}>
             Autoscroll
-          </StudioButton>
+          </StudioToggleButton>
           <StudioButton type="button" onClick={download} disabled={visibleLines.length === 0}>Download</StudioButton>
           <StudioButton type="button" onClick={clear}>Clear</StudioButton>
         </div></>} />
