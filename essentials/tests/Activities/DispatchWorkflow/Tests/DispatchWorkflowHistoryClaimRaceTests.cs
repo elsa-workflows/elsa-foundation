@@ -5,7 +5,6 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
@@ -13,8 +12,9 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 public sealed class DispatchWorkflowHistoryClaimRaceTests
 {
     [Theory]
-    [InlineData(false)] [InlineData(true)]
-    public async Task Expiry_during_the_last_native_edge_read_refuses_the_recipient_handoff(bool parentResume)
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task Expiry_or_transfer_during_the_last_native_edge_read_refuses_the_recipient_handoff(bool parentResume, bool transfer)
     {
         var race = new Race();
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(configureServices: services =>
@@ -23,12 +23,7 @@ public sealed class DispatchWorkflowHistoryClaimRaceTests
             services.Replace(ServiceDescriptor.Singleton<IPersistenceAccessContextAccessor>(new Access()));
             services.Replace(ServiceDescriptor.Singleton<IWorkflowDispatchStore>(provider => new ExpiringDispatchStore(
                 new InMemoryWorkflowDispatchStore(provider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>()),
-                (FakeTimeProvider)provider.GetRequiredService<TimeProvider>(), race)));
-            var descriptor = services.Single(item => item.ServiceType == typeof(IPostCommitOutboxLookupStore));
-            services.Remove(descriptor);
-            services.AddScoped<IPostCommitOutboxLookupStore>(provider => new CountingLookup(
-                (IPostCommitOutboxLookupStore)(descriptor.ImplementationFactory?.Invoke(provider) ??
-                    descriptor.ImplementationInstance ?? ActivatorUtilities.CreateInstance(provider, descriptor.ImplementationType!)), race));
+                race)));
         });
         var run = await fixture.StartParentAsync("history-lease-" + parentResume, "history-lease-parent-" + parentResume, "correlation",
             waitForCompletion: true, parentPartition: new("tenant-42"));
@@ -37,6 +32,16 @@ public sealed class DispatchWorkflowHistoryClaimRaceTests
         if (parentResume)
             Assert.Equal(1, (await processor.ProcessAsync(new(1, intentKind: WorkflowDispatchLifecycle.StartChildIntentKind))).DeliveredCount);
         race.Kind = parentResume ? WorkflowDispatchLifecycle.ResumeParentIntentKind : WorkflowDispatchLifecycle.StartChildIntentKind;
+        race.OnExpiry = async () =>
+        {
+            fixture.AdvanceTime(TimeSpan.FromHours(1));
+            if (transfer)
+            {
+                var store = (IRuntimePostCommitOutboxClaimStore)scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+                Assert.Single(await store.ClaimAsync(new("racing-peer", scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow(),
+                    TimeSpan.FromMinutes(5), 1, workflowExecutionId: run.Start.WorkflowExecutionId, intentKind: race.Kind)));
+            }
+        };
         await processor.ProcessAsync(new(1, intentKind: race.Kind));
         Assert.True(race.Expired);
         if (parentResume)
@@ -48,23 +53,11 @@ public sealed class DispatchWorkflowHistoryClaimRaceTests
         else Assert.Empty(fixture.ChildProbe.Observations);
     }
 
-    private sealed class Race { internal string? Kind; internal int Reads; internal bool Expired; }
+    private sealed class Race { internal string? Kind; internal int NativeEdgeReads; internal bool Expired; internal Func<Task>? OnExpiry; }
     private sealed class Access : IPersistenceAccessContextAccessor
     { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("tenant-42")); }
 
-    private sealed class CountingLookup(IPostCommitOutboxLookupStore inner, Race race) : IPostCommitOutboxLookupStore
-    {
-        public bool CanInspectHistorySources(IRuntimeHistoryStore reader) => inner.CanInspectHistorySources(reader);
-        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string id, CancellationToken token = default) => inner.FindAsync(id, token);
-        public async ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string id, CancellationToken token = default)
-        {
-            var item = await inner.FindDurableAsync(id, token);
-            if (race.Kind is not null && item?.Intent.Kind == race.Kind) race.Reads++;
-            return item;
-        }
-    }
-
-    private sealed class ExpiringDispatchStore(InMemoryWorkflowDispatchStore inner, FakeTimeProvider clock, Race race) :
+    private sealed class ExpiringDispatchStore(InMemoryWorkflowDispatchStore inner, Race race) :
         IWorkflowDispatchStore, IWorkflowDispatchQueryStore, IWorkflowDispatchAdmissionStore, IWorkflowDispatchCancellationStore,
         IWorkflowDispatchDeleteStore, IWorkflowDispatchRetentionRootStore
     {
@@ -72,7 +65,11 @@ public sealed class DispatchWorkflowHistoryClaimRaceTests
         public async ValueTask<WorkflowDispatchRecord?> FindAsync(string id, CancellationToken token = default)
         {
             var record = await inner.FindAsync(id, token);
-            if (race.Reads >= 2 && !race.Expired) { race.Expired = true; clock.Advance(TimeSpan.FromHours(1)); }
+            if (race.Kind is not null && ++race.NativeEdgeReads == (race.Kind == WorkflowDispatchLifecycle.ResumeParentIntentKind ? 2 : 3))
+            {
+                race.Expired = true;
+                await race.OnExpiry!();
+            }
             return record;
         }
         public ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(string id, CancellationToken token = default) => inner.ListAsync(id, token);
