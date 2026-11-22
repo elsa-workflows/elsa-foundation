@@ -29,6 +29,7 @@ internal static class EventIdentityChecks
         await CheckRestoredWait(RestoreAt.BeforeInsert, check, keep: true);
         await CheckRestoredWait(RestoreAt.BeforeMatch, check, keep: true);
         await CheckRestoredWait(RestoreAt.AfterMatch, check, keep: true);
+        await FoundationEventSendChecks.KeepingSubscription(check);
         await FoldedRegistration(check);
         await LegacyTicket(doneDelivery: false, check);
         await LegacyTicket(doneDelivery: true, check);
@@ -543,12 +544,14 @@ internal static class EventIdentityChecks
         check(publicationSteps == 1 && store.FoundationEvents.Count == 1 && !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
             "the first authored step commits before any live or restored wait is matched");
 
+        var catchUpBeforeRestore = catchUpSteps;
         if (point == RestoreAt.AfterMatch) await Match();
         if (point is RestoreAt.BeforeMatch or RestoreAt.AfterMatch) await Restore();
         if (point != RestoreAt.AfterMatch) await Match();
         await Pump(owner);
         if (point == RestoreAt.BeforeMatch && keep)
-            check(publicationSteps == 2 && catchUpSteps == 1, "both the publication page and keeping catch-up commit after the insert");
+            check(publicationSteps == 2 && catchUpSteps == catchUpBeforeRestore + 1,
+                "both the publication page and keeping catch-up commit after the insert");
         var expected = point != RestoreAt.AfterMatch || keep ? 1 : 0;
         var shift = point == RestoreAt.BeforeAuthor ? " followed by a 30-second clock backstep" : "";
         check(Observed(store, scope, publisher) is [{ Payload: "from turn" }] &&

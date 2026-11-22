@@ -616,8 +616,12 @@ public sealed class DurableTurn
 
     internal void Subscribe(string key, string wait, bool keep, string? foundationTenant)
     {
-        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation) { FoundationTenant = foundationTenant });
-        if (keep) _kept.Add(_subscribed[^1]);
+        _subscribed.Add(new SubscriptionRow(key, Id, wait, Creation: _input.Creation)
+        {
+            FoundationTenant = foundationTenant,
+            FoundationKeepsEvents = keep && foundationTenant is not null
+        });
+        if (keep && foundationTenant is null) _kept.Add(_subscribed[^1]);
     }
     public void Unsubscribe(string key, string wait) => Unsubscribe(key, wait, null);
 

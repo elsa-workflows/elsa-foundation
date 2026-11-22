@@ -139,6 +139,90 @@ internal static class FoundationEventSendChecks
         await CheckAlreadyDeliveredPage(check);
     }
 
+    internal static async Task KeepingSubscription(Action<bool, string> check)
+    {
+        const long initial = 1_701_510_000_000;
+        var now = initial;
+        const string key = "keeping";
+        var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase)
+        {
+            IngressDeduplicationWindow = TimeSpan.FromMilliseconds(10)
+        };
+        var scope = new Contract.BoundScope("keeping-scope");
+        var actor = new Probe();
+        var edge = new InMemoryIngress(store, new Requests("keeping-wait"), "keeping-wait");
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var worker = Owner("keeping-wait");
+        await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await edge.SendAsync(scope, new Contract.Target.Start(new(actor.Type, key)), "actor", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(first);
+
+        await Publish(key, "owed", 100);
+        await Publish("uncovered", "later-horizon", 110);
+        await Pump(first);
+        now++;
+        await Turn("register", "wait-keep");
+        var registration = store.Subscriptions.SingleOrDefault();
+        var ticket = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null);
+        var opened = registration is { FoundationKeepsEvents: true, FoundationRegisteredAt: initial + 1, FoundationIncarnation: not null } &&
+            ticket is { Done: false, Message: { HasIssuedTicket: true, ParkCatchUp.Entitlement: initial + 1 } };
+        check(opened, "a keeping subscription stamps its first registration and commits one entitled meet ticket with it");
+        if (!opened) return;
+
+        now++;
+        await Turn("duplicate", "wait-keep");
+        check(store.Subscriptions.Single() == registration &&
+            store.Messages.Values.Single(row => row.Message.ParkCatchUp is not null) == ticket,
+            "same-turn and later equivalent registrations keep one incarnation, its stamp and its meet ticket");
+
+        now = initial + 111;
+        await store.SweepAsync();
+        check(store.FoundationEvents.Values.Select(row => row.Id).SequenceEqual(["owed"]),
+            "coverage holds the owed event while the sweep removes an uncovered event and advances the horizon");
+        await first.DisposeAsync();
+        worker = Owner("keeping-successor");
+        await using var successor = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Pump(successor);
+        check(Observed().SequenceEqual(["owed"]) && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the successor finishes the committed catch-up and delivers the expired owed event once");
+
+        await Turn("remove", "wait-remove");
+        check(store.Subscriptions.Count == 0, "unsubscribing removes the covered incarnation");
+        now = initial + 50;
+        await successor.DisposeAsync();
+        worker = Owner("keeping-backstep");
+        await using var latest = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Publish(key, "below-horizon", 30);
+        await Pump(latest);
+        await Turn("register-again", "wait-keep");
+        check(store.Subscriptions.SingleOrDefault() is { FoundationRegisteredAt: initial + 50 } replacement &&
+            replacement.FoundationIncarnation != registration!.FoundationIncarnation &&
+            store.FoundationEvents.Values.Any(row => row.Id == "below-horizon" && row.KeepUntil == initial + 80) &&
+            store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null) is
+                { Message.ParkCatchUp.Entitlement: initial + 111 },
+            "a new incarnation after clock rollback cannot claim events at or below the recorded horizon");
+        await Pump(latest);
+        check(Observed().SequenceEqual(["owed"]) && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the later incarnation completes without replaying the old publication or claiming an event behind the horizon");
+
+        async Task Publish(string topic, string id, long keep) =>
+            _ = await edge.SendAsync(scope, new Contract.Target.Event(topic), id, "ignored", id,
+                new(KeepFor: TimeSpan.FromMilliseconds(keep)));
+
+        List<string> Observed() => Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!.Row.State);
+
+        async Task Turn(string id, string kind)
+        {
+            await edge.SendAsync(scope, target, id, kind);
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id);
+            await worker.FlushAsync();
+        }
+    }
+
     private static async Task CheckMatchOrder(Action<bool, string> check)
     {
         var now = 1_702_200_020_000L;
@@ -448,6 +532,10 @@ internal static class FoundationEventSendChecks
                         break;
                     case { Kind: "wait-remove" }:
                         turn.Unsubscribe(turn.Header.TypeData, "single");
+                        break;
+                    case { Kind: "wait-keep" }:
+                        turn.Subscribe(turn.Header.TypeData, "single", keep: true);
+                        turn.Subscribe(turn.Header.TypeData.ToUpperInvariant(), "SINGLE", keep: true);
                         break;
                     case { Kind: "wait-end" }:
                         turn.End(Contract.ActorStatus.Finished);

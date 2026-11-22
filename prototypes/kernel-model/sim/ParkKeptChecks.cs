@@ -691,9 +691,10 @@ internal static class ParkKeptChecks
         var probe = new KeepingRecoveryProbe();
         var scope = new Contract.BoundScope("catch-up-lost-step");
         var losses = 0;
+        var injectRecoveryLoss = false;
         var forward = new CountingStore(store, () => { }, (batch, landed) =>
         {
-            if (batch.Turns is [{ FoundationCatchUpStep: not null }] && landed == landedBeforeLoss &&
+            if (injectRecoveryLoss && batch.Turns is [{ FoundationCatchUpStep: not null }] && landed == landedBeforeLoss &&
                 (!landedBeforeLoss || losses == 0))
             {
                 losses++;
@@ -734,6 +735,7 @@ internal static class ParkKeptChecks
             check(foreign && seenOnly && store.Messages[key] is { Seen: 0, Trial: 0, Attempts: 0 },
                 "a positional foreign fence and an ordinary Seen mark cannot hide a pending catch-up ticket");
         }
+        injectRecoveryLoss = true;
         await worker.PollAsync();
         await worker.MeetAsync();
         check(!worker.Owns && losses == 1 && (!landedBeforeLoss ?
@@ -779,10 +781,11 @@ internal static class ParkKeptChecks
         var scope = new Contract.BoundScope("catch-up-attempt");
         var faults = 0;
         CommitBatch? delayed = null;
+        var injectRecoveryFailures = false;
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var forward = new CountingStore(store, () => { }, (batch, landed) =>
         {
-            if (landed || batch.Turns is not [{ FoundationCatchUpStep: not null } step]) return;
+            if (landed || !injectRecoveryFailures || batch.Turns is not [{ FoundationCatchUpStep: not null } step]) return;
             switch (faults)
             {
                 case 0:
@@ -823,6 +826,7 @@ internal static class ParkKeptChecks
         await worker.FlushAsync();
         var originalControl = store.Instances[id].ParkRecovery!.Control;
         var (key, _) = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null);
+        injectRecoveryFailures = true;
         await CatchUpOnly(worker);
         var unchanged = worker.Owns && faults == 1 && store.Messages.GetValueOrDefault(key) is
             { Done: false, Attempts: 1, Message.ParkCatchUp.Page: 0 } &&

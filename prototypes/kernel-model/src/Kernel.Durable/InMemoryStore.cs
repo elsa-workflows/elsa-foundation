@@ -262,7 +262,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
             Dictionary<string, Message>? initialExpiries = null;
-            Dictionary<string, Message>? catchUpOpens = null;
+            Dictionary<string, FoundationSubscriptionInsert>? subscriptionInserts = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
             PublicationPage? publicationPage = null;
             Dictionary<TurnCommit, CascadeInputs>? cascades = null;
@@ -322,12 +322,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     else if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
                         !(catchUpSteps ??= []).TryAdd(turn.FoundationCatchUpStep!.Value, catchUp))
                         throw new StoreException(Failure.Definite, "A catch-up ticket can advance only once per batch.");
-                    if (PrepareParkCatchUpOpen(turn, now) is { } firstCatchUp)
-                        (catchUpOpens ??= new(StringComparer.Ordinal)).Add(turn.Instance, firstCatchUp);
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
+                    if (PrepareFoundationSubscriptionInsert(turn, epochs, now) is { } subscriptions &&
+                        !(subscriptionInserts ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, subscriptions))
+                        Diverged($"two subscription writes for {turn.Instance}");
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
                     foreach (var id in turn.FoundationReleasedHolds ?? [])
@@ -375,8 +376,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     if (turn.Journal is not null && batch.PartitionOf(turn) is var journal && Journal.ContainsKey((journal, ++at[journal])))
                         Diverged($"journal position {at[journal]} of partition {journal} is written already");
                 }
-                if (catchUpOpens is not null || catchUpSteps is not null)
-                    ValidateCatchUpWrites(batch, catchUpOpens?.Values ?? (IEnumerable<Message>)[],
+                if (subscriptionInserts is not null || catchUpSteps is not null)
+                    ValidateCatchUpWrites(batch, subscriptionInserts?.Values.Select(insert => insert.Ticket).OfType<Message>() ?? [],
                         catchUpSteps?.Values ?? (IEnumerable<CatchUpStep>)[], initialExpiries?.Values ?? (IEnumerable<Message>)[]);
                 if (batch.Turns.Any(turn => turn.FoundationCatchUpBefore is { } deadline && clock() >= deadline))
                     throw new StoreException(Failure.Definite, "The catch-up step reached its deadline before committing.");
@@ -477,11 +478,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     seqs.Add(_seq);
                     if (childBindings?.GetValueOrDefault(message.InboxKey) is { } binding) InsertReference(binding);
                 }
-                if (turn.FoundationRecoverySubscriptions is not null)
-                    RestoreFoundationSubscriptions(turn, catchUpOpens?.GetValueOrDefault(turn.Instance), now);
-                else
-                    foreach (var subscription in turn.Subscribed)
-                        if (RegisteredSubscription(subscription) is null) AddRegisteredSubscription(subscription);
+                if (subscriptionInserts?.GetValueOrDefault(turn.Instance) is { } subscriptions)
+                    InsertFoundationSubscriptions(subscriptions);
+                foreach (var subscription in turn.Subscribed)
+                    if (subscription.FoundationTenant is null && RegisteredSubscription(subscription) is null) AddRegisteredSubscription(subscription);
                 foreach (var subscription in turn.Unsubscribed)
                     if (RegisteredSubscription(subscription) is { } found &&
                         (subscription.FoundationTenant is null || found.Creation == subscription.Creation))

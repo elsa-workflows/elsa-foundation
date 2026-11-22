@@ -1754,6 +1754,10 @@ calls one new model hook.
       nullable column set only on publish tickets) and copied into the event row; today a turn computes `KeepUntil`
       from `ITurn.Now` (`Turns.cs` 432). `AcceptedAt` is used for nothing else. A repeated idempotent subscribe keeps
       the row's first `RegisteredAt`.
+      The in-memory Foundation path now stamps ordinary registrations and commits a keeping wait's meet ticket and
+      coverage with its first registration. The Worker test covers equivalent registrations, sweep before catch-up,
+      takeover, removal and re-registration after a clock rollback (`--event-identity-check`). Start registrations
+      and provider qualification have separate cases.
       - **A zero keep window.** Such an event has `KeepUntil` = `AcceptedAt`. Both rules above apply to it unchanged:
         it reaches a keeping wait through the publisher side when the wait registered before its match step, and
         through the catch-up only when `KeepUntil` ≥ `P0`. Without a clock step-back that second case needs the

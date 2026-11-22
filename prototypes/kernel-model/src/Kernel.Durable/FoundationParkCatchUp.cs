@@ -20,6 +20,7 @@ public sealed partial class InMemoryStore
 {
     private sealed record CatchUpCoverage(SubscriptionRow Wait, ParkCatchUpTicket Ticket);
     private sealed record CatchUpStep(ParkCatchUpTicket Ticket, IReadOnlyList<EventDelivery> Deliveries, Message? Next);
+    private sealed record FoundationSubscriptionInsert(IReadOnlyList<SubscriptionRow> Rows, Message? Ticket);
     private readonly Dictionary<Guid, CatchUpCoverage> _foundationCatchUpCoverage = [];
     private readonly Dictionary<int, HashSet<InboxKey>> _parkCatchUpTrials = [];
     private readonly Dictionary<string, long> _foundationSweepHorizon = new(StringComparer.Ordinal);
@@ -29,29 +30,65 @@ public sealed partial class InMemoryStore
         new Message(id, new(actor), Kinds.Meet, Sender: actor, TargetCreation: creation, SenderCreation: creation)
             { ParkCatchUp = ticket }.AsIssued().AsKernelTicket();
 
-    private Message? PrepareParkCatchUpOpen(TurnCommit turn, long now)
+    private FoundationSubscriptionInsert? PrepareFoundationSubscriptionInsert(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, long now)
     {
-        if (turn.FoundationRecoverySubscriptions is null ||
-            turn.Subscribed.FirstOrDefault(subscription => subscription.FoundationKeepsEvents) is not { } keeping)
+        var requested = turn.Subscribed.Where(subscription => subscription.FoundationTenant is not null).ToArray();
+        if (requested.Length == 0)
             return null;
-        var row = turn.Row!;
+        if (turn.Row is not { Retired: false } row || row.Id != turn.Instance ||
+            StoreBatchRules.AddressPartition(row.Id) is not { } partition || !epochs.ContainsKey(partition) ||
+            requested.Any(subscription => subscription.Instance != row.Id || subscription.Creation != row.Creation ||
+                subscription.Start is not null || subscription.FoundationIncarnation is not null || subscription.FoundationRegisteredAt is not null))
+            throw new StoreException(Failure.Definite, "A foundation subscription must be registered by its own fenced checkpoint.");
+        if (turn.Unsubscribe)
+            return null;
+
+        var restoring = turn.FoundationRecoverySubscriptions is not null;
+        var names = new Dictionary<string, HashSet<string>>(_foundationEventEquality);
+        foreach (var removal in turn.Unsubscribed)
+            if (removal.FoundationTenant is not null && removal.Instance == row.Id && removal.Creation == row.Creation)
+                Reserve(removal);
+        var rows = new List<SubscriptionRow>();
+        foreach (var subscription in requested)
+        {
+            if (Reserve(subscription) && RegisteredSubscription(subscription) is null)
+                rows.Add(subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now });
+            else if (restoring)
+                throw new StoreException(Failure.Definite, "A restored subscription must insert a new registration.");
+        }
+        if (rows.Count == 0)
+            return null;
+        var keeping = rows.FirstOrDefault(subscription => subscription.FoundationKeepsEvents);
+        var bytes = rows.Sum(subscription => (long)(subscription.FoundationKeepsEvents ? KeepingRestoreAllowance : SubscriptionRestoreAllowance));
+        if (rows.Count > MaxRestoreWaits || bytes + (keeping is null ? 0 : CatchUpTicketAllowance) > MaxRestoreBytes)
+            throw new StoreException(Failure.Definite, "The subscription writes exceed the plan budget.");
+        if (keeping is null)
+            return new(rows, null);
+
+        var suffix = restoring ? "0001" : "keep";
         var origin = CreationProtocol.Origin(row.Id, row.Creation);
-        var first = InboxKey.Issued(FormattableString.Invariant($"{origin}#{row.Revision}.0001"));
+        var first = InboxKey.Issued(FormattableString.Invariant($"{origin}#{row.Revision}.{suffix}"));
         var horizon = _foundationSweepHorizon.GetValueOrDefault(keeping.FoundationTenant!, long.MinValue);
         var ticket = new ParkCatchUpTicket(FoundationEventIdentity.CatchUpId(first), 0, Math.Max(now, checked(horizon + 1)));
-        return CatchUpMessage(first.Id, row.Id, row.Creation, ticket);
+        return new(rows, CatchUpMessage(first.Id, row.Id, row.Creation, ticket));
+
+        bool Reserve(SubscriptionRow subscription)
+        {
+            if (!names.TryGetValue(subscription.Key, out var waits))
+                names.Add(subscription.Key, waits = new(_foundationEventEquality));
+            return waits.Add(subscription.Wait);
+        }
     }
 
-    private void RestoreFoundationSubscriptions(TurnCommit turn, Message? message, long now)
+    private void InsertFoundationSubscriptions(FoundationSubscriptionInsert insert)
     {
-        foreach (var subscription in turn.Subscribed)
+        foreach (var registered in insert.Rows)
         {
-            var registered = subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now };
             AddRegisteredSubscription(registered);
             if (registered.FoundationKeepsEvents)
-                _foundationCatchUpCoverage.Add(registered.FoundationIncarnation!.Value, new(registered, message!.ParkCatchUp!));
+                _foundationCatchUpCoverage.Add(registered.FoundationIncarnation!.Value, new(registered, insert.Ticket!.ParkCatchUp!));
         }
-        if (message is not null) Messages.Add(message.InboxKey, new(message, ++_seq, 0));
+        if (insert.Ticket is { } ticket) Messages.Add(ticket.InboxKey, new(ticket, ++_seq, 0));
     }
 
     private CatchUpStep? PrepareParkCatchUp(TurnCommit turn, IReadOnlyDictionary<int, long> epochs, IReadOnlySet<Guid>? revoked)

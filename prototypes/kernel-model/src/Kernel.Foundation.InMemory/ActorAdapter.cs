@@ -237,7 +237,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var outcome = turn.Seal();
-        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) > MaxTurnSends)
+        var meet = !outcome.Unsubscribe && outcome.Subscribed.Exists(wait => wait.FoundationKeepsEvents) ? 1 : 0;
+        if (outcome.Sent.Count + outcome.Held.Count(outcome.ConvertsHeldJobResult) + meet > MaxTurnSends)
             throw new InvalidOperationException($"A turn may send at most {MaxTurnSends:N0} messages.");
         if (outcome.Row is { } nextRow)
         {
