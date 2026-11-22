@@ -106,7 +106,7 @@ describe("agent editor", () => {
       const result = await focus({ location: { providerKey: "elsa.agent", jsonPointer: pointer }, subject: { kind: "ActivityDefinition", id: "elsa.agent" }, editorElement: container });
       expect(result.kind).toBe("focused");
       expect(document.activeElement).toBe(field(container, label));
-      if (pointer.startsWith("/limits/")) expect(container.querySelector<HTMLDetailsElement>(".agent-advanced")!.open).toBe(true);
+      if (pointer.startsWith("/limits/")) expect(container.querySelector(".studio-advanced-section button")?.getAttribute("aria-expanded")).toBe("true");
     }
     const unsupported = await focus({ location: { providerKey: "elsa.agent", jsonPointer: "/future-private-field" }, subject: { kind: "ActivityDefinition", id: "elsa.agent" }, editorElement: container });
     expect(unsupported.kind).toBe("unsupported");
@@ -368,7 +368,7 @@ describe("agent editor", () => {
     const controls = [...container.querySelectorAll("input, textarea, select")] as HTMLInputElement[];
     expect(controls.length).toBeGreaterThan(4);
     for (const control of controls) expect(control.disabled || control.closest("fieldset")?.disabled).toBe(true);
-    expect([...container.querySelectorAll("button")].filter(x => !x.disabled && !x.closest("fieldset[disabled]"))).toHaveLength(0);
+    expect([...container.querySelectorAll("button")].filter(x => !x.hasAttribute("aria-expanded") && !x.disabled && !x.closest("fieldset[disabled]"))).toHaveLength(0);
     // Read-only still shows what the saved model would need, without offering to change it.
     expect(container.textContent).not.toContain("Remove unsupported settings");
   });
