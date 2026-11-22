@@ -54,7 +54,7 @@ Both constitutions and `docs/contributing/review-checklist.md` were read. Framew
 
 ### Documentation
 
-`specs/1233-switch-match-any-bodies/` contains spec, plan, research, data-model, contracts/switch, quickstart, tasks and requirements checklist. Review/acceptance receipts belong on the implementation PR. Spec 1234 is reserved only and is not drafted here.
+`specs/1233-switch-match-any-bodies/` contains spec, plan, research, data-model, contracts/switch, quickstart and tasks. The terminal requirements checklist was removed after implementation acceptance. Review/acceptance receipts belong on the implementation PR. Spec 1234 is reserved only and is not drafted here.
 
 ### Source and tests
 
