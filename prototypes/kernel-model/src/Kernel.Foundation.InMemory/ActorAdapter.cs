@@ -53,7 +53,13 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
         row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
-            : delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+            : SettlesEndedChildNotice(row, delivery.Message) ||
+                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+
+    private bool SettlesEndedChildNotice(Durable.InstanceRow row, Durable.Message message) =>
+        message.Kind == Contract.Kinds.ChildFinished && row.Status != Durable.InstanceStatus.Running &&
+        row.ParkResolutionGeneration > 0 && row.ParkRecovery is null && !row.ParkDiscarded &&
+        store.FoundationTurnHeader(row).Park is null;
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
@@ -85,6 +91,23 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return OpenDiscard(input);
         if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
             return OpenRecover(input);
+        if (input.Row is { } terminalParent && SettlesEndedChildNotice(terminalParent, message))
+        {
+            if (!IsChildNotice(terminalParent, message) || message.Payload is null)
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            try
+            {
+                if (message.Read<Completion>() is not { Final: true })
+                    return new(input.Actor) { Consumed = [.. input.Taken], Status = terminalParent.Status };
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            }
+            var children = Durable.ChildRegistry.Read(terminalParent.Children);
+            children.Remove(new(message.Sender!, message.SenderCreation));
+            return ParkCheckpoint(input, terminalParent, terminalParent with { Children = Durable.ChildRegistry.Write(children) });
+        }
         if (input.Row is { ParkRecovery: not null, Status: not Durable.InstanceStatus.Running } endedDuringRecovery && !message.IsControl)
             return Durable.CreationProtocol.Refuse(input.Actor, endedDuringRecovery, input.Taken, "Ended");
         if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)

@@ -269,6 +269,10 @@ internal static class ParkKeptChecks
         await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
         await CheckTerminalCohort(takeover: false, check);
         await CheckTerminalCohort(takeover: true, check);
+        await CheckTerminalCohort(takeover: false, check, cutAfter: false);
+        await CheckTerminalCohort(takeover: false, check, cutAfter: true);
+        await CheckTerminalChildNotice(keptBeforeResume: false, check);
+        await CheckTerminalChildNotice(keptBeforeResume: true, check);
     }
 
     private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
@@ -389,7 +393,7 @@ internal static class ParkKeptChecks
             "Resume clears the consumed fault, applies the kept arrival once and recalls the expiry");
     }
 
-    private static async Task CheckTerminalCohort(bool takeover, Action<bool, string> check)
+    private static async Task CheckTerminalCohort(bool takeover, Action<bool, string> check, bool? cutAfter = null)
     {
         const long initial = 1_701_400_028_000L;
         var now = initial;
@@ -397,7 +401,7 @@ internal static class ParkKeptChecks
         var probe = new Probe(withholdFaulted: takeover) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
         var scope = new Contract.BoundScope("terminal-recovery");
         var cleared = 0;
-        Worker MakeWorker(string node, int limit) => new(node, 0, store, new ActorAdapter(store, probe),
+        Worker MakeWorker(string node, int limit, IKernelStore? actual = null) => new(node, 0, actual ?? store, new ActorAdapter(store, probe),
             new WorkerOptions
             {
                 Monotonic = () => now - initial, PollLimit = limit,
@@ -406,7 +410,14 @@ internal static class ParkKeptChecks
                     if (turn.FoundationRecoveryPage is { TerminalInputs: true } page) cleared += page.Rows.Count;
                 }
             });
-        var first = MakeWorker("terminal-first", 1024);
+        var interrupted = false;
+        var cut = cutAfter is null ? null : new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (interrupted || landed != cutAfter || !batch.Turns.Any(turn => turn.FoundationRecoveryPage is { TerminalInputs: true })) return;
+            interrupted = true;
+            throw new StoreException(Failure.Unknown, "lost terminal page outcome");
+        });
+        var first = MakeWorker("terminal-first", 1024, cut);
         var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
         await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
         var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
@@ -422,7 +433,23 @@ internal static class ParkKeptChecks
         var parked = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!;
         await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(parked.Selection!, Contract.RecoverMode.Resume)));
-        if (takeover)
+        if (cutAfter is not null)
+        {
+            for (var pass = 0; pass < 16 && !interrupted; pass++) { now += 11; await Pump(owner); }
+            var held = store.Messages.Values.Single(row => row.Message.Id == "held-000");
+            check(interrupted && held.Done == cutAfter && !first.Owns, "the terminal checkpoint loses its outcome at the requested cut");
+            if (!interrupted) return;
+            var oldDeadline = held.Message.KeepUntil;
+            now += (long)Defaults.Lease.TotalMilliseconds + 1;
+            var successor = MakeWorker("terminal-unknown-successor", 1024);
+            await using var active = (await new DurableHost([successor]).ActivateAsync(0))!;
+            await Verify(active);
+            check(held is { Done: true, Held: false, Trial: 0, Attempts: 0 } && held.Message.KeepUntil > now &&
+                (cutAfter.Value ? held.Message.KeepUntil == oldDeadline : held.Message.KeepUntil > oldDeadline),
+                cutAfter.Value ? "the successor retains a landed terminal page's exact settlement" :
+                    "the successor replays an unlanded terminal page without putting its held input on trial");
+        }
+        else if (takeover)
         {
             var id = store.Instances.Values.Single().Id;
             for (var step = 0; step < 2; step++)
@@ -467,6 +494,54 @@ internal static class ParkKeptChecks
     }
 
     private sealed record RecoveryTally(long Restored, long Cleared);
+
+    private static async Task CheckTerminalChildNotice(bool keptBeforeResume, Action<bool, string> check)
+    {
+        const long initial = 1_701_400_040_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = true };
+        var scope = new Contract.BoundScope("terminal-child");
+        var worker = new Worker("terminal-parent", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "parent", Contract.Kinds.Start);
+        var parent = new Contract.Target.Ref(birth.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, parent, "spawn", "spawn");
+        await Pump(owner);
+        var child = new Contract.Target.Ref(probe.Child!.Value);
+        await ingress.SendAsync(scope, parent, "park", "poison");
+        await Pump(owner);
+        await ingress.SendAsync(scope, parent, "end", "advance");
+        if (keptBeforeResume)
+        {
+            await FinishChild();
+            check(store.Messages.Values.Any(row => row.Message.Kind == Contract.Kinds.ChildFinished && row.KeptBy == ParkKeepReason.Arrived),
+                "the authentic final child notice is kept before Resume");
+        }
+        else await Pump(owner);
+        var reader = new ActorList(store, 10);
+        var parked = (await reader.GetAsync(scope, parent.Actor))!;
+        await ingress.SendAsync(scope, parent, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(parked.Selection!)));
+        for (var pass = 0; pass < 8; pass++) { now += 11; await Pump(owner); }
+        if (!keptBeforeResume) await FinishChild();
+        var terminal = store.ReadFoundationActor(scope.Tenant, parent.Actor.Id).Actor!;
+        check(terminal is { Park: null, Row: { ParkRecovery: null, Children: null, Status: InstanceStatus.Faulted } } &&
+            probe.Notices.Count == 0, "an authentic final child notice settles a recovered terminal registry without model entry");
+        var selected = (await reader.GetAsync(scope, parent.Actor))!.Selection!;
+        await ingress.SendAsync(scope, parent, "delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selected)));
+        await Pump(owner);
+        check(store.Instances[terminal.Row.Id].Retired, "the settled child no longer protects the parent from a qualified delete");
+
+        async Task FinishChild()
+        {
+            await ingress.SendAsync(scope, child, "finish-child", "finish-child");
+            await Pump(owner);
+        }
+    }
 
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
@@ -1105,6 +1180,7 @@ internal static class ParkKeptChecks
             foreach (var message in turn.Inbox)
                 if (message.Kind == "spawn") Child = turn.Start(new(Type, "child", null));
                 else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
+                else if (message.Kind == "finish-child") turn.End(Contract.ActorStatus.Finished);
             if (turn.Inbox.Any(message => message.Kind == "advance"))
             {
                 if (HoldAdvance && !turn.Inbox.Any(message => message.Kind == "late"))

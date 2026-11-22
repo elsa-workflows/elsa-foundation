@@ -107,6 +107,7 @@ public sealed record JobFinished([property: System.Text.Json.Serialization.JsonC
 
 public static class Kinds
 {
+    internal const string ChildFinished = "child-finished";
     public const string Start = "start";
     public const string JobFinished = "job-finished";
     public const string Event = "event";

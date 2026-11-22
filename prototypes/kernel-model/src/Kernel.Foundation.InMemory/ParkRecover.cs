@@ -60,9 +60,9 @@ internal sealed partial class ActorAdapter
         if (!envelope.Matches(delivery.Message, row, drain.Control))
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         var serial = checked(drain.Serial + 1);
-        var credit = store.FoundationRecoveryCredit(row, input.RecoveryHandedOff);
-        if (row.Status == Durable.InstanceStatus.Running &&
-            (row.Suspended || RecoveryWithholds(Header(checkpoint)) || !credit.CanRead))
+        var running = row.Status == Durable.InstanceStatus.Running;
+        var credit = running ? store.FoundationRecoveryCredit(row, input.RecoveryHandedOff) : default;
+        if (running && (row.Suspended || RecoveryWithholds(Header(checkpoint)) || !credit.CanRead))
             return NextPage(envelope.Issue(row, serial, drainAt: checked(input.Services.Now + 10)), drain, null);
 
         var release = new Durable.ParkRelease(row.Creation, row.ParkResolutionGeneration);
@@ -71,14 +71,14 @@ internal sealed partial class ActorAdapter
         if (page is not { Count: > 0 })
         {
             if (page is null) return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
-            if (row.Status != Durable.InstanceStatus.Running)
+            if (!running)
             {
                 var terminal = store.ReadEndedFoundationRecoveryPage(address, park, release.Generation);
                 if (terminal is null) return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
                 if (terminal.Count != 0)
                     return NextPage(envelope.Issue(row, serial), drain with { Gate = null }, new(park, terminal, TerminalInputs: true));
             }
-            var cohort = row.Status == Durable.InstanceStatus.Running && store.FirstUnheldRecoveryInput(row, release, _ => false) is not null
+            var cohort = running && store.FirstUnheldRecoveryInput(row, release, _ => false) is not null
                 ? release : (Durable.ParkRelease?)null;
             var completed = ParkCheckpoint(input, row, row with { ParkRecovery = null, ParkCohort = cohort });
             completed.Journal = Durable.Json.Write(new { Outcome = "recovered", drain.Operation, drain.Restored, drain.Cleared });
@@ -93,7 +93,7 @@ internal sealed partial class ActorAdapter
         {
             if (drain.Restores(item, row.Status))
             {
-                if (!Durable.ParkRecoveryCredit.IsTicket(item.Kind))
+                if (running && !Durable.ParkRecoveryCredit.IsTicket(item.Kind))
                 {
                     var charged = Durable.ParkRecoveryCredit.StoredBytes(item.PayloadBytes);
                     if (rows > 0 && (rows >= Durable.InMemoryStore.ParkPageLimit || bytes + charged > Durable.ParkRecoveryCredit.LimitBytes)) break;

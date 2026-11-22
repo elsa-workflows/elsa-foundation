@@ -32,6 +32,7 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
     internal InboxKey? Gate { get; init; }
 
     internal bool Restores(ParkPageRow row, InstanceStatus status) => row.Kind == Kinds.Publish ||
+        status != InstanceStatus.Running && row.Kind == Kinds.ChildFinished ||
         (status == InstanceStatus.Running && row.Kind != Kinds.Meet &&
             (row.Reason is null or ParkKeepReason.Arrived || Mode == ParkRecoveryMode.RetryAll ||
                 Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
@@ -80,7 +81,8 @@ public sealed partial class InMemoryStore
                 var stale = !row.Done && current.Status == InstanceStatus.Running && recoveryGeneration is { } active &&
                     row.ReleasedBy is { } release && release.Creation == address.Creation && release.Generation < active;
                 var settling = terminalInputs && !row.Done && row.ReleasedBy is { } tag && tag.Creation == address.Creation &&
-                    tag.Generation <= recoveryGeneration && !ParkRecoveryCredit.IsTicket(row.Message.Kind) && !row.Message.IsControl;
+                    tag.Generation <= recoveryGeneration && !ParkRecoveryCredit.IsTicket(row.Message.Kind) &&
+                    row.Message.Kind != Kinds.ChildFinished && !row.Message.IsControl;
                 if (terminalInputs ? !settling : !kept && !stale) continue;
 
                 var cursor = new ParkPageCursor(row.Seq, key);

@@ -1487,7 +1487,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         tag == RecoveryRelease(slot.CurrentRow) && !ParkRecoveryCredit.IsTicket(item.Message.Kind);
 
     private static bool WithheldByRecovery(Delivery item, Slot slot) => slot.CurrentRow is { ParkRecovery: not null } row &&
-        !item.Message.IsControl && item.ReleasedBy != RecoveryRelease(row);
+        !item.Message.IsControl && (row.Status != InstanceStatus.Running || item.ReleasedBy != RecoveryRelease(row));
 
     private ParkPageCursor? FirstUnheldRecoveryInput(Slot slot) =>
         slot.CurrentRow is { } row && RecoveryRelease(row) is { } release && !Withheld(slot)
@@ -1719,7 +1719,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (due is [var held] && held.Held && held.Message.IsControl && HeldCommandStimulus(slot, held, now) > 0)
             return due;
         // An obsolete job result is side-effect-free bookkeeping, even when it was held at a prior checkpoint.
-        return due.TrueForAll(i => i.Held && !ObsoleteJobAt(i, slot.CurrentRow)) ? [] : due;
+        // A terminal child notice can also settle a registry entry without a new model stimulus.
+        return due.TrueForAll(i => i.Held && !ObsoleteJobAt(i, slot.CurrentRow) &&
+            (i.Message.Kind != Kinds.ChildFinished || slot.CurrentRow?.Status == InstanceStatus.Running ||
+                !CanSettleWhileWithheld(slot, i))) ? [] : due;
     }
 
     private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
