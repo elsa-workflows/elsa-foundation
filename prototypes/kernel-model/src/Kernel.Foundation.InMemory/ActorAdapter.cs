@@ -233,6 +233,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
+        if (running || row is not null && store.FoundationTurnHeader(row).Park is not null)
+            result.FoundationKeep = Durable.ParkKeepReason.Consumed;
         result.Journal = pending is List<object> entries
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });
