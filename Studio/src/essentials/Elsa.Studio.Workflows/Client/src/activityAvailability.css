@@ -584,13 +584,7 @@
   font-size: 11px;
 }
 
-.availability-details-raw summary {
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--wf-muted-text);
-}
-
-.availability-details-raw pre {
+.availability-details-raw {
   margin: 6px 0 0;
   padding: 8px;
   max-height: 240px;

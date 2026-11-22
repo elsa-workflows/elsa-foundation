@@ -46,8 +46,7 @@
 /* Status occupies its own final row, so feedback never moves the action targets. */
 .ad-publication-toolbar { display: contents; }
 
-.ad-authoring-toolbar-actions > button,
-.ad-publication-toolbar-trigger,
+.ad-authoring-toolbar-actions > button:not(.studio-button),
 .ad-authoring-advanced > summary,
 .ad-authoring-history > summary {
   display: inline-flex;
@@ -69,9 +68,6 @@
   /* Fit the longest review label without shifting the following actions. */
   width: 16rem;
   max-width: 100%;
-  border-color: var(--studio-accent);
-  color: var(--studio-accent-text);
-  background: var(--studio-accent);
 }
 
 .ad-publication-toolbar-status {
@@ -206,7 +202,6 @@
 .ad-interface-suggestions { margin: 1rem 0; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
 .ad-interface-suggestions > summary { color: var(--studio-text-muted); cursor: pointer; font-weight: 600; }
 .ad-interface-suggestions[open] > summary { margin-bottom: 1rem; }
-.ad-draft-editor .ad-publication-toolbar-trigger { color: var(--studio-accent-text); }
 
 /* Keep routine authoring views visually separate from technical controls. */
 .ad-draft-editor .ad-authoring-view-tabs {
