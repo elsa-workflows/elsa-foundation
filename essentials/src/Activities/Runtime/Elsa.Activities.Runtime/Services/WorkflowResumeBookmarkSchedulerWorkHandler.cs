@@ -429,6 +429,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeChildControlTransport? completedChildControl = null;
         IActivityCompletionTransition? completionTransition = null;
         ActivityExecutionState? replacementSuspendedState = null;
+        DateTimeOffset?[] replacementDeadlines = [];
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
         try
@@ -444,6 +445,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             if (transition is IStatefulActivitySuspensionTransition suspension)
             {
                 StatefulSuspensionSupport.ValidateRegistrations(executable, executableNode, suspension);
+                replacementDeadlines = suspension.Registrations.Select(registration => registration.ExpiresAt).ToArray();
                 replacementSuspendedState = StatefulActivitySuspensionProjector.Project(
                     executionState,
                     resumeAttempt,
@@ -577,7 +579,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (replacementSuspendedState is not null)
         {
             RecordContinuation(RuntimeHistorySourceFactKind.ActivityContinuationSuspended);
-            var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState).ToArray();
+            var replacementWorkItems = NewReplacementBookmarkWorkItems(workItem, resumePayload, replacementSuspendedState, replacementDeadlines).ToArray();
             await bookmarkConsumptionCheckpointService.CommitAsync(
                 BookmarkConsumptionCheckpointRequest.ForSuspension(
                     workItem,
@@ -818,9 +820,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private IEnumerable<RuntimeSchedulerWorkItem> NewReplacementBookmarkWorkItems(
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
-        ActivityExecutionState suspendedState)
+        ActivityExecutionState suspendedState, IReadOnlyList<DateTimeOffset?> deadlines)
     {
         var registrations = suspendedState.TriggerRegistrations?.ToArray() ?? [];
+        if (registrations.Length != deadlines.Count)
+            throw new InvalidOperationException("Replacement deadline count does not match its native registrations.");
         for (var index = 0; index < registrations.Length; index++)
         {
             var registration = registrations[index];
@@ -834,7 +838,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 stimulusType: registration.StimulusType,
                 stimulusHash: registration.StimulusHash,
                 payload: null,
-                expiresAt: registration.ExpiresAt,
+                expiresAt: deadlines[index],
                 reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
                 metadata: registration.Metadata,
                 valueSnapshots: [],

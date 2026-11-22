@@ -15,7 +15,7 @@ public sealed class EventPassiveExpiryTests
     [InlineData(PersistenceMode.Durable)]
     [InlineData(PersistenceMode.Balanced)]
     [InlineData(PersistenceMode.Ephemeral)]
-    public async Task Original_registration_deadline_survives_native_creation_and_expiry_does_not_wake_the_owner(PersistenceMode mode)
+    public async Task Original_suspension_deadline_survives_native_creation_and_expiry_does_not_wake_the_owner(PersistenceMode mode)
     {
         var clock = new FakeTimeProvider(DateTimeOffset.UnixEpoch.AddDays(1));
         var identity = new WorkflowExecutableIdentity("expiry-artifact", "expiry-definition", "expiry-version", "1", "expiry-hash");
@@ -27,9 +27,9 @@ public sealed class EventPassiveExpiryTests
         var bookmark = Assert.Single((await store.ListPageAsync(new(harness.ExecutionId, 10))).Items);
         Assert.Equal(deadline, bookmark.ExpiresAt);
         var owner = Assert.Single((await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListPageAsync(new(harness.ExecutionId, 10))).Items);
-        Assert.Equal(deadline, Assert.Single(owner.TriggerRegistrations!).ExpiresAt);
+        Assert.DoesNotContain("ExpiresAt", JsonSerializer.Serialize(Assert.Single(owner.TriggerRegistrations!)));
         var retained = JsonSerializer.Deserialize<ActivityTriggerRegistration>(JsonSerializer.Serialize(Assert.Single(owner.TriggerRegistrations!)));
-        Assert.Equal(deadline, retained!.ExpiresAt);
+        Assert.Equal(Assert.Single(owner.TriggerRegistrations!), retained);
         clock.Advance(TimeSpan.FromMinutes(6));
         var lookup = await harness.Services.GetRequiredService<IBookmarkStimulusLookup>().FindAsync(new(
             harness.ExecutionId, bookmark.StimulusType, bookmark.StimulusHash, clock.GetUtcNow(), bookmark.BookmarkId));
@@ -45,6 +45,6 @@ public sealed class EventPassiveExpiryTests
         var registration = new ActivityTriggerRegistration("registration", "invocation", "resume", new("String"), "Event", "hash", ActivityTriggerDeduplicationPolicy.Once);
         var json = JsonSerializer.Serialize(registration);
         Assert.DoesNotContain("ExpiresAt", json);
-        Assert.Null(JsonSerializer.Deserialize<ActivityTriggerRegistration>(json)!.ExpiresAt);
+        Assert.Equal(json, JsonSerializer.Serialize(JsonSerializer.Deserialize<ActivityTriggerRegistration>(json)));
     }
 }

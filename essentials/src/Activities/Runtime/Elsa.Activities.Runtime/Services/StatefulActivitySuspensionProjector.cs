@@ -45,7 +45,7 @@ internal static class StatefulActivitySuspensionProjector
                     ActivityTriggerDeduplicationMode.IdempotencyKey => RuntimeTriggerDeduplicationPolicy.IdempotencyKey,
                     _ => throw new InvalidOperationException($"Unsupported activity trigger deduplication mode '{registration.DeduplicationMode}'.")
                 },
-                metadata: registration.Metadata) { ExpiresAt = registration.ExpiresAt })
+                metadata: registration.Metadata))
             .ToArray();
 
         if (registrations.Length == 0)

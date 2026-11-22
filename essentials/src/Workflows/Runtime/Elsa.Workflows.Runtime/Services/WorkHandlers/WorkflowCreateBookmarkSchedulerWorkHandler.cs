@@ -202,8 +202,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (!StringComparer.Ordinal.Equals(registration.InvocationId, state.InvocationId) ||
             !StringComparer.Ordinal.Equals(registration.ResumeTargetKey, payload.ResumeTargetId) ||
             !StringComparer.Ordinal.Equals(registration.StimulusType, payload.StimulusType) ||
-            !StringComparer.Ordinal.Equals(registration.StimulusHash, payload.StimulusHash) ||
-            registration.ExpiresAt != payload.ExpiresAt)
+            !StringComparer.Ordinal.Equals(registration.StimulusHash, payload.StimulusHash))
         {
             throw new InvalidOperationException(
                 $"VF-ACT-008: CreateBookmark scheduler work item '{payload.BookmarkId}' does not match its live trigger registration on activity invocation '{state.InvocationId}'.");
