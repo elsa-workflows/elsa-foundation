@@ -191,7 +191,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 
 Candidates reported by source readers. Confirm the need before building any of them.
 
-- [ ] **K9.** (#5002) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
+- [x] **K9.** (#5002, PR #5342) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
 - [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).

@@ -36,7 +36,10 @@ test("broad upgrades select only explicit roots, show the authoritative closure,
   await page.getByRole("button", { name: "Add exact root" }).click();
   await expect(page.locator(".au-root-list > li")).toHaveCount(2);
   await page.getByLabel("Replacement target version").fill("dependency-v2");
+  const progress = page.getByRole("list", { name: "Upgrade progress" }).locator('[aria-current="step"]');
+  await expect(progress).toHaveText(/Select replacements/);
   await page.getByRole("button", { name: "Review upgrade plan" }).click();
+  await expect(progress).toHaveText(/Review and apply stages/);
 
   await expect(page.getByRole("heading", { name: "Selected dependency closure" })).toBeVisible();
   await expect(page.getByText("Bottom-up stage 1", { exact: true })).toBeVisible();
@@ -141,6 +144,7 @@ test("a lost child-stage response reconciles once, survives reload, hands off ex
 
   await page.getByRole("button", { name: "Apply stage 1 atomically" }).click();
   await expect(page.getByText("Upgrade complete")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Upgrade progress" }).locator('[aria-current="step"]')).toHaveText(/Review results/);
   await expect(page.getByText("receipt-final")).toBeVisible();
   expect(state.finalApplyBodies).toHaveLength(1);
 });
