@@ -79,6 +79,12 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Graph authoring audit
+
+The A6 review covered all 54 files in `WF/graph-authoring/` at `4e593ed012`. The two resource hosts share the workspace, palette, inspector, canvas and block operations. The sequence and compensation renderers provide their own ordered step and occurrence controls. React Flow handles keep their directional placement, keyboard labels and saved viewport. Block and BPMN planners check the selected scope, catalog, connections, bindings and edit authority before a preview can be applied. Their transformations and checkpoints do not render controls. Six stylesheets govern the specific canvas geometry, portal menus, panels, and small-screen layouts.
+
+The specialized canvas add-step and slot controls retain their pointer anchors and keyboard alternatives. The findings below cover the shared commands, their dialogs, structured-data disclosures and compensation reorder focus.
+
 ### Form and decision authoring audit
 
 The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
@@ -375,6 +381,8 @@ Browser dialogs and busy labels (no kit prerequisite):
   [source] `CreateWorkflowDialog` ("Creating..."), `WorkflowRunInputDialog` ("Starting..."),
   `EXT/Secrets/SecretPickerEditor.tsx:86`.
 
+- [ ] **A6 graph dialogs** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:277` implements `NativeBlockDialog` with a local backdrop and focus hook. Native block edits, BPMN body import, and reusable activity promotion use this shell and place their footers in scrollable content. Adopt the shared dialog and keep the preview, pending, cancellation and nested publication behavior.
+
 ### X4. Create flows
 
 Five patterns exist [seen]: modal dialog (workflow, activity definition, connection); inline page with
@@ -433,6 +441,8 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   decision" (`:164`). (PR #5305)
 - [x] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
   "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`). (PR #5305)
+
+- [ ] **A6 graph commands** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:68` implements `handleCommandsMenuKeyDown` and a second grouped menu. Use the shared action menu and retain disabled explanations and focus return.
 
 ### X6. Refresh
 
@@ -625,6 +635,8 @@ the designer header is a documented exception.
 
 - [ ] **X12.13** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
 
+- [ ] **A6 graph previews** [verified] `WF/graph-authoring/NativeBlockCommands.tsx:260`, `BlockPromotionDialog.tsx:277`, and `BpmnInterchangeCommands.tsx:135` render native disclosures for “Current graph, layout and names”, “Reusable activity material”, and “Proposed resource”. Use the shared disclosure controls and preserve which reviews open by default.
+
 ### X13. CSS texture
 
 Work file by file and run `pnpm lint:css` after each. Counts are grep counts on the audit date.
@@ -754,6 +766,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
   `AttachedRunActivityInspector.tsx:25–36`, `AttachedTestRunControls.tsx:12–25`,
   `ActivityExecutionBrowser.tsx:63, 246` → `ActionNotice` / `StudioAlert`.
+
+- [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:302` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
 ### Extensions
 
