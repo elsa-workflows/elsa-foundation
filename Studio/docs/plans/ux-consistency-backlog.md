@@ -472,7 +472,7 @@ in scope.
 - [x] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu). (PR #5325)
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
-- [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
+- [x] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by (PR #5356)
   searching for a `StudioButton` labelled "Refresh" outside `KIT`. Weather, External sign-in, User access and the ETL lists use the header contribution in PR #5348.
 
 ### X7. Status badges
