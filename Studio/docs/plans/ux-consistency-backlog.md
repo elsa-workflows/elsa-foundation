@@ -157,12 +157,12 @@ Candidates reported by source readers. Confirm the need before building any of t
 
 - [ ] **K9.** (#5002) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
-- [ ] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`,
+- [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).
 - [ ] **K11.** (#5004) [source] Radio group and checkbox field (`AgentPlayground.tsx:195`,
   `AgentEditor.tsx:254`, `ConnectionCredentialField.tsx:99–115`).
 - [x] **K12.** (#5005) [source] Dismissible `StudioAlert`, to replace module banners (see X9.4). (PR #5299)
-- [ ] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`).
+- [x] **K13.** (#5006) [source] Compact inline loading status (`ad-inline-status`). (PR #5309)
 - [ ] **K14.** (#5007) [source] Multi-select field (`DASH/native/ResourceDialogs.tsx:165`,
   `DASH/native/NamedDashboards.tsx:524`).
 
@@ -470,7 +470,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `EXT/Attention/AttentionWidget.tsx:12`; `DASH/WidgetFrame.tsx:88, 92` ([verified] `:88`).
 - [ ] **X9.2** (#5129) [verified] Suspense fallbacks in `WF/workflow-editor/WorkflowDefinitions.tsx:816` and
   `:991` (also `:992`, `:994`, `:1014` [source]).
-- [ ] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and
+- [x] **X9.3** (#5130) [source] `WF/ActivityDefinitionWorkbench.tsx:283` and (PR #5309)
   `ActivityDefinitionCreateDialog.tsx:126` (`ad-inline-status`);
   `EXT/Connections/ConnectionList.tsx:32` (a `StudioResultState` titled "Loading connections…").
 - [ ] **X9.4** (#5131) [source] Custom error blocks → `StudioAlert` / `StudioResultState`:
@@ -585,10 +585,10 @@ Work file by file and run `pnpm lint:css` after each. Counts are grep counts on 
 
 Uppercase labels (`needs: D3`):
 
-- [ ] **X13.1** (#5184) [verified] `WF/styles.css`: the token `--wf-label-transform: uppercase` at `:87` drives
+- [x] **X13.1** (#5184) [verified] `WF/styles.css`: the token `--wf-label-transform: uppercase` at `:87` drives (PR #5309)
   12 `text-transform: var(--wf-label-transform, uppercase)` rules; two literal `uppercase` rules sit at
   `:6061` and near `:7547`.
-- [ ] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`,
+- [x] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`, (PR #5309)
   `:275`; `WF/activityContractEditor.css:280–281`; `WF/activityDefinitionDependencyExplorer.css:29`;
   `WF/activityUpgradeWorkbench.css:578–580`.
 - [x] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`. (PR #5304)

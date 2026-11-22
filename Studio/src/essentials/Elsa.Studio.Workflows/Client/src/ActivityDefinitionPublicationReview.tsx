@@ -1,5 +1,5 @@
 import { graphPublicationValidationFailure } from "./activityPublicationValidationFailure";
-import { StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioFactList, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -389,26 +389,26 @@ export function ActivityDefinitionPublicationReview({
 }
 
 function PublicationSummary({ preflight, publishedOutcome, version, compact = false, blocked = false }: { preflight: ActivityPublicationPreflight; blocked?: boolean; publishedOutcome: ActivityPublicationReceipt["outcome"]; version: string; compact?: boolean }) {
-  if (!compact) return <dl className="ad-publication-summary">
+  if (!compact) return <StudioFactList>
     <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
     <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
     <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
     <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
-  </dl>;
+  </StudioFactList>;
   return <>
-    <dl className="ad-publication-summary">
+    <StudioFactList>
       <div><dt>Version</dt><dd>{version || "Not selected"}</dd></div>
       <div><dt>Readiness</dt><dd>{preflight.isPublishable && !blocked ? "Ready to publish" : "Blocked"}</dd></div>
       <div><dt>Change</dt><dd>{!preflight.hasBaseline ? "First publication" : preflight.diff?.requiredBump ? `${preflight.diff.requiredBump} version change` : "No version change required"}</dd></div>
       <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "No published baseline exists"}</dd></div>
-    </dl>
+    </StudioFactList>
     <details className="ad-publication-technical-details">
       <summary>Exact publication identities</summary>
-      <dl className="ad-publication-summary">
+      <StudioFactList>
         <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
         <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
         <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
-      </dl>
+      </StudioFactList>
     </details>
   </>;
 }
