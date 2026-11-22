@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AdvancedSection, StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioAlert, StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
 import { Copy, GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
 import { ContributedTaskForm } from "./TaskForm";
 import { createFieldRowId, duplicateTaskField, validateTaskFields } from "./formDesignerModel";
@@ -313,7 +313,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                       }
                       updateField(selectedRow.id, update);
                     }} />}</> : null}
-                  </> : <p role="alert">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</p>}
+                  </> : <StudioAlert tone="danger">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</StudioAlert>}
                   {fieldErrors[selectedIndex].length ? <ul className="user-task-designer__property-errors" aria-label="Selected field errors">{fieldErrors[selectedIndex].map(error => <li key={error}>{error}</li>)}</ul> : null}
                 </> : <p>Select a field in the canvas to edit its properties, or open Form settings.</p>}
               </div>
