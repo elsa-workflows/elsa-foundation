@@ -104,7 +104,8 @@ describe("navigation mode stylesheet", () => {
     expect(ruleBody(stylesCss, ".topbar-actions .user-menu")).toMatch(/display:\s*none;/);
     expect(ruleBody(stylesCss, 'html[data-nav-mode="top"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
     expect(responsiveRuleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
-    expect(responsiveRuleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    // Only account controls are hidden here; the footer also owns backend switching.
+    // The composed access journey exercises that connection control at narrow widths.
     expect(responsiveRuleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
   });
 
