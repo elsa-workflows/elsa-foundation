@@ -12,6 +12,10 @@ internal static class ParkHandoffCreditChecks
         await Backlog(large: true, check);
         await Backlog(large: false, check, keepHeld: true);
         await Backlog(large: true, check, keepHeld: true);
+        await Interrupt(check, loseAfter: null);
+        await Interrupt(check, loseAfter: false);
+        await Interrupt(check, loseAfter: true);
+        await HeldRunner(check);
     }
 
     private static async Task Backlog(bool large, Action<bool, string> check, bool keepHeld = false)
@@ -223,6 +227,208 @@ internal static class ParkHandoffCreditChecks
         }
     }
 
+    private static async Task Interrupt(Action<bool, string> check, bool? loseAfter)
+    {
+        const long initial = 1_702_610_018_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe();
+        var scope = new Contract.BoundScope("drain-credit-cut");
+        var ingress = new InMemoryIngress(store, new Requests("drain-credit-cut"), "drain-credit-cut",
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Suspend or Contract.Kinds.Resume);
+        var faultArmed = false;
+        var lost = false;
+        var proposed = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!faultArmed || lost || landed != loseAfter) return;
+            if (batch.Turns.FirstOrDefault(turn => turn is { Row.ParkRecovery: not null, FoundationRecoveryPage: null } &&
+                Applied(turn.Row) > 0 && turn.Consumed.Concat(turn.Done).Any(key =>
+                    store.Messages.GetValueOrDefault(key)?.Message.Kind == "input")) is not { } modelWrite)
+                return;
+            lost = true;
+            proposed = Applied(modelWrite.Row!);
+            throw new StoreException(Failure.Unknown, "Cut the model checkpoint around its fence.");
+        });
+        var worker = Owner();
+        await using var first = await Activate(worker);
+        var born = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(born.Actor!.Value);
+        var actor = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        await Step(worker);
+        await Send("fault", "fault");
+        await Step(worker);
+        var limit = InMemoryStore.ParkPageLimit;
+        var arrivals = Enumerable.Range(0, 4 * limit).Select(index => $"arrival-{index:D4}").ToArray();
+        foreach (var id in arrivals) await Send(id, "input");
+        for (var pass = 0; pass < 5 && store.Messages.Values.Count(row => row.KeptBy is not null) != arrivals.Length + 1; pass++)
+            await Step(worker);
+        var selection = (await new ActorList(store, 5).GetAsync(scope, target.Actor))!.Selection!;
+        await Send("recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Step(worker);
+        await Step(worker);
+        check(Row().ParkRecovery?.Restored == limit - 1 && Applied(Row()) == 0, "HC-2 the interruption fixture restores the first page before model entry");
+        if (Row().ParkRecovery is null) return;
+
+        if (loseAfter is null)
+        {
+            await Send("suspend", Contract.Kinds.Suspend);
+            for (var pass = 0; pass < 4 && !Suspended(); pass++) await Step(worker);
+            var frozen = Row().ParkRecovery?.Restored;
+            var withheld = Suspended() && frozen == limit - 1 && Applied(Row()) == 0;
+            for (var pass = 0; pass < 4; pass++)
+            {
+                now += 11;
+                await Step(worker);
+                withheld &= Row().ParkRecovery?.Restored == frozen && Applied(Row()) == 0 && Suspended();
+            }
+            check(withheld, "HC-2 suspension stops the page cursor and model through four due controls");
+            await Send("resume", Contract.Kinds.Resume);
+            await Complete(worker);
+        }
+        else
+        {
+            for (var pass = 0; pass < 20 && Row().ParkRecovery?.Restored < 2 * limit - 1; pass++)
+            {
+                if (pass % 3 == 2) now += 11;
+                await Step(worker);
+            }
+            var before = Applied(Row());
+            var beforeLoss = Row().ParkRecovery?.Restored == 2 * limit - 1 && before == limit - 1;
+            check(beforeLoss, "HC-2 the unknown-write cut follows page two while its model handoff is pending");
+            if (!beforeLoss) return;
+            faultArmed = true;
+            for (var pass = 0; pass < 12 && !lost; pass++)
+            {
+                if (pass % 3 == 2) now += 11;
+                await Step(worker);
+            }
+            var expected = loseAfter.Value ? proposed : before;
+            check(lost && !worker.Owns && proposed > before && Applied(Row()) == expected,
+                $"HC-2 a model commit {(loseAfter.Value ? "landed before" : "did not land before")} its unknown answer and abandons the old owner");
+            if (!lost) return;
+            probe.HandedHere.Clear();
+            var replacement = Owner();
+            await using var next = await Activate(replacement);
+            await Complete(replacement);
+        }
+
+        check(Row().ParkRecovery is null && !Suspended() && Json.Read<List<string>>(Row().State).SequenceEqual(arrivals),
+            "HC-2 every arrival reaches one committed model state after the interruption");
+
+        static int Applied(InstanceRow row) => Json.Read<List<string>>(row.State).Count;
+        InstanceRow Row() => store.Instances[actor];
+        bool Suspended() => store.FoundationTurnHeader(Row()).Header.TypeData == "suspended";
+        ValueTask<Contract.Admission> Send(string id, string kind, string? payload = null) =>
+            ingress.SendAsync(scope, target, id, kind, payload);
+        Worker Owner() => new("drain-credit-cut-owner", 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, PollLimit = 1_024 });
+        static async Task<IScopeActivation> Activate(Worker owner) => (await new DurableHost([owner]).ActivateAsync(0))!;
+        async Task Step(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.FlushAsync();
+            owner.RunTurn(actor);
+            await owner.FlushAsync();
+        }
+        async Task Complete(Worker owner)
+        {
+            var stayedBounded = true;
+            for (var pass = 0; pass < 3 * arrivals.Length + 30 && (Row().ParkRecovery is not null || Applied(Row()) < arrivals.Length); pass++)
+            {
+                if (pass % 3 == 2) now += 11;
+                await Step(owner);
+                stayedBounded &= store.Messages.Values.Count(row => !row.Done && row.Message.Target.Id == actor &&
+                    row.Message.Kind == "input" && row.ReleasedBy is not null) <= limit;
+            }
+            check(stayedBounded, "HC-2 the continued drain never exceeds one page of pending model inputs");
+        }
+    }
+
+    private static async Task HeldRunner(Action<bool, string> check)
+    {
+        const long initial = 1_702_610_019_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("drain-credit-runner");
+        var probe = new Probe { KeepsJob = true };
+        var scheduler = new HeldScheduler();
+        var edge = new InMemoryIngress(store, new Requests("drain-credit-runner"), "drain-credit-runner", (_, kind) => kind == Contract.Kinds.Recover);
+        var first = Owner("drain-credit-before-park");
+        await using var initialOwner = await Activate(first);
+        var born = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "")), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(born.Actor!.Value);
+        var actor = store.FoundationTarget(scope.Tenant, target.Actor.Id)!.Id;
+        await Step(first);
+        await Send("arm", "arm");
+        await Step(first);
+        var key = InboxKey.Ticket(actor, "credit-job", Row().Creation);
+        store.Messages[key].Attempts = 3;
+        await initialOwner.DisposeAsync();
+        scheduler.RunAll();
+
+        var worker = Owner("drain-credit-job-park");
+        await using var active = await Activate(worker);
+        for (var pass = 0; pass < 5 && Row().Status == InstanceStatus.Running; pass++) await Step(worker);
+        var parked = Row().Status == InstanceStatus.Faulted &&
+            store.Messages[key] is { Done: true, KeptBy: ParkKeepReason.Consumed } && probe.JobEntries == 0;
+        check(parked, "HC-2 a real exhausted job is retained before testing the runner's handoff");
+        if (!parked) return;
+
+        var limit = InMemoryStore.ParkPageLimit;
+        var arrivals = Enumerable.Range(0, 2 * limit + 1).Select(index => $"held-runner-{index:D3}").ToArray();
+        foreach (var id in arrivals) await Send(id, "input");
+        await Step(worker);
+        var selection = (await new ActorList(store, 5).GetAsync(scope, target.Actor))!.Selection!;
+        var handle = store.SealFoundationKeptHandle(scope.Tenant, target.Actor.Id, key)!;
+        await Send("recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Retry, [handle])));
+        for (var pass = 0; pass < 8 && Row().ParkRecovery?.Restored != limit; pass++) await Step(worker);
+        var firstPage = Row().ParkRecovery;
+        var waiting = firstPage?.Restored == limit && store.Messages[key] is { Done: false, KeptBy: null };
+        check(waiting, "HC-2 Retry restores the exact ticket beside the ordinary arrivals on page one");
+        if (!waiting) return;
+
+        for (var pass = 0; pass < 24 && Row().ParkRecovery?.Restored <= limit; pass++)
+        {
+            if (pass % 3 == 2) now += 11;
+            await Step(worker);
+        }
+        var second = Row().ParkRecovery;
+        check(second?.Restored == 2 * limit && store.Messages[key] is { Done: false } &&
+            scheduler.Count > 0 && probe.JobEntries == 0,
+            "HC-2 the next page gets all of its credit while the restored job runner is still queued");
+        for (var pass = 0; pass < 24 && (Row().ParkRecovery is not null ||
+            Json.Read<List<string>>(Row().State).Count < arrivals.Length); pass++)
+        {
+            if (pass % 3 == 2) now += 11;
+            await Step(worker);
+        }
+        var drained = Row().ParkRecovery is null && probe.JobEntries == 0 && store.Messages[key] is { Done: false } &&
+            Json.Read<List<string>>(Row().State).SequenceEqual(arrivals);
+        var completion = worker.JobCompletion(actor, "credit-job", Row().Creation);
+        scheduler.RunAll();
+        if (completion is not null) await completion.WaitAsync(TimeSpan.FromSeconds(5));
+        for (var pass = 0; pass < 5; pass++) await Step(worker);
+        var settled = store.Messages.GetValueOrDefault(key) is null or { Done: true, KeptBy: null };
+        check(drained && probe.JobEntries == 1 && probe.JobResults == 1 && settled && Row().Status == InstanceStatus.Running,
+            $"HC-2 the drain completes before the released runner enters once and settles its ticket (drained={drained}, entries={probe.JobEntries}, results={probe.JobResults}, settled={settled})");
+
+        InstanceRow Row() => store.Instances[actor];
+        ValueTask<Contract.Admission> Send(string id, string kind, string? payload = null) => edge.SendAsync(scope, target, id, kind, payload);
+        Worker Owner(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, JobScheduler = scheduler, PollLimit = 1_024 });
+        static async Task<IScopeActivation> Activate(Worker owner) => (await new DurableHost([owner]).ActivateAsync(0))!;
+        async Task Step(Worker owner)
+        {
+            await owner.PollAsync();
+            await owner.LoadAsync();
+            await owner.FlushAsync();
+            owner.RunTurn(actor);
+            await owner.FlushAsync();
+        }
+    }
+
     private sealed class DrainMeasurements
     {
         private readonly Dictionary<(string Name, string Aggregate), long> values = [];
@@ -258,6 +464,9 @@ internal static class ParkHandoffCreditChecks
     {
         public string Type => "handoff-credit";
         internal bool HoldInputs { get; set; }
+        internal bool KeepsJob { get; init; }
+        internal int JobEntries { get; private set; }
+        internal int JobResults { get; private set; }
         internal HashSet<string> HandedHere { get; } = new(StringComparer.Ordinal);
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
@@ -266,6 +475,10 @@ internal static class ParkHandoffCreditChecks
             foreach (var message in turn.Inbox)
             {
                 if (message.Kind == "fault") throw new InvalidOperationException("Park the drain-credit fixture.");
+                if (message.Kind is Contract.Kinds.Suspend or Contract.Kinds.Resume)
+                    turn.SetHeader(message.Kind == Contract.Kinds.Suspend ? "suspended" : "", turn.Header.Labels);
+                if (message.Kind == "arm") turn.StartJob("credit-job");
+                if (message.Kind == Contract.Kinds.JobFinished) JobResults++;
                 if (message.Kind == "tick") { order.Add(message.Id); continue; }
                 if (message.Kind != "input") continue;
                 HandedHere.Add(message.Id);
@@ -276,9 +489,14 @@ internal static class ParkHandoffCreditChecks
             return default;
         }
 
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => new((object?)null);
-        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            JobEntries++;
+            return new((object?)null);
+        }
+        public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) =>
+            new([], KeepsJob ? [new("credit-job", null)] : [], []);
+        public bool Withholds(Contract.ActorHeader header) => header.TypeData == "suspended";
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
     }
