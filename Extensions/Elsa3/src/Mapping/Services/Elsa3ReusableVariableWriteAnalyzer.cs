@@ -1564,7 +1564,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 _arrays.Add(call);
                 Put(mapped, "*", arguments.Length <= 1 || arguments[1].Functions.Count == 0 ? elements :
                     Repeated(_ => Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local),
-                        maximumCalls: LiteralArrayBound(call.Arguments[0])));
+                        maximumCalls: LiteralArrayBound(call.Arguments[0]),
+                        minimumCalls: LiteralArrayBound(call.Arguments[0]) ?? 0));
                 return mapped;
             }
             // Only known read-only intrinsics bypass the opaque-call guard. Reflection and callbacks can return or
@@ -1613,13 +1614,18 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
         if (method is "map" or "filter" or "find" or "findIndex" or "findLast" or "findLastIndex" or "some" or "every" or "forEach" or "flatMap" or "reduce" or "reduceRight")
             if (arguments.FirstOrDefault()?.Functions.Count > 0)
+            {
+                var maximum = method is "reduce" or "reduceRight" && arguments.Length <= 1 && callbackBound is { } count
+                    ? Math.Max(0, count - 1) : callbackBound;
+                var minimum = maximum is > 0 && call.Callee is MemberExpression { Object: ArrayExpression literalArray } &&
+                    literalArray.Elements.All(item => item is not null) ? 1 : 0;
                 callbackResult = Repeated(accumulator => Apply(arguments[0], method is "reduce" or "reduceRight"
                     ? [accumulator, Member(receiver, "*"), Value.Local, receiver]
                     : [Member(receiver, "*"), Value.Local, receiver],
                     method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local),
                     method is "reduce" or "reduceRight" ? arguments.Length > 1 ? arguments[1] : Member(receiver, "*") : null,
-                    method is "reduce" or "reduceRight" && arguments.Length <= 1 && callbackBound is { } count
-                        ? Math.Max(0, count - 1) : callbackBound);
+                    maximum, minimum);
+            }
         if (method is "replace" or "replaceAll")
         {
             Coerce([receiver], stringHint: true);
@@ -1690,7 +1696,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private static int? LiteralArrayBound(Node expression) => expression is ArrayExpression array &&
         array.Elements.All(item => item is not SpreadElement) ? array.Elements.Count : null;
 
-    private Value Repeated(Func<Value, Value> invoke, Value? initial = null, int? maximumCalls = null)
+    private Value Repeated(Func<Value, Value> invoke, Value? initial = null, int? maximumCalls = null, int minimumCalls = 0)
     {
         // Native iteration can invoke the same callback more than once. Preserve captured-state changes and feed
         // possible reducer results back into its accumulator until the finite ownership graph stops growing.
@@ -1698,13 +1704,17 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (maximumCalls is { } bound)
         {
             // A proven bound must not invent another callback. Keep sequential strong updates for these calls,
-            // while retaining every possible returned value for collection results.
+            // while retaining every possible returned value and exit prefix. Early-stopping methods, holes and
+            // callback deletions can all perform fewer calls than the maximum.
             var accumulator = result;
+            State? exits = minimumCalls == 0 ? _state.Copy() : null;
             for (var index = 0; index < bound && !_writes; index++)
             {
                 accumulator = invoke(accumulator);
                 result = result.Union(accumulator);
+                if (index + 1 >= minimumCalls) exits = Join(exits, _state);
             }
+            _state = exits ?? _state;
             return result;
         }
         while (!_writes)
