@@ -16,10 +16,12 @@ internal static class ParkPageBoundsChecks
         await Run(Resolution.Resume, check, aboveHighWater: true);
         foreach (var arrival in Enum.GetValues<LateArrival>())
             await Run(Resolution.Resume, check, arrival: arrival);
+        await Run(Resolution.Resume, check, cutAfterPage: false);
+        await Run(Resolution.Resume, check, cutAfterPage: true);
     }
 
     private static async Task Run(Resolution resolution, Action<bool, string> check, bool aboveHighWater = false,
-        LateArrival? arrival = null)
+        LateArrival? arrival = null, bool? cutAfterPage = null)
     {
         const long start = 1_701_679_300_000;
         var now = start;
@@ -30,9 +32,15 @@ internal static class ParkPageBoundsChecks
         var ingress = new InMemoryIngress(store, new Requests("page-bounds"), "page-bounds", (_, _) => true);
         var pages = new List<IReadOnlyList<ParkPageRow>>();
         var observedPressure = false;
+        var lostPage = false;
+        var privateTrial = false;
         var actor = default(Contract.ActorRef);
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
+            privateTrial |= batch.Trial.Any(key => key.Scope == ParkDrainEnvelope.Scope);
+            var cut = !lostPage && landed == cutAfterPage &&
+                batch.Turns.Any(turn => turn.FoundationRecoveryPage?.Rows.Count == InMemoryStore.ParkPageLimit);
+            if (cut && !landed) LosePage();
             if (!landed) return;
             if (aboveHighWater && store.Partitions[0].DueBacklog == 5 &&
                 store.Instances.Values.Any(row => row.ParkRecovery is not null))
@@ -42,6 +50,7 @@ internal static class ParkPageBoundsChecks
                 var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
                 if (rows is { Count: > 0 }) pages.Add(rows);
             }
+            if (cut) LosePage();
         }, async batch =>
         {
             if (arrival == LateArrival.BeforePage && pages.Count == 0 &&
@@ -50,7 +59,14 @@ internal static class ParkPageBoundsChecks
                 await AdmitEarlier(page[^1].Cursor);
         });
 
-        await using var initial = await Owner("page-first");
+        void LosePage()
+        {
+            lostPage = true;
+            throw new StoreException(Failure.Unknown, "The first recovery page did not return an answer.");
+        }
+
+        var first = Worker("page-first");
+        await using var initial = await Owner(first);
         var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "metadata")), "birth", Contract.Kinds.Start);
         actor = birth.Actor ?? throw new InvalidOperationException("The page fixture could not start its actor.");
         var target = new Contract.Target.Ref(actor);
@@ -102,13 +118,24 @@ internal static class ParkPageBoundsChecks
             if (admission.Outcome != Contract.AdmissionOutcome.Accepted)
                 throw new InvalidOperationException($"The fixture could not admit {resolution}: {admission.Outcome}.");
         }
-        for (var i = 0; i < 12 && pages.Count == 0; i++)
+        for (var i = 0; i < 12 && pages.Count == 0 && !lostPage; i++)
             await Pump(initial, 1);
         var firstLanded = pages is [{ Count: InMemoryStore.ParkPageLimit }] &&
             pages[0][0].Cursor.Key == kept.MinBy(row => row.Seq)!.Message.InboxKey;
-        check(firstLanded,
-            $"S-5 {resolution}: page one includes the largest first input and stops at the row boundary");
-        if (!firstLanded) return;
+        if (cutAfterPage is { } after)
+        {
+            var atCut = Read().Row;
+            var rightBoundary = lostPage && !first.Owns && firstLanded == after &&
+                atCut.ParkRecovery is { } recovery && (recovery.Cursor is not null) == after && probe.Restored == 0 &&
+                store.Messages.GetValueOrDefault(recovery.Control) is { Done: false, Attempts: 0, Trial: 0 };
+            check(rightBoundary, $"M3-2 and M3-9 the cursor reflects whether the lost page landed ({after})");
+            if (!rightBoundary) return;
+        }
+        else
+        {
+            check(firstLanded, $"S-5 {resolution}: page one includes the largest first input and stops at the row boundary");
+            if (!firstLanded) return;
+        }
         if (arrival is LateArrival.AfterPage or LateArrival.Tied or LateArrival.BeforeTake)
             await AdmitEarlier(pages[0][^1].Cursor);
         if (aboveHighWater)
@@ -116,8 +143,8 @@ internal static class ParkPageBoundsChecks
                 await ingress.SendAsync(scope, target, $"unreleased-{i}", "late", "outside the recovery cohort");
         var keepOwner = arrival is LateArrival.BeforePage or LateArrival.AfterPage;
         if (!keepOwner) await initial.DisposeAsync();
-        now++;
-        await using var replacement = keepOwner ? null : await Owner("page-second");
+        now += cutAfterPage is null ? 1 : (long)Defaults.Lease.TotalMilliseconds + 1;
+        await using var replacement = keepOwner ? null : await Owner(Worker("page-second"));
         if (arrival == LateArrival.AfterTake) await AdmitEarlier(pages[0][^1].Cursor);
         for (var i = 0; i < 16; i++)
         {
@@ -145,6 +172,9 @@ internal static class ParkPageBoundsChecks
                 row.Status == InstanceStatus.Finished,
                 $"E-1–E-3 {arrival}: the late arrival ends the model after Complete and every restored row " +
                 $"(ended after {probe.EndAfterRestored}; open at end {probe.EndDuringRecovery}; distinct {probe.RestoredIds.Count}; status {row.Status})");
+        if (cutAfterPage is not null)
+            check(complete && !privateTrial && probe.RestoredIds.SetEquals(restorable) && row.Status == InstanceStatus.Running,
+                $"M3-2 and M3-9 the cold owner applies every input once without a trial on any drain control ({cutAfterPage})");
 
         async Task AdmitEarlier(ParkPageCursor cursor)
         {
@@ -165,13 +195,12 @@ internal static class ParkPageBoundsChecks
 
         InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
 
-        async Task<IScopeActivation> Owner(string node) =>
-            (await new DurableHost([new Worker(node, 0, wire, new ActorAdapter(store, probe),
-                new WorkerOptions
-                {
-                    Monotonic = () => now - start,
-                    Backlog = aboveHighWater ? new(4, 2, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10)) : null
-                })]).ActivateAsync(0))!;
+        Worker Worker(string node) => new(node, 0, wire, new ActorAdapter(store, probe), new WorkerOptions
+        {
+            Monotonic = () => now - start,
+            Backlog = aboveHighWater ? new(4, 2, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10)) : null
+        });
+        static async Task<IScopeActivation> Owner(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
     }
 
     private static string WideId(int index)
