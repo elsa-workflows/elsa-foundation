@@ -721,8 +721,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
   reads "1 loaded questions".
-- [ ] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
-  secondary ones into an overflow menu.
+- [x] **E6** (#5236) [seen] Structured logs and Console: about ten same-weight toolbar buttons. Move the
+  secondary ones into an overflow menu. (PR #5292)
 - [ ] **E7** (#5237) [check] ETL: one-word page descriptions ("Design", "Runtime"); list and editor share one
   page.
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
