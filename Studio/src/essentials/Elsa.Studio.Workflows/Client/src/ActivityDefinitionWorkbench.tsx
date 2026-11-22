@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,6 +45,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   onNavigate(next: RouteState): void;
   onPlanUpgrade(kind: "ActivityDraft" | "ActivityVersion", id: string): void;
 }) {
+  
   const queryClient = useQueryClient();
   const requestedSection = selectedDraftId ? "drafts" : selectedVersionId ? "versions" : normalizeSection(section);
   const [draftCursorStack, setDraftCursorStack] = useState<(string | null)[]>([null]);
@@ -237,6 +239,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 }
 
 function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManagementView; provider: string }) {
+  
   return <dl className="ad-identity-strip">
     {isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") && detail.definition.category ? <div><dt>Category</dt><dd>{detail.definition.category}</dd></div> : null}
     <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
@@ -250,6 +253,7 @@ function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManag
 }
 
 function DesignedOverview({ detail, activeDrafts, onOpen, onOpenWorkflows }: { detail: ActivityDefinitionManagementView; activeDrafts: number | null; onOpen(section: Section): void; onOpenWorkflows?(): void }) {
+  
   const recommendation = detail.lifecycle.recommendation;
   const available = isActivityDefinitionEnumValue(recommendation?.lifecycle, "Active");
   return <div className="ad-designed-overview">
@@ -259,6 +263,7 @@ function DesignedOverview({ detail, activeDrafts, onOpen, onOpenWorkflows }: { d
 }
 
 function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { detail: ActivityDefinitionManagementView; provider: string; designOwned: boolean; versionQuery: ReturnType<typeof useActivityDefinitionVersion>; onOpen(section: Section): void }) {
+  
   if (!designOwned) return <div className="ad-source-overview">
     <dl className="ad-source-summary">
       <div><dt>Category</dt><dd>{detail.definition.category}</dd></div>
@@ -280,12 +285,14 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
 }
 
 function DraftsSection({ query, exactQuery, exactFailure, privacyFailure, selectedDraftId, page, designOwned, canCreateDraft, onCreate, onPrevious, onNext, onRetry, onSelect, onEdit, onPlanUpgrade }: { query: ReturnType<typeof useActivityDefinitionDrafts>; exactQuery: ReturnType<typeof useActivityDefinitionDraft>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedDraftId: string | null; page: number; designOwned: boolean; canCreateDraft: boolean; onCreate(): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(draftId: string): void; onEdit(draftId: string): void; onPlanUpgrade(draftId: string): void }) {
+  useStudioTimeZone();
   const data = privacyFailure ? undefined : query.data;
   const selected = privacyFailure || exactFailure ? undefined : data?.items.find(item => item.draft.draftId === selectedDraftId) ?? exactQuery.data;
   return <div><div className="ad-section-heading-row"><SectionHeading icon={<GitBranch size={18} />} title="Drafts" description="Mutable drafts are listed by exact identity. Presentation labels are optional and need not be unique." />{canCreateDraft ? <button type="button" onClick={onCreate}>Create parallel draft</button> : null}</div>{!designOwned ? <div className="ad-unavailable-note" role="status"><strong>No mutable source-owned drafts</strong><span>Choose an immutable version and fork it into a new Design-owned identity.</span></div> : null}{selected ? <SelectedDraft item={query.error ? { ...selected, actions: [] } : selected} onEdit={() => onEdit(selected.draft.draftId)} onPlanUpgrade={() => onPlanUpgrade(selected.draft.draftId)} /> : <ExactSelectionState kind="draft" selected={Boolean(selectedDraftId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized drafts are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition drafts">{data.items.map(item => <button key={item.draft.draftId} type="button" className={item.draft.draftId === selectedDraftId ? "is-selected" : ""} onClick={() => onSelect(item.draft.draftId)}><span><strong>{draftLabel(item)}</strong><small>Revision {item.draft.revision} · {item.draft.status}</small></span><span><strong>{item.draft.providerKey}</strong><small>{formatDate(item.draft.updatedAt)}</small></span></button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
 function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, selectedVersionId, page, designOwned, onCreateFromVersion, onManage, onPrevious, onNext, onRetry, onSelect, onPlanUpgrade }: { query: ReturnType<typeof useActivityDefinitionVersions>; exactQuery: ReturnType<typeof useActivityDefinitionVersion>; exactFailure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; selectedVersionId: string | null; page: number; designOwned: boolean; onCreateFromVersion(versionId: string): void; onManage(action: ActivityDefinitionVersionLifecycleAction, version: ActivityDefinitionVersionManagementView): void; onPrevious(): void; onNext(): void; onRetry(): void; onSelect(versionId: string): void; onPlanUpgrade(versionId: string): void }) {
+  useStudioTimeZone();
   const data = privacyFailure ? undefined : query.data;
   const listedSelection = data?.items.find(item => item.version.versionId === selectedVersionId);
   const selected = privacyFailure || exactFailure
@@ -298,6 +305,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
 }
 
 function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query: ReturnType<typeof useActivityDefinitionDrafts> | ReturnType<typeof useActivityDefinitionVersions>; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; empty: string; onRetry(): void }) {
+  
   if (privacyFailure) return <div className="ad-inline-error" role="alert"><span>{privacyFailure === "unavailable" ? "This backend does not advertise this supported management collection. No fallback is used." : privacyFailure === "not-found" ? "This collection is no longer available. No identities or counts are shown." : "This account cannot open this collection. No identities or counts are shown."}</span> <button type="button" onClick={onRetry}>Try again</button></div>;
   if (query.isPending) return <div className="ad-inline-status" role="status">Loading authorized rows…</div>;
   if (query.isError && !query.data) return <div className="ad-inline-error" role="alert">This collection could not be confirmed. No unconfirmed rows are shown.</div>;
@@ -307,6 +315,7 @@ function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query
 }
 
 function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft" | "version"; selected: boolean; query: ReturnType<typeof useActivityDefinitionDraft> | ReturnType<typeof useActivityDefinitionVersion>; failure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null }) {
+  
   if (!selected) return null;
   if (query.isPending) return <div className="ad-inline-status" role="status">Loading the exact selected {kind}…</div>;
   if (failure) return <div className="ad-inline-error" role="alert">The exact selected {kind} could not be confirmed. No unconfirmed identity is shown.</div>;
@@ -314,13 +323,17 @@ function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft"
 }
 
 function CursorPager({ page, data, onPrevious, onNext }: { page: number; data: { hasMore: boolean; continuation?: string | null } | undefined; onPrevious(): void; onNext(): void }) {
+  
   if (!data || (page <= 1 && !data.hasMore)) return null;
   return <div className="ad-child-pager"><button type="button" onClick={onPrevious} disabled={page <= 1}><ChevronLeft size={15} aria-hidden /> Previous</button><span>Page {page}</span><button type="button" onClick={onNext} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></button></div>;
 }
 
-function SectionHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) { return <header className="ad-section-heading"><span aria-hidden>{icon}</span><div><h2>{title}</h2><p>{description}</p></div></header>; }
-function SelectedDraft({ item, onEdit, onPlanUpgrade }: { item: ActivityDefinitionDraftManagementView; onEdit(): void; onPlanUpgrade(): void }) { return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><div className="ad-header-actions">{isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft") ? <button type="button" onClick={onEdit}>Open implementation editor</button> : <span>This draft is read-only or editing is unavailable for this account.</span>}<button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact draft</button></div></div>; }
+function SectionHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+   return <header className="ad-section-heading"><span aria-hidden>{icon}</span><div><h2>{title}</h2><p>{description}</p></div></header>; }
+function SelectedDraft({ item, onEdit, onPlanUpgrade }: { item: ActivityDefinitionDraftManagementView; onEdit(): void; onPlanUpgrade(): void }) {
+   return <div className="ad-selected-record" aria-label="Selected exact draft"><strong>{draftLabel(item)}</strong><span><code>{item.draft.draftId}</code> · revision {item.draft.revision} · {item.draft.providerKey}</span><div className="ad-header-actions">{isActivityDefinitionEnumValue(item.draft.status, "Active") && isActionAllowed(item.actions, "edit-draft") ? <button type="button" onClick={onEdit}>Open implementation editor</button> : <span>This draft is read-only or editing is unavailable for this account.</span>}<button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact draft</button></div></div>; }
 function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, onPlanUpgrade, onManage }: { item: ActivityDefinitionVersionManagementView; compact: boolean; actionLabel: string; actionAllowed: boolean; onCreate(): void; onPlanUpgrade(): void; onManage(action: ActivityDefinitionVersionLifecycleAction): void }) {
+  
   const lifecycleActions: Array<{ action: ActivityDefinitionVersionLifecycleAction; availability: string; label: string }> = [
     { action: "recommend", availability: "set-recommendation", label: "Make recommended" },
     { action: "retire", availability: "retire-version", label: "Retire" },
@@ -349,6 +362,7 @@ function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, 
 }
 
 function HistoricalContract({ contract, compact = false }: { contract: NonNullable<ActivityDefinitionVersionManagementView["contract"]>; compact?: boolean }) {
+  
   return <section className="ad-historical-contract" aria-labelledby="historical-contract-title"><header>{compact ? <h2 id="historical-contract-title">Inputs, outputs &amp; outcomes</h2> : <h3 id="historical-contract-title">Immutable public contract</h3>}{!compact ? <span>Schema {contract.contractSchemaVersion}</span> : null}</header>{!compact ? <p>Stored aliases remain visible even when they are no longer available in the current authoring catalog.</p> : null}
     <div className="ad-historical-contract-groups">
       <HistoricalMembers compact={compact} title="Inputs" members={contract.inputs.map(member => ({
@@ -374,6 +388,7 @@ function HistoricalContract({ contract, compact = false }: { contract: NonNullab
 }
 
 function HistoricalMembers({ title, members, compact }: { title: string; compact: boolean; members: Array<{ key: string; name: string; detail: string; compactDetail: string }> }) {
+  
   return <section>{compact ? <h3>{title}</h3> : <h4>{title}</h4>}{members.length ? <ul>{members.map(member => <li key={member.key}><strong>{member.name}</strong>{compact ? <span>{member.compactDetail}</span> : <><code>{member.key}</code><span>{member.detail}</span></>}</li>)}</ul> : <p>None</p>}</section>;
 }
 function compactContractType(alias: string, collectionKind: string, requirement: string, isNullable: boolean) {

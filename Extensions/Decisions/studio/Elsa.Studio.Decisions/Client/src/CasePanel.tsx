@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { StudioAlert, StudioButton, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
@@ -13,6 +15,7 @@ export function displayValue(value: unknown): string {
   return value === null || value === undefined ? "Not retained" : String(value);
 }
 export function ValueInput({ clause, value, onChange, label, unset = false }: { clause: Clause; value: Scalar; onChange(value: Scalar): void; label: string; unset?: boolean }) {
+  
   const missingId = useId();
   const kind = unset ? "unset" : value.kind === "null" ? "null" : clause.type;
   const confirm = (next: string) => {
@@ -45,6 +48,7 @@ export function ValueInput({ clause, value, onChange, label, unset = false }: { 
   </span>{unset ? <span id={missingId} className="decision-input-missing" role="status">{label} is not set. Runtime will refuse MissingInput until you enter or confirm a value.</span> : null}</label>;
 }
 export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChange }: { api: ElsaStudioModuleApi; asset: DecisionAsset; candidate?: DecisionVersion; xml: string; dirty: boolean; onDraftStateChange?(dirty: boolean, busy: boolean): void }) {
+  useStudioTimeZone();
   const [cases, setCases] = useState<DecisionCase[]>([]), [runs, setRuns] = useState<TestRun[]>([]), [run, setRun] = useState<TestRun | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [editing, setEditing] = useState<DecisionCase | "new" | null>(null), [name, setName] = useState(""), [inputs, setInputs] = useState<Record<string, Scalar>>({});
@@ -102,10 +106,11 @@ export function CasePanel({ api, asset, candidate, xml, dirty, onDraftStateChang
       <label className="decision-checkbox"><input type="checkbox" checked={sensitive} onChange={event => setSensitive(event.target.checked)} /> Protect saved case values</label><div className="decision-actions"><StudioButton type="submit" variant="primary" disabled={busy || !name.trim()}>Save case</StudioButton><StudioButton disabled={busy} onClick={close}>Cancel</StudioButton></div></fieldset>
     </form> : null}
     {run ? <TestResult run={run} changed={run.candidateHash !== (candidate?.sourceHash ?? asset.sourceHash) || dirty} labels={run.candidateHash === (candidate?.sourceHash ?? asset.sourceHash) && !dirty ? labelsForXml(xml) : undefined} /> : null}
-    {can(api, "decisions:history") ? <div className="decision-history"><h3>Test history</h3><StudioButton disabled={busy} onClick={() => void work(async () => { const items = await history(api, asset.id); if (alive.current) setRuns(items); })}>Load test history</StudioButton>{runs.map(item => <div className="decision-history-row" key={item.id}><span>{item.passed ? "Passed" : "Failed"} · {new Date(item.completedAt).toLocaleString()}</span><StudioButton disabled={busy} onClick={() => void work(async () => { const receipt = await getRun(api, asset.id, item.id); if (alive.current) setRun(receipt); })}>Inspect run {item.id}</StudioButton>{can(api, "decisions:manage") ? <StudioButton disabled={busy} onClick={() => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete test history", message: "Delete this completed test receipt and retained details?", confirmLabel: "Delete", tone: "danger" })) return; await deleteRun(api, asset.id, item.id); if (alive.current) { setRuns(previous => previous.filter(row => row.id !== item.id)); if (run?.id === item.id) setRun(null); } })}>Delete run {item.id}</StudioButton> : null}</div>)}</div> : null}
+    {can(api, "decisions:history") ? <div className="decision-history"><h3>Test history</h3><StudioButton disabled={busy} onClick={() => void work(async () => { const items = await history(api, asset.id); if (alive.current) setRuns(items); })}>Load test history</StudioButton>{runs.map(item => <div className="decision-history-row" key={item.id}><span>{item.passed ? "Passed" : "Failed"} · {formatStudioDate(item.completedAt)}</span><StudioButton disabled={busy} onClick={() => void work(async () => { const receipt = await getRun(api, asset.id, item.id); if (alive.current) setRun(receipt); })}>Inspect run {item.id}</StudioButton>{can(api, "decisions:manage") ? <StudioButton disabled={busy} onClick={() => void work(async () => { if (!await api.dialogs.confirm({ title: "Delete test history", message: "Delete this completed test receipt and retained details?", confirmLabel: "Delete", tone: "danger" })) return; await deleteRun(api, asset.id, item.id); if (alive.current) { setRuns(previous => previous.filter(row => row.id !== item.id)); if (run?.id === item.id) setRun(null); } })}>Delete run {item.id}</StudioButton> : null}</div>)}</div> : null}
   </section>;
 }
 export function TestResult({ run, changed, labels }: { run: TestRun; changed: boolean; labels?: ExplanationLabels }) {
+  
   return <section className="decision-test-result" aria-label="Decision test results"><h3>{run.passed ? "All cases passed" : "Cases failed"}</h3>{changed ? <p>These results belong to a different saved candidate.</p> : null}<details className="decision-provenance"><summary>Tested candidate</summary><dl><dt>Candidate</dt><dd><code>{run.candidateId}</code></dd><dt>Content identity</dt><dd><code>{run.candidateHash}</code></dd></dl></details>
     {!run.hasDetailedPayload ? <p className="decision-muted">Detailed values were not retained or are unavailable with your permissions.</p> : null}
     {run.comparisons?.map(item => <article className="decision-comparison" key={item.caseId}><h4>{item.name} · {item.passed ? "Passed" : "Failed"}</h4><p>{item.status}{item.failurePath ? ` at ${item.failurePath}` : ""}</p>{item.expected !== undefined && item.expected !== null ? <p>Expected: <output>{displayValue(item.expected)}</output></p> : null}{item.actual !== undefined && item.actual !== null ? <p>Actual: <output>{displayValue(item.actual)}</output></p> : null}{item.trace?.length ? <RuleExplanation trace={item.trace} labels={labels} /> : item.matchedRules?.length ? <details><summary>Rule identities</summary><p>Matched: {item.matchedRules.join(", ")}</p>{item.selectedRules?.length ? <p>Selected: {item.selectedRules.join(", ")}</p> : null}</details> : null}</article>)}

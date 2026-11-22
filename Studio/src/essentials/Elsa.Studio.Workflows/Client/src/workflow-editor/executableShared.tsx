@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { Check, Copy } from "lucide-react";
@@ -7,6 +8,7 @@ import type { ExecutableRunState } from "./editorTypes";
 import { copyTextToClipboard, formatReferenceScope, getExecutableReferenceStatus } from "./editorHelpers";
 
 export function ExecutableRunStatusLine({ status, run, compact = false }: { status: string; run: ExecutableRunState | null; compact?: boolean }) {
+  
   const openRun = () => {
     if (!run?.workflowExecutionId) return;
     window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(run.workflowExecutionId)}`));
@@ -25,6 +27,7 @@ export function ExecutableRunStatusLine({ status, run, compact = false }: { stat
 }
 
 export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; textLabel?: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+  
   if (!value) return null;
 
   const copy = async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -58,6 +61,7 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
   ariaLabel?: string;
   variant?: "compact" | "collection";
 }) {
+  useStudioTimeZone();
   if (references.length === 0) return <p className="wf-muted">No source references.</p>;
 
   return (

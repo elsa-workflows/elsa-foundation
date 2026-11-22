@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, CornerDownRight } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -58,6 +59,7 @@ export function useExecutionPage(context: StudioEndpointContext, workflowExecuti
 }
 
 function PageFeedback({ state }: { state: ReturnType<typeof useExecutionPage> }) {
+  
   if (state.status === "ready") return null;
   return <div className="wf-execution-feedback" role="status">
     {state.status === "loading" ? "Loading recorded executions…" : state.status === "unsupported" ? "Execution browsing is unavailable on this host." : state.status === "denied" ? "Execution history is unavailable for this context." : "Execution history could not be loaded."}
@@ -69,6 +71,7 @@ function ExecutionRow({ entry, selected, label, onSelect, onIncident }: {
   entry: ActivityExecutionBrowseEntry; selected?: boolean; label: string;
   onSelect(): void; onIncident?(execution: ActivityExecutionStateSummary): void;
 }) {
+  useStudioTimeZone();
   const execution = entry.execution;
   const durationMs = execution.startedAt && execution.completedAt ? Date.parse(execution.completedAt) - Date.parse(execution.startedAt) : null;
   const duration = durationMs !== null && durationMs >= 0 && durationMs < 1000 ? `${durationMs} ms` : formatDuration(execution.startedAt, execution.completedAt) || "Duration unavailable";
@@ -83,6 +86,7 @@ function ExecutionRow({ entry, selected, label, onSelect, onIncident }: {
 }
 
 function PageNavigation({ page, onPage }: { page: ActivityExecutionBrowsePage; onPage(cursor: string): void }) {
+  
   if (!page.previousCursor && !page.nextCursor) return null;
   return <div className="wf-execution-paging" aria-label="Execution pages">
     <button type="button" disabled={!page.previousCursor} onClick={() => page.previousCursor && onPage(page.previousCursor)}><ChevronLeft size={14} />Earlier</button>
@@ -111,6 +115,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   onSelect(execution: ActivityExecutionStateSummary): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
+  
   const [expanded, setExpanded] = useState(false);
   const [popupHeight, setPopupHeight] = useState<number>();
   const [cursor, setCursor] = useState<{ query: string; value: string } | null>(null);
@@ -217,6 +222,7 @@ export function ChildExecutionBrowser({ context, execution, refreshKey, labelFor
   onEnter(entry: ActivityExecutionBrowseEntry): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
+  
   const [expanded, setExpanded] = useState(false);
   const [cursor, setCursor] = useState<string>();
   const state = useExecutionPage(context, execution.workflowExecutionId, { parentActivityExecutionId: execution.activityExecutionId, cursor, limit: expanded ? 50 : 1 }, true, refreshKey);
@@ -238,6 +244,7 @@ function ChildExecutionGroup({ context, execution, node, label, refreshKey, onEn
   context: StudioEndpointContext; execution: ActivityExecutionStateSummary; node: string; label: string; refreshKey: number;
   onEnter(entry: ActivityExecutionBrowseEntry): void; onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
+  
   const [cursor, setCursor] = useState<string>();
   const state = useExecutionPage(context, execution.workflowExecutionId, { parentActivityExecutionId: execution.activityExecutionId, executableNodeId: node, cursor }, true, refreshKey);
   return <div className="wf-execution-child-group"><h5>{label}{state.page ? <span>{state.page.totalCount} recorded</span> : null}</h5><PageFeedback state={state} />
@@ -261,6 +268,7 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
   onIncident(execution: ActivityExecutionStateSummary): void;
   renderDetails(execution: ActivityExecutionStateSummary, navigation: React.ReactNode, children: React.ReactNode): React.ReactNode;
 }) {
+  
   // A refresh of this same exact selection must not unmount its expanded evidence while the read is pending.
   const key = `${runtimeValueContextId(context)}:${workflowExecutionId}:${nodeId}:${ancestorId ?? ""}:${exactId ?? ""}`;
   const [resolved, setResolved] = useState<{ key: string; execution: ActivityExecutionStateSummary | null } | null>(null);
@@ -295,6 +303,7 @@ export function ExecutionScopeNavigator({ context, execution, label, refreshKey,
   onSelect(execution: ActivityExecutionStateSummary): void; onUnavailable(): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
 }) {
+  
   const choiceFocus = useRef<string | null>(null);
   return <div className="wf-execution-scope-occurrence">
     <ActivityExecutionNavigator context={context} workflowExecutionId={execution.workflowExecutionId}

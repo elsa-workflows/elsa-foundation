@@ -375,7 +375,7 @@ internal sealed class HostHttpBindings
     }
 
     private static string ComputeHandle(HostHttpBinding binding, ConnectionMetadataSnapshot? connection) =>
-        Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        Elsa.Serialization.Core.JsonHashInput.Hash(new
         {
             FormatVersion = 1,
             ScopeIdentity = EtlRuntimeIdentity.ScopeKey(binding.Scope),
@@ -389,7 +389,7 @@ internal sealed class HostHttpBindings
             ConnectionAlias = binding.ConnectionName?.ToLowerInvariant(),
             Shards = binding.Shards.Select(shard => new { shard.Id, SeedUri = shard.SeedUri.AbsoluteUri }).ToArray(),
             Connection = connection
-        }))).ToLowerInvariant();
+        });
 
     private static bool ValidName(string? value) => value is { Length: > 0 and <= MaximumNameLength } &&
         char.IsAsciiLetterOrDigit(value[0]) && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');

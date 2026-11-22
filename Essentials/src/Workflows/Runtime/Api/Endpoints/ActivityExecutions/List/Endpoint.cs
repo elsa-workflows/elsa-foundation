@@ -33,13 +33,13 @@ public sealed class Endpoint(IWorkflowExecutionStateStore workflows, IActivityEx
         RuntimeStorePageRequest.ValidateContinuationToken(request.Cursor, nameof(request.Cursor));
         if (request.Cursor is not null && request.AnchorActivityExecutionId is not null)
             throw new ArgumentException("Choose either a continuation or an execution anchor.");
-        var binding = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[]
+        var binding = Elsa.Serialization.Core.JsonHashInput.Hash(new[]
         {
             request.WorkflowExecutionId, request.ExecutableNodeId, request.ParentActivityExecutionId,
             request.AncestorActivityExecutionId, request.Limit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             authorization.TenantScope, authorization.AuditSubject,
             await authorization.GetAuthorizationProfileAsync(cancellationToken)
-        }))));
+        }).ToUpperInvariant();
         long? offset = null;
         if (request.Cursor is not null)
         {

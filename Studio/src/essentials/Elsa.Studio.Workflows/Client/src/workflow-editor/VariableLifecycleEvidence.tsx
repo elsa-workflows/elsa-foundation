@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useId } from "react";
 import { AlertTriangle, History, RefreshCw } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";
@@ -37,6 +38,7 @@ type LabelOf = (executableNodeId: string) => string | undefined;
  * write history filtered to lost updates); without it the badge only reports, as the shared warning status chip.
  */
 export function LostUpdateBadge({ count, onSelect, label }: { count: number; onSelect?: () => void; label?: string }) {
+  
   if (count <= 0) return null;
   const text = label ?? (count === 1 ? "1 lost update" : `${count} lost updates`);
   const content = <><AlertTriangle size={12} aria-hidden="true" /> {text}</>;
@@ -56,6 +58,7 @@ export function VariableValueState({ label, value, evidence, note, stateLabel }:
   /** Replaces the state's generic name, for a value kept for a purpose of its own (a recorded completion's write). */
   stateLabel?: string;
 }) {
+  
   const presentation = presentValueState(value);
   return (
     <div className="wf-variable-value-state" data-tone={presentation.tone}>
@@ -88,6 +91,7 @@ function VariableWriteCard({ record, labelOf, evidenceById }: {
   labelOf?: LabelOf;
   evidenceById: ReadonlyMap<string, ActivityExecutionInspectionValueSnapshot>;
 }) {
+  useStudioTimeZone();
   const evidenceOf = (value: VariableLifecycleValueState | null | undefined) =>
     value?.evidenceId ? evidenceById.get(value.evidenceId) : undefined;
   return (
@@ -136,6 +140,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
   inspection: Pick<ActivityExecutionInspection, "variableWrites" | "recordedCompletion" | "subStatus" | "valueSnapshots"> & { status?: string | null };
   labelOf?: LabelOf;
 }) {
+  
   const headingId = useId();
   const records = variableWriteDiagnostics(inspection);
   const recorded = inspection.recordedCompletion;
@@ -196,6 +201,7 @@ export function VariableWriteDiagnosticsSection({ inspection, labelOf }: {
 
 /** The input evaluations a background admission refresh superseded, each with the changed variables that caused it. */
 export function InputRefreshHistory({ refreshes }: { refreshes: readonly ActivityInputRefreshView[] | null | undefined }) {
+  useStudioTimeZone();
   if (!refreshes?.length) return null;
   return (
     <section className="wf-input-refreshes" aria-label="Superseded input evaluations">

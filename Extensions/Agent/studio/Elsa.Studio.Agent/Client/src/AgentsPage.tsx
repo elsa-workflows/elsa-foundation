@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -68,6 +70,7 @@ export function activityDefinitionPath(definitionId: string, draftId?: string) {
  * generic activity editor, which stays the authority for revisions and permissions.
  */
 export function AgentsPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
+  useStudioTimeZone();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [collection, setCollection] = useState<Collection>({ kind: "loading" });
@@ -227,6 +230,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
 }
 
 function AgentStatus({ row }: { row: AgentRow }) {
+  
   const { head, recommendation, draftCount, versionCount } = row.lifecycle;
   const published = publishedVersion(row);
   // Another provider's recommendation or latest version is disclosed by role, without its provider key.
@@ -248,6 +252,7 @@ function AgentStatus({ row }: { row: AgentRow }) {
 }
 
 function AgentAuthority({ row }: { row: AgentRow }) {
+  
   const allowed = (name: string) => row.actions.some(action => action.action === name && action.allowed);
   const configuration = isEnumValue(row.definition.contentAuthority.kind, "ProviderSource");
   return (
@@ -264,6 +269,7 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   onCancel(): void;
   onCreated(definitionId: string, draftId: string): void;
 }) {
+  
   const nameId = useId();
   const [name, setName] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -313,5 +319,5 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
 
 function formatDate(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }

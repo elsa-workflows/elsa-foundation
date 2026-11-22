@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useState } from "react";
 import type { StudioWeaverRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowVersionSummary } from "../workflowTypes";
@@ -23,6 +24,7 @@ export function WorkflowVersionHistory({ definitionId, versions, weaver }: {
   versions: WorkflowVersionSummary[];
   weaver?: WorkflowVersionHistoryWeaver;
 }) {
+  useStudioTimeZone();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = versions.find(version => version.id === selectedId) ?? null;
   useWorkflowInspectionContext({

@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { Suspense, type ReactNode } from "react";
 import { AlertCircle, Check, Flag, Layers, MapPin, Wrench } from "lucide-react";
 import { CopyableIdentifier, StudioButton, TechnicalDetails } from "@elsa-workflows/studio-ui";
@@ -45,6 +46,7 @@ export function ValidationPanel({
   unavailable?: boolean;
   pending?: boolean;
 }) {
+  
   const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
   if (!errors.length) {
     if (pending) {
@@ -122,6 +124,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   observation?: TestRunObservation;
   executionControls?: ReactNode;
 }) {
+  useStudioTimeZone();
   if (!testRun) {
     return (
       <div className="wf-runtime-panel">
@@ -274,6 +277,7 @@ function RejectedReason({
   reason: string;
   activityLabels?: ValidationActivityLabels;
 }) {
+  
   const humanized = activityLabels?.humanizeMessage(reason) ?? { message: reason };
   return (
     <div className="wf-runtime-reason" title={reason}>

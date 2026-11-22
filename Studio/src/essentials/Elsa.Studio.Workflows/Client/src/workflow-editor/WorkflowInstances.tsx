@@ -1,3 +1,4 @@
+import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
@@ -125,6 +126,7 @@ export function WorkflowInstances({ context, navigate }: {
   context: StudioEndpointContext;
   navigate(path: string): void;
 }) {
+  useStudioTimeZone();
   const healthFilterHelpId = useId();
   const [location, setLocation] = useState<RunHistoryLocation>(readRunHistoryLocation);
   const [draftFilters, setDraftFilters] = useState<RunHistoryFilters>(location.filters);
@@ -467,6 +469,7 @@ export function WorkflowInstances({ context, navigate }: {
             <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
             <RunFilterInput label="Artifact" value={draftFilters.artifactId} onChange={value => setDraftFilters(current => ({ ...current, artifactId: value }))} />
             <RunFilterInput label="Correlation" value={draftFilters.correlationId} onChange={value => setDraftFilters(current => ({ ...current, correlationId: value }))} />
+            <p>Dates use {resolveStudioTimeZone()}; each bound is converted with its date's offset.</p>
             <RunFilterInput label="From" type="datetime-local" value={draftFilters.from} onChange={value => setDraftFilters(current => ({ ...current, from: value }))} />
             <RunFilterInput label="To" type="datetime-local" value={draftFilters.to} onChange={value => setDraftFilters(current => ({ ...current, to: value }))} />
             <div className="wf-run-filter-actions">
@@ -651,6 +654,7 @@ function RunFilterInput({ label, value, type = "text", onChange }: {
   type?: "text" | "datetime-local";
   onChange(value: string): void;
 }) {
+  
   return (
     <label className="wf-run-filter-field">
       <span>{label}</span>
@@ -813,6 +817,7 @@ export function formatCurrentIncidentHealth(instance: Pick<WorkflowInstanceSumma
 }
 
 function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSummary }) {
+  
   const available = typeof instance.activeIncidentCount === "number" && typeof instance.blockingIncidentCount === "number";
   const health = !available
     ? "unavailable"
@@ -830,8 +835,7 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
 
 function toUtcIso(value: string) {
   if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
+  return new Date(localDateTimeToIso(value)).toISOString();
 }
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
@@ -861,6 +865,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   initialReturnTo?: string | null;
   navigate(path: string): void;
 }) {
+  
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [loadedData, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
@@ -2008,6 +2013,7 @@ function WorkflowInstanceCanvas({
   journals?: CompensationJournals;
   operator?: CompensationOperatorControls;
 }) {
+  
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
   const journalOf = journals?.get;
@@ -2153,6 +2159,7 @@ function ReadOnlyWorkflowFlow({
   onSelectEvidence(evidenceId: string | null): void;
   focusRequestId: number;
 }) {
+  
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
   return (
@@ -2321,6 +2328,7 @@ export function getIncidentHealthActionState(incidents?: IncidentStateSummary[] 
 }
 
 function IncidentHealthAction({ incidents, onClick }: { incidents?: IncidentStateSummary[] | null; onClick(): void }) {
+  
   const { health, label } = getIncidentHealthActionState(incidents);
 
   return (
@@ -2415,6 +2423,7 @@ function WorkflowInstanceInspector({
   onToggleCollapsed?(): void;
   onToggleMaximized?(): void;
 }) {
+  useStudioTimeZone();
   const inspectorRef = useRef<HTMLElement>(null);
   // Spec 1229 FR-017: the variable lifecycle reads, on hosts that advertise them.
   // null while the host's capabilities are being read.
@@ -2822,6 +2831,7 @@ export function WorkflowIncidentList({
   onOpenDefinition?(definitionId: string): void;
   definitionAccess?: DefinitionAccessObservation;
 }) {
+  useStudioTimeZone();
   const [copyStatus, setCopyStatus] = useState("");
   const [loadingAssociations, setLoadingAssociations] = useState(false);
   const [incidentDetailsId, setIncidentDetailsId] = useState<string | null>(null);
@@ -2998,6 +3008,7 @@ export function getIncidentInputLabel(
 }
 
 function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
+  
   const stackTrace = getIncidentStackTrace(incident);
   if (!stackTrace) return null;
 
@@ -3010,6 +3021,7 @@ function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
 }
 
 function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary }) {
+  useStudioTimeZone();
   const activityExecutionId = readIncidentActivityExecutionId(incident);
   const inputKey = readIncidentInputKey(incident);
   const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
@@ -3076,6 +3088,7 @@ function IncidentDetailsDialog({ incident, context, summary, guidance, onOpenDef
   onClose(): void;
   actions?: ReactNode;
 }) {
+  useStudioTimeZone();
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const [copyStatus, setCopyStatus] = useState("");
@@ -3153,6 +3166,7 @@ function NamedIdentity({
   id: string;
   secondary?: string | null;
 }) {
+  
   const identity = resolveNamedIdentity(name, id, [secondary]);
   const secondaryText = identity.secondaryIds.join(" · ") || null;
   return (
@@ -3170,6 +3184,7 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activity
   activityCatalog?: ActivityCatalogItem[];
   executableGraph?: ExecutableActivityGraph | null;
 }) {
+  
   if (!graphNodeIds) return null;
 
   const unmatchedActivities = details.activities.filter(activity => {

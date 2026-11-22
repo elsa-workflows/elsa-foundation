@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { useMemo } from "react";
 import { resolveRuntimeActivityLabel as resolveActivityLabel } from "./runtimeActivityDisplay";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
@@ -15,6 +17,7 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
+  useStudioTimeZone();
   const catalogByTypeKey = useMemo(
     () => new Map(activityCatalog.map(item => [item.activityTypeKey, item])),
     [activityCatalog]
@@ -65,6 +68,7 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
 }
 
 function WorkflowStatusPill({ status }: { status: string }) {
+  
   const normalized = status.toLowerCase();
   const label = normalized === "completed" ? "OK" : status;
   return <span className="wf-status-badge wf-timeline-pill" data-status={normalized}>{label}</span>;
@@ -88,5 +92,5 @@ function formatClockTime(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? ""
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    : formatStudioDate(date);
 }

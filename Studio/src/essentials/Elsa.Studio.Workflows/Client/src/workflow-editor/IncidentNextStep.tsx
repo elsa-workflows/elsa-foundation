@@ -1,3 +1,4 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { useEffect, useState } from "react";
 import "./IncidentNextStep.css";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -84,6 +85,7 @@ export function IncidentNextStep({
   onOpenDefinition?(definitionId: string): void;
   definitionAccess?: DefinitionAccessObservation;
 }) {
+  useStudioTimeZone();
   const sameRun = !!summary && incident.workflowExecutionId === summary.workflowExecutionId;
   const definitionId = sameRun ? summary.definitionId?.trim() || null : null;
   const runHasEnded = sameRun && !!summary

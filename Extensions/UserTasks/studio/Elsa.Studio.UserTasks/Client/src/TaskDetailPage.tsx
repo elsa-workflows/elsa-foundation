@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTitle, type ElsaStudioModuleApi, type StudioNavigationRequest } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -9,6 +11,7 @@ import { readTaskBrowseLocation, taskCollectionPath } from "./taskNavigation";
 const responsePendingNotice = "Your response is recorded. The workflow will continue when delivery completes. You can leave this page.";
 
 export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi; id: string; navigate(path: string): void }) {
+  
   const location = useStudioRouteLocation();
   const backPath = taskCollectionPath(readTaskBrowseLocation(location.search), id);
   const scope = api.backendSession ?? api.backend;
@@ -34,6 +37,7 @@ export function TaskDetailPage({ api, id, navigate }: { api: ElsaStudioModuleApi
 }
 
 export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: ElsaStudioModuleApi; id: string; identity: TaskActor; onClose?(): void; accessNotice?: React.ReactNode }) {
+  useStudioTimeZone();
   const [task, setTask] = useState<TaskItem>(); const [data, setData] = useState<Record<string, unknown>>({});
   const [validationNotice, setValidationNotice] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({}); const [notice, setNotice] = useState("");
@@ -142,6 +146,6 @@ export function TaskDetail({ api, id, identity, onClose, accessNotice }: { api: 
       <label>Assign to <select value={targetKind} onChange={event => setTargetKind(event.target.value)}><option value="user">User</option><option value="group">Group</option></select></label>
       <label>{targetKind === "user" ? "User ID" : "Group ID"}<input value={target} onChange={event => setTarget(event.target.value)} /></label>
       <StudioButton disabled={!target.trim()} onClick={() => void act("reassign")}>Reassign</StudioButton></fieldset> : null}
-    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {entry.actorId} · <time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time></li>)}</ol></details>
+    <details><summary>History</summary><ol>{task.history.map((entry, index) => <li key={`${entry.at}-${index}`}>{entry.operation}{entry.action ? ` · ${entry.action}` : ""} · {entry.actorId} · <time dateTime={entry.at}>{formatStudioDate(entry.at)}</time></li>)}</ol></details>
   </>);
 }

@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, CheckCircle2, GitBranch, Layers3 } from "lucide-react";
 import type {
   ActivityUpgradeDiagnostic,
@@ -24,6 +26,7 @@ export function ActivityUpgradePlanReview({
   applying: boolean;
   onApply(stage: ActivityUpgradeStage): void;
 }) {
+  useStudioTimeZone();
   const nextStage = nextReadyActivityUpgradeStage(plan);
   const planStatus = normalizePlanStatus(plan.status);
   const stages = [...plan.stages].sort((left, right) => left.order - right.order);
@@ -119,6 +122,7 @@ function StageCard({
   number: number;
   steps: ActivityUpgradeStep[];
 }) {
+  
   const status = normalizeStageStatus(stage.status);
   return <li className={`au-stage is-${status.toLowerCase()}`}>
     <header>
@@ -146,6 +150,7 @@ function StageCard({
 }
 
 function DiagnosticList({ diagnostics, compact = false }: { diagnostics: ActivityUpgradeDiagnostic[]; compact?: boolean }) {
+  
   if (!diagnostics.length) return compact ? null : <div className="au-diagnostics is-empty" role="status">No plan-level diagnostics.</div>;
   return <section className={`au-diagnostics${compact ? " is-compact" : ""}`} aria-label={compact ? "Stage diagnostics" : "Plan diagnostics"}>
     <h3>{compact ? "Stage diagnostics" : "Plan diagnostics"}</h3>
@@ -175,5 +180,5 @@ function valueLabel(value: string | number, numeric: string[]) {
 
 function formatDateTime(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }

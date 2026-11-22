@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import {
   useCallback,
   useEffect,
@@ -76,6 +78,7 @@ export function ActivityDefinitionTestRunDialog({
   onClose(): void;
   onOpenRun(path: string): void;
 }) {
+  
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const pollTimerRef = useRef<number | null>(null);
@@ -436,6 +439,7 @@ function ActivityTestRunEvidence({
   dispatchPhase: DispatchPhase;
   history: ActivityDraftTestRunView[];
 }) {
+  
   const copy = stageCopy(stage);
   return (
     <section className={`ad-historical-contract ad-test-run-evidence is-${stage}`} aria-labelledby="activity-test-run-evidence-title">
@@ -490,6 +494,7 @@ function ActivityTestRunEvidence({
 }
 
 function ExpirationEvidence({ view }: { view: ActivityDraftTestRunView }) {
+  useStudioTimeZone();
   const expiration = view.expiration;
   if (!expiration.sourceReferenceExpired) {
     return <p className="ad-test-run-expiry">Source Reference expires {formatTime(expiration.sourceReferenceExpiresAt)}. The durable receipt expires {formatTime(expiration.receiptExpiresAt)}.</p>;
@@ -572,7 +577,7 @@ function safeCode(code: string) {
 
 function formatTime(value: string) {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.valueOf()) ? "at the server-defined retention boundary" : parsed.toLocaleString();
+  return Number.isNaN(parsed.valueOf()) ? "at the server-defined retention boundary" : formatStudioDate(parsed);
 }
 
 function clearError(

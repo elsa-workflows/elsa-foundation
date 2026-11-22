@@ -131,3 +131,4 @@ static Elsa.Serialization.Core.JsonConversionContract.Deserialize(System.Text.Js
 static Elsa.Serialization.Core.JsonConversionContract.Deserialize<T>(System.Text.Json.JsonElement value) -> T?
 static Elsa.Serialization.Core.JsonConversionContract.Deserialize(string! value, System.Type! type) -> object?
 static Elsa.Serialization.Core.JsonConversionContract.Deserialize<T>(string! value) -> T?
+static Elsa.Serialization.Core.JsonHashInput.SerializeToElement(object? value, System.Type! type) -> System.Text.Json.JsonElement

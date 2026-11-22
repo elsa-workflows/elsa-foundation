@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { tabElementIds, useTablistKeyboard } from "@elsa-workflows/studio-ui";
@@ -68,6 +70,7 @@ export function ActivityDefinitionDraftEditor({ context, definitionId, draftId, 
   onOpenVersion(definitionId: string, versionId: string): void;
   onOpenStudioPath(path: string): void;
 }) {
+  
   const query = useFullActivityDefinitionDraft(context, draftId);
   const definitionQuery = useActivityDefinition(context, definitionId);
 
@@ -95,6 +98,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   onOpenVersion(definitionId: string, versionId: string): void;
   onOpenStudioPath(path: string): void;
 }) {
+  useStudioTimeZone();
   const initialDraftIsActive = isActiveDraft(initialDraft.status);
   const [draft, setDraft] = useState(initialDraft);
   useStudioWorkspaceTitle(definitionLabel, isActiveDraft(draft.status) ? "Draft" : "Published");
@@ -994,7 +998,7 @@ function saveStatusDescription(status: SaveStatus, blocked: boolean) {
 
 function formatRecoveryTime(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "at an unknown time" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "at an unknown time" : formatStudioDate(date);
 }
 
 function formatRecoveryPreview(recovery: ActivityDefinitionRecoverySnapshot) {

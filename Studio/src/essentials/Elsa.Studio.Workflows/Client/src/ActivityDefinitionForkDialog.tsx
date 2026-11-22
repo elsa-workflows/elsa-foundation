@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -37,6 +39,7 @@ export function ActivityDefinitionForkDialog({
   onClose(): void;
   onApplied(receipt: ActivityDefinitionForkReceipt): void;
 }) {
+  
   const recommendation = definition.lifecycle.recommendation!;
   const capabilitiesQuery = useActivityAuthoringCapabilities(context);
   const choices = useMemo(
@@ -186,6 +189,7 @@ export function ActivityDefinitionForkDialog({
 }
 
 function ForkReview({ preview }: { preview: ActivityDefinitionForkPreview }) {
+  useStudioTimeZone();
   return <>
     <dl className="ad-review-facts">
       <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code>{preview.source.versionId}</code></dd></div>
@@ -292,5 +296,5 @@ function operationIdentity(prefix: string) {
 
 function formatTimestamp(value: string) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }

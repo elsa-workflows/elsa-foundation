@@ -2,7 +2,8 @@ import { useSyncExternalStore } from "react";
 
 export const studioTimeZoneStorageKey = "elsa-studio-time-zone";
 export const studioTimeZoneChangedEvent = "elsa-studio:time-zone-changed";
-let transientPreference: string | undefined;
+// Hosting and externally loaded SDK modules share one session fallback when storage is blocked.
+const session = ((globalThis as typeof globalThis & { __elsaStudioTimeZone?: { transient?: string } }).__elsaStudioTimeZone ??= {});
 
 export function isStudioTimeZone(value: unknown): value is string {
   if (value === "browser") return true;
@@ -11,7 +12,7 @@ export function isStudioTimeZone(value: unknown): value is string {
 }
 
 export function getStudioTimeZonePreference(): string {
-  if (transientPreference !== undefined) return transientPreference;
+  if (session.transient !== undefined) return session.transient;
   try {
     const stored = typeof window === "undefined" ? null : window.localStorage.getItem(studioTimeZoneStorageKey);
     return isStudioTimeZone(stored) ? stored : "browser";
@@ -20,12 +21,12 @@ export function getStudioTimeZonePreference(): string {
 
 export function setStudioTimeZonePreference(value: string): void {
   if (!isStudioTimeZone(value)) throw new RangeError("Choose UTC, the browser's zone, or an IANA time zone.");
-  transientPreference = value;
+  session.transient = value;
   if (typeof window === "undefined") return;
   try {
     if (value === "browser") window.localStorage.removeItem(studioTimeZoneStorageKey);
     else window.localStorage.setItem(studioTimeZoneStorageKey, value);
-    transientPreference = undefined;
+    session.transient = undefined;
   } catch { /* Keep this session's choice when browser storage is unavailable. */ }
   window.dispatchEvent(new Event(studioTimeZoneChangedEvent));
 }
@@ -37,7 +38,12 @@ export function resolveStudioTimeZone(preference = getStudioTimeZonePreference()
 function subscribe(onChange: () => void) {
   if (typeof window === "undefined") return () => undefined;
   window.addEventListener(studioTimeZoneChangedEvent, onChange);
-  const storageChanged = () => { transientPreference = undefined; onChange(); };
+  const storageChanged = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== studioTimeZoneStorageKey) return;
+    try { if (event.storageArea && event.storageArea !== window.localStorage) return; } catch { return; }
+    session.transient = undefined;
+    onChange();
+  };
   window.addEventListener("storage", storageChanged);
   return () => {
     window.removeEventListener(studioTimeZoneChangedEvent, onChange);
@@ -54,14 +60,15 @@ function offsetMinutes(date: Date, timeZone: string): number {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset", hour: "2-digit", hourCycle: "h23" })
     .formatToParts(date).find(part => part.type === "timeZoneName")?.value;
   if (name === "GMT" || name === "UTC") return 0;
-  const match = /^(?:GMT|UTC)([+-])(\d{2}):(\d{2})$/.exec(name ?? "");
+  const match = /^(?:GMT|UTC)([+-])(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(name ?? "");
   if (!match) throw new RangeError("This date uses an offset that cannot be represented in whole minutes.");
-  return (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]));
+  return (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]) + Number(match[4] ?? 0) / 60);
 }
 
 function offsetText(minutes: number): string {
   const absolute = Math.abs(minutes);
-  return `${minutes < 0 ? "-" : "+"}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+  const seconds = Math.round(absolute * 60);
+  return `${minutes < 0 ? "-" : "+"}${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}${seconds % 60 ? `:${String(seconds % 60).padStart(2, "0")}` : ""}`;
 }
 
 export function formatStudioDate(value: string | number | Date | null | undefined, preference = getStudioTimeZonePreference()): string {
@@ -78,7 +85,7 @@ function wallParts(date: Date, timeZone: string): number[] {
 }
 
 /** Converts a wall time using that date's zone offset. A DST gap is refused; a repeated hour uses its earlier instant. */
-export function localDateTimeToIso(value: string, preference = getStudioTimeZonePreference()): string {
+export function localDateTimeToIso(value: string, preference = getStudioTimeZonePreference(), originalInstant?: string): string {
   const explicit = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
   const wall = explicit ? value.replace(/(?:Z|[+-]\d{2}:\d{2})$/, "") : value;
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,7}))?)?$/.exec(wall);
@@ -92,8 +99,16 @@ export function localDateTimeToIso(value: string, preference = getStudioTimeZone
   if (year < 1 || [candidate.getUTCFullYear(), candidate.getUTCMonth() + 1, candidate.getUTCDate(), candidate.getUTCHours(), candidate.getUTCMinutes(), candidate.getUTCSeconds()].some((part, index) => part !== fields[index]))
     throw new RangeError("Enter a valid calendar date and time.");
   if (explicit) {
-    if (!Number.isFinite(Date.parse(value))) throw new RangeError("Enter a valid date and offset.");
+    const offset = /([+-])(\d{2}):(\d{2})$/.exec(value);
+    if (offset && (Number(offset[2]) > 14 || Number(offset[3]) > 59 || Number(offset[2]) === 14 && Number(offset[3]) !== 0) || (!Number.isFinite(Date.parse(value)) || new Date(value).getUTCFullYear() < 1 || new Date(value).getUTCFullYear() > 9999))
+      throw new RangeError("Enter a valid date and offset between -14:00 and +14:00.");
     return value;
+  }
+  if (originalInstant && studioLocalDateTime(originalInstant, preference) === value) {
+    localDateTimeToIso(originalInstant, preference); // Validate the original explicit instant, including .NET range.
+    const offset = offsetMinutes(new Date(originalInstant), resolveStudioTimeZone(preference));
+    if (!Number.isInteger(offset)) throw new RangeError("This historical zone offset cannot be sent as a .NET date.");
+    return `${wall}${offsetText(offset)}`;
   }
   const zone = resolveStudioTimeZone(preference);
   const wallUtc = candidate.getTime();
@@ -103,13 +118,16 @@ export function localDateTimeToIso(value: string, preference = getStudioTimeZone
     .filter(item => wallParts(item.date, zone).every((part, index) => part === fields[index]))
     .sort((left, right) => left.date.getTime() - right.date.getTime());
   if (!instants.length) throw new RangeError(`That local time does not exist in ${zone} because the clock changes. Choose another time.`);
+  if (instants[0].date.getUTCFullYear() < 1 || instants[0].date.getUTCFullYear() > 9999) throw new RangeError("The instant must fall between years 0001 and 9999 UTC.");
+  if (!Number.isInteger(instants[0].offset)) throw new RangeError("This historical zone offset cannot be sent as a .NET date. Choose UTC or an explicit whole-minute offset.");
   return `${wall}${offsetText(instants[0].offset)}`;
 }
 
-/** Wall-time text for a datetime-local control, retaining the chosen instant in the selected zone. */
+/** Wall-time text for a datetime-local control. Pass the original instant on unchanged edits to preserve a repeated hour. */
 export function studioLocalDateTime(value: string, preference = getStudioTimeZonePreference()): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
   const [year, month, day, hour, minute, second] = wallParts(date, resolveStudioTimeZone(preference));
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+  const fraction = /\.(\d{1,7})(?:Z|[+-]\d{2}:\d{2})$/.exec(value)?.[1];
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}${fraction ? `.${fraction}` : ""}`;
 }

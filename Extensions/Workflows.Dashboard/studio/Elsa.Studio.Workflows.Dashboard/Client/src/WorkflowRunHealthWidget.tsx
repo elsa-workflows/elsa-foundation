@@ -1,3 +1,4 @@
+import { formatStudioDate, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import type { StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
@@ -6,6 +7,7 @@ import { WorkflowDashboardMetric } from "./WorkflowDashboardMetric";
 import { WorkflowDashboardUnavailable } from "./WorkflowDashboardUnavailable";
 
 export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyProps<WorkflowRunHealthSnapshot, RunHealthSettings>) {
+  useStudioTimeZone();
   if (!snapshot) return null;
 
   if (snapshot.status === "unavailable") {
@@ -93,6 +95,7 @@ export function WorkflowRunHealthWidget({ snapshot }: StudioDashboardWidgetBodyP
 }
 
 function RunBucketChart({ buckets, timeZone, granularity, totalStarted }: { buckets: RunBucket[]; timeZone: string; granularity: "hour" | "day"; totalStarted: number }) {
+  useStudioTimeZone();
   const maxStarted = Math.max(1, ...buckets.map(bucket => bucket.startedCount));
   const tickIndices = sparseTickIndices(buckets.length);
 
@@ -138,6 +141,7 @@ function RunBucketChart({ buckets, timeZone, granularity, totalStarted }: { buck
 }
 
 function BucketDetails({ buckets, timeZone }: { buckets: RunBucket[]; timeZone: string }) {
+  useStudioTimeZone();
   if (buckets.length === 0) return null;
 
   return (
@@ -213,25 +217,17 @@ function formatPercentage(value: number) {
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`;
 }
 
-function formatFullTime(value: string, timeZone: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone,
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-    timeZoneName: "shortOffset",
-  }).format(date);
+function formatFullTime(value: string, _timeZone: string) {
+  return formatStudioDate(value);
 }
 
-function formatAxisTime(value: string, timeZone: string, granularity: "hour" | "day") {
+function formatAxisTime(value: string, _timeZone: string, granularity: "hour" | "day") {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
+  // Compact chart labels retain their offset; full instant text is in the tooltip and accessible table.
   return new Intl.DateTimeFormat(undefined, {
-    timeZone,
-    month: "short",
-    day: "numeric",
-    ...(granularity === "hour" ? { hour: "2-digit" } : {}),
+    timeZone: resolveStudioTimeZone(), month: "short", day: "numeric",
+    ...(granularity === "hour" ? { hour: "2-digit" as const } : {}), timeZoneName: "longOffset"
   }).format(date);
 }
 

@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -25,6 +27,7 @@ type RequestFailure = { error: unknown; kind: EtlApiFailureKind };
 type EtlDefinitionsPageProps = { context: StudioEndpointContext; dialogs: StudioDialogApi; profile?: "file" | "connector" };
 
 export function EtlDefinitionsPage({ context, dialogs, profile = "file" }: EtlDefinitionsPageProps) {
+  
   return profile === "connector"
     ? <EtlDefinitionWorkspace key="connector" context={context} dialogs={dialogs} profile={connectorAuthoringProfile} />
     : <EtlDefinitionWorkspace key="file" context={context} dialogs={dialogs} profile={fileAuthoringProfile} />;
@@ -33,6 +36,7 @@ export function EtlDefinitionsPage({ context, dialogs, profile = "file" }: EtlDe
 function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, TBinding extends EtlBindingSummary>({
   context, dialogs, profile
 }: { context: StudioEndpointContext; dialogs: StudioDialogApi; profile: EtlAuthoringProfile<TPipeline, TBinding> }) {
+  useStudioTimeZone();
   const { listEtlBindings, listEtlDefinitions, listEtlVersions, getEtlDefinition, createEtlDefinition,
     updateEtlDraft, validateEtlDraft, publishEtlDefinition, getEtlVersion } = profile.api;
   const PipelineEditor = profile.Editor;
@@ -645,7 +649,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
 
       {visibleDraft && visiblePipeline ? <section className="etl-editor-section" aria-labelledby={`${pageId}-draft`}>
         <div className="etl-editor-section-heading">
-          <div><h2 id={`${pageId}-draft`}>Draft: {visibleDraft.definitionId}</h2><p>Revision {visibleDraft.revision} · last updated {new Date(visibleDraft.updatedAt).toLocaleString()}</p></div>
+          <div><h2 id={`${pageId}-draft`}>Draft: {visibleDraft.definitionId}</h2><p>Revision {visibleDraft.revision} · last updated {formatStudioDate(visibleDraft.updatedAt)}</p></div>
           <div className="etl-actions">
             <button type="button" disabled={mutation !== null} onClick={() => void reloadSelectedDraft()}>Reload draft</button>
             <button type="button" disabled={!isDirty || mutation !== null} onClick={() => void saveDraft()}>
@@ -698,7 +702,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
           {versions.map(version => <li key={version.selection}>
             <button type="button" aria-pressed={artifactSelection === version.selection} disabled={mutation !== null}
               onClick={() => void loadPublishedArtifact(version)}>
-              <span>View version {version.definitionVersion}</span><small>{version.contentHash} · {version.publishedAt ? new Date(version.publishedAt).toLocaleString() : "publication time unavailable"}</small>
+              <span>View version {version.definitionVersion}</span><small>{version.contentHash} · {version.publishedAt ? formatStudioDate(version.publishedAt) : "publication time unavailable"}</small>
             </button>
           </li>)}
         </ul> : null}
@@ -723,6 +727,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
 }
 
 function FailureNotice({ failure, subject, onRetry }: { failure: RequestFailure; subject: string; onRetry(): void }) {
+  
   const message = failure.kind === "forbidden"
     ? `You do not have permission to read ${subject}.`
     : failure.kind === "unavailable"

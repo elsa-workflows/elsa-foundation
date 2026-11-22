@@ -1,3 +1,4 @@
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { AlertCircle, CheckCircle2, CircleSlash, Clock3 } from "lucide-react";
 import type { ConnectionDescriptorsResponse, ConnectionStatus } from "./connectionTypes";
@@ -10,6 +11,7 @@ const statuses = {
 };
 
 export function ConnectionStatusBadge({ status }: { status: ConnectionStatus }) {
+  
   const presentation = statuses[status] ?? { label: status, tone: "muted", icon: AlertCircle };
   const Icon = presentation.icon;
   return <span className={`connection-status connection-status--${presentation.tone}`}><Icon size={13} aria-hidden="true" />{presentation.label}</span>;
@@ -26,5 +28,5 @@ export function connectionSchemeLabel(descriptors: ConnectionDescriptorsResponse
 export function connectionDate(value?: string | null) {
   if (!value) return "Not tested yet";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unavailable" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return Number.isNaN(date.getTime()) ? "Unavailable" : formatStudioDate(date);
 }

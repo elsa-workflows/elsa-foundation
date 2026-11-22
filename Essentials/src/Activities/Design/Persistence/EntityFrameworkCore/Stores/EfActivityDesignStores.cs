@@ -1545,7 +1545,7 @@ public sealed class EfActivityDesignStores(
 
     private static IQueryable<T> ApplyVisibility<T>(IQueryable<T> rows, string? tenantId)
         where T : ActivityManagementProjectionRevision => tenantId is null ? rows.Where(x => x.TenantId == null) : rows.Where(x => x.TenantId == null || x.TenantId == tenantId);
-    private static string Fingerprint(ActivityDependencyProjectionState projection) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { projection.RebuildId, projection.Sequence, projection.AsOf, projection.Items }, Json))));
+    private static string Fingerprint(ActivityDependencyProjectionState projection) => Elsa.Serialization.Core.JsonHashInput.Hash(new { projection.RebuildId, projection.Sequence, projection.AsOf, projection.Items }).ToUpperInvariant();
 
     private static bool IsIncluded(string kind, bool drafts, bool versions) =>
         kind.EndsWith("Draft", StringComparison.Ordinal) ? drafts : versions;

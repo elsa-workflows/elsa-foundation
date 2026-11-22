@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "../../sdk/timeZone";
+import { formatStudioDate } from "../../sdk/timeZone";
 import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
@@ -57,6 +59,7 @@ const inspectorTabs = [
 const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
 
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
+  
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
@@ -251,6 +254,7 @@ function createInitialViewState(): HostViewState {
 }
 
 function SummaryItem({ label, value }: { label: string; value: number }) {
+  
   return (
     <div className="modules-summary-item">
       <strong>{value}</strong>
@@ -280,6 +284,7 @@ function SourceNavigator({
   onSelectNuplane(): void;
   onSelectPackageSource(source: string): void;
 }) {
+  
   const allNuplaneActive = activeSourceView === "nuplane" && activePackageSource === AllPackageSources;
 
   return (
@@ -369,6 +374,7 @@ function InlinePackageUploads({
   onDragActiveChange(active: boolean): void;
   onDeleteDropFolderPackage(fileName: string): void;
 }) {
+  useStudioTimeZone();
   const uploadDisabled = busy || !registry.capabilities.canUploadPackages;
 
   return (
@@ -429,7 +435,7 @@ function InlinePackageUploads({
               <div key={file.fileName} className="modules-drop-folder-row">
                 <span>
                   <strong>{file.fileName}</strong>
-                  <code>{packageIdentity ? `${packageIdentity.id} ${packageIdentity.version} · ` : ""}{formatFileSize(file.size)} · {new Date(file.lastWriteTimeUtc).toLocaleString()}</code>
+                  <code>{packageIdentity ? `${packageIdentity.id} ${packageIdentity.version} · ` : ""}{formatFileSize(file.size)} · {formatStudioDate(file.lastWriteTimeUtc)}</code>
                 </span>
                 <button type="button" className="studio-icon-button" disabled={busy} title={`Delete ${file.fileName} from ${host.label} drop folder`} onClick={() => onDeleteDropFolderPackage(file.fileName)}>
                   <Trash2 size={14} />
@@ -456,6 +462,7 @@ function ModuleInspector({
   activeTab: InspectorTab;
   onSelectTab(tab: InspectorTab): void;
 }) {
+  
   if (!registry) {
     return (
       <aside className="modules-inspector">
@@ -487,6 +494,7 @@ function ModuleInspector({
 }
 
 function OverviewTab({ host, registry, selectedRow }: { host: HostModel; registry: ModuleManagementRegistryResponse; selectedRow: ModuleRow | null }) {
+  
   return (
     <div className="modules-inspector-section">
       <h4>Overview</h4>
@@ -508,6 +516,7 @@ function OverviewTab({ host, registry, selectedRow }: { host: HostModel; registr
 }
 
 function ContributionsTab({ selectedRow }: { selectedRow: ModuleRow | null }) {
+  
   const contributions = selectedRow?.module?.contributions ?? [];
   return (
     <div className="modules-inspector-section">
@@ -532,6 +541,7 @@ function PackageTab({
   registry: ModuleManagementRegistryResponse;
   selectedRow: ModuleRow | null;
 }) {
+  
   const selectedPackage = selectedRow?.package ?? findPackageForModule(registry, selectedRow?.module ?? null);
   return (
     <div className="modules-inspector-section">
@@ -553,6 +563,7 @@ function PackageTab({
 }
 
 function PackageDependencies({ package: pkg }: { package: ModuleManagementPackage }) {
+  
   return (
     <div className="modules-package-dependencies">
       <h5>Dependencies</h5>
@@ -580,6 +591,7 @@ function ManifestTab({
   registry: ModuleManagementRegistryResponse;
   selectedRow: ModuleRow | null;
 }) {
+  
   const selectedPackage = selectedRow?.package ?? findPackageForModule(registry, selectedRow?.module ?? null);
   const packageManifest = selectedPackage?.manifest ?? null;
   const moduleManifest = selectedRow?.module?.manifest ?? null;
@@ -595,6 +607,7 @@ function ManifestTab({
 }
 
 function PackageManifestView({ manifest }: { manifest: ModuleManagementPackageManifest }) {
+  
   return (
     <div className="modules-manifest-view">
       <span className="modules-manifest-kind">{manifest.kind}</span>
@@ -611,6 +624,7 @@ function PackageManifestView({ manifest }: { manifest: ModuleManagementPackageMa
 }
 
 function StudioManifestView({ manifest }: { manifest: ModuleManagementStudioManifest }) {
+  
   return (
     <div className="modules-manifest-view">
       <dl className="modules-metadata">
@@ -639,6 +653,7 @@ function StudioManifestView({ manifest }: { manifest: ModuleManagementStudioMani
 }
 
 function DiagnosticsTab({ registry, selectedRow }: { registry: ModuleManagementRegistryResponse; selectedRow: ModuleRow | null }) {
+  
   const diagnostics = [
     ...(selectedRow?.module?.diagnostics ?? []),
     ...registry.diagnostics

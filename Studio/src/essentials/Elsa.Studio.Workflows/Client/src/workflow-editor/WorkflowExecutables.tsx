@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -48,6 +50,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
 }
 
 export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
+  useStudioTimeZone();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
@@ -361,7 +364,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
 function formatExecutableListDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? value : formatStudioDate(date);
 }
 
 function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): WorkflowListIdentifier[] {
@@ -384,6 +387,7 @@ function collectExecutableIdentifiers(executable: WorkflowExecutableSummary): Wo
 }
 
 function WorkflowExecutableOrigins({ executable, definitionNames }: { executable: WorkflowExecutableSummary; definitionNames: ReadonlyMap<string, string> }) {
+  
   const definitionIds = getExecutableDefinitionIds(executable);
 
   const openSourceDefinition = (definitionId: string) => {
@@ -414,6 +418,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames }: { executable
 }
 
 export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionId: string; publishedArtifactId: string | null }) {
+  useStudioTimeZone();
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");

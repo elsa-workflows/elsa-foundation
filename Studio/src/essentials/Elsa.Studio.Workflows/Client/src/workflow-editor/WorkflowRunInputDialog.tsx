@@ -1,3 +1,4 @@
+import { localDateTimeToIso, resolveStudioTimeZone, useStudioTimeZone } from "@elsa-workflows/studio-sdk";
 import { Component, useEffect, useId, useRef, useState, type ErrorInfo, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowInput } from "../workflowTypes";
@@ -17,6 +18,8 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
   onSubmit(values: WorkflowRunInputValues): void;
   onCancel(): void;
 }) {
+  useStudioTimeZone();
+  const timeZone = useStudioTimeZone();
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const [drafts, setDrafts] = useState<WorkflowRunInputDrafts>({});
@@ -62,7 +65,7 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
           <div className="wf-dialog-heading">
             <div>
               <h3 id={titleId}>Run workflow</h3>
-              <p>Provide the workflow inputs for this run.</p>
+              <p>Provide the workflow inputs for this run. Dates use {resolveStudioTimeZone(timeZone)}. A repeated hour uses its earlier offset; choose an explicit offset in JSON to select the later instant.</p>
             </div>
           </div>
           <div className="wf-run-input-list">
@@ -118,6 +121,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
   onEditorFailure(): void;
   onChange(value: string): void;
 }) {
+  useStudioTimeZone();
   const fieldId = useId();
   const descriptionId = `${fieldId}-description`;
   const errorId = `${fieldId}-error`;
@@ -159,6 +163,7 @@ export function WorkflowRunInputField({ input, editors, value, error, disabled, 
           />
         </WorkflowRunInputEditorBoundary>
       ) : fallback}
+      {getWorkflowRunInputControlKind(input) === "datetime" && value ? <small>{dateOffsetPreview(value)}</small> : null}
       {input.description ? <small id={descriptionId}>{input.description}</small> : null}
       {error ? <small id={errorId} role="alert">{error}</small> : null}
     </label>
@@ -250,4 +255,8 @@ function trapFocus(event: ReactKeyboardEvent, dialog: HTMLElement | null) {
     event.preventDefault();
     first.focus();
   }
+}
+
+function dateOffsetPreview(value: string) {
+  try { return `Sent as ${localDateTimeToIso(value)}`; } catch (error) { return error instanceof Error ? error.message : "Enter a valid date and time."; }
 }

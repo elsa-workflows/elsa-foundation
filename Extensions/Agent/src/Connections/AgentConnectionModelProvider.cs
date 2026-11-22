@@ -136,12 +136,12 @@ public abstract class AgentConnectionModelProvider(
         var configuration = AgentConnectionProfile.Read(connection, ConnectionTypeName, model);
         // Serialize framed values rather than concatenate delimiters. The operational incarnation
         // and revision bind each lease separately, so re-created support metadata can be republished.
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new object[]
+        var fingerprint = Elsa.Serialization.Core.JsonHashInput.Hash(new object[]
         {
             ProviderKey, ProtocolProfile, AgentProviderSchema.Profile, configuration.Endpoint.AbsoluteUri,
             configuration.ModelId, configuration.MaximumOutputTokens, configuration.StructuredResults, configuration.TemperatureSupported,
             connection.Hosts.Kind, connection.Hosts.Hosts.Order(StringComparer.Ordinal).ToArray()
-        }))));
+        }).ToUpperInvariant();
         return new(configuration.Endpoint, new(fingerprint, configuration.TemperatureSupported ? SettingsSchema : EmptySettingsSchema,
             configuration.StructuredResults, configuration.MaximumOutputTokens), configuration.TemperatureSupported, configuration.IncarnationId);
     }

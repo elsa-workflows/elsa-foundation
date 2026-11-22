@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React from "react";
 import { ArrowRight, CheckCheck, CircleAlert, CircleCheck, Clock3, Inbox, Network, Play, Plus, Workflow, type LucideIcon } from "lucide-react";
 import { qualifyStudioBackendPath, type StudioDashboardWidgetBodyProps, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
@@ -10,6 +12,7 @@ const previewRows: Record<StudioDashboardWidgetSize, number> = { small: 3, mediu
 // Compact, linked records give the author a route back to their work. Status has both an icon
 // and a caption; technical identities remain secondary and can wrap at any widget size.
 export function QuickActionsWidget({runtimeAvailable=true}:{runtimeAvailable?:boolean}) {
+  
   return (
     <div className="home-actions">
       <ul className="home-quick-actions">
@@ -30,6 +33,7 @@ export function QuickActionsWidget({runtimeAvailable=true}:{runtimeAvailable?:bo
 }
 
 export function RecentWorkflowsWidget({ snapshot, size }: StudioDashboardWidgetBodyProps<HomeWorkflowSummary[], unknown>) {
+  
   const workflows = snapshot ?? [];
   if (!workflows.length) return <HomeEmptyState icon={Workflow} title="No workflows yet" description="Your next automation starts with a workflow." action={{ href: "/workflows/definitions", label: "Create a workflow" }} />;
   return (
@@ -53,18 +57,22 @@ export function RecentWorkflowsWidget({ snapshot, size }: StudioDashboardWidgetB
 }
 
 export function RecentRunsWidget({ snapshot, size }: StudioDashboardWidgetBodyProps<HomeRunSummary[], unknown>) {
+  
   return <RunRecords items={snapshot ?? []} size={size} />;
 }
 
 export function NeedsAttentionWidget({ snapshot, size }: StudioDashboardWidgetBodyProps<HomeRunSummary[], unknown>) {
+  
   return <RunRecords items={snapshot ?? []} size={size} attention />;
 }
 
 export function TasksWidget() {
+  
   return <HomeEmptyState icon={Inbox} title="Open tasks" description="Assigned work lives in Tasks." action={{ href: "/tasks", label: "Open tasks" }} />;
 }
 
 function RunRecords({ items, size, attention = false }: { items: HomeRunSummary[]; size: StudioDashboardWidgetSize; attention?: boolean }) {
+  
   if (!items.length) return attention
     ? <HomeEmptyState icon={CheckCheck} title="All clear" description="No runs need your attention right now." tone="success" />
     : <HomeEmptyState icon={Play} title="No runs yet" description="Run a workflow, then follow its progress here." action={{ href: "/workflows/definitions", label: "Open the designer" }} />;
@@ -101,13 +109,15 @@ function runIcon(status: string | undefined): LucideIcon {
 }
 
 function RecordTime({ value, label }: { value?: string; label: string }) {
+  useStudioTimeZone();
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return <time dateTime={value} title={date.toLocaleString()}>{label} {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, {date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</time>;
+  return <time dateTime={value} title={formatStudioDate(date)}>{label} {formatStudioDate(date)}</time>;
 }
 
 function HomeEmptyState({ icon: Icon, title, description, action, tone }: { icon: LucideIcon; title: string; description: string; action?: { href: string; label: string }; tone?: string }) {
+  
   return <div className="home-empty" role="status" data-tone={tone}>
     <span className="home-empty-icon"><Icon size={27} aria-hidden="true" /></span>
     <strong>{title}</strong><span>{description}</span>
@@ -116,6 +126,7 @@ function HomeEmptyState({ icon: Icon, title, description, action, tone }: { icon
 }
 
 function HomeLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  
   const targetHref=qualifyStudioBackendPath(href);
   return <a href={targetHref} className={className} onClick={event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

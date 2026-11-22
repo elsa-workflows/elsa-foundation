@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
@@ -184,14 +186,17 @@ export function register(api: ElsaStudioModuleApi) {
 }
 
 export function ConsoleStreamPanel() {
+  
   return <ConsoleStreamView />;
 }
 
 export function ConsoleStreamPage() {
+  
   return <ConsoleStreamView page />;
 }
 
 function ConsoleStreamView({ page = false }: { page?: boolean }) {
+  useStudioTimeZone();
   const [hostId, setHostId] = useState<ConsoleHostId>(defaultStudioHostId);
   const [sources, setSources] = useState<ConsoleLogSource[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState("");
@@ -454,14 +459,14 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
       <div className="console-stream-lines" ref={viewportRef}>
         {renderedLines.length === 0 ? (
           <div className="console-stream-line stdout">
-            <span>{new Date().toLocaleTimeString()}</span>
+            <span>{formatStudioDate(new Date())}</span>
             <small>{selectedSource ? formatConsoleSourceLabel(selectedSource) : "All sources"}</small>
             <code>Console stream is ready.</code>
           </div>
         ) : null}
         {renderedLines.map(line => (
           <div className={`console-stream-line ${line.stream}`} key={line.id}>
-            <span>{new Date(line.timestamp).toLocaleTimeString()}</span>
+            <span>{formatStudioDate(line.timestamp)}</span>
             <small>{line.sourceLabel ?? "local"}</small>
             <code>{line.renderedText}</code>
           </div>

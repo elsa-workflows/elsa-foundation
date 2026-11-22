@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "@elsa-workflows/studio-sdk";
+import { formatStudioDate } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, KeyRound, Plus, RefreshCw, X } from "lucide-react";
 import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, useStudioRouteLocation, useStudioWorkspaceTab, type StudioDialogApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -13,6 +15,7 @@ const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked
 const MAX_SECRETS_PER_LOAD = 100;
 
 export function SecretsPage({ context, dialogs, navigate }: { context: StudioEndpointContext; dialogs: StudioDialogApi; navigate?(path: string): void }) {
+  useStudioTimeZone();
   const location = useStudioRouteLocation();
   const tab = useStudioWorkspaceTab();
   const initialBrowse = readSecretBrowse(location.search);
@@ -353,6 +356,7 @@ export function SecretsPage({ context, dialogs, navigate }: { context: StudioEnd
 }
 
 function SecretNotification({ message, error = false, onDismiss }: { message: string; error?: boolean; onDismiss(): void }) {
+  
   const Icon = error ? AlertCircle : CheckCircle2;
   return (
     <div className={`secrets-notification ${error ? "secrets-alert" : "secrets-status"}`}>
@@ -368,6 +372,7 @@ function SecretNotification({ message, error = false, onDismiss }: { message: st
 }
 
 function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
+  
   const id = useId();
   const helpId = helpText ? `${id}-help` : undefined;
   const descriptionId = description ? `${id}-description` : undefined;
@@ -387,6 +392,7 @@ function FilterSelect({ label, value, options, helpText, description, onChange }
 }
 
 function StatusBadge({ status }: { status: SecretStatus }) {
+  
   return <span className={`secrets-badge ${status.toLowerCase()}`}>{status}</span>;
 }
 
@@ -399,5 +405,5 @@ function labelStore(descriptors: SecretDescriptorsResponse | null, storeName: st
 }
 
 function formatDate(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : "-";
+  return value ? formatStudioDate(value) : "-";
 }

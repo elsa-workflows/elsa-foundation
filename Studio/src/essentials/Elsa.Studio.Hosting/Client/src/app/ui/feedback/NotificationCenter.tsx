@@ -1,3 +1,5 @@
+import { useStudioTimeZone } from "../../../sdk/timeZone";
+import { formatStudioDate } from "../../../sdk/timeZone";
 import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Bell, X } from "lucide-react";
@@ -35,6 +37,7 @@ function formatRelativeTime(timestamp: number, now: number): string {
  * Toasts are suppressed while the sheet is open, since they would cover it and repeat what it lists.
  */
 export function NotificationCenter({ navigate, controller = notificationController, now = Date.now }: NotificationCenterProps) {
+  
   const entries = useSyncExternalStore(controller.subscribe, controller.getEntries, controller.getEntries);
   const [open, setOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -98,6 +101,7 @@ function NotificationList({ entries, controller, navigate, now, headingRef, onCl
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   onClose(): void;
 }) {
+  
   const listRef = useRef<HTMLUListElement>(null);
   const focusedRemovalIndex = useRef<number | null>(null);
   // Relative times are computed while rendering; tick so an open sheet does not show stale ages.
@@ -149,6 +153,7 @@ function NotificationEntryRow({ entry, index, controller, navigate, now, onClose
   onClose(): void;
   onRemovedWhileFocused(index: number): void;
 }) {
+  useStudioTimeZone();
   const { id, link, action } = entry;
   const rowRef = useRef<HTMLLIElement>(null);
   const latest = useRef({ index, onRemovedWhileFocused });
@@ -187,7 +192,7 @@ function NotificationEntryRow({ entry, index, controller, navigate, now, onClose
           <span className="studio-notification-sr-only">{`${entry.read ? "" : "Unread, "}${notificationLevelLabel[entry.level]}: `}</span>
           <span className="studio-notification-entry-title">{entry.title}</span>
           {entry.message ? <span className="studio-notification-entry-message">{entry.message}</span> : null}
-          <span className="studio-notification-time" title={new Date(entry.updatedAt).toLocaleString()}>{formatRelativeTime(entry.updatedAt, now)}</span>
+          <span className="studio-notification-time" title={formatStudioDate(entry.updatedAt)}>{formatRelativeTime(entry.updatedAt, now)} · {formatStudioDate(entry.updatedAt)}</span>
         </button>
         {link || action ? (
           <div className="studio-notification-entry-actions">
