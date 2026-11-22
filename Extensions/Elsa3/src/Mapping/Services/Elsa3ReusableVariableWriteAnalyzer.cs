@@ -1563,7 +1563,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 var mapped = Allocate(call);
                 _arrays.Add(call);
                 Put(mapped, "*", arguments.Length <= 1 || arguments[1].Functions.Count == 0 ? elements :
-                    Repeated(_ => Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local)));
+                    Repeated(_ => Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local),
+                        maximumCalls: LiteralArrayBound(call.Arguments[0])));
                 return mapped;
             }
             // Only known read-only intrinsics bypass the opaque-call guard. Reflection and callbacks can return or
@@ -1597,6 +1598,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             Put(receiver, "*", members);
         }
         var callbackResult = Value.Local;
+        // A direct literal cannot acquire an external alias before this call. Array iteration snapshots its length;
+        // mutations from the callback cannot increase that maximum. Other receivers keep conservative repetition.
+        var callbackBound = call.Callee is MemberExpression arrayCall ? LiteralArrayBound(arrayCall.Object) : null;
         if (method is "sort" or "toSorted")
         {
             Repeated(_ =>
@@ -1605,7 +1609,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     Coerce([Apply(arguments[0], [Member(receiver, "*"), Member(receiver, "*")], Value.Local)]);
                 else Coerce([Member(receiver, "*")], stringHint: true);
                 return Value.Local;
-            });
+            }, maximumCalls: callbackBound is <= 1 ? 0 : null);
         }
         if (method is "map" or "filter" or "find" or "findIndex" or "findLast" or "findLastIndex" or "some" or "every" or "forEach" or "flatMap" or "reduce" or "reduceRight")
             if (arguments.FirstOrDefault()?.Functions.Count > 0)
@@ -1613,7 +1617,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     ? [accumulator, Member(receiver, "*"), Value.Local, receiver]
                     : [Member(receiver, "*"), Value.Local, receiver],
                     method is not ("reduce" or "reduceRight") && arguments.Length > 1 ? arguments[1] : Value.Local),
-                    method is "reduce" or "reduceRight" ? arguments.Length > 1 ? arguments[1] : Member(receiver, "*") : null);
+                    method is "reduce" or "reduceRight" ? arguments.Length > 1 ? arguments[1] : Member(receiver, "*") : null,
+                    method is "reduce" or "reduceRight" && arguments.Length <= 1 && callbackBound is { } count
+                        ? Math.Max(0, count - 1) : callbackBound);
         if (method is "replace" or "replaceAll")
         {
             Coerce([receiver], stringHint: true);
@@ -1681,11 +1687,26 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         return FreshContainer(call);
     }
 
-    private Value Repeated(Func<Value, Value> invoke, Value? initial = null)
+    private static int? LiteralArrayBound(Node expression) => expression is ArrayExpression array &&
+        array.Elements.All(item => item is not SpreadElement) ? array.Elements.Count : null;
+
+    private Value Repeated(Func<Value, Value> invoke, Value? initial = null, int? maximumCalls = null)
     {
         // Native iteration can invoke the same callback more than once. Preserve captured-state changes and feed
         // possible reducer results back into its accumulator until the finite ownership graph stops growing.
         var result = initial ?? Value.Local;
+        if (maximumCalls is { } bound)
+        {
+            // A proven bound must not invent another callback. Keep sequential strong updates for these calls,
+            // while retaining every possible returned value for collection results.
+            var accumulator = result;
+            for (var index = 0; index < bound && !_writes; index++)
+            {
+                accumulator = invoke(accumulator);
+                result = result.Union(accumulator);
+            }
+            return result;
+        }
         while (!_writes)
         {
             var before = _state.Copy();
