@@ -41,9 +41,15 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
+  const firstDraftRef = useRef<HTMLAnchorElement>(null);
   const homeFallbackRef = useRef<HTMLElement>(null);
   const [dialogState, setDialogState] = useState<ActiveDialog | null>(null);
   const activeDialog = workflowsEnabled && dialogState?.authorityKey === authorityKey ? dialogState : null;
+
+  useEffect(() => {
+    const link = firstDraftRef.current;
+    if (link && document.activeElement?.matches(".home-continue-dialog .studio-dialog-close")) link.focus();
+  }, [activeDialog?.discovery.kind]);
 
   const closeDialog = useCallback(() => {
     controllerRef.current?.abort();
@@ -160,7 +166,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {accessLimited ? <span id="home-task-access" role="note">Create requires workflow design access. Continue and Browse require access to read workflow definitions.</span> : null}
       </div>
       {activeDialog ? (
-        <StudioDialog open title="Continue editing" onClose={closeDialog} className="home-continue-dialog" dismissOnOutsideClick={false}
+        <StudioDialog open title="Continue editing" onClose={closeDialog} className="home-continue-dialog" initialFocusRef={firstDraftRef} dismissOnOutsideClick={false}
           onCloseAutoFocus={event => {
             event.preventDefault();
             const opener = continueButtonRef.current;
@@ -185,10 +191,10 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
                 ? `Showing the 8 most recently changed of ${activeDialog.discovery.total} current drafts.`
                 : `${activeDialog.discovery.total} current ${activeDialog.discovery.total === 1 ? "draft" : "drafts"}.`}</p>
               <ul aria-label="Current workflow drafts">
-                {activeDialog.discovery.candidates.map(workflow => {
+                {activeDialog.discovery.candidates.map((workflow, index) => {
                   const href = workflowDefinitionHref(workflow.id);
                   return <li key={workflow.id}>
-                    <a href={href} onClick={event => handleLinkClick(event, href, closeDialog)}>
+                    <a ref={index === 0 ? firstDraftRef : undefined} href={href} onClick={event => handleLinkClick(event, href, closeDialog)}>
                       <strong>{workflow.name}</strong><code>{workflow.id}</code>
                     </a>
                   </li>;

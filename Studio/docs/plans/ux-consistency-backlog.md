@@ -299,11 +299,11 @@ Host and Dashboard:
 
 - [ ] **X3.21** (#5057) [source] `H/modules/PackageFeedsPage.tsx:339` (`modules-upload-dialog`). Footer at
   `:367–368` has no primary submit.
-- [ ] **X3.22** (#5058) [source] `DASH/native/ResourceDialogs.tsx:15` (`named-dialog`).
-- [ ] **X3.23** (#5059) [source] `DASH/HomeTaskGroup.tsx:166`; footer at `:197` is a lone raw "Cancel".
-- [ ] **X3.24** (#5060) [source] `DASH/WidgetFrame.tsx:178`; footer at `:192–193` uses raw buttons with
+- [x] **X3.22** (#5058, PR #5312) [source] `DASH/native/ResourceDialogs.tsx:15` (`named-dialog`).
+- [x] **X3.23** (#5059, PR #5312) [source] `DASH/HomeTaskGroup.tsx:166`; footer at `:197` is a lone raw "Cancel".
+- [x] **X3.24** (#5060, PR #5312) [source] `DASH/WidgetFrame.tsx:178`; footer at `:192–193` uses raw buttons with
   `data-variant`.
-- [ ] **X3.25** (#5061) [seen] `DASH/HomePage.tsx:250` add-widget picker; text "Close" at `:264`.
+- [x] **X3.25** (#5061, PR #5312) [seen] `DASH/HomePage.tsx:250` add-widget picker; text "Close" at `:264`.
 
 Extensions:
 
