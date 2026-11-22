@@ -53,7 +53,10 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     public override string ToString() => Id;
 }
 
-internal sealed record FoundationOperatorCommand(string? Selection);
+internal sealed record FoundationOperatorCommand(string? Selection)
+{
+    internal ParkRecoveryMode? RecoverMode { get; init; }
+}
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
@@ -104,6 +107,7 @@ public sealed record JobFinished([property: System.Text.Json.Serialization.JsonC
 
 public static class Kinds
 {
+    internal const string ChildFinished = "child-finished";
     public const string Start = "start";
     public const string JobFinished = "job-finished";
     public const string Event = "event";

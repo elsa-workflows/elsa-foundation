@@ -45,23 +45,31 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
+        if (row.ParkRecovery is not null)
+            return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
         return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        store.FoundationTurnHeader(row).Park is not null
+        row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
             ? !delivery.Message.IsControl
-            : delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+            : SettlesEndedChildNotice(row, delivery.Message) ||
+                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+
+    private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
+        message.Kind == Contract.Kinds.ChildFinished && row is
+            { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
 
     private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
+        SettlesEndedChildNotice(row, delivery.Message) ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
             delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || IsParked(row)));
 
-    private bool IsParked(Durable.InstanceRow? row) => row is { Status: Durable.InstanceStatus.Faulted } &&
+    private bool IsParked(Durable.InstanceRow? row) => row is { Status: Durable.InstanceStatus.Faulted, ParkRecovery: null } &&
         store.FoundationTurnHeader(row).Park is not null;
 
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
@@ -73,11 +81,35 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind == Durable.Kinds.ParkExpiry)
             return ExpirePark(input);
         if (message.Kind == Durable.Kinds.Drain)
-            return ContinueDiscard(input);
+            return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
         if (input.Row is { ParkDiscard: not null } draining)
             return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "ResolutionOpen");
+        if (input.Row is { ParkRecovery: not null } recovering &&
+            message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
+            return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
         if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
             return OpenDiscard(input);
+        if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
+            return OpenRecover(input);
+        if (input.Row is { } terminalParent && SettlesEndedChildNotice(terminalParent, message))
+        {
+            if (!IsChildNotice(terminalParent, message) || message.Payload is null)
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            try
+            {
+                if (message.Read<Completion>() is not { Final: true })
+                    return new(input.Actor) { Consumed = [.. input.Taken], Status = terminalParent.Status };
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            }
+            var children = Durable.ChildRegistry.Read(terminalParent.Children);
+            children.Remove(new(message.Sender!, message.SenderCreation));
+            return ParkCheckpoint(input, terminalParent, terminalParent with { Children = Durable.ChildRegistry.Write(children) });
+        }
+        if (input.Row is { ParkRecovery: not null, Status: not Durable.InstanceStatus.Running } endedDuringRecovery && !message.IsControl)
+            return Durable.CreationProtocol.Refuse(input.Actor, endedDuringRecovery, input.Taken, "Ended");
         if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)
             return Durable.CreationProtocol.Refuse(input.Actor, discarded, input.Taken, "Ended");
         var parked = IsParked(input.Row);
@@ -206,6 +238,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
             ValidateTerminalEnvelope(nextRow, nextHeader);
+            if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
+                store.FirstUnheldRecoveryInput(nextRow, cohort, key =>
+                    outcome.Consumed.Exists(input => input.Message.InboxKey == key) || outcome.Cancelled.Contains(key)) is null))
+                outcome.Row = nextRow with { ParkCohort = null };
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);
         }
@@ -265,7 +301,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         {
             Status = running ? Durable.InstanceStatus.Faulted : next.Status,
             Fault = running ? BoundFaultText(error) : next.Fault,
-            Revision = checked(next.Revision + 1)
+            Revision = checked(next.Revision + 1),
+            ParkRecovery = null,
+            ParkCohort = null
         };
         result.Row = next;
         result.Status = next.Status;
@@ -277,6 +315,13 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });
         result.FoundationHeader = next.FoundationInlineHeader ?? (row is null ? InitialHeader(next.Definition) : null);
+        if (row?.ParkRecovery is { } recovery)
+        {
+            result.Cancelled.Add(recovery.Control);
+            if (store.FoundationTurnHeader(row).Park is { } mark && store.FoundationExpiry(row) is { } expiry)
+                result.Sent.Add(Durable.ParkDrainEnvelope.For(next, mark).Issue(next, checked(recovery.Serial + 1), expiryAt: expiry.At));
+            return result;
+        }
         if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
         return result;
     }

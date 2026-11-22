@@ -20,6 +20,8 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal long ParkResolutionGeneration { get; init; }
     internal ParkDiscardDrain? ParkDiscard { get; init; }
     internal ParkRecoveryDrain? ParkRecovery { get; init; }
+    internal ParkRelease? ParkCohort { get; init; }
+    internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null

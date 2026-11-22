@@ -12,11 +12,11 @@ internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long 
     internal static ParkDrainEnvelope For(InstanceRow row, InMemoryStore.FoundationParkMark park) =>
         new(row.Creation, park.Revision, park.At, row.ParkResolutionGeneration);
 
-    internal Message Issue(InstanceRow row, long serial, long? expiryAt = null)
+    internal Message Issue(InstanceRow row, long serial, long? expiryAt = null, long? drainAt = null)
     {
         var key = Key(row, serial);
         return new Message(key.Id, new(row.Id), expiryAt is null ? Kinds.Drain : Kinds.ParkExpiry, Json.Write(this), row.Id,
-                Due: expiryAt, TargetCreation: row.Creation,
+                Due: expiryAt ?? drainAt, TargetCreation: row.Creation,
                 SenderCreation: row.Creation)
             .WithInboxScope(key.Scope)
             .AsKernelTicket();
@@ -58,11 +58,22 @@ public sealed partial class InMemoryStore
         IReadOnlyDictionary<int, long> epochs, long now)
     {
         var next = turn.Row;
-        if (turn.FoundationRecoveryPage is not null)
+        if (previous is { ParkRecovery: not null } && next is { Status: InstanceStatus.Faulted, ParkRecovery: null } &&
+            turn.FoundationKept is { Count: > 0 })
         {
-            ValidateRecoveryPage(turn, previous, epochs, now);
+            ValidateRecoveryInterruption(turn, previous, epochs);
             return null;
         }
+        if (turn.FoundationRecoveryPage is not null || previous?.ParkRecovery is not null &&
+            turn.Consumed.Concat(turn.Done).Any(key => key == previous.ParkRecovery.Control))
+        {
+            ValidateRecoveryStep(turn, previous, epochs, now);
+            return null;
+        }
+        if (previous?.ParkRecovery is null && next is { ParkRecovery: not null })
+            return ValidateRecoveryOpen(turn, previous, epochs, now);
+        if (!turn.Delete && next is not null && next.EndedDuringParkRecovery != (previous?.EndedDuringParkRecovery ?? false))
+            throw InvalidDrain();
         if (next is not null && next.ParkRecovery != previous?.ParkRecovery || previous?.ParkRecovery is not null &&
             (turn.Delete || turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain)))
             throw InvalidDrain();

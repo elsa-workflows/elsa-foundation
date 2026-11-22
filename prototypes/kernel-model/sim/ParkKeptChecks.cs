@@ -260,6 +260,327 @@ internal static class ParkKeptChecks
         }
     }
 
+    internal static async Task CheckRecoverArrivals(Action<bool, string> check)
+    {
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false);
+        await CheckRecoverArrivals(check, faultOnAdvance: true, throwOnOpen: false);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdAdvance: true);
+        await CheckRecoverArrivals(check, faultOnAdvance: false, throwOnOpen: false, holdControl: true);
+        await CheckTerminalCohort(takeover: false, check);
+        await CheckTerminalCohort(takeover: true, check);
+        await CheckTerminalCohort(takeover: false, check, cutAfter: false);
+        await CheckTerminalCohort(takeover: false, check, cutAfter: true);
+        await CheckTerminalChildNotice(keptBeforeResume: false, check);
+        await CheckTerminalChildNotice(keptBeforeResume: true, check);
+        await CheckTerminalChildNotice(keptBeforeResume: true, check, holdNotices: true);
+        await CheckTerminalChildNotice(keptBeforeResume: false, check, ordinaryEnd: true);
+    }
+
+    private static async Task CheckRecoverArrivals(Action<bool, string> check, bool faultOnAdvance, bool throwOnOpen,
+        bool holdAdvance = false, bool holdControl = false)
+    {
+        const long initial = 1_701_400_028_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
+        var probe = new Probe(withholdFaulted: true) { FaultOnAdvance = faultOnAdvance, HoldAdvance = holdAdvance, HoldSuspend = holdControl };
+        var scope = new Contract.BoundScope("recover-arrivals");
+        var worker = new Worker("recover-arrivals", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind == Contract.Kinds.Recover || holdControl && kind == Contract.Kinds.Suspend);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        var shortWindow = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1));
+        await ingress.SendAsync(scope, target, "fault", "poison", options: shortWindow);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "keep", "advance",
+            faultOnAdvance ? new string('x', ParkRecoveryCredit.LimitBytes) : null, options: shortWindow);
+        if (faultOnAdvance) await ingress.SendAsync(scope, target, "suffix", "advance", options: shortWindow);
+        await Pump(owner);
+        now += 3;
+        await store.SweepAsync();
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var retained = parked.Park is not null && store.FoundationExpiry(parked.Row) is { Armed: not null } &&
+            store.Messages.Values.Any(row => row.Message.Id == "fault" && row.KeptBy == ParkKeepReason.Consumed) &&
+            store.Messages.Values.Any(row => row.Message.Id == "keep" && row.KeptBy == ParkKeepReason.Arrived);
+        check(retained, "the recovery fixture keeps both input reasons across sweep before the armed deadline");
+        if (!retained) return;
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var command = Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume));
+        if (throwOnOpen)
+        {
+            probe.ThrowOnRunningWithholds = true;
+            await ingress.SendAsync(scope, target, "bad-resume", Contract.Kinds.Recover, command);
+            var escaped = false;
+            try { await Pump(owner); }
+            catch (InvalidOperationException error) when (error.Message == "withholding probe failed") { escaped = true; }
+            var afterFailure = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+            check(!escaped && afterFailure.Row == parked.Row && afterFailure.Park == parked.Park &&
+                store.FoundationExpiry(afterFailure.Row)?.Armed is not null &&
+                store.Messages.Values.Any(row => row.Message.Id == "bad-resume" && row.Done),
+                "a failing withholding predicate settles Resume and preserves the original Park");
+            if (escaped) return;
+            probe.ThrowOnRunningWithholds = false;
+        }
+        probe.PausePages = holdControl;
+        var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover, command);
+        if (holdControl)
+        {
+            await Pump(owner);
+            var drain = store.Instances[parked.Row.Id].ParkRecovery;
+            var delayed = drain is not null && store.Messages.GetValueOrDefault(drain.Control)?.Message.Due > now;
+            check(delayed, "the held-command fixture pauses the open recovery page");
+            if (!delayed) return;
+            var suspend = await ingress.SendAsync(scope, target, "suspend", Contract.Kinds.Suspend);
+            await Pump(owner);
+            check(suspend.Outcome == Contract.AdmissionOutcome.Accepted && probe.SuspendOffers == 1,
+                "a held command is not repeatedly offered without a fresh stimulus");
+            await ingress.SendAsync(scope, target, "still-withheld", "late");
+            await Pump(owner);
+            check(probe.SuspendOffers == 1, "an arrival withheld until Complete cannot wake the held command");
+            probe.PausePages = false;
+        }
+        if (holdAdvance)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(parked.Row.Id);
+            await worker.FlushAsync();
+            var opened = store.Instances[parked.Row.Id].ParkRecovery is not null;
+            check(opened, "the held-cohort fixture opens before the late arrival");
+            if (!opened) return;
+            await ingress.SendAsync(scope, target, "late", "late");
+            // Exercise the store contract where later acceptance may have a lower ordering tuple.
+            store.Messages.Values.Single(row => row.Message.Id == "late").Seq =
+                store.Messages.Values.Single(row => row.Message.Id == "keep").Seq - 1;
+        }
+        for (var pass = 0; pass < 5; pass++)
+        {
+            await Pump(owner);
+            now += 11;
+        }
+        var restored = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        if (holdControl)
+        {
+            check(restored is { Park: null, Row.ParkRecovery: null } && probe.RecoveredArrivals == 1,
+                "a new page can run while a public command remains held");
+            return;
+        }
+        if (faultOnAdvance)
+        {
+            check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+                restored is { Park: null, EndedAt: not null, Row: { Status: InstanceStatus.Faulted, ParkRecovery: null } } &&
+                probe.RecoveredArrivals == 1 && store.Messages.Values.All(row => row.KeptBy is null),
+                "a model that ends Faulted can finish recovery and clear the kept suffix");
+            return;
+        }
+        if (holdAdvance)
+        {
+            check(probe.LateOffer.SequenceEqual(["advance", "late"]), "a held cohort member precedes the late arrival in the model inbox");
+            check(restored is { Park: null, Row.ParkCohort: null } &&
+                store.Messages.Values.All(row => row.Done || row.ReleasedBy is null),
+                "the turn consuming the last held cohort member clears the durable mark");
+            return;
+        }
+        check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+            restored is { Park: null, Row: { Status: InstanceStatus.Running, State: "advanced" } } &&
+            probe.PoisonOffers == 1 && probe.RecoveredArrivals == 1 &&
+            !store.Messages.Values.Any(row => row.KeptBy is not null || row.Message.Kind == Kinds.ParkExpiry),
+            "Resume clears the consumed fault, applies the kept arrival once and recalls the expiry");
+    }
+
+    private static async Task CheckTerminalCohort(bool takeover, Action<bool, string> check, bool? cutAfter = null)
+    {
+        const long initial = 1_701_400_028_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: takeover) { FaultOnAdvance = true, HoldTerminalInput = !takeover };
+        var scope = new Contract.BoundScope("terminal-recovery");
+        var cleared = 0;
+        Worker MakeWorker(string node, int limit, IKernelStore? actual = null) => new(node, 0, actual ?? store, new ActorAdapter(store, probe),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial, PollLimit = limit,
+                OnPreparedCheckpoint = (turn, _, _) =>
+                {
+                    if (turn.FoundationRecoveryPage is { TerminalInputs: true } page) cleared += page.Rows.Count;
+                }
+            });
+        var interrupted = false;
+        var cut = cutAfter is null ? null : new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (interrupted || landed != cutAfter || !batch.Turns.Any(turn => turn.FoundationRecoveryPage is { TerminalInputs: true })) return;
+            interrupted = true;
+            throw new StoreException(Failure.Unknown, "lost terminal page outcome");
+        });
+        var first = MakeWorker("terminal-first", 1024, cut);
+        var ingress = new InMemoryIngress(store, new Requests(first.Node), first.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(birth.Actor!.Value);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "fault", "poison");
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "first", "advance");
+        for (var index = 0; index < (takeover ? 174 : 1); index++)
+            await ingress.SendAsync(scope, target, $"held-{index:D3}", "terminal-pending");
+        await Pump(owner);
+
+        var parked = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!;
+        await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(parked.Selection!, Contract.RecoverMode.Resume)));
+        if (cutAfter is not null)
+        {
+            for (var pass = 0; pass < 16 && !interrupted; pass++) { now += 11; await Pump(owner); }
+            var held = store.Messages.Values.Single(row => row.Message.Id == "held-000");
+            check(interrupted && held.Done == cutAfter && !first.Owns, "the terminal checkpoint loses its outcome at the requested cut");
+            if (!interrupted) return;
+            var oldDeadline = held.Message.KeepUntil;
+            now += (long)Defaults.Lease.TotalMilliseconds + 1;
+            var successor = MakeWorker("terminal-unknown-successor", 1024);
+            await using var active = (await new DurableHost([successor]).ActivateAsync(0))!;
+            await Verify(active);
+            check(held is { Done: true, Held: false, Trial: 0, Attempts: 0 } && held.Message.KeepUntil > now &&
+                (cutAfter.Value ? held.Message.KeepUntil == oldDeadline : held.Message.KeepUntil > oldDeadline),
+                cutAfter.Value ? "the successor retains a landed terminal page's exact settlement" :
+                    "the successor replays an unlanded terminal page without putting its held input on trial");
+        }
+        else if (takeover)
+        {
+            var id = store.Instances.Values.Single().Id;
+            for (var step = 0; step < 2; step++)
+            {
+                await first.PollAsync();
+                await first.LoadAsync();
+                await first.FlushAsync();
+                first.RunTurn(id);
+                await first.FlushAsync();
+            }
+            check(store.Messages.Values.Count(row => !row.Done && row.ReleasedBy is not null) == 169,
+                "the old owner releases a bounded cohort before takeover");
+            var epoch = first.Fences.Single().Epoch;
+            await owner.DisposeAsync();
+            var successor = MakeWorker("terminal-successor", 1);
+            await using var active = (await new DurableHost([successor]).ActivateAsync(0))!;
+            check(successor.Fences.Single().Epoch > epoch, "the terminal recovery fixture moves to a fresh one-row poll owner");
+            await Verify(active);
+        }
+        else await Verify(owner);
+
+        async Task Verify(IScopeActivation active)
+        {
+            for (var pass = 0; pass < 24; pass++) { now += 11; await Pump(active); }
+            var resolved = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+            check(resolved is { Park: null, Row: { Status: InstanceStatus.Faulted, ParkCohort: null, ParkRecovery: null } } &&
+                store.Messages.Values.All(row => row.KeptBy is null && (row.ReleasedBy is null || row.Done)) &&
+                probe.RecoveredArrivals == 1 && cleared > 0,
+                takeover ? "a successor settles all released terminal inputs before Complete" :
+                    "terminal recovery settles a model-held released input without another stimulus");
+            var receipt = store.Journal.Values.SingleOrDefault(row => row.Entries.Contains("\"recovered\"", StringComparison.Ordinal));
+            check(receipt is not null && Json.Read<RecoveryTally>(receipt.Entries) == (takeover ? new(169, 7) : new(2, 1)),
+                "terminal settlement does not count an already released input twice in the recovery receipt");
+            if (!takeover)
+            {
+                await ingress.SendAsync(scope, target, "after-end", "terminal-query");
+                await Pump(active);
+                check(probe.TerminalQueryOffer.SequenceEqual(["terminal-query"]),
+                    "terminal dispatch after Complete still accepts a model query without returning the old held input");
+            }
+        }
+    }
+
+    private sealed record RecoveryTally(long Restored, long Cleared);
+
+    private static async Task CheckTerminalChildNotice(bool keptBeforeResume, Action<bool, string> check,
+        bool holdNotices = false, bool ordinaryEnd = false)
+    {
+        const long initial = 1_701_400_040_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new Probe(withholdFaulted: !holdNotices && !ordinaryEnd)
+        {
+            FaultOnAdvance = !ordinaryEnd, HoldTerminalNotices = holdNotices
+        };
+        var scope = new Contract.BoundScope("terminal-child");
+        var worker = new Worker("terminal-parent", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind is Contract.Kinds.Recover or Contract.Kinds.Delete);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "parent", Contract.Kinds.Start);
+        var parent = new Contract.Target.Ref(birth.Actor!.Value);
+        await Pump(owner);
+        var children = new List<Contract.Target.Ref>();
+        if (!ordinaryEnd) await Spawn();
+        if (holdNotices) await Spawn();
+        await ingress.SendAsync(scope, parent, "park", "poison");
+        await Pump(owner);
+        if (holdNotices) await FinishChildren();
+        await ingress.SendAsync(scope, parent, "end", "advance");
+        if (keptBeforeResume)
+        {
+            if (!holdNotices) await FinishChildren();
+            await Pump(owner);
+            check(store.Messages.Values.Count(row => row.Message.Kind == Contract.Kinds.ChildFinished && row.KeptBy == ParkKeepReason.Arrived) == children.Count,
+                "the authentic final child notice is kept before Resume");
+        }
+        else await Pump(owner);
+        var reader = new ActorList(store, 10);
+        var parked = (await reader.GetAsync(scope, parent.Actor))!;
+        await ingress.SendAsync(scope, parent, "resume", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(parked.Selection!)));
+        if (holdNotices)
+        {
+            var id = store.ReadFoundationActor(scope.Tenant, parent.Actor.Id).Actor!.Row.Id;
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+            await ingress.SendAsync(scope, parent, "query", "terminal-query");
+        }
+        for (var pass = 0; pass < 8; pass++) { now += 11; await Pump(owner); }
+        if (ordinaryEnd)
+        {
+            await Spawn();
+            await ingress.SendAsync(scope, parent, "end-outside-recovery", "finish-child");
+            await Pump(owner);
+        }
+        if (!keptBeforeResume) await FinishChildren();
+        var terminal = store.ReadFoundationActor(scope.Tenant, parent.Actor.Id).Actor!;
+        check(terminal is { Park: null, Row: { ParkRecovery: null, Children: null } } &&
+            terminal.Row.Status == (ordinaryEnd ? InstanceStatus.Finished : InstanceStatus.Faulted) &&
+            terminal.Row.EndedDuringParkRecovery != ordinaryEnd && probe.Notices.Count == (ordinaryEnd ? 1 : 0),
+            ordinaryEnd ? "an actor that ends after a running recovery still receives its child's notice in the model" :
+                "authentic final child notices settle the terminal registry without model entry");
+        if (holdNotices)
+            check(probe.HeldChildOffers >= 2 && probe.TerminalQueryOffer.SequenceEqual(["terminal-query"]),
+                "two held child notices settle alone and do not consume the queued terminal query");
+        var selected = (await reader.GetAsync(scope, parent.Actor))!.Selection!;
+        await ingress.SendAsync(scope, parent, "delete", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(selected)));
+        await Pump(owner);
+        check(store.Instances[terminal.Row.Id].Retired, "the settled child no longer protects the parent from a qualified delete");
+
+        async Task Spawn()
+        {
+            await ingress.SendAsync(scope, parent, $"spawn-{children.Count}", "spawn");
+            await Pump(owner);
+            children.Add(new(probe.Child!.Value));
+        }
+
+        async Task FinishChildren()
+        {
+            for (var index = 0; index < children.Count; index++)
+                await ingress.SendAsync(scope, children[index], $"finish-{index}", "finish-child");
+            await Pump(owner);
+        }
+    }
+
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
         const long now = 1_701_400_029_000;
@@ -861,13 +1182,36 @@ internal static class ParkKeptChecks
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
+        public int RecoveredArrivals { get; private set; }
+        public bool FaultOnAdvance { get; init; }
+        public bool HoldTerminalInput { get; init; }
+        public bool HoldTerminalNotices { get; init; }
+        public int HeldChildOffers { get; private set; }
+        public string[] TerminalQueryOffer { get; private set; } = [];
+        public bool ThrowOnRunningWithholds { get; set; }
+        public bool HoldAdvance { get; init; }
+        public string[] LateOffer { get; private set; } = [];
+        public bool PausePages { get; set; }
+        public bool HoldSuspend { get; init; }
+        public int SuspendOffers { get; private set; }
         public Contract.ActorRef? Child { get; private set; }
         public List<Contract.ChildFinished> Notices { get; } = [];
-        public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
+        public bool Withholds(Contract.ActorHeader header) => ThrowOnRunningWithholds && header.Status == Contract.ActorStatus.Running
+            ? throw new InvalidOperationException("withholding probe failed")
+            : PausePages && header.Status == Contract.ActorStatus.Running ||
+                withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             Offers++;
+            if (turn.Inbox.Any(message => message.Kind == "terminal-query"))
+                TerminalQueryOffer = turn.Inbox.Select(message => message.Kind).ToArray();
+            if (HoldSuspend && turn.Inbox is [var suspend] && suspend.Kind == Contract.Kinds.Suspend)
+            {
+                SuspendOffers++;
+                turn.Hold(suspend);
+                return default;
+            }
             if (turn.Inbox.Any(message => message.Kind == "poison"))
             {
                 PoisonOffers++;
@@ -875,8 +1219,32 @@ internal static class ParkKeptChecks
             }
             foreach (var message in turn.Inbox)
                 if (message.Kind == "spawn") Child = turn.Start(new(Type, "child", null));
+                else if (message.Kind == Contract.Kinds.ChildFinished && HoldTerminalNotices)
+                {
+                    HeldChildOffers++;
+                    turn.Hold(message);
+                }
                 else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
-            turn.State = "saved";
+                else if (message.Kind == "finish-child") turn.End(Contract.ActorStatus.Finished);
+            if (turn.Inbox.Any(message => message.Kind == "advance"))
+            {
+                if (HoldAdvance && !turn.Inbox.Any(message => message.Kind == "late"))
+                {
+                    turn.Hold(turn.Inbox.Single(message => message.Kind == "advance"));
+                    return default;
+                }
+                if (HoldAdvance) LateOffer = turn.Inbox.Select(message => message.Kind).ToArray();
+                RecoveredArrivals++;
+                turn.State = "advanced";
+                if (FaultOnAdvance)
+                {
+                    if (HoldTerminalInput)
+                        foreach (var pending in turn.Inbox.Where(message => message.Kind == "terminal-pending"))
+                            turn.Hold(pending);
+                    turn.End(Contract.ActorStatus.Faulted);
+                }
+            }
+            else turn.State = "saved";
             return default;
         }
 
