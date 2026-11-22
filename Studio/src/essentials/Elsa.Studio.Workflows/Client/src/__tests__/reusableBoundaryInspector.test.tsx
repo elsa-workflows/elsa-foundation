@@ -89,6 +89,42 @@ describe("ReusableBoundaryInspector", () => {
       .toEqual(["Completed", "Faulted"]);
   });
 
+  it("keeps historical nodes with missing positions selectable next to the pinned canvas", () => {
+    const node = { templateNodeId: "first", authoredActivityId: "first", executableNodeId: "placed", activityType: "Example.PlacedStep", x: 0, y: 0, hasPinnedGeometry: true };
+    const saved = layout("outer", [node, { ...node, executableNodeId: "unplaced", activityType: "Example.UnplacedStep", hasPinnedGeometry: false }]);
+    const onSelectNode = vi.fn();
+    const container = render(<HistoricalBoundaryLayout layout={saved} onSelectNode={onSelectNode} selectedExecutableNodeId="unplaced" />);
+    expect(container.querySelector("svg [role='button']")?.getAttribute("aria-label")).toContain("Placed Step");
+    const unplaced = button(container, "Unplaced Step");
+    expect(unplaced.getAttribute("aria-pressed")).toBe("true");
+    click(unplaced);
+    expect(onSelectNode).toHaveBeenCalledWith("unplaced");
+  });
+
+  it("enables opening another boundary after returning during a nested request", async () => {
+    const delayed = deferred<ActivityExecutionInspection>();
+    vi.mocked(getActivityExecutionLayout).mockImplementation(async (_context, _run, id) => layout(id, []));
+    vi.mocked(getActivityExecutionDescendants).mockImplementation(async (_context, _run, id) => {
+      const child = id === "outer" ? "inner" : "deep";
+      return page(1, [hierarchyItem(child, 1, { activityType: "Example.NestedStep", boundary: boundaryInspection(child).boundary })]);
+    });
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) =>
+      id === "deep" ? delayed.promise : boundaryInspection(id));
+
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+    await waitFor(() => expect(treeItem(container, "Nested Step")).toBeDefined());
+    click(button(container, "View steps"));
+    await waitFor(() => expect(container.querySelector("nav")?.textContent).toContain("Nested Step"));
+    await waitFor(() => expect(treeItem(container, "Nested Step")).toBeDefined());
+    click(button(container, "View steps"));
+    await waitFor(() => expect(button(container, "Opening…").disabled).toBe(true));
+    click(button(container, "Outer Reusable"));
+    await waitFor(() => expect(button(container, "View steps").disabled).toBe(false));
+    delayed.resolve(boundaryInspection("deep"));
+    click(button(container, "View steps"));
+    await waitFor(() => expect(container.querySelector("nav")?.textContent).toContain("Nested Step"));
+  });
+
   it("supports a compact presentation for historical structure inside the inspector", () => {
     const saved = layout("outer", [{ templateNodeId: "child", authoredActivityId: "child", executableNodeId: "placed-child", x: 0, y: 0, activityType: "Example.WriteLine", hasPinnedGeometry: false }]);
 
