@@ -20,6 +20,24 @@ public sealed class RuntimeHistoryCompositionTests
     private static readonly DateTimeOffset At = DateTimeOffset.UnixEpoch;
 
     [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Source_inspection_qualifies_the_actual_memory_owner_through_both_coalescing_ports(bool decorated)
+    {
+        var services = Services(new Access()); RuntimeHistoryRegistration.AddServices(services);
+        if (decorated) services.AddPersistenceModes();
+        using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
+        var reader = scope.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>();
+        var lookup = scope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
+        Assert.True(lookup.CanInspectHistorySources(reader));
+        Assert.True(((IPostCommitOutboxLookupStore)scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>()).CanInspectHistorySources(reader));
+        var foreignServices = Services(new Access()); RuntimeHistoryRegistration.AddServices(foreignServices);
+        using var foreignProvider = foreignServices.BuildServiceProvider(); using var foreignScope = foreignProvider.CreateScope();
+        Assert.False(lookup.CanInspectHistorySources(foreignScope.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>()));
+    }
+
+
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void Ordinary_service_resolution_remains_lazy_before_an_admission_scope_exists(bool enabled)

@@ -81,7 +81,7 @@ public static class RuntimeHistorySafety
     {
         "history.status", "history.reasonCode", "history.outcomeNames", "history.stimulusType", "history.resumeTargetId",
         "history.outcomeCaptureState", "history.outcomeCount", "history.outcomeContentHash",
-        "history.selectedBookmarkId", "history.childWorkflowId", "history.relatedWorkflowExecutionId", "history.timerId", "history.scheduledAt", "history.controlKind",
+        "history.sourceDeliveryId", "history.selectedBookmarkId", "history.childWorkflowId", "history.relatedWorkflowExecutionId", "history.timerId", "history.scheduledAt", "history.controlKind",
         "history.valueEvidenceIds", "history.incidentFailureType", "history.originalCheckpoint", "history.capturePolicyId"
         , "history.relatedActivityExecutionId", "history.compensationEntryId", "history.valuePhase", "history.valueEvaluationId", "history.durableStateAddress", "history.operation", "history.lifecycle", "history.storage", "history.sourceCapturedAt"
     };

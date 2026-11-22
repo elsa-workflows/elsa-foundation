@@ -183,7 +183,7 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
         return RuntimeHistoryBookmarkView.From(item, observedAt, eligibility, reason);
     }
 
-    private ValueTask<RuntimeHistoryCoverageView> CoverageAsync(WorkflowExecutionState workflow, RuntimeHistoryHead? head, CancellationToken token)
+    private async ValueTask<RuntimeHistoryCoverageView> CoverageAsync(WorkflowExecutionState workflow, RuntimeHistoryHead? head, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (workflow.HistoryCaptureEnabledAtAdmission == false && (head is not null || workflow.HistoryCapturePolicy is not null) ||
@@ -204,24 +204,19 @@ public sealed partial class RuntimeHistoryInspectionService(IWorkflowExecutionSt
                 captureAvailable = false;
             }
         }
-        // These later owner contracts are intentionally not installed in this API slice. An unknown
-        // responsibility is never represented as zero pending or source closure.
-        var needsSettlement = policy?.SupportedKinds.Any(kind => kind is
-            "TimerScheduled" or "TimerDispatched" or "TimerRetired" or "ChildWorkflowDispatchRequested" or
-            "StimulusPublicationCommitted" or "ChildWorkflowSettled") == true;
-        var sourceLimitation = head is not null && needsSettlement
-            ? "This host cannot establish the source history settlement covered by this capture policy. Recorded events remain readable."
-            : null;
+        var (sourcePending, sourceLimitation) = await SourceSettlementAsync(workflow.WorkflowExecutionId, head, policy, token);
         var coverage = Coverage(workflow, head);
-        if (sourceLimitation is not null && coverage.State == "captured")
+        if (sourcePending == true && coverage.State == "captured")
+            coverage = coverage with { State = "pending", Limitation = "Source history is awaiting acknowledgement. The recorded prefix remains readable." };
+        else if (sourceLimitation is not null && coverage.State == "captured")
             coverage = coverage with { State = "partial", Limitation = sourceLimitation };
-        return ValueTask.FromResult(coverage with
+        return coverage with
         {
             CaptureAvailable = captureAvailable,
             CaptureLimitation = captureAvailable == false ? "Required history capture is unavailable in this host's current composition. Retained history remains readable." : null,
-            SourceHistoryPending = null,
+            SourceHistoryPending = sourcePending,
             SourceHistoryLimitation = sourceLimitation
-        });
+        };
     }
 
     private static bool IsAvailabilityFailure(Exception error) => error is not

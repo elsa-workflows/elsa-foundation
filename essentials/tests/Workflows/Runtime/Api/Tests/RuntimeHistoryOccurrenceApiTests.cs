@@ -80,6 +80,27 @@ public sealed partial class RuntimeHistoryApiTests
     }
 
     [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Occurrence_authority_retired_during_pending_source_settlement_never_discloses_rows_or_window(bool profile)
+    {
+        var policy = new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true, SourcePolicy.SupportedKinds.Append("ActivityStarted").ToArray());
+        var page = OccurrencePage(); page = page with { Head = page.Head! with { Policy = policy } };
+        var source = new OccurrenceProjection { Occurrences = page,
+            SettlementPage = new(page.Head, [Origin()], 1, 1, 1, null, "catch-up") };
+        var lookup = new HeldSettlementLookup(source); var current = new CurrentOccurrencePermissions();
+        await using var host = await OccurrenceHost(source, current, policy: policy, lookup: lookup); host.Authenticate();
+        var request = host.Client.GetAsync(Path + "/occurrences");
+        await lookup.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        if (profile) host.Authorization.Subject = "replacement";
+        else current.DeniedPermission = HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission;
+        lookup.Release.SetResult();
+        using var response = await request;
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, lookup.Reads); Assert.Equal(0, host.Authorization.ValueReads);
+    }
+
+    [Theory]
     [InlineData("wrong-run")]
     [InlineData("wrong-position")]
     [InlineData("changed-window")]
@@ -334,15 +355,16 @@ public sealed partial class RuntimeHistoryApiTests
     }
 
     private static Task<Host> OccurrenceHost(OccurrenceProjection source, CurrentOccurrencePermissions? permissions = null,
-        bool defaultAuthorization = false) => Host.StartAsync(
+        bool defaultAuthorization = false, RuntimeHistoryCapturePolicy? policy = null, IPostCommitOutboxLookupStore? lookup = null) => Host.StartAsync(
         services =>
         {
             services.AddSingleton<IRuntimeHistoryStore>(source);
+            if (lookup is not null) services.AddSingleton(lookup);
             services.Replace(ServiceDescriptor.Singleton<ICurrentSubjectPermissionAuthorizer>(permissions ?? new CurrentOccurrencePermissions()));
             services.EnsureReplacementContract<ICurrentSubjectPermissionAuthorizer, CurrentOccurrencePermissions>();
             if (defaultAuthorization)
                 services.Replace(ServiceDescriptor.Scoped<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
-        }, workflow: Workflow() with { HistoryCapturePolicy = OccurrencePolicy });
+        }, workflow: Workflow() with { HistoryCapturePolicy = policy ?? OccurrencePolicy });
 
     private static RuntimeHistoryOccurrencePage OccurrencePage(long sequence = 1)
     {
@@ -371,10 +393,27 @@ public sealed partial class RuntimeHistoryApiTests
         public RuntimeHistoryOccurrencePage Occurrences { get; set; } = OccurrencePage();
         public RuntimeHistoryOccurrenceQuery? OccurrenceQuery { get; private set; }
         public Func<CancellationToken, Task<RuntimeHistoryOccurrencePage>>? Pending { get; set; }
+        public RuntimeHistoryPage? SettlementPage { get; set; }
+        public override ValueTask<RuntimeHistoryPage> ReadPageAsync(RuntimeHistoryQuery query, CancellationToken token = default) =>
+            SettlementPage is { } page ? ValueTask.FromResult(page) : base.ReadPageAsync(query, token);
         public async ValueTask<RuntimeHistoryOccurrencePage> ReadOccurrencesAsync(RuntimeHistoryOccurrenceQuery query, CancellationToken token = default)
         {
             Read(token); OccurrenceQuery = query;
             return Pending is { } pending ? await pending(token) : Occurrences;
+        }
+    }
+
+    private sealed class HeldSettlementLookup(IRuntimeHistoryStore reader) : IPostCommitOutboxLookupStore
+    {
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int Reads { get; private set; }
+        public bool CanInspectHistorySources(IRuntimeHistoryStore selected) => ReferenceEquals(reader, selected);
+        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string id, CancellationToken token = default) => throw new InvalidOperationException("Overlay read forbidden.");
+        public async ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string id, CancellationToken token = default)
+        {
+            Assert.Equal("outgoing", id); Reads++; Entered.SetResult(); await Release.Task.WaitAsync(token);
+            return SourceItem(RuntimePostCommitOutboxStatus.Pending);
         }
     }
 }
