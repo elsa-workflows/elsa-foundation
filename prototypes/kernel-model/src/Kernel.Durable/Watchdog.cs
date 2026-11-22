@@ -111,7 +111,7 @@ public sealed class Watchdog
 /// heartbeats. Every member of <see cref="IKernelStore"/> is its own, so no default of the interface stands in for the
 /// inner store's (a reflection check in the runtime conformance's <c>WatchdogChecks</c>, run by <c>semantic</c>, holds it to that).
 /// </summary>
-public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore
+public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKernelStore, IFoundationSchedulingStore, IDueBacklogStore
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     string? IFoundationSchedulingStore.FoundationScheduleTenant(CreationAddress address) =>
@@ -126,6 +126,11 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
     public bool HasActorAliases => inner.HasActorAliases;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
     public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+
+    bool IDueBacklogStore.MeasuresDueBacklog => inner is IDueBacklogStore { MeasuresDueBacklog: true };
+    int IDueBacklogStore.PublishedDueBacklog(int partition) => ((IDueBacklogStore)inner).PublishedDueBacklog(partition);
+    ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken) =>
+        watchdog.RunAsync("backlog", cancellationToken, token => ((IDueBacklogStore)inner).CountDueBacklogAsync(partition, cap, token));
 
     // The owner path, watched.
     public ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default) =>

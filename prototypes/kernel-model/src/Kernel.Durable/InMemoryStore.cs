@@ -696,6 +696,11 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         }
     }
 
+    int IDueBacklogStore.PublishedDueBacklog(int partition)
+    {
+        lock (_gate) return Partitions[partition].DueBacklog;
+    }
+
     ValueTask<int> IDueBacklogStore.CountDueBacklogAsync(int partition, int cap, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cap);

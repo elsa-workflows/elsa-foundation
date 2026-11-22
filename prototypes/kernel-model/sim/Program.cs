@@ -142,6 +142,12 @@ if (args.Contains("--scope-age-check"))
     await ScopeAgeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
+if (args.Contains("--backlog-worker-check"))
+{
+    var failed = false;
+    await BacklogWorkerChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 if (args.Contains("--backlog-store-check"))
 {
     var failed = false;
