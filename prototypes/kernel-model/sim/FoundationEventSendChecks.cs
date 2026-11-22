@@ -358,7 +358,7 @@ internal static class FoundationEventSendChecks
     internal static async Task KeepingSubscriptionBatch(Action<bool, string> check)
     {
         const long now = 1_701_510_100_000;
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
         var scope = new Contract.BoundScope("keeping-batch");
         var probe = new Probe();
         var edge = new InMemoryIngress(store, new Requests("keeping-batch"), "keeping-batch");
@@ -400,6 +400,56 @@ internal static class FoundationEventSendChecks
                 all ? "a checkpoint registers a fresh wait after an earlier batch turn clears all waits" :
                     "a checkpoint registers a fresh wait after an earlier batch turn removes the exact wait");
             if (store.Subscriptions.Count != 1) return;
+        }
+
+        var typed = wait with { Key = scope.Tenant + "_mixed" };
+        var raw = typed with { FoundationTenant = null, FoundationKeepsEvents = false, Creation = 0 };
+        var addRaw = rowless with { Subscribed = [raw] };
+        var addTyped = Add(typed);
+        await RefusesWithoutWrites([addRaw, addTyped], "the batch refuses an exact raw key that precedes the typed keeping wait");
+        await RefusesWithoutWrites([addTyped, addRaw], "the batch refuses an exact raw key that follows the typed keeping wait");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [raw, typed] }],
+            "a single checkpoint refuses raw then typed registration at one exact slot");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [typed, raw] }],
+            "a single checkpoint refuses typed then raw registration at one exact slot");
+
+        var alias = typed with { Key = scope.Tenant + "_MIXED" };
+        var combined = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false, [addRaw, Add(alias)], [], []));
+        check(combined.Landed && store.Subscriptions.Contains(raw) && store.Subscriptions.Contains(alias),
+            "different physical spellings keep the raw and scoped registrations separate");
+        var removeAlias = rowless with { Unsubscribed = [alias] };
+        await RefusesWithoutWrites([removeAlias, Add(typed)], "an earlier alias removal cannot expose a raw slot to a scoped insert");
+
+        var transferRaw = raw with { Key = scope.Tenant + "_transfer" };
+        var transferTyped = typed with { Key = transferRaw.Key };
+        await store.SubscribeAsync(transferRaw);
+        var enter = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferRaw] }, Add(transferTyped)], [], []));
+        check(enter.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) is
+            { FoundationTenant: not null, FoundationIncarnation: not null }, "a preceding raw removal frees the exact slot for the scoped wait");
+        var leave = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferTyped] }, rowless with { Subscribed = [transferRaw] }], [], []));
+        check(leave.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) == transferRaw,
+            "a preceding scoped removal frees the exact slot for a raw wait");
+
+        TurnCommit Add(SubscriptionRow subscription)
+        {
+            var saved = store.Instances[previous.Id];
+            return registering with { Expected = saved.Revision, Row = saved with { Revision = saved.Revision + 1 }, Subscribed = [subscription] };
+        }
+
+        async Task RefusesWithoutWrites(IReadOnlyList<TurnCommit> turns, string name)
+        {
+            var saved = store.Instances[previous.Id];
+            var position = partition.Position;
+            var waits = store.Subscriptions.ToArray();
+            var tickets = store.Messages.Count;
+            var refused = false;
+            try { await store.CommitAsync(new(0, fence.Epoch, position, Defaults.Lease, false, turns, [], [])); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+            check(refused && store.Instances[previous.Id] == saved && partition.Position == position &&
+                store.Subscriptions.Count == waits.Length && waits.All(wait => store.Subscriptions.Contains(wait)) &&
+                store.Messages.Count == tickets, name);
         }
     }
 
