@@ -2305,6 +2305,7 @@ internal static class ParkKeptChecks
         await CheckRestartedJob(timed: false, check);
         await CheckRestartedJob(timed: true, check);
         await CheckRestartedJob(timed: true, check, sweepDuringOpen: true);
+        await CheckInterruptedPendingRestart(check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Resume, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.RetryAll, check);
         await CheckRetryConsumedResult(Contract.RecoverMode.Retry, check);
@@ -2327,6 +2328,116 @@ internal static class ParkKeptChecks
             alterTicket: (ticket, _) => ticket with { Deadline = null, Timer = null });
         await CheckRetryConsumedTicket(check, timed: true, mode: Contract.RecoverMode.Retry, missingDeadline: true,
             alterTicket: (ticket, _) => ticket with { Key = "earlier-job" });
+    }
+
+    private static async Task CheckInterruptedPendingRestart(Action<bool, string> check)
+    {
+        const long initial = 1_701_400_012_500;
+        const int attempts = 3;
+        const string key = "background";
+        var now = initial;
+        var store = new InMemoryStore(1, () => now);
+        var probe = new ParkedJobProbe("result", timed: false);
+        var scope = new Contract.BoundScope("pending-job-restart");
+        var ingress = new InMemoryIngress(store, new Requests("pending-job-restart"), "pending-job-restart", (_, kind) => kind == Contract.Kinds.Recover);
+        var first = Worker("original-job");
+        await using var owner = (await new DurableHost([first]).ActivateAsync(0))!;
+        var birth = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "birth", Contract.Kinds.Start);
+        var actor = birth.Actor!.Value;
+        var target = new Contract.Target.Ref(actor);
+        var id = store.FoundationTarget(scope.Tenant, actor.Id)!.Id;
+        await Pump(owner);
+        var original = Row();
+        var oldTicket = InboxKey.Ticket(id, key, original.Creation, JobRegistry.Generation(original, key)!.Value);
+        await ingress.SendAsync(scope, target, "first-fault", "fault");
+        await Pump(owner);
+        await owner.DisposeAsync();
+
+        var next = Worker("recover-job");
+        await using var active = (await new DurableHost([next]).ActivateAsync(0))!;
+        await Pump(active);
+        var parked = Read();
+        var retained = parked.Park is not null && store.Messages.GetValueOrDefault(oldTicket) is { Done: true, KeptBy: ParkKeepReason.Arrived } && probe.Entries == 1;
+        check(retained, "D-4 the fresh owner keeps the original job ticket while its actor is parked");
+        if (!retained) return;
+        await ingress.SendAsync(scope, target, "trip", "fault", new string('x', ParkRecoveryCredit.LimitBytes));
+        await ingress.SendAsync(scope, target, "suffix", "advance");
+        await Pump(active);
+
+        var accepted = await Recover("open-first");
+        await Step(next);
+        var opened = Row();
+        var generation = JobRegistry.Generation(opened, key);
+        if (accepted.Outcome != Contract.AdmissionOutcome.Accepted || generation is not { } current ||
+            opened.ParkRecovery is null || opened.ParkRestartedJobs is null)
+        {
+            check(false, "D-4 the first Open durably restarts the job before handing off the poison input");
+            return;
+        }
+        var restartedKey = InboxKey.Ticket(id, key, original.Creation, current);
+        var newTicket = store.Messages.GetValueOrDefault(restartedKey);
+        var restarted = restartedKey != oldTicket && newTicket is { Done: false, ReleasedBy: null } && probe.Entries == 1;
+        check(restarted, "D-4 the first Open creates the new pending ticket and records its generation");
+        if (!restarted) return;
+
+        var trip = store.Messages.Values.Single(row => row.Message.Id == "trip");
+        for (var pass = 0; pass < 8 && trip.ReleasedBy is null; pass++) await Step(next);
+        var released = trip is { Done: false, Seen: 0, ReleasedBy: not null } && Row().ParkRecovery is { Cursor: not null };
+        check(released, "D-4 the committed page releases the poison input before the owner polls it");
+        if (!released) return;
+        trip.Attempts = attempts;
+        for (var pass = 0; pass < 8 && Row().ParkRecovery is not null; pass++) await Step(next);
+        var interrupted = Read();
+        var pending = interrupted is { Row: { Status: InstanceStatus.Faulted, ParkRecovery: null } } && interrupted.Park == parked.Park &&
+            interrupted.Row.ParkRestartedJobs == opened.ParkRestartedJobs && probe.Entries == 1 &&
+            newTicket is { Done: false, ReleasedBy: null } && store.Messages.GetValueOrDefault(oldTicket) is { Done: true, KeptBy: null };
+        check(pending, "D-4 a real re-park preserves the restart disposition and pending ticket beside the old Done marker");
+        if (!pending) return;
+
+        var retried = await Recover("open-second");
+        // Make the operator command reach dispatch ahead of the pending ticket, as with independently allocated order keys.
+        store.Messages.Values.Single(row => row.Message.Id == "open-second").Seq = newTicket!.Seq - 1;
+        await Step(next);
+        var reopened = Row();
+        var preserved = retried.Outcome == Contract.AdmissionOutcome.Accepted && reopened.ParkRecovery is not null &&
+            reopened.ParkRestartedJobs == opened.ParkRestartedJobs && reopened.NextJobGeneration == opened.NextJobGeneration &&
+            JobRegistry.Generation(reopened, key) == current && store.Messages.GetValueOrDefault(restartedKey) == newTicket &&
+            newTicket is { Done: false } && store.Messages.Values.Count(row => !row.Done && row.Message.Kind == Kinds.Job) == 1;
+        check(preserved, $"D-4 the second Open preserves the exact ticket and generation (registered {JobRegistry.Generation(reopened, key)}; expected {current})");
+        if (!preserved) return;
+
+        for (var pass = 0; pass < 4; pass++)
+        {
+            now += 11;
+            await Pump(active);
+        }
+        var completion = next.JobCompletion(id, key, original.Creation);
+        check(completion is not null && Row() is { ParkRecovery: null, ParkRestartedJobs: null } && probe.Entries == 2,
+            "D-4 Complete starts the retained generation once");
+        if (completion is null) return;
+        probe.Complete.SetResult();
+        await completion.WaitAsync(TimeSpan.FromSeconds(5));
+        await Pump(active);
+        check(probe is { Entries: 2, Completions: 1, Result: "result" } && Row().Jobs is null && !store.Messages.ContainsKey(restartedKey),
+            "D-4 the retained generation delivers one result and clears its registration");
+
+        InstanceRow Row() => store.Instances[id];
+        InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
+        Worker Worker(string node) => new(node, 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial, MaxAttempts = attempts });
+        async Task<Contract.Admission> Recover(string operation)
+        {
+            var selection = (await new ActorList(store, 5).GetAsync(scope, actor))!.Selection;
+            return await ingress.SendAsync(scope, target, operation, Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        }
+        async Task Step(Worker worker)
+        {
+            await worker.PollAsync();
+            await worker.LoadAsync();
+            await worker.FlushAsync();
+            worker.RunTurn(id);
+            await worker.FlushAsync();
+        }
     }
 
     private static async Task CheckRestartedJob(bool timed, Action<bool, string> check, bool sweepDuringOpen = false)
