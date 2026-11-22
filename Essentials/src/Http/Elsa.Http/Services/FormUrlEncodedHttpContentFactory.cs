@@ -21,9 +21,10 @@ internal sealed class FormUrlEncodedHttpContentFactory : IHttpContentFactory
             return dictionary.ToDictionary(x => x.Key, x => x.Value.ToString() ?? string.Empty);
 
         if (content is string or JsonObject)
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(JsonSerializer.Serialize(content))!;
+            return (Dictionary<string, string>)Elsa.Serialization.Core.JsonConversionContract.For(typeof(Dictionary<string, string>))
+                .Read(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(content))!;
 
-        var jsonElement = JsonSerializer.SerializeToElement(content);
+        var jsonElement = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(content);
         return jsonElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.ToString());
     }
 }

@@ -45,7 +45,7 @@ internal sealed class VariableDefaultValueFormatter : IVariableDefaultValueForma
         // Fixes GitHub issue #7019.
         if (value is IEnumerable)
         {
-            return new(JsonSerializer.Serialize(value));
+            return new(Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value).GetRawText());
         }
 
         var converter = System.ComponentModel.TypeDescriptor.GetConverter(underlyingSourceType);

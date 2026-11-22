@@ -110,7 +110,7 @@ internal static class EtlNativeBoundary
             state.InvocationId != activity.InvocationId || state.Value.Type != StateType || state.Value.InlineValue is not { } json ||
             System.Runtime.InteropServices.JsonMarshal.GetRawUtf8Value(json).Length > MaximumRequestBytes + 1024)
             throw Invalid();
-        var request = ReadState(json.Deserialize<RunEtlState>() ?? throw Invalid());
+        var request = ReadState(Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunEtlState>(json) ?? throw Invalid());
         if (request.WorkflowExecutionId != activity.Execution.WorkflowExecutionId ||
             request.ActivityExecutionId != activity.InvocationId || request.NodeId != activity.Execution.ExecutableNodeId)
             throw Invalid();
@@ -147,7 +147,7 @@ internal static class EtlNativeBoundary
         var invocation = Invocation(request, receipts[0].RegistrationId);
         if (receipts[0].Payload.InlineValue is { } json)
         {
-            var completion = json.Deserialize<RunEtlCompletion>() ?? throw Invalid();
+            var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunEtlCompletion>(json) ?? throw Invalid();
             if (completion.FormatVersion != FormatVersion ||
                 EtlRuntimeIdentity.InvocationFingerprint(EtlRuntimeJson.Read<EtlInvocation>(completion.Invocation, MaximumRequestBytes)) !=
                 EtlRuntimeIdentity.InvocationFingerprint(invocation))

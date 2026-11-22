@@ -92,7 +92,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
             state.InvocationId != activity.InvocationId || state.Value.Type != new ValueTypeDescriptor(typeof(RunBpmnState).FullName!, schemaVersion: 1) ||
             state.Value.InlineValue is not { } value)
             throw BpmnEmbeddingJson.Invalid();
-        var invocation = Read(value.Deserialize<RunBpmnState>() ?? throw BpmnEmbeddingJson.Invalid());
+        var invocation = Read(Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunBpmnState>(value) ?? throw BpmnEmbeddingJson.Invalid());
         if (invocation.NativeExecutionId != activity.Execution.WorkflowExecutionId || invocation.NativeInvocationId != activity.InvocationId ||
             invocation.NativeNodeId != activity.Execution.ExecutableNodeId) throw BpmnEmbeddingJson.Invalid();
         return invocation;
@@ -180,7 +180,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
         if (context.Command.InputKind == "native-parent-settled")
         {
             RequireWorkerCancellationSettled(context.State ?? throw BpmnEmbeddingJson.Invalid());
-            var completion = payload.Deserialize<RunBpmnCompletion>() ?? throw BpmnEmbeddingJson.Invalid();
+            var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunBpmnCompletion>(payload) ?? throw BpmnEmbeddingJson.Invalid();
             if (source.Intent.Kind != ResultKind || source.Intent.WorkflowExecutionId != invocation.ExecutionId || context.State?.TerminalResult is not { } terminal ||
                 !JsonElement.DeepEquals(completion.Invocation, input.Invocation) || !JsonElement.DeepEquals(completion.Result, terminal) ||
                 !await ParentProofAsync(invocation, token)) throw BpmnEmbeddingJson.Invalid();

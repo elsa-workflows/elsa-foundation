@@ -14,7 +14,7 @@ internal static class ActivityExecutionInspection
     public static JsonElement SerializeOutputValue(object? value) =>
         value is JsonElement json
             ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
+            : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
 
     public static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value, string? valueName = null, RuntimeValueTypeDescriptor? type = null) =>
         decision.Mode switch

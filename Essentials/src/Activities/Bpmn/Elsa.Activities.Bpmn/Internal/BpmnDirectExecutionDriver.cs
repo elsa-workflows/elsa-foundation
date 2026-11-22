@@ -423,7 +423,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         {
             var intent = "bpmn-native-parent:" + BpmnModelIdentity.Create(executionId);
             intents.Add(new(intent, executionId, BpmnEmbeddingBoundary.ResultKind, now, null, intent,
-                JsonSerializer.SerializeToElement(new RunBpmnCompletion(1, nativeParent.Invocation, terminal.Value))));
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new RunBpmnCompletion(1, nativeParent.Invocation, terminal.Value))));
         }
         var commit = new RuntimeCheckpointCommit(commitId, new(commitId, "ModelDecision", executionId, now, [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), intents, new Dictionary<string, string>())

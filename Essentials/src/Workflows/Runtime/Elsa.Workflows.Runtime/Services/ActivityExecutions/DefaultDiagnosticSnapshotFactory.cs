@@ -28,7 +28,7 @@ public static class DefaultDiagnosticSnapshotFactory
 
             var json = value is JsonElement element
                 ? element.Clone()
-                : JsonSerializer.SerializeToElement(value, value.GetType());
+                : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value);
 
             var budget = new SnapshotBudget(limits.MaxTotalBytes);
             return CaptureJson(json, type?.Id ?? value.GetType().FullName, valueName, depth: 0, limits, budget);

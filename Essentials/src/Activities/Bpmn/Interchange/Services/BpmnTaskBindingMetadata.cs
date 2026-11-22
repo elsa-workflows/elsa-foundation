@@ -46,7 +46,7 @@ internal static class BpmnTaskBindingMetadata
     public static LibModel.BpmnForeignAttribute ToAttribute(string activityVersionId, IReadOnlyList<ArgumentState> inputs) =>
         new(new LibModel.BpmnQName(LibInterchange.BpmnXmlNames.VendorNamespaceName, AttributeName), JsonSerializer.Serialize(new Carried(
             activityVersionId,
-            inputs.ToDictionary(input => input.ReferenceKey, input => JsonSerializer.SerializeToElement(input.Value.Value), StringComparer.Ordinal)), Web));
+            inputs.ToDictionary(input => input.ReferenceKey, input => Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(input.Value.Value), StringComparer.Ordinal)), Web));
 
     /// <summary>Whether a catalog input declaration may travel with a literal value: never a sensitive, credential, masked or connection input.</summary>
     public static bool IsPortable(InputDefinition declaration) =>

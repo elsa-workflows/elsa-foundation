@@ -98,7 +98,7 @@ internal sealed class RulesNativeDeliveryExecution(
         var dispatched = await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>()
             .DispatchAsync(new BookmarkResumeDispatchRequest(
                 address.WorkflowExecutionId, address.StimulusType, address.StimulusHash,
-                JsonSerializer.SerializeToElement(completion), envelope.DeliveryId,
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion), envelope.DeliveryId,
                 requestedBy: "rules.native-delivery", metadata: null,
                 payloadType: RulesNativeBoundary.CompletionType, providerId: RulesNativeBoundary.ProviderId,
                 bookmarkId: address.BookmarkId, testRunDelivery: null), cancellationToken: cancellationToken);

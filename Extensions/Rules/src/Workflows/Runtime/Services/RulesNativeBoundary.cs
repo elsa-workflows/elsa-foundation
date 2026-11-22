@@ -90,7 +90,7 @@ internal static class RulesNativeBoundary
             state.InvocationId != activity.InvocationId || state.Value.Type != new ValueTypeDescriptor(typeof(RunRulesState).FullName!, schemaVersion: 1) ||
             state.Value.InlineValue is not { } json)
             throw Invalid();
-        var request = ReadState(json.Deserialize<RunRulesState>() ?? throw Invalid());
+        var request = ReadState(Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunRulesState>(json) ?? throw Invalid());
         if (request.WorkflowExecutionId != activity.Execution.WorkflowExecutionId || request.ActivityExecutionId != activity.InvocationId ||
             request.NodeId != activity.Execution.ExecutableNodeId)
             throw Invalid();

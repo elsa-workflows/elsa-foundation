@@ -72,7 +72,7 @@ internal sealed class StepScriptVariables : IScriptVariableSession
             return ExpressionVariableRead.Refused(exception.Message);
         }
 
-        return ExpressionVariableRead.Present(value is null ? JsonNull : JsonSerializer.SerializeToElement(value));
+        return ExpressionVariableRead.Present(value is null ? JsonNull : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options));
     }
 
     public void Write(string name, JsonElement? value)

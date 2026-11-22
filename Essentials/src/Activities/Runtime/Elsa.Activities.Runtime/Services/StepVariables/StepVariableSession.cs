@@ -232,7 +232,7 @@ internal sealed class StepVariableSession : IStepVariableSession
         if (resolved.IsTransient)
             throw Fault(new InvalidOperationException(
                 $"Variable '{resolved.Name}' is transient: a script cannot write it."));
-        var json = value is null ? (JsonElement?)null : JsonSerializer.SerializeToElement(value);
+        var json = value is null ? (JsonElement?)null : JsonSerializer.SerializeToElement(value, Elsa.Serialization.Core.JsonBaseline.Options);
         Stage(resolved, json, StepVariableWriteKind.WholeAssignment, droppedMembers: null);
     }
 

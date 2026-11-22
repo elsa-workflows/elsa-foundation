@@ -33,7 +33,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
         BpmnEmbeddedInvocation invocation; string inputKind;
         if (source.Intent.Kind == BpmnEmbeddingBoundary.ResultKind)
         {
-            var completion = source.Intent.Payload?.Deserialize<RunBpmnCompletion>() ?? throw BpmnEmbeddingJson.Invalid();
+            var completion = source.Intent.Payload?.Deserialize<RunBpmnCompletion>(Elsa.Serialization.Core.JsonConversionContract.For(typeof(RunBpmnCompletion)).Options) ?? throw BpmnEmbeddingJson.Invalid();
             invocation = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, completion.Invocation));
             var model = await boundary.RequireModelAsync(invocation, cancellationToken);
             BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(model);

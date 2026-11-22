@@ -101,7 +101,7 @@ internal sealed class RunEtlStateViewProjector : IActivityStateViewProjector
                 return null;
             if (receipts[0].Payload.InlineValue is { } json)
             {
-                var completion = json.Deserialize<RunEtlCompletion>();
+                var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunEtlCompletion>(json);
                 if (completion is null || completion.FormatVersion != EtlNativeBoundary.FormatVersion ||
                     EtlRuntimeIdentity.InvocationFingerprint(EtlRuntimeJson.Read<EtlInvocation>(completion.Invocation, EtlNativeBoundary.MaximumRequestBytes)) != fingerprint ||
                     EtlRuntimeJson.Read<EtlTerminalResult>(completion.Result, EtlNativeBoundary.MaximumResultBytes) != terminal)

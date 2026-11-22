@@ -253,7 +253,7 @@ internal sealed class RulesIntentHandler : IRuntimePostCommitIntentHandler
             RulesNativeBoundary.StimulusType,
             RulesNativeBoundary.StimulusHash(request),
             // The typed activity state deserializer uses the default System.Text.Json contract.
-            input: JsonSerializer.SerializeToElement(completion),
+            input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(completion),
             idempotencyKey: completion.DeliveryId,
             requestedBy: "rules.native-intent",
             metadata: new Dictionary<string, string>(StringComparer.Ordinal)
