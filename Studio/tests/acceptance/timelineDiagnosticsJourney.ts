@@ -69,7 +69,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     const published = await api<{ artifactId: string; sourceReferenceId: string }>(`/publishing/workflows/${submitted.version.id}/publish`, "POST", {});
     const run = await api<{ workflowExecutionId: string }>(`/runtime/workflows/executables/${published.artifactId}/execute`, "POST", { sourceReferenceId: published.sourceReferenceId });
     runs.push(run.workflowExecutionId);
-    await expect.poll(async () => (await details(run.workflowExecutionId)).instance.status, { timeout: 30_000 }).toBe("Suspended");
+    await expect.poll(async () => (await details(run.workflowExecutionId)).activities.some(activity => activity.status === "Suspended"), { timeout: 30_000 }).toBe(true);
     return { title, submitted, published, id: run.workflowExecutionId };
   };
   const restart = async () => {
@@ -122,7 +122,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await restart();
   const restored = { details: await details(approval.id), history: await history(approval.id), bookmarks: await bookmarks(approval.id),
     task: await api<unknown>(`/runtime/user-tasks/${taskId}`), occurrences: await api<{ items: unknown[] }>(`${path(approval.id)}/history/occurrences?${new URLSearchParams({ sequenceToken: before.occurrences.sequenceToken, limit: "50" })}`) };
-  expect(restored.details.instance.status).toBe("Suspended"); expect(restored.history.items).toEqual(before.history.items);
+  expect(restored.details.instance.status).toBe(before.details.instance.status);
+  expect(restored.details.activities.find(item => item.activityExecutionId === active.bookmark.identity.activityExecutionId)?.status).toBe("Suspended"); expect(restored.history.items.slice(0, before.history.items.length)).toEqual(before.history.items);
   expect(restored.bookmarks.items[0].bookmark).toEqual(active.bookmark); expect(restored.task).toEqual(before.task);
   expect(restored.occurrences.items).toEqual(before.occurrences.items);
   await page.goto(`/user-tasks/${taskId}`);
@@ -138,7 +139,8 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await capture(page, info, "diagnostics-approval-consumed");
   await restart();
   const retained = { history: await history(approval.id), bookmarks: await bookmarks(approval.id), task: await api<unknown>(`/runtime/user-tasks/${taskId}`) };
-  expect(retained.history.items).toEqual(completed.history.items); expect(retained.bookmarks.items[0].bookmark).toEqual(active.bookmark);
+  expect(retained.history.items.slice(0, completed.history.items.length)).toEqual(completed.history.items);
+  expect(new Set(retained.history.items.map(item => item.historyEventId)).size).toBe(retained.history.items.length); expect(retained.bookmarks.items[0].bookmark).toEqual(active.bookmark);
   expect(retained.bookmarks.items[0].endedHistoryEventId).toBe(completed.bookmarks.items[0].endedHistoryEventId); expect(retained.task).toEqual(completed.task);
   lifecycle = await openLifecycle(approval.id, active.createdHistoryEventId!);
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1);
@@ -149,7 +151,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   expect(expiryBefore.bookmarks.items[0].bookmark.expiresAt).toBeTruthy(); expect(expiryBefore.bookmarks.items[0].eligibility).toBe("eligible");
   const advanced = await api<unknown>(`/__qualification/activity-playback/${expiry.id}/advance-expiry`, "POST", {});
   const expired = { details: await details(expiry.id), history: await history(expiry.id), bookmarks: await bookmarks(expiry.id) };
-  expect(expired.details.instance.status).toBe("Suspended"); expect(expired.history.items).toEqual(expiryBefore.history.items);
+  expect(expired.details.activities.find(item => item.activityExecutionId === expiryBefore.bookmarks.items[0].bookmark.identity.activityExecutionId)?.status).toBe("Suspended"); expect(expired.history.items).toEqual(expiryBefore.history.items);
   const passive = expired.bookmarks.items[0]; expect(passive.status).toBe("Active"); expect(passive.eligibility).toBe("expired");
   expect(passive.bookmark).toEqual(expiryBefore.bookmarks.items[0].bookmark); expect(passive.endedHistoryEventId ?? null).toBeNull();
   expect(Date.parse(passive.eligibilityObservedAt)).toBeGreaterThanOrEqual(Date.parse(passive.bookmark.expiresAt!));

@@ -806,11 +806,11 @@ class OwnedBackendRestart:
         name = 'backend' if self.generation == 0 else f'backend-generation-{self.generation}'
         # host() also records/cleans failed starts through the ordinary observer.
         def record(process):
+            self.started = time.time_ns()
             self.processes[name] = process
             self.report['ownedPids'][name] = process.pid
         self.process = self.stack.enter_context(host(self.item['backend'], 'Elsa.Workbench.dll',
             self.item['backendUrl'], '/__qualification/ready', self.output / f'{name}.log', self.env, on_started=record))
-        self.started = time.time_ns()
 
     def pump(self):
         path = self.control / 'request.json'
@@ -846,7 +846,7 @@ class OwnedBackendRestart:
         if self.process.pid == old.pid or self.identity != fingerprints(self.item['backend']):
             raise ValueError('Owned restart did not preserve inputs in a distinct process')
         result = {'requestId': request_id, 'generation': self.generation, 'beforePid': old.pid,
-            'afterPid': self.process.pid, 'beforeStartedNs': str(old_started), 'afterStartedNs': str(self.started),
+            'afterPid': self.process.pid, 'beforeSpawnObservedNs': str(old_started), 'afterSpawnObservedNs': str(self.started),
             'beforeExitCode': old.returncode, 'oldGroupGone': True, 'sameOwnedStoreRoot': True,
             'sameBinaryAndConfiguration': True, 'readyOnSameUrl': True}
         self.receipts.append(result)

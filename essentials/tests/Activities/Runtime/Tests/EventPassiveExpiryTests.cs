@@ -29,7 +29,7 @@ public sealed class EventPassiveExpiryTests
         var owner = Assert.Single((await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListPageAsync(new(harness.ExecutionId, 10))).Items);
         Assert.DoesNotContain("ExpiresAt", JsonSerializer.Serialize(Assert.Single(owner.TriggerRegistrations!)));
         var retained = JsonSerializer.Deserialize<ActivityTriggerRegistration>(JsonSerializer.Serialize(Assert.Single(owner.TriggerRegistrations!)));
-        Assert.Equal(Assert.Single(owner.TriggerRegistrations!), retained);
+        Assert.Equal(JsonSerializer.Serialize(Assert.Single(owner.TriggerRegistrations!)), JsonSerializer.Serialize(retained));
         clock.Advance(TimeSpan.FromMinutes(6));
         var lookup = await harness.Services.GetRequiredService<IBookmarkStimulusLookup>().FindAsync(new(
             harness.ExecutionId, bookmark.StimulusType, bookmark.StimulusHash, clock.GetUtcNow(), bookmark.BookmarkId));

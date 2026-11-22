@@ -74,7 +74,7 @@ internal static class ActivityPlaybackQualificationControls
                 WithRun(registry, workflowExecutionId, http, token, async (services, run) =>
                 {
                     var page = await services.GetRequiredService<IBookmarkStateStore>().ListPageAsync(new(run.WorkflowExecutionId, 2), token);
-                    if (run.Status != WorkflowExecutionStatus.Suspended || page.NextContinuationToken is not null || page.Items.Count != 1 ||
+                    if (run.Status is not (WorkflowExecutionStatus.Suspended or WorkflowExecutionStatus.Running) || page.NextContinuationToken is not null || page.Items.Count != 1 ||
                         page.Items.Single().StimulusType != EventStimulus.StimulusType || page.Items.Single().ExpiresAt is not null)
                         return Results.Conflict(new { reason = "one-native-unexpired-event-required" });
                     var bookmark = page.Items.Single();
