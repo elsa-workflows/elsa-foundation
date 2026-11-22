@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "fa8f147651b0b227994a22db0b71528e8d567fb8",
+  "last_publish_commit": "655717b0509f915915e2483102010af9720a845e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -864,8 +864,8 @@
     },
     {
       "package_id": "Elsa.Serialization.SystemText",
-      "version": "4.0.17-preview",
-      "commit": "4fd435eb3116d6542a8aa7a76415ebe46053480f"
+      "version": "4.0.18-preview",
+      "commit": "655717b0509f915915e2483102010af9720a845e"
     },
     {
       "package_id": "Elsa.Studio.Dashboard.Api",
