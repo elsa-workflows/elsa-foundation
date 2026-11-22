@@ -330,6 +330,27 @@ describe("workflow run history", () => {
     expect(container.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe("Inspect workflow run execution-1 · Order fulfillment");
   });
 
+  it.each(["unattributed", "admitted", "legacy"] as const)("keeps child run list attribution truthful for %s sources", async source => {
+    const child = { ...page("child-execution-12345678").items[0], parentWorkflowExecutionId: "parent-execution",
+      ...(source === "legacy" ? {} : { sourceReferenceId: source === "unattributed" ? null : "recorded-source" }) };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return definitionCapabilities;
+      if (url.startsWith("/design/workflows/definitions")) return { items: [{ id: "definition-1", name: "Producer workflow" }] };
+      return page(child.workflowExecutionId, { items: [child] });
+    });
+    const container = render(context(getJson), vi.fn());
+    const name = source === "unattributed" ? "Child run · 12345678" : "Producer workflow";
+    await waitFor(() => expect(container.querySelector(".wf-run-inspect strong")?.textContent).toBe(name));
+    click(container.querySelector<HTMLButtonElement>(".wf-run-secondary-identifiers button[aria-haspopup=dialog]")!);
+    const label = source === "unattributed" ? "Executable definition ID" : "Definition ID";
+    expect(document.body.querySelector(`button[aria-label="Copy ${label}"]`)).not.toBeNull();
+    expect(document.body.textContent).toContain("definition-1");
+    if (source === "unattributed") {
+      expect(container.textContent).not.toContain("Producer workflow");
+      expect(getJson.mock.calls.some(([url]) => url.startsWith("/design/workflows/definitions"))).toBe(false);
+    }
+  });
+
   it("lets browser history restore the same applied Runs query after inspecting a row", async () => {
     const returnPath = "/workflows/instances?status=Running&pageSize=10";
     window.history.replaceState({}, "", returnPath);

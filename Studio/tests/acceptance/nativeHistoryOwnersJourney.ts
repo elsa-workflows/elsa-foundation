@@ -138,7 +138,7 @@ export async function nativeHistoryOwnersJourney(page: Page, info: TestInfo, cap
   await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(childRunId)}\\?view=timeline`));
   await waitCapturedPlaybackReady(page);
   await openEvent(settled, "Child run settled");
-  await expect(page.getByRole("heading", { name: `Child run · ${childRunId.slice(-8)}`, exact: true, level: 2 })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Run workspace actions", exact: true }).getByRole("heading", { name: `Child run · ${childRunId.slice(-8)}`, exact: true, level: 2 })).toBeVisible();
   await expect(page.getByRole("group", { name: "Run workspace actions", exact: true }).getByRole("button", { name: "Open definition", exact: true })).toHaveCount(0);
   await capture(page, info, "child-settlement");
   await openEvent(receipt, "Delivery received");
