@@ -54,7 +54,10 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 - **Variable expressions** (#3201). An Elsa 3 `Variable` expression reads the variable's declared id, using the
   nearest enclosing container's scope or workflow scope. Its embedded name and storage-driver metadata do not
   select another variable. Missing, ambiguous, malformed and out-of-scope references are refused during import;
-  reads of a loop's captured current value retain the existing inside-the-loop restriction.
+  generated projection IDs do not satisfy a missing source declaration. The selected declaration's actual value type
+  must fit the input. A dynamic capture needs compatible producer kinds and a preceding sequence capture; future or
+  conditional captures and other possible writes are conservatively refused. Reads of a loop's captured current value
+  retain the inside-the-loop restriction and refuse competing explicit or script writes.
 - **Output capture.**
   - An Elsa 3 output captured into a **workflow** variable becomes an Elsa 4 `Variable` output binding, so readers of
     the variable see the value.

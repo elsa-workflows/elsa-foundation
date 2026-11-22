@@ -109,10 +109,41 @@ reference-key HTTP 400 before the correction. After lowering the expression's de
 runs to completion and copies the source value into a separate variable. Mapping coverage also checks workflow and
 container scope, ambiguous or undeclared ids, malformed declarations and the existing loop-current-value boundary.
 
-**JTest publish remeasurement: not run.** The private `JTEST-nexxbiz` corpus is unavailable in this checkout and the
-available local project directories. The 36/8/2 historical counts above remain the 2026-10-21 measurement; they are
-not fresh qualification of #3201 or evidence that either named corpus definition now publishes. That acceptance row
-remains open until the same corpus can be run against the correction.
+**Historical verification hold:** the 6 November session did not find the private `JTEST-nexxbiz` corpus, so its
+publish remeasurement was not run. The remeasurement below resolves that missing-input hold; the 21 October counts
+above remain historical.
+
+### Follow-up #3201 remeasurement (2026-11-22)
+
+The authorized local corpus was located and read without modification: 36 definitions at corpus commit
+`9c01aa4b53ccbd47e09922d7cc49a694e5f3d2b0`, with a clean corpus checkout. The comparison uses initiative baseline
+`18dd3aefb98bb0d3c8916ad6b71be69a9fc3699f` and corrected production source
+`ddc84d6542902d1ecd007dd60402c371d47e1e99`.
+
+For each definition, a fresh disposable HTTP/SQLite import host composes the real converter, publication and runtime,
+including HTTP and scheduling activities. It uploads the same export, applies that definition with its dependency
+closure, publishes its workflow and runs it without inputs for up to 30 seconds. The local probe and private export
+are not committed. These are current import/apply measurements, not copied counts from an earlier converter-only audit.
+
+| Result out of 36 | Initiative baseline | Corrected source |
+|---|---:|---:|
+| Import/apply succeeds | 17 | 16 |
+| Publication succeeds | 14 | 15 |
+| Execution completes within 30 seconds | 4 | 5 |
+
+Only two definitions change result:
+
+- `events-listener` reproduces the missing-reference-key HTTP 400 on the baseline; with the correction it publishes
+  and completes.
+- `performance-commit-after-every-activity` reproduces the same HTTP 400 on the baseline. It is now refused during
+  import with `ELS3-UNTYPED-RESULT`: its For index cannot bind to WriteLine's text input faithfully. The required
+  producer-kind check is retained; no successful publication or execution is claimed for this definition. Its
+  `ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS` diagnostic is also retained.
+
+The other 34 definitions retain their per-definition import/publication/completion results. `logging-workflow`
+still fails publication because its Headers expression declares `HttpHeaders` instead of the target dictionary
+shape; published definitions that fault or do not complete within the budget remain recorded as non-completions.
+This measurement does not claim general corpus acceptance or alter Elsa 4 runtime defaults.
 
 ## Clarifications
 
