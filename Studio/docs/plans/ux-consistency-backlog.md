@@ -10,7 +10,7 @@ that each checkbox is one small task.
   `main` on 2026-11-21 and reverted there the same day because it broke CI. It is kept on branch
   `wip/studio-in-progress-2026-11-21`. Until that work lands, an item may describe code that `main`
   does not have yet; confirm the defect on your own base before changing anything.
-- **Status:** delivery in progress. The section trackers in #4990 show live progress.
+- **Status:** the 251 tracked items and the follow-up audit findings are complete. [Delivery record](https://github.com/elsa-workflows/elsa-foundation/issues/4990) · [Visual QA archives](https://github.com/elsa-workflows/elsa-foundation/pull/5286).
 - **Normative rules:** [UX design spec](../ux/design-spec.md), [module UI guide](../module-ui.md),
   [design tokens](../design-tokens.md). This file lists deviations from them; it does not replace them.
 - **Tracking:** every open item has a Foundation issue, shown in brackets after its ID. They hang
