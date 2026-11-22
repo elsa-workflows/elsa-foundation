@@ -30,7 +30,7 @@ internal static class FoundationKeyIngressChecks
             store.ReferenceFor(scope.Tenant, new(row.Message.Target.Id, 1)) == reference.Id).Message.Target;
         var equivalent = first.Outcome == Contract.AdmissionOutcome.Accepted &&
             retry is { Outcome: Contract.AdmissionOutcome.Duplicate, Actor: var same } && same == reference &&
-            foreign.Actor != reference && conflict is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+            foreign.Actor != reference && conflict is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null, Reason: Contract.RefusalReason.Conflict } &&
             upper is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Repeat };
         check(equivalent, "equivalent key spellings share one start receipt, with distinct tenants and exact operation tokens");
         if (!equivalent) return;
@@ -128,9 +128,19 @@ internal static class FoundationKeyIngressChecks
             var matchingRequest = secondInput == attempts[0].Input;
             check(matchingOperation && matchingRequest
                 ? loser.Outcome == Contract.AdmissionOutcome.Duplicate && loser.Actor == winner.receipt.Actor
-                : loser.Outcome == Contract.AdmissionOutcome.Refused && loser.Actor is null &&
-                  (!matchingOperation ? loser.Reason == Contract.RefusalReason.Repeat : loser.Reason != Contract.RefusalReason.Repeat),
-                $"KB-1 {Label()} returns the corresponding receipt for the losing request");
+                : loser is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
+                  loser.Reason == (matchingOperation ? Contract.RefusalReason.Conflict : Contract.RefusalReason.Repeat),
+                $"KB-1 {Label()} returns the corresponding admission for the losing request");
+            if (matchingOperation && !matchingRequest)
+            {
+                var rejected = attempts[1 - winner.index];
+                var edge = new InMemoryIngress(store, new Requests("key-binding-requests"), "key-binding-requests");
+                var replay = await edge.RequestAsync(scope,
+                    new Contract.Target.Key(rejected.Key, new Contract.StartSpec("key-ingress", "one", rejected.Input)),
+                    rejected.Operation, Contract.Kinds.Start, null, null, new Contract.RequestOptions(null, now + 100));
+                check(replay.Error == "conflict",
+                    "KB-1 the conflicting replay returns conflict through the public request route");
+            }
         }
 
         foreach (var creator in creators)

@@ -38,6 +38,7 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
                 return new(null, null, Error: admission.Reason switch
                 {
                     RefusalReason.Repeat => "repeat",
+                    RefusalReason.Conflict => "conflict",
                     RefusalReason.StaleSelection => "stale selection",
                     _ => "missing"
                 });
