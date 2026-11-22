@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState } from "@elsa-workflows/studio-ui";
 import { InvocationEvidenceDetails, applicationText } from "./InvocationEvidence";
 import { pollDelay } from "./AgentPlayground";
 import { getInvocationEvidence, type InvocationEvidenceView } from "./playgroundApi";
@@ -77,7 +77,7 @@ function InvocationScreen({ context, reference, refreshInterval }:
     return () => { abort.abort(); clearTimeout(timer); };
   }, [load.kind, settled, failures, tick, refresh, refreshInterval]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading agent invocation…</p></StudioPage>;
+  if (load.kind === "loading") return <StudioPage aria-busy="true"><SkeletonRows label="Loading agent invocation" /></StudioPage>;
   if (load.kind === "missing")
     return <StudioPage data-testid="invocation-missing"><StudioResultState title="Agent invocation not found"
       description="No agent invocation you may inspect matches this link. It may belong to another tenant, or need the activity execution inspection permission." /></StudioPage>;

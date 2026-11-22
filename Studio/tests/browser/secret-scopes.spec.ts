@@ -13,14 +13,14 @@ async function loadSecretsPage(page: import("@playwright/test").Page, scenario =
 async function openCreateSecret(page: import("@playwright/test").Page, scenario = "default") {
   const opener = await loadSecretsPage(page, scenario);
   await opener.click();
-  const dialog = page.getByRole("region", { name: "New secret", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New secret", exact: true });
   await expect(dialog).toBeVisible();
   return { dialog, opener };
 }
 
 async function openEditSecret(page: import("@playwright/test").Page, scenario = "editor") {
   await page.goto(`/secret-scopes.html?scenario=${scenario}`);
-  const opener = page.getByRole("button", { name: "Edit billing.integration-key", exact: true });
+  const opener = page.locator('a[data-secret-open="billing.integration-key"]');
   await expect(opener).toBeEnabled();
   await opener.click();
   const dialog = page.getByRole("region", { name: "Edit secret", exact: true });
@@ -146,7 +146,7 @@ test("inventory coverage stays truthful through search, local scope filtering an
   const detail = page.getByRole("region", { name: "Edit secret" });
   await expect(detail).toBeVisible();
   await detail.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Edit knownlaterintegrationbillingcredentialsforregionalpartnernetwork", exact: true })).toBeFocused();
+  await expect(page.locator('a[data-secret-open="knownlaterintegrationbillingcredentialsforregionalpartnernetwork"]')).toBeFocused();
   await expect(scope).toHaveValue("Integration:Later");
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
 
@@ -156,7 +156,7 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await expect(detail).toBeVisible();
   await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Secrets", exact: true }).click();
   await expect(detail).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Edit knownlaterintegrationbillingcredentialsforregionalpartnernetwork", exact: true })).toBeFocused();
+  await expect(page.locator('a[data-secret-open="knownlaterintegrationbillingcredentialsforregionalpartnernetwork"]')).toBeFocused();
   await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();
   await expect(scope).toHaveValue("Integration:Later");
 
@@ -406,7 +406,7 @@ test("custom scope is revealed by keyboard and keeps its exact case at 320px", a
   await fillRequiredMetadata(dialog, "custom.scope");
 
   const dimensions = await page.evaluate(() => {
-    const form = document.querySelector<HTMLElement>(".secrets-editor-page form")!;
+    const form = document.querySelector<HTMLElement>(".secrets-create-shell form")!;
     const bounds = form.getBoundingClientRect();
     return { viewport: window.innerWidth, document: document.documentElement.scrollWidth, left: bounds.left, right: bounds.right };
   });
@@ -616,13 +616,13 @@ test("restores row Edit focus when a metadata refresh temporarily removes the op
   await dialog.getByLabel("Display name", { exact: true }).fill("Focus restored after delayed refresh");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByTestId("secret-list-requests")).toHaveText("2");
-  await expect(page.locator(".secrets-loading")).toBeVisible();
+  await expect(page.getByRole("status", {name: "Loading secrets"})).toBeVisible();
   await expect(originalOpener).toHaveCount(0);
   expect(await originalElement!.evaluate(element => element.isConnected)).toBe(false);
 
   await page.evaluate(() => window.dispatchEvent(new Event("fixture-release-editor-refresh")));
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator('button[data-secret-edit="billing.integration-key"]')).toBeFocused();
+  await expect(page.locator('a[data-secret-open="billing.integration-key"]')).toBeFocused();
 });
 
 test("Edit save errors preserve fields and Cancel restores focus at 320px", async ({ page }) => {
@@ -658,7 +658,7 @@ test("secret mutation attempts are visible while pending and remain counted afte
 
   const create = page.getByRole("button", { name: "New secret", exact: true });
   await create.click();
-  const createDialog = page.getByRole("region", { name: "New secret", exact: true });
+  const createDialog = page.getByRole("dialog", { name: "New secret", exact: true });
   await fillRequiredMetadata(createDialog, "fixture.attempted-create");
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(count).toHaveText("1");
@@ -670,7 +670,7 @@ test("secret mutation attempts are visible while pending and remain counted afte
   await expect(count).toHaveText("1");
   await createDialog.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  const edit = page.getByRole("button", { name: "Edit billing.integration-key", exact: true });
+  const edit = page.locator('a[data-secret-open="billing.integration-key"]');
   await edit.click();
   const editDialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await editDialog.getByLabel("Display name", { exact: true }).fill("Attempted metadata update");

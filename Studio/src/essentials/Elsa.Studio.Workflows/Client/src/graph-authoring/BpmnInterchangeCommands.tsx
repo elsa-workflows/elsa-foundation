@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField, TechnicalDetails, StudioCheckboxField } from "@elsa-workflows/studio-ui";
 import { resolveScope } from "../workflowAdapter";
 import { exportBpmnDocument, importBpmnDocument, withDiagramFromLayout, type BpmnImportResult } from "../api/bpmnInterchange";
 import { NativeBlockDialog, type NativeBlockCommandProps } from "./NativeBlockCommands";
@@ -24,6 +24,7 @@ export default function BpmnInterchangeCommands(props: Props) {
   const request = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const committing = useRef(false);
+  const [applying, setApplying] = useState(false);
   const [review, setReview] = useState<{ file: File; xml: string; original: Props; result: BpmnImportResult } | null>(null);
   const [processId, setProcessId] = useState("");
   const [confirmed, setConfirmed] = useState<string[]>([]);
@@ -92,12 +93,12 @@ export default function BpmnInterchangeCommands(props: Props) {
       const document = nativeBlockEditorDocument(proposed.document, current.current.context.catalog);
       const validation = await current.current.validate(document);
       if (!isCurrent() || validation.state !== "validated") { setPlan(null); setMessages(validation.messages.length ? validation.messages : ["The resource or its authority changed. Nothing was applied."]); return; }
-      committing.current = true;
+      committing.current = true; setApplying(true);
       await current.current.apply(document, [], isCurrent);
       committing.current = false;
       if (id === request.current) close();
     } catch (error) { if (id === request.current) setMessages([error instanceof Error ? error.message : "The body was not applied."]); }
-    finally { committing.current = false; if (id === request.current) setBusy(false); }
+    finally { committing.current = false; setApplying(false); if (id === request.current) setBusy(false); }
   };
   const exportBody = async () => {
     const original = current.current;
@@ -118,8 +119,10 @@ export default function BpmnInterchangeCommands(props: Props) {
     <StudioButton type="button" disabled={busy} onClick={() => void exportBody()}>Export BPMN body</StudioButton>
     <input ref={input} type="file" accept=".bpmn,.xml" hidden aria-label="Import native BPMN body file" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void load(file); }} />
     {!review && messages.length ? <span role="alert">{messages.join(" ")}</span> : null}
-    {review ? <NativeBlockDialog title="Review BPMN body import" onClose={close}>
-      <h2>Review BPMN body import</h2>
+    {review ? <NativeBlockDialog title="Review BPMN body import" onClose={close} dismissDisabled={applying}
+      footer={<StudioDialogFooter leading={<StudioButton disabled={busy || !!stale || !review.xml || !props.context.canEdit} onClick={() => void preview()}>
+        {busy ? "Validating…" : "Preview imported body"}</StudioButton>} onCancel={close} cancelDisabled={applying}
+        confirmType="button" confirmLabel="Apply imported body" confirmDisabled={busy || !!stale || !plan || !props.context.canEdit} onConfirm={() => void apply()} />}>
       <p>Replace the current body with {review.file.name}. The owning activity keeps its version, inputs, outputs and runtime settings. Apply records one edit that can be undone.</p>
       <StudioButton type="button" onClick={() => download(review.file, review.file.name)}>Download original file</StudioButton>
       {review.result.analysis.processIds.length > 1 ? <StudioField label="Process"><select value={processId} disabled={busy} onChange={event => void analyze(event.target.value)}><option value="">Default process</option>{review.result.analysis.processIds.map(id => <option key={id} value={id}>{id}</option>)}</select></StudioField> : null}
@@ -127,13 +130,12 @@ export default function BpmnInterchangeCommands(props: Props) {
       <h3>Bindings retained in this file</h3>
       <p>Confirm only versions and literal input keys you intend to use. The host checks their availability before applying.</p>
       {review.result.analysis.capabilities?.map((item, index) => <div key={`${item.elementId}-${index}`}>
-        {item.retainedBinding ? <label className="wf-block-binding"><input type="checkbox" disabled={busy || !!stale} checked={confirmed.includes(item.elementId)} onChange={event => { const checked = event.currentTarget.checked; setPlan(null); setConfirmed(current => checked ? [...current, item.elementId] : current.filter(id => id !== item.elementId)); }} /><span>{item.elementId} · {item.retainedBinding.activityVersionId} · inputs: {item.retainedBinding.inputKeys.join(", ") || "none"}</span></label> : <span>{item.elementId} · {item.capability}</span>}
+        {item.retainedBinding ? <StudioCheckboxField disabled={busy || !!stale} checked={confirmed.includes(item.elementId)} onChange={checked => { setPlan(null); setConfirmed(current => checked ? [...current, item.elementId] : current.filter(id => id !== item.elementId)); }} label={<>{item.elementId} · {item.retainedBinding.activityVersionId} · inputs: {item.retainedBinding.inputKeys.join(", ") || "none"}</>} /> : <span>{item.elementId} · {item.capability}</span>}
         <p>{item.reason}</p>
       </div>)}
       {stale ? <p role="alert">The resource changed. Cancel and choose the file again.</p> : null}
       {messages.length ? <ul role="alert">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
-      {plan ? <><p>The complete proposed resource passed validation. Review its body, bindings and layout before applying.</p><details><summary>Current resource</summary><pre>{JSON.stringify(review.original.context.document, null, 2)}</pre></details><details open><summary>Proposed resource</summary><pre>{JSON.stringify(plan.document, null, 2)}</pre></details></> : null}
-      <div className="wf-block-dialog-actions"><StudioButton type="button" disabled={committing.current} onClick={close}>Cancel</StudioButton><StudioButton type="button" disabled={busy || !!stale || !review.xml || !props.context.canEdit} onClick={() => void preview()}>{busy ? "Validating…" : "Preview imported body"}</StudioButton><StudioButton type="button" disabled={busy || !!stale || !plan || !props.context.canEdit} onClick={() => void apply()}>Apply imported body</StudioButton></div>
+      {plan ? <><p>The complete proposed resource passed validation. Review its body, bindings and layout before applying.</p><TechnicalDetails label={<>Current resource</>}><pre>{JSON.stringify(review.original.context.document, null, 2)}</pre></TechnicalDetails><TechnicalDetails defaultOpen label={<>Proposed resource</>}><pre>{JSON.stringify(plan.document, null, 2)}</pre></TechnicalDetails></> : null}
     </NativeBlockDialog> : null}
   </>;
 }

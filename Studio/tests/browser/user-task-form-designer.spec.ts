@@ -12,7 +12,7 @@ test("native task form designer supports recipient preview and accessible editin
 
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Number", exact: true }).click();
-  await expect(page.locator(".user-task-designer__advanced")).not.toHaveAttribute("open");
+  await expect(page.locator(".studio-advanced-section button[aria-expanded]")).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Select Text field 1", exact: true }).click();
   await page.getByRole("textbox", { name: "Label", exact: true }).fill("Customer note");
   await page.screenshot({ path: testInfo.outputPath("form-designer-desktop.png") });

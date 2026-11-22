@@ -74,7 +74,7 @@ describe("submitted collection scope", () => {
     finish({ items: [{ ...question(), kind: "dashboard", name: "LATE-MINE-RESULT" }] });
     await waitUntil(() => view.textContent?.includes("shared:finance") === true);
     expect(view.textContent).not.toContain("LATE-MINE-RESULT");
-    click(view, "Refresh"); await waitUntil(() => list.mock.calls.filter(call => call[1] === "shared").length === 2);
+    flushSync(() => view.querySelector<HTMLButtonElement>('button[aria-label="Refresh dashboards"]')!.click()); await waitUntil(() => list.mock.calls.filter(call => call[1] === "shared").length === 2);
     expect(list.mock.calls.at(-1)?.[2]).toBe("finance");
   });
 });

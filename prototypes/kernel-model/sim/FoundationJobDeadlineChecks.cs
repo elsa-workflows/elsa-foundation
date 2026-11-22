@@ -51,16 +51,22 @@ internal static class FoundationJobDeadlineChecks
             model.Attempts["expires"].Job.Deadline == initial + 100 && Results(expires).Count == 0,
             "a pending public job and its absolute deadline commit before its attempt enters");
 
+        var jobOwner = (Worker)owner;
+        var cancelledRow = Row(cancelled);
+        var oldDriver = jobOwner.JobCompletion(cancelledRow.Id, "job", cancelledRow.Creation);
         await edge.SendAsync(scope, new Contract.Target.Ref(cancelled), "cancel", "cancel-job");
         await Pump(owner);
         check(model.Attempts["cancelled"].Cancelled && Timers(cancelled) == 0,
             "cancelling a job recalls its durable deadline and signals its driver");
         await edge.SendAsync(scope, new Contract.Target.Ref(cancelled), "restart", "restart-job", "restart");
         await Pump(owner);
+        var newDriver = jobOwner.JobCompletion(cancelledRow.Id, "job", cancelledRow.Creation);
         model.Attempts["cancelled"].Finish("old");
         model.Attempts["restart"].Finish("new");
+        if (oldDriver is not null && newDriver is not null)
+            await Task.WhenAll(oldDriver, newDriver).WaitAsync(TimeSpan.FromSeconds(5));
         await Pump(owner);
-        check(Results(cancelled).SequenceEqual(["new"]) && Timers(cancelled) == 0,
+        check(oldDriver is not null && newDriver is not null && Results(cancelled).SequenceEqual(["new"]) && Timers(cancelled) == 0,
             "the old attempt cannot publish into a restarted job with the same key");
 
         store.AddFoundationMessage(scope.Tenant, expires.Id, "suspend", Kinds.Suspend);

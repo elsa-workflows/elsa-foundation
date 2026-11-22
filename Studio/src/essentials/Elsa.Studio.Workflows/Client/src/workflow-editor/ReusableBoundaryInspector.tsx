@@ -1,4 +1,4 @@
-import { StudioButton, StudioTabs, tabElementIds } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioTabs, StudioTimestamp, tabElementIds } from "@elsa-workflows/studio-ui";
 import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
 import {
@@ -358,6 +359,7 @@ export function ReusableBoundaryInspector({
     if (!target || index === frames.length - 1) return;
     openControllerRef.current?.abort();
     selectionControllerRef.current?.abort();
+    setOpenState({ activityExecutionId: null, error: "" });
     restoreScrollRef.current = target.scrollTop;
     setFrames(current => current.slice(0, index + 1).map((frame, frameIndex) =>
       frameIndex === index ? prepareFrameForLeave(frame) : frame));
@@ -558,33 +560,33 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
   const nodeDescription = (node: ActivityExecutionLayout["nodes"][number]) =>
     presentation.get(node.executableNodeId)?.description?.trim() || undefined;
   const positioned = layout.nodes.filter(node => node.hasPinnedGeometry);
-  if (positioned.length === 0) {
-    return (
-      <div className={`wf-boundary-layout wf-boundary-layout-list${compact ? " wf-boundary-layout-compact wf-boundary-layout-list-compact" : ""}`}>
-        <header className="wf-boundary-layout-heading">
-          <strong>Activity structure</strong>
-          <small>{layout.nodes.length} {layout.nodes.length === 1 ? "activity" : "activities"}</small>
-        </header>
-        {layout.nodes.map(node => {
-          const status = statusByNode?.get(node.executableNodeId);
-          const selected = selectedExecutableNodeId === node.executableNodeId;
-          const contents = (
-            <>
-              <span className="wf-boundary-layout-list-identity">{nodeLabel(node)}</span>
-              {status ? <span className="wf-boundary-layout-list-status"><WorkflowStatusBadge status={status} /></span> : null}
-            </>
-          );
+  const nodeList = (nodes: ActivityExecutionLayout["nodes"], title: string) => (
+    <div className={`wf-boundary-layout wf-boundary-layout-list${compact ? " wf-boundary-layout-compact wf-boundary-layout-list-compact" : ""}`}>
+      <header className="wf-boundary-layout-heading">
+        <strong>{title}</strong>
+        <small>{nodes.length} {nodes.length === 1 ? "activity" : "activities"}</small>
+      </header>
+      {nodes.map(node => {
+        const status = statusByNode?.get(node.executableNodeId);
+        const selected = selectedExecutableNodeId === node.executableNodeId;
+        const contents = (
+          <>
+            <span className="wf-boundary-layout-list-identity">{nodeLabel(node)}</span>
+            {status ? <span className="wf-boundary-layout-list-status"><WorkflowStatusBadge status={status} /></span> : null}
+          </>
+        );
 
-          return (
-            <div className="wf-boundary-layout-list-row" data-selected={selected ? "true" : undefined} key={node.executableNodeId} title={nodeDescription(node)}>
-              {onSelectNode ? <StudioButton className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</StudioButton>
-                : <div className="wf-boundary-layout-list-action">{contents}</div>}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+        return (
+          <div className="wf-boundary-layout-list-row" data-selected={selected ? "true" : undefined} key={node.executableNodeId} title={nodeDescription(node)}>
+            {onSelectNode ? <StudioButton className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</StudioButton>
+              : <div className="wf-boundary-layout-list-action">{contents}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+  if (positioned.length === 0) return nodeList(layout.nodes, "Activity structure");
+  const unpositioned = layout.nodes.filter(node => !node.hasPinnedGeometry);
 
   const nodeById = new Map(positioned.map(node => [node.executableNodeId, node]));
   const minX = Math.min(...positioned.map(node => node.x));
@@ -607,8 +609,8 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
       </figcaption>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`Pinned historical boundary layout with ${layout.nodes.length} nodes`}
+        role={onSelectNode ? "group" : "img"}
+        aria-label={`Pinned historical boundary layout with ${positioned.length} nodes`}
       >
         <g transform={`translate(${translateX} ${translateY})`}>
           {layout.connections.map((connection, index) => {
@@ -652,6 +654,7 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
           })}
         </g>
       </svg>
+      {unpositioned.length > 0 ? nodeList(unpositioned, "Activities without a saved position") : null}
       {layout.nestedBoundaries.length > 0 ? (
         <p className="wf-muted">
           {layout.nestedBoundaries.length} nested boundary occurrence{layout.nestedBoundaries.length === 1 ? "" : "s"} represented as one node each. Open one from Steps to inspect it.
@@ -975,7 +978,7 @@ function BoundaryTechnicalDetails({
             <dt>Selected attempt</dt>
             <dd>{selectedInspection.attempt ? `${selectedInspection.attempt.attemptNumber} of ${selectedInspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
             <dt>Last committed</dt>
-            <dd>{selectedInspection.lastCommittedAt ?? "Not committed"}</dd>
+            <dd><StudioTimestamp value={selectedInspection.lastCommittedAt} format="date-time" fallback="Not committed" /></dd>
             {selectedInspection.incidents.length > 0 ? (
               <>
                 <dt>Incident IDs</dt>
@@ -1011,7 +1014,7 @@ function BoundaryTechnicalDetails({
             items={selectedInspection.bookmarks.slice(0, evidenceSummaryLimit).map(bookmark => ({
               id: bookmark.bookmarkId,
               title: bookmark.stimulusType,
-              detail: `Resume target ${bookmark.resumeTargetId} · created ${bookmark.createdAt}`
+              detail: <>Resume target {bookmark.resumeTargetId} · created <StudioTimestamp value={bookmark.createdAt} format="date-time" fallback="—" /></>
             }))}
           />
         </div>
@@ -1089,7 +1092,7 @@ function BoundedEvidenceSummary({
 }: {
   title: string;
   total: number;
-  items: Array<{ id: string; title: string; detail: string }>;
+  items: Array<{ id: string; title: string; detail: ReactNode }>;
 }) {
   return (
     <section className="wf-boundary-bounded-summary">

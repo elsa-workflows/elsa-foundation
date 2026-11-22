@@ -174,6 +174,8 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", placement: "operate", parentId: undefined }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", placement: "build", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "build", parentId: "library" }),
+      expect.objectContaining({ id: "workflows-activity-upgrades", label: "Activity upgrades", parentId: "library" }),
+      expect.objectContaining({ id: "workflows-elsa3-import", label: "Import from Elsa 3", parentId: "library" }),
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined })
@@ -187,6 +189,7 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
       expect.objectContaining({ id: "workflows-activity-upgrades", path: "/workflows/activity-definitions/upgrades" }),
       expect.objectContaining({ id: "workflows-activity-definitions", path: "/workflows/activity-definitions" }),
+      expect.objectContaining({ id: "agent-activity-definition", path: "/agents/definitions" }),
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
       expect.objectContaining({ id: "workflows-executable-inspector", label: "Executable Inspector", path: "/workflows/executables/:artifactId" }),

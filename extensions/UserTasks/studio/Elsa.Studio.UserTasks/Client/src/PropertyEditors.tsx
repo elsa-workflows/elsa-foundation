@@ -2,7 +2,7 @@ import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { Trash2 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioActivityPropertyEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { forms, targets, message, type FormVersion } from "./taskApi";
 export function ActionsEditor({ value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
   let literal: unknown = value;
@@ -13,7 +13,7 @@ export function ActionsEditor({ value, disabled, onChange, onValidationChange }:
   return <div className="user-task-property-editor">{items.map((item, index) => <div className="user-task-action-row" key={index}><StudioField label={<>Action {index + 1}</>}><input className="studio-input" disabled={disabled} value={item} onChange={event => onChange(items.map((entry, i) => i === index ? event.target.value : entry))} /></StudioField>
     <StudioButton variant="ghost" aria-label={`Remove action ${index + 1}`} title={`Remove action ${index + 1}`} disabled={disabled} onClick={() => onChange(items.filter((_, i) => i !== index))}><RemoveIcon /></StudioButton></div>)}
     <StudioButton disabled={disabled || items.length >= 20} onClick={() => onChange([...items, ""])}>Add action</StudioButton>
-    {invalid ? <p role="alert">Enter unique, nonempty action names without surrounding spaces.</p> : null}</div>;
+    {invalid ? <StudioAlert tone="danger">{items.includes("Unmatched") ? "Unmatched is reserved. Choose another action name." : "Enter unique, nonempty action names without surrounding spaces."}</StudioAlert> : null}</div>;
 }
 export function AssignmentEditor({ api, group, value, disabled, onChange, context, onValidationChange }: StudioActivityPropertyEditorProps & { api: ElsaStudioModuleApi; group: boolean }) {
   const assignment = context.inputValues;
@@ -53,8 +53,8 @@ export function AssignmentEditor({ api, group, value, disabled, onChange, contex
     }}>
     <option value="">None</option>{value && !items.some(item => item.id === value) ? <option value={String(value)}>{String(value)}</option> : null}{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></StudioField>
     {!group && !context.setLiteralInputs ? <p role="status">If both assignment choices are set, clear one before continuing.</p> : null}
-    {invalid && !group && <p role="alert">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</p>}
-    {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <p role="alert">{error}</p> : null}</div>;
+    {invalid && !group && <StudioAlert tone="danger">{hasUser ? "Choose either an assignee or a group; clear the other assignment." : "Select an assignee or a group for this task."}</StudioAlert>}
+    {more ? <StudioButton disabled={disabled || loading} onClick={() => void load(skip, true)}>More choices</StudioButton> : null}{error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}</div>;
 }
 function RemoveIcon() {
   return <Trash2 size={18} aria-hidden="true" />;
@@ -105,8 +105,8 @@ export function FormEditor({ api, value, disabled, onChange, context, descriptor
       <a className="studio-button" data-variant="secondary" data-size="sm" href={qualifyStudioBackendPath("/user-tasks/forms")}>Manage forms</a>
       {!context.setLiteralInputs && <p role="status">Choose a published version below to finish selecting this form.</p>}
     </>}
-    {error && <div role="alert"><p>{error}</p><StudioButton disabled={disabled} onClick={() => setReload(value => value + 1)}>Retry loading forms</StudioButton></div>}
-    {invalid && <p role="alert">The selected {versionMode ? "version" : "form"} is unavailable. Choose a published form and version.</p>}
+    {error && <StudioAlert tone="danger"><p>{error}</p><StudioButton disabled={disabled} onClick={() => setReload(value => value + 1)}>Retry loading forms</StudioButton></StudioAlert>}
+    {invalid && <StudioAlert tone="danger">The selected {versionMode ? "version" : "form"} is unavailable. Choose a published form and version.</StudioAlert>}
   </div>;
 }
 

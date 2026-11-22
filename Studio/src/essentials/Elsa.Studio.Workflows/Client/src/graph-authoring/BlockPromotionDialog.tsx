@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioDialogFooter, StudioField, StudioRadioGroup, TechnicalDetails } from "@elsa-workflows/studio-ui";
 import { createActivityDefinition, getActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityAuthoringCapabilities, CreateActivityDefinitionResponse } from "../activityDefinitionTypes";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -64,6 +64,7 @@ function reusableVersions(catalog: ActivityCatalogItem[]) {
 export function BlockPromotionDialog(props: BlockPromotionDialogProps) {
   const current = useRef(props);
   current.current = props;
+  const nameInput = useRef<HTMLInputElement>(null);
   const initialName = props.context.document.activityPresentation.find(item => item.nodeId === props.blockNodeId)?.displayName ?? "";
   const [name, setName] = useState(initialName);
   const [category, setCategory] = useState(reusableCategory);
@@ -181,16 +182,21 @@ export function BlockPromotionDialog(props: BlockPromotionDialogProps) {
   const unavailable = props.host.capabilitiesState === "loading" ? "Loading authoring capabilities…"
     : !plannerContext ? "Reusable activity authoring is unavailable on this server." : null;
   const draftLabel = created ? `${created.definition.displayName ?? reviewed?.name ?? name}` : null;
-  return <NativeBlockDialog title="Promote to reusable activity" onClose={close}>
-    <h2>Promote to reusable activity</h2>
+  const creating = !unavailable && target === "new" && !created;
+  const replacing = !unavailable && (target === "existing" || !!publishedVersionId);
+  const targetVersion = target === "existing" ? existingVersionId : publishedVersionId;
+  return <NativeBlockDialog title="Promote to reusable activity" onClose={close} dismissDisabled={committing || publicationPending} initialFocusRef={nameInput}
+    footer={<StudioDialogFooter onCancel={close} cancelLabel={created || publishedVersionId ? "Close" : "Cancel"} cancelDisabled={committing || publicationPending}
+      confirmType="button" confirmLabel={creating ? busy === "creating" ? "Creating draft…" : "Create reusable activity draft"
+        : replacing ? busy === "replacing" ? "Checking and replacing…" : "Replace block with this version" : undefined}
+      confirmDisabled={!ready || Boolean(busy) || (creating ? createUnknown : !targetVersion)}
+      onConfirm={() => creating ? void create() : targetVersion && void replace(targetVersion)} />}>
     <p>Studio proposes a reusable activity built from this block and a call that replaces it. Nothing changes in this document until you replace the block with an exact published version.</p>
     {unavailable ? <p role="status">{unavailable}</p> : <>
-      <fieldset className="wf-block-promotion-target" disabled={Boolean(busy) || Boolean(created)}>
-        <legend>Reusable activity</legend>
-        <label><input type="radio" name="promotion-target" checked={target === "new"} onChange={() => { setTarget("new"); setMessages([]); }} /> Create a new reusable activity</label>
-        <label><input type="radio" name="promotion-target" checked={target === "existing"} onChange={() => { setTarget("existing"); setMessages([]); }} /> Use a published version</label>
-      </fieldset>
-      <StudioField label="Name"><input value={name} maxLength={200} disabled={Boolean(busy) || Boolean(created)} onChange={event => { setName(event.target.value); setMessages([]); }} /></StudioField>
+      <StudioRadioGroup<Target> label="Reusable activity" inline disabled={Boolean(busy) || Boolean(created)} value={target}
+        options={[{ value: "new", label: "Create a new reusable activity" }, { value: "existing", label: "Use a published version" }]}
+        onChange={value => { setTarget(value); setMessages([]); }} />
+      <StudioField label="Name"><input ref={nameInput} value={name} maxLength={200} disabled={Boolean(busy) || Boolean(created)} onChange={event => { setName(event.target.value); setMessages([]); }} /></StudioField>
       {target === "new" && !created ? <>
         <StudioField label="Category"><input value={category} maxLength={200} disabled={Boolean(busy)} onChange={event => setCategory(event.target.value)} /></StudioField>
         <StudioField label="Summary"><textarea value={description} maxLength={2000} disabled={Boolean(busy)} onChange={event => setDescription(event.target.value)} /></StudioField>
@@ -224,12 +230,6 @@ export function BlockPromotionDialog(props: BlockPromotionDialogProps) {
       {published ? <div className="wf-block-preview" role="status"><h3>Published version {published.version}</h3><p>Replace the block with this exact version. Studio checks the block and the published version again first.</p></div> : null}
       {messages.length ? <ul role="alert">{messages.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
     </>}
-    <div className="wf-block-dialog-actions">
-      <button type="button" disabled={committing || publicationPending} onClick={close}>{created || publishedVersionId ? "Close" : "Cancel"}</button>
-      {!unavailable && target === "new" && !created ? <StudioButton type="button" variant="primary" disabled={!ready || Boolean(busy) || createUnknown} onClick={() => void create()}>{busy === "creating" ? "Creating draft…" : "Create reusable activity draft"}</StudioButton> : null}
-      {!unavailable && (target === "existing" || publishedVersionId) ? <StudioButton type="button" variant="primary" disabled={!ready || Boolean(busy) || !(target === "existing" ? existingVersionId : publishedVersionId)}
-        onClick={() => void replace((target === "existing" ? existingVersionId : publishedVersionId) ?? "")}>{busy === "replacing" ? "Checking and replacing…" : "Replace block with this version"}</StudioButton> : null}
-    </div>
   </NativeBlockDialog>;
 }
 
@@ -271,10 +271,10 @@ function PromotionProposal({ plan, context, host }: { plan: ReadyBlockPromotion;
   return <div className="wf-block-preview">
     <h3>Proposed reusable activity</h3>
     <p>{steps} {steps === 1 ? "step" : "steps"}; {plan.inputs.length} {plan.inputs.length === 1 ? "input" : "inputs"}, {plan.outputs.length} {plan.outputs.length === 1 ? "output" : "outputs"} and {outcomes.length} {outcomes.length === 1 ? "outcome" : "outcomes"}. The call passes the block’s current values.</p>
-    {plan.inputs.length ? <details open><summary>Inputs</summary><ul>{plan.inputs.map(input => <li key={input.referenceKey}><strong>{input.name}</strong> · {typeLabel(input.type)} · {describeSource(input.source, context, host)} · used by {input.uses.length} {input.uses.length === 1 ? "step" : "steps"}</li>)}</ul></details> : null}
-    {plan.outputs.length ? <details open><summary>Outputs</summary><ul>{plan.outputs.map(output => <li key={output.referenceKey}><strong>{output.name}</strong> · {typeLabel(output.type)}</li>)}</ul></details> : null}
-    {outcomes.length ? <details><summary>Outcomes</summary><ul>{outcomes.map(outcome => <li key={outcome.referenceKey}>{outcome.name}</li>)}</ul></details> : null}
-    <details><summary>Reusable activity material</summary><pre>{JSON.stringify(plan.candidate, null, 2)}</pre></details>
-    <details><summary>Replacement call</summary><pre>{JSON.stringify(plan.callSite, null, 2)}</pre></details>
+    {plan.inputs.length ? <TechnicalDetails defaultOpen label={<>Inputs</>}><ul>{plan.inputs.map(input => <li key={input.referenceKey}><strong>{input.name}</strong> · {typeLabel(input.type)} · {describeSource(input.source, context, host)} · used by {input.uses.length} {input.uses.length === 1 ? "step" : "steps"}</li>)}</ul></TechnicalDetails> : null}
+    {plan.outputs.length ? <TechnicalDetails defaultOpen label={<>Outputs</>}><ul>{plan.outputs.map(output => <li key={output.referenceKey}><strong>{output.name}</strong> · {typeLabel(output.type)}</li>)}</ul></TechnicalDetails> : null}
+    {outcomes.length ? <TechnicalDetails label={<>Outcomes</>}><ul>{outcomes.map(outcome => <li key={outcome.referenceKey}>{outcome.name}</li>)}</ul></TechnicalDetails> : null}
+    <TechnicalDetails label={<>Reusable activity material</>}><pre>{JSON.stringify(plan.candidate, null, 2)}</pre></TechnicalDetails>
+    <TechnicalDetails label={<>Replacement call</>}><pre>{JSON.stringify(plan.callSite, null, 2)}</pre></TechnicalDetails>
   </div>;
 }

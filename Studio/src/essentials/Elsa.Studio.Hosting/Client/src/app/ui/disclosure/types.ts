@@ -30,12 +30,18 @@ export interface DisclosureOption {
   isBound?: boolean;
 }
 
-export type OverflowMenuItem =
-  | {
-      id: string;
-      label: ReactNode;
-      onSelect(): void;
-      disabled?: boolean;
-      destructive?: boolean;
-    }
-  | { type: "separator" };
+export interface OverflowMenuAction {
+  id: string;
+  label: ReactNode;
+  onSelect(): void;
+  disabled?: boolean;
+  destructive?: boolean;
+  group?: string;
+  title?: string;
+  describedBy?: string;
+  icon?: ReactNode;
+  detail?: ReactNode;
+  selection?: { type: "checkbox" | "radio"; checked: boolean };
+}
+
+export type OverflowMenuItem = OverflowMenuAction | { type: "separator" };

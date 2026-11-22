@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, useId, type ReactNode } from "react";
-import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioTabs, tabElementIds, StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioTabs, tabElementIds, StudioLoadingStatus, StudioResultState, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -202,7 +202,7 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
       <StudioShellBreadcrumbs items={[{ label: agentWorkspace ? "Agents" : "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
-      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Activity definitions unavailable" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not support activity definition management." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</button></section>
+      <StudioResultState tone="danger" headingLevel={1} icon={<AlertTriangle size={22} aria-hidden />} title={detailFailure === "unavailable" ? "Activity definitions unavailable" : "Activity Definition unavailable"} description={detailFailure === "unavailable" ? "This backend does not support activity definition management." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."} actions={<><StudioButton type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</StudioButton></>} />
     </main>;
   }
   if (!detail) return null;
@@ -260,14 +260,18 @@ export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, d
         () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>{item.label}</StudioLink>
     } />
     <StudioPageHeader compact headingLevel={2} title={detail.definition.displayName} titleId="activity-definition-title"
-      description={detail.definition.description} actions={<>
+      description={detail.definition.description} refresh={{
+        id: "activity-definition-workbench", label: "Refresh activity definition", refreshing: detailQuery.isFetching,
+        onRefresh: async () => {
+          setPrivacyFailure(current => current?.definitionId === definitionId ? null : current);
+          observeActivityDefinitions({ event: "refresh", surface: "workbench" });
+          await detailQuery.refetch();
+        }
+      }} actions={<>
         {designOwned ? <StudioButton type="button" variant="primary" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
           <Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}
         </StudioButton> : null}
         {canFork ? <StudioButton type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</StudioButton> : null}
-        <StudioButton type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
-          <RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}
-        </StudioButton>
       </>} />
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}

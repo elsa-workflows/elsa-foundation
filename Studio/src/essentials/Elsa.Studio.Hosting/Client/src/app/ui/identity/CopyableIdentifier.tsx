@@ -1,16 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export interface CopyableIdentifierProps {
   label: string;
   value: string;
   className?: string;
+  copyLabel?: string;
+  externalValue?: boolean;
+  onCopied?(): void;
+  scope?: object;
   labelPlacement?: "internal" | "external";
 }
 
-export function CopyableIdentifier({ label, value, className, labelPlacement = "internal" }: CopyableIdentifierProps) {
+export function CopyableIdentifier({ label, value, className, copyLabel = `Copy ${label}`, externalValue, onCopied, scope, labelPlacement = "internal" }: CopyableIdentifierProps) {
   const valueRef = useRef<HTMLSpanElement | null>(null);
   const [displayValue, setDisplayValue] = useState(value);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+
+  const generation = useRef(0);
+  useLayoutEffect(() => {
+    setCopyState("idle");
+    return () => { generation.current++; };
+  }, [scope, value]);
 
   useEffect(() => {
     const element = valueRef.current;
@@ -37,11 +47,14 @@ export function CopyableIdentifier({ label, value, className, labelPlacement = "
   }, [copyState]);
 
   const copy = async () => {
+    const origin = generation.current;
     try {
       await copyExactText(value);
+      if (origin !== generation.current) return;
       setCopyState("copied");
+      onCopied?.();
     } catch {
-      setCopyState("failed");
+      if (origin === generation.current) setCopyState("failed");
     }
   };
 
@@ -57,24 +70,24 @@ export function CopyableIdentifier({ label, value, className, labelPlacement = "
       data-label-placement={labelPlacement}
     >
       {labelPlacement === "internal" ? <span className="studio-copyable-identifier__label">{label}</span> : null}
-      <span
+      {!externalValue ? <span
         ref={valueRef}
         className="studio-copyable-identifier__value"
         title={value}
         aria-label={`${label}: ${value}`}
       >
         {displayValue}
-      </span>
+      </span> : null}
       <button
         type="button"
         className="studio-copyable-identifier__button"
-        aria-label={`Copy ${label}`}
-        title={`Copy ${label}`}
+        aria-label={copyLabel}
+        title={copyLabel}
         onClick={() => void copy()}
       >
         {copyState === "copied" ? <CheckIcon /> : <CopyIcon />}
       </button>
-      <span className="studio-copyable-identifier__announcement" role="status" aria-live="polite">
+      <span className={copyState === "failed" ? "studio-copyable-identifier__failure" : "studio-copyable-identifier__announcement"} role="status" aria-live="polite">
         {announcement}
       </span>
     </div>
@@ -123,9 +136,9 @@ async function copyExactText(value: string) {
   textArea.style.opacity = "0";
   document.body.appendChild(textArea);
   textArea.select();
-  const copied = document.execCommand("copy");
-  textArea.remove();
-  if (!copied) throw new Error("Clipboard copy failed.");
+  try {
+    if (!document.execCommand("copy")) throw new Error("Clipboard copy failed.");
+  } finally { textArea.remove(); }
 }
 
 function CopyIcon() {

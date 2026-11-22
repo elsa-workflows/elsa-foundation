@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, AnchoredPopover, OverflowMenu, StudioButton, StudioTableContainer, StudioField } from "@elsa-workflows/studio-ui";
 import { editTable, parseTable, type Clause, type Table, type TableEdit } from "./decisionXml";
 import type { Diagnostic } from "./decisionsApi";
 
@@ -13,7 +13,7 @@ export function TableEditor(props: EditorProps) {
     try { return { table: parseTable(props.xml) }; }
     catch (error) { return { error: error instanceof Error ? error.message : "This document cannot be edited as a table." }; }
   }, [props.xml]);
-  return parsed.table ? <DecisionGrid {...props} table={parsed.table} /> : <p role="alert">{parsed.error}</p>;
+  return parsed.table ? <DecisionGrid {...props} table={parsed.table} /> : <StudioAlert tone="danger">{parsed.error}</StudioAlert>;
 }
 
 function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], table }: EditorProps & { table: Table }) {
@@ -92,17 +92,20 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
     const next = { row: Math.max(0, Math.min(table.rules.length - 1, position.row + rowDelta)), column: Math.max(0, Math.min(columnCount - 1, position.column + columnDelta)) };
     selectCell(next, extend);
   };
-  const moveTab = (position: Position, backwards: boolean) => {
+  const adjacentCell = (position: Position, backwards: boolean): Position | undefined => {
     const index = position.row * columnCount + position.column + (backwards ? -1 : 1);
-    const bounded = Math.max(0, Math.min(table.rules.length * columnCount - 1, index));
-    selectCell({ row: Math.floor(bounded / columnCount), column: bounded % columnCount });
+    if (index < 0 || index >= table.rules.length * columnCount) return undefined;
+    return { row: Math.floor(index / columnCount), column: index % columnCount };
   };
   const handleCellKeyDown = (position: Position, event: React.KeyboardEvent<HTMLTableCellElement>) => {
     if (event.target !== event.currentTarget) return;
     if (event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       move(position, event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0, event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0, event.shiftKey);
-    } else if (event.key === "Tab") { event.preventDefault(); moveTab(position, event.shiftKey); }
+    } else if (event.key === "Tab") {
+      const next = adjacentCell(position, event.shiftKey);
+      if (next) { event.preventDefault(); selectCell(next); }
+    }
     else if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); startEditing(position); }
     else if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); startEditing(position, ""); }
     else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); startEditing(position, event.key); }
@@ -199,11 +202,14 @@ function DecisionGrid({ xml, readOnly, onChange, onError, diagnostics = [], tabl
             const isEditing = same(editing, position);
             const diagnostic = diagnostics.find(item => item.ruleId === rule.id && item.clauseId === clause.id);
             const diagnosticId = diagnostic ? `diagnostic-${rule.id}-${clause.id}` : undefined;
-            return <td key={clause.id} id={`cell-${rule.id}-${clause.id}`} role="gridcell" aria-label={`Rule ${row + 1}, ${output ? "output" : "input"} ${clause.name || (output ? column - table.inputs.length : column) + 1}`} aria-selected={inRange || active} aria-describedby={diagnosticId} tabIndex={active ? 0 : -1} className={`decision-grid-cell${active ? " is-active" : ""}${inRange ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`} ref={element => { if (element) cellRefs.current.set(positionKey(position), element); else cellRefs.current.delete(positionKey(position)); }} onFocus={() => { if (!selected) { setSelected(position); setAnchor(position); } }} onClick={() => selectCell(position)} onDoubleClick={() => startEditing(position)} onKeyDown={event => handleCellKeyDown(position, event)}>
+            return <td key={clause.id} id={`cell-${rule.id}-${clause.id}`} role="gridcell" aria-label={`Rule ${row + 1}, ${output ? "output" : "input"} ${clause.name || (output ? column - table.inputs.length : column) + 1}`} aria-selected={inRange || active} aria-describedby={diagnosticId} tabIndex={active && !isEditing ? 0 : -1} className={`decision-grid-cell${active ? " is-active" : ""}${inRange ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`} ref={element => { if (element) cellRefs.current.set(positionKey(position), element); else cellRefs.current.delete(positionKey(position)); }} onFocus={() => { if (!selected) { setSelected(position); setAnchor(position); } }} onClick={() => selectCell(position)} onDoubleClick={() => startEditing(position)} onKeyDown={event => handleCellKeyDown(position, event)}>
               {isEditing ? <input ref={editorRef} aria-label="Edit selected cell" value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => {
                 if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); cancel(); }
                 else if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); commit(); }
-                else if (event.key === "Tab") { event.preventDefault(); event.stopPropagation(); const next = { row, column: column + (event.shiftKey ? -1 : 1) }; commit(next.column < 0 ? { row: Math.max(0, row - 1), column: columnCount - 1 } : next.column >= columnCount ? { row: Math.min(table.rules.length - 1, row + 1), column: 0 } : next); }
+                else if (event.key === "Tab") {
+                  const next = adjacentCell(position, event.shiftKey);
+                  if (next) { event.preventDefault(); event.stopPropagation(); commit(next); }
+                }
               }} onBlur={() => commit(undefined, false)} /> : <span>{text}</span>}
               {diagnostic ? <span id={diagnosticId} className="decision-cell-diagnostic" role="note">{diagnostic.message}</span> : null}
             </td>;

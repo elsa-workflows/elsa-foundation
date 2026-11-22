@@ -290,7 +290,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         ReceiveJobPublications();
         return _slots.TryGetValue(instance, out var slot)
-            && slot.Inbox.Exists(i => !i.Taken && i.CompletedJob && i.Message.Kind == Kinds.JobFinished && i.Message.InboxKey == InboxKey.Ticket(instance, key, creation));
+            && slot.Inbox.Exists(i => !i.Taken && i.CompletedJob && i.Message.Kind == Kinds.JobFinished &&
+                i.Message.InboxKey == InboxKey.Ticket(instance, key, creation, DiagnosticJobGeneration(slot.CurrentRow, key, creation)));
     }
 
     /// <summary>
@@ -298,8 +299,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// it does not establish that a model consumed the result or committed a logical job outcome.
     /// </summary>
     public Task? JobCompletion(string instance, string key, long creation = 0) =>
-        _items.GetValueOrDefault(InboxKey.Ticket(instance, key, creation)) is { } ticket
+        _items.GetValueOrDefault(InboxKey.Ticket(instance, key, creation,
+            DiagnosticJobGeneration(_slots.GetValueOrDefault(instance)?.CurrentRow, key, creation))) is { } ticket
             && ticket.Message.Target.Id == instance && ticket.Key == key ? ticket.JobDriver : null;
+
+    private static long DiagnosticJobGeneration(InstanceRow? row, string key, long creation) =>
+        row?.Creation == creation ? JobRegistry.Generation(row, key) ?? 0 : 0;
 
     public bool Has(Flaw flaw) => (_options.Flaws & flaw) != 0;
     public int Partitions => _options.Partitions;
@@ -1474,7 +1479,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // still be fenced so an earlier due timer cannot strand the pending Park.
     private bool PoisonPending(Slot slot) => Volatile.Read(ref slot.PoisonAt) <= Now;
 
-    private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !item.DiscardedAt(slot) &&
+    private bool PoisonInput(Delivery item, Slot slot) => !item.Taken && !DiscardedAt(item, slot) &&
         item.UncheckedReference is null && item.Attempts >= _options.MaxAttempts &&
         item.Message.Kind != Kinds.JobFinished && !item.Message.IsControl && CreationError(slot, item.Message) is null;
 
@@ -1535,7 +1540,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             if (skipped.Contains(target) || PoisonPending(slot) &&
                 (suspect.Message.Kind == Kinds.Job && suspect.Ticket || !PrecedesPoison(suspect, slot, control))) continue;
             if (suspect.UncheckedReference is null && (Loaded(slot) || Has(Flaw.TrialBeforeLoad)) && (!slot.Busy || Has(Flaw.SuspendDuringTrial) || Has(Flaw.TrialBeforeLoad))
-                && (suspect.DiscardedAt(slot) || !Withheld(slot) || CanSettleWhileWithheld(slot, suspect) ||
+                && (DiscardedAt(suspect, slot) || !Withheld(slot) || CanSettleWhileWithheld(slot, suspect) ||
                     CreationError(slot, suspect.Message) is not null)
                 && (attempts ??= suspect.Attempts) == suspect.Attempts)
             {
@@ -1606,6 +1611,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
         return local is not null && local.ObservedOrder < durable.ObservedOrder ? local : durable;
     }
 
+    private bool ObsoleteJobAt(Delivery item, InstanceRow? row) =>
+        item.IsJobWork && row is not null &&
+        (row.NextJobGeneration is not null || item.Message.FoundationJobResult || _type.SupportsFoundationOperator(row)) &&
+        item.IsObsoleteJob(row);
+
+    private bool DiscardedAt(Delivery item, Slot slot) =>
+        item.DiscardedAt(slot) || ObsoleteJobAt(item, slot.CurrentRow);
+
     private List<Delivery> Deliverable(string instance, Slot slot, long now)
     {
         var due = new List<Delivery>();
@@ -1613,7 +1626,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var onTrial = OnTrial(instance);
         var control = RecoveryBoundary(slot, now, onTrial);
         bool Eligible(Delivery item) => !item.Ticket && !item.Taken && !(item.Message.Due > now)
-            && (!suspended || item.DiscardedAt(slot) || item.Message.IsControl || CanSettleWhileWithheld(slot, item) ||
+            && (!suspended || DiscardedAt(item, slot) || item.Message.IsControl || CanSettleWhileWithheld(slot, item) ||
                 CreationError(slot, item.Message) is not null);
         bool InFront(Delivery item) => TrialItems.Contains(item) || BeforeRecoveryControl(item, control);
 
@@ -1663,12 +1676,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         if (due is [var held] && held.Held && held.Message.IsControl && HeldCommandStimulus(slot, held, now) > 0)
             return due;
-        return due.TrueForAll(i => i.Held) ? [] : due;    // held messages wait for something new to come with
+        // An obsolete job result is side-effect-free bookkeeping, even when it was held at a prior checkpoint.
+        return due.TrueForAll(i => i.Held && !ObsoleteJobAt(i, slot.CurrentRow)) ? [] : due;
     }
 
     private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
         .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&
-            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !item.DiscardedAt(slot) && CreationError(slot, item.Message) is null)
+            item.ObservedOrder > held.HeldThrough && !Awaits(item) && !DiscardedAt(item, slot) && CreationError(slot, item.Message) is null)
         .Select(item => item.ObservedOrder).DefaultIfEmpty().Max();
 
     // A qualified terminate also frees its ordinary predecessors to run. The dispatcher still selects them first.
@@ -1841,7 +1855,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         if (Blocked || (TrialItems.Count > 0 && !OnTrial(instance) && !Spared(instance))) return;
         var due = Deliverable(instance, slot, now);
         if (due.Count == 0) return;
-        var supplied = due.FindAll(i => i.DiscardedAt(slot));
+        var supplied = due.FindAll(i => DiscardedAt(i, slot));
         if (supplied.Count > 0)
         {
             // A wire message cannot complete a job. Fence consumption before selecting a creator or involving
@@ -2005,8 +2019,15 @@ public sealed class Worker : IScopeActivation, ITurnServices
 
     private void StartJob(Delivery ticket, CancellationToken cancellationToken)
     {
-        if (ticket.JobDeadline is { } deadline && Now >= deadline) return;
         if (!_slots.TryGetValue(Canonical(ticket.Message.Target.Id), out var loadedSlot) || !Loaded(loadedSlot) || loadedSlot.Busy) return;
+        if (ObsoleteJobAt(ticket, loadedSlot.Row))
+        {
+            ticket.Cancel?.Cancel();
+            ticket.Ticket = false;
+            ticket.Key = null;
+            return; // the next fenced dispatch drops the obsolete ticket
+        }
+        if (ticket.JobDeadline is { } deadline && Now >= deadline) return;
         if (loadedSlot.Row is not { Status: InstanceStatus.Running } || CreationProtocol.TargetError(loadedSlot.Row, ticket.Message) is not null)
         {
             // An entered driver of this occurrence retains its completion path until explicit cancellation.
@@ -2731,11 +2752,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
     {
         if (unit.Row is not { } row) return;
         var tickets = _items.Values.Where(i => !i.Durable && i.Key is not null && Canonical(i.Message.Target.Id) == unit.Instance).ToList();
-        var keys = tickets.Select(i => i.Key!).ToHashSet(StringComparer.Ordinal);
+        var keys = tickets.Select(i => new JobRegistration(i.Key!, i.Message.JobGeneration)).ToHashSet();
         if (row.Jobs is { } jobs)
         {
-            var remaining = DurableKeyJson.ReadKeys(jobs).Where(k => !keys.Contains(k)).ToList();
-            unit.Row = row with { Jobs = remaining.Count == 0 ? null : DurableKeyJson.WriteKeys(remaining) };
+            var remaining = JobRegistry.Read(jobs).Where(job => !keys.Contains(job)).ToList();
+            unit.Row = row with { Jobs = JobRegistry.Write(remaining) };
         }
         foreach (var ticket in tickets)
         {
@@ -2857,7 +2878,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         {
             _behind.Remove(item.Message.InboxKey);
             Forget(item);
-            if (_slots.TryGetValue(Canonical(item.Message.Target.Id), out var empty) && item.DiscardedAt(empty) &&
+            if (_slots.TryGetValue(Canonical(item.Message.Target.Id), out var empty) && DiscardedAt(item, empty) &&
                 empty.Row is null && empty.Loaded && !empty.Busy && empty.Inbox.Count == 0 && empty.Replies.Count == 0)
                 RemoveSlot(Canonical(item.Message.Target.Id));
         }
