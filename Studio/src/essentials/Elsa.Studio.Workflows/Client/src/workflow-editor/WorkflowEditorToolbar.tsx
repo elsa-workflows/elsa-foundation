@@ -173,7 +173,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={16} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         {!props.templateMode ? props.directBpmnPublication : null}
         {!props.templateMode ? <PublishActionButton unavailableReason={props.publicationUnavailableReason} busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
-        {!props.templateMode ? <StudioButton size="sm" type="button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</StudioButton> : null}
+        {!props.templateMode ? <StudioButton size="sm" type="button" aria-label="Test Run" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={16} aria-hidden="true" /> Test Run</StudioButton> : null}
         <StudioButton size="sm"
           ref={triggerRef}
           type="button"

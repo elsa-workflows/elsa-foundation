@@ -1865,7 +1865,7 @@ if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture &&
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || classicVariant || scalarInputsFixture || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || searchParams.get("mode") === "decision-grid" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
+  if (darkVariant || classicVariant || searchParams.get("mode") === "compensation-scope" || scalarInputsFixture || searchParams.get("mode") === "connections" || searchParams.get("mode") === "decision-inputs" || searchParams.get("mode") === "decision-grid" || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture || publicationReviewFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);

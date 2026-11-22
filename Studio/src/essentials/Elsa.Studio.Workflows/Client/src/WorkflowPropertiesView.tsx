@@ -173,6 +173,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   if (!options) {
     return (
       <StudioField label={ariaLabel}><input
+        aria-label={ariaLabel}
         type="text"
         disabled={disabled}
         value={value}
@@ -188,7 +189,7 @@ function PickerCell({ value, options, placeholder, allowEmpty, ariaLabel, disabl
   const grouped = groups.length > 0;
 
   return (
-    <StudioField label={ariaLabel}><select value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} disabled={disabled} onChange={event => onChange(event.target.value)}>
       {allowEmpty ? <option value="">{placeholder ?? "—"}</option> : null}
       {/* An alias the descriptor list doesn't know about is preserved but shown as an unresolved, disabled option. */}
       {!hasValue ? <option value={value} disabled>{value} (unresolved)</option> : null}
@@ -218,7 +219,7 @@ function CollectionKindCell({ value, ariaLabel, onChange }: {
   onChange(kind: CollectionKind): void;
 }) {
   return (
-    <StudioField label={ariaLabel}><select value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
+    <StudioField label={ariaLabel}><select aria-label={ariaLabel} value={value} onChange={event => onChange(event.target.value as CollectionKind)}>
       {collectionKinds.map(kind => <option key={kind} value={kind}>{collectionKindLabels[kind]}</option>)}
     </select></StudioField>
   );
