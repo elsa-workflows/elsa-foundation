@@ -1893,7 +1893,7 @@ const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
   // Toast, bell and sheet styles live in the shared primitives sheet; load it only where they render.
-  if (moveDefinitionsFixture || dictionaryFixture || folderRestructureFixture || versionChangeFixture || searchParams.get("mode") === "incident-diagnostics") await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
+  if (reusableBoundaryFixture || moveDefinitionsFixture || dictionaryFixture || folderRestructureFixture || versionChangeFixture || searchParams.get("mode") === "incident-diagnostics") await import("../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css");
   if (searchParams.get("mode") === "intrinsic-labels") {
     const { IntrinsicLabelsFixture } = await import("./intrinsicLabelsFixture");
     root.render(<IntrinsicLabelsFixture />);

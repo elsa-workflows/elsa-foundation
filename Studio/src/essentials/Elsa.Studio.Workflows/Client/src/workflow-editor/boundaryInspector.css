@@ -74,44 +74,6 @@
   justify-content: space-between;
 }
 
-.wf-boundary-pane-tabs {
-  display: inline-flex;
-  min-width: 0;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  background: var(--studio-surface-muted);
-}
-
-.wf-boundary-pane-tabs [role="tab"] {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  border-radius: var(--studio-radius-sm);
-  background: transparent;
-  color: var(--studio-text-muted);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-  padding: 5px 10px;
-}
-
-.wf-boundary-pane-tabs [role="tab"][data-selected="true"] {
-  background: var(--studio-surface);
-  color: var(--studio-text);
-  box-shadow: var(--studio-shadow-sm, none);
-}
-
-.wf-boundary-pane-tabs small {
-  color: var(--studio-text-muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-
 .wf-boundary-controls > a {
   min-width: 0;
   overflow-wrap: anywhere;

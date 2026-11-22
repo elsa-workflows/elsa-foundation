@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 import { SecretFormField } from "./SecretFormField";
 import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
@@ -22,18 +21,17 @@ interface CreateSecretFormProps {
 
 /** Retained for contextual creation hosts; collection navigation uses the standalone form page. */
 export function CreateSecretDialog(props: CreateSecretFormProps) {
-  const dialogRef = useRef<HTMLElement>(null);
+  const initialField = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
-  useDialogFocus(dialogRef, busy ? null : props.onCancel);
   const { onStateChange } = props;
   const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
-  return <div className="secrets-modal secrets-create-backdrop"><section ref={dialogRef} className="secrets-create-dialog" role="dialog" aria-modal="true" aria-label="New secret" tabIndex={-1}>
-    <header className="secrets-create-header"><h3>New secret</h3></header>
-    <CreateSecretForm {...props} onStateChange={report} />
-  </section></div>;
+  return <StudioDialog open title="New secret" onClose={props.onCancel} dismissDisabled={busy} dismissOnOutsideClick={false}
+    initialFocusRef={initialField} className="secrets-create-shell">
+    <CreateSecretForm {...props} initialField={initialField} onStateChange={report} />
+  </StudioDialog>;
 }
 
-export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, scopeCatalogError = false, onRetryScopeCatalog, onCancel, onSave, onStateChange }: CreateSecretFormProps) {
+export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, scopeCatalogError = false, onRetryScopeCatalog, onCancel, onSave, onStateChange, initialField }: CreateSecretFormProps & { initialField?: React.RefObject<HTMLElement | null> }) {
   const initialTypeName = descriptors.types[0]?.name ?? "";
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -54,7 +52,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
   const [focusRequest, setFocusRequest] = useState<{ field: string }>();
   const formRef = useRef<HTMLFormElement>(null);
   const initiallyFocused = useRef(false);
-  useLayoutEffect(() => { if (!initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>('[data-secret-field="name"]')?.focus(); } }, []);
+  useLayoutEffect(() => { if (!initialField && !initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>('[data-secret-field="name"]')?.focus(); } }, [initialField]);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const descriptionInputId = useId();
   const scopeMatchingHintId = useId();
@@ -88,7 +86,10 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
   }
   const fieldChanged = () => { setInvalid(""); setInvalidField(""); };
   const fieldError = (field: string) => invalidField === field ? invalid : undefined;
-  return <form ref={formRef} className="secrets-create-form secrets-tabbed-form" aria-busy={submitting} noValidate onSubmit={event => void submit(event)} onChange={fieldChanged}>
+  return <form ref={element => {
+    formRef.current = element;
+    if (initialField) initialField.current = element?.querySelector<HTMLElement>('[data-secret-field="name"]') ?? null;
+  }} className="secrets-create-form secrets-tabbed-form" aria-busy={submitting} noValidate onSubmit={event => void submit(event)} onChange={fieldChanged}>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     {invalid ? <p className="secrets-field-error" role="alert">{invalid}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={submitting}>
@@ -132,7 +133,7 @@ export function CreateSecretForm({ descriptors, scopeCatalogLoading = false, sco
       </> }}
     </SecretEditorTabs>
     </fieldset>
-    <StudioDialogFooter className="secrets-dialog-actions secrets-create-actions" onCancel={onCancel} cancelDisabled={submitting} confirmLabel={submitting ? "Creating..." : "Create"} confirmDisabled={submitting} />
+    <StudioDialogFooter className="secrets-dialog-actions secrets-create-actions" onCancel={onCancel} cancelDisabled={submitting} confirmLabel={submitting ? "Creating…" : "Create"} confirmDisabled={submitting} />
   </form>;
 }
 
@@ -152,11 +153,10 @@ export function RotateSecretDialog({
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const dialogRef = useRef<HTMLDivElement>(null);
+
   const isConfiguration = secret.storeName === "configuration";
   const type = descriptors?.types.find(item => item.name === secret.typeName);
   const canSubmit = isConfiguration ? configurationKey.trim().length > 0 : value.length > 0;
-  useDialogFocus(dialogRef, submitting ? null : onCancel);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -180,9 +180,10 @@ export function RotateSecretDialog({
   }
 
   return (
-    <div ref={dialogRef} className="secrets-modal" role="dialog" aria-modal="true" aria-label="Rotate secret" tabIndex={-1}>
-      <form onSubmit={event => void submit(event)}>
-        <h3>Rotate {secret.name}</h3>
+    <StudioDialog open title="Rotate secret" description={secret.name} className="secrets-rotate-shell" onClose={onCancel}
+      dismissDisabled={submitting} dismissOnOutsideClick={false} onSubmit={event => void submit(event)}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={submitting} confirmLabel={submitting ? "Rotating…" : "Rotate"}
+        confirmDisabled={!canSubmit || submitting} />}>
         {error ? <p className="secrets-alert">{error}</p> : null}
         <p className="secrets-field-hint">Rotation replaces the backing material or configuration lookup. The current value is never shown.</p>
         {isConfiguration ? (
@@ -191,15 +192,7 @@ export function RotateSecretDialog({
           <SecretValueField label="New value" value={value} typeName={secret.typeName} editorHint={type?.editorHint ?? null} onChange={setValue} />
         )}
         <StudioField label="Expires"><input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></StudioField>
-        <StudioDialogFooter
-          className="secrets-dialog-actions"
-          onCancel={onCancel}
-          cancelDisabled={submitting}
-          confirmLabel={submitting ? "Rotating..." : "Rotate"}
-          confirmDisabled={!canSubmit || submitting}
-        />
-      </form>
-    </div>
+    </StudioDialog>
   );
 }
 

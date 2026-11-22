@@ -1895,7 +1895,7 @@ test("Activity Definition publication keeps first and later recommendation seman
 });
 
 async function openPublicationVersion(dialog: Locator) {
-  await dialog.locator("summary").filter({ hasText: /^Version$/ }).click();
+  await dialog.getByRole("button", { name: "Version", exact: true }).click();
   return dialog.getByRole("textbox", { name: "Publication version" });
 }
 
@@ -1952,7 +1952,13 @@ test("reusable activity Run Overview stays readable with keyboard disclosures at
   await page.keyboard.press("Enter");
   await expect(technical).toHaveAttribute("open", "");
   await expect(technical.getByText("activity-def-browser", { exact: true })).toBeVisible();
-  await internals.getByRole("tab", { name: "Definition", exact: true }).click();
+  await internals.getByRole("tab", { name: "Steps", exact: true }).focus();
+  await page.keyboard.press("End");
+  const definitionTab = internals.getByRole("tab", { name: "Definition", exact: true });
+  await expect(definitionTab).toBeFocused();
+  await expect(internals.getByRole("tabpanel", { name: "Definition", exact: true })).toBeVisible();
+  await definitionTab.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("activity-boundary-tabs.png") });
   await expect(internals.getByRole("link", { name: "View activity definition" })).toBeVisible();
 
   const technicalWidth = await technical.evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth }));
@@ -1973,7 +1979,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   const version = await openPublicationVersion(page.getByRole("dialog", { name: "Review & publish" }));
   await version.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
-  await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Published Browser graph activity 2.0.0" })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
   const journey = await mockReusableBoundaryJourney(page);
@@ -2103,6 +2109,10 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   expect(rowGeometry.rowHeights.every(height => height === 88)).toBe(true);
   expect(rowGeometry.rowTops.slice(1).every((top, index) => top - rowGeometry.rowTops[index]! === 88)).toBe(true);
   expect(rowGeometry.overlappingRows).toBe(0);
+  // Return to the responsive inspector after exercising the fixed-width stress case.
+  await internals.evaluate(element => {
+    for (const property of ["width", "max-width", "box-sizing"]) (element as HTMLElement).style.removeProperty(property);
+  });
   await longRow.focus();
   await page.keyboard.press("ArrowDown");
   await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeFocused();
