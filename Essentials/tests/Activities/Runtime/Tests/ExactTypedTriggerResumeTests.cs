@@ -47,7 +47,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         await SaveBookmarkAsync();
         var capture = StimulusResumeRecipient.From((await _bookmarkStateStore.ObserveAsync("wfexec-1", "bookmark-1"))!,
             (await _exactWorkflowStates.FindAsync("wfexec-1"))!, ExactScope);
-        var original = NewResumeWorkItem(input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)), triggerDelivery: Delivery(type, "dedupe-42"));
+        var original = NewResumeWorkItem(input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ApprovalTrigger(true)), triggerDelivery: Delivery(type, "dedupe-42"));
         var payload = original.Payload!.Value.Deserialize<RuntimeResumeBookmarkCommandPayload>()!;
         var capturedPayload = new RuntimeResumeBookmarkCommandPayload(payload.PinnedExecutable, payload.BookmarkId,
             payload.ActivityExecutionId, payload.ExecutableNodeId, payload.ResumeTargetId, payload.StimulusType, payload.StimulusHash,

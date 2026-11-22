@@ -1357,3 +1357,5 @@ static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.opera
 static Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate.operator ==(Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? left, Elsa.Workflows.Publishing.Core.Models.EvaluatedPublicationCandidate? right) -> bool
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView.Warnings.init -> void
+Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Workflows.Publishing.Core.Models.WorkflowExecutableCompileRequest.Warnings.init -> void

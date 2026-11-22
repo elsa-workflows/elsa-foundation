@@ -280,7 +280,7 @@ public sealed class EventTriggerStimulusProviderTests
         var request = new ActivityResumeRequest(
             DirectContext(),
             new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventWaitState))),
-            JsonSerializer.SerializeToElement(new EventWaitState("order-shipped")),
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new EventWaitState("order-shipped")),
             new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(EventReceived))),
             JsonDocument.Parse(triggerJson).RootElement.Clone(),
             registrationId: "registration-1",
