@@ -54,7 +54,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
     const formRow = page.getByRole("row").filter({ hasText: "purchase-form-with-a-long-identifier" });
     await expect(formRow).toContainText("Published · v1");
-    const createForm = page.getByRole("button", { name: "New form", exact: true });
+    const createForm = page.locator(".studio-page-header").getByRole("button", { name: "New form", exact: true });
     await expect(createForm).toBeVisible();
     expect(await createForm.evaluate(button => button.scrollWidth <= button.clientWidth)).toBe(true);
     expect((await createForm.boundingBox())!.height).toBeLessThan(48);
