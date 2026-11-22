@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"]) {
       await expect(page.getByRole("tab", { name: "Drafts", exact: true })).toHaveAttribute("aria-selected", "true");
       await page.getByRole("button", { name: "Open editor", exact: true }).click();
       await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
-      await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+      await page.getByRole("link", { name: /^activity definitions$/i }).click();
       await expect(page.getByRole("row", { name: "Open Activity Definition Browser graph activity" })).toBeVisible();
     });
   }
@@ -306,7 +306,7 @@ for (const theme of ["light", "dark"]) {
     await mockActivityDraftManagement(page, { sourceOwned: true });
     await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
     const header = page.locator(".ad-workbench .studio-page-header");
-    await expect(header.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    await expect(header.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i })).toBeEnabled();
     await expect(header.locator(".ad-primary-action")).toHaveCount(0);
     await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
   });
@@ -577,10 +577,10 @@ test("Activity Definitions restores each collection origin through real browser 
 
   await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
-  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await page.getByRole("link", { name: /^activity definitions$/i }).click();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
   const firstAppReturn = requests.length;
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(firstAppReturn).some(request => request.search === "first-origin" &&
     request.limit === "50" && request.cursor === firstCursor)).toBe(true);
   await expect(page).not.toHaveURL(/cursor=/);
@@ -591,7 +591,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await expect.poll(() => requests.some(request => request.search === "second-origin" && request.cursor === secondCursor)).toBe(true);
   await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
-  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await page.getByRole("link", { name: /^activity definitions$/i }).click();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
 
   let requestStart = requests.length;
@@ -599,7 +599,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
   await page.goBack();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
     request.limit === "50" && request.cursor === secondCursor)).toBe(true);
 
@@ -609,7 +609,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goBack();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("first-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
     request.limit === "50" && request.cursor === firstCursor)).toBe(true);
 
@@ -619,7 +619,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goForward();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
     request.limit === "50" && request.cursor === secondCursor)).toBe(true);
 
@@ -722,7 +722,7 @@ test("Activity Definitions retains confirmed rows when refresh fails and keeps e
   try {
     await page.goto("/?mode=activity-definitions");
     await expect(page.getByText("Invoice evaluator")).toBeVisible();
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     const initialPresentation = await refresh.evaluate(button => {
       const style = getComputedStyle(button);
       const bounds = button.getBoundingClientRect();
@@ -787,7 +787,7 @@ test("Activity Definition search keeps result positions stable while requests ar
 
     await search.fill("missing");
     await missingRequestStarted;
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     await expect(refresh).toBeEnabled();
     await expect(refresh).not.toHaveAttribute("aria-busy", "true");
     await refresh.click();
@@ -4218,7 +4218,7 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?mode=activity-definitions&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     const tools = page.locator(".ad-tools-disclosure > summary");
     const advanced = page.locator(".ad-advanced-filters > summary");
     expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);
