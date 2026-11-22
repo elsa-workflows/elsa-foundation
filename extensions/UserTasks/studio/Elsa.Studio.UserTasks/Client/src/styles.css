@@ -9,7 +9,7 @@
 .user-task-detail-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--studio-space-2); }
 .user-task-description { color: var(--studio-text-muted); line-height: 1.6; white-space: pre-wrap; }
 .user-task-form-editor { width: 100%; min-width: 0; }
-.user-task-detail :is(fieldset), .user-task-form-editor, .user-task-field-author { padding: var(--studio-space-4); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); min-width: 0; }
+.user-task-detail :is(fieldset), .user-task-field-author { padding: var(--studio-space-4); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); min-width: 0; }
 .user-task-detail { min-width: 0; max-width: 64rem; display: grid; gap: var(--studio-space-4); overflow-wrap: anywhere; }
 .user-task-fields, .user-task-field { display: grid; gap: .5rem; }
 .user-task-field { margin-block: .75rem; }
@@ -56,7 +56,7 @@
 .user-task-assignment-or { display: flex; align-items: center; gap: var(--studio-space-2, .5rem); color: var(--studio-text-muted); }
 .user-task-assignment-or::before, .user-task-assignment-or::after { height: 1px; flex: 1; background: var(--studio-border); content: ""; }
 
-.user-task-form-editor { display: flex; box-sizing: border-box; min-height: min(78vh, 58rem); flex: 1 1 0; flex-direction: column; padding: 0; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); margin: 0; background: var(--studio-surface); overflow: hidden; }
+.user-task-form-editor { display: flex; box-sizing: border-box; min-height: min(78vh, 58rem); flex: 1 1 0; flex-direction: column; padding: 0; margin: 0; overflow: hidden; }
 .user-tasks--editing { height: 100%; min-height: calc(100dvh - 8rem); gap: 0; overflow: hidden; }
 .user-task-form-editor > .studio-alert { flex: 0 0 auto; margin: var(--studio-space-2) var(--studio-space-4) 0; }
 .user-task-form-editor > .user-task-designer { min-height: 0; flex: 1 1 0; }
@@ -64,7 +64,7 @@
 .user-task-form-autosave { display: inline-flex; align-items: center; gap: var(--studio-space-1); min-height: var(--studio-control-height); color: var(--studio-text-muted); white-space: nowrap; }
 .user-task-form-page-header--editing { min-height: 2.5rem; flex: 0 0 auto; align-items: center; padding: var(--studio-space-1) var(--studio-space-4); }
 .user-task-form-page-header--editing .studio-page-header-copy { flex-basis: auto; }
-.user-task-form-page-header--editing :is(h1, h2) { font-size: var(--studio-label-size); }
+.user-task-form-page-header--editing :is(h1, h2) { overflow-wrap: anywhere; }
 .user-task-form-page-header--workspace { min-height: 3rem; align-items: center; }
 .user-task-form-page-header--workspace .studio-page-header-copy { flex-basis: auto; }
 .user-task-form-page-header--workspace :is(h1, h2) { font-size: var(--studio-section-title-size); }

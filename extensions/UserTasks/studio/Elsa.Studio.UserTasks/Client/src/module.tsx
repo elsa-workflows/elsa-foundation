@@ -11,6 +11,13 @@ import { builtInTaskFieldControls } from "./fieldControls";
 import { ActionsEditor, AssignmentEditor, FormEditor } from "./PropertyEditors";
 import { basicProvider, taskCapability } from "./taskApi";
 import "./styles.css";
+function FormRoute({ api, navigate, detail = false }: { api: ElsaStudioModuleApi; navigate(path: string): void; detail?: boolean }) {
+  const location = useStudioRouteLocation();
+  let id: string | undefined;
+  try { if (detail) id = decodeURIComponent(location.pathname.split("/").at(-1) ?? ""); }
+  catch { return <StudioResultState tone="danger" title="Invalid form address" description="Open Task forms and select a form to continue." />; }
+  return <FormsPage key={id ?? "collection"} api={api} formId={id} navigate={navigate} />;
+}
 function DetailRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
   let id: string;
@@ -29,7 +36,8 @@ export function register(api: ElsaStudioModuleApi) {
       { title: "Task forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
     ], requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
     routes: [
-      { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: () => <FormsPage api={api} /> },
+      { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} /> },
+      { id: "user-tasks.form", path: "/user-tasks/forms/:formId", label: "Task form", requiresBackend: taskCapability, workspace: { resourceKey: location => location.pathname }, component: ({ navigate }) => <FormRoute api={api} navigate={navigate} detail /> },
       { id: "user-tasks.detail", path: "/user-tasks/:id", label: "Task", requiresBackend: taskCapability, workspace: { resourceKey: location => { try { return `user-task:${decodeURIComponent(location.pathname.split("/").at(-1) ?? "")}`; } catch { return null; } } }, component: ({ navigate }) => <DetailRoute api={api} navigate={navigate} /> },
       { id: "user-tasks", path: "/user-tasks", label: "User tasks", requiresBackend: taskCapability, component: ({ navigate }) => <TasksPage api={api} navigate={navigate} /> }
     ] });

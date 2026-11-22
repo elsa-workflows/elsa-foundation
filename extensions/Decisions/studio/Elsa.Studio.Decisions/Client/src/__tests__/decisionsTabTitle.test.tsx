@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudioWorkspaceTabProvider, type StudioWorkspaceTabHandle } from "@elsa-workflows/studio-sdk";
 import { DecisionsPage, type DecisionsPageProps } from "../DecisionsPage";
-import { asset, button, click, render, stubApi, type } from "./helpers";
+import { beginDecision, asset, button, click, render, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mountInTab(props: Omit<DecisionsPageProps, "navigate">) {
@@ -23,6 +23,7 @@ describe("Decisions workspace tab titles", () => {
   });
   it("names an unsaved decision New decision, then the saved decision's name once it is opened", async () => {
     const api = stubApi(), { host, setTitle, navigate, update } = mountInTab({ api, isNew: true });
+    await beginDecision();
     api.backend.http.postJson.mockResolvedValue({ ...asset, name: "Purchase approval" } as never);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(setTitle).toHaveBeenLastCalledWith({ title: "New decision", detail: undefined });

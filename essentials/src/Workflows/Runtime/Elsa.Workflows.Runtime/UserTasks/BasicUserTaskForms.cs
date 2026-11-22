@@ -19,7 +19,7 @@ internal sealed class BasicUserTaskForms : IUserTaskFormProvider
     public void ValidateDefinition(UserTaskForm form)
     {
         if (form.Provider != Provider || string.IsNullOrWhiteSpace(form.Id) || string.IsNullOrWhiteSpace(form.Version) ||
-            string.IsNullOrWhiteSpace(form.Name) || form.Id.Length > 256 || form.Version.Length > 128 || form.Fields is null || form.Fields.Any(x => x is null) || form.Fields.Count > 100 ||
+            string.IsNullOrWhiteSpace(form.Name) || form.Id.Length > 256 || form.Version.Length > 128 || form.Description is { Length: > 2000 } || form.Fields is null || form.Fields.Any(x => x is null) || form.Fields.Count > 100 ||
             form.Fields.Select(x => x.Key).Distinct(StringComparer.Ordinal).Count() != form.Fields.Count)
             throw Invalid("The form identity, version and unique fields are required (maximum 100 fields).");
         foreach (var field in form.Fields)
