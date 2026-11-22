@@ -456,7 +456,7 @@
                                     "collectionKind": "single"
                                   },
                                   "options": {},
-                                  "capabilityProfile": "binding-pure-v1",
+                                  "capabilityProfile": "binding-readonly-v1",
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
@@ -633,7 +633,7 @@
                                 "collectionKind": "single"
                               },
                               "options": {},
-                              "capabilityProfile": "binding-pure-v1",
+                              "capabilityProfile": "binding-readonly-v1",
                               "parameters": {
                                 "message": {
                                   "kind": "WorkflowRequest",
@@ -1338,7 +1338,7 @@
                                     "collectionKind": "single"
                                   },
                                   "options": {},
-                                  "capabilityProfile": "binding-pure-v1",
+                                  "capabilityProfile": "binding-readonly-v1",
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
@@ -1531,7 +1531,7 @@
                                 "collectionKind": "single"
                               },
                               "options": {},
-                              "capabilityProfile": "binding-pure-v1",
+                              "capabilityProfile": "binding-readonly-v1",
                               "parameters": {
                                 "message": {
                                   "kind": "WorkflowRequest",
@@ -2393,7 +2393,7 @@
                                     "collectionKind": "single"
                                   },
                                   "options": {},
-                                  "capabilityProfile": "binding-pure-v1",
+                                  "capabilityProfile": "binding-readonly-v1",
                                   "parameters": {
                                     "message": {
                                       "kind": "WorkflowRequest",
@@ -2636,7 +2636,7 @@
                                 "collectionKind": "single"
                               },
                               "options": {},
-                              "capabilityProfile": "binding-pure-v1",
+                              "capabilityProfile": "binding-readonly-v1",
                               "parameters": {
                                 "message": {
                                   "kind": "WorkflowRequest",

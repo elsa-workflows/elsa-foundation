@@ -229,8 +229,8 @@
         {
           "referenceKey": "value",
           "name": "Value",
-          "type": "Elsa.Any",
-          "typeName": "Elsa.Any",
+          "type": "Any",
+          "typeName": "Any",
           "displayName": "Value",
           "order": 1,
           "isBrowsable": true,
@@ -286,8 +286,8 @@
         {
           "referenceKey": "value",
           "name": "Value",
-          "type": "Elsa.Any",
-          "typeName": "Elsa.Any",
+          "type": "Any",
+          "typeName": "Any",
           "displayName": "Value",
           "order": 1,
           "isBrowsable": true,

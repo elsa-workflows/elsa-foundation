@@ -21,11 +21,11 @@ try {
     ctx.catalog.push(...["flowchart", "bpmn"].map(key => ({ ...descriptor(key, versions[key]), ports: [{ name: "Done", type: "outcome", referenceKey: "Done" }] })));
     ctx.capabilities.storageDriverKeys = ["elsa.json"];
     ctx.capabilities.types.forEach(type => { type.compatibleStorageDriverKeys = ["elsa.json"]; });
-    ctx.expressionBoundary = { revision: "explicit-args-closed-boundary-v1", allows: preservesJavaScriptWithAddedVariable };
+    ctx.expressionBoundary = { revision: "explicit-args-closed-boundary-v2", allows: preservesJavaScriptWithAddedVariable };
     ctx.sourceKey = `qualification:${kind}:${parameter ? "parameter" : "direct"}`;
     const block = ctx.document.rootActivity.structure.payload.activities[0];
     block.activityVersionId = kind;
-    const read = parameter ? { expressionType: "JavaScript", value: { language: "JavaScript", source: "args.message", resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1", parameters: { message: { kind: "WorkflowRequest", memberKey: "Greeting" } } } } : { expressionType: "Input", value: { referenceKey: "greeting" } };
+    const read = parameter ? { expressionType: "JavaScript", value: { language: "JavaScript", source: "args.message", resultType: { alias: "String", collectionKind: "single" }, options: {}, capabilityProfile: "binding-readonly-v1", parameters: { message: { kind: "WorkflowRequest", memberKey: "Greeting" } } } } : { expressionType: "Input", value: { referenceKey: "greeting" } };
     const assign = { nodeId: "assign", activityVersionId: "set", inputs: [{ referenceKey: "value", value: read }], outputs: [], intrinsic: { kind: "set", valueType: { alias: "String", collectionKind: "Single" }, variable: { referenceKey: "local", declaringScopeId: "block" } } };
     const show = { nodeId: "show", activityVersionId: "write", inputs: [{ referenceKey: "text", value: { expressionType: "Variable", value: { referenceKey: "local", declaringScopeId: "block" } } }], outputs: [] };
     block.structure = { kind: `elsa.${kind === "bpmn" ? "bpmn" : kind}.structure`, schemaVersion: "1.0.0", payload: {

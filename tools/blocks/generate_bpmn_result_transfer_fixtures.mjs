@@ -34,7 +34,7 @@ try {
     // Object syntax preserves numeric JSON for Inline's Object input; Literal scalars are text at that boundary.
     const producer = node("producer", loop ? "Variable" : "Object", loop ? { referenceKey: "counter" } : 42);
     const consumer = node("consumer", parameter ? "JavaScript" : "ActivityResult", parameter ? {
-      language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+      language: "JavaScript", source: "args.prior + 1", resultType: { alias: "Object", collectionKind: "single" }, options: {}, capabilityProfile: "binding-readonly-v1",
       parameters: { prior: { kind: "ActivityResult", producerNodeId: "producer", projectionKey: "$result" } }
     } : read);
     const answer = { nodeId: "answer", activityVersionId: "elsa.intrinsic.set-output@1", intrinsic: { kind: "setOutput", valueType: { alias: "Elsa.Any", collectionKind: "single" } }, outputs: [],
@@ -54,7 +54,7 @@ try {
     const scope = [];
     if (loop) {
       const increment = { nodeId: "increment", activityVersionId: "elsa.intrinsic.set@1", inputs: [{ referenceKey: "value", value: argument("JavaScript", {
-        language: "JavaScript", source: "args.counter + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-pure-v1",
+        language: "JavaScript", source: "args.counter + 1", resultType: { alias: "Int32", collectionKind: "single" }, options: {}, capabilityProfile: "binding-readonly-v1",
         parameters: { counter: { kind: "Variable", declaringScopeNodeId: "workflow", variableKey: "counter" } }
       }) }], outputs: [],
         intrinsic: { kind: "set", valueType: { alias: "Elsa.Any", collectionKind: "single" }, variable: { referenceKey: "counter" } } };
