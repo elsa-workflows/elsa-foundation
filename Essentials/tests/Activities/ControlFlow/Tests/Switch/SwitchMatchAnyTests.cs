@@ -125,6 +125,23 @@ public sealed class SwitchMatchAnyTests
     }
 
     [Fact]
+    public async Task A_successful_body_with_empty_outcome_selection_still_counts_toward_all_selected_bodies()
+    {
+        await using var harness = NewHarness();
+        var run = await harness.RunAsync(Executable(SwitchModes.MatchAny, true, true, true,
+            new Dictionary<string, ExecutableNode>
+            {
+                ["a"] = WorkflowExecutionHarness.NewProbeNode("empty-selection", []),
+                ["c"] = WorkflowExecutionHarness.NewProbeNode("ordinary")
+            }));
+        run.AssertCompleted("empty-selection");
+        Assert.Empty(run.State("empty-selection").Completion!.OutcomeNames);
+        run.AssertOutcomes("switch", "Approved", "Audit", "Notify");
+        run.AssertDidNotRun("fallback");
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
     public void MatchAny_bodies_reject_reserved_Done_before_publication()
     {
         using var provider = StructureProvider();

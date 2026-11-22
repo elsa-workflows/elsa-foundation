@@ -1,6 +1,6 @@
 # Validation guide: Switch MatchAny case activities
 
-Run after spec agreement/merge in the separate implementation checkout. This proposal contains no runtime code and claims no passing runtime or UX acceptance.
+Run in the isolated S-12 checkout. The coordinator approved the prepared requirements and directed implementation in the same PR #5410. Evidence remains in that PR; a command listed here is not a claim that it passed.
 
 ## Prerequisites
 

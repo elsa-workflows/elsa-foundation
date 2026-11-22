@@ -40,7 +40,10 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeVisible();
   }
   async function returnToOwner() {
-    await page.getByRole("button", { name: "Root", exact: true }).click();
+    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    // A primitive is selected in the current canvas; a container creates a navigable scope crumb.
+    const root = page.getByRole("button", { name: "Root", exact: true });
+    if (await root.count()) await root.click();
     await selectOwner();
   }
   async function open() {
@@ -70,7 +73,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     return stored();
   }
   async function configureBody(text: string) {
-    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await page.getByRole("complementary", { name: "Inspector panel", exact: true }).getByRole("tab", { name: "Inputs", exact: true }).click();
     const row = page.locator(".wf-property-row").filter({ has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ }) });
     const editor = row.getByRole("textbox").first();
     await editor.fill(text); await editor.press("Tab");

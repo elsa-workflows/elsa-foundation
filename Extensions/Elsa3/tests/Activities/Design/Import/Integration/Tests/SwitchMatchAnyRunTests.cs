@@ -53,22 +53,87 @@ public sealed class SwitchMatchAnyRunTests
         Assert.Equal(new[] { "a", "c", "empty" }, Assert.Single(completed.Activities, item => item.Execution.ExecutableNodeId == "route").Completion!.OutcomeNames);
     }
 
+    [Fact]
+    public async Task Done_mapping_after_multiple_case_bodies_keeps_one_default_join_and_a_dead_path()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var source = Source("MatchAny", true, true);
+        var route = source["root"]!["activities"]![0]!.DeepClone();
+        JsonObject Connection(string port, string target) => new()
+        {
+            ["source"] = new JsonObject { ["activity"] = "route", ["port"] = port },
+            ["target"] = new JsonObject { ["activity"] = target, ["port"] = "In" }, ["vertices"] = new JsonArray()
+        };
+        source["root"] = Activity("root", "Elsa.Flowchart", ("activities", new JsonArray(route,
+            Activity("joined", "Elsa.WriteLine", ("text", Literal("joined once"))),
+            Activity("dead", "Elsa.WriteLine", ("text", Literal("never"))))),
+            ("connections", new JsonArray(Connection("Done", "joined"), Connection("b", "dead"))));
+        var run = await host.RunAsync(await ImportAndPublish(host, source));
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Workflow?.Status);
+        Assert.Empty(run.Incidents);
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "joined");
+        Assert.DoesNotContain("dead", run.ExecutedNodeIds);
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "a");
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "c");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Proven_safe_Break_ports_or_case_local_loops_leave_the_other_selected_wait_running(bool localLoop)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync(withScheduling: true);
+        var source = Source("MatchAny", true, true);
+        var cases = source["root"]!["activities"]![0]!["cases"]!.AsArray();
+        cases[0]!["activity"] = localLoop
+            ? Activity("a", "Elsa.While", ("condition", Literal("true", "Boolean")), ("body", Activity("inner-break", "Elsa.Break")))
+            : Activity("a", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Ordinary');")),
+                ("possibleOutcomes", Literal("[\"Break\",\"Ordinary\"]", "List<String>")));
+        cases[2]!["activity"] = Activity("c", "Elsa.Delay", ("timeSpan", Literal("00:00:05", "TimeSpan")));
+        var workflow = await ImportAndPublish(host, source);
+        var executionId = await host.ExecuteAsync(workflow);
+        var waiting = await host.WaitForAsync(executionId, state => state.Activities.Any(item => item.Execution.ExecutableNodeId == "c" && item.Status == ActivityExecutionStatus.Suspended)
+            && state.Activities.Any(item => item.Execution.ExecutableNodeId == "a" && item.Status == ActivityExecutionStatus.Completed));
+        Assert.DoesNotContain("after", waiting.ExecutedNodeIds);
+        Assert.NotEqual(ActivityExecutionStatus.Completed, Assert.Single(waiting.Activities, item => item.Execution.ExecutableNodeId == "route").Status);
+        var completed = await host.WaitForSettledAsync(executionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, completed.Workflow?.Status);
+        Assert.Empty(completed.Incidents);
+        Assert.Single(completed.Activities, item => item.Execution.ExecutableNodeId == "after");
+    }
+
+    [Fact]
+    public async Task Converted_Finish_in_a_selected_body_keeps_workflow_terminal_without_running_Sequence_successor()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var source = Source("MatchAny", true, true);
+        source["root"]!["activities"]![0]!["cases"]![0]!["activity"] = Activity("a", "Elsa.Finish");
+        var run = await host.RunAsync(await ImportAndPublish(host, source));
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Workflow?.Status);
+        Assert.DoesNotContain("after", run.ExecutedNodeIds);
+        Assert.NotEqual(ActivityExecutionStatus.Completed, Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "route").Status);
+    }
+
     [Theory]
     [InlineData("activity")]
     [InlineData("script")]
+    [InlineData("computed")]
     [InlineData("nested-label")]
     [InlineData("Break")]
     [InlineData("Done")]
     public async Task Incompatible_control_outcomes_are_refused_at_the_import_boundary(string form)
     {
-        await using var host = await Elsa3ImportHost.StartAsync();
+        await using var host = await Elsa3ImportHost.StartAsync(withScheduling: true);
         var source = Source("MatchAny", true, true);
+        source["root"]!["activities"]![0]!["cases"]![2]!["activity"] = Activity("c", "Elsa.Delay", ("timeSpan", Literal("00:00:05", "TimeSpan")));
         var first = source["root"]!["activities"]![0]!["cases"]![0]!;
         if (form is "Break" or "Done") first["label"] = form;
         else first["activity"] = form switch
         {
             "activity" => Activity("unsafe", "Elsa.Break"),
             "script" => Activity("unsafe", "Elsa.RunJavaScript", ("script", Literal("setOutcome('Break');"))),
+            "computed" => Activity("unsafe", "Elsa.RunJavaScript", ("script", Literal("const name = 'Break'; setOutcome(name);")),
+                ("possibleOutcomes", Literal("[\"Break\"]", "List<String>"))),
             _ => Activity("unsafe", "Elsa.Switch", ("cases", new JsonArray(new JsonObject
             {
                 ["label"] = "Break", ["condition"] = Literal("true", "Boolean"),

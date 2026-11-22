@@ -31,4 +31,4 @@
 
 ## Notes
 
-This is an author quality check, not coordinator agreement. The spec's Approved status is the prepared final record required by the initiative workflow; the draft PR still requires human agreement and the pre-merge gate. Runtime/Studio acceptance remains not run until implementation.
+This author quality check preceded the coordinator's explicit approval, recorded on PR #5410. Implementation now proceeds in that same PR under the scoped follow-up. Runtime/Studio acceptance and final review/integration gates remain separate; remove this terminal checklist once implementation acceptance is complete.

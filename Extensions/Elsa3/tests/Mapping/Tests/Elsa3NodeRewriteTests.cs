@@ -2,6 +2,10 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Models;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
+using Elsa3.Mapping.Contracts;
+using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Mappings;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 
@@ -321,6 +325,44 @@ public sealed class Elsa3NodeRewriteTests
             new { label, condition = new { expression = new { type = "Literal", value = "true" } }, activity = Port(body) }
         });
         return node;
+    }
+
+    [Fact]
+    public async Task An_outer_loop_does_not_make_an_escaping_case_Break_faithful()
+    {
+        var owner = MatchAnyCase(Activity("body", "Elsa.Break"));
+        var loop = Activity("outer", "Elsa.While", ("condition", Literal("true", "Boolean")), ("body", Port(owner)));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", loop)));
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Acme.PossibleBreak", false)]
+    [InlineData("Acme.SendInvoice", true)]
+    public async Task Alias_outcomes_are_checked_after_catalog_resolution(string type, bool safe)
+    {
+        var catalog = RealActivityCatalog.CreateWith(typeof(PossibleBreakAliasActivity).Assembly);
+        var result = await ConversionServices.ConvertAsync(catalog,
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(Activity("body", type)))));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("Break", false)]
+    [InlineData("Ordinary", true)]
+    public async Task Exact_replacement_outcomes_are_checked_after_effective_resolution(string outcome, bool safe)
+    {
+        await using var provider = ConversionServices.Create(RealActivityCatalog.Create());
+        await using var scope = provider.CreateAsyncScope();
+        var source = ConversionServices.Definition(Sequence("root", MatchAnyCase(Activity("body", "Acme.Reference"))));
+        var result = await scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>().ConvertAsync(new Elsa3ConversionRequest(source,
+            replacements: new Dictionary<string, Elsa3ActivityExactReplacement> { ["body"] = new("replacement-version", [],
+                new HashSet<string>(), new HashSet<string> { outcome }) }));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Theory]
