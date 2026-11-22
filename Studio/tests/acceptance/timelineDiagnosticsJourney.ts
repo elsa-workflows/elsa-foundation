@@ -116,14 +116,28 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     restarts.push(receipt); await signIn(); return receipt;
   };
   const openOwner = async (id: string, eventId: string, tab: "Journal" | "Bookmarks") => {
+    const ownerId = (await history(id)).items.find(item => item.historyEventId === eventId)?.activityExecutionId;
+    expect(ownerId, "The recorded event has an exact activity owner").toBeTruthy();
     await page.goto(`/workflows/instances/${id}?view=timeline&historyEvent=${encodeURIComponent(eventId)}`);
     await waitCapturedPlaybackReady(page);
-    await page.getByRole("region", { name: "History event details", exact: true }).getByRole("button", { name: "Inspect owning execution →", exact: true }).click();
-    await page.getByRole("tablist", { name: "Activity execution views", exact: true }).getByRole("tab", { name: tab, exact: true }).click();
+    await page.getByRole("region", { name: "History event details", exact: true }).getByRole("button", { name: "Inspect owning execution →", exact: true }).click({ timeout: 30_000 });
+    await expect(page).toHaveURL(url => url.searchParams.get("selected") === ownerId, { timeout: 30_000 });
+    const views = page.getByRole("tablist", { name: "Activity execution views", exact: true });
+    await expect(views).toBeVisible({ timeout: 30_000 });
+    // Exact-owner navigation can retain the previous inspector while its scope resolves.
+    // Its occurrence controls can also disappear when a singleton read settles.
+    for (const text of ["Resolving execution scope…", "Loading recorded executions…"]) {
+      await expect(page.getByText(text, { exact: true })).toHaveCount(0, { timeout: 30_000 });
+    }
+    await waitCapturedPlaybackReady(page);
+    const target = views.getByRole("tab", { name: tab, exact: true });
+    await frame(target);
+    await target.click({ timeout: 30_000 });
+    await expect(target).toHaveAttribute("aria-selected", "true", { timeout: 30_000 });
   };
   const openLifecycle = async (id: string, eventId: string) => {
     await openOwner(id, eventId, "Bookmarks");
-    await page.getByRole("region", { name: "Activity bookmark history", exact: true }).getByRole("button", { name: "View lifecycle →", exact: true }).click();
+    await page.getByRole("region", { name: "Activity bookmark history", exact: true }).getByRole("button", { name: "View lifecycle →", exact: true }).click({ timeout: 30_000 });
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
     await expect(lifecycle).toBeVisible();
     await expect(lifecycle.getByText("Loading exact bookmark lifecycle…", { exact: true })).toHaveCount(0);
