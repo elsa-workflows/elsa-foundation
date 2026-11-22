@@ -29,7 +29,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
         if (!SupportsFoundationOperator(row) || row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
-            return (row.ParkRecovery is null || row.Status == Durable.InstanceStatus.Running) &&
+            return (row.ParkRecovery is null || row.Status == Durable.InstanceStatus.Running || row.Children is not null || row.Jobs is not null) &&
                 store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
@@ -99,7 +99,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         {
             if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && draining.ParkDiscard.DeletesAtComplete)
                 return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
-            return RefuseDuringDiscard(input, draining);
+            return RefuseDuringResolution(input, draining);
         }
         if (message.Kind == Contract.Kinds.Terminate &&
             input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
@@ -113,7 +113,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return TakeOverEndedRecovery(input, endedForDelete, terminateDelete.Selection, thenDelete: true);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
-            return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
+            return RefuseDuringResolution(input, recovering);
         if (message.CascadeOrigin && !Durable.CreationProtocol.MatchesCascadeParent(input.Row, message))
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "WrongParent");
         if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
