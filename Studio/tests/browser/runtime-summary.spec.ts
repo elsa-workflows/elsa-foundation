@@ -12,7 +12,7 @@ for (const appearance of [{ preset: "classic", mode: "light" }, { preset: "class
     // #4903 replaced the "Latest test run" heading with a compact status and outcome line.
     await expect(panel.locator(".wf-runtime-status-outcome .wf-runtime-outcome")).toBeVisible();
     await expect(panel.getByText("Waiting triggers", { exact: true })).toBeHidden();
-    await expect(panel.getByRole("button", { name: "Copy Artifact ID", exact: true })).toBeHidden();
+    await expect(panel.getByRole("button", { name: "Copy Executable ID", exact: true })).toBeHidden();
     await expect(panel.getByRole("link", { name: "View artifact", exact: true })).toHaveAttribute("href", /\/workflows\/executables\/artifact-7e88b5cd7828-exact-very-long-reference-for-copy\?backend=test-backend$/);
     await panel.getByRole("button", { name: "Open run", exact: true }).click();
     await expect(page.getByLabel("Opened run", { exact: true })).toHaveText("run-exact-14qxVV6LzBr");
@@ -21,10 +21,10 @@ for (const appearance of [{ preset: "classic", mode: "light" }, { preset: "class
     const disclosure = panel.getByRole("button", { name: "Technical details", exact: true });
     await disclosure.focus(); await disclosure.press("Enter");
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const copy = panel.getByRole("button", { name: "Copy Artifact ID", exact: true });
+    const copy = panel.getByRole("button", { name: "Copy Executable ID", exact: true });
     await copy.focus(); await copy.press("Enter");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("artifact-7e88b5cd7828-exact-very-long-reference-for-copy");
-    await expect(panel.getByRole("status").filter({ hasText: "Artifact ID copied" })).toBeVisible();
+    await expect(panel.getByRole("status").filter({ hasText: "Executable ID copied" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await panel.screenshot({ path: test.info().outputPath("runtime-summary-expanded.png") });
     await page.addScriptTag({ content: axe.source });

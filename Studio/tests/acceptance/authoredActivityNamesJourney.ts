@@ -2,7 +2,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
 
-/** Real saved presentation, immutable publication, and run evidence on the owned composed host. */
+/** Real saved presentation, immutable publication, and run data on the owned composed host. */
 export async function authoredActivityNamesJourney(page: Page, info: TestInfo, capture: Capture) {
   const backend = process.env.ELSA_WORKBENCH_URL!;
   async function api<T>(route: string, method = "GET", data?: unknown): Promise<T> {

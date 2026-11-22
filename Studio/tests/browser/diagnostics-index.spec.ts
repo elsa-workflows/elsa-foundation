@@ -5,7 +5,7 @@ const destinations = [
   ["Structured logs", "/diagnostics/structured-logs"],
   ["OpenTelemetry", "/diagnostics/open-telemetry"],
   ["Database audit", "/diagnostics/audit"],
-  ["Runtime evidence settings", "/workflows/runtime-diagnostics"]
+  ["Runtime diagnostics", "/workflows/runtime-diagnostics"]
 ] as const;
 
 for (const theme of ["light", "dark"] as const) {

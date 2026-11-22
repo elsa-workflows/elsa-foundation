@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { notifyStudioNavigationGuardReleased, studioNavigationRequestedEvent, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceTitle, useStudioWorkspaceWhenActive, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioResultState } from "@elsa-workflows/studio-ui";
 import { CreateSecretForm } from "./SecretDialogs";
 import { SecretDetail } from "./SecretDetail";
 import { createSecret, getSecret, getSecretDescriptors, updateSecret } from "./secretsApi";
@@ -76,7 +75,8 @@ export function SecretEditorPage({ api, name, navigate }: { api: ElsaStudioModul
   useEffect(() => { if (!formState.dirty && !formState.busy) notifyStudioNavigationGuardReleased(); }, [formState]);
   const accepted = (title: string, origin: number) => { if (origin === lifetime.current && mounted.current && workspace?.isActive() !== false) api.notifications?.notify({ level: "success", title }); phase.current.accepted = true; phase.current.dirty = false; notifyStudioNavigationGuardReleased(); };
   return <StudioPage role="region" className="secrets-shell secrets-editor-page" aria-label={name ? "Edit secret" : "New secret"}>
-    <StudioPageHeader title={name ? "Edit secret" : "New secret"} actions={<StudioButton variant="ghost" disabled={formState.busy} onClick={() => void leave()}><ArrowLeft size={16} aria-hidden />Back to secrets</StudioButton>} />
+    <StudioShellBreadcrumbs items={[{ label: "Secrets", onClick: () => void leave(), disabled: formState.busy }]} current={name ? "Edit secret" : "New secret"} />
+    <StudioPageHeader title={name ? "Edit secret" : "New secret"} />
     {error ? <StudioAlert tone="danger">{error}<StudioButton disabled={loading} onClick={() => setRevision(value => value + 1)}>Retry secret options</StudioButton></StudioAlert> : null}
     {!data ? loading ? <p role="status">Loading secret editor…</p> : <StudioResultState title="Secret editor unavailable" description={error} />
       : name && data.secret ? <SecretDetail notifications={api.notifications} copyScope={scope} key={data.secret.id} secret={data.secret} descriptors={data.descriptors} presentation="page" onStateChange={onStateChange}

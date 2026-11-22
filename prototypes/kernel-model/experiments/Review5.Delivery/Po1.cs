@@ -20,6 +20,8 @@ enum PoRules { Reviewed, Repaired, Negative }
 sealed class Po1(string variant, PoRules rules)
 {
     private const int MaxAttempts = 3;              // WorkerOptions.MaxAttempts default
+    // This fixture holds the recovery state itself. The store reserves the real drain for a checkpoint transition.
+    private const string ModeledDrainKind = "experiment.drain";
     private static readonly InstanceRef Self = new("0/subject");
     private static readonly TimeSpan LeaseFor = TimeSpan.FromMilliseconds(10);
     public static readonly string[] Variants = ["cohort", "open", "ordinary"];
@@ -120,8 +122,8 @@ sealed class Po1(string variant, PoRules rules)
             _releasedBy[_j] = (1, 1); _releasedBy[_r] = (1, 1);
             if (variant == "open")
             {
-                var c = ModeledTicket.Issue(new Message($"{CreationProtocol.Origin(Self.Id, 1)}#drain.950", Self, Fr2.DrainKind,
-                    Json.Write(new { Generation = 1 }), Self.Id, TargetCreation: 1, SenderCreation: 1).AsIssued());
+                var c = new Message($"{CreationProtocol.Origin(Self.Id, 1)}#drain.950", Self, ModeledDrainKind,
+                    Json.Write(new { Generation = 1 }), Self.Id, TargetCreation: 1, SenderCreation: 1).AsIssued();
                 await Commit([new TurnCommit(Self.Id, null, null, [], [], [c], [], [], null)]);
                 _store.Messages[c.InboxKey].Seq = 950;
                 _c = c.InboxKey;
@@ -151,7 +153,7 @@ sealed class Po1(string variant, PoRules rules)
     private bool Cohort(InboxKey key) => _releasedBy.ContainsKey(key) && _store.Messages.ContainsKey(key) && !_store.Messages[key].Done &&
         _store.Messages[key].Message.Kind is not (Kinds.Job or Kinds.Meet or Kinds.Publish);
     private bool CohortContext => _drainOpen || _mark;
-    private static bool IsControl(string kind) => Kinds.IsControl(kind) || kind == Fr2.DrainKind;
+    private static bool IsControl(string kind) => Kinds.IsControl(kind) || kind == ModeledDrainKind;
     private bool Due(Stored s) => (s.Message.Due ?? 0) <= _now;
 
     /// <summary>Worker.cs 705–707: an exhausted input that is not a result and not a control.</summary>
@@ -245,13 +247,13 @@ sealed class Po1(string variant, PoRules rules)
     {
         var key = item.Message.InboxKey;
         _memory.Remove(key);
-        if (item.Message.Kind == Fr2.DrainKind && !_drainOpen)
+        if (item.Message.Kind == ModeledDrainKind && !_drainOpen)
         {
             await Commit([new TurnCommit(Self.Id, null, null, [key], [], [], [], [], null)]);
             _report.Line("C: no open resolution (the re-park interrupted the drain); consumed");
             return;
         }
-        if (item.Message.Kind == Fr2.DrainKind)
+        if (item.Message.Kind == ModeledDrainKind)
         {
             // The final page found no row; it completes when gate row R is taken up (FR-1's gate): consumed, or seen at this
             // epoch and not an untried suspect. Otherwise it waits.
@@ -259,8 +261,8 @@ sealed class Po1(string variant, PoRules rules)
             var takenUp = gate is null || gate.Done || gate.Seen == _lease.Epoch && !_suspects.Contains(_r);
             if (!takenUp)
             {
-                var retryMessage = ModeledTicket.Issue(new Message(item.Message.Id + "'", Self, Fr2.DrainKind, item.Message.Payload,
-                    Self.Id, Due: _now + 3, TargetCreation: 1, SenderCreation: 1).AsIssued());
+                var retryMessage = new Message(item.Message.Id + "'", Self, ModeledDrainKind, item.Message.Payload,
+                    Self.Id, Due: _now + 3, TargetCreation: 1, SenderCreation: 1).AsIssued();
                 await Commit([new TurnCommit(Self.Id, null, null, [key], [], [retryMessage], [], [], null)]);
                 Once($"C: gate row R not taken up (an untried suspect); C sends a retry due 3 ms later");
                 return;

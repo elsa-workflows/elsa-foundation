@@ -148,7 +148,7 @@ test("uses the advertised legacy forms contract for published form access and di
 
   await rows.first().getByRole("button", { name: "Open form contact" }).click();
   await expect(page.getByRole("region", { name: "Published form", exact: true })).toContainText("Published version 1");
-  await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
   await page.getByRole("button", { name: "Create form version", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("feedback");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Feedback form");

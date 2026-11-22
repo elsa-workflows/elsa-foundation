@@ -34,8 +34,8 @@ for (const mode of ["light", "dark"] as const) {
     }
 
     await page.setViewportSize({ width: 1440, height: 900 });
-    await row.getByRole("button", { name: "Copy Artifact ID", exact: true }).click();
-    await expect(row.getByRole("status")).toHaveText("Artifact ID copied");
+    await row.getByRole("button", { name: "Copy Executable ID", exact: true }).click();
+    await expect(row.getByRole("status")).toHaveText("Executable ID copied");
     await expect(page).toHaveURL(listUrl);
     const identifierTrigger = row.getByRole("button", { name: /^Identifiers for / });
     await identifierTrigger.click();

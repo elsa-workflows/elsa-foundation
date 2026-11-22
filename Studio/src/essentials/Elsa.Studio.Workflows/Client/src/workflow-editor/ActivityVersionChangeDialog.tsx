@@ -173,7 +173,7 @@ export function ActivityVersionChangeDialog({
             </label>
           </fieldset>
 
-          {diff.isPending || target.isPending ? <p role="status">Loading authoritative compatibility evidence…</p> : null}
+          {diff.isPending || target.isPending ? <p role="status">Loading compatibility details…</p> : null}
           {diff.data && impact ? (
             <>
               <section className="wf-version-change-section" aria-labelledby="version-compatibility-title">
@@ -219,7 +219,7 @@ export function ActivityVersionChangeDialog({
           ) : null}
 
           {versions.isError || target.isError || diff.isError ? (
-            <p className="wf-publication-recovery" role="alert">Authorized exact-version evidence could not be loaded. Try the review again.</p>
+            <p className="wf-publication-recovery" role="alert">The version details could not be loaded. Retry the review.</p>
           ) : null}
           {error ? <p className="wf-publication-recovery" role="alert">{error}</p> : null}
 

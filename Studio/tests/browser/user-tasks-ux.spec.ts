@@ -42,10 +42,10 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("task-detail.png"), fullPage: true });
     page.once("dialog", dialog => dialog.dismiss());
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).press("Enter");
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).press("Enter");
     await expect(detail.getByRole("textbox", { name: "Note" })).toHaveValue("Reviewed with keyboard");
     page.once("dialog", dialog => dialog.accept());
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).press("Enter");
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).press("Enter");
     await expect(detail).toHaveCount(0); await expect(link).toBeFocused();
     await page.goto(`/user-tasks-ux.html?forms&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No reusable forms yet", exact: true })).toBeVisible();
@@ -54,9 +54,9 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
     const formRow = page.getByRole("row").filter({ hasText: "purchase-form-with-a-long-identifier" });
     await expect(formRow).toContainText("Published · v1");
-    const createForm = page.getByRole("button", { name: "New form", exact: true });
+    const createForm = page.locator(".studio-page-header").getByRole("button", { name: "New form", exact: true });
     await expect(createForm).toBeVisible();
-    expect((await createForm.boundingBox())!.width).toBeGreaterThan(90);
+    expect(await createForm.evaluate(button => button.scrollWidth <= button.clientWidth)).toBe(true);
     expect((await createForm.boundingBox())!.height).toBeLessThan(48);
     const formActions = formRow.getByRole("button", { name: "Actions for Purchase response", exact: true });
     await expect(formActions).toBeVisible();
@@ -184,14 +184,14 @@ for (const width of [360, 1440]) {
 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(page.getByText("1 form shown", { exact: true })).toBeVisible();
     await expect(row.getByRole("button", { name: "Unsaved designer copy", exact: true })).toBeFocused();
     await openFormAction(page, row, "Edit");
     await versionsTab.click();
     await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Back to forms", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(row).toContainText("Published · Draft");
     await expect(page.getByRole("table", { name: "Reusable task forms" }).locator("tbody tr")).toHaveCount(1);
   });
@@ -241,7 +241,7 @@ test("legacy form pages add history without adding duplicate collection rows", a
   await expect(history).not.toContainText("Travel details");
   await history.getByRole("button", { name: "Select version 1", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByText("2 forms shown", { exact: true })).toBeVisible();
   await expect(newsletter.getByRole("button", { name: "Open form newsletter-signup", exact: true })).toBeFocused();
@@ -265,7 +265,7 @@ test("read-only form readers can inspect published versions", async ({ page }) =
   await page.getByRole("tab", { name: "Versions", exact: true }).click();
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Back to forms", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 });
 
@@ -296,7 +296,7 @@ test("a standalone task retains an unconfirmed response and prevents leaving unt
   await detail.getByRole("textbox", { name: /^Note/ }).fill("Keep this exact response");
   await detail.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(detail.getByRole("button", { name: "Retry Approve", exact: true })).toBeVisible();
-  await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeDisabled();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeDisabled();
   await detail.getByRole("button", { name: "Task actions", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Reassign task", exact: true })).toBeDisabled();
   await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
