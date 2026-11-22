@@ -108,6 +108,9 @@ public static class CreationProtocol
         return row?.Creation > 0 ? "IdentityRequired" : null;
     }
 
+    internal static bool MatchesCascadeParent(InstanceRow? row, Message message) =>
+        row?.Parent is { } parent && message.Sender == parent && message.SenderCreation == row.ParentCreation;
+
     public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason)
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status, CreationRefused = true };

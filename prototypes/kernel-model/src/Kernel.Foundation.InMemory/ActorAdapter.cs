@@ -87,6 +87,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
+        if (message.CascadeOrigin && !Durable.CreationProtocol.MatchesCascadeParent(input.Row, message))
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "WrongParent");
         if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
             return OpenDiscard(input);
         if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)

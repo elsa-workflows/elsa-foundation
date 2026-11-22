@@ -97,6 +97,86 @@ internal static class CommandAuthorityChecks
 
     private sealed record Children(Contract.ActorRef Ended, Contract.ActorRef Running);
 
+    internal static async Task RunCascade(Action<bool, string> check)
+    {
+        const long now = 1_701_400_010_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("cascade-origin");
+        var actor = new Probe();
+        var emitted = new List<Message>();
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed) emitted.AddRange(batch.Turns.SelectMany(turn => turn.Sent));
+        });
+        Contract.IIngress ingress = new InMemoryIngress(store, new Requests("cascade"), "cascade");
+        var worker = new Worker("cascade", 0, wire, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var parentRef = await Start("parent");
+        var foreignRef = await Start("foreign");
+        await Pump();
+        var parent = Row(parentRef);
+        var foreign = Row(foreignRef);
+        var children = Json.Read<Children>(parent.State);
+        var child = Row(children.Running);
+        var target = new InstanceRef(child.Id);
+        var wrongIssuer = new Message("wrong-parent", target, Kinds.Terminate, Sender: foreign.Id,
+            TargetCreation: child.Creation, SenderCreation: foreign.Creation).AsIssued().AsCascadeTerminate();
+        var invalidSend = wrongIssuer with { Id = "copied-mark" };
+        var wrongGeneration = new Message("wrong-issuer-generation", target, Kinds.Terminate, Sender: foreign.Id,
+            TargetCreation: child.Creation, SenderCreation: foreign.Creation + 1).AsIssued().AsCascadeTerminate();
+        var fence = worker.Fences.Single();
+        foreach (var malformed in new[] { invalidSend, wrongGeneration })
+        {
+            var refused = false;
+            try { await SendRaw(malformed); }
+            catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+            check(refused && !store.Messages.ContainsKey(malformed.InboxKey),
+                "the store refuses a cascade without its original issuer or exact sender creation");
+        }
+        check((await SendRaw(wrongIssuer)).Landed, "a valid kernel envelope can reach a child whose recorded parent differs");
+        await Pump();
+        check(Row(children.Running) == child && !store.Messages.ContainsKey(wrongIssuer.InboxKey),
+            "the real Worker consumes a cascade from an unrelated creation without entering or ending the child");
+
+        var stale = new Message("stale-parent", target, Kinds.Terminate, Sender: parent.Id,
+            TargetCreation: child.Creation, SenderCreation: parent.Creation - 1).AsIssued().AsCascadeTerminate();
+        // An older issuer's durable send is already present when the child owner reads the inbox.
+        store.Messages.Add(stale.InboxKey, new(stale, long.MaxValue - 1, 0));
+        await Pump();
+        check(Row(children.Running) == child && !store.Messages.ContainsKey(stale.InboxKey),
+            "a matching parent address with a stale creation cannot terminate the child");
+
+        var second = Row(children.Ended);
+        var outside = new Message("outside", new(second.Id), Kinds.Terminate, Sender: foreign.Id,
+            TargetCreation: second.Creation, SenderCreation: foreign.Creation).AsIssued().AsCascadeTerminate();
+        await store.AddAsync(outside);
+        check(store.Messages[outside.AsOrdinary().InboxKey].Message is { CascadeOrigin: false, InboxScope: 0 },
+            "ordinary ingress resets a cascade mark and its issued scope");
+        await Pump();
+        check(Row(children.Ended).Status == InstanceStatus.Cancelled, "the ordinary terminate keeps its existing authority");
+
+        await ingress.SendAsync(scope, new Contract.Target.Ref(parentRef), "cancel-tree", "cancel-tree");
+        await Pump();
+        check(Row(children.Running).Status == InstanceStatus.Cancelled && emitted.Any(message => message is
+            { Kind: Kinds.Terminate, CascadeOrigin: true } && message.Target == target && message.Sender == parent.Id &&
+            message.SenderCreation == parent.Creation && message.TargetCreation == child.Creation),
+            "the real terminal turn marks its descendant send and the recorded child obeys it");
+
+        ValueTask<Committed> SendRaw(Message message) => store.CommitAsync(new(fence.Partition, fence.Epoch, fence.Position,
+            Defaults.Lease, false, [new(foreign.Id, null, null, [], [], [message], [], [], null)], [], []));
+        InstanceRow Row(Contract.ActorRef reference) => store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row;
+        async Task<Contract.ActorRef> Start(string typeData) => (await ingress.SendAsync(scope,
+            new Contract.Target.Start(new(actor.Type, typeData)), typeData, Contract.Kinds.Start)).Actor!.Value;
+        async Task Pump()
+        {
+            for (var i = 0; i < 20; i++)
+            {
+                await owner.WokenAsync(null);
+                await owner.RunAsync();
+            }
+        }
+    }
+
     private sealed class Probe : Contract.IActorType
     {
         public string Type => "command-authority";
@@ -116,6 +196,9 @@ internal static class CommandAuthorityChecks
                         break;
                     case "finish":
                         turn.End(Contract.ActorStatus.Finished);
+                        break;
+                    case "cancel-tree":
+                        turn.End(Contract.ActorStatus.Cancelled);
                         break;
                     case "cancel-children":
                         var children = Json.Read<Children>(turn.State!);

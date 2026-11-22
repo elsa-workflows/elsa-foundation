@@ -177,7 +177,7 @@ internal sealed partial class ActorAdapter
                 ended && _status == Contract.ActorStatus.Cancelled;
             if (cascades)
             {
-                foreach (var child in _children) _turn.Send(new(child.Id), Contract.Kinds.Terminate, options: new(TargetCreation: child.Creation));
+                foreach (var child in _children) _turn.CascadeTerminate(child);
                 foreach (var job in Durable.JobRegistry.Read(_turn.Jobs()))
                     CancelJob(job.Key);
             }
