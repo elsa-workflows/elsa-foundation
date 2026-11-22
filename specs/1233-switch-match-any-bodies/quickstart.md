@@ -45,6 +45,8 @@ Use equivalent commands on the permitted Linux host. Record source, executable/t
 | Elsa 3 MatchAny body surfaces native Break through activity, literal/computed script or propagated nested label | Localized UnsupportedMode refusal with bookmarked sibling; no changed-behavior publish/run | Check only Break-activity descendants or ignore aliases/replacements |
 | Ordinary If/Sequence body with declared but unreachable Break | Converts/publishes/runs without cancelling another selected wait | Reject every declared Break port blindly |
 | Ordinary script outcome or nested label other than Break | Body succeeds and owning Switch still awaits its sibling | Reject every named outcome or nested Switch indiscriminately |
+| Imported owning Switch labels Break/Done, ordinary bodies and Sequence successor | Localized refusal/rename guidance; ordinary-label control runs successor once | Check only case bodies and miss owning outward selection |
+| Native body-containing MatchAny case label Done | Draft/publication/runtime-structure rejection before invalid multiple selection | Publish and later fault on Done plus another label |
 | Elsa 3 case-local loop consumes Break | That loop ends; another selected bookmarked body remains live and is awaited | Treat every nested Break as Switch Break or blanket-refuse safe loops |
 | MatchFirst/outcome-only FlowSwitch | Existing behavior unchanged | Apply body coordination indiscriminately |
 
