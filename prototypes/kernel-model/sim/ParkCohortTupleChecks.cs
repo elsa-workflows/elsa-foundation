@@ -9,9 +9,11 @@ internal static class ParkCohortTupleChecks
     {
         await TiedCohort(poisonFirst: false, check);
         await TiedCohort(poisonFirst: true, check);
+        await TiedCohort(poisonFirst: false, check, narrow: true);
+        await TiedCohort(poisonFirst: true, check, narrow: true);
     }
 
-    private static async Task TiedCohort(bool poisonFirst, Action<bool, string> check)
+    private static async Task TiedCohort(bool poisonFirst, Action<bool, string> check, bool narrow = false)
     {
         const long initial = 1_702_610_001_000;
         const int maxAttempts = 3;
@@ -36,8 +38,9 @@ internal static class ParkCohortTupleChecks
         await Pump(first);
         await ingress.SendAsync(scope, target, "park", "fault");
         await Pump(first);
-        await ingress.SendAsync(scope, target, "first-input", "hold", "first");
-        await ingress.SendAsync(scope, target, "second-input", "hold", "second");
+        var insertionOrder = narrow ? new[] { "second", "first" } : ["first", "second"];
+        foreach (var value in insertionOrder)
+            await ingress.SendAsync(scope, target, value + "-input", "hold", value);
         await Pump(first);
         var park = (await reads.GetAsync(scope, actor))!.Selection!;
         await ingress.SendAsync(scope, target, "open", Contract.Kinds.Recover,
@@ -69,7 +72,7 @@ internal static class ParkCohortTupleChecks
         flights.Clear();
         flightsBeforePark = null;
         now++;
-        var successor = Worker("tie-successor");
+        var successor = Worker("tie-successor", narrow ? 1 : 500);
         await using var active = await Activate(successor);
         await Pump(active);
         var order = Json.Read<List<string>>(Row().State);
@@ -77,19 +80,19 @@ internal static class ParkCohortTupleChecks
         {
             check(Row().Status == InstanceStatus.Faulted && order.Count == 0 && flightsBeforePark == 0 &&
                   suspect.KeptBy == ParkKeepReason.Arrived && poison.KeptBy == ParkKeepReason.Consumed,
-                "TT-1 the earlier full tuple parks first and retains the later suspect for recovery");
+                "TT-1 the earlier full tuple parks first and retains the later suspect for recovery" + (narrow ? " with a one-row poll" : ""));
         }
         else
         {
             check(Row().Status == InstanceStatus.Faulted && order is [var tried] && tried == suspect.Message.Payload &&
                   flightsBeforePark == 1 && flights.Count == 1 && flights[0].SequenceEqual([suspect.Message.InboxKey]) &&
                   suspect is { Done: true, KeptBy: null } && poison.KeptBy == ParkKeepReason.Consumed,
-                "TT-1 the earlier full tuple takes the sole trial before the equal-sequence poison parks the actor");
+                "TT-1 the earlier full tuple takes the sole trial before the equal-sequence poison parks the actor" + (narrow ? " with a one-row poll" : ""));
         }
 
-        Worker Worker(string node) => new(node, 0, wire, new ActorAdapter(store, probe), new WorkerOptions
+        Worker Worker(string node, int pollLimit = 500) => new(node, 0, wire, new ActorAdapter(store, probe), new WorkerOptions
         {
-            Monotonic = () => now - initial, MaxAttempts = maxAttempts, TrialGroup = 1
+            Monotonic = () => now - initial, MaxAttempts = maxAttempts, TrialGroup = 1, PollLimit = pollLimit
         });
         async Task<IScopeActivation> Activate(Worker worker) => (await new DurableHost([worker]).ActivateAsync(0))!;
         InstanceRow Row() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row;

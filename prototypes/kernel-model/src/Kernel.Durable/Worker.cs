@@ -1481,9 +1481,16 @@ public sealed class Worker : IScopeActivation, ITurnServices
     /// in every poll; a poll limit of them hides the resume behind them. So it is shelved: its row is marked seen at this
     /// epoch, which moves the polls on, but it is neither on trial nor cleared to run. The next owner still suspects it.
     /// </summary>
-    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) && (WithheldByRecovery(suspect, slot) ||
-        !CohortInput(suspect, slot) && slot.CurrentRow?.ParkCohort is not null && FirstUnheldRecoveryInput(slot) is not null ||
-        Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) && CreationError(slot, suspect.Message) is null;
+    private bool Shelf(Delivery suspect) => !Has(Flaw.NoShelf) && _slots.TryGetValue(Canonical(suspect.Message.Target.Id), out var slot) &&
+        (WithheldByRecovery(suspect, slot) || WaitsForCohortHead(suspect, slot) || Withheld(slot) && !CanSettleWhileWithheld(slot, suspect)) &&
+        CreationError(slot, suspect.Message) is null;
+
+    private bool WaitsForCohortHead(Delivery item, Slot slot)
+    {
+        var cohort = CohortInput(item, slot);
+        return (cohort || slot.CurrentRow?.ParkCohort is not null) && FirstUnheldRecoveryInput(slot) is { } head &&
+            (!cohort || RecoveryOrder(item) != head);
+    }
 
     // Exhausted input blocks new physical jobs and job trials. Ordinary predecessor suspects may
     // still be fenced so an earlier due timer cannot strand the pending Park.
