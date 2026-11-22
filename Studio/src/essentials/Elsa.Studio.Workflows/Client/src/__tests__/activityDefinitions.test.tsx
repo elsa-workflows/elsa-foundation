@@ -77,7 +77,7 @@ describe("Activity Definitions experience", () => {
     expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("New activity definition");
     click(createActivity);
     await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
-    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!);
+    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')!);
     expect(buttonByText(rendered.container, "Browse built-in activities")).toBeTruthy();
 
     const tools = rendered.container.querySelector<HTMLDetailsElement>(".ad-tools-disclosure")!;
@@ -2072,7 +2072,7 @@ function renderPage(
   const render = () => <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={context} activityEditors={() => activityEditors} navigateToStudioPath={navigateToStudioPath} /></QueryClientProvider>;
   flushSync(() => root.render(render()));
   return {
-    container,
+    container: document.body,
     baseUrl,
     setBaseUrl(baseUrl: string) {
       context = { ...context, baseUrl };

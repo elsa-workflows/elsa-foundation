@@ -465,7 +465,7 @@ describe("Activity Definition authoring", () => {
     click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     expect(rendered.container.querySelector("select[name='provider']")).toBeNull();
-    expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true);
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
 
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='category']")!, "Finance");
@@ -3020,7 +3020,7 @@ function renderPage(options: {
   };
   mountedAuthoringRoots.add(unmount);
   return {
-    container,
+    container: document.body,
     unmount,
     rerender,
     queryClient

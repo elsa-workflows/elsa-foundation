@@ -72,6 +72,7 @@ export function ActivityDefinitionTestRunDialog({
   prepareExactRevision,
   onFocusDiagnostic,
   onClose,
+  restoreFocus,
   onOpenRun
 }: {
   context: StudioEndpointContext;
@@ -82,6 +83,7 @@ export function ActivityDefinitionTestRunDialog({
   prepareExactRevision(onPhase: (phase: "saving" | "validating") => void): Promise<PreparedActivityTestRunRevision | null>;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onClose(): void;
+  restoreFocus?(): void;
   onOpenRun(path: string): void;
 }) {
   const titleId = useId();
@@ -282,6 +284,7 @@ export function ActivityDefinitionTestRunDialog({
   return (
     <StudioDialog open className="ad-test-run-dialog" title={definitionLabel} onClose={onClose}
       closeLabel="Close Test Run" dismissDisabled={busy}
+      onCloseAutoFocus={restoreFocus ? event => { event.preventDefault(); restoreFocus(); } : undefined}
       description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable Runtime Evidence without publishing this Activity Definition.</>}>
 
         {preparation !== "ready" ? (

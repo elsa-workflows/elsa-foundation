@@ -270,6 +270,10 @@ export function ActivityDefinitionPublicationReview({
   const attentionTitle = publicationBlocked && hasBlockingDiagnostics ? "Publication blocked" : phase === "failed" ? preflight ? "Publication did not complete" : "Review could not be prepared"
     : publicationBlocked ? "Publication blocked" : publicationStatusLabel(phase, preflight?.isPublishable);
   const closeAllowed = phase !== "publishing" && phase !== "unknown";
+  const reviewPanelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (mode === "toolbar" && dialogOpen && !closeAllowed) reviewPanelRef.current?.focus();
+  }, [closeAllowed, dialogOpen, mode]);
   const focusDiagnostic = async (diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement) => {
     if (mode === "toolbar") {
       if (closeAllowed) setDialogOpen(false);
@@ -338,7 +342,7 @@ export function ActivityDefinitionPublicationReview({
       </footer> : null}
     </> : null;
 
-  const reviewPanel = <section className="ad-publication-review" aria-labelledby={mode === "full" ? "activity-publication-title" : undefined}>
+  const reviewPanel = <section ref={reviewPanelRef} tabIndex={mode === "toolbar" ? -1 : undefined} className="ad-publication-review" aria-labelledby={mode === "full" ? "activity-publication-title" : undefined}>
     {mode === "full" ? <header className="ad-publication-header">
       <div>{titleLevel === "h3" ? <h3 id="activity-publication-title">Review &amp; publish</h3> : <h2 id="activity-publication-title">Review &amp; publish</h2>}<p>Studio first saves the exact draft, then asks the backend for one authoritative impact and readiness projection.</p></div>
       <button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}>

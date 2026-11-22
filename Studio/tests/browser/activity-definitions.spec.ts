@@ -1107,7 +1107,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("button", { name: "Close Test Run" })).toBeFocused();
   const modalLayout = await dialog.evaluate(element => {
-    const backdrop = element.parentElement!;
+    const backdrop = document.querySelector<HTMLElement>(".studio-dialog-overlay")!;
     const dialogBounds = element.getBoundingClientRect();
     const backdropBounds = backdrop.getBoundingClientRect();
     return {
