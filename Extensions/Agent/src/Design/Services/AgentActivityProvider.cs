@@ -261,8 +261,8 @@ internal sealed class AgentActivityProvider(
                     return [new("agent-invocation-controls", ActivityVersionChangeArea.Contract, "AgentInvocationContractChanged", new(), null, null,
                         ActivityVersionChangeImpact.Breaking, ActivityVersionBump.Major, "The agent's native invocation controls or whole-result metadata changed.")];
                 if (before is not null && after is not null &&
-                    JsonElement.DeepEquals(JsonSerializer.SerializeToElement(before.InputConstraints), JsonSerializer.SerializeToElement(after.InputConstraints)) &&
-                    JsonElement.DeepEquals(JsonSerializer.SerializeToElement(before.ResultConstraints), JsonSerializer.SerializeToElement(after.ResultConstraints))) return [];
+                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.InputConstraints), JsonSerializer.SerializeToElement(after.InputConstraints)) &&
+                    Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(before.ResultConstraints), JsonSerializer.SerializeToElement(after.ResultConstraints))) return [];
             }
         }
         return [new("agent-json-constraints", ActivityVersionChangeArea.Contract, "AgentJsonConstraintsChanged", new(), null, null,

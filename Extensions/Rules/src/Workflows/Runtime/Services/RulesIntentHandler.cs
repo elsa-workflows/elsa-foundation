@@ -179,7 +179,7 @@ internal sealed class RulesIntentHandler : IRuntimePostCommitIntentHandler
             var validatedRequest = RulesNativeBoundary.ReadState(new RunRulesState(
                 RulesNativeBoundary.FormatVersion,
                 RulesNativeBoundary.Write(native.Request)));
-            if (!JsonElement.DeepEquals(
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(
                     RulesNativeBoundary.Write(validatedRequest),
                     RulesNativeBoundary.Write(native.Request)))
                 throw RulesNativeBoundary.Invalid();
@@ -304,7 +304,7 @@ internal sealed class RulesIntentHandler : IRuntimePostCommitIntentHandler
         try
         {
             var retainedRequest = RulesNativeBoundary.ReadState(activity);
-            if (!JsonElement.DeepEquals(RulesNativeBoundary.Write(retainedRequest), RulesNativeBoundary.Write(request)) ||
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(RulesNativeBoundary.Write(retainedRequest), RulesNativeBoundary.Write(request)) ||
                 RulesNativeBoundary.ReadAddress(activity) != address)
                 throw RulesNativeBoundary.Invalid();
         }

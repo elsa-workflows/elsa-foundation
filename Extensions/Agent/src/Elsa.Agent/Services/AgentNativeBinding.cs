@@ -62,7 +62,7 @@ internal sealed class AgentNativeBinding(IWorkflowExecutionStateStore workflows,
             (node.DescriptorSchemaVersion == AgentRuntimeIds.ContinuityDescriptorSchema) != AgentNativeControls.Enabled(descriptor) ||
             node.ActivityContract?.Activation.Capability != AgentRuntimeIds.FacadeCapability ||
             node.ActivityContract.DescriptorKind != AgentRuntimeIds.ConsumerKey ||
-            !JsonElement.DeepEquals(node.ActivityContract.DescriptorPayload, node.DescriptorPayload) ||
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(node.ActivityContract.DescriptorPayload, node.DescriptorPayload) ||
             !Stamped(node, "definitionId", descriptor.DefinitionId) || !Stamped(node, "definitionVersionId", descriptor.DefinitionVersionId) ||
             !Stamped(node, "version", descriptor.Version) || !Stamped(node, "templateHash", descriptor.TemplateHash) || !Stamped(node, "sourceReferenceId", descriptor.SourceReferenceId))
             throw Failure();
