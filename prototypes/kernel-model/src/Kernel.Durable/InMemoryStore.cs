@@ -313,6 +313,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     {
                         if (turn.Row is not { Retired: false, Status: InstanceStatus.Faulted } park ||
                             !turn.OpensPark && !_foundationParks.ContainsKey(new(park.Id, park.Creation)) ||
+                            kept.Values.Any(reason => reason is not (ParkKeepReason.Arrived or ParkKeepReason.Consumed)) ||
                             !kept.Keys.All(id => turn.Done.Contains(id) && !turn.Consumed.Contains(id) &&
                                 Messages.GetValueOrDefault(id) is { Done: false } selected &&
                                 selected.Message.Target.Id == park.Id && selected.Message.TargetCreation == park.Creation))
@@ -391,6 +392,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
                     var expiry = initialExpiries?.GetValueOrDefault(turn.Instance);
                     RecordFoundationMetadata(turn, stored, previous, now, expiry);
+                    if (previous?.ParkRecovery is not null && stored.ParkRecovery is null &&
+                        stored.Status == InstanceStatus.Faulted && turn.FoundationKept is { Count: > 0 })
+                        RevertFoundationRetryMarks(stored);
                     if (expiry is not null)
                     {
                         var seen = batch.HandOver ? epochs.GetValueOrDefault(expiry.Target.Partition) : 0;
@@ -414,6 +418,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
                 ApplyFoundationRecoveryPage(turn, now);
+                ApplyFoundationRetryOpen(turn.FoundationRetry);
                 ApplyFoundationTimerOpen(turn.FoundationRecoveryTimers);
                 ApplyFoundationJobOpen(turn.FoundationRecoveryJobs);
                 foreach (var id in turn.Done)

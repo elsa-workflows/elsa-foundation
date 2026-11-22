@@ -230,6 +230,7 @@ public sealed partial class InMemoryStore
             writes.UnionWith(turn.Sent.Select(message => message.InboxKey));
             writes.UnionWith(turn.FoundationRecoveryTimers?.Rearms.Select(timer => timer.Envelope.InboxKey) ?? []);
             writes.UnionWith(turn.FoundationRecoveryJobs?.Writes.Select(job => job.InboxKey) ?? []);
+            writes.UnionWith(turn.FoundationRecoveryJobs?.DeadlineRearms.Select(deadline => deadline.Envelope.InboxKey) ?? []);
         }
         foreach (var open in opens) Reserve(open);
         foreach (var step in steps)

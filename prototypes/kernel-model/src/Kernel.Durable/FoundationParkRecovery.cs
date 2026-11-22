@@ -74,7 +74,7 @@ public sealed partial class InMemoryStore
             control.Due is not null || control.KeepUntil is not null ||
             Messages.GetValueOrDefault(request) is not { Done: false, Message: { Kind: "kernel.recover" } input } ||
             input.Target.Id != next.Id || input.TargetCreation != next.Creation || input.Due > now ||
-            input.Operator is not { Selection: { } selection, RecoverMode: { } mode } ||
+            input.Operator is not { Selection: { } selection, RecoverMode: { } mode } command ||
             mode != recovery.Mode || input.Id != recovery.Operation)
             throw InvalidDrain();
 
@@ -88,21 +88,32 @@ public sealed partial class InMemoryStore
             !ParkDrainEnvelope.For(next, park).MatchesIssued(control, next, recovery.Serial, recovery.Control))
             throw InvalidDrain();
         var timers = turn.FoundationRecoveryTimers;
-        if (timers is null || timers.Dispositions != next.ParkTimerDispositions)
+        if (timers is null || timers.Dispositions != next.ParkTimerDispositions ||
+            (mode == ParkRecoveryMode.Retry) != (turn.FoundationRetry is not null))
             throw InvalidDrain();
-        var checkedTimers = PlanFoundationTimers(previous, mode, timers.Recipes);
-        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions ||
-            !checkedTimers.Rearms.SequenceEqual(timers.Rearms) || !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
+        ParkRetryOpen? retry = null;
+        if (turn.FoundationRetry is { } staged)
+        {
+            retry = PlanFoundationRetry(previous, binding.Tenant, binding.Reference, park, command.RecoverHandles, timers.Recipes);
+            if (retry is null || !retry.Marked.SequenceEqual(staged.Marked) || !retry.TimerRearms.SequenceEqual(staged.TimerRearms) ||
+                !retry.AlreadyRearmed.SequenceEqual(staged.AlreadyRearmed))
+                throw new StoreException(Failure.Unknown, "The Park's retry selection changed before recovery opened.");
+        }
+        if (recovery.AlreadyRearmed != (retry?.AlreadyRearmed.Count ?? 0)) throw InvalidDrain();
+        var checkedTimers = PlanFoundationTimers(previous, mode, timers.Recipes, retry);
+        if (checkedTimers is null || checkedTimers.Dispositions != timers.Dispositions || !checkedTimers.Rearms.SequenceEqual(timers.Rearms) ||
+            !checkedTimers.Preserved.SequenceEqual(timers.Preserved))
             throw new StoreException(Failure.Unknown, "The Park's timer rows changed before recovery opened.");
         var jobs = turn.FoundationRecoveryJobs;
         var subscriptionRecipes = turn.FoundationRecoverySubscriptions ?? [];
         if (jobs is null || jobs.Registry != next.Jobs || jobs.NextGeneration != next.NextJobGeneration || jobs.Restarts != next.ParkRestartedJobs ||
             (long)timers.Recipes.Count + jobs.Recipes.Count + subscriptionRecipes.Count > MaxRestoreWaits)
             throw InvalidDrain();
-        var checkedJobs = PlanFoundationJobs(previous, mode, jobs.Recipes, checkedTimers.Bytes);
+        var checkedJobs = PlanFoundationJobs(previous, mode, jobs.Recipes, checkedTimers.Bytes, retry);
         if (checkedJobs is null || checkedJobs.Registry != jobs.Registry || checkedJobs.NextGeneration != jobs.NextGeneration ||
             checkedJobs.Restarts != jobs.Restarts || !checkedJobs.Pending.SequenceEqual(jobs.Pending) ||
             !checkedJobs.Retained.SequenceEqual(jobs.Retained) || !checkedJobs.RecalledDeadlines.SequenceEqual(jobs.RecalledDeadlines) ||
+            !checkedJobs.DeadlineRearms.Select(WithoutAuthority).SequenceEqual(jobs.DeadlineRearms.Select(WithoutAuthority)) ||
             !checkedJobs.Writes.Select(message => message.WithoutTicketAuthority()).SequenceEqual(jobs.Writes.Select(message => message.WithoutTicketAuthority())))
             throw new StoreException(Failure.Unknown, "The Park's job rows changed before recovery opened.");
         var subscriptions = PlanFoundationSubscriptions(previous, binding.Tenant, subscriptionRecipes, checkedJobs.Bytes);
@@ -112,10 +123,13 @@ public sealed partial class InMemoryStore
         if (!turn.Consumed.SequenceEqual(recalls)) throw InvalidDrain();
         foreach (var message in jobs.Writes)
             if (!message.HasIssuedTicket || Messages.ContainsKey(message.InboxKey)) throw InvalidDrain();
+        if (jobs.DeadlineRearms.Any(rearm => !rearm.Envelope.HasIssuedTicket)) throw InvalidDrain();
         if (expiry is null) return null;
         if (now >= expiry.At)
             throw new StoreException(Failure.WindowExpired, "The Park expiry became due before recovery opened.");
         return (expiry.At, false);
+
+        static ParkTimerRearm WithoutAuthority(ParkTimerRearm row) => row with { Envelope = row.Envelope.WithoutTicketAuthority() };
     }
 
     private void ValidateRecoveryInterruption(TurnCommit turn, InstanceRow previous, IReadOnlyDictionary<int, long> epochs)
