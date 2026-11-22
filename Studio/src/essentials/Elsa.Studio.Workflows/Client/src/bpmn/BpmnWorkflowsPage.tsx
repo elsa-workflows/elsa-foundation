@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { studioRowInteraction, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioTimestamp } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, StudioRefreshControl, StudioResultState, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { evaluateBackendRequirements, qualifyStudioBackendPath, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { createBpmnRuntimeClient, type BpmnPage, type BpmnExecution, type BpmnPublication } from "../api/bpmnRuntime";
 import { WorkflowListIdentifiers } from "../workflow-editor/WorkflowListIdentifiers";
@@ -32,7 +32,7 @@ export function BpmnWorkflowsPage({ session, view, navigate }: Props) {
       <a href={qualifyStudioBackendPath("/workflows/bpmn/runs")} aria-current={view !== "processes" ? "page" : undefined} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); open("/workflows/bpmn/runs"); } }}>Runs</a>
     </nav>
     {session.disposed ? <p role="alert">This backend connection ended. Reconnect to load current BPMN state.</p>
-      : !available ? <p role="alert">BPMN navigation is unavailable on the selected backend.</p>
+      : !available ? <StudioResultState title="BPMN unavailable" description="Choose a backend with BPMN support to open processes and runs." />
         : view === "run" ? executionId ? <BpmnRunDetails key={`${client.sessionKey}:${client.scope}:${executionId}`} client={client} session={session} executionId={executionId} /> : <p role="alert">This BPMN run address is invalid.</p>
           : <BpmnCatalog key={`${client.sessionKey}:${client.scope}:${view}:${artifactId ?? ""}`} client={client} session={session} view={view} artifactId={artifactId} open={open} />}
   </section>;
@@ -54,7 +54,7 @@ function BpmnCatalog({ client, session, view, artifactId, open }: { client: Clie
     void query.fetchNextPage().catch(() => undefined).finally(() => { paging.current = false; });
   };
   return <div className="wf-bpmn-catalog">
-    <div className="wf-bpmn-actions"><StudioButton type="button" disabled={query.isFetching} onClick={() => { void queryClient.resetQueries({ queryKey, exact: true }); }}>Refresh</StudioButton>
+    <div className="wf-bpmn-actions"><StudioRefreshControl refresh={{ id: "bpmn-" + view, label: "Refresh BPMN " + view, refreshing: query.isFetching, onRefresh: () => queryClient.resetQueries({ queryKey, exact: true }) }} />
       {artifactId ? <StudioButton type="button" variant="default" onClick={() => open("/workflows/bpmn/runs")}>Show all runs</StudioButton> : null}</div>
     {view === "processes" && admission.data?.admitNewExecutions === false ? <p role="status">New starts are disabled. Existing runs can still be inspected and resumed.</p> : null}
     {view === "processes" && admission.isError ? <p role="alert">Execution availability could not be loaded: {admission.error.message}</p> : null}
