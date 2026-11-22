@@ -54,6 +54,18 @@ internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long 
 
 public sealed partial class InMemoryStore
 {
+    internal bool AuthorizesDrainingTerminate(InstanceRow row, Message message)
+    {
+        if (message.Kind != Kinds.Terminate || message.Target.Id != row.Id || message.TargetCreation != row.Creation)
+            return false;
+        if (message.Operator is { } command)
+        {
+            var identity = FoundationIdentity(row.Id, row.Creation);
+            return command.Selection is { } selection && MatchesFoundationSelection(identity.Tenant, identity.Reference, selection);
+        }
+        return message.InboxKey.HasIssuedOrigin && CreationProtocol.MatchesCascadeParent(row, message);
+    }
+
     private static bool IsParkControl(Message message) => message.Kind != Kinds.Cascade && ParkDrainEnvelope.IsInDomain(message);
 
     private (long At, bool Due)? ValidateParkDrain(TurnCommit turn, InstanceRow? previous,

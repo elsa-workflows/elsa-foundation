@@ -5,6 +5,19 @@ namespace Kernel.Foundation.InMemory;
 
 internal sealed partial class ActorAdapter
 {
+    private Durable.TurnOutcome RefuseDuringDiscard(Durable.TurnInput input, Durable.InstanceRow row)
+    {
+        var refusal = Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "ResolutionOpen");
+        if (row.Cascade is not null || !store.AuthorizesDrainingTerminate(row, input.Taken[input.From].Message)) return refusal;
+        var entries = Durable.CascadeRegistry.From(row);
+        if (entries.Count == 0) return refusal;
+
+        refusal.Row = row with { Revision = checked(row.Revision + 1) };
+        refusal.Expected = row.Revision;
+        refusal.Revision = refusal.Row.Revision;
+        return Durable.CascadeProtocol.Open(refusal, entries);
+    }
+
     private Durable.TurnOutcome OpenDiscard(Durable.TurnInput input)
     {
         var message = input.Taken[input.From].Message;
