@@ -129,6 +129,7 @@ internal static class FoundationEventSendChecks
     internal static async Task CheckPagedPublication(Action<bool, string> check)
     {
         await CheckConcurrentAdmission(check);
+        await CheckMatchOrder(check);
         await CheckPage(check, byteCut: false, loseAfter: null);
         await CheckPage(check, byteCut: true, loseAfter: null);
         await CheckPage(check, byteCut: false, loseAfter: null, largeStart: true);
@@ -136,6 +137,61 @@ internal static class FoundationEventSendChecks
         await CheckPage(check, byteCut: false, loseAfter: true);
         await CheckDeadLetter(check);
         await CheckAlreadyDeliveredPage(check);
+    }
+
+    private static async Task CheckMatchOrder(Action<bool, string> check)
+    {
+        var now = 1_702_200_020_000L;
+        var incarnation = 0;
+        var store = new InMemoryStore(2, () => now) { NewPublicationIncarnation = () => Incarnation(++incarnation) };
+        var scope = new Contract.BoundScope("publication-order");
+        var ingress = new InMemoryIngress(store, new Requests("order"), "order");
+        var events = new EventIngress(store, new Requests("publish-order"), "order");
+        var left = StartWait("left");
+        var right = StartWait("right");
+        var workers = Enumerable.Range(0, 2).Select(partition => new Worker("order", partition, store,
+            new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => 0 })).ToArray();
+        await using var firstOwner = (await new DurableHost([workers[0]]).ActivateAsync(0))!;
+        await using var secondOwner = (await new DurableHost([workers[1]]).ActivateAsync(1))!;
+        await Pump(firstOwner);
+
+        var first = EventId(0, Incarnation(1));
+        var second = EventId(1, Incarnation(2));
+        var a = await events.SendAsync(scope, new("live"), first, new string('A', 3 * 1_024 * 1_024), null);
+        now++;
+        var b = await events.SendAsync(scope, new("live"), second, "B", null);
+        check(a is { Outcome: Contract.AdmissionOutcome.Accepted, Publication.Status: Contract.PublicationStatus.Pending } &&
+            b is { Outcome: Contract.AdmissionOutcome.Accepted, Publication.Status: Contract.PublicationStatus.Pending } &&
+            !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
+            "accepted receipts precede match commits for both independent publications");
+
+        await Step(workers[0]); // A reaches left, then stops at the byte allowance.
+        await Step(workers[1]); // B reaches both waits before A can reach right.
+        await Step(workers[0]); // A reaches right.
+        await Pump(firstOwner);
+        check(PayloadOrder(left).SequenceEqual(['A', 'B']) && PayloadOrder(right).SequenceEqual(['B', 'A']),
+            "each wait observes publication match commit order across overlapping pages and independent publishers");
+
+        await ingress.SendAsync(scope, new Contract.Target.Ref(left), "relay", "send-direct-pair", right.Id);
+        await Pump(firstOwner);
+        check(PayloadOrder(right).SequenceEqual(['B', 'A', 'X', 'Y']),
+            "the same actor's direct sends to one target stay in authored FIFO order");
+
+        Contract.ActorRef StartWait(string name)
+        {
+            var target = InstanceRef.In(0, name);
+            var reference = store.AdmitFoundationStart(scope.Tenant, new Message(name, target, Kinds.Start,
+                Start: new("event-send", "live", "twice", Creation: new(1, 0, name)), TargetCreation: 1));
+            return new(reference ?? throw new InvalidOperationException("The test wait was not admitted."));
+        }
+
+        IEnumerable<char> PayloadOrder(Contract.ActorRef actor) =>
+            Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!.Row.State).Select(payload => payload[0]);
+
+        string EventId(int partition, Guid identity) => Enumerable.Range(0, 32).Select(i => $"{partition}-{i}").First(id =>
+            InstanceRef.Spread(FoundationEventIdentity.PublishId(new(scope.Tenant + "_live", id, null, now), identity), 2) == partition);
+
+        static Guid Incarnation(int id) => new(id, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private static async Task CheckConcurrentAdmission(Action<bool, string> check)
@@ -379,6 +435,13 @@ internal static class FoundationEventSendChecks
                         break;
                     case { Kind: Contract.Kinds.Event, Payload: { } input }:
                         state.Add(input);
+                        break;
+                    case { Kind: "send-direct-pair", Payload: { } target }:
+                        turn.Send(new(target), "direct-order", "X");
+                        turn.Send(new(target), "direct-order", "Y");
+                        break;
+                    case { Kind: "direct-order", Payload: { } direct }:
+                        state.Add(direct);
                         break;
                     case { Kind: "wait-remove" }:
                         turn.Unsubscribe(turn.Header.TypeData, "single");

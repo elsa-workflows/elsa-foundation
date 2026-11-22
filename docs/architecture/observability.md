@@ -1648,6 +1648,15 @@ calls one new model hook.
       before its first delivery (SB-5 run (x)). Each step is at-least-once: a step
       whose owner is lost runs again from the committed cursor, and a delivery it adds again is a duplicate by its
       digest identity. The step deadline and attempt count below apply per step.
+      - **Broadcast ordering (owner, 22 November).** Each wait receives broadcasts in match commit order.
+        Overlapping publications can commit their deliveries in different orders at different waits. The publish
+        receipt acknowledges acceptance. Direct messages retain FIFO from one sender to one target.
+        The SB-6 ordering run places two publication tickets on separate partitions. The first publication's
+        byte allowance lets it reach one wait before the second matches both. The first publication's next page
+        reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
+        that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
+        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 qualifies
+        the same interleaving on the physical providers.
       - **A byte allowance per step (proposed, sixth review R6-M4).** `P_page` counts rows, and a delivery carries
         the whole payload, so 170 deliveries of a payload at the source limit would write about 2.6 GiB in one step.
         So each match step, which pages subscriptions, and each meet step, which pages matches, writes deliveries in

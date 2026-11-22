@@ -51,6 +51,7 @@ public enum AdmissionOutcome { Accepted, Duplicate, Refused }
 public enum RefusalReason { RateLimited, NodeBusy, InboxFull, InvalidEventId, Repeat, StaleSelection }
 
 public enum PublicationStatus { Pending, Matched, DeadLettered }
+/// <summary>Acceptance and matching status. Each wait receives its broadcasts in match commit order.</summary>
 public sealed record PublicationReceipt(string CorrelationKey, string EventId, Guid Incarnation, PublicationStatus Status);
 
 public sealed record Admission(

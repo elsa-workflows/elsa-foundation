@@ -359,6 +359,12 @@ with provider encoding qualified at K4.
 | K2 qualifies the in-memory clauses of FC-1 to FC-18 assigned to it in the plan. The existing milestones keep each remaining clause and its explicit acceptance evidence. The full adapter qualification still includes all clauses and the contract workloads. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [K2 evidence](../program-goals/clean-slate-kernel.md#k2-foundation-contract-evidence) |
 | Release 1 requires cooperative cancellation for bounded in-process progress. A recovered job must physically exit before it yields poison trial isolation to eligible termination. A yield leaves the job logically pending without recording a process death. | [Owner decisions on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7069577972), [job workers](job-workers.md#what-is-built) |
 
+## Owner decision on broadcast ordering (22 November)
+
+Each wait receives broadcasts in the order their match pages commit. Two overlapping broadcasts can reach
+different waits in different orders. A publication receipt acknowledges acceptance. Direct messages retain
+FIFO from one sender to one target. [Owner decision on #4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-7080391053)
+
 ## Process
 
 | Date | Rule | Source |
