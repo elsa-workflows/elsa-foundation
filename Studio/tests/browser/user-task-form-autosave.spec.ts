@@ -10,8 +10,7 @@ const draftRequests = async (page: import("@playwright/test").Page) => page.eval
 test("enables autosave by default without writing when opening an unchanged publication", async ({ page }) => {
   await page.goto("/form-designer.html");
   const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
 
   await expect(page.getByRole("checkbox", { name: "Auto-save" })).toBeChecked();
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Contact form");
@@ -48,8 +47,7 @@ test("debounces draft saves, serializes revisions, and keeps editing during a sl
 test("pauses autosave after an error and allows an explicit retry", async ({ page }) => {
   await page.goto("/form-designer.html?save-fails");
   const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   const name = page.getByRole("textbox", { name: "Name", exact: true });
   await name.fill("Unsaved after failure");
 
@@ -110,8 +108,7 @@ test("unapplied JSON source edits are not autosaved", async ({ page }) => {
 test("guards host and browser navigation while there are unsaved local edits", async ({ page }) => {
   await page.goto("/form-designer.html");
   const row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Pending change");
 
   const prevented = await page.evaluate(() => {

@@ -10,8 +10,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await expect(rows.first()).toContainText("Contact form");
   await expect(rows.first()).toContainText("Published · v1");
 
-  await rows.first().getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await rows.first().press("Enter");
   const name = page.getByRole("textbox", { name: "Name", exact: true });
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeDisabled();
   await name.fill("Contact draft");
@@ -21,8 +20,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
 
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Published · Draft");
-  await rows.first().getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await rows.first().press("Enter");
   await expect(name).toHaveValue("Contact draft");
   await name.fill("Contact version two");
   await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -39,8 +37,7 @@ test("edits one form through shared drafts, read-only history, publication, and 
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Published · v2");
 
-  await rows.first().getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await rows.first().press("Enter");
   await name.fill("Discarded working change");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await expect(page.getByRole("button", { name: "Select Text field 1", exact: true })).toBeVisible();
@@ -74,7 +71,7 @@ test("supports keyboard row navigation and keeps the action menu isolated from t
   const actions = row.getByRole("button", { name: /^Actions for / });
 
   await actions.click();
-  await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
   await page.keyboard.press("Escape");
@@ -82,7 +79,7 @@ test("supports keyboard row navigation and keeps the action menu isolated from t
   await page.keyboard.press("Enter");
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(row.getByRole("button", { name: "Contact form", exact: true })).toBeFocused();
+  await expect(row).toBeFocused();
 });
 
 test("cancelling form deletion leaves the row and sends no request", async ({ page }) => {
@@ -116,16 +113,14 @@ test("confirmed deletion uses the current revision and removes the row only afte
 test("omits deletion for older backends and read-only users while preserving view access", async ({ page }) => {
   await page.goto("/form-designer.html?delete-unavailable");
   let row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await row.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeEnabled();
 
   await page.goto("/form-designer.html?read-only");
   row = page.getByRole("table", { name: "Task forms" }).locator("tbody tr").first();
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await expect(page.getByRole("menuitem", { name: "View", exact: true })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Delete", exact: true })).toHaveCount(0);
-  await page.getByRole("menuitem", { name: "View", exact: true }).click();
+  await expect(row.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await row.press("Space");
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeDisabled();
 });
 
@@ -147,9 +142,9 @@ test("uses the advertised legacy forms contract for published form access and di
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Contact form");
 
-  await rows.first().getByRole("button", { name: "Open form contact" }).click();
+  await rows.first().press("Enter");
   await expect(page.getByRole("region", { name: "Published form", exact: true })).toContainText("Published version 1");
-  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).click();
   await page.getByRole("button", { name: "New form", exact: true }).click();
   await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("feedback");
