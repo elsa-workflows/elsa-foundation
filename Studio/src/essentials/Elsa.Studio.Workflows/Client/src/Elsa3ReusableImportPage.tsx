@@ -1,5 +1,5 @@
 import "./elsa3Import.css";
-import { StudioButton, TechnicalDetails, StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioStepper, StudioButton, TechnicalDetails, StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useEffect,
   useMemo,
@@ -475,6 +475,11 @@ export function Elsa3ReusableImportPage({
       <StudioPageHeader headingLevel={2} title={<>Import from Elsa 3</>} titleId="elsa3-import-title" description={<>
             Import reusable activities and the workflows that use them. Each workflow keeps a reference to the imported version.
           </>} actions={<><span className="elsa3-import-safety-badge"><ShieldCheck size={16} /> Uses reusable activities directly</span></>} />
+
+      <StudioStepper label="Import progress" steps={[
+        { id: "export", label: "Select export" }, { id: "analysis", label: "Review analysis" },
+        { id: "selection", label: "Review selection" }, { id: "confirm", label: "Confirm import" }, { id: "result", label: "Results" }
+      ]} current={receipt ? "result" : reviewOpen ? "confirm" : analysis && expandedSelection.size ? "selection" : analysis ? "analysis" : "export"} />
 
       <section className="elsa3-import-callout" aria-label="Conversion contract">
         <strong>What gets imported</strong>
