@@ -1,7 +1,7 @@
-import { TechnicalDetails, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioSearchInput, TechnicalDetails, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, EyeOff, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
+import { Activity, AlertTriangle, EyeOff, Save, Shield, SlidersHorizontal, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   useActivityAvailabilityDiagnostics,
@@ -254,10 +254,8 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
                 <EyeOff size={13} />
                 Hidden only
               </StudioButton>
-              <div className="wf-search availability-search">
-                <Search size={14} />
-                <input type="search" value={search} placeholder="Filter activities…" onChange={event => setSearch(event.target.value)} />
-              </div>
+              <StudioSearchInput className="availability-search" aria-label="Filter activities" value={search}
+                placeholder="Filter activities…" onChange={event => setSearch(event.target.value)} />
             </div>
           </div>
           <div className="availability-activity-browser">

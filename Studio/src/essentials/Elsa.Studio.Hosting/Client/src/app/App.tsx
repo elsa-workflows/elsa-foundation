@@ -1,5 +1,5 @@
 import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
-import { StudioAlert, StudioButton, StudioIconButton, StudioPageHeader, StudioResultState } from "./ui";
+import { TechnicalDetails, StudioAlert, StudioButton, StudioIconButton, StudioPageHeader, StudioResultState } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -483,7 +483,13 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div> : null}
+        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <section className="studio-page">
+          <StudioPageHeader headingLevel={2} title={route.label} />
+          <StudioResultState title="Page unavailable" description={route.availability.source === "runtime"
+            ? "This page is unavailable on the selected backend." : route.availability.reason}>
+            {route.availability.source === "runtime" && route.availability.reason ? <TechnicalDetails>{route.availability.reason}</TechnicalDetails> : null}
+          </StudioResultState>
+        </section> : null}
         {!screenSettingsSurface && !RouteComponent && !builtIn ? (
           <div className="empty-state" role="status">
             {area

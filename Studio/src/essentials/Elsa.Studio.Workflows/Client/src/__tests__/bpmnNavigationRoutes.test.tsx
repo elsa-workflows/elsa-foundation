@@ -51,6 +51,7 @@ it("refuses a direct navigation whose selected backend lacks the optional capabi
     Object.defineProperty(api, "backendSession", { value: { key: "unsupported", profile: { id: "unsupported", baseUrl: api.backend.baseUrl, name: "Backend", environment: "Test", source: "configuration" },
       context: api.backend, capabilities, identity: { status: "authenticated", subject: "author", roles: [], permissions: [] }, disposed: false, pendingWrites: 0, refreshCapabilities: async () => capabilities } satisfies StudioBackendSession });
   }, false, capabilities);
-  await vi.waitFor(() => expect(page.container.textContent).toContain("BPMN navigation is unavailable"));
+  await vi.waitFor(() => expect(page.container.textContent).toContain("BPMN unavailable"));
+  expect(page.container.textContent).toContain("Choose a backend with BPMN support to open processes and runs.");
   expect(fetch).not.toHaveBeenCalled(); await page.unmount();
 });
