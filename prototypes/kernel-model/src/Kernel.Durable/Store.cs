@@ -59,6 +59,11 @@ public sealed record EventRow(
 
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     internal long FoundationOccurrence { get; init; }
+
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal Guid? FoundationIncarnation { get; init; }
+
+    internal InboxKey? FoundationPublishTicket { get; init; }
 }
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
@@ -418,9 +423,9 @@ public interface IKernelStore : IMembership
 /// <summary>A read-only event delivery. Only the event router constructs this envelope.</summary>
 public sealed class EventDelivery
 {
-    internal EventDelivery(Message message, EventMatch match, string? foundationTenant = null)
+    internal EventDelivery(Message message, string match, string? foundationTenant = null)
     {
-        Message = message.WithInboxScope(InboxKey.EventDeliveryScope, match.Encode());
+        Message = message.WithInboxScope(InboxKey.EventDeliveryScope, match);
         FoundationTenant = foundationTenant;
     }
 
@@ -431,16 +436,29 @@ public sealed class EventDelivery
 
 public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
 {
+    internal StringComparer? FoundationKeyEquality { get; init; }
+
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
     {
-        if (Event.FoundationTenant != Wait.FoundationTenant || Event.Key != Wait.Key)
+        if (Event.FoundationTenant != Wait.FoundationTenant ||
+            !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
             throw new ArgumentException("The event and wait must share their key and tenant scope.");
+        var delivery = Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo };
+        if (Event is { FoundationTenant: not null, FoundationIncarnation: { } incarnation })
+        {
+            delivery = delivery with
+            {
+                Id = FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                Payload = FoundationEventDelivery.Encode(Event, Wait, incarnation)
+            };
+            return new(delivery, FoundationEventIdentity.Match(Event, incarnation), Wait.FoundationTenant);
+        }
         var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
         {
             FoundationTenant = Wait.FoundationTenant,
             FoundationOccurrence = Event.FoundationOccurrence
         };
-        return new(Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo }, match, Wait.FoundationTenant);
+        return new(delivery, match.Encode(), Wait.FoundationTenant);
     }
 }
 
@@ -462,12 +480,23 @@ public sealed record EventMatch(
     [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     internal long FoundationOccurrence { get; init; }
 
+    internal Guid? FoundationIncarnation { get; init; }
+
     public string Encode() => Json.Write(this);
     public static EventMatch Decode(string text) => Json.Read<EventMatch>(text);
 }
 
 public static class Events
 {
+    internal static EventMatch? MatchFor(Message message)
+    {
+        if (message.Kind != Kinds.Event || message.EventMatch is not { } match) return null;
+        if (message.ProjectedEvent is { } projected) return projected;
+        return FoundationEventDelivery.HasDigest(message)
+            ? FoundationEventDelivery.ReadHeader(message, out _)
+            : EventMatch.Decode(match);
+    }
+
     /// <summary>
     /// The logical wire envelope for a match. A start carries its placement partition until the store
     /// allocates the physical target and returns it with the acceptance receipt.
@@ -484,6 +513,8 @@ public static class Events
     /// </summary>
     public static (string Event, string Wait)? Delivered(Message m)
     {
+        if (m.Kind == Kinds.Event && FoundationEventDelivery.HasDigest(m) && MatchFor(m) is { } compact)
+            return (compact.Event, compact.Wait);
         if (m.Kind == Kinds.Event && m.Start is null && m.TargetCreation is > 0 && m.Id.StartsWith("evq:", StringComparison.Ordinal))
         {
             var split = m.Id.IndexOf(':', 4);
@@ -495,11 +526,7 @@ public static class Events
             return (m.Id.Substring(start, length), m.Id[(start + length + qualifiedMarker.Length)..]);
         }
         if (m.Kind != Kinds.Event || !m.Id.StartsWith("ev:", StringComparison.Ordinal)) return null;
-        if (m.EventMatch is { } encoded)
-        {
-            var match = EventMatch.Decode(encoded);
-            return (match.Event, match.Wait);
-        }
+        if (MatchFor(m) is { } match) return (match.Event, match.Wait);
         var marker = m.Start is null ? $":{m.Target.Id}:" : "::";
         var at = m.Id.LastIndexOf(marker, StringComparison.Ordinal);
         return at < 3 ? null : (m.Id[3..at], m.Id[(at + marker.Length)..]);

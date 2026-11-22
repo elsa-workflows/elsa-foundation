@@ -780,7 +780,7 @@ describe("Incident diagnostic presentation", () => {
     const container = mounted!.container;
     click(buttonByText(container, "Open incident details"));
 
-    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const dialog = document.querySelector<HTMLElement>("[role=dialog]")!;
     const content = dialog.textContent ?? "";
     expect(content).toContain("Next step");
     expect(content.indexOf("Next step")).toBeLessThan(content.indexOf("Failure type"));
@@ -845,7 +845,7 @@ describe("Incident diagnostic presentation", () => {
     expect(trigger).toBeDefined();
     trigger!.focus();
     click(trigger);
-    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const dialog = document.querySelector<HTMLElement>("[role=dialog]")!;
     expect(dialog).not.toBeNull();
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     await new Promise(resolve => requestAnimationFrame(resolve));
@@ -861,8 +861,8 @@ describe("Incident diagnostic presentation", () => {
     } finally {
       window.removeEventListener("keydown", surroundingEscape);
     }
-    expect(container.querySelector("[role=dialog]")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });
 

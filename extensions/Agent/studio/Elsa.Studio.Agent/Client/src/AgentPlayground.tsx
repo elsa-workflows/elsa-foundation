@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
-import { FlaskConical, Play, RefreshCw, Square } from "lucide-react";
+import { FlaskConical, Play, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
@@ -176,9 +176,9 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
         compact
         title={`Draft revision ${draft.revision}`}
         description="Runs the saved revision on the production agent runtime. Unsaved editor changes are not included."
+        refresh={{ id: "agent-draft", label: "Reload draft", disabled: active, onRefresh: loadDraft }}
         actions={<>
           {navigate ? <StudioButton onClick={() => navigate(activityDefinitionPath(draft.definitionId, draft.draftId))}>Edit draft</StudioButton> : null}
-          <StudioButton aria-label="Reload draft" disabled={active} onClick={() => void loadDraft()}><RefreshCw aria-hidden="true" size={14} /> Reload draft</StudioButton>
         </>} />
 
       <form className="agent-playground__form" aria-label="Run" onSubmit={event => { event.preventDefault(); void start(); }}>

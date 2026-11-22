@@ -1,14 +1,11 @@
 /* Spec 260: the confirmation dialog for operator actions on a waiting recovery. */
-.wf-operator-dialog {
-  width: min(600px, 100%);
+.studio-dialog.wf-operator-dialog {
+  width: min(37.5rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   overflow-wrap: anywhere;
 }
 
-.wf-operator-dialog form {
-  gap: 14px;
-}
 
 .wf-operator-facts {
   display: grid;
@@ -137,11 +134,6 @@
   background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
 }
 
-.wf-operator-dialog .wf-dialog-actions button[type="submit"][data-tone="danger"] {
-  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
-  color: var(--studio-danger-fg);
-  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
-}
 
 .wf-operator-dialog :focus-visible {
   outline: 2px solid var(--studio-focus);

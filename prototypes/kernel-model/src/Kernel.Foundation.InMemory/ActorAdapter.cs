@@ -227,7 +227,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     private static Durable.InboxKey AmbientDelivery(Durable.Message message) => message.EventMatch is { } match
-        ? new(message.Target.Id, Durable.InboxKey.EventDeliveryScope, match)
+        ? new(message.Target.Id, Durable.InboxKey.EventDeliveryScope,
+            Durable.FoundationEventDelivery.HasDigest(message) ? message.EventStartAmbientKey ?? message.Id : match)
         : message.InboxKey;
 
     public ValueTask<object?> ExecuteJobAsync(string type, Durable.IJob job, CancellationToken cancellationToken)

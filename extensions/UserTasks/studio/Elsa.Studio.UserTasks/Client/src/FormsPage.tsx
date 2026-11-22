@@ -1,7 +1,7 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbs, studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
+import { StudioTimestamp, StudioShellBreadcrumbs, studioRowInteraction, SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, createForm, forms, formsPageMode, formsPageModeFromSession, message, statusOf, type FormVersion, type FormsPageMode, type TaskActor, type TaskForm } from "./taskApi";
@@ -201,7 +201,7 @@ export function LegacyFormsPage({ api }: { api: ElsaStudioModuleApi }) {
               id: version.form.version,
               ariaLabel: `Select version ${version.form.version}`,
               title: `Version ${version.form.version}`,
-              subtitle: <time dateTime={version.createdAt}>{new Date(version.createdAt).toLocaleString()}</time>,
+              subtitle: <StudioTimestamp value={version.createdAt} />,
               status: isLatest(version) ? <StatusChip tone="success">Latest</StatusChip> : undefined
             }));
           })()}

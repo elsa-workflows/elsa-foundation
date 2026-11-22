@@ -13,7 +13,7 @@ test("approves the exact pending content with the keyboard and stays resolved af
   await expect(page.getByText("Proofreader: ready to publish.")).toBeVisible();
   await expect(page.getByTestId("review-status")).toHaveText("Awaiting your decision");
 
-  await page.getByLabel("Comment (optional)").focus();
+  await page.getByRole("textbox", { name: "Comment" }).focus();
   await page.keyboard.type("Ship it.");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Approve" })).toBeFocused();
