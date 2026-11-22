@@ -222,14 +222,14 @@ Every item in this section `needs: K15`.
   [source] `StudioBreadcrumbs` in `EXT/Decisions/DecisionsPage.tsx:215`,
   `WF/ActivityDefinitionWorkbench.tsx:256` and `WF/ActivityDefinitionDraftEditor.tsx:959`.
   `needs: D5`
-- [ ] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says
+- [x] **X2.2** (#5026) [seen] Tags and Saved views: the shell says "Studio / Workflows" while the page says (PR #5303)
   "Definitions › …". Make them agree.
-- [ ] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button →
+- [x] **X2.3** (#5027) [verified] `EXT/Secrets/SecretEditorPage.tsx:79` ghost "Back to secrets" button → (PR #5303)
   shell trail.
-- [ ] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost
+- [x] **X2.4** (#5028) [verified] `EXT/UserTasks/TaskDetailPage.tsx:33` (also `:147`, `:149` [source]) ghost (PR #5303)
   "Back to task list"; `:34` [source] an `<a className="studio-button">` "Task inbox" →
   shell trail.
-- [ ] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon →
+- [x] **X2.5** (#5029) [verified] `EXT/UserTasks/FormsPage.tsx:163` default "Back to forms" with no icon → (PR #5303)
   shell trail.
 - [ ] **X2.6** (#5030) [verified] `EXT/FeatureManagement/module.tsx:1048` raw "Back" button.
 - [ ] **X2.7** (#5031) [source] `WF/ActivityDefinitionWorkbench.tsx:263` `StudioLink className="ad-back-to-designer"`
@@ -239,7 +239,7 @@ Every item in this section `needs: K15`.
   and the Agent create form (`AgentsPage.tsx:293–306`, Cancel or Escape only).
 - [ ] **X2.9** (#5033) [source] No breadcrumb on `WF/ActivityUpgradeWorkbenchPage.tsx:296` and
   `WF/Elsa3ReusableImportPage.tsx:479`, which are reachable only from Activity definitions.
-- [ ] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to
+- [x] **X2.10** (#5034) [source] Port `ScopeBreadcrumb` (`.wf-breadcrumb`, raw "Root" button, 13px chevrons) to (PR #5303)
   `StudioBreadcrumbs`. It navigates scopes inside one workflow, so D5 may not apply to it; ask before
   moving it into the shell. `needs: K7`
 - [ ] **X2.11** (#5035) [source] `WF/ActivityDataMemberBrowser.tsx:140` raw "Back" button.
@@ -370,27 +370,27 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [x] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string. (PR #5297)
-- [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
+- [x] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
   443, 489`, Backends `BACK/BackendsPage.tsx:121`, `WF/ActivityGraphImplementationEditor.tsx:270, 1363`.
-  `needs: D7`
-- [ ] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
+  `needs: D7` (PR #5305)
+- [x] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
   `H/weaver/WeaverSurface.tsx:186`, "Retry mode change" `:117`, and the Definitions list variants
   "Retry current search", "Restart from first page", "Reload workflow support"
-  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7`
+  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7` (PR #5305)
 - [x] **X5.9** Withdrawn on 2026-11-21: not a defect. "Withdraw"
   (`H/weaver/WeaverMessageList.tsx:132`) withdraws the user's own unstarted message; "Deny"
   (`H/weaver/WeaverProposalReview.tsx:107`) rejects a proposal. They are different actions.
-- [ ] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
+- [x] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
   "Activity definition upgrades", "Task forms", "Runtime diagnostics" (D8). **[check]** "Console" /
   "Server console": find where "Server console" is shown before changing anything; it was not found
-  in source. `needs: D8`
-- [ ] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
-  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`.
-- [ ] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
+  in source. `needs: D8` (PR #5305)
+- [x] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
+  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`. (PR #5305)
+- [x] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
   (`DecisionsPage.tsx:144`), "Move to recycle bin" (`:258`), overflow "Delete", "Permanently delete
-  decision" (`:164`).
-- [ ] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
-  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`).
+  decision" (`:164`). (PR #5305)
+- [x] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
+  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`). (PR #5305)
 
 ### X6. Refresh
 
@@ -429,7 +429,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `IncidentNextStep.tsx:154`, `ReusableBoundaryInspector.tsx`; `.wf-chip` "Template"/"Draft" in
   `WorkflowEditorToolbar.tsx:163`.
 - [x] **X7.3** (#5109) [seen] `secrets-badge` in Secrets. (PR #5299)
-- [ ] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance.
+- [x] **X7.4** (#5110) [seen] `settings-default-badge` in Appearance. (PR #5304)
 - [ ] **X7.5** (#5111) [source] `.ad-badge` (`WF/activityDefinitions.css:57`), `.ad-status-chip`
   (`WF/activityDefinitionCollection.css:17`), `.ad-version-lifecycle` (`WF/activityDefinitions.css:111`),
   `.ad-validation-result` (`:203`).
@@ -484,7 +484,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   [check] `.etl-error`, `.external-auth-error`.
 - [ ] **X9.5** (#5133) [seen] BPMN pages show the raw string "This backend does not support
   elsa.api.bpmn-catalog." with no page header. Use an "unavailable" result state in plain language.
-- [ ] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task
+- [x] **X9.6** (#5134) [source] "Invalid secret address." (`EXT/Secrets/module.tsx:63`) and "Invalid task (PR #5303)
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
 - [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
@@ -544,16 +544,16 @@ the designer header is a documented exception.
   `BpmnInterchangeCommands.tsx` (6).
 - [x] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
   `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`. (PR #5310)
-- [ ] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
+- [x] **X11.16** (#5165) [source] Host: `H/App.tsx:844, 1206, 1215`; `H/modules/ModuleManagementPage.tsx:298,
   311, 328, 408, 440`; `H/modules/PackageFeedsPage.tsx:170–177, 183, 221, 253, 290`;
-  `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`.
+  `H/modules/PackageMaintenance.tsx:97, 116`; `H/settings/AppearancePage.tsx:244`. (PR #5304)
 - [ ] **X11.17** (#5166) [source] Dashboard: `DASH/HomePage.tsx:237, 241, 299`, `DASH/WidgetFrame.tsx:62–69`.
 - [ ] **X11.18** (#5167) [source] Extensions: `EXT/Connections/ConnectionCredentialField.tsx:137`,
   `ConnectionPickerEditor.tsx:90`, `EXT/Secrets/SecretsPage.tsx:279`,
   `EXT/Secrets/SecretPickerEditor.tsx:90`, `EXT/UserTasks/fieldControls.tsx:53, 60, 80`.
 - [ ] **X11.19** (#5168) [check] ETL draft toolbar.
-- [ ] **X11.20** (#5169) [source] Icon-only buttons named by `title` only: `H/modules/PackageFeedsPage.tsx:172,
-  175`, `H/modules/ModuleManagementPage.tsx:440`. `needs: K3`
+- [x] **X11.20** (#5169) [source] Icon-only buttons named by `title` only: `H/modules/PackageFeedsPage.tsx:172,
+  175`, `H/modules/ModuleManagementPage.tsx:440`. `needs: K3` (PR #5304)
 
 ### X12. Native `<details>` instead of `AdvancedSection` / `TechnicalDetails`
 
@@ -567,7 +567,7 @@ the designer header is a documented exception.
   `DecisionInputsEditor.tsx:182` [source].
 - [ ] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
   `OverflowMenu`.
-- [ ] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`.
+- [x] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`. (PR #5304)
 - [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
   about `:193`).
 - [ ] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles.
@@ -591,12 +591,12 @@ Uppercase labels (`needs: D3`):
 - [ ] **X13.2** (#5185) [verified] `WF/activityDefinitions.css:17` (`.ad-kicker`); [source] `:85`, `:211`,
   `:275`; `WF/activityContractEditor.css:280–281`; `WF/activityDefinitionDependencyExplorer.css:29`;
   `WF/activityUpgradeWorkbench.css:578–580`.
-- [ ] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`.
+- [x] **X13.3** (#5186) [verified] `H/styles.css:708, 1856, 2402, 2750`. (PR #5304)
 - [x] **X13.4** (#5187) [verified] `H/weaver/weaver.css:37`; [source] `H/weaver/weaverControls.css:191, 251`. (PR #5310)
 - [x] **X13.5** (#5188) [verified] `BACK/backends.css:39`. (PR #5310)
-- [ ] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
+- [x] **X13.6** (#5189) [source] `H/navigation/navigation.css:21`, `H/components/UserMenu.css:86`,
   `H/components/ThemeSwitcher.css:167`, `H/themes/layouts.css:76`, `H/themes/signal.css:26`,
-  `H/themes/elsaCloud.css:24`.
+  `H/themes/elsaCloud.css:24`. (PR #5304)
 - [x] **X13.7** (#5190) [verified] `EXT/Diagnostics.OpenTelemetry/styles.css:244, 311`. (PR #5298)
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
@@ -657,12 +657,12 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable
   apply receipt", "Outcome unknown"; `WF/Elsa3ReusableImportPage.tsx`: "Side-effect-free analysis",
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
-- [ ] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
+- [x] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
   snapshot…" (`WF/workflow-editor/AttachedRunActivityInspector.tsx:25`); "Loading authoritative
-  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2`
-- [ ] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
+  compatibility evidence…". D9 replaces "evidence" in UI copy, with “Run data” and “Run data detail”. `needs: G2` (PR #5300)
+- [x] **X14.7** (#5208) [seen] Executables: "Executable" and "Artifact" name the same thing on one screen
   ("Artifact ID", "Artifact hash", "Artifact: {id}" filter chip). Use "Executable" for all of them
-  (D9). `needs: G1`
+  (D9). `needs: G1` (PR #5300)
 - [ ] **X14.8** (#5209) [source] Dashboards: "Category / x axis" (`DASH/native/ResourceDialogs.tsx:164`,
   `NamedDashboards.tsx:523`), "From (inclusive UTC instant)" (`DASH/native/QueryControls.tsx:124`).
 - [ ] **X14.9** (#5210) [source] `EXT/Agent/AgentEditor.tsx:229` "Model: none from …" → "No model selected".
@@ -763,25 +763,23 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 ### Host
 
-- [ ] **H1** (#5252) [seen] Sign-in error screen uses a blue button, red title and a different font from the
-  rest of Studio (`H/auth/studioAuth.tsx:114` `studio-auth-retry` [verified]).
-- [ ] **H2** (#5253) [seen] Theme builder has five header buttons and none is primary
+- [x] **H1** (#5252) [seen] Sign-in error screen uses a blue button, red title and a different font from the
+  rest of Studio (`H/auth/studioAuth.tsx:114` `studio-auth-retry` [verified]). (PR #5304)
+- [x] **H2** (#5253) [seen] Theme builder has five header buttons and none is primary
   (`H/modules/ThemeBuilderPage.tsx:375–379` [source]). Make Save the primary and move the rest into an
-  `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`.
-- [ ] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance.
-- [ ] **H4** (#5255) [seen] Workspace tabs accumulate without limit (23 open after normal navigation),
-  including transient ones. D10: transient routes reuse the current tab, and the strip gets a cap that
-  closes the least recently used clean tab. Use 12 tabs and preserve unsaved tabs even above the cap. `needs: D10`
-- [ ] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
-  **[check]** how it behaves at narrow widths.
+  `OverflowMenu`. "Apply" at `:614` differs from "Save" at `:378`. (PR #5304)
+- [x] **H3** (#5254) [seen] Modules empty state shows raw configuration keys as its only guidance. (PR #5304)
+- [x] **H4** (#5255) Workspace tabs reuse transient create routes and evict the least recently visited clean background tab beyond 12. Unsaved and pinned tabs are protected. (PR #5302)
+- [x] **H5** (#5256) [verified] `H/settings/SettingsShell.tsx:25` uses a `<select>` as the section switcher.
+  **[check]** how it behaves at narrow widths. (PR #5304)
 - [x] **H6** (#5257) [source] Hand-rolled menus and popovers: `H/components/UserMenu.tsx:40`,
   `H/components/ThemeSwitcher.tsx:57, 105`, `H/workspace/WorkspaceTabStrip.tsx:295–317`,
   `H/weaver/WeaverSurface.tsx:305–323`, the Backends switcher popover → `OverflowMenu` /
   `AnchoredPopover`. None of these was captured in the running app. (PR #5310)
-- [ ] **H7** (#5258) [source] Redundant `label={<><span>…</span></>}` wrappers and duplicate `aria-label` on
-  `StudioField`: `H/modules/PackageFeedsPage.tsx:351–354`, `H/modules/ThemeBuilderPage.tsx:403–431`.
-- [ ] **H8** (#5259) [source] `H/modules/ThemeBuilderPage.tsx:479–491` deletes an asset from a button.
-  **[check]** that it goes through `api.dialogs.confirm`.
+- [x] **H7** (#5258) [source] Redundant `label={<><span>…</span></>}` wrappers and duplicate `aria-label` on
+  `StudioField`: `H/modules/PackageFeedsPage.tsx:351–354`, `H/modules/ThemeBuilderPage.tsx:403–431`. (PR #5304)
+- [x] **H8** (#5259) [source] `H/modules/ThemeBuilderPage.tsx:479–491` deletes an asset from a button.
+  **[check]** that it goes through `api.dialogs.confirm`. (PR #5304)
 
 ## Documentation changes the decisions require
 

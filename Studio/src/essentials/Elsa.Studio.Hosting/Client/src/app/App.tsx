@@ -1,5 +1,5 @@
 import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
-import { StudioPageHeader } from "./ui";
+import { StudioIconButton, StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -521,8 +521,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
-    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-    ?? activeRoute?.label
+    ?? screenLabel(path, activeRoute, navigation)
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
   const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
@@ -609,11 +608,16 @@ export function describeScreen(
     return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
   }
   return {
-    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-      ?? route?.label
+    title: screenLabel(path, route, navigation)
       ?? findFeatureAreaForPath(featureAreas, path)?.title
       ?? (path === "/" ? "Home" : "Studio")
   };
+}
+
+function screenLabel(path: string, route: { path: string; label: string } | undefined, navigation: StudioNavigationContribution[]) {
+  const active = navigation.find(item => isNavigationItemActive(item, path, navigation));
+  if (route?.path === path && active?.path !== path) return route.label;
+  return active?.label ?? route?.label;
 }
 
 /** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
@@ -843,7 +847,7 @@ export function ShellFrame({
               <small>{branding.subtitle}</small>
             </span>
           </a>
-          <button
+          <StudioIconButton
             type="button"
             className="sidebar-collapse-toggle"
             aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -852,7 +856,7 @@ export function ShellFrame({
             onClick={toggleNavCollapsed}
           >
             {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
+          </StudioIconButton>
         </div>
 
         <label className="sidebar-search">
@@ -1187,7 +1191,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           }}
         />
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
-          <button
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
@@ -1195,8 +1199,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleCollapsed}
           >
             {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-          <button
+          </StudioIconButton>
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
@@ -1204,7 +1208,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleMaximized}
           >
             {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          </StudioIconButton>
         </div>
       </div>
       {panels.map((panel, index) => panel.id === activePanel.id ? null : (

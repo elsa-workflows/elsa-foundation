@@ -1,4 +1,4 @@
-import { createTab, defaultLocationKey, homeLocation, maxWorkspaceTabs, normalizeOrder, unqualifyLocation, type WorkspaceState, type WorkspaceTab } from "./model";
+import { createTab, defaultLocationKey, homeLocation, trimOpenTabs, normalizeOrder, unqualifyLocation, type WorkspaceState, type WorkspaceTab } from "./model";
 
 /** Identifies whose workspace this is: the Studio host, the backend profile and the signed-in identity. */
 export interface WorkspaceScope {
@@ -13,6 +13,7 @@ interface StoredTab {
   id: string;
   location: string;
   pinned?: boolean;
+  lastActiveAt?: number;
   title?: { title: string; detail?: string; screenKey: string };
   scrollTop?: number;
 }
@@ -56,9 +57,10 @@ export function serializeWorkspace(state: WorkspaceState): StoredWorkspace {
   return {
     version: 1,
     activeId: state.activeId,
-    tabs: state.tabs.slice(0, maxWorkspaceTabs).map(tab => ({
+    tabs: state.tabs.map(tab => ({
       id: tab.id,
       location: sanitizeLocation(tab.location),
+      lastActiveAt: tab.lastActiveAt,
       ...(tab.pinned ? { pinned: true } : {}),
       ...(tab.title ? { title: { title: tab.title.title.slice(0, maxTitleLength), ...(tab.title.detail ? { detail: tab.title.detail.slice(0, maxTitleLength) } : {}), screenKey: tab.title.screenKey } } : {}),
       ...(tab.scrollTop ? { scrollTop: Math.round(tab.scrollTop) } : {})
@@ -73,12 +75,13 @@ export function parseWorkspace(value: unknown, now = Date.now()): WorkspaceState
   if (stored.version !== 1 || !Array.isArray(stored.tabs)) return null;
   const seen = new Set<string>();
   const tabs: WorkspaceTab[] = [];
-  for (const candidate of stored.tabs.slice(0, maxWorkspaceTabs)) {
+  for (const candidate of stored.tabs) {
     if (!candidate || typeof candidate !== "object" || typeof candidate.id !== "string" || typeof candidate.location !== "string") continue;
     if (seen.has(candidate.id)) continue;
     seen.add(candidate.id);
     const tab = createTab(sanitizeLocation(candidate.location), now, candidate.id);
     tab.pinned = candidate.pinned === true;
+    if (typeof candidate.lastActiveAt === "number" && Number.isFinite(candidate.lastActiveAt)) tab.lastActiveAt = candidate.lastActiveAt;
     const title = candidate.title;
     if (title && typeof title.title === "string" && typeof title.screenKey === "string" && title.title.trim())
       tab.title = { title: title.title.slice(0, maxTitleLength), screenKey: title.screenKey, ...(typeof title.detail === "string" && title.detail ? { detail: title.detail.slice(0, maxTitleLength) } : {}) };
@@ -87,7 +90,7 @@ export function parseWorkspace(value: unknown, now = Date.now()): WorkspaceState
   }
   if (tabs.length === 0) return null;
   const activeId = typeof stored.activeId === "string" && seen.has(stored.activeId) ? stored.activeId : tabs[0].id;
-  return { tabs: normalizeOrder(tabs), activeId };
+  return { tabs: normalizeOrder(trimOpenTabs(tabs, activeId)), activeId };
 }
 
 export function readWorkspace(scope: WorkspaceScope, storage: Storage | undefined = safeLocalStorage()) {
@@ -134,7 +137,7 @@ export function restoreWorkspace(restored: WorkspaceState | null, bootLocation: 
     return { tabs, activeId: match.id };
   }
   const tab = { ...createTab(location, now), retained: true };
-  return { tabs: [...restored.tabs, tab].slice(-maxWorkspaceTabs), activeId: tab.id };
+  return { tabs: trimOpenTabs([...restored.tabs, tab], tab.id), activeId: tab.id };
 }
 
 function safeLocalStorage() {

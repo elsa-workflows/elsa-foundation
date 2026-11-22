@@ -837,21 +837,21 @@ export function ActivityGraphImplementationEditor({
       const elementNode = nodes.find(node => node.id === selectedNodeId);
       if (!elementNode) return;
       const message = selected
-        ? "Remove this element, the activity it binds, and any nested graph content? This change will autosave."
-        : "Remove this BPMN element and its sequence flows? This change will autosave.";
-      if (!await confirmGraphChange(message, "Remove")) return;
+        ? "Delete this element, the activity it binds, and any nested graph content? This change will autosave."
+        : "Delete this BPMN element and its sequence flows? This change will autosave.";
+      if (!await confirmGraphChange(message, "Delete")) return;
       interactions.onNodesDelete([elementNode]);
       return;
     }
     if (!selected) return;
-    if (!await confirmGraphChange("Remove this activity and any nested graph content? This change will autosave.", "Remove")) return;
+    if (!await confirmGraphChange("Delete this activity and any nested graph content? This change will autosave.", "Delete")) return;
     updateOwnerActivities(activities.filter(activity => activity.nodeId !== selected.nodeId));
     setSelectedNodeId(null);
   };
   const deleteSequenceActivity = async (nodeId: string) => {
     if (readOnly || slot?.mode !== "sequence" || slot.cardinality !== "many") return;
     const node = nodes.find(candidate => candidate.id === nodeId);
-    if (!node || !await confirmGraphChange("Remove this activity and any nested graph content? This change will autosave.", "Remove")) return;
+    if (!node || !await confirmGraphChange("Delete this activity and any nested graph content? This change will autosave.", "Delete")) return;
     interactions.onNodesDelete([node]);
     if (nodes.length === 1) {
       window.requestAnimationFrame(() => interactions.canvasRef.current?.focus({ preventScroll: true }));
@@ -998,7 +998,7 @@ export function ActivityGraphImplementationEditor({
             {/* Ordering is a slot-list concept; a BPMN process is ordered by its sequence flows. */}
             <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity up" : "Move activity left"} onClick={() => moveSelected(-1)} disabled={readOnly || isBpmnSlot || selectedIndex <= 0}>{slot?.mode === "sequence" ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowLeft size={15} aria-hidden="true" />}</StudioButton>
             <StudioButton variant="ghost" size="sm" aria-label={slot?.mode === "sequence" ? "Move activity down" : "Move activity right"} onClick={() => moveSelected(1)} disabled={readOnly || isBpmnSlot || selectedIndex < 0 || selectedIndex === activities.length - 1}>{slot?.mode === "sequence" ? <ArrowDown size={15} aria-hidden="true" /> : <ArrowRight size={15} aria-hidden="true" />}</StudioButton>
-            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Remove</StudioButton>
+            <StudioButton size="sm" className="danger" onClick={deleteSelected} disabled={readOnly}><Trash2 size={15} aria-hidden="true" /> Delete</StudioButton>
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}

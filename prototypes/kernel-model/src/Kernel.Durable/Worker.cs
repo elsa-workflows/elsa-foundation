@@ -2541,7 +2541,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             Committed result;
             try
             {
-                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear);
+                StoreBatchRules.Validate(batch, ownedSets: _store.OwnedSetsAvailable, supportsJobTrialClear: _store.SupportsJobTrialClear,
+                    supportsFoundationParkResolution: true);
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
@@ -2655,7 +2656,8 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationHeldPromotions = promotions,
             FoundationReleasedHolds = releases,
             OpensPark = unit.OpensPark,
-            FoundationKept = kept
+            FoundationKept = kept,
+            FoundationParkClear = unit.FoundationParkClear
         };
     }
 

@@ -61,7 +61,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
-  await operate.getByRole("link", { name: "Forms", exact: true }).click();
+  await operate.getByRole("link", { name: "Task forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
   await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
@@ -83,7 +83,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toBeFocused();
   await expect(page.getByRole("heading", { name: "Published version 1", exact: true })).toHaveCSS("outline-style", "none");
   await capture(page, info, "published-form");
-  await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Task forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
 
   await page.setViewportSize({ width: 1600, height: 1100 });
@@ -211,7 +211,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect.poll(async () => (await get(`/runtime/workflows/instances/${runId}`)).instance.status, { timeout: 30_000 }).toBe("Completed");
   await page.getByRole("button", { name: "Refresh task", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeEnabled();
   const completed = await get(`/runtime/workflows/instances/${runId}`);
   expect(completed.outputs.RenamedData).toMatchObject({ isRedacted: false, captureMode: "DiagnosticSnapshot", value: { kind: "object", properties: [{ name: "Note", value: { preview: "Approved with case preserved" } }] } });
   await page.setViewportSize({ width: 1600, height: 1100 }); await page.goto(`/workflows/instances/${runId}`);

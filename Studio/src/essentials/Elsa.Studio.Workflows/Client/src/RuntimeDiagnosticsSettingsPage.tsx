@@ -78,7 +78,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
   return (
     <section className="studio-page wf-page runtime-diagnostics-page">
-      <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime evidence settings</>} description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
+      <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime diagnostics</>} description={<>Choose what run data to retain for new events. Previously captured run data is unchanged.</>} actions={<><div className="studio-page-actions">
           <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
             {saving ? "Saving..." : "Save"}
@@ -118,7 +118,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
         <section className="runtime-diagnostics-section runtime-diagnostics-section-grow">
           <div className="runtime-diagnostics-section-title">
             <h3 className="wf-section-label"><DatabaseZap size={14} /> Subject overrides</h3>
-            <p>Request a different level for a specific kind of evidence. The runtime-applied level is shown after Host Policy.</p>
+            <p>Request a different level for a specific kind of run data. The runtime-applied level is shown after Host Policy.</p>
           </div>
           <div className="runtime-diagnostics-subjects">
             {subjects.map(subject => {
@@ -208,7 +208,7 @@ function LevelSelect({
 }) {
   return (
     <fieldset className="runtime-diagnostics-levels" disabled={disabled}>
-      <legend>Requested default</legend>
+      <legend>Run data detail</legend>
       <div className="runtime-diagnostics-level-options">
         {allowedLevels.map(level => (
           <label
@@ -236,7 +236,7 @@ function LevelSelect({
 function levelDescription(level: RuntimeDiagnosticsEvidenceLevel): string {
   switch (level) {
     case "Off":
-      return "Do not store runtime value evidence.";
+      return "Do not store captured run data.";
     case "Metadata":
       return "Store capture metadata without value shape.";
     case "DiagnosticSnapshot":

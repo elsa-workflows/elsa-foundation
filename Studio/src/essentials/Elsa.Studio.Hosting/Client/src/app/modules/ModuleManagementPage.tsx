@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "../ui";
+import { StudioIconButton, StudioPageHeader, StudioButton } from "../ui";
 import React, { useMemo, useRef, useState, useId } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import { defaultStudioHostId, type ElsaStudioModuleApi } from "../../sdk";
@@ -295,7 +295,7 @@ function SourceNavigator({
         <strong>{builtInCount + nuplaneCount}</strong>
       </div>
 
-      <button
+      <StudioButton
         type="button"
         className={activeSourceView === "built-in" ? "modules-source-button active" : "modules-source-button"}
         aria-pressed={activeSourceView === "built-in"}
@@ -306,9 +306,9 @@ function SourceNavigator({
           <small>Host deployment</small>
         </span>
         <em>{builtInCount}</em>
-      </button>
+      </StudioButton>
 
-      <button
+      <StudioButton
         type="button"
         className={allNuplaneActive ? "modules-source-button active" : "modules-source-button"}
         aria-pressed={allNuplaneActive}
@@ -319,13 +319,13 @@ function SourceNavigator({
           <small>Runtime packages</small>
         </span>
         <em>{nuplaneCount}</em>
-      </button>
+      </StudioButton>
 
       {nuplaneCount > 0 ? (
         <div className="modules-source-group" aria-label="Nuplane package sources">
           <span>Nuplane sources</span>
           {packageSourceOptions.map(source => (
-            <button
+            <StudioButton
               key={source}
               type="button"
               className={activeSourceView === "nuplane" && activePackageSource === source ? "active" : ""}
@@ -334,7 +334,7 @@ function SourceNavigator({
             >
               <span>{source}</span>
               <em>{packageSourceCounts.get(source) ?? 0}</em>
-            </button>
+            </StudioButton>
           ))}
         </div>
       ) : null}
@@ -405,10 +405,10 @@ function InlinePackageUploads({
           <strong>Drop .nupkg files here</strong>
           <small>Upload packages to this host's Nuplane drop folder.</small>
         </span>
-        <button type="button" className="studio-button" disabled={uploadDisabled} onClick={() => uploadInputRef.current?.click()}>
+        <StudioButton type="button" disabled={uploadDisabled} onClick={() => uploadInputRef.current?.click()}>
           <CloudUpload size={15} />
-          Upload Packages
-        </button>
+          Upload packages
+        </StudioButton>
         <input
           ref={uploadInputRef}
           type="file"
@@ -437,9 +437,9 @@ function InlinePackageUploads({
                   <strong>{file.fileName}</strong>
                   <code>{packageIdentity ? `${packageIdentity.id} ${packageIdentity.version} · ` : ""}{formatFileSize(file.size)} · {new Date(file.lastWriteTimeUtc).toLocaleString()}</code>
                 </span>
-                <button type="button" className="studio-icon-button" disabled={busy} title={`Delete ${file.fileName} from ${host.label} drop folder`} onClick={() => onDeleteDropFolderPackage(file.fileName)}>
+                <StudioIconButton type="button" variant="danger" disabled={busy} aria-label={`Delete ${file.fileName} from ${host.label} drop folder`} onClick={() => onDeleteDropFolderPackage(file.fileName)}>
                   <Trash2 size={14} />
-                </button>
+                </StudioIconButton>
               </div>
             );
           })}

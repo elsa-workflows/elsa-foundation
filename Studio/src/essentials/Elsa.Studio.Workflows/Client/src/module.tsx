@@ -132,7 +132,7 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}], title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "build", parentId: "workflows", order: 20 },
         { id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "build", parentId: "library", order: 20 },
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "build", parentId: "library", order: 25 },
-        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
+        { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "runtime", order: 40 },
         { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "authoring", order: 50 }
       ]
     },
@@ -164,8 +164,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
         path: "/workflows/activity-definitions/import-elsa3",
-        label: "Elsa 3 import",
-        component: ({ navigate }) => deferred("Elsa 3 import", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
+        label: "Import from Elsa 3",
+        component: ({ navigate }) => deferred("Import from Elsa 3", <Elsa3ReusableImportPage context={api.backend} navigate={navigate} />)
       },
       {
         id: "workflows-activity-upgrades", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
@@ -221,8 +221,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}],
         path: "/workflows/runtime-diagnostics",
-        label: "Runtime evidence settings",
-        component: () => deferred("Runtime evidence settings", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
+        label: "Runtime diagnostics",
+        component: () => deferred("Runtime diagnostics", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
       }
     ]
   });

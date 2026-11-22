@@ -180,7 +180,7 @@ it("takes forms-only users directly to their permitted form workspace without re
   const get = vi.fn(async (path: string) => path.includes("identity") ? { ...identity, canRead: false, canManageForms: true, canReadForms: true } : path.includes("forms") ? { items: [] } : Promise.reject(new StudioHttpError(403, "Task read denied")));
   await act(async () => root.render(<TasksPage api={api(get)} />));
   await act(async () => {});
-  expect(container.textContent).toContain("Reusable task forms");
+  expect(container.textContent).toContain("Task forms");
   await vi.waitFor(async () => { await act(async () => {}); expect(container.textContent).toContain("No reusable forms yet"); });
   await click("New form"); expect(container.textContent).toContain("Design the form");
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
@@ -505,7 +505,7 @@ it("selects task assignment and form contributions before the generic scalar edi
   const context = { ...api(vi.fn(async (path: string) => path.includes("targets") ? { users: [], groups: [] } : path.includes("forms") ? { items: [] } : task())), featureAreas: { add: featureArea }, propertyEditors: { add: (item: StudioActivityPropertyEditorContribution) => registered.push(item) }, userTaskForms: { add: vi.fn() } } as unknown as ElsaStudioModuleApi;
   register(context);
   const nav = (featureArea.mock.calls[0][0] as { nav: { items: Array<{ title: string; placement?: string }> } }).nav;
-  expect(nav.items.map(item => item.title)).toEqual(["Inbox", "Forms"]);
+  expect(nav.items.map(item => item.title)).toEqual(["Inbox", "Task forms"]);
   expect(nav.items.map(item => item.placement)).toEqual(["operate", "operate"]);
   const fallback: StudioActivityPropertyEditorContribution = { id: "generic.scalar", order: 100, supports: () => true, component: () => <input aria-label="Generic scalar" /> };
   for (const hint of ["user-task-user", "user-task-group", "user-task-form"]) {
@@ -668,7 +668,7 @@ it("opens the task detail route as a standalone page without loading the inbox",
   expect(container.querySelector('input[type="search"]')).toBeNull();
   expect(container.querySelector('table[aria-label="User tasks"]')).toBeNull();
   expect(get.mock.calls.some(([path]) => path.startsWith("/runtime/user-tasks?"))).toBe(false);
-  expect(container.textContent).toContain("Back to task list");
+  expect(container.textContent).toContain("User tasks");
 });
 
 it("navigates from the collection to a task instead of mounting its response editor beside the list", async () => {
@@ -725,7 +725,7 @@ it("retains inbox search and opaque paging context through a standalone task and
   window.history.replaceState(null, "", detailPath);
   await act(async () => root.render(<Detail navigate={navigate} />));
   await vi.waitFor(() => expect(container.textContent).toContain("Purchase"));
-  await click("Back to task list");
+  await click("User tasks");
   const back = new URL(navigate.mock.calls.at(-1)![0], location.origin);
   expect(back.pathname).toBe("/user-tasks"); expect(back.searchParams.get("view")).toBe("queue");
   expect(back.searchParams.get("search")).toBe("Purchase"); expect(back.searchParams.get("after")).toBe("opaque+/="); expect(back.searchParams.get("focusTask")).toBe("opaque/id");
@@ -741,7 +741,7 @@ it("shows a denied task detail without reading either tasks or the inbox", async
   const get = vi.fn().mockResolvedValue({ ...identity, canRead: false, canReadForms: true, canManageForms: true });
   await act(async () => root.render(<TaskDetailPage api={api(get)} id="task" navigate={vi.fn()} />));
   expect(container.textContent).toContain("Task access unavailable"); expect(container.querySelector("table")).toBeNull();
-  expect(container.textContent).not.toContain("Reusable task forms"); expect(get).toHaveBeenCalledTimes(1);
+  expect(container.textContent).not.toContain("Task forms"); expect(get).toHaveBeenCalledTimes(1);
 });
 
 it("keeps a response when discard is cancelled and releases the guard only after confirmed discard", async () => {
@@ -750,9 +750,9 @@ it("keeps a response when discard is cancelled and releases the guard only after
   const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
   await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
   await input(container.querySelector("input")!, "Unsent notes");
-  await click("Back to task list"); expect(closed).not.toHaveBeenCalled(); expect(container.querySelector("input")!.value).toBe("Unsent notes");
+  await click("User tasks"); expect(closed).not.toHaveBeenCalled(); expect(container.querySelector("input")!.value).toBe("Unsent notes");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(false);
-  await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+  await click("User tasks"); expect(closed).toHaveBeenCalledTimes(1);
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
 });
 
@@ -774,7 +774,7 @@ it("does not navigate after a discard confirmation outlives the task view", asyn
   const withForm = { ...task(), form: { id: "f", version: "1", name: "F", provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text" }] } };
   const context = Object.assign(api(vi.fn().mockResolvedValue(withForm)), { dialogs: { confirm } }) as unknown as ElsaStudioModuleApi;
   await act(async () => root.render(<TaskDetail api={context} id="task" identity={identity} onClose={closed} />));
-  await input(container.querySelector("input")!, "Unsent notes"); await click("Back to task list");
+  await input(container.querySelector("input")!, "Unsent notes"); await click("User tasks");
   await act(async () => root.render(<p>Another view</p>)); await act(async () => finish(true));
   expect(closed).not.toHaveBeenCalled();
 });
@@ -828,8 +828,8 @@ it("allows leaving after an accepted response while runtime delivery is still pe
   await act(async () => root.render(<TaskDetail api={api(vi.fn().mockResolvedValue(task()), vi.fn().mockResolvedValue(receipt))} id="task" identity={identity} onClose={closed} />));
   await click("Approve"); expect(container.textContent).toContain("Your response is recorded");
   expect(requestStudioNavigation("/user-tasks/task", "/user-tasks/task", "probe")).toBe(true);
-  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "Back to task list")!;
-  expect(back.disabled).toBe(false); await click("Back to task list"); expect(closed).toHaveBeenCalledTimes(1);
+  const back = [...container.querySelectorAll("button")].find(button => button.textContent === "User tasks")!;
+  expect(back.disabled).toBe(false); await click("User tasks"); expect(closed).toHaveBeenCalledTimes(1);
 });
 
 it("releases an ambiguous attempt when refresh confirms a durable pending decision", async () => {
@@ -931,12 +931,12 @@ describe("inbox and form polish (#4068)", () => {
     expect(container.querySelector(`label[for="${container.querySelector("textarea")!.id}"]`)!.textContent).toBe("Note *");
     expect(container.querySelector(".user-task-response")!.hasAttribute("data-final")).toBe(false);
   });
-  it("gives a missing task a way back from the page body", async () => {
+  it("gives a missing task a way back from the breadcrumb", async () => {
     const onClose = vi.fn();
     await act(async () => root.render(<TaskDetail api={api(vi.fn().mockRejectedValue(new StudioHttpError(404, "Not found")))} id="gone" identity={identity} onClose={onClose} />));
     await vi.waitFor(() => expect(container.textContent).toContain("Task not found"));
-    const body = container.querySelector(".studio-result-state")!.querySelector("button")!;
-    expect(body.textContent).toBe("Back to task list");
+    const body = container.querySelector("nav")!.querySelector("button")!;
+    expect(body.textContent).toBe("User tasks");
     await act(async () => body.click()); await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
   it("lists one row per form and publishes the next system-managed version", async () => {

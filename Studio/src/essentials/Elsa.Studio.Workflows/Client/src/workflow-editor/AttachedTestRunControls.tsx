@@ -17,7 +17,7 @@ export function AttachedTestRunControls({ canvas }: {
             loading={canvas.loading} complete={canvas.observationStatus === "connected" && isTerminalExecution(canvas.status)} />
         </> : <button type="button" className="wf-run-tool" onClick={canvas.attach}><Eye size={14} aria-hidden="true" />{canvas.stale ? "Inspect captured snapshot" : "Show execution"}</button>}
       </div>
-      {canvas.loading && !canvas.details ? <span role="status">Loading execution evidence…</span> : null}
+      {canvas.loading && !canvas.details ? <span role="status">Loading run data…</span> : null}
       {canvas.repeated ? <span>Some activities ran more than once. Choose an occurrence in Run data.</span> : null}
       {canvas.attached && canvas.granularity === "boundary-level" ? <span>Activity state is recorded at commit boundaries.</span> : null}
       {canvas.attached ? <RunObservationNotice status={canvas.observationStatus} /> : null}

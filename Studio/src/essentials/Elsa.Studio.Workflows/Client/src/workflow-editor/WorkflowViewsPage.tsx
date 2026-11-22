@@ -87,7 +87,7 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
 
   const deleteView = async (view: WorkflowLibraryView) => {
     if (!view.canDelete) return;
-    if (!confirm(`Delete "${view.name}"?`)) return;
+    if (!confirm(`Delete saved view "${view.name}"?`)) return;
     setBusy(true); setError("");
     try {
       await deleteWorkflowView(context, view);
@@ -113,9 +113,9 @@ function WorkflowViewsPage({ context, initialViews, navigate }: { context: Studi
           <td>{view.shared ? "Shared" : "Private"}</td>
           <td>
             <div className="wf-library-control-row">
-              <StudioButton onClick={() => applyView(view)}><Bookmark size={14} aria-hidden="true" />Apply</StudioButton>
+              <StudioButton onClick={() => applyView(view)}><Bookmark size={14} aria-hidden="true" />Apply saved view</StudioButton>
               <StudioButton onClick={() => setEditingView(view)}><span aria-hidden="true">✏️</span>Edit</StudioButton>
-              {view.canDelete ? <StudioButton onClick={() => void deleteView(view)}><Trash2 size={14} aria-hidden="true" />Delete</StudioButton> : null}
+              {view.canDelete ? <StudioButton onClick={() => void deleteView(view)}><Trash2 size={14} aria-hidden="true" />Delete saved view</StudioButton> : null}
             </div>
           </td>
         </tr>)}</tbody>

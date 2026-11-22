@@ -1,3 +1,4 @@
+import { StudioPage, StudioResultState, StudioShellBreadcrumbs } from "@elsa-workflows/studio-ui";
 import React from "react";
 import { ClipboardList, FileText } from "lucide-react";
 import { useStudioRouteLocation } from "@elsa-workflows/studio-sdk";
@@ -13,7 +14,10 @@ import "./styles.css";
 function DetailRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
   const location = useStudioRouteLocation();
   let id: string;
-  try { id = decodeURIComponent(location.pathname.split("/").at(-1) ?? ""); } catch { return <p role="alert">Invalid task address.</p>; }
+  try { id = decodeURIComponent(location.pathname.split("/").at(-1) ?? ""); } catch {
+    return <StudioPage><StudioShellBreadcrumbs items={[{ label: "User tasks", onClick: () => navigate("/user-tasks") }]} current="Invalid task address" />
+      <StudioResultState tone="danger" title="Invalid task address" description="Open the collection and select a record to continue." /></StudioPage>;
+  }
   return <TaskDetailPage key={id} api={api} id={id} navigate={navigate} />;
 }
 export function register(api: ElsaStudioModuleApi) {
@@ -22,7 +26,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.featureAreas.add({ id: "user-tasks", title: "User tasks", navGroup: "Workspace", order: 30, description: "Assigned work, group queues and reusable forms.", ownedPaths: ["/user-tasks"], required: false, defaultEnabled: true,
     nav: { title: "User tasks", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 30, items: [
       { title: "Inbox", icon: ClipboardList, path: "/user-tasks", placement: "operate", order: 40, requiresPermission: ["user-tasks:read", "user-tasks:manage"] },
-      { title: "Forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
+      { title: "Task forms", icon: FileText, path: "/user-tasks/forms", placement: "operate", order: 41, requiresPermission: ["user-task-forms:read", "user-task-forms:manage"] }
     ], requiresBackend: taskCapability, requiresPermission: ["user-tasks:read", "user-tasks:manage", "user-task-forms:read", "user-task-forms:manage"] },
     routes: [
       { id: "user-tasks.forms", path: "/user-tasks/forms", label: "Task forms", requiresBackend: taskCapability, component: () => <FormsPage api={api} /> },

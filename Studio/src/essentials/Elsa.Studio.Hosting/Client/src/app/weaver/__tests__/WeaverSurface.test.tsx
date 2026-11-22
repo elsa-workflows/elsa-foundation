@@ -873,8 +873,8 @@ describe("WeaverSurface acknowledged autonomy (#3440)", () => {
       expect(modeButton(container).textContent).toBe("Manual review");
       expect(statusText(container)).toContain("sent but not confirmed");
       expect(container.querySelector("textarea")!.disabled).toBe(true);
-      flushSync(() => buttonByText(container, "Retry mode change")!.click()); await flushPromises();
-      expect(autonomyState(container)).toBe("pending"); expect(buttonByText(container, "Retry mode change")).toBeNull();
+      flushSync(() => buttonByText(container, "Retry")!.click()); await flushPromises();
+      expect(autonomyState(container)).toBe("pending"); expect(buttonByText(container, "Retry")).toBeNull();
       expect(vi.mocked(client.updateAutonomy).mock.calls[2]).toEqual(["agt_1", { autonomyMode: "full-auto", expectedRevision: 1 }]);
       retried.resolve(sessionPolicy("full-auto", 2)); await flushPromises();
       expect(modeButton(container).textContent).toBe("Autopilot"); expect(container.querySelector("textarea")!.disabled).toBe(false);

@@ -17,7 +17,7 @@ export function RunObservationControls({ following, onFollowingChange, onRefresh
     {typeof following === "boolean" && onFollowingChange ? <button type="button" className="wf-run-tool wf-run-live-tool"
       aria-label={finished ? "Live updates complete" : following ? "Pause live updates" : "Resume live updates"}
       aria-pressed={!finished && following} disabled={finished}
-      title={finished ? "The run has finished. Refresh to read its latest evidence." : "Pause or resume recorded updates without changing the inspected occurrence. Pausing updates does not stop the workflow."}
+      title={finished ? "The run has finished. Refresh to read its latest run data." : "Pause or resume recorded updates without changing the inspected occurrence. Pausing updates does not stop the workflow."}
       onClick={() => onFollowingChange(!following)}>
       {finished ? <Check size={14} aria-hidden="true" /> : following ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
       <span>{finished ? "Updates complete" : following ? "Live updates" : "Updates paused"}</span>
@@ -26,8 +26,8 @@ export function RunObservationControls({ following, onFollowingChange, onRefresh
 }
 
 export function RunObservationNotice({ status, error }: { status?: ExecutionObservationStatus; error?: string }) {
-  const label = status === "paused" ? "Live updates paused · showing last confirmed evidence. Pausing updates does not stop the workflow."
-    : status === "disconnected" ? "Live updates disconnected · showing last confirmed evidence."
+  const label = status === "paused" ? "Live updates paused · showing last confirmed run data. Pausing updates does not stop the workflow."
+    : status === "disconnected" ? "Live updates disconnected · showing last confirmed run data."
     : status === "unavailable" ? "Live updates unavailable."
     : status === "expired" ? "Test Run expired."
     : status === "loading" ? "Connecting to execution…" : "";

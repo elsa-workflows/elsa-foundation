@@ -58,10 +58,10 @@ export async function timelineSelectionJourney(page: Page, info: TestInfo, captu
   const timelineTab = panel.getByRole("tab", { name: "Timeline", exact: true });
   async function settledCapture(name: string) {
     await expect(page.getByText("Resolving execution scope…", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Loading visible execution evidence…", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Loading visible run data…", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Loading recorded executions…", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Retry execution scope", exact: true })).toHaveCount(0);
-    await expect(page.getByText("Some visible execution evidence could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Some visible run data could not be loaded. Refresh to retry.", { exact: true })).toHaveCount(0);
     await capture(page, info, name);
   }
   // Let the deep link establish its parent scope before navigating away from Activity.

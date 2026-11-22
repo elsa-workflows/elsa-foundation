@@ -235,7 +235,7 @@ export async function chooseDataJourney(page: Page, info: TestInfo, capture: Cap
     const consumer = executions.items.find(item => item.execution.authoredActivityId === "consumer")!.execution.activityExecutionId;
     const detail = await api<{ valueSnapshots: { evidenceId: string; inputKey: string | null }[] }>(`${instance}/activity-executions/${consumer}`);
     const evidence = detail.valueSnapshots.find(snapshot => snapshot.inputKey === "text");
-    expect(evidence, "Committed Text input evidence").toBeTruthy();
+    expect(evidence, "Committed Text input data").toBeTruthy();
     const payload = await api<{ payload: { preview: string } }>(`${instance}/activity-executions/${consumer}/value-evidence/${evidence!.evidenceId}/payload`);
     // The consumer received the producer's committed output, not a literal or a variable.
     expect(payload.payload.preview).toBe("00:00:01");

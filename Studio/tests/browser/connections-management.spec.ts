@@ -176,7 +176,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     expect(await credential.evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector(".studio-advanced-section")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     await expect(dialog.getByText(/Base URL.*Allowed hosts.*More options|Allowed hosts.*More options.*Base URL/i)).toBeVisible();
     await dialog.getByLabel("Name", { exact: true }).fill("customer-api");
-    await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+    await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
     await expect(create).toBeDisabled();
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
     await expect(create).toBeEnabled();
@@ -281,7 +281,7 @@ test("API-key creation explains denied Secret metadata and recovers without read
   const opener = page.getByRole("button", { name: "New connection", exact: true }).first();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
-  await expect(dialog.getByRole("alert")).toContainText("Access to existing Secrets is denied.");
+  await expect(dialog.getByRole("alert")).toContainText("Access to existing secrets is denied.");
   await expect(dialog.getByRole("alert")).toContainText("you can enter a new value instead.");
   await dialog.getByLabel("Name", { exact: true }).fill("denied-api");
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
@@ -289,13 +289,13 @@ test("API-key creation explains denied Secret metadata and recovers without read
   await dialog.getByRole("radio", { name: "New value", exact: true }).check();
   await dialog.getByLabel("New value for API key", { exact: true }).fill("fixture-new-value");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
-  await dialog.getByRole("radio", { name: "Existing Secret", exact: true }).check();
+  await dialog.getByRole("radio", { name: "Existing secret", exact: true }).check();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   denied = false;
   const retry = dialog.getByRole("button", { name: "Retry", exact: true });
   await retry.focus();
   await page.keyboard.press("Enter");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+  await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   expect(secretRequests).toEqual(["POST /secrets/picker", "POST /secrets/picker"]);
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -321,7 +321,7 @@ for (const width of [320, 1440]) {
     const name = dialog.getByLabel("Name", { exact: true });
     const create = dialog.getByRole("button", { name: "Create", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
-    await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption("customer-api");
+    await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption("customer-api");
     await dialog.getByLabel("Base URL", { exact: true }).fill("https://api.example");
     await name.fill("Backend API");
     await expect(name).toHaveAttribute("aria-invalid", "true");
@@ -336,7 +336,7 @@ for (const width of [320, 1440]) {
     await expect(more).toHaveAttribute("aria-expanded", "false");
     await expect(more).not.toContainText("Error");
     await expect(dialog.getByRole("alert")).toContainText("Choose another name.");
-    await expect(dialog.getByLabel("Existing Secret for API key", { exact: true })).toHaveValue("customer-api");
+    await expect(dialog.getByLabel("Existing secret for API key", { exact: true })).toHaveValue("customer-api");
     await expect(dialog.getByLabel("Base URL", { exact: true })).toHaveValue("https://api.example");
     await page.addScriptTag({ content: axe.source });
     expect(await page.evaluate(async () => (await window.axe.run(document.querySelector('[role="dialog"]')!)).violations.map(item => item.id))).toEqual([]);
