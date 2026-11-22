@@ -279,7 +279,7 @@ public sealed class ClrAssemblyScanner(
                 slots,
                 BuildInitialPayload(mode, slots));
 
-            facets.Add(new ActivityDesignFacet(kind, schemaVersion, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(payload, SerializerOptions)));
+            facets.Add(new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions)));
         }
 
         var paletteAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(ActivityPaletteAttribute).FullName);
@@ -293,7 +293,7 @@ public sealed class ClrAssemblyScanner(
                 ResourceKinds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ResourceKinds)),
                 Description = ReadNamedStringArgument(paletteAttribute, nameof(ActivityPaletteAttribute.Description))
             };
-            facets.Add(new ActivityDesignFacet("elsa.activity-palette", "1", Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(payload, SerializerOptions)));
+            facets.Add(new ActivityDesignFacet("elsa.activity-palette", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions)));
         }
 
         var outcomesFacet = BuildOutcomesFacet(type);
@@ -346,7 +346,7 @@ public sealed class ClrAssemblyScanner(
             : new ActivityDesignFacet(
                 ReplacedActivityTypesFacetKind,
                 "1",
-                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new { typeNames }, SerializerOptions));
+                JsonSerializer.SerializeToElement(new { typeNames }, SerializerOptions));
     }
 
     /// <summary>
@@ -422,7 +422,7 @@ public sealed class ClrAssemblyScanner(
         // The input whose script selects with complete(result, outcomes); draft validation checks its literal names.
         if (!string.IsNullOrWhiteSpace(scriptInput))
             payload["scriptInput"] = scriptInput;
-        return new ActivityDesignFacet("elsa.outcomes", "1", Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(payload, SerializerOptions));
+        return new ActivityDesignFacet("elsa.outcomes", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions));
     }
 
     /// <summary>
@@ -743,7 +743,7 @@ public sealed class ClrAssemblyScanner(
                     throw InvalidInputMetadata(activityTypeName, property.Name, $"Option provider dependency '{dependency}' does not identify a sibling input.");
             }
 
-            return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new
+            return JsonSerializer.SerializeToElement(new
             {
                 optionsProvider = new { key = provider!.Trim(), dependsOn = dependencies }
             }, SerializerOptions);
@@ -764,7 +764,7 @@ public sealed class ClrAssemblyScanner(
         if (duplicate is not null)
             throw InvalidInputMetadata(activityTypeName, property.Name, $"Option value '{duplicate.Key}' is duplicated.");
 
-        return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new { options }, SerializerOptions);
+        return JsonSerializer.SerializeToElement(new { options }, SerializerOptions);
     }
 
     private static ActivityInputOptionSpecification ToStringOption(string? value, Type? targetType, string activityTypeName, string inputName)
@@ -980,6 +980,7 @@ public sealed class ClrAssemblyScanner(
 
     private static JsonElement ParseDefaultValue(string value, Type? valueType)
     {
+        valueType = UnwrapNullable(valueType);
         var typeName = valueType?.FullName;
 
         if (typeName == typeof(bool).FullName && bool.TryParse(value, out var boolValue))

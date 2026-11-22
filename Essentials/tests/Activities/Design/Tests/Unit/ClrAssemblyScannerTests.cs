@@ -428,6 +428,23 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(expectedJson, input.DefaultValue?.GetRawText());
     }
 
+    [Fact]
+    public void Nullable_scalar_defaults_use_the_underlying_metadata_type_without_accepting_quoted_numbers()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(NullableDefaultFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        var enabled = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Enabled)).DefaultValue!.Value;
+        var count = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Count)).DefaultValue!.Value;
+        var multiplier = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.Multiplier)).DefaultValue!.Value;
+        var quoted = InputFor<NullableDefaultFixtureActivity>(models, nameof(NullableDefaultFixtureActivity.QuotedMultiplier)).DefaultValue!.Value;
+
+        Assert.Equal(JsonValueKind.True, enabled.ValueKind);
+        Assert.Equal(7, count.GetInt32());
+        Assert.Equal(2.5, multiplier.GetDouble());
+        Assert.Equal(JsonValueKind.String, quoted.ValueKind);
+        Assert.ThrowsAny<Exception>(() => Elsa.Serialization.Core.JsonConversionContract.Deserialize<double?>(quoted));
+    }
+
     [Theory]
     [InlineData(nameof(JsonDefaultFixtureActivity.NotJson), "not json")]
     [InlineData(nameof(JsonDefaultFixtureActivity.Text), "{}")]
