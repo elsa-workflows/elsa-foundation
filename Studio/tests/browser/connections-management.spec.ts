@@ -19,14 +19,14 @@ for (const width of [320, 768, 1024, 1440]) {
     await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
     await page.goto("/?mode=connections");
     const table = page.getByRole("table", { name: "Connections", exact: true });
-    await expect(table.getByRole("button", { name: "Customer API", exact: true })).toBeVisible();
+    await expect(table.getByRole("cell", { name: /Customer API/ })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() =>
       document.documentElement.scrollWidth <= document.documentElement.clientWidth
     )).toBe(true);
 
-    const opener = page.getByRole("button", { name: "Details for Customer API", exact: true });
-    await opener.click();
+    const opener = page.getByRole("row", { name: /Customer API/ });
+    await opener.press("Enter");
     const details = page.getByRole("dialog", { name: "Customer API", exact: true });
     await expect(details).toBeVisible();
     await expect(details.locator("details")).not.toHaveAttribute("open");
@@ -65,15 +65,11 @@ test("search waits for initial collection readiness and then accepts Enter", asy
   try {
     await page.goto("/?mode=connections");
     const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
-    const submit = page.getByRole("button", { name: "Search", exact: true });
-    await expect(submit).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toHaveCount(0);
     await expect.poll(() => queries).toEqual([""]);
     await search.fill("absent");
-    await search.press("Enter");
-    expect(queries).toEqual([""]);
+    await expect.poll(() => queries).toEqual(["", "absent"]);
     releaseDescriptors();
-    await expect(submit).toBeEnabled();
-    await search.press("Enter");
     await expect(page.getByRole("button", { name: "Clear search", exact: true })).toBeVisible();
     expect(queries).toEqual(["", "absent"]);
   } finally {
@@ -98,9 +94,8 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   const search = page.getByRole("searchbox", { name: "Search connections", exact: true });
   await expect.poll(() => listQueries).toEqual([""]);
   await search.fill("customer");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect.poll(() => listQueries).toEqual(["", "customer"]);
-  await expect(page.getByRole("button", { name: "Details for Customer API", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Customer API/ })).toBeVisible();
 
   await search.fill("draft-only");
   await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
@@ -109,10 +104,10 @@ test("creating a Connection preserves the accepted search and leaves absent resu
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(dialog).toHaveCount(0);
-  await expect(search).toHaveValue("customer");
-  await expect.poll(() => listQueries).toEqual(["", "customer", "customer"]);
+  await expect(search).toHaveValue("draft-only");
+  await expect.poll(() => listQueries).toEqual(["", "customer", "draft-only", "draft-only"]);
   await expect(page.locator(".studio-toast")).toContainText("Connection 'billing-api' created.");
-  await expect(page.locator(".connections-notice")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
@@ -158,7 +153,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     });
     await page.goto(`/?mode=connections&theme=${theme}`);
     const opener = page.getByRole("button", { name: "Create connection", exact: true }).first();
-    await opener.click();
+    await opener.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
     const more = dialog.getByRole("button", { name: /^More options/ });
     const create = dialog.getByRole("button", { name: "Create", exact: true });
@@ -249,7 +244,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     }, secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "customer-api" } } });
 
     // The alternative address and New value path keep runtime defaults un-authored.
-    await opener.click();
+    await opener.press("Enter");
     await dialog.getByLabel("Name", { exact: true }).fill("new-api");
     await dialog.getByRole("radio", { name: "New value", exact: true }).check();
     await dialog.getByLabel("New value for API key", { exact: true }).fill("fixture-operator-value");
@@ -365,7 +360,7 @@ for (const controlled of [false, true]) {
     await page.route("**/connections/descriptors", route => route.fulfill({ json: descriptors }));
     await page.route("**/connections", async route => { created = true; await route.fulfill({ status: 201, json: value }); });
     await page.goto("/?mode=connections");
-    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeEnabled();
     await page.getByRole("button", { name: "Create connection", exact: true }).first().click();
     const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
     await dialog.getByLabel("Name", { exact: true }).fill(value.name);

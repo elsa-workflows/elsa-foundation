@@ -81,8 +81,7 @@ test("filter controls stay aligned above their descriptions at wide and wrapped 
         viewportWidth: window.innerWidth,
         toolbar: bounds(toolbar),
         search: [
-          bounds(toolbar.querySelector(".secrets-search-control")!),
-          bounds(toolbar.querySelector(".secrets-search-action")!)
+          bounds(toolbar.querySelector(".secrets-search-control")!)
         ],
         fields
       };
@@ -134,9 +133,11 @@ test("inventory coverage stays truthful through search, local scope filtering an
   await expect(listRequests).toHaveText("2");
   await expect(page.getByRole("link", { name: "Known later credentials", exact: true })).toBeVisible();
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
-  await search.fill("draft should not relabel this search");
+  await search.fill("missing search");
+  await expect(page.getByRole("heading", { name: "No results for “missing search”" })).toBeVisible();
+  await search.fill("knownlaterintegrationbillingcredentialsforregionalpartnernetwork");
+  await expect(listRequests).toHaveText("4");
   await expect(count).toHaveText("1 shown · 1 loaded · 1 result for “knownlaterintegrationbillingcredentialsforregionalpartnernetwork”");
-  await expect(listRequests).toHaveText("2");
 
   const scope = page.getByRole("combobox", { name: "Scope", exact: true });
   await scope.selectOption("Integration:Later");
@@ -294,7 +295,6 @@ test("keeps an active loaded scope visible when search returns a different scope
   const search = page.getByRole("searchbox", { name: "Search secrets", exact: true });
   const laterName = "knownlaterintegrationbillingcredentialsforregionalpartnernetwork";
   await search.fill(laterName);
-  await page.getByRole("button", { name: "Search", exact: true }).click();
 
   await expect(count).toHaveText(`0 shown · 1 loaded · 1 result for “${laterName}”`);
   await expect(scope).toHaveValue("Scope:1");
