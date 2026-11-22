@@ -403,7 +403,7 @@ in scope.
 - [ ] **X6.3** (#5099) [source] `EXT/Agent/HumanReviewPage.tsx:108` and `AgentInvocationPage.tsx:97`.
 - [x] **X6.4** (#5100) [source] `EXT/Connections/ConnectionsPage.tsx:146`. (PR #5299)
 - [x] **X6.5** (#5101) [seen] `EXT/Secrets/SecretsPage.tsx:255` (labelled "Refresh secrets" in the running app). (PR #5299)
-- [ ] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`.
+- [x] **X6.6** (#5102) [source] `EXT/Decisions/DecisionsPage.tsx:176`. (PR #5320)
 - [ ] **X6.7** (#5103) [source] `EXT/UserTasks/TaskDetailPage.tsx:168–171` ("Refresh task" inside the overflow
   menu).
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
@@ -435,7 +435,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `.ad-validation-result` (`:203`).
 - [x] **X7.6** (#5112) [source] `ConnectionStatusBadge` / `.connection-status` (PR #5299)
   (`EXT/Connections/connectionPresentation.tsx:12–16`).
-- [ ] **X7.7** (#5113) [source] `.decision-draft-status` pill (`EXT/Decisions/styles.css:22`).
+- [x] **X7.7** (#5113) [source] `.decision-draft-status` pill (`EXT/Decisions/styles.css:22`). (PR #5320)
 - [ ] **X7.8** (#5114) [check] `.etl-run-status` in ETL.
 
 ### X8. Tabs and view switches
@@ -457,7 +457,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   buttons → `PeerViewSwitch`.
 - [ ] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
   labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version").
-- [ ] **X8.11** (#5126) [source] `EXT/Decisions/DecisionsPage.tsx:184–185` uses `StudioTabs` for Active /
+- [x] **X8.11** (#5126) [source] `EXT/Decisions/DecisionsPage.tsx:184–185` uses `StudioTabs` for Active / (PR #5320)
   Recycle bin where `PeerViewSwitch` is the peer-view primitive.
 
 ### X9. Loading, empty and error states
@@ -488,7 +488,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   address." (`EXT/UserTasks/module.tsx:16`) are plain paragraphs → `StudioResultState`.
 - [ ] **X9.7** (#5135) [source] `role="status"` on error text where `role="alert"` is right:
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
-- [ ] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`;
+- [x] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`; (PR #5320)
   action results belong in `api.notifications.notify`.
 - [ ] **X9.9** (#5137) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
   `EXT/Workflows.Dashboard/WorkflowRunHealthWidget.tsx:66`, `WorkflowDashboardUnavailable.tsx:5`.
@@ -500,7 +500,7 @@ Replace local date formatting with `StudioTimestamp`.
 - [ ] **X10.1** (#5139) [verified] `WF/workflow-editor/WorkflowInstances.tsx:842`.
 - [x] **X10.2** (#5140) [verified] `EXT/Connections/connectionPresentation.tsx:29` (`connectionDate`, used by (PR #5299)
   `ConnectionDetailDialog.tsx:41–42`).
-- [ ] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`.
+- [x] **X10.3** (#5141) [verified] `EXT/Decisions/CasePanel.tsx:130`. (PR #5320)
 - [ ] **X10.4** (#5142) [verified] `EXT/UserTasks/FormsPage.tsx:204`, `FormsPageLifecycle.tsx:436`,
   `FormVersionWorkspace.tsx:48`, `TaskDetailPage.tsx:188`.
 - [ ] **X10.5** (#5143) [verified] `EXT/Etl/EtlDefinitionsPage.tsx:648, 701`.
@@ -563,7 +563,7 @@ the designer header is a documented exception.
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
   `closest("details")`; keep that focus behaviour working.
 - [ ] **X12.4** (#5174) [verified] `EXT/Connections/ConnectionDetailDialog.tsx:50` → `TechnicalDetails`.
-- [ ] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`),
+- [x] **X12.5** (#5175) [verified] `EXT/Decisions/CasePanel.tsx:130` (also `:135`, `:137`), (PR #5320)
   `DecisionInputsEditor.tsx:182` [source].
 - [x] **X12.6** (#5176) [verified] `DASH/native/NamedDashboards.tsx:558` uses `<details>` as an action menu →
   `OverflowMenu`. (PR #5311)
@@ -715,7 +715,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   (`ConnectionList.tsx:39, 46`). Replace both with `studioRowInteraction` on the row. `needs: D12`
 - [ ] **E2** (#5232) [source] Secrets: show/hide toggle (`SecretDialogs.tsx:245`) → `RevealToggle`; the row
   copy button → `CopyableIdentifier`.
-- [ ] **E3** (#5233) [seen] Decisions: "Add rule" is a second filled primary beside header Save and is
+- [x] **E3** (#5233) [seen] Decisions: "Add rule" is a second filled primary beside header Save and is (PR #5320)
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
 - [ ] **E4** (#5234) [seen] Forms: the editor is wrapped in a page card; "Publish" and "Cancel" sit inside the
   card while "Back to forms" sits above it; the page title is 12px.
@@ -729,7 +729,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [ ] **E8** (#5238) [verified] Feature management: the whole screen lives in one 2,298-line `module.tsx`.
 - [ ] **E9** (#5239) [source] Agent review: "Deny" is a default-styled button beside primary "Approve"
   (`HumanReviewPage.tsx:121–122`). `needs: K2`
-- [ ] **E10** (#5240) [source] Decisions: recycle-bin rows use inline buttons (`DecisionsPage.tsx:208`) while
+- [x] **E10** (#5240) [source] Decisions: recycle-bin rows use inline buttons (`DecisionsPage.tsx:208`) while (PR #5320)
   active rows use `OverflowMenu`; "Unpublish" and "Move to recycle bin" are default buttons
   (`:257–258`). `needs: K2`
 - [ ] **E11** (#5241) [check] Forms list and editor share one route with no URL per form
