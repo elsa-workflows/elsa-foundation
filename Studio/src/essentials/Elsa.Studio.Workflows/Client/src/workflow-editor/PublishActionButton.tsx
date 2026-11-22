@@ -1,5 +1,5 @@
 import "./PublishActionButton.css";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronDown, GitBranch, Send } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 
@@ -9,43 +9,32 @@ interface PublishActionButtonProps {
   busy: boolean;
   saving: boolean;
   unavailableReason?: string;
-  ariaLabel?: string;
-  preferenceKey?: string;
-  primaryButtonRef?: RefObject<HTMLButtonElement | null>;
   onPublish(mode: WorkflowPublishMode): void;
 }
 
 const rememberedModeKey = "elsa-studio-workflow-publish-mode";
 const modes: WorkflowPublishMode[] = ["review", "publish"];
 
-function readRememberedMode(key: string): WorkflowPublishMode {
+function readRememberedMode(): WorkflowPublishMode {
   try {
-    const stored = window.localStorage.getItem(key);
+    const stored = window.localStorage.getItem(rememberedModeKey);
     return stored === "publish" || stored === "review" ? stored : "review";
   } catch {
     return "review";
   }
 }
 
-function rememberMode(key: string, mode: WorkflowPublishMode) {
+function rememberMode(mode: WorkflowPublishMode) {
   try {
-    window.localStorage.setItem(key, mode);
+    window.localStorage.setItem(rememberedModeKey, mode);
   } catch {
     // The current choice still works for this editor session when storage is unavailable.
   }
 }
 
-export function PublishActionButton({
-  busy: pending,
-  saving,
-  unavailableReason,
-  ariaLabel = "Workflow publication actions",
-  preferenceKey = rememberedModeKey,
-  primaryButtonRef,
-  onPublish
-}: PublishActionButtonProps) {
+export function PublishActionButton({ busy: pending, saving, unavailableReason, onPublish }: PublishActionButtonProps) {
   const busy = pending || !!unavailableReason;
-  const [mode, setMode] = useState<WorkflowPublishMode>(() => readRememberedMode(preferenceKey));
+  const [mode, setMode] = useState<WorkflowPublishMode>(readRememberedMode);
   const [open, setOpen] = useState(false);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -99,7 +88,7 @@ export function PublishActionButton({
   const selectMode = (nextMode: WorkflowPublishMode, command: HTMLButtonElement) => {
     focusReturnTargetRef.current = document.activeElement === command ? "options" : null;
     setMode(nextMode);
-    rememberMode(preferenceKey, nextMode);
+    rememberMode(nextMode);
     closeMenu();
     onPublish(nextMode);
   };
@@ -141,12 +130,9 @@ export function PublishActionButton({
   const queuedTitle = unavailableReason ?? (saving ? "Finishing the current save; this action will start once it settles." : undefined);
 
   return (
-    <div className="wf-publish-actions" role="group" aria-label={ariaLabel}>
+    <div className="wf-publish-actions" role="group" aria-label="Workflow publication actions">
       <button
-        ref={element => {
-          primaryRef.current = element;
-          if (primaryButtonRef) primaryButtonRef.current = element;
-        }}
+        ref={primaryRef}
         type="button"
         className="wf-publish-primary"
         disabled={busy}

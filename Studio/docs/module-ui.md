@@ -227,10 +227,14 @@ destination can keep their existing controls.
 - Keep denied access, unsupported capability, empty data and failed requests distinct.
   Clear identities and counts when access is lost. Never render a secret value in a list.
 - Use `StudioCollectionFooter` for counts and pagination. Say loaded/shown/total
-  accurately; preserve opaque cursor semantics and disable unavailable navigation.
+  accurately in `summary` or in existing children. Use `pageSize={{ label, value, sizes, onChange }}`
+  for a labelled numeric selector and `loadMore={{ hasMore, busy, onLoadMore }}` for cursor-based
+  append actions. The button is disabled while busy or when `hasMore` is false. Keep cursor and
+  request state in the module; put custom navigation, such as Previous and Next, in children.
 - Use `StudioButton`, `StudioField`, `CopyableIdentifier`, status chips and the
   disclosure kit. Use the injected `api.dialogs` for host confirmation and focus management.
   A shared visual primitive does not grant permissions or implement a mutation.
+- Use `StudioButton` with `variant="danger"` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent.
 - Keep embedded editors, diagnostic streams, dashboards and graph workspaces shaped
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.

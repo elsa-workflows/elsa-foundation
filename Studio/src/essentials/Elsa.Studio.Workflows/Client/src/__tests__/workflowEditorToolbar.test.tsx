@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -79,24 +77,6 @@ describe("compact workflow toolbar", () => {
     expect(commands.onRun).toHaveBeenCalledOnce();
     expect(publishAccessibleName).toBe("Review & publish");
     expect(runAccessibleName).toBe("Test Run");
-  });
-
-  it("renders the published Run action with its availability reason and invokes it when enabled", () => {
-    const onRunPublished = vi.fn();
-    const { container } = render({
-      onRunPublished,
-      canRunPublished: false,
-      runPublishedTitle: "Publish this workflow to run it"
-    });
-    const runPublished = container.querySelector<HTMLButtonElement>(".wf-run-published-button")!;
-
-    expect(runPublished.textContent).toContain("Run");
-    expect(runPublished.disabled).toBe(true);
-    expect(runPublished.title).toBe("Publish this workflow to run it");
-
-    const enabled = render({ onRunPublished, canRunPublished: true, runPublishedTitle: "Run published version 4" });
-    click(enabled.container.querySelector<HTMLButtonElement>(".wf-run-published-button")!);
-    expect(onRunPublished).toHaveBeenCalledOnce();
   });
 
   it("keeps save feedback with the actions and preserves busy and run eligibility guards", () => {

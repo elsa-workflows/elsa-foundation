@@ -61,7 +61,7 @@ describe("workflow definition browse boundaries", () => {
     } else if (key === "page") {
       await click(button(container, "Next"));
     } else {
-      await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+      await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     }
 
     await waitForCondition(() => expect(requests.some(isTransitionRequest)).toBe(true));

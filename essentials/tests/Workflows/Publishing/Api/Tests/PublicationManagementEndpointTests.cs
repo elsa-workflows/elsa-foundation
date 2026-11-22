@@ -24,7 +24,6 @@ public sealed class PublicationManagementEndpointTests
         { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", WorkflowPublishingPermissions.Read },
         { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", WorkflowPublishingPermissions.Manage },
         { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Manage },
-        { "UnpublishPublicationSlotAtRevisionEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", WorkflowPublishingPermissions.Manage },
         { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", WorkflowPublishingPermissions.Manage },
         { "GetPublicationRecordEndpoint", "publishing/publications/{publicationId}", WorkflowPublishingPermissions.Read },
         { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Read },
@@ -55,7 +54,6 @@ public sealed class PublicationManagementEndpointTests
     public static TheoryData<string, string, string, string> SlotLifecycleRelations => new()
     {
         { "publication-slot-unpublish", "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", "DELETE" },
-        { "publication-slot-unpublish-reviewed", "UnpublishPublicationSlotAtRevisionEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", "POST" },
         { "publication-slot-restore", "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST" }
     };
 

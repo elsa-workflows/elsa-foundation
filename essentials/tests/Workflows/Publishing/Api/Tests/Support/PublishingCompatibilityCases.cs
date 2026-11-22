@@ -127,7 +127,6 @@ public static class PublishingCompatibilityCases
         "ActivityDrafts.Publish" => "{\"draftId\":\"body-draft\",\"expectedDraftRevision\":0,\"version\":\"1\",\"reviewToken\":\"capture-review\",\"idempotencyKey\":\"capture-publish\"}",
         "ActivityTestRuns.Start" => "{\"draftId\":\"body-draft\",\"input\":{},\"idempotencyKey\":\"capture-run\"}",
         "WorkflowPolicy.Set" => "{\"defaultAction\":\"Replace\",\"defaultSlotName\":\"default\",\"expectedRevision\":0}",
-        "PublicationSlots.UnpublishReviewed" => null,
         "PublicationSlots.Unpublish" or "PublicationSlots.Restore" => "{}",
         _ when route.Endpoint.Method.Value == "GET" => null,
         _ => "{}"
@@ -138,7 +137,6 @@ public static class PublishingCompatibilityCases
         .Replace("{versionId:regex(^(?!drafts$).+$)}", "version-route", StringComparison.Ordinal)
         .Replace("{definitionId}", "definition-route", StringComparison.Ordinal)
         .Replace("{slotName}", "default", StringComparison.Ordinal)
-        .Replace("{expectedRevision}", "17", StringComparison.Ordinal)
         .Replace("{draftId}", "draft-route", StringComparison.Ordinal)
         .Replace("{idempotencyKey}", "idempotency-route", StringComparison.Ordinal)
         .Replace("{testRunId}", "test-run-route", StringComparison.Ordinal);
@@ -179,7 +177,7 @@ public sealed record PublishingRoute(
         "ValueConversionProfiles.List" => "ValueConversionProfilesResponse",
         "WorkflowPreflight" => "PublicationPreflightView",
         "WorkflowSnapshotPreflight" => "PublicationSnapshotPreflightView",
-        "PublicationSlots.Unpublish" or "PublicationSlots.UnpublishReviewed" or "PublicationSlots.Restore" => "PublicationSlotView",
+        "PublicationSlots.Unpublish" or "PublicationSlots.Restore" => "PublicationSlotView",
         "WorkflowPolicy.Get" or "WorkflowPolicy.Set" => "PublicationPolicyView",
         "WorkflowPublish" => "PublishedWorkflowView",
         "WorkflowTestRuns.Start" or "WorkflowTestRuns.StartDraft" => "WorkflowTestRunView",

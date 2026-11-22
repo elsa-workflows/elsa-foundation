@@ -6,6 +6,8 @@ import type { NativeBlockValidation } from "./NativeBlockCommands";
 const NativeBlockAuthorityContext = createContext<{
   sourceKey: string;
   canEdit: boolean;
+  startEditing?(): void;
+  startingEditing?: boolean;
   canApply(): boolean;
   validate(candidate: StudioActivityDefinitionImplementationState): Promise<NativeBlockValidation>;
 } | null>(null);

@@ -54,7 +54,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await outputName.fill("Sum"); await outputName.press("Enter");
   await page.getByRole("combobox", { name: "Type", exact: true }).selectOption("Double");
   await page.getByRole("checkbox", { name: /^Required/ }).check();
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await capture(page, info, "set-output-declaration");
   await views.getByRole("tab", { name: "Designer", exact: true }).click();
   await row().click();
@@ -74,7 +74,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await inputBindings.selectOption("A"); await inputBindings.selectOption("B");
   await expect(value.getByRole("list", { name: "Bound activity inputs", exact: true })).toContainText("args.A");
   await expect(value.getByRole("list", { name: "Bound activity inputs", exact: true })).toContainText("args.B");
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await capture(page, info, "set-output-expression");
   await page.reload(); await row().click();
   await expect(target()).toHaveValue("Sum");
@@ -84,14 +84,14 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await views.getByRole("tab", { name: /^Outputs/ }).click();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("RenamedSum");
   await page.getByRole("textbox", { name: "Name", exact: true }).press("Tab");
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await views.getByRole("tab", { name: "Designer", exact: true }).click(); await row().click();
   await expect(target()).toHaveAttribute("aria-invalid", "true");
   await capture(page, info, "set-output-removed-target");
   await views.getByRole("tab", { name: /^Outputs/ }).click();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Sum");
   await page.getByRole("textbox", { name: "Name", exact: true }).press("Tab");
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await views.getByRole("tab", { name: "Designer", exact: true }).click(); await row().click();
   await expect(target()).toHaveAttribute("aria-invalid", "false");
   await page.setViewportSize(viewport);
@@ -114,7 +114,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   });
   await page.reload(); await views.getByRole("tab", { name: /^Outputs/ }).click();
   await expect(page.getByText("This output also has a Set Output assignment. Remove this connection or the assignment before publishing.", { exact: true })).toBeVisible();
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   const rejectedReview = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publication-preflight"));
   await page.getByRole("button", { name: "Review & publish", exact: true }).click();
   const rejected = await (await rejectedReview).json();
@@ -129,7 +129,7 @@ export async function setOutputJourney(page: Page, info: TestInfo, capture: Capt
   await review.getByRole("button", { name: "Return to editor", exact: true }).click();
   await page.getByRole("button", { name: "Remove connection", exact: true }).click();
   await expect(page.getByText("Assigned by Set Output in the designer.", { exact: true })).toBeVisible();
-  await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
   await page.locator(".ad-output-value-source").scrollIntoViewIfNeeded();
   await capture(page, info, "set-output-conflict-repaired");
   const saved = await api<Draft>(`/design/activities/drafts/${created.draft.draftId}`);

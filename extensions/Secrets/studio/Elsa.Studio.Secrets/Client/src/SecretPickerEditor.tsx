@@ -104,23 +104,14 @@ export function SecretPickerEditor({
 }
 
 export function toReference(value: unknown): SecretReference | null {
-  const candidate = typeof value === "string" ? parseReferenceJson(value) : value;
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-  const reference = candidate as Partial<SecretReference>;
+  if (!value || typeof value !== "object") return null;
+  const reference = value as Partial<SecretReference>;
   if (typeof reference.name !== "string" || !reference.name.trim()) return null;
   return {
     name: reference.name,
     typeName: typeof reference.typeName === "string" ? reference.typeName : null,
     scope: typeof reference.scope === "string" ? reference.scope : null
   };
-}
-
-function parseReferenceJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
 }
 
 function allowlistMetadata(items: SecretMetadata[]): SecretPickerMetadata[] {

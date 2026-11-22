@@ -292,75 +292,6 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
-  it("lists archived definitions separately and restores them through the server-authorized action", async () => {
-    let restored = false;
-    const archivedDefinition = definition({ definitionId: "definition-archived", displayName: "Archived activity" }, [{ action: "restore-definition", allowed: true }]);
-    const getJson = vi.fn(async (url: string) => {
-      if (url === "/capabilities") return capabilities();
-      if (url.startsWith("/design/activities/definitions?")) {
-        const parameters = new URLSearchParams(url.slice(url.indexOf("?") + 1));
-        return parameters.get("archivedOnly") === "true" && !restored ? page([archivedDefinition]) : page([]);
-      }
-      throw new Error(`Unexpected GET ${url}`);
-    });
-    const postJson = vi.fn(async () => { restored = true; });
-    const rendered = renderPage(getJson, undefined, undefined, postJson);
-
-    await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Archived"));
-    await waitForText(rendered.container, "Archived activity");
-    expect(rendered.container.querySelector(".studio-page-actions")?.textContent).not.toContain("Create activity");
-    click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Archived activity"]')!);
-    const menu = document.querySelector<HTMLElement>("[role='menu']")!;
-    expect([...menu.querySelectorAll("[role='menuitem']")].map(item => item.textContent?.trim())).toEqual(["Restore", "Version history", "Usage"]);
-    click(buttonByText(menu, "Restore"));
-
-    await waitForText(rendered.container, "No archived Activity Definitions");
-    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition-archived/restore", undefined);
-    expect(getJson.mock.calls.some(([url]) => url.includes("archivedOnly=true"))).toBe(true);
-    await rendered.unmount();
-  });
-
-  it("does not offer restore without server permission and keeps restore failures retryable", async () => {
-    let restored = false;
-    let failFirstAttempt = true;
-    const deniedDefinition = definition({ definitionId: "definition-denied", displayName: "Denied activity" }, [{ action: "restore-definition", allowed: false }]);
-    const archivedDefinition = definition({ definitionId: "definition-archived", displayName: "Archived activity" }, [{ action: "restore-definition", allowed: true }]);
-    const getJson = vi.fn(async (url: string) => {
-      if (url === "/capabilities") return capabilities();
-      if (url.startsWith("/design/activities/definitions?")) {
-        const archived = new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("archivedOnly") === "true";
-        return archived ? page(restored ? [] : [deniedDefinition, archivedDefinition]) : page([]);
-      }
-      throw new Error(`Unexpected GET ${url}`);
-    });
-    const postJson = vi.fn(async () => {
-      if (failFirstAttempt) {
-        failFirstAttempt = false;
-        throw new Error("Restore service unavailable");
-      }
-      restored = true;
-    });
-    const rendered = renderPage(getJson, undefined, undefined, postJson);
-
-    await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Archived"));
-    await waitForText(rendered.container, "Denied activity");
-    const deniedActions = rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Denied activity"]')!;
-    click(deniedActions);
-    expect([...document.querySelectorAll("[role='menuitem']")].map(item => item.textContent?.trim())).toEqual(["Version history", "Usage"]);
-    click(deniedActions);
-    click(document.querySelector<HTMLButtonElement>("[aria-label='Actions for Archived activity']")!);
-    click(buttonByText(document.querySelector<HTMLElement>("[role='menu']")!, "Restore"));
-    await waitForText(rendered.container, "The restore request could not be confirmed");
-    await waitFor(() => expect(buttonByText(rendered.container, "Retry restore")).toBeTruthy());
-    click(buttonByText(rendered.container, "Retry restore"));
-
-    await waitForText(rendered.container, "No archived Activity Definitions");
-    expect(postJson).toHaveBeenCalledTimes(2);
-    await rendered.unmount();
-  });
-
   it("opens publication review for the only authorized active draft without publishing", async () => {
     const postJson = vi.fn(async (_url: string) => ({}));
     const putJson = vi.fn(async () => ({ ...draftDetail(), revision: 4 }));
@@ -2199,7 +2130,6 @@ function capabilities(includeAuthoring = false, includeFork = false) {
     { rel: "activity-definitions", href: "design/activities/definitions" },
     ...(includeAuthoring ? [{ rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" }] : []),
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
-    { rel: "activity-definition-restore", href: "design/activities/definitions/{definitionId}/restore", templated: true },
     { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },

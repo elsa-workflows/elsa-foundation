@@ -67,52 +67,6 @@ public sealed class PublicationSlotNotFoundEndpointTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Reviewed_unpublish_rejects_a_stale_revision_without_changing_the_slot_or_publication()
-    {
-        await using var host = await StartAsync();
-        var artifactId = await SaveExecutableAsync(host, ActiveDefinitionId);
-        await SavePublicationAsync(host, ActiveDefinitionId, ActivePublicationId, artifactId, PublicationStatus.Active);
-        var authority = host.Services.GetRequiredService<IWorkflowActivationAuthority>();
-        var reviewed = await authority.FindAsync(ActiveDefinitionId, SlotName);
-        Assert.NotNull(reviewed);
-
-        using var response = await SendReviewedAsync(host, ActiveDefinitionId, reviewed.Revision - 1);
-
-        await AssertStatusAsync(HttpStatusCode.Conflict, response);
-        Assert.Equal(ActivePublicationId, (await authority.FindAsync(ActiveDefinitionId, SlotName))?.ActiveActivationId);
-        Assert.Equal(PublicationStatus.Active,
-            (await host.Services.GetRequiredService<IPublicationRecordStore>().FindAsync(ActivePublicationId))?.Status);
-    }
-
-    [Fact]
-    public async Task Reviewed_unpublish_requires_a_revision()
-    {
-        await using var host = await StartAsync();
-
-        using var response = await SendReviewedAsync(host, ActiveDefinitionId, null);
-
-        await AssertStatusAsync(HttpStatusCode.NotFound, response);
-    }
-
-    [Fact]
-    public async Task Reviewed_unpublish_clears_the_slot_when_the_reviewed_revision_still_matches()
-    {
-        await using var host = await StartAsync();
-        var artifactId = await SaveExecutableAsync(host, ActiveDefinitionId);
-        await SavePublicationAsync(host, ActiveDefinitionId, ActivePublicationId, artifactId, PublicationStatus.Active);
-        var authority = host.Services.GetRequiredService<IWorkflowActivationAuthority>();
-        var reviewed = await authority.FindAsync(ActiveDefinitionId, SlotName);
-        Assert.NotNull(reviewed);
-
-        using var response = await SendReviewedAsync(host, ActiveDefinitionId, reviewed.Revision);
-
-        await AssertStatusAsync(HttpStatusCode.OK, response);
-        Assert.Null((await authority.FindAsync(ActiveDefinitionId, SlotName))?.ActiveActivationId);
-        Assert.Equal(PublicationStatus.Retired,
-            (await host.Services.GetRequiredService<IPublicationRecordStore>().FindAsync(ActivePublicationId))?.Status);
-    }
-
-    [Fact]
     public async Task Restoring_a_slot_with_no_retired_publication_is_a_404()
     {
         const string definitionId = "definition-never-retired";
@@ -245,18 +199,6 @@ public sealed class PublicationSlotNotFoundEndpointTests : IAsyncLifetime
         return host.Client.SendAsync(request);
     }
 
-    private static Task<HttpResponseMessage> SendReviewedAsync(
-        PublishingMinimalApiScenarioHost host,
-        string definitionId,
-        long? expectedRevision)
-    {
-        var revisionSegment = expectedRevision is { } revision ? $"/{revision}" : "";
-        var request = new HttpRequestMessage(HttpMethod.Post,
-            $"/publishing/workflows/{definitionId}/slots/{SlotName}/unpublish{revisionSegment}");
-        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
-        return host.Client.SendAsync(request);
-    }
-
     private static async Task AssertStatusAsync(HttpStatusCode expected, HttpResponseMessage response) =>
         Assert.True(expected == response.StatusCode, $"Expected {(int)expected}, got {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
 
@@ -277,9 +219,6 @@ public sealed class PublicationSlotNotFoundEndpointTests : IAsyncLifetime
     private sealed class ThrowingSlotLifecycle : IPublicationSlotUnpublisher, IPublicationSlotRestorer
     {
         public Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
-            throw new PublicationSlotNotFoundException("Nothing to act on here.");
-
-        public Task<WorkflowActivationSlot> UnpublishAtRevisionAsync(string workflowDefinitionId, string slotName, long expectedRevision, CancellationToken cancellationToken) =>
             throw new PublicationSlotNotFoundException("Nothing to act on here.");
 
         public Task<WorkflowActivationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
