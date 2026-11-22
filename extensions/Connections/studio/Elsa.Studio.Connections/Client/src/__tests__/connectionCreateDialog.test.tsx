@@ -560,7 +560,7 @@ describe("connection credential creation", () => {
     const { container } = renderDialog({ context: endpointContext(postJson), onCancel });
 
     expect(document.activeElement).toBe(control<HTMLInputElement>(container, "Name"));
-    await waitFor(() => container.textContent?.includes("Secrets read permission") === true);
+    await waitFor(() => container.textContent?.includes("secrets read permission") === true);
     expect(container.textContent).toContain("Access to existing secrets is denied.");
     expect(container.textContent).not.toContain(rawSecretValue);
     clickButton(container, "Retry");
