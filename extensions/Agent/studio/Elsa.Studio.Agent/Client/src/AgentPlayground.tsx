@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FlaskConical, Play, Square } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StatusChip, StudioAlert, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioAlert, StudioButton, StudioPage, SkeletonRows, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { activityDefinitionPath } from "./AgentsPage";
 import { InvocationEvidenceDetails } from "./InvocationEvidence";
 import { invocationPath } from "./AgentInvocationPage";
@@ -105,7 +105,7 @@ function Playground({ context, draftId, navigate, pollInterval }: { context: Stu
     return () => { abort.abort(); clearTimeout(timer); };
   }, [context, run, pollInterval]);
 
-  if (load.kind === "loading") return <StudioPage aria-busy="true"><p>Loading agent draft…</p></StudioPage>;
+  if (load.kind === "loading") return <StudioPage aria-busy="true"><SkeletonRows label="Loading agent draft" /></StudioPage>;
   if (load.kind === "missing")
     return <StudioPage data-testid="playground-missing"><StudioResultState title="Agent draft not found" description="No visible agent draft matches this link. It may have been published, discarded or belong to another tenant." /></StudioPage>;
   if (load.kind === "denied")
