@@ -1,4 +1,4 @@
-import { formatStudioDate } from "../../../../sdk/timeZone";
+import { formatStudioDate } from "../../../sdk/timeZone";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";

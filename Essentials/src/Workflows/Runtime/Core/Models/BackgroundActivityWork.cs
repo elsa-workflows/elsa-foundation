@@ -209,7 +209,6 @@ public sealed record BackgroundActivityWorkItem(
 /// <summary>Receipt identity computed from the canonical terminal payload, never supplied by a worker.</summary>
 public static class BackgroundActivityWorkReceipt
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
 
     public static string ComputeDigest(BackgroundActivityWorkRequest request, BackgroundActivityWorkTerminalResult result)
     {
@@ -222,7 +221,7 @@ public static class BackgroundActivityWorkReceipt
             resultJson = resultDocument.RootElement.Clone();
         }
 
-        var canonicalPayload = JsonSerializer.SerializeToElement(new
+        var canonicalPayload = Elsa.Serialization.Core.JsonHashInput.SerializeToElement(new
         {
             request.WorkId,
             request.WorkflowExecutionId,
@@ -238,35 +237,7 @@ public static class BackgroundActivityWorkReceipt
             ResultJson = resultJson,
             result.Fault,
             result.CancellationReason
-        }, SerializerOptions);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-            WriteCanonical(canonicalPayload, writer);
-        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
-    }
-
-    private static void WriteCanonical(JsonElement element, Utf8JsonWriter writer)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(property.Value, writer);
-                }
-                writer.WriteEndObject();
-                return;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray())
-                    WriteCanonical(item, writer);
-                writer.WriteEndArray();
-                return;
-            default:
-                element.WriteTo(writer);
-                return;
-        }
+        });
+        return Elsa.Serialization.Core.JsonHashInput.Hash(canonicalPayload);
     }
 }

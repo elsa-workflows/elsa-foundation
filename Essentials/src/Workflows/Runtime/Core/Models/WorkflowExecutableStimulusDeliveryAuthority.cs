@@ -44,10 +44,13 @@ internal sealed class WorkflowExecutableStimulusDeliveryAuthorityJsonConverter :
     }
 
     public override void Write(Utf8JsonWriter writer, WorkflowExecutableStimulusDeliveryAuthority value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new Wire(value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
-            value.OwnerId, value.FencingToken, value.TriggerBindingId), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record Wire([property: JsonRequired] string SourceOutboxItemId,
+    internal static Wire HashProjection(WorkflowExecutableStimulusDeliveryAuthority value) =>
+        new Wire(value.SourceOutboxItemId, value.IntentFingerprint, value.Scope,
+            value.OwnerId, value.FencingToken, value.TriggerBindingId);
+
+    internal sealed record Wire([property: JsonRequired] string SourceOutboxItemId,
         [property: JsonRequired] string IntentFingerprint, [property: JsonRequired] PersistenceScope Scope,
         [property: JsonRequired] string OwnerId, [property: JsonRequired] long FencingToken,
         [property: JsonRequired] string TriggerBindingId);

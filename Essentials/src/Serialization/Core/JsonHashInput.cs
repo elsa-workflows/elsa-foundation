@@ -7,7 +7,7 @@ using System.Text.Json.Serialization.Metadata;
 namespace Elsa.Serialization.Core;
 
 /// <summary>The single JSON hash contract (ADR 0091). Frozen with every hashed type from Elsa 4's first stable release.</summary>
-public static class JsonHashInput
+public static partial class JsonHashInput
 {
     private static readonly JsonSerializerOptions Options = CreateOptions();
 

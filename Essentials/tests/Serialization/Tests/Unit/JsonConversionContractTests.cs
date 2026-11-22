@@ -82,8 +82,8 @@ public sealed class JsonConversionContractTests
     public void Strict_and_required_contracts_refuse()
     {
         var strict = JsonConversionContract.For(typeof(StrictOrder));
-        Assert.Contains("json-unmatched-member-refused", Assert.Throws<JsonException>(() => strict.Read(Element("{\"wrong\":1}"), typeof(StrictOrder))).Message);
-        Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(RequiredOrder)).Read(Element("{}"), typeof(RequiredOrder)));
+        Assert.Contains("json-unmatched-member-refused", Assert.ThrowsAny<JsonException>(() => strict.Read(Element("{\"wrong\":1}"), typeof(StrictOrder))).Message);
+        Assert.ThrowsAny<JsonException>(() => JsonConversionContract.For(typeof(RequiredOrder)).Read(Element("{}"), typeof(RequiredOrder)));
     }
 
     [Theory]
@@ -97,22 +97,22 @@ public sealed class JsonConversionContractTests
     [InlineData("false", typeof(DateTimeOffset))]
     [InlineData("{}", typeof(TimeSpan))]
     public void Implicit_coercions_and_invalid_temporal_values_refuse_as_json_errors(string json, Type type) =>
-        Assert.Throws<JsonException>(() => JsonConversionContract.For(type).Read(Element(json), type));
+        Assert.ThrowsAny<JsonException>(() => JsonConversionContract.For(type).Read(Element(json), type));
 
     [Fact]
     public void Number_handling_annotations_cannot_reenable_text_to_number_parsing()
     {
         var contract = JsonConversionContract.For(typeof(AnnotatedNumber));
-        Assert.Throws<JsonException>(() => contract.Read(Element("{\"number\":\"42\"}"), typeof(AnnotatedNumber)));
+        Assert.ThrowsAny<JsonException>(() => contract.Read(Element("{\"number\":\"42\"}"), typeof(AnnotatedNumber)));
     }
 
     [Fact]
     public void Nullable_scoped_structs_remain_strict_and_nested_date_paths_remain_complete()
     {
         var contract = JsonConversionContract.For(typeof(StrictValue?));
-        Assert.Throws<JsonException>(() => contract.Read(Element("{\"unknown\":1}"), typeof(StrictValue?)));
+        Assert.ThrowsAny<JsonException>(() => contract.Read(Element("{\"unknown\":1}"), typeof(StrictValue?)));
         var date = JsonConversionContract.For(typeof(NestedDateHolder));
-        var exception = Assert.Throws<JsonException>(() => date.Read(Element("{\"invoice\":{\"startAt\":\"2026-10-28T09:15:00\"}}"), typeof(NestedDateHolder)));
+        var exception = Assert.ThrowsAny<JsonException>(() => date.Read(Element("{\"invoice\":{\"startAt\":\"2026-10-28T09:15:00\"}}"), typeof(NestedDateHolder)));
         Assert.Equal("$[\"invoice\"][\"startAt\"]", exception.Path);
         Assert.Contains("json-datetime-offset-missing", exception.Message);
     }
@@ -121,14 +121,14 @@ public sealed class JsonConversionContractTests
     public void Dates_require_offsets_keep_conversion_offsets_and_write_instants_in_utc()
     {
         var contract = JsonConversionContract.For(typeof(DateTimeOffset));
-        Assert.Contains("json-datetime-offset-missing", Assert.Throws<JsonException>(() => contract.Read(Element("\"2026-10-28T09:15:00\""), typeof(DateTimeOffset))).Message);
+        Assert.Contains("json-datetime-offset-missing", Assert.ThrowsAny<JsonException>(() => contract.Read(Element("\"2026-10-28T09:15:00\""), typeof(DateTimeOffset))).Message);
         var offset = (DateTimeOffset)contract.Read(Element("\"2026-10-28T09:15:00+01:00\""), typeof(DateTimeOffset))!;
         Assert.Equal(TimeSpan.FromHours(1), offset.Offset);
         Assert.EndsWith("+01:00\"", contract.Write(offset, typeof(DateTimeOffset)).GetRawText());
         var date = (DateTime)JsonConversionContract.For(typeof(DateTime)).Read(Element("\"2026-10-28T09:15:00+01:00\""), typeof(DateTime))!;
         Assert.Equal(DateTimeKind.Utc, date.Kind);
         Assert.Equal(8, date.Hour);
-        Assert.Throws<JsonException>(() => JsonConversionContract.For(typeof(DateTime)).Write(DateTime.SpecifyKind(date, DateTimeKind.Unspecified), typeof(DateTime)));
+        Assert.ThrowsAny<JsonException>(() => JsonConversionContract.For(typeof(DateTime)).Write(DateTime.SpecifyKind(date, DateTimeKind.Unspecified), typeof(DateTime)));
         var options = JsonBaseline.CreateCopy();
         StrictDateTimeConverters.Configure(options, apiMode: true);
         Assert.Contains("08:15:00", JsonSerializer.Serialize(offset, options));

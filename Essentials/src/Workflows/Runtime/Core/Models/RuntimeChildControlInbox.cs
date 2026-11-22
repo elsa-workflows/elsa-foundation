@@ -72,9 +72,12 @@ internal sealed class RuntimeChildControlInboxJsonConverter : JsonConverter<Runt
     }
 
     public override void Write(Utf8JsonWriter writer, RuntimeChildControlInbox value, JsonSerializerOptions options) =>
-        JsonSerializer.Serialize(writer, new WireInbox(value.Version, value.Target, value.NextOrdinal,
-            value.IsTerminalConsumed, value.Pending), options);
+        JsonSerializer.Serialize(writer, HashProjection(value), options);
 
-    private sealed record WireInbox(int Version, RuntimeChildControlTarget Target, long? NextOrdinal,
+    internal static WireInbox HashProjection(RuntimeChildControlInbox value) =>
+        new WireInbox(value.Version, value.Target, value.NextOrdinal,
+            value.IsTerminalConsumed, value.Pending);
+
+    internal sealed record WireInbox(int Version, RuntimeChildControlTarget Target, long? NextOrdinal,
         bool? IsTerminalConsumed, IReadOnlyList<RuntimeChildControlTransport>? Pending);
 }
