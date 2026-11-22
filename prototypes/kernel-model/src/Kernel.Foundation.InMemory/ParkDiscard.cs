@@ -37,7 +37,7 @@ internal sealed partial class ActorAdapter
         if (input.Services.Now >= expiry.At)
             return BeginDiscard(input, row, park, expiry, expired: true);
 
-        var early = DiscardCheckpoint(input, row, row);
+        var early = ParkCheckpoint(input, row, row);
         early.Sent.Add(envelope.Issue(row, checked(expiry.Serial + 1), expiryAt: expiry.At));
         return early;
     }
@@ -65,7 +65,7 @@ internal sealed partial class ActorAdapter
             return AdvanceDiscard(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1), drain.Expired);
 
         var completed = row with { ParkDiscard = null, ParkDiscarded = true };
-        var outcome = DiscardCheckpoint(input, row, completed);
+        var outcome = ParkCheckpoint(input, row, completed);
         outcome.Journal = Durable.Json.Write(new { Outcome = drain.Expired ? "expired" : "discarded", drain.Operation, drain.Cleared });
         if (outcome.Row!.Parent is not null)
             outcome.Sent.Add(Notice(outcome.Row, null, final: true));
@@ -81,20 +81,20 @@ internal sealed partial class ActorAdapter
         {
             Expired = expired
         };
-        var outcome = DiscardCheckpoint(input, row, next with { ParkDiscard = drain });
+        var outcome = ParkCheckpoint(input, row, next with { ParkDiscard = drain });
         outcome.Sent.Add(control);
         if (page is not null)
             outcome.FoundationParkClear = new(park, page);
         return outcome;
     }
 
-    private static Durable.TurnOutcome DiscardCheckpoint(Durable.TurnInput input, Durable.InstanceRow row,
+    private static Durable.TurnOutcome ParkCheckpoint(Durable.TurnInput input, Durable.InstanceRow row,
         Durable.InstanceRow next)
     {
         var revision = checked(row.Revision + 1);
         return new(row.Id)
         {
-            Row = next with { Revision = revision }, Expected = row.Revision, Revision = revision, Status = row.Status,
+            Row = next with { Revision = revision }, Expected = row.Revision, Revision = revision, Status = next.Status,
             Consumed = [.. input.Taken]
         };
     }

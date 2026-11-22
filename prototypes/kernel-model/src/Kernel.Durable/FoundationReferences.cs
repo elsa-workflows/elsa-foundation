@@ -265,7 +265,7 @@ public sealed partial class InMemoryStore
             throw new StoreException(Failure.Definite, "Actor headers carry at most four labels, with each name and value at most 1,024 bytes.");
     }
 
-    private void RecordFoundationMetadata(TurnCommit turn, InstanceRow row, long now, Message? firstExpiry)
+    private void RecordFoundationMetadata(TurnCommit turn, InstanceRow row, InstanceRow? previous, long now, Message? firstExpiry)
     {
         if (_referenceBirths.Count == 0) return;
         var address = new CreationAddress(row.Id, row.Creation);
@@ -286,7 +286,12 @@ public sealed partial class InMemoryStore
         }
         else
             _foundationEnds.TryAdd(address, now);
-        RecordParkExpiry(turn, row, address, firstExpiry);
+        if (previous?.ParkRecovery is not null && row.ParkRecovery is null && turn.FoundationKept is null)
+        {
+            _foundationParks.Remove(address);
+            _foundationParkExpiries.Remove(address);
+        }
+        else RecordParkExpiry(turn, row, address, firstExpiry);
         if (row.ParkDiscarded && _foundationParks.Remove(address))
             _foundationEnds[address] = now;
         if (turn.OpensPark)

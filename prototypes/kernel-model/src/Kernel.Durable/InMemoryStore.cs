@@ -354,9 +354,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (turn.Row is { } stored)
                 {
                     if (inlineRoots?.GetValueOrDefault(stored.Id) is { } root) InsertReference(root);
+                    var previous = Instances.GetValueOrDefault(stored.Id);
                     Instances[stored.Id] = CommitClockFacts.Stamp(stored.WithoutInlineBirth(), now);
                     var expiry = initialExpiries?.GetValueOrDefault(turn.Instance);
-                    RecordFoundationMetadata(turn, stored, now, expiry);
+                    RecordFoundationMetadata(turn, stored, previous, now, expiry);
                     if (expiry is not null)
                     {
                         var seen = batch.HandOver ? epochs.GetValueOrDefault(expiry.Target.Partition) : 0;

@@ -260,6 +260,52 @@ internal static class ParkKeptChecks
         }
     }
 
+    internal static async Task CheckRecoverArrivals(Action<bool, string> check)
+    {
+        const long initial = 1_701_400_028_000L;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
+        var probe = new Probe(withholdFaulted: true);
+        var scope = new Contract.BoundScope("recover-arrivals");
+        var worker = new Worker("recover-arrivals", 0, store, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => now - initial });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node,
+            (_, kind) => kind == Contract.Kinds.Recover);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var started = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready", null)), "start", Contract.Kinds.Start);
+        var target = new Contract.Target.Ref(started.Actor!.Value);
+        await Pump(owner);
+        var shortWindow = new Contract.AddOptions(KeepFor: TimeSpan.FromMilliseconds(1));
+        await ingress.SendAsync(scope, target, "fault", "poison", options: shortWindow);
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "keep", "advance", options: shortWindow);
+        await Pump(owner);
+        now += 3;
+        await store.SweepAsync();
+
+        var parked = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        var retained = parked.Park is not null && store.FoundationExpiry(parked.Row) is { Armed: not null } &&
+            store.Messages.Values.Any(row => row.Message.Id == "fault" && row.KeptBy == ParkKeepReason.Consumed) &&
+            store.Messages.Values.Any(row => row.Message.Id == "keep" && row.KeptBy == ParkKeepReason.Arrived);
+        check(retained, "the recovery fixture keeps both input reasons across sweep before the armed deadline");
+        if (!retained) return;
+
+        var selection = (await new ActorList(store, 10).GetAsync(scope, target.Actor))!.Selection!;
+        var result = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume)));
+        for (var pass = 0; pass < 3; pass++)
+        {
+            await Pump(owner);
+            now += 11;
+        }
+        var restored = store.ReadFoundationActor(scope.Tenant, target.Actor.Id).Actor!;
+        check(result.Outcome == Contract.AdmissionOutcome.Accepted &&
+            restored is { Park: null, Row: { Status: InstanceStatus.Running, State: "advanced" } } &&
+            probe.PoisonOffers == 1 && probe.RecoveredArrivals == 1 &&
+            !store.Messages.Values.Any(row => row.KeptBy is not null || row.Message.Kind == Kinds.ParkExpiry),
+            "Resume clears the consumed fault, applies the kept arrival once and recalls the expiry");
+    }
+
     private static async Task CheckUnarmedParkExpiry(Action<bool, string> check)
     {
         const long now = 1_701_400_029_000;
@@ -861,6 +907,7 @@ internal static class ParkKeptChecks
         public string Type => "kept-check";
         public int PoisonOffers { get; private set; }
         public int Offers { get; private set; }
+        public int RecoveredArrivals { get; private set; }
         public Contract.ActorRef? Child { get; private set; }
         public List<Contract.ChildFinished> Notices { get; } = [];
         public bool Withholds(Contract.ActorHeader header) => withholdFaulted && header.Status == Contract.ActorStatus.Faulted;
@@ -876,7 +923,12 @@ internal static class ParkKeptChecks
             foreach (var message in turn.Inbox)
                 if (message.Kind == "spawn") Child = turn.Start(new(Type, "child", null));
                 else if (message.Kind == Contract.Kinds.ChildFinished) Notices.Add(Json.Read<Contract.ChildFinished>(message.Payload!));
-            turn.State = "saved";
+            if (turn.Inbox.Any(message => message.Kind == "advance"))
+            {
+                RecoveredArrivals++;
+                turn.State = "advanced";
+            }
+            else turn.State = "saved";
             return default;
         }
 

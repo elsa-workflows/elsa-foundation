@@ -7,7 +7,7 @@ public sealed partial class InMemoryStore
     private static string FoundationOperatorKey(string tenant, string id) => tenant + "_" + id;
 
     internal (OperatorAdmission Outcome, string? Reference) AdmitFoundationOperator(string tenant, string? reference, string? callerKey,
-        string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo)
+        string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo, ParkRecoveryMode? recoverMode = null)
     {
         lock (_gate)
         {
@@ -16,8 +16,8 @@ public sealed partial class InMemoryStore
             if (reference is null || !_referenceBindings.TryGetValue(reference, out var binding) || binding.Tenant != tenant ||
                 selection is not null && BoundActor(tenant, reference) is null)
                 return (OperatorAdmission.Unavailable, null);
-            var discard = kind == "kernel.discard";
-            if (discard)
+            var resolvesPark = kind is "kernel.discard" or "kernel.recover";
+            if (resolvesPark)
             {
                 if (selection is null || !NamesFoundationPark(tenant, reference, selection))
                     return (OperatorAdmission.StaleSelection, null);
@@ -28,10 +28,10 @@ public sealed partial class InMemoryStore
             // The receipt is scoped to the operation, and keeps the first target after the Park's mark changes.
             if (_foundationOperatorReceipts.TryGetValue(FoundationOperatorKey(tenant, id), out var prior) && prior.Until >= clock())
                 return (OperatorAdmission.Duplicate, prior.Reference);
-            if (discard && !MatchesFoundationSelection(tenant, reference, selection))
+            if (resolvesPark && !MatchesFoundationSelection(tenant, reference, selection))
                 return (OperatorAdmission.StaleSelection, null);
 
-            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: new(selection)) switch
+            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: new(selection) { RecoverMode = recoverMode }) switch
             {
                 true => (OperatorAdmission.Accepted, reference),
                 false => (OperatorAdmission.Duplicate, reference),

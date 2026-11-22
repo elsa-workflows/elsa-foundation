@@ -41,7 +41,7 @@ internal sealed class InMemoryIngress(Durable.InMemoryStore store, Durable.Reque
                     RefusalReason.StaleSelection => "stale selection",
                     _ => "missing"
                 });
-            if (kind == Kinds.Discard && admission.Outcome == AdmissionOutcome.Duplicate)
+            if (kind is Kinds.Discard or Kinds.Recover && admission.Outcome == AdmissionOutcome.Duplicate)
                 return new(null, null, Error: "repeat");
             return await RequestReplies.WaitAsync(store, requests, open, scope, admission.Actor, cancellationToken);
         }

@@ -48,7 +48,9 @@ public sealed partial class InMemoryStore
         }
         else if (_foundationParkExpiries.TryGetValue(address, out var expiry))
         {
-            if (row.ParkDiscarded || row.Status == InstanceStatus.Running)
+            if (row.ParkRecovery is { } recovery)
+                _foundationParkExpiries[address] = expiry with { Armed = null, Serial = recovery.Serial };
+            else if (row.ParkDiscarded || row.Status == InstanceStatus.Running)
                 _foundationParkExpiries.Remove(address);
             else if (row.ParkDiscard is { } drain && expiry.Armed is not null)
                 _foundationParkExpiries[address] = expiry with { Armed = null, Serial = drain.Serial };

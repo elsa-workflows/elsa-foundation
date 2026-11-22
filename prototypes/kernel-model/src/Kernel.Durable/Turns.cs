@@ -44,6 +44,8 @@ public interface IActorType
     /// <summary>Whether the foundation can settle this input without offering it to the actor.</summary>
     internal bool SettlesWhileWithheld(InstanceRow row, Delivery delivery) => false;
 
+    internal ParkPageCursor? FirstUnheldRecoveryInput(InstanceRow row, ParkRelease release, Predicate<InboxKey> isHeld) => null;
+
     /// <summary>
     /// A turn the actor type handles alone, without any of the actor's own code: a command (<see cref="Kinds.IsControl"/>),
     /// or messages to an actor that has ended. Null when the turn is not one of those.
@@ -122,6 +124,8 @@ public sealed class Delivery(Message message, long seq)
     internal bool Held;               // a turn handed it back: it waits for something new to come with
     internal Message? Original;       // a job's ticket as it was before its result replaced it (decision 4: what is written)
     internal int Attempts;
+    internal ParkRelease? ReleasedBy;
+    internal bool HeldHere;
     internal bool SuppliedCompletion => Message.Kind == Kinds.JobFinished && !CompletedJob && !Message.FoundationJobResult;
     internal bool SuppliedTicket => Message.InboxScope == 0 && Message.Kind is Kinds.Meet or Kinds.Publish or Kinds.Job or Kinds.JobDeadline;
     internal bool DiscardedInput => SuppliedCompletion || SuppliedTicket;
@@ -215,6 +219,8 @@ public sealed class TurnInput
     public ITurnServices Services => _services;
     internal int MaxAttempts => _worker.MaxAttempts;
 
+    internal bool RecoveryHandedOff(InboxKey key) => _worker.RecoveryHandedOff(key);
+
     internal Message? VolatileMessage(InboxKey id) => _volatile?.GetValueOrDefault(id);
 
     /// <summary>The current foundation time for deciding whether an unwritten checkpoint may stay in memory.</summary>
@@ -234,6 +240,7 @@ public sealed class TurnOutcome(string instance)
     internal bool OpensPark;
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
+    internal ParkRecoveryPage? FoundationRecoveryPage;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
