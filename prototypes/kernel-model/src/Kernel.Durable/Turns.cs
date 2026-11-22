@@ -217,6 +217,7 @@ public sealed class TurnOutcome(string instance)
     internal FoundationHeaderChange? FoundationHeader;
     internal bool OpensPark;
     internal ParkKeepReason? FoundationKeep;
+    internal ParkPageClear? FoundationParkClear;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
