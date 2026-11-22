@@ -29,13 +29,15 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 message.Sender == creatorParent && message.SenderCreation == start.ParentCreation;
         if (!SupportsFoundationOperator(row)) return false;
         if (store.FoundationTurnHeader(row).Park is not null)
-            return row.ParkRecovery is null && store.AuthorizesDrainingTerminate(row, message);
+            return (row.ParkRecovery is null || row.Status == Durable.InstanceStatus.Running) &&
+                store.AuthorizesDrainingTerminate(row, message);
         if (message.Operator is { Selection: { } selection })
         {
             if (row.Status != Durable.InstanceStatus.Running && row.Children is null && row.Jobs is null) return false;
             var identity = store.FoundationIdentity(row.Id, row.Creation);
             return store.MatchesFoundationSelection(identity.Tenant, identity.Reference, selection);
         }
+        if (message.Operator is not null) return row.Status == Durable.InstanceStatus.Running;
         if (row.Status != Durable.InstanceStatus.Running && (row.Children is null || message.ActorAuthored)) return false;
         return row.Parent is not null && message.InboxKey.HasIssuedOrigin &&
             message.Sender == row.Parent && message.SenderCreation == row.ParentCreation;
@@ -43,6 +45,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
 
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
+        if (row.ParkDiscard?.Kind == Durable.ParkClearKind.Terminate) return true;
         var checkpoint = store.FoundationTurnHeader(row);
         if (row.ParkRecovery is not null)
             return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
@@ -84,6 +87,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
         if (input.Row is { ParkDiscard: not null } draining)
             return RefuseDuringDiscard(input, draining);
+        if (message.Kind == Contract.Kinds.Terminate &&
+            input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
+            store.FoundationTurnHeader(liveRecovery).Park is { } recoveryPark)
+            return OpenParkTerminate(input, liveRecovery, recoveryPark);
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");

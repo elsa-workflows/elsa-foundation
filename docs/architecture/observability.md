@@ -987,7 +987,13 @@ Park decision.
     the drain through the Worker. A finite expiry is recalled, the cascade starts without a final notice, and the
     Park mark stays current. The successor clears three kept pages across a handover, completes as Cancelled,
     sends the parent one final notice and then consumes later inputs without entering the model.
-    These runs are part of P-7 in `--park-drain-cascade-check`. Recover interruption and `ThenDelete` have their own cases.
+    These runs are part of P-7 in `--park-drain-cascade-check`.
+  - **In-memory evidence for interrupting Recover.** A selected or unselected operator interrupts a Running
+    Recover after it releases the first input. Open recalls the old control and records the interrupted operation.
+    The row stays Running without an end timestamp. A successor clears the remaining kept pages and commits
+    Cancelled once, with no model input after the interruption. This exercises the Terminate transition in DT-2.
+    The same fixture runs a queued job callback while the opening commit is in flight and checks that it cannot
+    enter, a WJ-1 schedule.
   - **Its open** does everything the built terminate does except the end: it stops delivery to the model at once,
     removes the instance's waits, cancels its jobs and sends terminate to its children, as the paged, idempotent
     cascade's first page and the pages after it ("A termination cascade is paged and idempotent" above). No model turn

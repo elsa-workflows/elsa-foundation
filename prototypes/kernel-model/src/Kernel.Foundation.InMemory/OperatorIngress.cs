@@ -29,7 +29,8 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
             try { command = payload is null ? null : JsonSerializer.Deserialize<OperatorCommand>(payload, kind == Kinds.Recover ? RecoverJson : null); }
             catch (JsonException) { return new(refused); }
             if (command?.ThenDelete == true) return new(refused);
-            if (command is not { Selection.Length: > 0 })
+            if (command is not { Selection.Length: > 0 } &&
+                (kind != Kinds.Terminate || command?.Selection is not null))
                 return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection));
             if (kind == Kinds.Recover)
             {
@@ -41,9 +42,9 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
                     _ => null
                 };
                 if (recoverMode is null) return new(refused);
-                if (recoverMode == Durable.ParkRecoveryMode.Retry) recoverHandles = command.Handles;
+                if (recoverMode == Durable.ParkRecoveryMode.Retry) recoverHandles = command?.Handles;
             }
-            selection = command.Selection;
+            selection = command?.Selection;
         }
 
         var receipt = store.AdmitFoundationOperator(scope.Tenant, (target as Target.Ref)?.Actor.Id,

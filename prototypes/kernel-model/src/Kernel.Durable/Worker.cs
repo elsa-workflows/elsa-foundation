@@ -2454,7 +2454,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
                     return;
                 }
                 if (!Loaded(slot) || slot.Busy || slot.DetachedAuthoredTurn) return;
-                if (slot.CurrentRow is { Status: InstanceStatus.Running, Retired: false } row &&
+                if (slot.CurrentRow is { Status: InstanceStatus.Running, Retired: false, ParkDiscard: null } row &&
                     OwnsFailedEventStep(row, ticket.Message))
                 {
                     slot.Busy = true;
