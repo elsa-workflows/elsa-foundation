@@ -89,6 +89,9 @@ for (const width of [320, 1440]) {
     });
     const filterSummary = timeline.locator(".wf-history-filters > summary");
     await filterSummary.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(filterSummary).toBeFocused();
     await expect(filterSummary).toHaveCSS("outline-color", "rgb(1, 80, 240)");
     await expect(timeline.locator(".wf-history-heading h3")).toHaveCSS("font-size", "25px");
     await expect(timeline.locator(".wf-history-heading p").first()).toHaveCSS("font-size", "19px");
