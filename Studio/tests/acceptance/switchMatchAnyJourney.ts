@@ -98,6 +98,9 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     expect(owner.outcomeNames).toEqual(selected);
     expect(Date.parse(successor.startedAt)).toBeGreaterThanOrEqual(Date.parse(owner.completedAt));
     for (const id of expected) expect(Date.parse(owner.completedAt)).toBeGreaterThanOrEqual(Date.parse(executions.items.find(item => item.execution.authoredActivityId === id)!.execution.completedAt));
+    // Publication reloads the source editor and clears its inspector selection. Reopen the actual persisted
+    // draft before the next edit, instead of addressing controls on the previous selection.
+    await open();
     return published;
   }
   await open();

@@ -121,6 +121,7 @@ public sealed class SwitchMatchAnyRunTests
     [InlineData("done-set")]
     [InlineData("native-alias")]
     [InlineData("global-native-alias")]
+    [InlineData("reflect-native-alias")]
     [InlineData("nested-done")]
     [InlineData("nested-label")]
     [InlineData("Break")]
@@ -142,6 +143,8 @@ public sealed class SwitchMatchAnyRunTests
             "native-alias" => Activity("unsafe", "Elsa.RunJavaScript", ("script", Literal("const emit = typeof complete === 'function' ? complete : (value => value); return emit(null, ['Break']);")),
                 ("possibleOutcomes", Literal("[\"Break\"]", "List<String>"))),
             "global-native-alias" => Activity("unsafe", "Elsa.RunJavaScript", ("script", Literal("const key = 'complete'; const emit = typeof globalThis[key] === 'function' ? globalThis[key] : (value => value); return emit(null, ['Break']);")),
+                ("possibleOutcomes", Literal("[\"Break\"]", "List<String>"))),
+            "reflect-native-alias" => Activity("unsafe", "Elsa.RunJavaScript", ("script", Literal("const build = Reflect.get(function(){}, 'constructor'); const emit = build(\"return typeof complete === 'function' ? complete : (value => value)\")(); return emit(null, ['Break']);")),
                 ("possibleOutcomes", Literal("[\"Break\"]", "List<String>"))),
             "nested-done" => Activity("unsafe", "Elsa.Switch", ("mode", Literal("MatchAny")), ("cases", new JsonArray(
                 new JsonObject { ["label"] = "Done", ["condition"] = Literal("true", "Boolean") },

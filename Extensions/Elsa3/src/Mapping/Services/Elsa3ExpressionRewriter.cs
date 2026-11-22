@@ -1006,6 +1006,7 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
         /// own <c>this</c> and <c>arguments</c>; arrow functions share their enclosing one's (spec 262 R-6).
         /// </summary>
         private readonly List<FunctionContext> _functions = [];
+        private readonly List<Node> _syntaxParents = [];
 
         public void Visit(Node node)
         {
@@ -1024,12 +1025,18 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
             };
             if (function is not null)
                 _functions.Add(function);
+            var parent = _syntaxParents.LastOrDefault();
+            _syntaxParents.Add(node);
             try
             {
                 // A bare native helper reference can be aliased without being a direct host-function call.
                 // The global object also allows computed access to that helper. Record this separately so
                 // newly enabled Switch bodies cannot claim proven outcome safety from setter names alone.
-                if (node is Identifier { Name: "complete" or "globalThis" or "Function" or "eval" } identifier && !IsDeclared(identifier.Name))
+                if (node is Identifier { Name: "complete" or "globalThis" or "Function" or "eval" or "Reflect" } identifier
+                    && IsValueReference(identifier, parent) && !IsDeclared(identifier.Name))
+                    MayAccessNativeCompletion = true;
+                if (node is ObjectPattern pattern && pattern.Properties.OfType<Property>().Any(property =>
+                    MightSelectCompletionCapability(property.Key, property.Computed)))
                     MayAccessNativeCompletion = true;
                 if (node is MemberExpression member)
                 {
@@ -1038,16 +1045,16 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     // An unresolved property can select a prototype constructor and be passed/aliased before
                     // invocation. Numeric literal indexes and named data properties cannot select that capability.
                     var knownKey = member.Property is Literal { Value: string or double or int or long };
-                    if (name is "constructor" or "__proto__"
+                    if (IsCompletionCapabilityKey(name)
                         || member.Computed && !knownKey && !dataVariableRead
-                        || member.Object is Identifier { Name: "Object" } && !IsDeclared("Object")
-                            && name is "getPrototypeOf" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors")
+                        )
                         MayAccessNativeCompletion = true;
                 }
                 VisitNode(node);
             }
             finally
             {
+                _syntaxParents.RemoveAt(_syntaxParents.Count - 1);
                 if (function is not null)
                 {
                     _functions.RemoveAt(_functions.Count - 1);
@@ -1062,6 +1069,29 @@ public sealed class Elsa3ExpressionRewriter(IJavaScriptDotNetUsageAnalyzer dotNe
                     _scopes.RemoveAt(_scopes.Count - 1);
             }
         }
+
+        private static bool IsValueReference(Identifier identifier, Node? parent) => parent switch
+        {
+            MemberExpression { Computed: false } member when ReferenceEquals(member.Property, identifier) => false,
+            Property { Computed: false } property when ReferenceEquals(property.Key, identifier) && !ReferenceEquals(property.Value, identifier) => false,
+            MethodDefinition { Computed: false } method when ReferenceEquals(method.Key, identifier) => false,
+            PropertyDefinition { Computed: false } field when ReferenceEquals(field.Key, identifier) => false,
+            AccessorProperty { Computed: false } accessor when ReferenceEquals(accessor.Key, identifier) => false,
+            LabeledStatement labeled when ReferenceEquals(labeled.Label, identifier) => false,
+            BreakStatement or ContinueStatement => false,
+            _ => true
+        };
+
+        private static bool MightSelectCompletionCapability(Node key, bool computed) => key switch
+        {
+            Identifier identifier when !computed => IsCompletionCapabilityKey(identifier.Name),
+            Literal { Value: string name } => IsCompletionCapabilityKey(name),
+            Literal { Value: double or int or long } => false,
+            _ => true
+        };
+
+        private static bool IsCompletionCapabilityKey(string? name) => name is "constructor" or "__proto__"
+            or "getPrototypeOf" or "getOwnPropertyDescriptor" or "getOwnPropertyDescriptors";
 
         private sealed class FunctionContext(IEnumerable<Node> parameters)
         {
