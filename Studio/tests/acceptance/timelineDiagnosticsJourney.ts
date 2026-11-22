@@ -158,7 +158,7 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
     const expected = (await bookmarks(id)).items.find(item => item.createdHistoryEventId === eventId);
     expect(expected, "The native created event identifies the physical handle").toBeTruthy();
     const records = page.getByRole("region", { name: "Activity bookmark history", exact: true });
-    const handle = records.locator("article").filter({ has: records.getByText(expected!.bookmark.identity.bookmarkId, { exact: true }) });
+    const handle = records.locator("article").filter({ has: page.getByText(expected!.bookmark.identity.bookmarkId, { exact: true }) });
     await handle.getByRole("button", { name: "View lifecycle →", exact: true }).click({ timeout: 30_000 });
     const lifecycle = page.getByRole("region", { name: "Bookmark lifecycle", exact: true });
     await expect(lifecycle).toBeVisible();
