@@ -1724,7 +1724,8 @@ for (const theme of ["light", "dark"]) {
       await expect(page.locator("#activity-draft-title")).toHaveCSS("font-size", "16px");
       await page.locator("details.ad-authoring-advanced > summary").click();
       const toolbar = page.locator(".ad-authoring-toolbar-actions");
-      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];
+      // While publication review is modal these actions are inert, but their layout must remain stable.
+      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.locator("button").filter({ hasText: /^\s*Test Run\s*$/ }), toolbar.locator("button").filter({ hasText: /^\s*Save now\s*$/ })];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
