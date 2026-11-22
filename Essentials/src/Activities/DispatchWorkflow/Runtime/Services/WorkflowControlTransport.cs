@@ -23,7 +23,7 @@ internal static class WorkflowControlTransport
         RuntimePostCommitOutboxIdentity.CreateLogicalValue(commitId, intentId), batch);
 
     internal static bool Equivalent(RuntimeChildControlTransport? left, RuntimeChildControlTransport? right) =>
-        JsonElement.DeepEquals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(left, Json), JsonSerializer.SerializeToElement(right, Json));
 
     internal static void ValidateTarget(RuntimeChildControlTransport carried, RuntimeChildControlTarget target)
     {

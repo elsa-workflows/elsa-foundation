@@ -106,7 +106,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
         access.Current.EnsureTenantScope(model.TenantId);
         if (model.MaterialIncarnationId != invocation.Model.MaterialIncarnationId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(model.Executable, invocation.Model.Executable) ||
-            BpmnDirectExecutionDriver.Read(model).NativeParent is not { } parent || !JsonElement.DeepEquals(parent.Invocation, BpmnEmbeddingJson.Write(invocation)))
+            BpmnDirectExecutionDriver.Read(model).NativeParent is not { } parent || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(parent.Invocation, BpmnEmbeddingJson.Write(invocation)))
             throw BpmnEmbeddingJson.Invalid();
         return model;
     }
@@ -121,7 +121,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
             activity.Execution.ActivityType != RunBpmn.ActivityType || activity.Execution.ExecutableNodeId != invocation.NativeNodeId) throw BpmnEmbeddingJson.Invalid();
         if (activity.PrivateState is not null)
         {
-            if (!JsonElement.DeepEquals(BpmnEmbeddingJson.Write(Read(activity)), BpmnEmbeddingJson.Write(invocation))) throw BpmnEmbeddingJson.Invalid();
+            if (!Elsa.Serialization.Core.JsonCanonicalForm.Equals(BpmnEmbeddingJson.Write(Read(activity)), BpmnEmbeddingJson.Write(invocation))) throw BpmnEmbeddingJson.Invalid();
         }
         else
         {
@@ -182,13 +182,13 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
             RequireWorkerCancellationSettled(context.State ?? throw BpmnEmbeddingJson.Invalid());
             var completion = Elsa.Serialization.Core.JsonConversionContract.Deserialize<RunBpmnCompletion>(payload) ?? throw BpmnEmbeddingJson.Invalid();
             if (source.Intent.Kind != ResultKind || source.Intent.WorkflowExecutionId != invocation.ExecutionId || context.State?.TerminalResult is not { } terminal ||
-                !JsonElement.DeepEquals(completion.Invocation, input.Invocation) || !JsonElement.DeepEquals(completion.Result, terminal) ||
+                !Elsa.Serialization.Core.JsonCanonicalForm.Equals(completion.Invocation, input.Invocation) || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(completion.Result, terminal) ||
                 !await ParentProofAsync(invocation, token)) throw BpmnEmbeddingJson.Invalid();
             return (invocation, null);
         }
         var cancelled = context.Command.InputKind == "cancel-embedded";
         if (source.Intent.Kind != (cancelled ? CancelKind : StartKind) || source.Intent.WorkflowExecutionId != invocation.NativeExecutionId ||
-            !JsonElement.DeepEquals(payload, input.Invocation)) throw BpmnEmbeddingJson.Invalid();
+            !Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, input.Invocation)) throw BpmnEmbeddingJson.Invalid();
         if (cancelled)
         {
             if (!workflow.Status.IsTerminal() && activity.Status != ActivityExecutionStatus.Cancelled) throw BpmnEmbeddingJson.Invalid();

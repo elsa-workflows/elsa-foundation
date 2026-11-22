@@ -203,7 +203,7 @@ public sealed class WorkflowIntrinsicExecutor(
             var unitType = new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit");
             result = ValueEnvelope.Inline(
                 unitType,
-                JsonSerializer.SerializeToElement(ActivityUnit.Value),
+                JsonSerializer.SerializeToElement(ActivityUnit.Value, Elsa.Serialization.Core.JsonBaseline.Options),
                 ValueProtectionPolicy.InstanceInline);
         }
         else
@@ -509,7 +509,7 @@ public sealed class WorkflowIntrinsicExecutor(
 
     private static ValueEnvelope UnitResult() => ValueEnvelope.Inline(
         new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit"),
-        JsonSerializer.SerializeToElement(ActivityUnit.Value),
+        JsonSerializer.SerializeToElement(ActivityUnit.Value, Elsa.Serialization.Core.JsonBaseline.Options),
         ValueProtectionPolicy.InstanceInline);
 
     // An intrinsic reads its inputs itself and never reaches activation, the only place a secret is resolved, so a secret
@@ -585,14 +585,14 @@ public sealed class WorkflowIntrinsicExecutor(
         {
             ValuePresence.Present => value.InlineValue,
             ValuePresence.ExplicitNull when value.Policy.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom =>
-                JsonSerializer.SerializeToElement<object?>(null),
+                JsonSerializer.SerializeToElement<object?>(null, Elsa.Serialization.Core.JsonBaseline.Options),
             _ => null
         };
         var state = new DurableValueState(
             durableValueId,
             workflowExecutionId,
             valueId,
-            new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type)),
+            new RuntimeValueTypeDescriptor("alias", value.Type.Alias, JsonSerializer.SerializeToElement(value.Type, Elsa.Serialization.Core.JsonBaseline.Options)),
             value.Policy.Lifecycle,
             value.Policy.Storage,
             inline,
@@ -1014,7 +1014,7 @@ public sealed class WorkflowIntrinsicExecutor(
             occurredAt,
             occurredAt,
             startWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            JsonSerializer.SerializeToElement(payload),
+            JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             startWorkItem.CommandMetadata,
             startWorkItem.EnvelopeMetadata);
     }

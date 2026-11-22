@@ -153,9 +153,7 @@ internal sealed class FileChunkStore : IFileChunkPublisher
                 // A competing attempt may have published the same effect. Never overwrite it,
                 // and compare real bytes, not a stale sidecar or the filename alone.
                 var existing = await ReadDescriptorAsync(finalPath, key, maxBytes, cancellationToken);
-                if (existing != candidate ||
-                    await ReadDescriptorAsync(finalPath, key, maxBytes, cancellationToken, hashJson: false) !=
-                    await ReadDescriptorAsync(stagingPath, key, maxBytes, cancellationToken, hashJson: false))
+                if (existing != candidate || !await HaveSameBytesAsync(finalPath, stagingPath, maxBytes, cancellationToken))
                     throw new EtlEffectException("etl.effect-conflict", "A published ETL effect has conflicting content.");
                 return existing;
             }
@@ -197,7 +195,26 @@ internal sealed class FileChunkStore : IFileChunkPublisher
     [DllImport("libc", EntryPoint = "link", SetLastError = true)]
     private static extern int Link([MarshalAs(UnmanagedType.LPUTF8Str)] string existingPath, [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath);
 
-    private async ValueTask<EtlChunk> ReadDescriptorAsync(string path, string key, long maxBytes, CancellationToken ct, bool hashJson = true)
+    private static async ValueTask<bool> HaveSameBytesAsync(string left, string right, long maxBytes, CancellationToken ct)
+    {
+        await using var a = new FileStream(left, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var b = new FileStream(right, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (a.Length != b.Length || a.Length > maxBytes) return false;
+        var remaining = a.Length;
+        var first = new byte[4096];
+        var second = new byte[4096];
+        while (remaining > 0)
+        {
+            var count = (int)Math.Min(remaining, first.Length);
+            await a.ReadExactlyAsync(first.AsMemory(0, count), ct);
+            await b.ReadExactlyAsync(second.AsMemory(0, count), ct);
+            if (!first.AsSpan(0, count).SequenceEqual(second.AsSpan(0, count))) return false;
+            remaining -= count;
+        }
+        return await a.ReadAsync(first.AsMemory(0, 1), ct) == 0 && await b.ReadAsync(second.AsMemory(0, 1), ct) == 0;
+    }
+
+    private async ValueTask<EtlChunk> ReadDescriptorAsync(string path, string key, long maxBytes, CancellationToken ct)
     {
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
@@ -207,7 +224,7 @@ internal sealed class FileChunkStore : IFileChunkPublisher
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         // Only the feature-owned single-document format is JSON. Source JSONL may deliberately retain
         // malformed records, and CSV, index and page-manifest files have byte-oriented protocols.
-        using var json = hashJson && _extension == ".json" ? new MemoryStream() : null;
+        using var json = _extension == ".json" ? new MemoryStream() : null;
         var buffer = new byte[4096];
         long length = 0;
         while (true)
@@ -217,8 +234,8 @@ internal sealed class FileChunkStore : IFileChunkPublisher
                 break;
             if (count > maxBytes - length)
                 throw new EtlEffectException("etl.effect-conflict", "A published ETL effect exceeds its permitted size.");
-            hash.AppendData(buffer.AsSpan(0, count));
-            if (json is not null) await json.WriteAsync(buffer.AsMemory(0, count), ct);
+            if (json is null) hash.AppendData(buffer.AsSpan(0, count));
+            else await json.WriteAsync(buffer.AsMemory(0, count), ct);
             length += count;
         }
 

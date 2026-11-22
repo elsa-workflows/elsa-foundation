@@ -107,11 +107,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "7D221A0FEEFBD55AEA961DECEFFBF4709A66D759F9AAB53FF065A8B310A9E1E3" },
+        { typeof(TriggerFixtureActivity), "52A6682889245C963143DE11B3698E4A088940034147459EA3C4E181B490E3BA" },
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
         // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" }
+        { typeof(HttpEndpoint), "3C38A293CCBFE7C63BCD311FF1CC4761F37CE9330C33B74F01E713C10FC01F3C" }
     };
 
     [Theory]
@@ -123,7 +123,7 @@ public sealed class ClrAssemblyScannerTests
         var version = CatalogVersion(model, model, activityType.Assembly);
 
         Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
-        Assert.True(expectedHash == version.Hash, $"Expected hash '{expectedHash}', actual hash '{version.Hash}'.");
+        Assert.True(expectedHash == version.Hash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{version.Hash}'.");
     }
 
     [Fact]
@@ -170,8 +170,8 @@ public sealed class ClrAssemblyScannerTests
         // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
         // with this PR rather than throwing on re-reconcile.
         // Spec 1228 FR-022: the CLR provider schema version went to 2, which moves both snapshots.
-        { typeof(PlainFixtureActivity), "4D43EA4D1174EF977273A98C264FCE3679229FC229C5CC430C5676415855C760" },
-        { typeof(ComplexInputFixtureActivity), "E903892E9FB46DB7E0A1972EC2804C62844F217530CEFA5535D3B0997EEDAD1B" }
+        { typeof(PlainFixtureActivity), "D2DBBA7C8295464D8076C82BFCC3705044DF8C8167DCDB292EC6476726A215B0" },
+        { typeof(ComplexInputFixtureActivity), "692BBABCB37067E918B0CCDEDA6D0B33B168FFFA6D9773FE5E8F5C8F3028C998" }
     };
 
     [Theory]
@@ -185,7 +185,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.DoesNotContain(nameof(InputDefinition.IsSensitive), json, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InputDefinition.IsCredential), json, StringComparison.Ordinal);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
-        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
+        Assert.True(expectedHash == actualHash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{actualHash}'.");
     }
 
     [Theory]
@@ -864,10 +864,10 @@ public sealed class ClrAssemblyScannerTests
         // Approved UX wording change: Start new workflows plus its help text.
         // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
         // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
-        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" },
-        { typeof(WriteLine), "6447F219BF705C43390B61BF9478005F9C7AFD93FC07E9D3941EC0FF42BE1979" },
-        { typeof(ParallelActivity), "4748F128F029398F93C1D7BF29D3E266AFED437FCC4BD030DFDD4D4F8938FE61" },
-        { typeof(SendHttpRequest), "92CDE66B36CEAB09480364A18F334C879ECB5B0770730F2D427F0B8C1EB9634F" }
+        { typeof(HttpEndpoint), "3C38A293CCBFE7C63BCD311FF1CC4761F37CE9330C33B74F01E713C10FC01F3C" },
+        { typeof(WriteLine), "F0B0366D43015DCE7856D50E6B392130BE2257EF5CC5D62310E1A4B1C61CE89D" },
+        { typeof(ParallelActivity), "ABA1FD421744D3A410E80F3462C769254954D3309E3E7D48086D97D059B8AD89" },
+        { typeof(SendHttpRequest), "615211315E2CB8629EB13BF45C7B69A4034A5EE59EBE9B71D7BE9C0D607C52BE" }
     };
 
     [Theory]
@@ -880,7 +880,7 @@ public sealed class ClrAssemblyScannerTests
         // Icons remain available as presentation metadata; the descriptor hash deliberately ignores them.
         Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
-        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
+        Assert.True(expectedHash == actualHash, $"First-stable hash freeze: changes require an explicit identity/migration decision. Expected '{expectedHash}', actual '{actualHash}'.");
     }
 
     [Fact]

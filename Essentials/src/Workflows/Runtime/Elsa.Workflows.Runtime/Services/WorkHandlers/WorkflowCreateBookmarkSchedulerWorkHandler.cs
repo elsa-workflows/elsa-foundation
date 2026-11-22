@@ -350,7 +350,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             requiresPayloadMessage: "CreateBookmark scheduler work item requires a create bookmark payload.",
             resolvedToNullMessage: "CreateBookmark scheduler work item payload resolved to null.",
             invalidPayloadMessage: "CreateBookmark scheduler work item payload is not a valid create bookmark payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeCreateBookmarkCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeCreateBookmarkCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException or RuntimeCreateBookmarkCommandPayloadValidationException);
 }

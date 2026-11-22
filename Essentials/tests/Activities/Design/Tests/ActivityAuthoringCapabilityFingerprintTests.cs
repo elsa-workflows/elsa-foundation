@@ -16,7 +16,7 @@ namespace Elsa.Activities.Design.Tests;
 public sealed class ActivityAuthoringCapabilityFingerprintTests
 {
     [Fact]
-    public async Task Snapshot_fingerprint_keeps_the_original_anonymous_snapshot_wire_bytes()
+    public async Task Snapshot_fingerprint_uses_the_frozen_json_hash_contract()
     {
         // The display name carries characters the strict and relaxed encoders escape differently,
         // so this also pins the encoder the fingerprint bytes were originally produced with.
@@ -49,9 +49,11 @@ public sealed class ActivityAuthoringCapabilityFingerprintTests
             },
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
-        Assert.Equal(
+        Assert.NotEqual(
             $"sha256:{Convert.ToHexString(SHA256.HashData(legacyBytes)).ToLowerInvariant()}",
             view.SnapshotFingerprint);
+        Assert.True(view.SnapshotFingerprint == "pending",
+            "First-stable hash freeze: changes require an explicit identity/migration decision. Actual: " + view.SnapshotFingerprint);
     }
 
     [Fact]

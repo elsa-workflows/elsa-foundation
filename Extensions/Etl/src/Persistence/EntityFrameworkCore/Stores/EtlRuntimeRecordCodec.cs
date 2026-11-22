@@ -161,7 +161,7 @@ internal static class EtlRuntimeRecordCodec
         var isV1Artifact = artifact.FormatVersion == EtlArtifact.CurrentFormatVersion;
         if (isV1Artifact)
             ValidatePipelineLimits(v1Limits!);
-        var artifactBytes = JsonSerializer.SerializeToUtf8Bytes(artifact).Length;
+        var artifactBytes = JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length;
         if (artifactBytes > EtlArtifact.MaximumByteLength || isV1Artifact && artifactBytes > v1Limits!.MaxArtifactBytes)
             throw new ArgumentException("The ETL invocation artifact exceeds its configured serialized size limit.", nameof(invocation));
         if (Encoding.UTF8.GetByteCount(Write(invocation)) > EtlArtifact.MaximumByteLength + 64 * 1024)

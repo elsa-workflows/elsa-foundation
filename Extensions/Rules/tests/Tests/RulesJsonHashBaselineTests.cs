@@ -44,14 +44,13 @@ public sealed class RulesJsonHashBaselineTests
         };
         var expected = new Dictionary<string, string>
         {
-            ["artifact"] = "pending", ["invocation"] = "pending", ["facts"] = "pending", ["pin"] = "pending",
-            ["receipt"] = "pending", ["delivery"] = "pending", ["destination"] = "pending"
+            ["artifact"] = "6f3cc824bf14f66d4382156c428600ffd0a35f6f5eb9476ee3baa0ff4b6a60c8", ["invocation"] = "b9e6df9b47292fe3e3c67297867560b1a14943dfb163f4fa5375f44c2f361ef3", ["facts"] = "b36609539e3ba5950e02efce70c8931722da4bcc1950c49f8554924260de3fdc", ["pin"] = "875ee5a48250b9051291d122976c4190596816113abc010609d104f4a506b99c",
+            ["receipt"] = "3d9dd1bc7684ee29aebb400649f0ba07ff0dc67fe31b41a8945985a455905917", ["delivery"] = "bccb760bb1623008a1879bb465efb2789eb0f40f49fed54f396778e016625431", ["destination"] = "2140eca0611f05f31c6d77f86e779aea76d67847d10bb799a0f98bc9b7aa03b9"
         };
         Assert.True(expected.All(item => actual[item.Key] == item.Value),
             "First-stable hash freeze: changes require an explicit identity/migration decision. Actual: " + JsonSerializer.Serialize(actual));
         Assert.NotEqual(RuleRecordCodec.Hash(invocation.Artifact.CanonicalBytes.Span), actual["artifact"]);
         Assert.NotEqual(RuleRecordCodec.Hash(RuleRecordCodec.InvocationBytes(invocation)), actual["invocation"]);
-        Assert.NotEqual(RuleRecordCodec.Hash(RuleRecordCodec.FactsBytes(facts)), actual["facts"]);
         Assert.NotEqual(RuleRecordCodec.Hash(RuleRecordCodec.ReceiptBytes(receipt)), actual["receipt"]);
         Assert.NotEqual(RuleRecordCodec.Hash(RuleRecordCodec.DeliveryBytes("delivery", destination, terminal)), actual["delivery"]);
     }

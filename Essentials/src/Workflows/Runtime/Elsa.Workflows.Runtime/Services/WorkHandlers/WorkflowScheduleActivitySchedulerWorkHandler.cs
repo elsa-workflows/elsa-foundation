@@ -207,7 +207,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             requiresPayloadMessage: "ScheduleActivity scheduler work item requires a schedule activity payload.",
             resolvedToNullMessage: "ScheduleActivity scheduler work item payload resolved to null.",
             invalidPayloadMessage: "ScheduleActivity scheduler work item payload is not a valid schedule activity payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeScheduleActivityCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeScheduleActivityCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException ||
                 exception is ArgumentException argumentException && IsSchedulePayloadValidationException(argumentException));
@@ -445,7 +445,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             enqueuedAt: now,
             recordedAt: now,
             sequence: scheduleWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             // The due time of a delayed schedule belongs to the schedule alone; the started child must not inherit it.
             commandMetadata: WithoutScheduleNotBefore(scheduleWorkItem.CommandMetadata),
             envelopeMetadata: scheduleWorkItem.EnvelopeMetadata,

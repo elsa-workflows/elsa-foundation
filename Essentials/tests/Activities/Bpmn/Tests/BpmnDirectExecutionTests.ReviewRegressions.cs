@@ -29,7 +29,7 @@ public sealed partial class BpmnDirectExecutionTests
     public async Task Owned_embedding_wrapper_errors_keep_the_public_checkpoint_and_retained_invocation_context(bool cancellation, bool wrongFormat)
     {
         var at = DateTimeOffset.UtcNow;
-        var payload = wrongFormat ? JsonSerializer.SerializeToElement(new { FormatVersion = "bad", Invocation = new { } })
+        var payload = wrongFormat ? JsonSerializer.SerializeToElement(new { formatVersion = "bad", invocation = new { } }, Elsa.Serialization.Core.JsonBaseline.Options)
             : JsonSerializer.SerializeToElement("malformed-wrapper");
         var retained = new ActivityExecutionState(new("wrapper-invocation", "wrapper-execution", "wrapper-node", "wrapper-authored", RunBpmn.ActivityType, "1.0.0"),
             ActivityExecutionStatus.Suspended, null, at, at, null, null, null, null, null, null, [], [], 0, 0, new Dictionary<string, string>())

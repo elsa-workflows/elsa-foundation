@@ -38,7 +38,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             var model = await boundary.RequireModelAsync(invocation, cancellationToken);
             BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(model);
             if (completion.FormatVersion != 1 || source.Intent.WorkflowExecutionId != invocation.ExecutionId ||
-                model.TerminalResult is not { } terminal || !JsonElement.DeepEquals(terminal, completion.Result)) throw BpmnEmbeddingJson.Invalid();
+                model.TerminalResult is not { } terminal || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(terminal, completion.Result)) throw BpmnEmbeddingJson.Invalid();
             var proof = await boundary.ParentProofAsync(invocation, cancellationToken);
             if (!proof)
             {

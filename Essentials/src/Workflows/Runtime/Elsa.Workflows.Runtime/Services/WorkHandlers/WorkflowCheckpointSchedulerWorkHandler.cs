@@ -452,7 +452,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             requiresPayloadMessage: "Checkpoint scheduler work item requires a checkpoint payload.",
             resolvedToNullMessage: "Checkpoint scheduler work item payload resolved to null.",
             invalidPayloadMessage: "Checkpoint scheduler work item payload is not a valid checkpoint payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeCheckpointCommandPayload>(),
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeCheckpointCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException or RuntimeCheckpointCommandPayloadValidationException);
 }

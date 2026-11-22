@@ -426,7 +426,7 @@ public sealed class EfDesignAtomicWriter(
         {
             using var leftDocument = JsonDocument.Parse(EfDesignSupport.Json(left));
             using var rightDocument = JsonDocument.Parse(EfDesignSupport.Json(right));
-            return JsonElement.DeepEquals(leftDocument.RootElement, rightDocument.RootElement);
+            return Elsa.Serialization.Core.JsonCanonicalForm.Equals(leftDocument.RootElement, rightDocument.RootElement);
         }
     }
 

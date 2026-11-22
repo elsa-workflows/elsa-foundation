@@ -117,7 +117,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             occurredAt,
             occurredAt,
             workItem.Sequence is { } sequence ? sequence + 1 : null,
-            JsonSerializer.SerializeToElement(schedulePayload),
+            JsonSerializer.SerializeToElement(schedulePayload, Elsa.Serialization.Core.JsonBaseline.Options),
             provenanceMetadata,
             workItem.EnvelopeMetadata,
             enclosingExecutionScopeId,
@@ -235,7 +235,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             throw new InvalidOperationException("RetryActivityBoundary scheduler work requires a payload.");
         try
         {
-            return payload.Deserialize<RetryActivityBoundaryCommand>()
+            return payload.Deserialize<RetryActivityBoundaryCommand>(Elsa.Serialization.Core.JsonBaseline.Options)
                    ?? throw new InvalidOperationException("RetryActivityBoundary scheduler work payload resolved to null.");
         }
         catch (JsonException exception)

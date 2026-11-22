@@ -140,7 +140,7 @@ public static class SchedulerWorkHandlerHelpers
             recordedAt: recordedAt,
             activityExecutionId: activityExecutionId,
             idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
+            payload: JsonSerializer.SerializeToElement(schedulerWorkItem, Elsa.Serialization.Core.JsonBaseline.Options),
             metadata: sourceWorkItem.CommandMetadata,
             // Carry the already-materialized work item alongside its authoritative serialized payload so
             // a live drain's in-process hop can skip re-deserializing it. In-process conduit only ([JsonIgnore]); the
@@ -179,7 +179,7 @@ public static class SchedulerWorkHandlerHelpers
     {
         if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
         {
-            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
+            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames, Elsa.Serialization.Core.JsonBaseline.Options)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
 
             return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);

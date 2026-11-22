@@ -64,5 +64,5 @@ internal sealed class EtlPipelineV2JsonConverter : JsonConverter<EtlPipelineV2>
     }
 
     public override void Write(Utf8JsonWriter writer, EtlPipelineV2 value, JsonSerializerOptions options) =>
-        EtlArtifactV2Json.Write(value).WriteTo(writer);
+        JsonSerializer.Serialize(writer, EtlArtifactV2Json.Write(value), Elsa.Serialization.Core.JsonBaseline.Options);
 }

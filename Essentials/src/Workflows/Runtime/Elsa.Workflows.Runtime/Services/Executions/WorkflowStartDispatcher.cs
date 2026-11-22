@@ -312,7 +312,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
         supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
             supplied.Value.ValueKind != JsonValueKind.Undefined && canonical!.Value.ValueKind != JsonValueKind.Undefined &&
-            JsonElement.DeepEquals(supplied.Value, canonical.Value));
+            Elsa.Serialization.Core.JsonCanonicalForm.Equals(supplied.Value, canonical.Value));
 
     private static ResolvedPinnedExecutable ResolveStimulusExecutable(StimulusStartRecipient saved, WorkflowExecutable executable)
     {
@@ -516,7 +516,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata) { InputWarnings = inputWarnings.Count == 0 ? null : inputWarnings });
+            triggerMetadata: request.TriggerMetadata) { InputWarnings = inputWarnings.Count == 0 ? null : inputWarnings }, Elsa.Serialization.Core.JsonBaseline.Options);
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 
@@ -569,9 +569,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload)
     {
-        // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
+        // Commands use the shared baseline. Invalid UTF-16 in an internal capture must not silently
         // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
-        var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options)!;
         var expected = request.StartAuthority!.StimulusDelivery!;
         var actual = restored.StartAuthority?.StimulusDelivery;
         if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||

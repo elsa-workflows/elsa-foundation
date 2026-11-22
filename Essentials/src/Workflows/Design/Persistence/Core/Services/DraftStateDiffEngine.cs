@@ -177,7 +177,7 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         stored.Y == desired.Y &&
         stored.Width == desired.Width &&
         stored.Height == desired.Height &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.AdditionalProperties), CanonicalJson(desired.AdditionalProperties));
+        JsonValuesEqual(stored.AdditionalProperties, desired.AdditionalProperties);
 
     /// <summary>
     /// Structural equality for a matched (same <c>ReferenceKey</c>) activity argument across a
@@ -193,11 +193,13 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         Equals(stored.StorageDriverType, desired.StorageDriverType) &&
         stored.IsSensitive == desired.IsSensitive &&
         StringComparer.Ordinal.Equals(stored.Value.ExpressionType, desired.Value.ExpressionType) &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.Value.Value), CanonicalJson(desired.Value.Value)) &&
-        StringComparer.Ordinal.Equals(CanonicalJson(stored.Conversion), CanonicalJson(desired.Conversion));
+        JsonValuesEqual(stored.Value.Value, desired.Value.Value) &&
+        JsonValuesEqual(stored.Conversion, desired.Conversion);
 
-    private static string CanonicalJson(object? value) =>
-        JsonSerializer.Serialize(value);
+    private static bool JsonValuesEqual(object? left, object? right) =>
+        Elsa.Serialization.Core.JsonCanonicalForm.Equals(
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(left),
+            Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(right));
 
     private static Dictionary<string, T> ByKey<T>(IEnumerable<T> items, Func<T, string> keySelector)
     {

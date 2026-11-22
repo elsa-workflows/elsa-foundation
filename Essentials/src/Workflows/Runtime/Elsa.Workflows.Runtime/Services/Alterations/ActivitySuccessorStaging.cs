@@ -285,7 +285,7 @@ internal static class ActivitySuccessorStaging
             RuntimeChainId.Derive(context.Job.JobId, $"alteration-{slug}-idempotency:{context.Ordinal}:{successor.Execution.ActivityExecutionId}"),
             now,
             now,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: commandMetadata,
             envelopeMetadata: new Dictionary<string, string>(),
             executionScopeId: successor.ExecutionScopeId);
@@ -296,7 +296,7 @@ internal static class ActivitySuccessorStaging
             now,
             successor.Execution.ActivityExecutionId,
             workItem.IdempotencyKey,
-            JsonSerializer.SerializeToElement(workItem),
+            JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options),
             workItem.CommandMetadata,
             materializedSchedulerWorkItem: workItem);
     }

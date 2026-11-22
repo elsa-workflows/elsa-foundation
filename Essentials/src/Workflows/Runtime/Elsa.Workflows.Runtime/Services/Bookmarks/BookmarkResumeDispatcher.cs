@@ -174,7 +174,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             input: request.Input,
             reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason,
             triggerDelivery: triggerDelivery,
-            testRunDelivery: request.TestRunDelivery) { ExpectedBookmarkResume = saved?.Expected ?? request.ExpectedRecipient });
+            testRunDelivery: request.TestRunDelivery) { ExpectedBookmarkResume = saved?.Expected ?? request.ExpectedRecipient }, Elsa.Serialization.Core.JsonBaseline.Options);
         var command = new WorkflowExecutionCommand(
             CommandId: commandId,
             WorkflowExecutionId: request.WorkflowExecutionId,

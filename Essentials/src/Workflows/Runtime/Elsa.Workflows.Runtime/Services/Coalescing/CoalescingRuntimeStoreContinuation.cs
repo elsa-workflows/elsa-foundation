@@ -17,7 +17,7 @@ internal static class CoalescingRuntimeStoreContinuation
         ArgumentNullException.ThrowIfNull(cursor);
         ArgumentException.ThrowIfNullOrWhiteSpace(cursor.LastIdentity);
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(binding, cursor));
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new Payload(binding, cursor), Elsa.Serialization.Core.JsonBaseline.Options);
         return $"crsp1.{Encode(payload)}.{Encode(SHA256.HashData(payload))}";
     }
 
@@ -38,7 +38,7 @@ internal static class CoalescingRuntimeStoreContinuation
                 !CryptographicOperations.FixedTimeEquals(suppliedChecksum, expectedChecksum))
                 throw new FormatException();
 
-            var payload = JsonSerializer.Deserialize<Payload>(bytes) ?? throw new FormatException();
+            var payload = JsonSerializer.Deserialize<Payload>(bytes, Elsa.Serialization.Core.JsonBaseline.Options) ?? throw new FormatException();
             if (!StringComparer.Ordinal.Equals(payload.Binding, binding) ||
                 string.IsNullOrWhiteSpace(payload.Cursor.LastIdentity))
                 throw new FormatException();

@@ -204,7 +204,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
 
         if (state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
         {
-            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
+            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames, Elsa.Serialization.Core.JsonBaseline.Options)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
 
             return outcomeNames;

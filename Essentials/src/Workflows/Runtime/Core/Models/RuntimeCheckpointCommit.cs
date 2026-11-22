@@ -556,7 +556,7 @@ public sealed class RuntimePostCommitIntent
         StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
         WaitFailurePolicy == other.WaitFailurePolicy &&
         NotBefore == other.NotBefore &&
-        (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
+        (Payload is { } payload ? other.Payload is { } otherPayload && Elsa.Serialization.Core.JsonCanonicalForm.Equals(payload, otherPayload) : other.Payload is null) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 
     /// <summary>

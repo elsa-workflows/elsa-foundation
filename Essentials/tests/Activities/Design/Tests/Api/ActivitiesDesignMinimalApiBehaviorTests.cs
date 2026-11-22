@@ -184,7 +184,7 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
         Assert.Contains($"\"name\":\"{queryName}\"", body, StringComparison.Ordinal);
         Assert.Contains($"Value [invalid] is not valid for a [{typeName}] property!", body, StringComparison.Ordinal);
         Assert.Null(host.Seams.LastRequest);

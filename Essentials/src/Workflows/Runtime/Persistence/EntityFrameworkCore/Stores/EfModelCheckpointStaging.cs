@@ -55,7 +55,7 @@ internal static class EfModelCheckpointStaging
             // Only terminal bookkeeping can change: the semantic result remains immutable, never Running.
             if (!retainsState && (current.Lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement) &&
                 (state.Lifecycle is not (RuntimeModelLifecycle.TerminalPendingSettlement or RuntimeModelLifecycle.TerminalSettled) ||
-                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
+                 !Elsa.Serialization.Core.JsonCanonicalForm.Equals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
                 throw new InvalidOperationException("A terminal model execution cannot resume semantic progression or replace its result.");
         }
 

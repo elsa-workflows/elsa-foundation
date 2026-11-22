@@ -76,10 +76,7 @@ public sealed class RuntimeGeneratorEmissionScheduler : IRuntimeGeneratorEmissio
         $"{generatedEvent.WorkflowExecutionId}:{purpose}:{generatedEvent.GeneratedEventId}";
 
     private static JsonSerializerOptions CreateDefaultPayloadJsonSerializerOptions() =>
-        new(JsonSerializerDefaults.General)
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        Elsa.Serialization.Core.JsonBaseline.CreateCopy();
 
     private static IReadOnlyDictionary<string, string> CreateCommandMetadata(GeneratedEvent generatedEvent)
     {

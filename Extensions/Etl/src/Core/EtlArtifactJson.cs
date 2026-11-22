@@ -8,9 +8,9 @@ namespace Elsa.Etl.Core;
 
 /// <summary>Reads, writes, and hashes the typed v1 ETL pipeline JSON representation.</summary>
 /// <remarks>
-/// Write uses the declared typed-property order and compact camel-case JSON. Hash hashes that compact
-/// serialization; it is not a general JSON canonicalization or property-sorting algorithm. Design and runtime
-/// share this codec so a published artifact has one mechanical representation.
+/// Write uses the declared typed-property order and compact camel-case JSON. Hash uses the shared exact
+/// canonical JSON value contract, independently of member order, number notation and escape spelling.
+/// Design and runtime share the typed wire codec and the frozen hash-input contract.
 /// </remarks>
 public static class EtlArtifactJson
 {
@@ -30,11 +30,7 @@ public static class EtlArtifactJson
         document.Deserialize<EtlPipeline>(Options)
         ?? throw new JsonException("The ETL pipeline document resolved to null.");
 
-    /// <summary>Returns lowercase SHA-256 for the compact JSON serialization of a pipeline document.</summary>
-    /// <remarks>
-    /// Pass a document produced by <see cref="Write(EtlPipeline)"/> for the published typed property order.
-    /// This method does not reorder arbitrary JSON object members.
-    /// </remarks>
+    /// <summary>Returns lowercase SHA-256 for the exact canonical JSON value through JsonHashInput.</summary>
     public static string Hash(JsonElement document) =>
         Elsa.Serialization.Core.JsonHashInput.Hash(document);
 

@@ -90,7 +90,7 @@ public static class ValueConversionCompatibility
     public static bool IsNullable(string alias) => alias.EndsWith("?", StringComparison.Ordinal);
 
     private static bool SameJson(JsonElement? left, JsonElement? right) =>
-        left.HasValue == right.HasValue && (!left.HasValue || JsonElement.DeepEquals(left.Value, right!.Value));
+        left.HasValue == right.HasValue && (!left.HasValue || Elsa.Serialization.Core.JsonCanonicalForm.Equals(left.Value, right!.Value));
 
     private static int NumericRank(string alias) => NormalizeAlias(alias) switch
     {

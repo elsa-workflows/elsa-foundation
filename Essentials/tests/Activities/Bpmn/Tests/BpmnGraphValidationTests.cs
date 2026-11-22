@@ -681,7 +681,7 @@ public sealed class BpmnGraphValidationTests
                         BpmnRuntimeFixture.EndEvent()
                     ],
                     sequenceFlows: [BpmnRuntimeFixture.Flow("flow-1", "start", "mi"), BpmnRuntimeFixture.Flow("flow-2", "mi", "end")],
-                    variables: variables))));
+                    variables: variables), Elsa.Serialization.Core.JsonBaseline.Options)));
 
     private static ExecutableNode WorkflowChild(string nodeId) =>
         Elsa.Activities.Testing.WorkflowExecutionHarness.NewProbeNode(nodeId);

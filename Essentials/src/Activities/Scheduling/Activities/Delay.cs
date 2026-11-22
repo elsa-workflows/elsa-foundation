@@ -51,7 +51,7 @@ public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timePro
                 StimulusHash: timerId,
                 DueTime: dueTime,
                 CreatedAt: now,
-                Input: JsonSerializer.SerializeToElement(trigger),
+                Input: Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(trigger),
                 PayloadType: registration.PayloadType,
                 ProviderId: TimerTriggerProviderId),
             context.CancellationToken);

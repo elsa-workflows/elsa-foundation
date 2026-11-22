@@ -30,7 +30,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
 
             // This envelope measurement is done before typed deserialization. The raw pipeline has already
             // been bounded, and the scalar identity fields were bounded above.
-            var envelopeSize = JsonSerializer.SerializeToUtf8Bytes(artifact).Length;
+            var envelopeSize = JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length;
             if (envelopeSize > EtlArtifact.MaximumByteLength)
                 throw Refused("etl.executable.too-large");
 

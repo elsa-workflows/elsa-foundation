@@ -104,7 +104,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryPagedScanne
 
     private string EncodeContinuation(RecoveryContinuation continuation)
     {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(continuation);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(continuation, Elsa.Serialization.Core.JsonBaseline.Options);
         var token = _continuationCodec.Encode("imrrs1", payload);
         RuntimeStorePageRequest.ValidateContinuationToken(token, nameof(token));
         return token;
@@ -118,7 +118,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryPagedScanne
         try
         {
             var payloadBytes = _continuationCodec.Decode("imrrs1", token);
-            var continuation = JsonSerializer.Deserialize<RecoveryContinuation>(payloadBytes)
+            var continuation = JsonSerializer.Deserialize<RecoveryContinuation>(payloadBytes, Elsa.Serialization.Core.JsonBaseline.Options)
                                ?? throw new InvalidDataException("Recovery continuation token is empty.");
             if (!StringComparer.Ordinal.Equals(continuation.Binding, binding) ||
                 string.IsNullOrWhiteSpace(continuation.ProviderContinuationToken))

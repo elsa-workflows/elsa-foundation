@@ -295,7 +295,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             else if (work is null) rejection = timer is null ? "obsolete-human-work" : "obsolete-timer-work";
             else if (timer is null && nativeResult is null && (work.NativeWork is not null || work.Timer is not null)) rejection = "not-human-work";
             else if (timer is null && nativeResult is null && ClaimRejection(definition, document, work, claimed) is { } claimRejection) rejection = claimRejection;
-            else if (timer is not null && (work.Timer is null || !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(work.Timer, Web), command.Payload))) rejection = "obsolete-timer-work";
+            else if (timer is not null && (work.Timer is null || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(work.Timer, Web), command.Payload))) rejection = "obsolete-timer-work";
             else if (nativeResult is not null && !nativeResult.Origin.IsEquivalentTo(work.NativeWork)) rejection = "obsolete-native-work";
             else
             {
@@ -627,7 +627,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     snapshot?.ActiveWork.Any(item => item.TokenId == failure.TokenId && item.ElementId == failure.ElementId && item.NodeId == failure.BindingId && item.IterationId == failure.IterationId) != true ||
                     failure.Status == "Open" && (state.Lifecycle != RuntimeModelLifecycle.WaitingIncident || state.TerminalResult is not null ||
                         failure.AttemptNumber >= failure.MaxAttempts || !result.Work.Any(work => work.InvocationId == failure.InvocationId && work.AttemptId == failure.FailedAttemptId && work.AttemptNumber == failure.AttemptNumber) ||
-                        !JsonElement.DeepEquals(failure.SemanticState, JsonSerializer.SerializeToElement(result.State, Web))))
+                        !Elsa.Serialization.Core.JsonCanonicalForm.Equals(failure.SemanticState, JsonSerializer.SerializeToElement(result.State, Web))))
                     throw new BpmnModelValidationException("A retained service failure lost its original attempt or active semantic snapshot.");
             }
             if ((state.Lifecycle == RuntimeModelLifecycle.WaitingIncident) != failures.Any(item => item.Status == "Open"))

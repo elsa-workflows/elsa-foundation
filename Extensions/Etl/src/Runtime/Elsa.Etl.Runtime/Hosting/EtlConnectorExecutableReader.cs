@@ -23,7 +23,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
                 throw Refused("etl.executable.invalid-pipeline");
             if (JsonMarshal.GetRawUtf8Value(artifact.Pipeline).Length > EtlArtifact.MaximumByteLength)
                 throw Refused("etl.executable.too-large");
-            var envelopeBytes = JsonSerializer.SerializeToUtf8Bytes(artifact).Length;
+            var envelopeBytes = JsonSerializer.SerializeToUtf8Bytes(artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length;
             if (envelopeBytes > EtlArtifact.MaximumByteLength)
                 throw Refused("etl.executable.too-large");
 

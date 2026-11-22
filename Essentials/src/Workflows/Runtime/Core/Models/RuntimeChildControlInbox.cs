@@ -52,7 +52,7 @@ public sealed class RuntimeChildControlInbox
         if (transport.Batch.Ordinal < NextOrdinal || IsTerminalConsumed && NextOrdinal == long.MaxValue && transport.Batch.Ordinal == long.MaxValue)
             return true;
         return Pending.Any(item => item.Batch.Ordinal == transport.Batch.Ordinal &&
-            JsonElement.DeepEquals(JsonSerializer.SerializeToElement(item), JsonSerializer.SerializeToElement(transport)));
+            Elsa.Serialization.Core.JsonCanonicalForm.Equals(JsonSerializer.SerializeToElement(item), JsonSerializer.SerializeToElement(transport)));
     }
 
 }

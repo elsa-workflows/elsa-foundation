@@ -84,12 +84,12 @@ public sealed class BpmnCompensationTests
         // handlerB runs first (most-recently-completed host), alone.
         var firstBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal("node-hB", firstBookmark.ExecutableNodeId);
-        run = await fixture.ResumeAsync(firstBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(firstBookmark.StimulusHash)));
+        run = await fixture.ResumeAsync(firstBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(firstBookmark.StimulusHash)));
 
         // then handlerA, alone.
         var secondBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal("node-hA", secondBookmark.ExecutableNodeId);
-        run = await fixture.ResumeAsync(secondBookmark, JsonSerializer.SerializeToElement(new DurableTimerElapsed(secondBookmark.StimulusHash)));
+        run = await fixture.ResumeAsync(secondBookmark, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new DurableTimerElapsed(secondBookmark.StimulusHash)));
 
         run.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         run.AssertWorkflowCompleted();

@@ -456,7 +456,7 @@ internal static class StructuralParentEvaluationSupport
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(normalizedOutcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
         // Only the current successful direct-child completion may supply this causal edge. Notification and
         // other callbacks must not retain a marker left by an earlier fault evaluation or attempt.
         metadata.Remove(RuntimeMetadataKeys.CompletedChildActivityExecutionId);

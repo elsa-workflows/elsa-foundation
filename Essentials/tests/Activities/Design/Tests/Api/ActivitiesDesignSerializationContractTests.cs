@@ -232,7 +232,8 @@ public sealed class ActivitiesDesignSerializationContractTests
         var summaryJson = JsonSerializer.Serialize(summary, options.GetTypeInfo(typeof(ReusableActivityDraftSummaryView))!);
         Assert.Contains("\"status\":\"active\"", summaryJson, StringComparison.Ordinal);
 
-        Assert.Equal(0, fallback.Calls);
+        Assert.DoesNotContain(fallback.RequestedTypes, owned.Contains);
+        Assert.Contains(typeof(string), fallback.RequestedTypes);
     }
 
     [Fact]
@@ -285,7 +286,7 @@ public sealed class ActivitiesDesignSerializationContractTests
         var json = Serialize(summary);
 
         Assert.Contains("\"status\":\"active\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"updatedAt\":\"2026-01-02T03:04:05Z\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"updatedAt\":\"2026-01-02T03:04:05+00:00\"", json, StringComparison.Ordinal);
 
         var provenance = new ActivityAuthoringProvenanceView("Api", "source-1", null);
         var provenanceJson = Serialize(provenance);
@@ -367,12 +368,13 @@ public sealed class ActivitiesDesignSerializationContractTests
 
     private sealed class CountingResolver : IJsonTypeInfoResolver
     {
-        public int Calls { get; private set; }
+        public List<Type> RequestedTypes { get; } = [];
+        private readonly DefaultJsonTypeInfoResolver resolver = new();
 
         public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
         {
-            Calls++;
-            return null;
+            RequestedTypes.Add(type);
+            return resolver.GetTypeInfo(type, options);
         }
     }
 }

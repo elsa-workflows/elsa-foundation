@@ -70,8 +70,8 @@ internal static class EtlNativeBoundary
     }
 
     public static string RunId(EtlScope scope, string workflowId, string activityId) =>
-        "etl-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            EtlRuntimeJson.Write(new { Format = "etl-native-run-v1", Scope = scope, WorkflowId = workflowId, ActivityId = activityId })))).ToLowerInvariant();
+        "etl-" + Elsa.Serialization.Core.JsonHashInput.Hash(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(
+            new { Format = "etl-native-run-v1", Scope = scope, WorkflowId = workflowId, ActivityId = activityId }));
 
     public static RunEtlRequest ReadState(RunEtlState state)
     {

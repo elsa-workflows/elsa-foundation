@@ -959,7 +959,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         outcomeMetadata.Remove(RuntimeMetadataKeys.InterventionRequestedBy);
         if (request.Decisions.Count > 0)
         {
-            outcomeMetadata[RuntimeMetadataKeys.InterventionDecisions] = JsonSerializer.Serialize(request.Decisions);
+            outcomeMetadata[RuntimeMetadataKeys.InterventionDecisions] = JsonSerializer.Serialize(request.Decisions, Elsa.Serialization.Core.JsonBaseline.Options);
             outcomeMetadata[RuntimeMetadataKeys.InterventionRequestedBy] = payload.ActivityExecutionId;
         }
 
@@ -1098,7 +1098,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             enqueuedAt: now,
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
+            payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
             commandMetadata: sourceWorkItem.CommandMetadata,
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
     }

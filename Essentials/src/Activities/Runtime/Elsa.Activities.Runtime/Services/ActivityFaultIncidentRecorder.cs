@@ -142,7 +142,7 @@ public sealed class ActivityFaultIncidentRecorder
                 recordedAt: occurredAt,
                 activityExecutionId: request.ActivityExecutionId,
                 idempotencyKey: $"{request.WorkItem.IdempotencyKey}:post-commit:{workItem.IdempotencyKey}",
-                payload: JsonSerializer.SerializeToElement(workItem),
+                payload: JsonSerializer.SerializeToElement(workItem, Elsa.Serialization.Core.JsonBaseline.Options),
                 metadata: request.WorkItem.CommandMetadata))
             .ToArray();
 

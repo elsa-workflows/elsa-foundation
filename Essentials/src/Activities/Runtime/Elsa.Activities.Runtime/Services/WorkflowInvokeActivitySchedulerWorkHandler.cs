@@ -1170,7 +1170,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 enqueuedAt: now,
                 recordedAt: now,
                 sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
-                payload: JsonSerializer.SerializeToElement(payload),
+                payload: JsonSerializer.SerializeToElement(payload, Elsa.Serialization.Core.JsonBaseline.Options),
                 commandMetadata: MergeMetadata(invokeWorkItem.CommandMetadata, request),
                 envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
         }
@@ -1491,7 +1491,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = invokePayload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
-        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames);
+        metadata[RuntimeMetadataKeys.CompletionOutcomeNames] = JsonSerializer.Serialize(outcomeNames, Elsa.Serialization.Core.JsonBaseline.Options);
 
         if (skipped)
             metadata[RuntimeMetadataKeys.InvokeSkipped] = bool.TrueString;

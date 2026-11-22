@@ -35,7 +35,7 @@ internal static class StartCommandExecution
         WorkflowExecutionStartCommandPayload? payload;
         try
         {
-            payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
+            payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>(Elsa.Serialization.Core.JsonBaseline.Options);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
