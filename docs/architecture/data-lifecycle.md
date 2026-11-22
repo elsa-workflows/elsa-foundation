@@ -126,7 +126,9 @@ public sealed record DeleteSelection(
   The in-memory Foundation requires both operator permissions for `ThenDelete` and carries the selected
   actor's exact reference as `ExpectedTarget`. The real Worker uses that pinned creation through delivery.
   `--cascade-pages-check` covers Native retirement with its first bounded cascade page, a protected
-  running actor, and already ended actors with and without a child. `--park-drain-cascade-check` covers
+  running actor, and already ended actors with and without a child. It also drives the 1,000-child
+  and one-job schedules for running and ended roots and children, including the protected child and a
+  fresh owner taking over after the first commit. `--park-drain-cascade-check` covers
   parked and running Recover origins. `--park-recovery-check` covers taking over an ended Recover and
   a competing `ThenDelete` that cascades while preserving the existing owner's operation.
 

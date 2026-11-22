@@ -26,6 +26,11 @@ internal static class CascadePageChecks
         await CheckDirectThenDelete(alreadyEnded: true, hasChild: false, protect: false, check);
         await CheckDirectThenDelete(alreadyEnded: true, hasChild: true, protect: false, check);
         await CheckDirectThenDelete(alreadyEnded: false, hasChild: true, protect: true, check);
+        await CheckMixedThenDelete(asChild: false, alreadyEnded: false, protect: false, check);
+        await CheckMixedThenDelete(asChild: true, alreadyEnded: false, protect: false, check);
+        await CheckMixedThenDelete(asChild: true, alreadyEnded: false, protect: true, check);
+        await CheckMixedThenDelete(asChild: false, alreadyEnded: true, protect: false, check);
+        await CheckMixedThenDelete(asChild: true, alreadyEnded: true, protect: false, check);
         await RunModelCap(check);
     }
 
@@ -427,6 +432,102 @@ internal static class CascadePageChecks
             $"PC-5 ThenDelete preserves the correct disposition and child binding for ended={alreadyEnded}, child={hasChild}, protected={protect}");
     }
 
+    private static async Task CheckMixedThenDelete(bool asChild, bool alreadyEnded, bool protect, Action<bool, string> check)
+    {
+        const long now = 1_702_300_065_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("mixed-then-delete");
+        var probe = new Probe { Protect = protect, HonourTerminate = true };
+        var scheduler = new HeldScheduler();
+        var edge = new InMemoryIngress(store, new Requests("mixed-then-delete"), "mixed-then-delete",
+            (_, kind) => kind is Contract.Kinds.Terminate or Contract.Kinds.Delete);
+        var pages = new List<TurnCommit>();
+        var writes = new List<TurnCommit>();
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!landed) return;
+            writes.AddRange(batch.Turns);
+            pages.AddRange(batch.Turns.Where(turn => turn.FoundationCascade is not null));
+        });
+        var worker = Owner("mixed-first");
+        await using var first = await Activate(worker);
+        var created = await edge.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "root")), "start", Contract.Kinds.Start);
+        var root = new Contract.Target.Ref(created.Actor!.Value);
+        var rootId = Physical(root);
+        await Step(worker, rootId);
+        var target = root;
+        if (asChild)
+        {
+            await edge.SendAsync(scope, root, "branch", "register-child");
+            await Step(worker, rootId);
+            target = new Contract.Target.Ref(new(store.Instances[rootId].State!));
+        }
+        var id = Physical(target);
+        await edge.SendAsync(scope, target, "register-mixed", "register-mixed");
+        await Pump(first);
+        var previous = store.Instances[id];
+        var entries = CascadeRegistry.From(previous);
+        var ticket = InboxKey.Ticket(id, "cascade-job", previous.Creation);
+        var guard = entries.Children.Length == CascadeProtocol.PageLimit && entries.Jobs is [{ Key: "cascade-job" }] &&
+            store.Messages.ContainsKey(ticket) &&
+            entries.Children.All(child => store.Instances.GetValueOrDefault(child.Id) is { Status: InstanceStatus.Running });
+        var label = $"child={asChild}, ended={alreadyEnded}, protected={protect}";
+        check(guard, $"PC-5 {label}: the real Foundation holds 1,000 child registrations and one pending job");
+        if (!guard) return;
+        if (alreadyEnded)
+        {
+            await edge.SendAsync(scope, target, "finish", "finish");
+            await Step(worker, id);
+        }
+
+        var registryAtCommand = CascadeRegistry.From(store.Instances[id]);
+        var ticketAtCommand = store.Messages.ContainsKey(ticket);
+        var command = new Contract.OperatorCommand(null, ThenDelete: true, ExpectedTarget: target.Actor);
+        var admission = await edge.SendAsync(scope, target, "end-delete", Contract.Kinds.Terminate, Json.Write(command));
+        for (var pass = 0; pass < 8 && !pages.Any(turn => turn.Instance == id); pass++)
+            await Step(worker, id);
+        var firstPage = store.Instances[id];
+        var disposition = alreadyEnded ? InstanceStatus.Finished : InstanceStatus.Cancelled;
+        var bounded = admission.Outcome == Contract.AdmissionOutcome.Accepted &&
+            registryAtCommand.Count == CascadeProtocol.PageLimit + 1 && ticketAtCommand && firstPage.Status == disposition &&
+            firstPage.Retired == !protect && firstPage.Cascade is { Cursor: CascadeProtocol.PageLimit } &&
+            !store.Messages.ContainsKey(ticket) &&
+            pages.Where(turn => turn.Instance == id).SelectMany(turn => turn.Sent).Count(message => message.CascadeOrigin) ==
+                CascadeProtocol.PageLimit - 1;
+        check(bounded, $"PC-5 {label}: the first fenced commit discharges the job and 999 children with its stored cursor" +
+            (bounded ? "" : $" (at command: {registryAtCommand.Count} entries, ticket={ticketAtCommand}; admission={admission.Outcome}; " +
+                $"after: {firstPage.Status}, retired={firstPage.Retired}, cursor={firstPage.Cascade?.Cursor})"));
+        if (!bounded) return;
+
+        await first.DisposeAsync();
+        scheduler.RunAll();
+        await using var cold = await Activate(Owner("mixed-cold"));
+        await Pump(cold);
+        var journal = store.Journal.Values.Where(row => row.Instance == id).ToArray();
+        var sent = pages.Where(turn => turn.Instance == id).SelectMany(turn => turn.Sent).Where(message => message.CascadeOrigin).ToArray();
+        var notices = writes.SelectMany(turn => turn.Sent).Count(message =>
+            message.Kind == Kinds.ChildFinished && message.Sender == id && message.Read<FoundationChildNotice>().Final);
+        check(store.Instances[id] is { Cascade: null } && sent.Length == CascadeProtocol.PageLimit &&
+            sent.Select(message => message.Target.Id).Distinct().Count() == CascadeProtocol.PageLimit &&
+            entries.Children.All(child => store.Instances[child.Id].Status == InstanceStatus.Cancelled) &&
+            (protect ? journal.All(row => row.Revision >= 0) : journal is [{ Revision: -1 }]) &&
+            notices == (asChild ? 1 : 0) && probe.JobEntries == 0,
+            $"PC-5 {label}: the new owner finishes the suffix once with the correct terminal journal and parent notice");
+
+        string Physical(Contract.Target.Ref reference) => store.FoundationTarget(scope.Tenant, reference.Actor.Id)!.Id;
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0, JobScheduler = scheduler });
+        static async Task<IScopeActivation> Activate(Worker owner) => (await new DurableHost([owner]).ActivateAsync(0))!;
+        static async Task Pump(IScopeActivation owner)
+        {
+            for (var pass = 0; pass < 24; pass++)
+            {
+                await owner.WokenAsync(null);
+                await owner.RunAsync();
+            }
+        }
+    }
+
     private static async Task RunModelCap(Action<bool, string> check)
     {
         const long now = 1_702_300_070_000;
@@ -461,9 +562,19 @@ internal static class CascadePageChecks
         public int Pulses { get; private set; }
         public bool CancelOnStart { get; set; }
         public bool Protect { get; init; }
+        public bool HonourTerminate { get; init; }
+        internal int JobEntries { get; private set; }
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             if (turn.Inbox.Any(message => message.Kind == "register-child")) turn.State = turn.Start(new(Type, "leaf")).Id;
+            if (HonourTerminate && turn.Header.Status == Contract.ActorStatus.Running &&
+                turn.Inbox is [{ Kind: Contract.Kinds.Terminate }]) turn.End(Contract.ActorStatus.Cancelled);
+            if (turn.Inbox.Any(message => message.Kind == "register-mixed"))
+            {
+                for (var index = 0; index < CascadeProtocol.PageLimit; index++) turn.Start(new(Type, "leaf"));
+                turn.StartJob("cascade-job", timeout: TimeSpan.FromMinutes(1));
+            }
+
             if (turn.Inbox.Any(message => message.Kind == "end-after-explicit"))
             {
                 turn.Send(new(turn.State!), Contract.Kinds.Terminate);
