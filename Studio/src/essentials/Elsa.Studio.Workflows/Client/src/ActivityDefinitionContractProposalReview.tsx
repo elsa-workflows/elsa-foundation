@@ -1,4 +1,4 @@
-import { TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioFactList } from "@elsa-workflows/studio-ui";
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
@@ -164,12 +164,12 @@ export function ActivityDefinitionContractProposalReview({
     </header>
     <ActivityDefinitionContractProposalStatus phase={phase} failure={failure} />
     {proposal && phase !== "stale" ? <>
-      <TechnicalDetails><dl className="ad-publication-summary" aria-label="Exact proposal binding">
+      <TechnicalDetails><StudioFactList aria-label="Exact proposal binding">
         <div><dt>Draft revision</dt><dd>{proposal.revision}</dd></div>
         <div><dt>Provider</dt><dd>{proposal.providerKey}</dd></div>
         <div><dt>Provider schema</dt><dd>{proposal.providerSchemaVersion}</dd></div>
         <div><dt>Implementation fingerprint</dt><dd><code>{proposal.manifestFingerprint}</code></dd></div>
-      </dl></TechnicalDetails>
+      </StudioFactList></TechnicalDetails>
       {reviews.length ? <ActivityDefinitionContractProposalChangeList
         reviews={reviews}
         decisions={decisions}

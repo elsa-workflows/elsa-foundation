@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Plus, Trash2, X } from "lucide-react";
-import { AdvancedSection, TechnicalDetails, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, TechnicalDetails, StudioFactList, tabElementIds, useTablistKeyboard, StudioField } from "@elsa-workflows/studio-ui";
 import type { StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type {
   ActivityAuthoringCapabilities,
@@ -369,13 +369,13 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
       </div>
     </div>
     <div data-contract-schema tabIndex={-1}><TechnicalDetails label="Advanced interface details">
-      <div className="ad-contract-workbench-facts">
-        <ReadOnlyFact label="Schema version" value={contract.contractSchemaVersion} />
-        {sourceVersionId ? <ReadOnlyFact label="Published baseline version ID" value={sourceVersionId} /> : null}
+      <StudioFactList>
+        <div><dt>Schema version</dt><dd>{contract.contractSchemaVersion}</dd></div>
+        {sourceVersionId ? <div><dt>Published baseline version ID</dt><dd>{sourceVersionId}</dd></div> : null}
+      </StudioFactList>
         {sourceVersionId && baselineContract ? <BaselineClassification contract={contract} baseline={baselineContract} /> : null}
         {sourceVersionId && !baselineContract && !baselineUnavailable ? <p className="ad-contract-workbench-note">Loading the exact immutable contract used for local impact classification…</p> : null}
         {sourceVersionId && baselineUnavailable ? <p className="ad-contract-workbench-note">Impact counts are unavailable until the immutable baseline can be loaded.</p> : null}
-      </div>
     </TechnicalDetails></div>
     {pendingImpact ? <ImpactReviewDialog impact={pendingImpact} onClose={() => setPendingImpact(null)} /> : null}
   </section>;

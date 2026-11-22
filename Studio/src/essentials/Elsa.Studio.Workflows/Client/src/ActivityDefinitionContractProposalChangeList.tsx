@@ -1,4 +1,4 @@
-import { TechnicalDetails } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioFactList } from "@elsa-workflows/studio-ui";
 import { Check, X } from "lucide-react";
 import {
   contractMemberFacts,
@@ -46,14 +46,14 @@ function ProposalChange({
       <span className={`ad-badge ${selected ? "is-design" : ""}`}>{selected ? "Selected" : "Not selected"}</span>
     </header>
     <p>{review.impactReasons.join(" ")}</p>
-    {review.supported ? <dl className="ad-impact-facts" aria-label={`${title} structured comparison`}>
+    {review.supported ? <StudioFactList aria-label={`${title} structured comparison`}>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(isCommonFact)} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(isCommonFact)} />
-    </dl> : <div className="ad-unavailable-note"><strong>Unknown structured kind</strong><span>The opaque provider payload is intentionally not rendered. This change cannot be selected.</span></div>}
-    {review.supported ? <TechnicalDetails><dl className="ad-impact-facts">
+    </StudioFactList> : <div className="ad-unavailable-note"><strong>Unknown structured kind</strong><span>The opaque provider payload is intentionally not rendered. This change cannot be selected.</span></div>}
+    {review.supported ? <TechnicalDetails><StudioFactList>
       <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(fact => !isCommonFact(fact))} />
       <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(fact => !isCommonFact(fact))} />
-    </dl></TechnicalDetails> : null}
+    </StudioFactList></TechnicalDetails> : null}
     <div className="ad-publication-actions" role="group" aria-label={`Review ${title}`}>
       <button type="button" aria-pressed={selected} onClick={() => onDecision(true)} disabled={!review.supported}><Check size={15} aria-hidden /> Accept</button>
       <button type="button" aria-pressed={!selected} onClick={() => onDecision(false)}><X size={15} aria-hidden /> Reject</button>

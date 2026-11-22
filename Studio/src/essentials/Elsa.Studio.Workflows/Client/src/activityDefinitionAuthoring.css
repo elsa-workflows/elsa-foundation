@@ -159,7 +159,7 @@
 .ad-publication-prepare-row { display: flex; justify-content: flex-start; }
 .ad-publication-technical-details { margin-top: .75rem; }
 .ad-publication-technical-details > summary { color: var(--studio-text-muted); cursor: pointer; }
-.ad-publication-technical-details .ad-publication-summary { margin-top: .5rem; }
+.ad-publication-technical-details .studio-fact-list { margin-top: .5rem; }
 .ad-publication-dialog .ad-publication-impact details > summary,
 .ad-publication-dialog .ad-readiness-grid details > summary { color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
 .ad-publication-dialog .ad-readiness-grid details code { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
@@ -241,7 +241,7 @@
 .ad-draft-editor .ad-interface-suggestions > .ad-publication-review { margin: 0; padding: 16px 0; border: 0; background: transparent; }
 .ad-proposal-technical > summary,
 .ad-mapping-technical > summary { width: fit-content; color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
-.ad-proposal-technical .ad-publication-summary { margin-top: 12px; }
+.ad-proposal-technical .studio-fact-list { margin-top: 12px; }
 .ad-interface-connections-header h2 { margin: 0 0 4px; font-size: var(--studio-section-title-size); }
 .ad-interface-connections-header p { margin: 0; color: var(--studio-text-muted); }
 .ad-public-interface-view { display: grid; gap: 24px; width: 100%; max-width: 84rem; min-width: 0; margin-inline: 0; }

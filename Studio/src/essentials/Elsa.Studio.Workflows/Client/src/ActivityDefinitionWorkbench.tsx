@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type R
 import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioLoadingStatus, StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -279,7 +279,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
       {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
       {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} publicationReviewRequested={requestedPublicationReview} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onReviewPublication={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null, publicationReview: true })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
       {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
-      {activeSection === "relationships" ? <Suspense fallback={<div className="ad-inline-status" role="status">Loading dependency explorer…</div>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
+      {activeSection === "relationships" ? <Suspense fallback={<StudioLoadingStatus>Loading dependency explorer…</StudioLoadingStatus>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
     </section>
     {designOwned ? <details className="ad-technical-disclosure"><summary>Advanced</summary><IdentityDetails detail={detail} provider={provider} /></details> : null}
   </main>
@@ -320,7 +320,7 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
     {isActivityDefinitionEnumValue(detail.lifecycle.recommendation?.lifecycle, "Active") ? versionQuery.isError
       ? <div className="ad-inline-error" role="alert">Activity details could not be loaded. <button type="button" onClick={() => void versionQuery.refetch()}>Retry</button></div>
       : versionQuery.data?.contract ? <HistoricalContract contract={versionQuery.data.contract} compact />
-      : <div className="ad-inline-status" role="status">Loading activity details…</div>
+      : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>
       : <p>No recommended active version is available. Choose a version to inspect its inputs and outputs.</p>}
   </div>;
 
@@ -374,7 +374,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
 
 function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query: ReturnType<typeof useActivityDefinitionDrafts> | ReturnType<typeof useActivityDefinitionVersions>; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; empty: string; onRetry(): void }) {
   if (privacyFailure) return <div className="ad-inline-error" role="alert"><span>{privacyFailure === "unavailable" ? "This backend does not advertise this supported management collection. No fallback is used." : privacyFailure === "not-found" ? "This collection is no longer available. No identities or counts are shown." : "This account cannot open this collection. No identities or counts are shown."}</span> <button type="button" onClick={onRetry}>Retry</button></div>;
-  if (query.isPending) return <div className="ad-inline-status" role="status">Loading authorized rows…</div>;
+  if (query.isPending) return <StudioLoadingStatus>Loading authorized rows…</StudioLoadingStatus>;
   if (query.isError && !query.data) return <div className="ad-inline-error" role="alert">This collection could not be confirmed. No unconfirmed rows are shown.</div>;
   if (query.isError && query.data) return <div className="ad-inline-error" role="alert">Refresh failed; retained rows remain visible as stale evidence.</div>;
   if (query.data?.items.length === 0) return <div className="ad-inline-status" role="status">{empty}</div>;
@@ -383,7 +383,7 @@ function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query
 
 function ExactSelectionState({ kind, selected, query, failure }: { kind: "draft" | "version"; selected: boolean; query: ReturnType<typeof useActivityDefinitionDraft> | ReturnType<typeof useActivityDefinitionVersion>; failure: ReturnType<typeof classifyActivityDefinitionReadFailure> | null }) {
   if (!selected) return null;
-  if (query.isPending) return <div className="ad-inline-status" role="status">Loading the exact selected {kind}…</div>;
+  if (query.isPending) return <StudioLoadingStatus>Loading the exact selected {kind}…</StudioLoadingStatus>;
   if (failure) return <div className="ad-inline-error" role="alert">The exact selected {kind} could not be confirmed. No unconfirmed identity is shown.</div>;
   return null;
 }
@@ -413,7 +413,7 @@ function SelectedVersion({ item, compact, standalone = false, actionLabel, actio
   return <section className="ad-version-detail" aria-label="Selected exact version">
     {standalone ? <header className="ad-version-detail-heading"><strong>Version {compact ? displayActivityDefinitionVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong><span>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</span></header> : null}
     {!compact ? actions : null}
-    {item.contract ? <HistoricalContract contract={item.contract} compact={compact} /> : <div className="ad-inline-status" role="status">Loading activity details…</div>}
+    {item.contract ? <HistoricalContract contract={item.contract} compact={compact} /> : <StudioLoadingStatus>Loading activity details…</StudioLoadingStatus>}
     <details className="ad-technical-details ad-version-details"><summary>Version details</summary>
       {compact ? actions : null}
       <dl className="ad-version-identifiers">

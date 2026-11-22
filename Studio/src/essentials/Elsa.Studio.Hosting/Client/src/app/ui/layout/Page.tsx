@@ -42,6 +42,11 @@ export function StudioPageHeader({ title, compact, breadcrumbs, description, eye
   </header>;
 }
 
+/** Groups related facts using native definition-list markup. Each child groups a dt and its dd. */
+export function StudioFactList({ className, ...props }: React.ComponentPropsWithoutRef<"dl">) {
+  return <dl className={["studio-fact-list", className].filter(Boolean).join(" ")} {...props} />;
+}
+
 /** Composable controls, not an ARIA toolbar: native Tab order is retained. */
 export function StudioCollectionToolbar({ className, ...props }: React.ComponentPropsWithoutRef<"div">) {
   return <div className={["studio-collection-toolbar", className].filter(Boolean).join(" ")} {...props} />;

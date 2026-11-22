@@ -564,7 +564,7 @@ describe("WeaverSurface", () => {
 
     flushSync(() => buttonByLabel(container, "Auto-apply mode")?.click());
 
-    const options = [...container.querySelectorAll<HTMLElement>(".weaver-mode-option")]
+    const options = [...document.querySelectorAll<HTMLElement>(".weaver-mode-option")]
       .map(option => option.textContent ?? "");
     expect(options).toHaveLength(2);
     expect(options[0]).toContain("Manual review");
@@ -614,7 +614,7 @@ describe("WeaverSurface", () => {
     await flushPromises();
 
     flushSync(() => buttonByLabel(container, "Auto-apply mode")?.click());
-    flushSync(() => buttonByText(container, "Autopilot")?.click());
+    flushSync(() => buttonByText(document.body, "Autopilot")?.click());
 
     typeAndSend(container, "Add an activity");
     await flushPromises();
@@ -1071,8 +1071,8 @@ function statusText(container: HTMLElement) {
 }
 
 function openModeMenu(container: HTMLElement) {
-  if (!container.querySelector('[role="menu"][aria-label="Auto-apply mode"]')) flushSync(() => modeButton(container).click());
-  return [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+  if (modeButton(container).getAttribute("aria-expanded") !== "true") flushSync(() => modeButton(container).click());
+  return [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
 }
 
 function menuOptions(container: HTMLElement) {
