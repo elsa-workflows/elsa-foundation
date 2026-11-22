@@ -23,10 +23,12 @@ internal static class EventIdentityChecks
         await CheckAuthoredStep(loseAfter: true, check, paged: true);
         await CheckAuthoredStep(loseAfter: null, check);
         await CheckAuthoredStep(loseAfter: null, check, endPublisher: true);
-        await CheckRestoredWait(restoreBeforeMatch: true, check);
-        await CheckRestoredWait(restoreBeforeMatch: false, check);
-        await CheckRestoredWait(restoreBeforeMatch: true, check, keep: true, restoreBeforeInsert: true);
-        await CheckRestoredWait(restoreBeforeMatch: false, check, keep: true);
+        await CheckRestoredWait(RestoreAt.BeforeAuthor, check);
+        await CheckRestoredWait(RestoreAt.BeforeMatch, check);
+        await CheckRestoredWait(RestoreAt.AfterMatch, check);
+        await CheckRestoredWait(RestoreAt.BeforeInsert, check, keep: true);
+        await CheckRestoredWait(RestoreAt.BeforeMatch, check, keep: true);
+        await CheckRestoredWait(RestoreAt.AfterMatch, check, keep: true);
         await FoldedRegistration(check);
         await LegacyTicket(doneDelivery: false, check);
         await LegacyTicket(doneDelivery: true, check);
@@ -501,14 +503,24 @@ internal static class EventIdentityChecks
             "the successor finishes matching once and keeps the original author commit's retention deadline");
     }
 
-    private static async Task CheckRestoredWait(bool restoreBeforeMatch, Action<bool, string> check, bool keep = false,
-        bool restoreBeforeInsert = false)
+    private enum RestoreAt { BeforeAuthor, BeforeInsert, BeforeMatch, AfterMatch }
+
+    private static async Task CheckRestoredWait(RestoreAt point, Action<bool, string> check, bool keep = false)
     {
         var now = 1_701_400_091_000L;
         var store = new InMemoryStore(1, () => now);
         var scope = new Contract.BoundScope("authored-restored-wait");
         var probe = new Probe([("Order-7", "wait")], restoreKeep: keep);
-        var worker = Owner("restored-wait", store, probe);
+        var publicationSteps = 0;
+        var catchUpSteps = 0;
+        var observedStore = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (!landed) return;
+            publicationSteps += batch.Turns.Count(turn => turn.FoundationPublicationSequence is not null && turn.FoundationCatchUpFailed is null);
+            catchUpSteps += batch.Turns.Count(turn => turn.FoundationCatchUpStep is not null && turn.FoundationPublicationSequence is null);
+        });
+        var worker = new Worker("restored-wait", 0, observedStore, new ActorAdapter(store, probe),
+            new WorkerOptions { Monotonic = () => 0 });
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
         var publisher = await Begin("publisher");
         var restored = await Begin("restored");
@@ -519,25 +531,29 @@ internal static class EventIdentityChecks
         var target = new Contract.Target.Ref(restored);
         var selection = (await new ActorList(store, 10).GetAsync(scope, restored))!.Selection!;
 
+        if (point == RestoreAt.BeforeAuthor)
+        {
+            await Restore();
+            now -= 30_000;
+        }
         await ingress.SendAsync(scope, new Contract.Target.Ref(publisher), "authored-publish", "publish");
         await Step(publisher);
-        if (restoreBeforeInsert) await Restore();
-        await worker.PollAsync();
-        await worker.MeetAsync();
-        check(store.FoundationEvents.Count == 1 && !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
+        if (point == RestoreAt.BeforeInsert) await Restore();
+        await Match();
+        check(publicationSteps == 1 && store.FoundationEvents.Count == 1 && !store.Messages.Values.Any(row => row.Message.Kind == Kinds.Event),
             "the first authored step commits before any live or restored wait is matched");
 
-        if (!restoreBeforeMatch) await Match();
-        if (!restoreBeforeInsert) await Restore();
-        if (restoreBeforeMatch) await Match();
+        if (point == RestoreAt.AfterMatch) await Match();
+        if (point is RestoreAt.BeforeMatch or RestoreAt.AfterMatch) await Restore();
+        if (point != RestoreAt.AfterMatch) await Match();
         await Pump(owner);
-        var label = keep
-            ? restoreBeforeInsert ? "a keeping wait restored before insert gets one authored delivery" :
-                "a keeping wait restored after matching catches up the authored publication once"
-            : restoreBeforeMatch ? "a restored non-keeping wait participates in a later authored match after a clock backstep" :
-                "a restored non-keeping wait sees no authored publication whose match already completed";
+        if (point == RestoreAt.BeforeMatch && keep)
+            check(publicationSteps == 2 && catchUpSteps == 1, "both the publication page and keeping catch-up commit after the insert");
+        var expected = point != RestoreAt.AfterMatch || keep ? 1 : 0;
+        var shift = point == RestoreAt.BeforeAuthor ? " followed by a 30-second clock backstep" : "";
         check(Observed(store, scope, publisher) is [{ Payload: "from turn" }] &&
-            Observed(store, scope, restored).Count == (restoreBeforeMatch || keep ? 1 : 0), label);
+            Observed(store, scope, restored).Count == expected,
+            $"restoring a {(keep ? "keeping" : "non-keeping")} wait at {point}{shift} gets {expected} authored deliveries");
 
         async Task<Contract.ActorRef> Begin(string id) =>
             (await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, id)), id, Contract.Kinds.Start)).Actor!.Value;
@@ -560,7 +576,6 @@ internal static class EventIdentityChecks
 
         async Task Restore()
         {
-            if (!keep) now -= 30_000;
             await ingress.SendAsync(scope, target, "recover", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
             await Step(restored);
         }
