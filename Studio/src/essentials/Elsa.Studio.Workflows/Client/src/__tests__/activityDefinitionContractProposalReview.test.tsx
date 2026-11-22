@@ -73,8 +73,8 @@ describe("Activity Definition contract proposal review", () => {
     expect(harness.container.textContent).not.toContain("private.default.expression");
 
     const addition = articleByText(harness.container, "Add input Currency");
-    expect(addition.querySelector("details")?.open).toBe(false);
-    expect(addition.querySelector("details")?.textContent).toContain("Reference key: currency");
+    expect(addition.querySelector(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
+    expect(addition.querySelector(".studio-technical-details")?.textContent).toContain("Reference key: currency");
     const remove = articleByText(harness.container, "Remove input Order");
     expect(buttonByText(remove, "Reject").getAttribute("aria-pressed")).toBe("true");
     expect(buttonByText(remove, "Accept").getAttribute("aria-pressed")).toBe("false");

@@ -1,4 +1,4 @@
-import { StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useEffect,
   useMemo,
@@ -712,8 +712,7 @@ function SourceVersionRow({
       {required ? <p style={styles.required}>Required by the selected reusable dependency closure.</p> : null}
       {requested && !required ? <p style={styles.requested}>Selected as an owner.</p> : null}
       {item.dependencies.length ? (
-        <details>
-          <summary>Exact dependencies and rewrites</summary>
+        <TechnicalDetails label="Exact dependencies and rewrites">
           <ul>
             {item.dependencies.map(dependency => (
               <li key={`${dependency.nodeId}:${dependency.targetSourceVersionId}`}>
@@ -726,17 +725,15 @@ function SourceVersionRow({
               </li>
             ))}
           </ul>
-        </details>
+        </TechnicalDetails>
       ) : null}
       {item.directStarts.length ? (
-        <details>
-          <summary>Direct starts</summary>
+        <TechnicalDetails label="Direct starts">
           <ul>{item.directStarts.map(start => <li key={`${start.nodeId}:${start.activityType}`}><code>{start.nodeId}</code> · {start.activityType}</li>)}</ul>
-        </details>
+        </TechnicalDetails>
       ) : null}
       {item.diagnostics.length ? <DiagnosticList diagnostics={item.diagnostics} compact /> : null}
-      <details>
-        <summary>Deterministic technical IDs</summary>
+      <TechnicalDetails label="Deterministic technical IDs">
         <dl style={styles.technicalIds}>
           <dt>Source version ID</dt><dd><code>{item.sourceVersionId}</code></dd>
           <dt>Workflow definition ID</dt><dd><code>{item.workflowDefinitionId}</code></dd>
@@ -745,7 +742,7 @@ function SourceVersionRow({
           {item.activityDefinitionVersionId ? <><dt>Activity Definition version ID</dt><dd><code>{item.activityDefinitionVersionId}</code></dd></> : null}
           <dt>Source fingerprint</dt><dd><code>{item.sourceFingerprint}</code></dd>
         </dl>
-      </details>
+      </TechnicalDetails>
     </article>
   );
 }

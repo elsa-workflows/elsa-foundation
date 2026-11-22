@@ -526,12 +526,12 @@ the designer header is a documented exception.
   20px `.ad-primary-action` buttons.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
 - [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
-- [ ] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10).
+- [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
 - [ ] **X11.9** (#5158) [verified] `EXT/FeatureManagement/module.tsx` (22).
-- [ ] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`,
+- [x] **X11.10** (#5159) [source] `WF/ActivityDefinitionWorkbench.tsx:264–268, 285, 342` (`ad-primary-action`, (PR #5316)
   "Fork recommended version", "Create parallel draft" shown twice).
-- [ ] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard
+- [x] **X11.11** (#5160) [source] `WF/ActivityDefinitionDraftEditor.tsx:983` raw "Save"; `:1068` "Discard (PR #5316)
   recovery".
 - [ ] **X11.12** (#5161) [source] `WF/ActivityUpgradeWorkbenchPage.tsx` (5), `WF/ActivityAvailabilityPage.tsx`
   (6), `WF/ActivityDefinitionsPage.tsx` (8), `WF/ActivityDataChooser.tsx` (10),
@@ -557,7 +557,7 @@ the designer header is a documented exception.
 
 ### X12. Native `<details>` instead of `AdvancedSection` / `TechnicalDetails`
 
-- [ ] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567`
+- [x] **X12.1** (#5171) [verified] `WF/ActivityDefinitionContractEditor.tsx:400, 566, 588` (and `:567` (PR #5316)
   [source]). "Advanced" appears three times with three class names.
 - [x] **X12.2** (#5172) [verified] `WF/ActivityDefinitionCreateDialog.tsx:128`. (PR #5306)
 - [ ] **X12.3** (#5173) [verified] `EXT/Agent/AgentEditor.tsx:244`. `EXT/Agent/module.tsx:42` relies on
@@ -570,11 +570,11 @@ the designer header is a documented exception.
 - [x] **X12.7** (#5177) [verified] `H/settings/AppearancePage.tsx:121`. (PR #5304)
 - [ ] **X12.8** (#5178) [verified] `EXT/ExtensionBuilder/extension-builder/SolutionExplorer.tsx:153` (through
   about `:193`).
-- [ ] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles.
-- [ ] **X12.10** (#5180) [source] `WF/ActivityDefinitionContractProposalChangeList.tsx:52` ("Technical
+- [x] **X12.9** (#5179) [seen] Workflow publication review: three native disclosure triangles. (PR #5316)
+- [x] **X12.10** (#5180) [source] `WF/ActivityDefinitionContractProposalChangeList.tsx:52` ("Technical (PR #5316)
   comparison") and `ActivityDefinitionContractProposalReview.tsx:166` ("Technical details"): one label,
   `TechnicalDetails`.
-- [ ] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"),
+- [x] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"), (PR #5316)
   `WF/Elsa3ReusableImportPage.tsx:716–743`, `WF/ActivityDefinitionPublicationReview.tsx:337–467`.
 - [ ] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`.
