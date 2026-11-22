@@ -87,7 +87,7 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
       </> }}
     </SecretEditorTabs>
     </fieldset>
-    <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save changes"} confirmDisabled={!changed || cannotClose} />
+    <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save"} confirmDisabled={!changed || cannotClose} />
   </form>;
 }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "-"; }

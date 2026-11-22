@@ -136,7 +136,7 @@ describe("workflow definition route browse session", () => {
     });
     const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
     await waitForText(container, "Previous backend workflow");
-    await click(button(container, "Create workflow"));
+    await click(button(container, "New workflow"));
     const createDialog = () => document.querySelector<HTMLElement>('form[role="dialog"]')!;
     await waitForCondition(() => expect(createDialog()?.querySelector<HTMLInputElement>('input[aria-label="Flowchart"]')?.disabled).toBe(false));
     await fill(createDialog().querySelector<HTMLInputElement>('input[aria-label="Display name"]'), "Created on previous backend");

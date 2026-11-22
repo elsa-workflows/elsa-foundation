@@ -60,7 +60,7 @@ async function applyReview(page: Page, enabled: boolean, cancelFirst: boolean) {
   const dialog = await openSettings(page);
   const toggle = dialog.locator("input[type='checkbox']");
   if (enabled) await toggle.check(); else await toggle.uncheck();
-  await dialog.getByRole("button", { name: "Save draft", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("button", { name: "Review changes", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review changes", exact: true });
   await expect(review).toContainText("Workflow organization");

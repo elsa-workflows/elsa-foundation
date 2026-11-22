@@ -60,7 +60,7 @@ export async function dashboardComparisonJourney(page: Page, info: TestInfo, cap
     const delta = expectedCurrent.length - expectedBaseline.length;
     expect(delta).toBe(1);
     await page.goto("/questions");
-    await page.getByRole("button", { name: "Create question", exact: true }).first().click();
+    await page.getByRole("button", { name: "New question", exact: true }).first().click();
     await page.getByLabel("Name", { exact: true }).fill(`Compared started cohorts ${Date.now()}`);
     await page.getByRole("combobox", { name: "Dataset", exact: true }).selectOption("elsa.workflows.runs");
     await page.getByRole("group", { name: "Group by", exact: true }).getByLabel("Workflow definition", { exact: true }).check();

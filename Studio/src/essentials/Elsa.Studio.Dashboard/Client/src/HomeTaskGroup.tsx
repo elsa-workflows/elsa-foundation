@@ -128,13 +128,13 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {canManage ? (
           <a className="home-task-card home-task-card--primary" href={createHref} onClick={event => handleLinkClick(event, createHref)}>
             <span className="home-task-card-icon"><Plus size={19} aria-hidden="true" /></span>
-            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Choose a starting point for your workflow.</span></span>
+            <span className="home-task-card-copy"><strong>New workflow</strong><span>Choose a starting point for your workflow.</span></span>
             <ArrowRight size={16} aria-hidden="true" />
           </a>
         ) : (
           <div className="home-task-card home-task-card--disabled" aria-disabled="true">
             <span className="home-task-card-icon"><Plus size={19} aria-hidden="true" /></span>
-            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Requires workflow design access.</span></span>
+            <span className="home-task-card-copy"><strong>New workflow</strong><span>Requires workflow design access.</span></span>
           </div>
         )}
         <button ref={continueButtonRef} className="home-task-card" type="button" onClick={startDiscovery} disabled={!canRead} aria-describedby={authenticated && !canRead ? "home-task-access" : undefined}>
@@ -169,7 +169,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
             {activeDialog.discovery.kind === "empty" ? <div>
               <p>No workflows have a current draft to continue.</p>
               {canManage
-                ? <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>Create workflow</a>
+                ? <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>New workflow</a>
                 : <p role="note">Creating a workflow requires workflow design access.</p>}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}

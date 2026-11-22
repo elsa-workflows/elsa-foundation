@@ -117,7 +117,7 @@ describe("connection administration page", () => {
     let release!: (value: ConnectionCatalog) => void;
     host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
       ? new Promise<ConnectionCatalog>(resolve => { release = resolve; }) : original(path));
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(release).toBeTypeOf("function"));
     release(await original("/_elsa/identity/external-connections"));
     await vi.waitFor(() => expect(host.container.textContent).toContain("Connection updated."));
@@ -149,7 +149,7 @@ describe("connection administration page", () => {
     const original = host.getJson.getMockImplementation()!;
     host.getJson.mockImplementation((path: string) => path.endsWith("/external-connections")
       ? Promise.reject({ status: 503 }) : original(path));
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
     await vi.waitFor(() => expect(document.activeElement).toBe(host.container.querySelector("[role=alert]")));
     expect(host.container.textContent).toContain("saved, but the current configuration could not be read");
@@ -175,14 +175,14 @@ describe("connection administration page", () => {
     const original = host.postJson.getMockImplementation()!;
     host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/" + operation)
       ? Promise.reject({ status }) : original(path, body));
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(host.container.querySelector("[role=alert]")).not.toBeNull());
     await vi.waitFor(() => expect(document.activeElement).toBe(host.container.querySelector("[role=alert]")));
     expect(field(host.container, "Display name").value).toBe("Preserved draft");
-    expect((await button(host.container, "Save changes")).disabled).toBe(true);
+    expect((await button(host.container, "Save")).disabled).toBe(true);
     expect((await button(host.container, "Refresh")).disabled).toBe(false);
     const attempts = host.postJson.mock.calls.filter(([path]) => path.endsWith("/commands")).length;
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     expect(host.postJson.mock.calls.filter(([path]) => path.endsWith("/commands")).length).toBe(attempts);
     click(await button(host.container, "Refresh"));
     await vi.waitFor(() => expect(field(host.container, "Display name").matches(":disabled")).toBe(false));
@@ -200,7 +200,7 @@ describe("connection administration page", () => {
     let reject!: (cause: unknown) => void;
     host.postJson.mockImplementation((path: string, body: ConnectionCommand) => path.endsWith("/commands")
       ? new Promise((_resolve, rejectRequest) => { reject = rejectRequest; }) : original(path, body));
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(reject).toBeTypeOf("function"));
     const otherTask = document.createElement("input"); document.body.appendChild(otherTask); cleanup.add(() => otherTask.remove());
     otherTask.focus(); reject({ status: 503 });
@@ -280,13 +280,13 @@ describe("connection administration page", () => {
     click(role);
     expect(host.container.textContent).toContain("Later sign-ins use roles saved in Elsa");
     expect(host.container.textContent).not.toContain("group mapping");
-    click(await button(host.container, "Save draft"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(host.postJson.mock.calls.some(([path]) => path.endsWith("/commands"))).toBe(true));
     const command = host.postJson.mock.calls.find(([path]) => path.endsWith("/commands"))![1] as ConnectionCommand;
     expect(command.change).toBe(connectionChanges.create); expect(command.expectedRevision).toBeNull();
     expect(command.record.enabled).toBe(false); expect(command.record.admission).toMatchObject({ type: "jit", defaultRoleIds: ["reader"] });
     expect(command.record.secrets.clientSecret).toEqual({ name: "credential", typeName: "text", scope: null });
-    expect(host.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Save draft", message: expect.stringContaining("Studio:") }));
+    expect(host.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Save", message: expect.stringContaining("Studio:") }));
   });
   it("keeps a deployment record read-only and prepares a complete non-shadowing draft only through the explicit override action", async () => {
     const baseline = { ...view, source: 0 as const, overridePermitted: true, configurationEditable: false, document: { ...connectionDocument, id: "deployment:company", enabled: true } };
@@ -297,7 +297,7 @@ describe("connection administration page", () => {
     expect(field(host.container, "Issuer URL").closest("fieldset")!.disabled).toBe(true);
     click(await button(host.container, "Prepare full override"));
     await vi.waitFor(() => expect(host.container.textContent).toContain("deployment connection continues to apply"));
-    click(await button(host.container, "Save draft"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(host.postJson.mock.calls.some(([path]) => path.endsWith("/commands"))).toBe(true));
     const command = host.postJson.mock.calls.find(([path]) => path.endsWith("/commands"))![1] as ConnectionCommand;
     expect(command.change).toBe(connectionChanges.create); expect(command.record.overridesDeployment).toBe(false); expect(command.record.enabled).toBe(false);
@@ -361,11 +361,11 @@ describe("connection administration page", () => {
     await vi.waitFor(() => expect(host.container.querySelector(".external-auth-editor input")).not.toBeNull());
     await vi.waitFor(() => expect(host.container.textContent).toContain("Current configuration ready"));
     type(field(host.container, "Display name"), "My draft name");
-    await vi.waitFor(async () => expect((await button(host.container, "Save changes")).disabled).toBe(false));
+    await vi.waitFor(async () => expect((await button(host.container, "Save")).disabled).toBe(false));
     const probe = new CustomEvent("elsa:studio-navigation-requested", { cancelable: true, detail: { intent: "probe" } }); window.dispatchEvent(probe);
     expect(probe.defaultPrevented).toBe(true);
     host.postJson.mockRejectedValue({ status: 409, payload: { failure: "revision-conflict", detail: "never-render-secret" } });
-    click(await button(host.container, "Save changes"));
+    click(await button(host.container, "Save"));
     await vi.waitFor(() => expect(host.container.textContent).toContain("Connections changed on the server"));
     expect(field(host.container, "Display name").value).toBe("My draft name"); expect(host.container.textContent).not.toContain("never-render-secret");
   });

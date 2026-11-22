@@ -126,7 +126,7 @@ export function ConnectionEditor({ client, catalog, view, seed, busy, onSave, on
     <p className="external-auth-muted">{!view ? "Save this draft to get its callback URLs." : view.signInCallback && view.previewCallback
       ? "Register both callback URLs with the provider using authorization code flow and PKCE." : "Ask your integrator to configure the backend's public URL so it can provide trusted callback addresses."}</p>
     {localError ? <p role="alert" className="external-auth-error">{localError}</p> : null}
-    <div className="external-auth-actions"><StudioButton type="submit" variant="primary" disabled={readOnly || busy || (Boolean(view) && !dirty)}>{view ? "Save changes" : "Save draft"}</StudioButton>
+    <div className="external-auth-actions"><StudioButton type="submit" variant="primary" disabled={readOnly || busy || (Boolean(view) && !dirty)}>Save</StudioButton>
       <StudioButton onClick={onDiscard} disabled={busy}>{dirty ? "Discard changes" : "Close editor"}</StudioButton></div>
   </form>;
 }

@@ -2077,11 +2077,11 @@ function FeatureSettingsDialog({
         </div>
 
         <div className="feature-management-dialog-actions">
-          <span>Save draft keeps changes local until you review changes and apply the reviewed draft.</span>
+          <span>Save keeps changes local until you review changes and apply the reviewed draft.</span>
           <div>
             <button type="button" onClick={onClose}>Cancel</button>
             <button type="button" onClick={resetDialogChanges} disabled={disabled}>Reset changes</button>
-            <button type="button" className="primary" onClick={saveDraft} disabled={disabled}>Save draft</button>
+            <button type="button" className="primary" onClick={saveDraft} disabled={disabled}>Save</button>
           </div>
         </div>
       </section>

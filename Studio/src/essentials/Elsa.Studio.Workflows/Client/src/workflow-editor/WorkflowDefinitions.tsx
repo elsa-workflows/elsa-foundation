@@ -788,7 +788,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   return (
     <>
       <StudioPageHeader title={recycleBinSelected ? "Recycle bin" : "Workflow definitions"} titleId="workflow-definitions-title" description={recycleBinSelected ? "Restore deleted workflow definitions or delete them permanently." : "Create and organize workflow definitions, then open a definition to edit its behavior."} actionsLabel="Workflow definition page actions" actions={
-        !recycleBinSelected ? <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton> : undefined
+        !recycleBinSelected ? <StudioButton variant="primary" size="md" title="New workflow" aria-label="New workflow" disabled={browseScopeBlocked} onClick={openCreateDialog}><Plus size={15} /> New workflow</StudioButton> : undefined
       } refresh={{
         id: `workflow-definitions:${context.baseUrl}:${authorityRevision}`,
         label: "Refresh workflow definitions",
@@ -859,7 +859,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            actions={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
+            actions={recycleBinSelected ? undefined : <StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> New workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (

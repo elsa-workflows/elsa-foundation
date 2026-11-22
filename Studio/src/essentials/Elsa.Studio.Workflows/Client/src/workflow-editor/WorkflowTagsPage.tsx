@@ -58,7 +58,7 @@ export function WorkflowTagsRoute({ context, view, navigate }: { context: Studio
 
   if (!loaded || loaded.context !== context || loaded.identity !== identity) return <SkeletonRows label="Loading workflow tags" />;
   if (loaded.error || loaded.unsupported || (view !== "list" && loaded.page?.permissions?.canManageTags !== true)) {
-    return <StudioPage><WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "Create tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />
+    return <StudioPage><WorkflowTagBreadcrumbs view={view} current={view === "list" ? "Workflow tags" : view === "create" ? "New tag" : loaded.tag?.name ?? "Edit tag"} navigate={navigate} />
     <StudioPageHeader title="Workflow tags" />
       <StudioResultState tone={loaded.error ? "danger" : undefined}
         title={loaded.error ? "Could not load workflow tags" : loaded.unsupported ? "Workflow tags unavailable" : "Tag management is not allowed"}
@@ -97,7 +97,7 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
     <WorkflowTagBreadcrumbs view="list" current="Workflow tags" navigate={navigate} />
     <StudioPageHeader title="Workflow tags" titleId="workflow-tags-title" description="Manage reusable labels and controlled classifications for workflows."
       actions={<>
-        {canManage ? <StudioButton variant="primary" onClick={() => navigate(`${tagsPath}/new`)}>Create tag</StudioButton> : null}
+        {canManage ? <StudioButton variant="primary" onClick={() => navigate(`${tagsPath}/new`)}>New tag</StudioButton> : null}
         <StudioButton disabled={busy} onClick={() => void load(term)}>Refresh</StudioButton>
       </>} />
     <form onSubmit={event => { event.preventDefault(); void load(search.trim()); }}>
@@ -121,7 +121,7 @@ function WorkflowTagsPage({ context, initialPage, navigate }: { context: StudioE
     </StudioTableContainer> : !error ? <StudioCollectionEmptyState title={term ? "No matching tags" : "No workflow tags yet"}
       description={term ? "Try a different search." : "Create a tag to organize workflows."} /> : null}
     <StudioCollectionFooter>
-      <span>{page.items.length} tags loaded</span>
+      <span>{page.items.length} {page.items.length === 1 ? "tag" : "tags"} loaded</span>
       {page.nextContinuationToken ? <StudioButton disabled={busy} onClick={() => void load(term, true)}>{busy ? "Loading…" : "Load more tags"}</StudioButton> : null}
     </StudioCollectionFooter>
   </StudioPage>;

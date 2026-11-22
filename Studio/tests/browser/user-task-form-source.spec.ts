@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("Forms editor switches between canvas, JSON source, and recipient preview", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID" }).fill("source-contact");
   await page.getByRole("textbox", { name: "Name" }).fill("Source contact");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
@@ -33,11 +33,11 @@ test("Forms editor switches between canvas, JSON source, and recipient preview",
   };
   await source.fill(JSON.stringify(updatedForm, null, 2));
   await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
 
-  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
   await expect(page.locator(".user-task-designer")).toHaveAttribute("data-field-order", "email");
 
@@ -57,14 +57,14 @@ test("Forms editor switches between canvas, JSON source, and recipient preview",
   await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect(page.locator(".user-task-designer__source-error")).toContainText(/valid JSON/i);
-  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Reset", exact: true }).click();
   await expect(page.locator(".user-task-designer__source-error")).toHaveCount(0);
   await expect(source).toContainText('"label": "Email from JSON"');
 
   await page.screenshot({ path: testInfo.outputPath("form-source-preview-desktop.png"), animations: "disabled" });
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   await expect(source).toContainText('"label": "Email from JSON"');
@@ -101,7 +101,7 @@ for (const appearance of ["light", "dark"] as const) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), appearance);
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID" }).fill("immutable-form");
   await page.getByRole("textbox", { name: "Name" }).fill("Immutable form");

@@ -124,7 +124,7 @@ describe("dashboard viewer and editor routes", () => {
     const editor = mount(api, controller, "edit", navigate, "dashboard");
     await waitUntil(() => editor.container.querySelector("textarea") !== null);
     edit(editor.container.querySelector<HTMLTextAreaElement>("textarea")!, "Saved operations summary");
-    button(editor.container, "Save changes"); await waitUntil(() => put.mock.calls.length === 1);
+    button(editor.container, "Save"); await waitUntil(() => put.mock.calls.length === 1);
     await waitUntil(() => navigate.mock.calls.length === 1);
     expect(put.mock.calls[0][1].description).toBe("Saved operations summary");
     expect(navigate).toHaveBeenCalledWith("/dashboards/d1");
@@ -403,7 +403,7 @@ describe("current native disclosure and reuse review", () => {
     await waitUntil(() => editor.container.textContent?.includes("Its reference is preserved during layout saves") === true);
     expect(value(editor.container, "Name").value).toBe("Keep my local dashboard name");
     expect(editor.container.textContent).not.toContain("Settings for question 1");
-    button(editor.container, "Save changes"); await waitUntil(() => put.mock.calls.length === 1);
+    button(editor.container, "Save"); await waitUntil(() => put.mock.calls.length === 1);
     expect(put.mock.calls[0][1]).toMatchObject({ name: "Keep my local dashboard name", tiles: [{ id: "tile-1", size: "wide", preserveReference: true }] });
     expect(JSON.stringify(put.mock.calls[0][1])).not.toContain("q1"); expect(JSON.stringify(put.mock.calls[0][1])).not.toContain("OLD-PROTECTED-OVERRIDE");
   });

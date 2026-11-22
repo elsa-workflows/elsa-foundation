@@ -354,22 +354,22 @@ Decided (D6): a name-and-description dialog, then the editor opens.
 
 ### X5. Labels and capitalisation
 
-- [ ] **X5.1** (#5083) [seen] Rename to "New …" (D1): "Create workflow", "Create secret", "Create connection",
-  "Create form", "Create tag", "Create dashboard". Apply “New …” to dialog titles as well. Keep “Create” for confirmations and version actions. `needs: D1`
-- [ ] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
+- [x] **X5.1** (#5083) [seen] Rename to "New …" (D1): "Create workflow", "Create secret", "Create connection",
+  "Create form", "Create tag", "Create dashboard". Apply “New …” to dialog titles as well. Keep “Create” for confirmations and version actions. `needs: D1` (PR #5297)
+- [x] **X5.2** (#5084) [seen] Rename to "Save" (D2): "Save changes" (Runtime evidence settings, Secrets), "Save
   draft" (Forms, ETL, Feature management), "Update view". Activity availability, Decisions and Theme
-  builder already say "Save". `needs: D2`
+  builder already say "Save". `needs: D2` (PR #5297)
 - [x] **X5.3** (#5085) [verified] Route labels in `WF/module.tsx`: `:173` "Activity Definition upgrades" →
   "Activity definition upgrades" (D8); `:180` "Activity Definitions" → "Activity definitions", matching
   the nav label and page title. Leave `:200` "Executable Inspector" as it is (D14). (PR #5291)
-- [ ] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
+- [x] **X5.4** (#5086) [seen] Sentence case: "Create Workflow", "Create Activity Definition"
   (`WF/ActivityDefinitionCreateDialog.tsx:117`), "Theme Builder", "New Activity Type Key"
   (`WF/ActivityDefinitionForkDialog.tsx:194`). Use the creation verbs in D1 for dialog titles. Leave "Test Run"
-  (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14).
+  (`WF/workflow-editor/WorkflowEditorToolbar.tsx:189`) as it is (D14). (PR #5297)
 - [x] **X5.5** (#5087) [source] "User Tasks" → "User tasks": `EXT/UserTasks/TasksPage.tsx:46–47` and
   `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
-- [ ] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
-  title "Create Activity Definition". Use one string.
+- [x] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
+  title "Create Activity Definition". Use one string. (PR #5297)
 - [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
   443, 489`, Backends `BACK/BackendsPage.tsx:121`, `WF/ActivityGraphImplementationEditor.tsx:270, 1363`.
   `needs: D7`

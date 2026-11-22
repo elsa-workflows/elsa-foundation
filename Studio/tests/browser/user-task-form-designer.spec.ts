@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("native task form designer supports recipient preview and accessible editing at desktop and phone widths", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await expect(page.getByRole("complementary", { name: "Field palette", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Form canvas", exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Field properties", exact: true })).toBeVisible();
@@ -43,7 +43,7 @@ test("native task form designer supports recipient preview and accessible editin
 test("native task form designer reorders fields by pointer drag", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Number", exact: true }).click();
   const first = page.getByRole("button", { name: "Reorder Text field 1", exact: true });

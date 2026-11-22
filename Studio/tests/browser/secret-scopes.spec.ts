@@ -5,7 +5,7 @@ const fixtureScope = " Org.Team-A/Case ";
 
 async function loadSecretsPage(page: import("@playwright/test").Page, scenario = "default") {
   await page.goto(`/secret-scopes.html?scenario=${scenario}`);
-  const opener = page.locator(".studio-page-header").getByRole("button", { name: "Create secret", exact: true });
+  const opener = page.locator(".studio-page-header").getByRole("button", { name: "New secret", exact: true });
   await expect(opener).toBeEnabled();
   return opener;
 }
@@ -13,7 +13,7 @@ async function loadSecretsPage(page: import("@playwright/test").Page, scenario =
 async function openCreateSecret(page: import("@playwright/test").Page, scenario = "default") {
   const opener = await loadSecretsPage(page, scenario);
   await opener.click();
-  const dialog = page.getByRole("region", { name: "Create secret", exact: true });
+  const dialog = page.getByRole("region", { name: "New secret", exact: true });
   await expect(dialog).toBeVisible();
   return { dialog, opener };
 }
@@ -586,7 +586,7 @@ test("Edit secret keeps Scope read-only, explains matching, and saves metadata o
   await selectSection(dialog, "Details");
   await dialog.getByLabel("Display name", { exact: true }).fill("Updated billing integration");
   await dialog.getByLabel("Description", { exact: true }).fill("Updated metadata only.");
-  await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   const metadata = page.getByTestId("updated-secret-metadata");
   await expect(metadata).toBeVisible();
@@ -614,7 +614,7 @@ test("restores row Edit focus when a metadata refresh temporarily removes the op
   const dialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Display name", { exact: true }).fill("Focus restored after delayed refresh");
-  await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByTestId("secret-list-requests")).toHaveText("2");
   await expect(page.locator(".secrets-loading")).toBeVisible();
   await expect(originalOpener).toHaveCount(0);
@@ -640,7 +640,7 @@ test("Edit save errors preserve fields and Cancel restores focus at 320px", asyn
   const description = dialog.getByLabel("Description", { exact: true });
   await displayName.fill("Keep this display name");
   await description.fill("Keep this description after a save failure.");
-  const save = dialog.getByRole("button", { name: "Save changes", exact: true });
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
   await save.click();
   await expect(dialog.getByRole("alert")).toContainText("Fixture metadata update failed.");
   await expect(displayName).toHaveValue("Keep this display name");
@@ -656,9 +656,9 @@ test("secret mutation attempts are visible while pending and remain counted afte
   const count = page.getByTestId("secret-mutation-requests");
   await expect(count).toHaveText("0");
 
-  const create = page.getByRole("button", { name: "Create secret", exact: true });
+  const create = page.getByRole("button", { name: "New secret", exact: true });
   await create.click();
-  const createDialog = page.getByRole("region", { name: "Create secret", exact: true });
+  const createDialog = page.getByRole("region", { name: "New secret", exact: true });
   await fillRequiredMetadata(createDialog, "fixture.attempted-create");
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(count).toHaveText("1");
@@ -674,7 +674,7 @@ test("secret mutation attempts are visible while pending and remain counted afte
   await edit.click();
   const editDialog = page.getByRole("region", { name: "Edit secret", exact: true });
   await editDialog.getByLabel("Display name", { exact: true }).fill("Attempted metadata update");
-  await editDialog.getByRole("button", { name: "Save changes", exact: true }).click();
+  await editDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(count).toHaveText("2");
   await page.evaluate(() => window.dispatchEvent(new Event("fixture-release-mutation")));
   await expect(editDialog.getByRole("alert")).toContainText("Fixture metadata update failed after the request was attempted.");

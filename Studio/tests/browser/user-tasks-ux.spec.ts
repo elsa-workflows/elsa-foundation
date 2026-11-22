@@ -54,7 +54,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
     const formRow = page.getByRole("row").filter({ hasText: "purchase-form-with-a-long-identifier" });
     await expect(formRow).toContainText("Published · v1");
-    const createForm = page.getByRole("button", { name: "Create form", exact: true });
+    const createForm = page.getByRole("button", { name: "New form", exact: true });
     await expect(createForm).toBeVisible();
     expect((await createForm.boundingBox())!.width).toBeGreaterThan(90);
     expect((await createForm.boundingBox())!.height).toBeLessThan(48);
@@ -182,7 +182,7 @@ for (const width of [360, 1440]) {
     await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Unsaved designer copy");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
     await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(page.getByText("1 form shown", { exact: true })).toBeVisible();
@@ -266,7 +266,7 @@ test("read-only form readers can inspect published versions", async ({ page }) =
   const history = page.getByRole("region", { name: "Published form versions", exact: true });
   await expect(history.getByRole("button", { name: "Select version 2", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 });
 
 test("a failed older-form page leaves the selected published version available", async ({ page }) => {
@@ -374,7 +374,7 @@ test("completed task responses remain framed and read-only without response acti
  test("a failed form publication preserves the shared working copy and list paging", async ({ page }) => {
   await page.goto("/user-tasks-ux.html?forms&form-error");
   await expect(page.getByRole("button", { name: "More forms", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Create form", exact: true }).first().click();
+  await page.getByRole("button", { name: "New form", exact: true }).first().click();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("purchase");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Purchase response");
   await page.getByRole("button", { name: "Text input", exact: true }).click();

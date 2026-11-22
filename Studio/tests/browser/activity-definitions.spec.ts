@@ -1490,12 +1490,12 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.goto("/?mode=activity-definitions");
   await expect(page.getByText("No designed activities yet")).toBeVisible();
 
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
   await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
   await selectSequenceComposition(page);
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
@@ -1626,9 +1626,9 @@ test("Activity Definition provider contract proposals require review and apply a
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
   await expectSavedRevision(page, 1);
   await openAdvancedDetails(page);
 
@@ -3980,10 +3980,10 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
 
 async function createBrowserActivity(page: Page, theme = "light") {
   await page.goto(`/?mode=activity-definitions&theme=${theme}`);
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
   await expectSavedRevision(page, 1, 15_000);
   await openAdvancedDetails(page);
 }

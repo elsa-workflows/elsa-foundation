@@ -463,7 +463,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
       }
     }} />Auto-save</label>
     <StatusChip tone={saveStatusTone}>{saveStatusLabel}</StatusChip>
-    <StudioButton disabled={busy || !canSave} onClick={() => void saveDraft()}>{savingDraft ? "Saving…" : "Save draft"}</StudioButton>
+    <StudioButton disabled={busy || !canSave} onClick={() => void saveDraft()}>{savingDraft ? "Saving…" : "Save"}</StudioButton>
     {savedForm ? <StudioButton disabled={busy || hasUnappliedSource} onClick={() => void discardDraft()}>Discard draft</StudioButton> : null}
     <StudioButton variant="primary" disabled={busy || hasUnappliedSource} onClick={() => void publish()}>{busy ? "Publishing…" : "Publish"}</StudioButton>
     <StudioButton disabled={busy} onClick={() => void leaveEditor(true)}>Cancel</StudioButton>
@@ -474,7 +474,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : undefined} title={title}
       description={editing ? undefined : "Manage each form once. Drafts remain editable until you publish an immutable version."}
       actions={<>
-        {!editing && identity?.canManageForms ? <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={createForm}>Create form</StudioButton> : null}
+        {!editing && identity?.canManageForms ? <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={createForm}>New form</StudioButton> : null}
         <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>
       </>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
@@ -499,7 +499,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
             </tr>;
           })}</tbody>
         </table></StudioTableContainer> : !error && hasFormAccess ? <StudioCollectionEmptyState title="No reusable forms yet" description="Create a form once, save a draft as you work, then publish it for new tasks."
-          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={createForm}>Create form</StudioButton> : undefined} /> : null}
+          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={createForm}>New form</StudioButton> : undefined} /> : null}
       {!loading && !error && hasFormAccess ? <StudioCollectionFooter><span>{definitions.length} {definitions.length === 1 ? "form" : "forms"} shown</span>
         {nextPage ? <StudioButton disabled={busy} onClick={() => void loadMoreDefinitions()}>{busy ? "Loading forms…" : "More forms"}</StudioButton> : null}
       </StudioCollectionFooter> : null}
