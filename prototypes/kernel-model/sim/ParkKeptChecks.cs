@@ -687,7 +687,7 @@ internal static class ParkKeptChecks
     private static async Task CheckLostCatchUpStep(Action<bool, string> check, bool landedBeforeLoss)
     {
         var now = 1_701_400_030_200L;
-        var store = new InMemoryStore(1, () => now);
+        var store = new InMemoryStore(2, () => now);
         var probe = new KeepingRecoveryProbe();
         var scope = new Contract.BoundScope("catch-up-lost-step");
         var losses = 0;
@@ -705,8 +705,9 @@ internal static class ParkKeptChecks
         var worker = TakeWorker("first-catch-up-owner");
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
         await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
-        var begun = await ingress.SendAsync(scope, new Contract.Target.Start(new(probe.Type, "ready")), "start", Contract.Kinds.Start);
-        var target = new Contract.Target.Ref(begun.Actor!.Value);
+        var reference = store.AdmitFoundationStart(scope.Tenant, new Message("start", InstanceRef.In(0, "lost-step"), Kinds.Start,
+            Start: new StartSpec(probe.Type, "ready", null, Creation: new(1, 0, "start")), TargetCreation: 1))!;
+        var target = new Contract.Target.Ref(new Contract.ActorRef(reference));
         await Pump(owner);
         await ingress.SendAsync(scope, target, "fault", "fault");
         await Pump(owner);
@@ -723,6 +724,17 @@ internal static class ParkKeptChecks
         worker.RunTurn(id);
         await worker.FlushAsync();
         var key = store.Messages.Single(pair => pair.Value.Message.ParkCatchUp is not null).Key;
+        if (!landedBeforeLoss)
+        {
+            var other = (await store.TakeAsync(1, "other-partition", Defaults.Lease))!;
+            var local = worker.Fences.Single();
+            var foreign = await DefiniteRejection(() => store.CommitAsync(new(1, other.Epoch, other.Position,
+                Defaults.Lease, false, [], [], [key])));
+            var seenOnly = await DefiniteRejection(() => store.CommitAsync(new(0, local.Epoch, local.Position,
+                Defaults.Lease, false, [], [key], [])));
+            check(foreign && seenOnly && store.Messages[key] is { Seen: 0, Trial: 0, Attempts: 0 },
+                "a positional foreign fence and an ordinary Seen mark cannot hide a pending catch-up ticket");
+        }
         await worker.PollAsync();
         await worker.MeetAsync();
         check(!worker.Owns && losses == 1 && (!landedBeforeLoss ?

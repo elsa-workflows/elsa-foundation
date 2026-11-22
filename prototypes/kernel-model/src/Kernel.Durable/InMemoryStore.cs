@@ -265,6 +265,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
+                ValidateParkCatchUpMarks(batch, epochs);
                 var at = fences.ToDictionary(f => f.Partition, f => f.Position);
                 HashSet<CreationAddress>? childAddresses = null;
                 HashSet<string>? childReferences = null;

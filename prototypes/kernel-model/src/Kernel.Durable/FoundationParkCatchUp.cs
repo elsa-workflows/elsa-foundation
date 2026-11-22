@@ -158,6 +158,17 @@ public sealed partial class InMemoryStore
         trials.Add(key);
     }
 
+    private void ValidateParkCatchUpMarks(CommitBatch batch, IReadOnlyDictionary<int, long> epochs)
+    {
+        if (batch.Seen.Any(key => Messages.GetValueOrDefault(key)?.Message.ParkCatchUp is not null))
+            throw new StoreException(Failure.Definite, "A catch-up ticket is marked only when its step begins.");
+        foreach (var key in batch.Trial)
+            if (Messages.GetValueOrDefault(key) is { Message.ParkCatchUp: not null } ticket &&
+                (ticket.Done || !epochs.ContainsKey(ticket.Message.Target.Partition) || batch.Trial.Count != 1 ||
+                    batch.Turns.Count != 0 || batch.Seen.Count != 0))
+                throw new StoreException(Failure.Definite, "A catch-up reservation requires its own pending ticket and partition fence.");
+    }
+
     private void ClearParkCatchUpTrial(InboxKey key, MessageRow ticket)
     {
         ticket.Trial = 0;
