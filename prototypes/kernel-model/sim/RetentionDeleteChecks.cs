@@ -9,9 +9,104 @@ internal static class RetentionDeleteChecks
     {
         await PolicyAtDelivery(check);
         await DelayedAcrossReuse(check);
+        await DelayedParkControlAcrossReuse(check, expiry: true);
+        await DelayedParkControlAcrossReuse(check, expiry: false);
         await UnresolvedPark(check);
         await RecoveryAfterSelection(check);
         await ExpiryStartsRetention(check);
+    }
+
+    private static async Task DelayedParkControlAcrossReuse(Action<bool, string> check, bool expiry)
+    {
+        var fixture = new Fixture(TimeSpan.FromSeconds(1)) { PollHorizon = TimeSpan.Zero };
+        var store = fixture.Store;
+        var label = expiry ? "P-4(4a)" : "P-4(4b)";
+        var first = fixture.Owner();
+        await using var initial = await Activate(first);
+        var a = await fixture.Start(first, "control-origin", callerKey: "reused-control");
+        var id = fixture.Row(a).Id;
+        await fixture.Send(a, "park-origin", "park");
+        await Step(first, id);
+        var original = fixture.Checkpoint(a);
+        if (original.Park is not { } mark)
+        {
+            check(false, $"{label} the original caller-keyed creation parks");
+            return;
+        }
+        var recalled = expiry ? store.FoundationExpiry(original.Row)?.Armed : await OpenAndWait(first, a, "recover-origin");
+        if (recalled is not { } oldKey || !store.Messages.TryGetValue(oldKey, out var old))
+        {
+            check(false, $"{label} the old creation durably issues its control");
+            return;
+        }
+        if (!expiry)
+        {
+            await fixture.Send(a, "terminate-origin", Contract.Kinds.Terminate);
+            for (var pass = 0; pass < 12 && fixture.Row(a).Status != InstanceStatus.Cancelled; pass++) await Step(first, id);
+            var ended = fixture.Row(a) is { Status: InstanceStatus.Cancelled, ParkRecovery: null } && !store.Messages.ContainsKey(oldKey);
+            check(ended, $"{label} Terminate interrupts recovery, recalls the control and ends its creation");
+            if (!ended) return;
+        }
+        await fixture.Send(a, "delete-origin", Contract.Kinds.Delete, Json.Write(new Contract.OperatorCommand(await fixture.Selection(a))));
+        for (var pass = 0; pass < 12 && !store.Instances[id].Retired; pass++) await Step(first, id);
+        var retired = store.Instances[id] is { Retired: true } marker && marker.Creation == original.Row.Creation &&
+            !store.Messages.ContainsKey(oldKey);
+        check(retired, $"{label} retirement leaves a reusable watermark and removes the old control");
+        if (!retired) return;
+
+        fixture.WithholdPages = false;
+        fixture.Now += 101;
+        await store.SweepAsync();
+        var b = await fixture.Start(first, "control-successor", callerKey: "reused-control");
+        await initial.DisposeAsync();
+        fixture.Now = mark.At;
+        var next = fixture.Owner();
+        await using var successor = await Activate(next);
+        await fixture.Send(b, "park-successor", "park");
+        await Step(next, id);
+        var parked = fixture.Checkpoint(b);
+        var armed = expiry ? store.FoundationExpiry(parked.Row)?.Armed : await OpenAndWait(next, b, "recover-successor");
+        if (armed is not { } nextKey || !store.Messages.TryGetValue(nextKey, out var current))
+        {
+            check(false, $"{label} the successor creation durably issues its control");
+            return;
+        }
+        var checkpoint = fixture.Checkpoint(b);
+        var oldEnvelope = old.Message.Read<ParkDrainEnvelope>();
+        var newEnvelope = current.Message.Read<ParkDrainEnvelope>();
+        var pinned = checkpoint.Row.Id == id && checkpoint.Row.Creation == original.Row.Creation + 1 && parked.Park == mark &&
+            oldEnvelope.Generation == (expiry ? 0 : 1) && oldEnvelope == (newEnvelope with { Creation = original.Row.Creation }) &&
+            old.Message.Due is not null && old.Message.Due == current.Message.Due &&
+            old.Seq < current.Seq && oldKey != nextKey;
+        check(pinned, $"{label} the reused physical target has equal Park marks, generations and due times across creations");
+        if (!pinned) return;
+
+        fixture.WithholdPages = false;
+        fixture.Now = current.Message.Due!.Value;
+        fixture.Replay(old);
+        var journal = store.Journal.Values.ToArray();
+        var rejected = CreationProtocol.TargetError(checkpoint.Row, old.Message);
+        await Step(next, id);
+        var changed = fixture.Checkpoint(b) != checkpoint;
+        check(rejected == "WrongCreation" && !store.Messages.ContainsKey(oldKey) && !changed &&
+            store.Messages.ContainsKey(nextKey) && store.Journal.Values.SequenceEqual(journal),
+            $"{label} the due predecessor control is dropped without advancing the successor control (state changed {changed})");
+
+        await Step(next, id);
+        var advanced = fixture.Row(b);
+        check(!store.Messages.ContainsKey(nextKey) && (expiry
+                ? advanced.ParkDiscard is { Expired: true } drain && drain.Operation == current.Message.Id
+                : advanced.ParkRecovery is { Cursor: not null } recover && recover.Control != nextKey),
+            $"{label} the genuine successor control performs the first transition");
+
+        async Task<InboxKey?> OpenAndWait(Worker worker, Contract.ActorRef actor, string operation)
+        {
+            fixture.WithholdPages = true;
+            await fixture.Send(actor, operation, Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(await fixture.Selection(actor))));
+            await Step(worker, id);
+            await Step(worker, id);
+            return fixture.Row(actor).ParkRecovery?.Control;
+        }
     }
 
     private static async Task PolicyAtDelivery(Action<bool, string> check)
@@ -284,17 +379,22 @@ internal static class RetentionDeleteChecks
             {
                 IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100), ParkedRetentionWindow = parkedWindow
             };
-            ingress = new(Store, requests, Node, (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Recover);
+            ingress = new(Store, requests, Node, (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Recover or Contract.Kinds.Terminate);
         }
 
         internal long Now { get; set; } = Initial;
         internal TimeSpan? Window { get; set; }
+        internal TimeSpan PollHorizon { get; init; } = new WorkerOptions().Horizon;
+        internal bool WithholdPages { get; set; }
         internal InMemoryStore Store { get; }
         public string Type => "retention-probe";
 
         internal Worker Owner() => new($"retention-owner-{++nextOwner}", 0, Store,
             new ActorAdapter(Store, this, retentionWindow: _ => Window),
-            new WorkerOptions { Monotonic = () => Now - Initial, Transport = new Replies(requests) });
+            new WorkerOptions { Monotonic = () => Now - Initial, Transport = new Replies(requests), Horizon = PollHorizon });
+
+        internal void Replay(InMemoryStore.MessageRow old) =>
+            Store.Messages.Add(old.Message.InboxKey, new(old.Message, old.Seq, 0) { Scoped = true, Tenant = scope.Tenant });
 
         internal async Task<Contract.ActorRef> Start(Worker worker, string operation, string? callerKey = null)
         {
@@ -340,7 +440,7 @@ internal static class RetentionDeleteChecks
 
         public Contract.RestorePlan RestoreWaits(Contract.ActorHeader header, string state) => new([], [], []);
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;
-        public bool Withholds(Contract.ActorHeader header) => false;
+        public bool Withholds(Contract.ActorHeader header) => WithholdPages && header.Status == Contract.ActorStatus.Running;
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
