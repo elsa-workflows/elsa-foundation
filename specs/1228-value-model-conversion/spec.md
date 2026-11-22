@@ -111,7 +111,7 @@ value. A loss is declared or refused, never silent.
 - Files and other resources (#3194). It is a linked defect, not S-8.
 - How dates are interpreted at the JSON to .NET boundary, unmatched keys, member casing and the shared serializer
   baseline: S-9 (spec 1207). S-8 uses those rules and adds none.
-- `undefined`, `NaN` and `Infinity`: S-2 (spec 1216).
+- `undefined`, `NaN` and `Infinity`: S-2 (spec 1232).
 - Host functions, the clock and `Date` in scripts: S-1 (spec 1223).
 - Versions, lost updates and the write history: S-10 (spec 1221).
 - The script body's read surface (`variables.X`, `variables['X']`, `getVariable`), its session reads and

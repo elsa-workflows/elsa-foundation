@@ -10,7 +10,7 @@ description: "Task list for Scripts Read Variables By Name (spec 1222)"
 
 **Status**: follows the spec, approved 2026-11-17 (initiative #3052). ADR 0089 is accepted and merged (`0a381a812a`); these tasks are implemented on
 the initiative branch (D-18). External prerequisites: #3171 (side track on `main`) for the
-parser parity; spec 1216 / S-2 FR-025–FR-027 for the missing-name behaviour. The former #3287 tasks (T026, T030) are
+parser parity; spec 1232 / S-2 FR-025–FR-027 for the missing-name behaviour. The former #3287 tasks (T026, T030) are
 dropped: #4315 fixed the `arguments` type. Phase 8 (T045, T047, T048, T050) and the converter's body switch (T028)
 landed with spec 1228 (S-8) in PR #4838, after S-7 merged.
 
@@ -28,7 +28,7 @@ story and may be written alongside implementation (no failing-run gate assumed).
 
 ## Phase 1: Setup
 
-- [x] T001 Confirm external prerequisites and record them in the PR: #3171 (side track) status for publish/runtime parser parity, and spec 1216 FR-025–FR-027 wording. Done: #3171 is still open on `main` (the publish parser and the runtime parser are both Acornima; a trailing line comment parses for expressions, the body case stays the side track). Spec 1216 FR-025–FR-027 is not on the initiative branch; the wording applied is this spec's FR-011/FR-012, recorded in the PR.
+- [x] T001 Confirm external prerequisites and record them in the PR: #3171 (side track) status for publish/runtime parser parity, and spec 1232 FR-025–FR-027 wording. Done: #3171 is still open on `main` (the publish parser and the runtime parser are both Acornima; a trailing line comment parses for expressions, the body case stays the side track). Spec 1232 FR-025–FR-027 is not on the initiative branch; the wording applied is this spec's FR-011/FR-012, recorded in the PR.
 - [x] T002 [P] Capture a baseline of current read-path tests in `Essentials/tests/` and `Extensions/Elsa3/tests/Mapping/Tests/` that this work changes (ambient-variable tests, declared-parameter tests, `Elsa3JavaScriptConversionTests`), so regressions are visible. Done: the affected suites were run before and after; `AmbientVariableReadTests.cs` (the regex ambient surface) is replaced by `VariablesRootEvaluationTests.cs`.
 
 ---
@@ -83,7 +83,7 @@ reads the right value, records the read in the input snapshot, and reads `undefi
 
 - [x] T015 [P] [US2] Cover publish of each computed form (non-literal index, non-literal `getVariable` arg, `variables`/`getVariable` aliased, passed, enumerated or spread) and a host-function read: publish succeeds, the fallback marker is set, and the conservative report lists the visible variables, in `Essentials/tests/.../ComputedReadPublishTests.cs`. Done in `ScriptVariableReadAnalyzerTests.cs`, `WorkflowExecutableCompilerTests.ScriptReads.cs` and `ScriptVariableReadValidatorTests.cs`.
 - [x] T016 [P] [US2] Cover run-time fallback: nearest-scope lookup (including iteration scope), recorded reads in the input snapshot, unread candidates not recorded, mixed literal + computed reads of the same variable, in `Essentials/tests/.../ComputedReadFallbackTests.cs`. Done in `ScriptVariableReadMaterializationTests.cs`, `CanonicalRuntimeInputBindingResolverTests.cs` and `VariableLifecycle/ExpressionReadSetTests.cs`.
-- [x] T017 [P] [US2] Cover a missing computed name: JavaScript reads `undefined` (not `null`), Liquid reads nil, a warning is recorded, the read is marked absent (spec 1216 FR-025/FR-026); a missing literal name stays a publish diagnostic (FR-027). Done in `ScriptVariableReadMaterializationTests.cs` and `VariablesRootEvaluationTests.cs`.
+- [x] T017 [P] [US2] Cover a missing computed name: JavaScript reads `undefined` (not `null`), Liquid reads nil, a warning is recorded, the read is marked absent (spec 1232 FR-025/FR-026); a missing literal name stays a publish diagnostic (FR-027). Done in `ScriptVariableReadMaterializationTests.cs` and `VariablesRootEvaluationTests.cs`.
 - [x] T018 [P] [US2] Cover a computed read resolving to a transient variable faulting the step with a fault that names the node and the variable (ADR 0089 R3, FR-017), and the transient-candidate publish warning. Done; the transient-candidate publish warning has no declaration to fire on (an authored Elsa 4 variable cannot be transient, `FromAuthoredStorage`), so the run-time fault carries FR-017.
 
 ### Implementation for User Story 2

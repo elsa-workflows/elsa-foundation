@@ -99,7 +99,7 @@ Plan decisions are numbered P-n, apart from the board's D-n.
 ### Documentation (this feature)
 
 ```text
-specs/1216-null-missing-undefined/
+specs/1232-null-missing-undefined/
 ├── spec.md
 ├── plan.md
 ├── research.md

@@ -34,7 +34,7 @@ baseline that transforms no data, as ADR 0091 records it.
 - S-10 (spec 1221) FR-001 and S-7 (spec 1231) FR-012 use the canonical form of FR-021a; `VariableValueDigest` already
   meets it.
 - #4832 (#3167): `JsonElement`-backed aliases are `StructuredValue`. Consistent with FR-011; nothing to change.
-- S-2 (spec 1216) owns the null representation (ADR 0091 decision 8). This spec only requires that the serializer
+- S-2 (spec 1232) owns the null representation (ADR 0091 decision 8). This spec only requires that the serializer
   keeps it.
 
 **Compatibility** is owed only from Elsa 4's first stable release. Before it, a changed stored format means stored
@@ -60,7 +60,7 @@ format (a compatibility proof, else a stamped format change); the Elsa 3 convert
 differences; the architecture test, the legacy list and the deviation register.
 
 **Out of scope**:
-- The null representation for declared members (S-2, spec 1216). FR-018 only requires that it survives.
+- The null representation for declared members (S-2, spec 1232). FR-018 only requires that it survives.
 - How a script sees values and which paths it writes back (S-8, ADR 0046 V9 and V12). A value a script changed is a
   new value; this spec only fixes the format it is written in.
 - Number handling inside the script engine (ADR 0046 V6, V9).

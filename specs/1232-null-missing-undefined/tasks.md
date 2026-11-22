@@ -1,6 +1,6 @@
 # Tasks: Null, missing and undefined
 
-**Input**: Design documents from `specs/1216-null-missing-undefined/`
+**Input**: Design documents from `specs/1232-null-missing-undefined/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/null-policies.md, quickstart.md
 
