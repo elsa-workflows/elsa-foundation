@@ -181,6 +181,10 @@ export function LegacyFormsPage({ api, formId, navigate }: { api: ElsaStudioModu
     returnKey.current = ""; setFormError(""); setShowValidation(false); setHasUnappliedSource(false);
     setForm({ ...initial(), name, ...(description ? { description } : {}) }); setEditing(true); setCreating(false);
   };
+  if (formId && !opened && !editing) return <StudioPage className="user-tasks">
+    {error || !hasFormAccess ? <StudioResultState tone="danger" title="Form unavailable" description={error || "Your account cannot open this form."}
+      actions={<StudioButton onClick={() => navigate?.(formsPath())}>Back to forms</StudioButton>} /> : <SkeletonRows label="Loading form" />}
+  </StudioPage>;
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
     {editing || opened ? <StudioShellBreadcrumbs items={[{ label: "Forms", onClick: editing ? () => closeEditor() : backToForms, disabled: busy }]} current={editing ? "Design the form" : opened!.form.name} /> : null}
     {creating ? <StudioNewResourceDialog title="New form" nameMaxLength={256} descriptionMaxLength={2000} onCancel={() => setCreating(false)} onCreate={beginForm} /> : null}

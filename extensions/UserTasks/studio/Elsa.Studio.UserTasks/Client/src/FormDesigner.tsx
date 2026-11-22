@@ -96,6 +96,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
     id: form?.id ?? "",
     version: form?.version ?? "1",
     name: form?.name ?? "",
+    ...(form?.description ? { description: form.description } : {}),
     provider: form?.provider ?? basicProvider,
     fields: rowFields
   };
@@ -120,7 +121,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
     });
     publishFields(nextRows);
     setSelectedId(current => nextRows.some(row => row.id === current) ? current : nextRows[0]?.id ?? null);
-    if (form && onFormChange && nextForm.name !== form.name) onFormChange({ name: nextForm.name });
+    if (form && onFormChange && (nextForm.name !== form.name || nextForm.description !== form.description)) onFormChange({ name: nextForm.name, description: nextForm.description });
   };
   const updateUnappliedSource = (unapplied: boolean) => {
     setUnappliedSource(unapplied);

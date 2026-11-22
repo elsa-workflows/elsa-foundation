@@ -40,7 +40,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
   const [savingDraft, setSavingDraft] = useState(false); const [autosaveEnabled, setAutosaveEnabled] = useState(true);
   const [autosavePaused, setAutosavePaused] = useState(false); const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState(""); const [deleteError, setDeleteError] = useState(""); const [formError, setFormError] = useState(""); const [conflict, setConflict] = useState(false);
-  const [editing, setEditing] = useState(false); const [editorLoading, setEditorLoading] = useState(false);
+  const [editing, setEditing] = useState(Boolean(formId)); const [editorLoading, setEditorLoading] = useState(Boolean(formId));
   const [currentId, setCurrentId] = useState<string | null>(null); const [isNew, setIsNew] = useState(false); const [readOnly, setReadOnly] = useState(false);
   const [form, setForm] = useState<TaskForm>(initialForm);
   const [baseForm, setBaseForm] = useState<TaskForm | null>(null); const [savedForm, setSavedForm] = useState<TaskForm | null>(null);
@@ -163,7 +163,7 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
   const openFromAddress = useRef(openDefinition);
   openFromAddress.current = openDefinition;
   useEffect(() => {
-    if (formId && identity && (identity.canReadForms || identity.canManageForms)) void openFromAddress.current(formId);
+    if (formId && (identity?.canReadForms || identity?.canManageForms)) void openFromAddress.current(formId);
   }, [formId, identity?.canReadForms, identity?.canManageForms]);
   const selectDefinition = (id: string) => { if (navigate) navigate(formsPath(id)); else void openDefinition(id); };
   const returningToCollection = useRef(false);
@@ -487,6 +487,10 @@ export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioMo
     <StudioButton disabled={busy} onClick={() => void leaveEditor(true)}>Cancel</StudioButton>
   </>;
 
+  if (formId && (error || formError && !editing || identity && !hasFormAccess)) return <StudioPage className="user-tasks">
+    <StudioResultState tone="danger" title="Form unavailable" description={formError || error || "Your account cannot open this form."}
+      actions={<StudioButton onClick={() => navigate?.(formsPath())}>Back to forms</StudioButton>} />
+  </StudioPage>;
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
     {creating ? <StudioNewResourceDialog title="New form" nameMaxLength={256} descriptionMaxLength={2000} onCancel={() => setCreating(false)} onCreate={createForm} /> : null}
     {editing ? <StudioShellBreadcrumbs items={[{ label: "Task forms", onClick: backToForms, disabled: busy }]} current={title} /> : null}
