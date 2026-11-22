@@ -18,8 +18,38 @@ internal static class CascadePageChecks
         await Run(10_001, check, delete: true, loseAfter: true);
         await Run(2 * CascadeProtocol.PageLimit + 1, check, delete: true, loseAfter: false);
         await Run(CascadeProtocol.PageLimit + 1, check, keepRunning: true);
+        await RefuseLegacyRebinding(check);
         await RunNative(check);
         await RunModelCap(check);
+    }
+
+    private static async Task RefuseLegacyRebinding(Action<bool, string> check)
+    {
+        var store = new InMemoryStore(1, () => 100);
+        var foreign = InstanceRef.In(0, "foreign");
+        var branch = InstanceRef.In(0, "branch");
+        var leaf = InstanceRef.In(0, "leaf");
+        var before = new InstanceRow(branch.Id, "probe", "branch", InstanceStatus.Running, "null", 1, "0/parent",
+            Children: ChildRegistry.Write([new(leaf.Id, 0)]));
+        store.Instances[branch.Id] = before;
+        store.Instances[foreign.Id] = new(foreign.Id, "probe", "foreign", InstanceStatus.Running, "null", 1, null);
+        var lease = (await store.TakeAsync(0, "cascade-rebinding", Defaults.Lease))!;
+        var command = new Message("foreign-command", branch, Kinds.Terminate, Sender: foreign.Id).AsIssued().AsCascadeTerminate();
+        var batch = new CommitBatch(0, lease.Epoch, lease.Position, Defaults.Lease, false,
+            [new(foreign.Id, null, null, [], [], [command], [], [], null)], [], []);
+        var sent = await store.CommitAsync(batch);
+
+        var registry = CascadeRegistry.From(before);
+        var next = before with { Parent = foreign.Id, Revision = 2, Children = null };
+        var page = CascadeProtocol.Page(next, registry, 0, next.Revision);
+        var forged = new TurnCommit(branch.Id, next, before.Revision, [command.InboxKey], [], page.Sent, [], [], null)
+            { FoundationCascade = new(registry) };
+        var refused = false;
+        try { await store.CommitAsync(batch with { Turns = [forged] }); }
+        catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+        check(sent.Landed && refused && store.Instances[branch.Id] == before && store.Messages.ContainsKey(command.InboxKey) &&
+            page.Sent.All(message => !store.Messages.ContainsKey(message.InboxKey)),
+            "a legacy cascade cannot authenticate its terminate by replacing the recorded parent in the same commit");
     }
 
     private static async Task RunNative(Action<bool, string> check)
@@ -257,6 +287,16 @@ internal static class CascadePageChecks
                 "the same replacement operation is accepted after the retired cascade finishes");
             check(blocked is { Outcome: Contract.AdmissionOutcome.Refused, Reason: Contract.RefusalReason.Repeat },
                 "another operation on the replacement key meets the new creation's start");
+            if (!loseAfter.HasValue)
+            {
+                probe.CancelOnStart = true;
+                for (var pass = 0; pass < 5; pass++) await Step(worker, address);
+                var replacementCreation = checked(row.Creation + 1);
+                check(store.Instances[address] is { Status: InstanceStatus.Cancelled, Retired: false } successor &&
+                    successor.Creation == replacementCreation &&
+                    Stops().Count(message => message.Sender == address && message.SenderCreation == replacementCreation) == 1,
+                    "a successor can start and terminate an attached child in its birth turn over a retired predecessor");
+            }
         }
 
         List<Message> Stops() => store.Messages.Values.Where(item => item.Message is { CascadeOrigin: true, Kind: Kinds.Terminate })
@@ -309,8 +349,14 @@ internal static class CascadePageChecks
     {
         public string Type => "cascade-pages";
         public int Pulses { get; private set; }
+        public bool CancelOnStart { get; set; }
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
+            if (CancelOnStart && turn.Header.TypeData == "root" && turn.Inbox.Any(message => message.Kind == Contract.Kinds.Start))
+            {
+                turn.Start(new(Type, "leaf"));
+                turn.End(Contract.ActorStatus.Cancelled);
+            }
             if (turn.Inbox.Any(message => message.Kind == "stop")) turn.End(Contract.ActorStatus.Cancelled);
             if (turn.Inbox.Any(message => message.Kind == "ping")) Pulses++;
             if (turn.Inbox.Any(message => message.Kind == "oversize"))
