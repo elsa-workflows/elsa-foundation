@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -63,7 +64,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
   await operate.getByRole("link", { name: "Task forms", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks\/forms(?:\?|$)/);
-  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
+  await page.getByRole("button", { name: "New form", exact: true }).first().click();
+  await confirmNewResource(page, "form", "New form");
   await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
   await page.getByLabel("Form ID", { exact: true }).fill(formId);
   await page.getByLabel("Name", { exact: true }).fill(title);

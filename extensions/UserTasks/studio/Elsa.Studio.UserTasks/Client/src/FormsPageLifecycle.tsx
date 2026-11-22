@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StudioNewResourceDialog, type StudioResourceMetadata, StudioShellBreadcrumbs, OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
+import { formsPath, type FormNavigation } from "./taskNavigation";
 import { PublishedFormSnapshot } from "./FormVersionWorkspace";
 
 const initialForm = (): TaskForm => ({ id: "", version: "1", name: "", provider: basicProvider, fields: [] });
@@ -20,7 +21,7 @@ const appendVersions = (current: FormVersion[], incoming: FormVersion[]) => {
   })];
 };
 
-export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
+export function FormLifecyclePage({ api, formId, navigate }: { api: ElsaStudioModuleApi } & FormNavigation) {
   const owner = useMemo(() => ({ api }), [api]);
   const fieldControls = api.userTaskFieldControls;
   const currentOwner = useRef(owner); currentOwner.current = owner;
@@ -159,11 +160,21 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     }
   };
 
-  const createForm = () => {
+  const openFromAddress = useRef(openDefinition);
+  openFromAddress.current = openDefinition;
+  useEffect(() => {
+    if (formId && identity && (identity.canReadForms || identity.canManageForms)) void openFromAddress.current(formId);
+  }, [formId, identity?.canReadForms, identity?.canManageForms]);
+  const selectDefinition = (id: string) => { if (navigate) navigate(formsPath(id)); else void openDefinition(id); };
+  const returningToCollection = useRef(false);
+
+  const [creating, setCreating] = useState(false);
+  const createForm = ({ name, description }: StudioResourceMetadata) => {
+    setCreating(false);
     editorRequest.current++; currentIdRef.current = null; persistedIdRef.current = null; clearHistory(); setCurrentDefinition(null); setCurrentId(null); setIsNew(true); setReadOnly(false);
     setHasUnappliedSource(false);
     unappliedSourceRef.current = false;
-    const emptyForm = initialForm();
+    const emptyForm = { ...initialForm(), name, ...(description ? { description } : {}) };
     setForm(emptyForm); setBaseForm(emptyForm); setSavedForm(null); baseFormRef.current = emptyForm; savedFormRef.current = null;
     revisionRef.current = 0; setDesignerGeneration(value => value + 1);
     lastRequestedSignature.current = formSignature(emptyForm);
@@ -316,11 +327,18 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     }
     const id = currentId;
     closeEditor(false);
+    if (formId && navigate) { returningToCollection.current = true; navigate(formsPath()); return; }
     if (!restoreFocus) return;
     requestAnimationFrame(() => { if (id) rowButtons.current.get(id)?.focus(); else createButton.current?.focus(); });
   };
 
   const backToForms = () => { void leaveEditor(true); };
+  useEffect(() => {
+    // Replace the collection-only working copy with its shareable address after the first stable save.
+    if (navigate && !formId && currentId && editing && !isNew && !busy && !savingDraft && !hasDirtyContent && !hasUnappliedSource)
+      navigate(formsPath(currentId));
+  }, [navigate, formId, currentId, editing, isNew, busy, savingDraft, hasDirtyContent, hasUnappliedSource]);
+
 
   useEffect(() => {
     if (!editing || editorLoading || !autosaveEnabled || autosavePaused || busy || readOnly || hasUnappliedSource || !form.id.trim() || !hasDirtyContent || formSignature(form) === lastRequestedSignature.current) {
@@ -342,7 +360,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   useEffect(() => {
     const dirty = editing && (hasDirtyContent || hasUnappliedSource || queuedSaves.current > 0 || autosaveTimer.current !== null);
     const preventNavigation = (event: Event) => {
-      if (!dirty) return;
+      if (!dirty || returningToCollection.current) return;
       event.preventDefault();
       if (event.type === "beforeunload") (event as BeforeUnloadEvent).returnValue = "";
     };
@@ -470,11 +488,13 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   </>;
 
   return <StudioPage className={`user-tasks${editing ? " user-tasks--editing" : ""}`} aria-label="Reusable task forms management">
+    {creating ? <StudioNewResourceDialog title="New form" nameMaxLength={256} descriptionMaxLength={2000} onCancel={() => setCreating(false)} onCreate={createForm} /> : null}
     {editing ? <StudioShellBreadcrumbs items={[{ label: "Task forms", onClick: backToForms, disabled: busy }]} current={title} /> : null}
     <StudioPageHeader className={editing ? "user-task-form-page-header--editing" : undefined} title={title}
       description={editing ? undefined : "Manage each form once. Drafts remain editable until you publish an immutable version."}
       actions={<>
-        {!editing && identity?.canManageForms ? <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={createForm}>New form</StudioButton> : null}
+        {editing && !editorLoading ? formToolbarActions : null}
+        {!editing && identity?.canManageForms ? <StudioButton ref={createButton} variant="primary" disabled={busy} onClick={() => setCreating(true)}>New form</StudioButton> : null}
         <a className="studio-button" data-variant="ghost" data-size="md" href={qualifyStudioBackendPath("/user-tasks")}>Task inbox</a>
       </>} />
     {error ? <StudioResultState tone="danger" title="Forms unavailable" description={error} actions={<StudioButton onClick={() => void refresh()}>Retry</StudioButton>} /> : null}
@@ -488,18 +508,18 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
             const name = definition.draft?.form?.name || definition.latestPublished?.form.name || definition.id;
             const status = definition.draft ? definition.latestPublished ? "Published · Draft" : "Draft" : definition.latestPublished ? `Published · v${definition.latestPublished.form.version}` : "Draft";
             const menuItems: OverflowMenuItem[] = [
-              { id: "open", label: identity?.canManageForms ? "Edit" : "View", onSelect: () => void openDefinition(definition.id) },
+              { id: "open", label: identity?.canManageForms ? "Edit" : "View", onSelect: () => selectDefinition(definition.id) },
               ...(deleteAvailable && identity?.canManageForms ? [{ id: "delete", label: "Delete", destructive: true, onSelect: () => void removeDefinition(definition) }] : [])
             ];
-            return <tr key={definition.id} aria-label={`Open reusable task form ${name}`} {...studioRowInteraction<HTMLTableRowElement>(() => void openDefinition(definition.id))}>
-              <td data-label="Form"><StudioButton className="user-task-link" disabled={busy} ref={button => { if (button) rowButtons.current.set(definition.id, button); else rowButtons.current.delete(definition.id); }} onClick={() => void openDefinition(definition.id)}>{name}</StudioButton></td><td data-label="Identifier">{definition.id}</td>
+            return <tr key={definition.id} aria-label={`Open reusable task form ${name}`} {...studioRowInteraction<HTMLTableRowElement>(() => selectDefinition(definition.id))}>
+              <td data-label="Form"><StudioButton className="user-task-link" disabled={busy} ref={button => { if (button) rowButtons.current.set(definition.id, button); else rowButtons.current.delete(definition.id); }} onClick={() => selectDefinition(definition.id)}>{name}</StudioButton></td><td data-label="Identifier">{definition.id}</td>
               <td data-label="Published version">{definition.latestPublished?.form.version ?? "—"}</td>
               <td data-label="Status"><StatusChip tone={definition.draft ? "warning" : "success"}>{status}</StatusChip></td>
               <td data-label="Actions" onClick={event => event.stopPropagation()}><OverflowMenu items={menuItems} ariaLabel={`Actions for ${name}`} /></td>
             </tr>;
           })}</tbody>
         </table></StudioTableContainer> : !error && hasFormAccess ? <StudioCollectionEmptyState title="No reusable forms yet" description="Create a form once, save a draft as you work, then publish it for new tasks."
-          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={createForm}>New form</StudioButton> : undefined} /> : null}
+          actions={identity?.canManageForms ? <StudioButton variant="primary" disabled={busy} onClick={() => setCreating(true)}>New form</StudioButton> : undefined} /> : null}
       {!loading && !error && hasFormAccess ? <StudioCollectionFooter><span>{definitions.length} {definitions.length === 1 ? "form" : "forms"} shown</span>
         {nextPage ? <StudioButton disabled={busy} onClick={() => void loadMoreDefinitions()}>{busy ? "Loading forms…" : "More forms"}</StudioButton> : null}
       </StudioCollectionFooter> : null}
@@ -518,13 +538,13 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
           versionsPanel={versionsPanel}
           onVersionsSelect={selectVersions}
           onUnappliedSourceChange={value => { unappliedSourceRef.current = value; setHasUnappliedSource(value); }}
-          toolbarActions={formToolbarActions} /> : <FormDesigner key={designerGeneration} form={form} versionLabel={versionLabel} fieldControls={fieldControls} formIdReadOnly={!isNew || savingDraft}
+          /> : <FormDesigner key={designerGeneration} form={form} versionLabel={versionLabel} fieldControls={fieldControls} formIdReadOnly={!isNew || savingDraft} compactHeader
           onFormChange={update => setForm(value => ({ ...value, ...update }))} fields={form.fields}
           onFieldsChange={fields => setForm(value => ({ ...value, fields }))}
           description="Save work as a draft; only publishing makes an immutable version available to new tasks. Existing tasks remain pinned."
           disabled={busy || readOnly}
           onUnappliedSourceChange={value => { unappliedSourceRef.current = value; setHasUnappliedSource(value); }}
-          toolbarActions={formToolbarActions} />}
+          />}
       </> : null}
     </section> : null}
   </StudioPage>;

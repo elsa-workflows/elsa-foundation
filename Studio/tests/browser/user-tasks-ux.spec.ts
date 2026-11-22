@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function openFormAction(page: Page, row: Locator, action: "Edit" | "View") {
@@ -85,6 +86,8 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(page.getByRole("button", { name: "Purchase response", exact: true })).toBeFocused();
 
     await createForm.click();
+
+    await confirmNewResource(page, "form", "New form");
     if (!(await formId.isVisible())) await page.getByRole("button", { name: "Expand properties panel" }).click();
     await expect(formId).toBeEnabled();
     await formId.fill("new-form");
@@ -375,6 +378,7 @@ test("completed task responses remain framed and read-only without response acti
   await page.goto("/user-tasks-ux.html?forms&form-error");
   await expect(page.getByRole("button", { name: "More forms", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "New form", exact: true }).first().click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("purchase");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Purchase response");
   await page.getByRole("button", { name: "Text input", exact: true }).click();

@@ -27,8 +27,8 @@ interface FieldRow {
 interface FormDesignerProps {
   fields: TaskField[];
   onFieldsChange: (fields: TaskField[]) => void;
-  form?: Pick<TaskForm, "id" | "version" | "name"> & Partial<Pick<TaskForm, "provider">>;
-  onFormChange?: (update: Partial<Pick<TaskForm, "id" | "name">>) => void;
+  form?: Pick<TaskForm, "id" | "version" | "name"> & Partial<Pick<TaskForm, "provider" | "description">>;
+  onFormChange?: (update: Partial<Pick<TaskForm, "id" | "name" | "description">>) => void;
   description?: React.ReactNode;
   versionLabel?: string;
   formIdReadOnly?: boolean;
@@ -269,6 +269,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                   <StudioField label="Form ID"><input value={form.id} aria-invalid={!form.id.trim()} disabled={canvasDisabled || formIdReadOnly} onChange={event => onFormChange({ id: event.target.value })} /></StudioField>
                   <StudioField label="Version" description="Assigned automatically when the form is published."><output className="user-task-version-value">{versionLabel ?? form.version}</output></StudioField>
                   <StudioField label="Name"><input value={form.name} aria-invalid={!form.name.trim()} disabled={canvasDisabled} onChange={event => onFormChange({ name: event.target.value })} /></StudioField>
+                  <StudioField label="Description"><textarea maxLength={2000} value={form.description ?? ""} disabled={canvasDisabled} onChange={event => onFormChange({ description: event.target.value })} /></StudioField>
                 </div> : selectedRow ? <>
                   <h4>Field properties</h4>
                   <StudioField label="Label"><input value={selectedRow.field.label} disabled={canvasDisabled} aria-invalid={fieldErrors[selectedIndex].some(error => error.includes("label"))} onChange={event => updateField(selectedRow.id, { label: event.target.value })} /></StudioField>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuthSession, usePermissions, useStudioRouteLocation, useStudioWorkspaceTab, useStudioWorkspaceWhenActive, studioNavigationRequestedEvent, notifyStudioNavigationGuardReleased, type StudioNavigationRequest, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, OverflowMenu, PeerViewSwitch, SkeletonRows, StudioButton, StudioDialog, StudioDialogFooter, StudioField, StudioTimestamp, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
+import { StudioNewResourceDialog, type StudioResourceMetadata, studioRowInteraction, OverflowMenu, PeerViewSwitch, SkeletonRows, StudioButton, StudioDialog, StudioDialogFooter, StudioField, StudioTimestamp, StudioCollectionFooter, StudioCollectionToolbar, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTableContainer } from "@elsa-workflows/studio-ui";
 import { createHomeLayoutScope } from "../homeLayout";
 import { DashboardApi } from "./api";
 import { QueryControls } from "./QueryControls";
@@ -113,27 +113,6 @@ function reconcileTileDisclosure(local: DashboardTile[] | undefined, previous: D
   });
 }
 
-type ResourceMetadata = { name: string; description: string };
-
-function NewResourceDialog({ kind, onCreate, onCancel }: {
-  kind: RouteProps["kind"];
-  onCreate(metadata: ResourceMetadata): void;
-  onCancel(): void;
-}) {
-  const nameInput = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  return <StudioDialog open title={`New ${kind}`} onClose={onCancel} initialFocusRef={nameInput}
-    onSubmit={event => {
-      event.preventDefault();
-      if (name.trim()) onCreate({ name: name.trim(), description: description.trim() });
-    }}
-    footer={<StudioDialogFooter onCancel={onCancel} confirmLabel="Create" confirmType="submit" confirmDisabled={!name.trim()} />}>
-    <StudioField label="Name"><input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required maxLength={200} /></StudioField>
-    <StudioField label="Description"><textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={2000} /></StudioField>
-  </StudioDialog>;
-}
-
 type AccessReview = { state: "checking" | "available" | "unavailable" | "denied"; message?: string };
 function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: RouteProps & { native: DashboardApi; id?: string }) {
   const permissions = usePermissions();
@@ -143,7 +122,7 @@ function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: Rou
   const [sourceError, setSourceError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
   const [editorReset, setEditorReset] = useState(0);
-  const [newMetadata, setNewMetadata] = useState<ResourceMetadata>();
+  const [newMetadata, setNewMetadata] = useState<StudioResourceMetadata>();
   // Activity restarts effects when a retained tab returns. Revalidate before paint while
   // retaining its editor component and local working state throughout the check.
   useLayoutEffect(() => {
@@ -161,12 +140,12 @@ function ResourceRoute({ api, native, kind, id, navigate, authoring, view }: Rou
   if (!resource) return <StudioPage className="named-workspace"><SkeletonRows label="Loading definition" /></StudioPage>;
   if (view === "create" && !newMetadata) return <>
     <ResourceCollection api={api} native={native} kind={kind} view="list" navigate={navigate} />
-    <NewResourceDialog kind={kind} onCreate={setNewMetadata} onCancel={() => navigate(resourcePath(kind))} />
+    <StudioNewResourceDialog title={`New ${kind}`} nameMaxLength={200} descriptionMaxLength={2000} onCreate={setNewMetadata} onCancel={() => navigate(resourcePath(kind))} />
   </>;
   return <ResourceEditor key={`${resource.id || "new"}:${editorReset}`} api={api} native={native} initial={resource} newMetadata={newMetadata} review={review} authoring={authoring} datasets={datasets} sourceError={sourceError} onRetryAccess={() => setAttempt(value => value + 1)} onReload={() => { setReview({ state: "checking" }); setEditorReset(value => value + 1); setAttempt(value => value + 1); }} navigate={navigate} view={view} />;
 }
 
-function ResourceEditor({ api, native, initial, newMetadata, review, datasets, sourceError, onReload, onRetryAccess, navigate, authoring, view }: { api: ElsaStudioModuleApi; native: DashboardApi; initial: DashboardResource; newMetadata?: ResourceMetadata; review: AccessReview; authoring?: DashboardAuthoringController; datasets: DatasetDeclaration[]; sourceError?: string; onReload(): void; onRetryAccess(): void; navigate(path: string): void; view: RouteProps["view"] }) {
+function ResourceEditor({ api, native, initial, newMetadata, review, datasets, sourceError, onReload, onRetryAccess, navigate, authoring, view }: { api: ElsaStudioModuleApi; native: DashboardApi; initial: DashboardResource; newMetadata?: StudioResourceMetadata; review: AccessReview; authoring?: DashboardAuthoringController; datasets: DatasetDeclaration[]; sourceError?: string; onReload(): void; onRetryAccess(): void; navigate(path: string): void; view: RouteProps["view"] }) {
   const permissions = usePermissions();
   const canCreateQuestion = permissions.has("*") || permissions.has("studio/questions:create");
   const [saved, setSaved] = useState(initial);

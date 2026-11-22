@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 test("edits one form through shared drafts, read-only history, publication, and discard", async ({ page }, testInfo) => {
@@ -149,7 +150,8 @@ test("uses the advertised legacy forms contract for published form access and di
   await rows.first().getByRole("button", { name: "Open form contact" }).click();
   await expect(page.getByRole("region", { name: "Published form", exact: true })).toContainText("Published version 1");
   await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
-  await page.getByRole("button", { name: "Create form version", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("feedback");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Feedback form");
   await page.getByRole("button", { name: "Publish form version", exact: true }).click();

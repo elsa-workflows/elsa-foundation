@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 type FormRequest = { path: string; body: { form?: { id?: string; name?: string }; revision?: number } };
@@ -21,6 +22,7 @@ test("enables autosave by default without writing when opening an unchanged publ
 test("debounces draft saves, serializes revisions, and keeps editing during a slow save", async ({ page }) => {
   await page.goto("/form-designer.html?save-delay=1800");
   await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Form settings", exact: true }).click();
 
@@ -66,6 +68,7 @@ test("pauses autosave after an error and allows an explicit retry", async ({ pag
 test("turning autosave off keeps edits local until an explicit save", async ({ page }) => {
   await page.goto("/form-designer.html");
   await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("checkbox", { name: "Auto-save" }).uncheck();
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("manual-only");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Manual only");
@@ -80,6 +83,7 @@ test("turning autosave off keeps edits local until an explicit save", async ({ p
 test("Cancel flushes pending autosave changes before leaving the editor", async ({ page }) => {
   await page.goto("/form-designer.html");
   await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("flush-on-leave");
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Saved on cancel");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -92,6 +96,7 @@ test("Cancel flushes pending autosave changes before leaving the editor", async 
 test("unapplied JSON source edits are not autosaved", async ({ page }) => {
   await page.goto("/form-designer.html");
   await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("source-pending");
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   const source = page.locator("[data-studio-code-editor] .cm-content");

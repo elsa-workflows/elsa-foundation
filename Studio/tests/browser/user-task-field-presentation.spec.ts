@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 for (const appearance of ["light", "dark"] as const) {
@@ -7,6 +8,7 @@ for (const appearance of ["light", "dark"] as const) {
       await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), appearance);
       await page.goto("/form-designer.html");
       await page.getByRole("button", { name: "New form", exact: true }).click();
+      await confirmNewResource(page, "form", "New form");
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand properties panel", exact: true }).click();
 
       const palette = page.getByRole("complementary", { name: "Field palette", exact: true });

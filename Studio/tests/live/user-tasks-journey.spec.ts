@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { signIn, expectAccessible } from "./support/journey";
@@ -82,7 +83,8 @@ test("authors reusable forms, assignment and connected action paths in the norma
   await page.goto("/user-tasks/forms?backend=legacy");
   await expect(page.getByRole("table", { name: "Reusable task forms", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("forms-list.png") });
-  await page.getByRole("button", { name: "Create form version", exact: true }).first().click();
+  await page.getByRole("button", { name: "New form", exact: true }).first().click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByLabel("Form ID", { exact: true }).fill(formId); await page.getByLabel("Name", { exact: true }).fill(title);
   await page.getByRole("button", { name: "Add field", exact: true }).click();
   await page.getByLabel("Key", { exact: true }).fill("Reason"); await page.getByLabel("Label", { exact: true }).fill("Reason");
