@@ -51,6 +51,14 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 
 ## Behaviour worth knowing
 
+- **Variable expressions** (#3201). An Elsa 3 `Variable` expression reads the variable's declared id, using the
+  nearest enclosing container's scope or workflow scope. Its embedded name and storage-driver metadata do not
+  select another variable. Missing, ambiguous, malformed and out-of-scope references are refused during import;
+  generated projection IDs do not satisfy a missing source declaration. The selected declaration's actual value type
+  must fit the input. A dynamic variable read into a typed input needs compatible producer kinds and a preceding
+  sequence capture. Future or conditional captures alone cannot establish compatibility; competing explicit or script
+  writes invalidate that proof. Reads of a loop's captured current value
+  retain the inside-the-loop restriction and refuse competing explicit or script writes.
 - **Output capture.**
   - An Elsa 3 output captured into a **workflow** variable becomes an Elsa 4 `Variable` output binding, so readers of
     the variable see the value.
@@ -139,8 +147,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   Elsa 4: it is kept for an `Int32`, `Int64` or `Decimal` input and refused for any other (Elsa 3 converted it into any input).
   A typed output, a typed variable, or a variable only Set Variable writes is not an untyped result; a loop's value
   captured into a typed variable still is, since Elsa 4 reads the loop's own variable there. A loop value
-  captured into a variable and read outside its loop keeps its own refusal. Not yet checked: a JavaScript or Liquid expression that reads such a
-  value, and Elsa 3's `Variable` expression form, which is not lowered yet (#3201).
+  captured into a variable and read outside its loop keeps its own refusal. The same producer-kind checks apply to
+  a `Variable` expression that reads the captured variable. JavaScript and Liquid expressions that read such a value
+  are not yet checked.
 - **Literal lists.** A literal bound to a collection input whose text is a JSON array (`["Approved","Rejected"]`,
   `[200,404]`) converts to that JSON array, as Elsa 3 converted the text. Elsa 4 reads literal text for a collection
   as a comma-separated list, so the brackets and quotes would otherwise become part of the items.

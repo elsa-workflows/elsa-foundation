@@ -207,27 +207,7 @@ internal sealed class Elsa3DefinitionConverter(
         var jsonPaths = plan.JsonPaths;
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
-        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(
-            (node, names, invalidDone, nativeCompletionAccess) =>
-            {
-                if (plan.Find(node) is not { } script) return;
-                script.EffectiveScriptOutcomes = names;
-                script.EffectiveScriptInvalidDoneSelection = invalidDone;
-                script.EffectiveScriptNativeCompletionAccess = nativeCompletionAccess;
-            },
-            plan.Definition,
-            inventory,
-            plan.Request.DiagnosticMetadata,
-            jsonPaths,
-            plan.SourceName,
-            (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
-            plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
-            plan.MemoryAliases,
-            plan.Request.IsReusable,
-            (node, name) => plan.Find(node)?.Resolved?.Inputs
-                .FirstOrDefault(input => input.ReferenceKey.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-                                         input.Name.Equals(name, StringComparison.OrdinalIgnoreCase))?.Type,
-            node => AncestorScopeNames(plan, node)));
+        plan.Diagnostics.AddRange(valueFlowLowerer.Lower(plan, inventory, node => AncestorScopeNames(plan, node)));
     }
 
     /// <summary>
@@ -255,6 +235,7 @@ internal sealed class Elsa3DefinitionConverter(
         }
 
         return names;
+
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>

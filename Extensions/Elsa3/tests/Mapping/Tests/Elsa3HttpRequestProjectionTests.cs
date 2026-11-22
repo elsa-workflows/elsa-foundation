@@ -16,6 +16,26 @@ namespace Elsa3.Mapping.Tests;
 /// </summary>
 public sealed class Elsa3HttpRequestProjectionTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_Variable_expression_requires_an_authored_declaration_even_if_normalization_generates_the_same_id(bool declared)
+    {
+        const string id = "http.endpoint.headers";
+        var root = Sequence("root", Endpoint(("headers", Captured("headers-slot"))),
+            Activity("read", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", JsonSerializer.SerializeToElement(new
+            {
+                typeName = "Object", expression = new { type = "Variable", value = new { id } }
+            }))));
+        var variables = declared ? new[] { new Elsa3Variable { Id = id, Name = id, TypeName = "Object" } } : [];
+
+        var result = await ConvertAsync(root, variables);
+
+        Assert.Equal(declared, result.Succeeded);
+        if (!declared)
+            Assert.Contains(result.Diagnostics, item => item.Code == "VF-IMP-001");
+    }
+
     [Fact]
     public async Task Headers_captured_into_a_workflow_variable_are_rebuilt_into_that_variable()
     {
