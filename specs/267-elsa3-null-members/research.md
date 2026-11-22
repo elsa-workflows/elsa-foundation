@@ -181,6 +181,15 @@ that boundary. Blank ContentType selects the JSON writer/application-json fallba
 Both writers send String content unchanged; 3.6.3 uses RawStringContent and 3.5.3 StringContent. Method also falls back
 to GET for null, while non-null whitespace reaches HttpMethod without the target's normalization.
 
+The implementation recheck follows the 3.6.3 JSON factory into
+[RawStringContent](https://github.com/elsa-workflows/elsa-core/blob/7eac7de6955718aea35870be125d54f080fc55dc/src/modules/Elsa.Http/ContentWriters/RawStringContent.cs).
+It preserves the media type with no charset parameter. The current target uses StringContent and appends
+`charset=utf-8`. Therefore blank ContentType with potentially non-null Content is refused under FR-012's
+faithful-or-refuse boundary, including nonempty text; emitting application/json alone would not preserve the header.
+The target also omits empty String Content and its headers. A nonliteral/referenced String body has no established
+nonempty guarantee, so that use is refused rather than accepting the same possible omission. Known-null/unbound
+Content retains its no-body path. These are source-inspection findings, not historical runtime executions.
+
 Both FlowSendHttpRequest implementations supply `[200]` for a null wrapped ExpectedStatusCodes Input. A present
 null/empty result selects **Done for every response**, including 404/500; a nonempty list adds numeric/unmatched
 alongside Done. The target's empty-list path instead selects Done for 2xx and Failed for non-2xx. The merged converter

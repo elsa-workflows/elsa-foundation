@@ -9,6 +9,8 @@ namespace Elsa3.Mapping.Conversion;
 
 internal sealed partial class Elsa3ActivityNormalizer
 {
+    private const string StatusListGuidance = "Set a nonempty ExpectedStatusCodes list in Elsa 3 and review its Done/status connections before converting.";
+
     private static bool HasSourceCorrections(Elsa3MemberRule rule) =>
         rule.OnAbsent is not null || rule.OnBlank is not null || rule.OnLiteralNull is not null ||
         rule.Contract is Elsa3ValueContract.HttpRequestContent;
@@ -56,9 +58,11 @@ internal sealed partial class Elsa3ActivityNormalizer
                 ApplyRule(context, rule, property, JsonNull, result, boundBy);
             return true;
         }
-        if (source.ValueKind == JsonValueKind.Object && !Elsa3TypedValues.IsCaptured(source) &&
-            (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
-             !Elsa3TypedValues.TryGetExpression(source, out _, out _)))
+        if (source.ValueKind == JsonValueKind.Object &&
+            (source.TryGetProperty("expression", out _) && !Elsa3TypedValues.TryGetExpression(source, out _, out _) ||
+             !Elsa3TypedValues.IsCaptured(source) &&
+             (!source.TryGetProperty("typeName", out var declared) || declared.ValueKind != JsonValueKind.String ||
+              !Elsa3TypedValues.TryGetExpression(source, out _, out _))))
         {
             context.Error(ValueOutsideContract, $"Member '{property}' has unsupported input/expression metadata.",
                 $"Set an explicit compatible value for '{property}' in the Elsa 3 workflow.", property);
@@ -91,7 +95,7 @@ internal sealed partial class Elsa3ActivityNormalizer
             case Elsa3ValueContract.NonemptyHttpStatusCodes:
                 if (!literal || !TryNonemptyStatusList(text))
                     fitted = Outside("must be a nonempty literal status list: Elsa 3 selects Done for every response when cleared, while Elsa 4 selects Failed for non-2xx responses",
-                        "Set a nonempty ExpectedStatusCodes list in Elsa 3 and review its Done/status connections before converting.");
+                        StatusListGuidance);
                 return true;
             case Elsa3ValueContract.PositiveLiteralTimeSpan:
                 if (literal && TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var interval) && interval > TimeSpan.Zero)
@@ -111,9 +115,9 @@ internal sealed partial class Elsa3ActivityNormalizer
                 if (literal && text == string.Empty && HasNonNullContentType(context))
                     fitted = Outside("is empty String content: Elsa 3 attaches an empty body and content type, while Elsa 4 omits the body and its headers",
                         "Remove the empty Content or supply nonempty text in the Elsa 3 workflow, and review the receiving endpoint.");
-                else if (!literal && !StringComparer.OrdinalIgnoreCase.Equals(Elsa3TypedValues.TypeAlias(value), "String") &&
-                         value.ValueKind != JsonValueKind.Null)
-                    fitted = Outside("must be String content", "Convert Content to text and declare its type as String in the Elsa 3 workflow.");
+                else if (!literal && value.ValueKind != JsonValueKind.Null)
+                    fitted = Outside("must be literal String content whose body presence is known; a computed or referenced String may be empty, in which case Elsa 4 omits the body and its headers",
+                        "Set Content to compatible nonempty literal text in the Elsa 3 workflow, or rebuild and review the HTTP request in Elsa 4.");
                 return true;
             default:
                 return false;

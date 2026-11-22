@@ -58,18 +58,32 @@ public sealed class MemberDefaultParityTests
     [Theory]
     [InlineData("Elsa.SendHttpRequest")]
     [InlineData("Elsa.FlowSendHttpRequest")]
-    public async Task Default_GET_and_blank_content_type_retain_bytes_and_headers(string type)
+    public async Task Blank_content_type_refuses_the_legacy_header_mismatch_before_any_request(string type)
     {
         await using var receiver = await Receiver.Start();
         await using var host = await Elsa3ImportHost.StartAsync(withHttp: true);
         var call = Activity("call", type);
         call["url"] = Literal(receiver.Url); call["content"] = Literal("hello"); call["contentType"] = Literal(" ");
-        var workflow = await ImportPublish(host, Definition(Sequence(call)));
-        Completed(await host.RunAsync(workflow));
-        var request = Assert.Single(receiver.Requests);
-        Assert.Equal("GET", request.Method);
-        Assert.Equal("hello", request.Body);
-        Assert.Equal("application/json; charset=utf-8", request.ContentType);
+        await RefusedWithoutWrites(host, Definition(Sequence(call)), "contentType");
+        Assert.Empty(receiver.Requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Computed_or_referenced_empty_String_content_is_refused_before_writing(bool reference)
+    {
+        await using var receiver = await Receiver.Start();
+        await using var host = await Elsa3ImportHost.StartAsync(withHttp: true);
+        var call = Activity("call", "Elsa.FlowSendHttpRequest");
+        call["url"] = Literal(receiver.Url); call["contentType"] = Literal("application/json");
+        call["content"] = reference
+            ? new JsonObject { ["typeName"] = "String", ["memoryReference"] = new JsonObject { ["id"] = "body" } }
+            : new JsonObject { ["typeName"] = "String", ["expression"] = new JsonObject { ["type"] = "JavaScript", ["value"] = "return '';" } };
+        var definition = Definition(Sequence(call));
+        if (reference) definition["variables"] = new JsonArray(new JsonObject { ["id"] = "body", ["name"] = "body", ["typeName"] = "String", ["value"] = "" });
+        await RefusedWithoutWrites(host, definition, "content");
+        Assert.Empty(receiver.Requests);
     }
 
     [Theory]
@@ -77,6 +91,8 @@ public sealed class MemberDefaultParityTests
     [InlineData("Elsa.SendHttpRequest", "null")]
     [InlineData("Elsa.FlowSendHttpRequest", "{}")]
     [InlineData("Elsa.FlowSendHttpRequest", "{\"typeName\":\"String\",\"expression\":{\"type\":\"Literal\",\"value\":null}}")]
+    [InlineData("Elsa.SendHttpRequest", "{\"typeName\":\"String\",\"expression\":{\"type\":\"Literal\",\"value\":\" \"}}")]
+    [InlineData("Elsa.FlowSendHttpRequest", "{\"typeName\":\"String\",\"expression\":{\"type\":\"Literal\",\"value\":\" \"}}")]
     public async Task Known_null_content_keeps_the_no_body_path(string type, string contentType)
     {
         await using var receiver = await Receiver.Start();

@@ -201,7 +201,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 OnNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content"),
                 OnAbsent = NullRefused("Elsa 3 sends no body without a content type; Elsa 4 can send the bound Content.", whenBound: "Content"),
                 OnLiteralNull = NullRefused("Elsa 3 sends no body when the content type is null.", whenBound: "Content"),
-                OnBlank = NullEmits("application/json")
+                OnBlank = NullRefused("Elsa 3.6's JSON writer sends application/json without a charset parameter; Elsa 4 appends charset=utf-8, changing the request header.", whenBound: "Content")
             },
             Removed("Authorization", warning: HttpAuthorizationUseConnection),
             Removed("DisableAuthorizationHeaderValidation", "true", warning: AuthHeaderUnvalidated),

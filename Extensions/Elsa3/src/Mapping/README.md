@@ -329,7 +329,7 @@ collections and the String text `"null"` cannot acquire a declared default by be
 
 | Member | Conversion |
 |---|---|
-| Both HTTP request ContentTypes | Missing/defaulted or null with potentially non-null Content refuses the legacy no-body mismatch. Blank ContentType emits `application/json`. Empty String Content with non-null ContentType refuses because the target omits its body/headers. Known-null Content retains no body. |
+| Both HTTP request ContentTypes | Missing/defaulted or null with potentially non-null Content refuses the legacy no-body mismatch. Blank ContentType with potentially non-null Content refuses the selected 3.6 JSON writer's header difference: Elsa 4 appends a charset parameter. Empty or unproven computed/referenced String Content refuses the target's body/header omission. Known-null Content retains no body. |
 | FlowSendHttpRequest.ExpectedStatusCodes | Missing/defaulted and bare JSON null emit `[200]`. Literal null, blank, `[]` and JSON-list text `[]` refuse: legacy Done on 404/500 differs from target Failed. Supported nonempty literal lists keep the existing outcome mapping. |
 | For.OuterBoundInclusive / Delay.TimeSpan | Missing/defaulted and bare JSON null retain true/one minute. Literal null/omitted Literal value and blank literals emit false/explicit zero duration. |
 | Timer.Interval | Missing/defaulted and bare JSON null retain one minute; authored intervals must be positive literals. Null, blank, zero, negative and invalid intervals refuse. |

@@ -465,7 +465,8 @@ internal sealed partial class Elsa3ActivityNormalizer(
             case Elsa3NullRule.Refuse:
                 context.Error(sourceShape is null ? NullUnconvertible : ValueOutsideContract,
                     $"Member '{propertyName}' is {sourceShape ?? "null"}. {onNull.Reason}",
-                    $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
+                    rule.Contract == Elsa3ValueContract.NonemptyHttpStatusCodes ? StatusListGuidance :
+                        $"Set a value for '{propertyName}' in the Elsa 3 workflow, or remove the activity.",
                     propertyName);
                 return;
         }

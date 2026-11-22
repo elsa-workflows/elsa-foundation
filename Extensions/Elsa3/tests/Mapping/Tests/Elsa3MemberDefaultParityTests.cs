@@ -71,7 +71,7 @@ public sealed class Elsa3MemberDefaultParityTests
     {
         var result = await Convert(type, member, shape, content);
         Assert.False(result.Succeeded);
-        var refusal = Assert.Single(result.Diagnostics.Where(d => d.IsError && d.Path.EndsWith("." + member, StringComparison.Ordinal)));
+        var refusal = Assert.Single(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith("." + member, StringComparison.Ordinal));
         Assert.NotEqual(Elsa3ActivityDiagnosticCodes.RequiredInputUnbound, refusal.Code);
         Assert.Contains(member, refusal.Message, StringComparison.Ordinal);
         Assert.False(string.IsNullOrWhiteSpace(refusal.Guidance));
@@ -90,18 +90,67 @@ public sealed class Elsa3MemberDefaultParityTests
         {
             var result = await Convert(type, member, "{\"typeName\":\"String\",\"expression\":" + expression + "}");
             Assert.False(result.Succeeded, expression);
-            Assert.Contains(result.Diagnostics, d => d.IsError && d.Path.EndsWith("." + member, StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith("." + member, StringComparison.Ordinal));
         }
     }
 
     [Theory]
     [InlineData("Elsa.SendHttpRequest")]
     [InlineData("Elsa.FlowSendHttpRequest")]
-    public async Task Blank_content_type_with_nonempty_string_content_selects_the_legacy_JSON_writer(string type)
+    public async Task Blank_content_type_refuses_the_selected_legacy_JSON_header_difference(string type)
     {
         var result = await Convert(type, "contentType", Literal(" ").GetRawText(), "hello");
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, d => d.IsError);
+        Assert.EndsWith(".contentType", error.Path, StringComparison.Ordinal);
+        Assert.Contains("charset", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Elsa.SendHttpRequest")]
+    [InlineData("Elsa.FlowSendHttpRequest")]
+    public async Task An_unproven_String_body_cannot_silently_lose_its_empty_body_headers(string type)
+    {
+        var subject = Subject(type, "content", Expression("JavaScript", "return '';", "String").GetRawText(), "unbound");
+        subject.AdditionalProperties["contentType"] = Literal("application/json");
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", subject)));
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith(".content", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("1")]
+    [InlineData("\"Literal\"")]
+    public async Task A_memory_reference_does_not_repair_malformed_present_expression_metadata(string expression)
+    {
+        var node = Subject("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"expression\":" + expression + ",\"memoryReference\":{\"id\":\"inclusive\"}}", "unbound");
+        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "true" };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith(".outerBoundInclusive", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_genuine_memory_only_input_keeps_its_reference_contract()
+    {
+        var node = Subject("Elsa.For", "outerBoundInclusive", "{\"typeName\":\"Boolean\",\"memoryReference\":{\"id\":\"inclusive\"}}", "unbound");
+        var variable = new Elsa3Variable { Id = "inclusive", Name = "inclusive", TypeName = "Boolean", Value = "true" };
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", node), variables: [variable]));
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("application/json", Text(Input(Node(result.Value!.State, "subject"), "ContentType")));
+        Assert.Equal("Variable", Input(Node(result.Value!.State, "subject"), "EndInclusive").Value.ExpressionType);
+    }
+
+    [Theory]
+    [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\",\"value\":null}}")]
+    [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\"}}")]
+    [InlineData("{\"typeName\":\"Object\",\"expression\":{\"type\":\"Literal\",\"value\":\" \"}}")]
+    public async Task Every_cleared_status_list_explains_the_nonempty_list_and_Done_path_review(string shape)
+    {
+        var result = await Convert("Elsa.FlowSendHttpRequest", "expectedStatusCodes", shape);
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.IsError);
+        Assert.Contains("nonempty", diagnostic.Guidance, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Done/status", diagnostic.Guidance, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -167,7 +216,7 @@ public sealed class Elsa3MemberDefaultParityTests
         subject.AdditionalProperties["expectedStatusCodes"] = Literal("[]");
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", subject)));
         foreach (var member in new[] { "contentType", "method", "expectedStatusCodes" })
-            Assert.Contains(result.Diagnostics, d => d.IsError && d.Path.EndsWith("." + member, StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, d => d.IsError && (d.Path ?? string.Empty).EndsWith("." + member, StringComparison.Ordinal));
         var duplicate = Subject("Elsa.Delay", "timeSpan", "{}", "unbound");
         duplicate.AdditionalProperties["TimeSpan"] = Literal("00:00:01");
         var dup = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", duplicate)));

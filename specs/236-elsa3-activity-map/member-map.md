@@ -222,7 +222,7 @@ applied before normalization; generic custom-map contracts and the member-rule c
 
 | Members | Missing/defaulted wrapper | Deliberate Literal-null / blank / explicit boundary |
 |---|---|---|
-| SendHttpRequest / FlowSendHttpRequest.ContentType | Refuse when Content may be non-null; retain no body for known-null Content | Null retains the no-body refusal. Blank emits `application/json` for the legacy JSON writer; empty String Content with a present non-null ContentType refuses the target's body/header omission. |
+| SendHttpRequest / FlowSendHttpRequest.ContentType | Refuse when Content may be non-null; retain no body for known-null Content | Null retains the no-body refusal. Blank refuses the selected 3.6 JSON writer's no-charset header versus the target's appended charset. Empty or unproven computed/referenced String Content refuses the target's body/header omission. |
 | FlowSendHttpRequest.ExpectedStatusCodes | Emit `[200]` | Null/blank/empty list refuses incompatible Done-on-every-response versus target non-2xx Failed. Supported nonempty literal lists keep existing mapping. |
 | For.OuterBoundInclusive | true (selected 3.6.3 semantics) | Literal null or blank emits false |
 | Delay.TimeSpan | one minute | Literal null or blank emits explicit zero duration |
