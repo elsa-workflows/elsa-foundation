@@ -370,27 +370,27 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   `EXT/UserTasks/module.tsx:22–24`. D14 specifies “User tasks”. `needs: D14` (PR #5289)
 - [x] **X5.6** (#5089) [source] "Create activity" (`WF/ActivityDefinitionsPage.tsx:482, 512`) against the dialog
   title "Create Activity Definition". Use one string. (PR #5297)
-- [ ] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
+- [x] **X5.7** (#5090) [source] Apply D7 to Delete/Remove: Theme builder `H/modules/ThemeBuilderPage.tsx:379,
   443, 489`, Backends `BACK/BackendsPage.tsx:121`, `WF/ActivityGraphImplementationEditor.tsx:270, 1363`.
-  `needs: D7`
-- [ ] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
+  `needs: D7` (PR #5305)
+- [x] **X5.8** (#5091) [verified] Apply D7 to Retry: "Try again" at `H/auth/studioAuth.tsx:114`; [source]
   `H/weaver/WeaverSurface.tsx:186`, "Retry mode change" `:117`, and the Definitions list variants
   "Retry current search", "Restart from first page", "Reload workflow support"
-  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7`
+  (`WF/workflow-editor/WorkflowDefinitions.tsx:833–834`). `needs: D7` (PR #5305)
 - [x] **X5.9** Withdrawn on 2026-11-21: not a defect. "Withdraw"
   (`H/weaver/WeaverMessageList.tsx:132`) withdraws the user's own unstarted message; "Deny"
   (`H/weaver/WeaverProposalReview.tsx:107`) rejects a proposal. They are different actions.
-- [ ] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
+- [x] **X5.10** (#5092) [seen] Make route label, nav label and page title one string: "Import from Elsa 3",
   "Activity definition upgrades", "Task forms", "Runtime diagnostics" (D8). **[check]** "Console" /
   "Server console": find where "Server console" is shown before changing anything; it was not found
-  in source. `needs: D8`
-- [ ] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
-  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`.
-- [ ] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
+  in source. `needs: D8` (PR #5305)
+- [x] **X5.11** (#5093) [source] "Secrets" capitalised mid-sentence:
+  `EXT/Connections/ConnectionCredentialField.tsx:129, 141, 173`, `EXT/Secrets/SecretPickerEditor.tsx:86`. (PR #5305)
+- [x] **X5.12** (#5094) [source] Decisions delete wording: "Move decision to recycle bin"
   (`DecisionsPage.tsx:144`), "Move to recycle bin" (`:258`), overflow "Delete", "Permanently delete
-  decision" (`:164`).
-- [ ] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
-  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`).
+  decision" (`:164`). (PR #5305)
+- [x] **X5.13** (#5095) [source] Saved views: "Delete saved view" (`WorkflowLibraryControls.tsx:253`) against
+  "Delete" and "Apply" (`WorkflowViewsPage.tsx:117, 119`). (PR #5305)
 
 ### X6. Refresh
 
