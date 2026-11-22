@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-03
 
-**Status**: Draft — awaiting final coordinator agreement and a clean initiative proposal gate.
+**Status**: Approved
 
 **Initiative**: part of [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052), spec row **S-2**.
 
