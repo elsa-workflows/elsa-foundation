@@ -255,7 +255,8 @@ export function ExternalAuthenticationPage({ context, dialogs }: { context: Stud
 
   return <StudioPage className="external-auth-shell">
     <StudioPageHeader title="External sign-in" headingLevel={2} description="Connect identity providers while Elsa keeps control of its users, roles and permissions."
-      actions={<><StudioButton onClick={() => { void refresh(); }} disabled={pending}>Refresh</StudioButton><StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton></>} />
+      refresh={{ id: "external-connections", label: "Refresh external connections", onRefresh: refresh, refreshing: loading, disabled: Boolean(busy), autoRefresh: !creating && !selected && !dirty && !needsRefresh }}
+      actions={<StudioButton variant="primary" disabled={!writable || locked} onClick={() => { void create(); }}>Add connection</StudioButton>} />
     {error ? <StudioAlert tone="danger" ref={feedback.errorRef} tabIndex={-1}>{error}{needsRefresh ? " Refresh connections before another change." : ""}<StudioButton disabled={pending} onClick={() => { void refresh(); }}>Refresh connections</StudioButton></StudioAlert> : null}
     {notice ? <p ref={feedback.noticeRef} tabIndex={-1} role="status" className="external-auth-notice">{notice}</p> : null}
     {busy ? <p role="status">{busy}…</p> : null}
