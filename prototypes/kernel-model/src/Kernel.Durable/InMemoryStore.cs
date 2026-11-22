@@ -24,6 +24,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public sealed class MessageRow(Message message, long seq, long seen)
     {
+        internal ParkKeepReason? KeptBy;
         public Message Message = message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
@@ -231,6 +232,15 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (turn.Row is not { } releasing || Messages.GetValueOrDefault(id) is not { Done: false, Held: true } released ||
                             released.Message.Target.Id != releasing.Id || released.Message.TargetCreation != releasing.Creation)
                             Diverged($"released message {id} is not there for {turn.Instance}");
+                    if (turn.FoundationKept is { } kept)
+                    {
+                        if (turn.Row is not { Retired: false, Status: InstanceStatus.Faulted } park ||
+                            !turn.OpensPark && !_foundationParks.ContainsKey(new(park.Id, park.Creation)) ||
+                            !kept.Keys.All(id => turn.Done.Contains(id) && !turn.Consumed.Contains(id) &&
+                                Messages.GetValueOrDefault(id) is { Done: false } selected &&
+                                selected.Message.Target.Id == park.Id && selected.Message.TargetCreation == park.Creation))
+                            throw new StoreException(Failure.Definite, "A kept delivery must be marked done by its exact Park.");
+                    }
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
@@ -298,6 +308,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 foreach (var id in turn.Done)
                 {
+                    if (turn.FoundationKept?.TryGetValue(id, out var reason) == true)
+                    {
+                        var retained = Messages[id];
+                        (retained.Done, retained.Held, retained.Trial, retained.KeptBy) = (true, false, 0, reason);
+                        continue;
+                    }
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
                     if (Has(Flaw.DeleteOutsideCommands)) Messages.Remove(id);
                     else if (Messages.GetValueOrDefault(id) is { } done) done.Done = true;
@@ -707,7 +723,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             var now = clock();
-            var messages = Messages.Values.Where(m => m.Done && m.Message.KeepUntil < now).Select(m => m.Message.InboxKey).ToList();
+            var messages = Messages.Values.Where(m => m.Done && m.KeptBy is null && m.Message.KeepUntil < now).Select(m => m.Message.InboxKey).ToList();
             var events = EventRows.Values.Where(e => e.KeepUntil < now).Select(e => (e.Key, e.Id)).ToList();
             messages.ForEach(id => Messages.Remove(id));
             events.ForEach(key => EventRows.Remove(key));

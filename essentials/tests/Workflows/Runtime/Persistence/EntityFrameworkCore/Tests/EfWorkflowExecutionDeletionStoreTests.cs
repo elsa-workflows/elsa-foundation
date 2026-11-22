@@ -356,6 +356,7 @@ public sealed class EfWorkflowExecutionDeletionStoreTests
         await SeedRunAsync(serviceProvider, context, "run-rollback", fullGraph: true);
         await context.Database.ExecuteSqlRawAsync($"CREATE TRIGGER fail_incident_delete BEFORE DELETE ON {RuntimeOperationalStateEfModule.IncidentTableName} BEGIN SELECT RAISE(ABORT, 'expected cleanup failure'); END;");
 
+        var originalLiveness = await context.ExecutionLivenessStates.AsNoTracking().ToArrayAsync();
         var candidate = await serviceProvider.GetRequiredService<IWorkflowExecutionDeletionStore>().ReadAsync("run-rollback");
         await Assert.ThrowsAsync<WorkflowExecutionStateEntityFrameworkPersistenceException>(() =>
             serviceProvider.GetRequiredService<IWorkflowExecutionDeletionStore>().TryDeleteTerminalAsync(candidate!).AsTask());
@@ -364,7 +365,7 @@ public sealed class EfWorkflowExecutionDeletionStoreTests
         Assert.NotNull(await serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run-rollback"));
         Assert.Equal(1, await context.ActivityExecutionStates.CountAsync(row => row.WorkflowExecutionId == Encode("run-rollback")));
         Assert.Equal(1, await context.IncidentStates.CountAsync(row => row.WorkflowExecutionId == Encode("run-rollback")));
-        Assert.Empty(await context.ExecutionLivenessStates.ToArrayAsync());
+        Assert.Equal(JsonSerializer.Serialize(originalLiveness), JsonSerializer.Serialize(await context.ExecutionLivenessStates.AsNoTracking().ToArrayAsync()));
     }
 
     private static IServiceCollection Compose(string connectionString) => new ServiceCollection()

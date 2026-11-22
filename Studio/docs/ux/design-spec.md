@@ -49,7 +49,10 @@ code.
    and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
    four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
-   Table headers use sentence case and the shared label size. Eyebrows are optional context; technical identifiers may use mono.
+   Keep the capitals in “Test Run” and “Executable Inspector”. Other UI labels use sentence case,
+   including “User tasks”. Table headers use sentence case and the shared label size. Technical identifiers may use mono.
+   Omit kickers (small labels above the title) in dialogs and sections. Use the optional
+   `StudioPageHeader` eyebrow “only when it adds information beyond the title/navigation”.
 
 ## Layout
 
@@ -142,7 +145,7 @@ explains the user journey.
 **Status: `exists`** (accepted in [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070)). The issue record carries the acceptance and delivery evidence.
 
 The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
-page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
+page inset, title and description with an optional eyebrow, one filled primary action, secondary page actions, search
 and filters, results, and pagination. Keep meaningful table headings and row labels. Shared
 hierarchy is a presentation rule, not a shared data-grid or filtering framework.
 

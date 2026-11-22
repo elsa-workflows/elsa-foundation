@@ -4,15 +4,16 @@ export type StudioFeedbackTone = "info" | "success" | "warning" | "danger";
 
 export function StudioAlert({
   tone = "info",
-  children
+  children,
+  ...elementProps
 }: {
   tone?: StudioFeedbackTone;
   children: React.ReactNode;
-}) {
+} & Pick<React.ComponentPropsWithRef<"div">, "id" | "ref" | "tabIndex">) {
   // Urgent tones (errors/warnings) use role="alert" (assertive) so screen readers announce them
   // immediately; informational tones use role="status" (polite) to avoid interrupting the user.
   const role = tone === "danger" || tone === "warning" ? "alert" : "status";
-  return <div className="studio-alert" role={role} data-tone={tone}>{children}</div>;
+  return <div {...elementProps} className="studio-alert" role={role} data-tone={tone}>{children}</div>;
 }
 
 export function EmptyState({

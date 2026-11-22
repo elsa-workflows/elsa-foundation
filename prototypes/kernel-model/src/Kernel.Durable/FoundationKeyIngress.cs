@@ -19,6 +19,7 @@ public sealed partial class InMemoryStore
         StartSpec? spec, long? due, TimeSpan? keepFor, string? replyTo = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
+        if (spec is null) Kinds.RequireApplicationSend(kind);
         var window = FoundationIngressWindow(keepFor);
         var qualified = tenant + "_" + key;
         var operation = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
