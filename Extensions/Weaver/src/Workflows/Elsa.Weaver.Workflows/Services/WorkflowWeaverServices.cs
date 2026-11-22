@@ -477,7 +477,7 @@ internal sealed class DefaultWorkflowWeaverContextProvider(
     {
         admitted = null;
         JsonElement content;
-        try { content = caller.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(caller.Content); }
+        try { content = caller.Content is JsonElement json ? json : Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(caller.Content); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
         var kind = WorkflowWeaverSnapshot.Text(content, "requestKind");
         var reference = WorkflowWeaverSnapshot.Text(content, "referenceId");

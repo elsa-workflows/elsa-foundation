@@ -14,6 +14,20 @@ public sealed class UserTaskOperationsTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public async Task Task_journal_and_copy_preserve_raw_prefill_and_accepted_response_data()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "empty":null, "text":"Ren\u00e9", "amount":1.00 }""";
+        var store = Store();
+        var task = Task() with { Prefill = Json(raw), AssigneeId = "alice", GroupId = null };
+        Assert.True(await store.TryWriteAsync(task, null));
+        Assert.Equal(raw, (await store.FindAsync("tenant", "task"))!.Prefill.GetRawText());
+        Assert.Equal(raw, UserTaskRules.Copy(task).Prefill.GetRawText());
+        var pending = await Operations(store, Actor("alice")).CompleteAsync("task", new(1, "request", "Approve", Json(raw)));
+        Assert.Equal(raw, pending.Decision!.Response.Data.GetRawText());
+        Assert.Equal(raw, (await store.FindAsync("tenant", "task"))!.Decision!.Response.Data.GetRawText());
+    }
+
     [Theory]
     [InlineData("title", "task title")]
     [InlineData("missing-assignment", "Select a task assignee or a group")]

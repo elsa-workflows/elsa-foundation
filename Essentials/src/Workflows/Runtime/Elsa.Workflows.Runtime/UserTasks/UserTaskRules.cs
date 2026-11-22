@@ -43,5 +43,5 @@ internal static class UserTaskRules
             throw new UserTaskException("validation", "Select a published version for the task form.");
     }
 
-    internal static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
+    internal static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Elsa.Serialization.Core.JsonBaseline.Options), Elsa.Serialization.Core.JsonBaseline.Options)!;
 }

@@ -87,7 +87,7 @@ public static class WorkflowWeaverGraphReader
             default:
                 try
                 {
-                    return JsonSerializer.SerializeToElement(content);
+                    return Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(content);
                 }
                 catch (NotSupportedException)
                 {

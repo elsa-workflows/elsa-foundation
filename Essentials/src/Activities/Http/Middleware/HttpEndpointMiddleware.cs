@@ -271,7 +271,7 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        var input = JsonSerializer.SerializeToElement(requestModel);
+        var input = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(requestModel);
 
         // Sync mode: drain inline, then deliver any committed typed response instruction in this request.
         // The sink remains a compatibility marker for an already-started custom response; canonical

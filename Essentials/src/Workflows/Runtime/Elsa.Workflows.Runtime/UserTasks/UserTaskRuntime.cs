@@ -99,7 +99,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
             completion.InvocationId == task.InvocationId && completion.Selection.Equals(OutcomeSelection.Named(decision.Response.Action)))
         {
             var result = completion.Result.InlineValue ?? (completion.Result.ExternalReference is { } reference ? await (payloads ?? throw Refuse("The external task result reader is unavailable.")).ReadAsync(reference, ct) : (JsonElement?)null);
-            if (result is null || !JsonElement.DeepEquals(result.Value, JsonSerializer.SerializeToElement(decision.Response)))
+            if (result is null || !Elsa.Serialization.Core.JsonCanonicalForm.Equals(result.Value, JsonSerializer.SerializeToElement(decision.Response, Elsa.Serialization.Core.JsonBaseline.Options)))
                 throw Refuse("The committed task result differs from its accepted response.");
             await TransitionAsync(task, UserTaskStatus.Completed, "completed", ct);
             return;
@@ -137,7 +137,7 @@ internal sealed class UserTaskRuntime(IUserTaskStore store, IUserTaskAccess elig
         }
         if (task.Status != UserTaskStatus.CompletionPending || task.Decision is null || task.Recipient is null) return;
         var request = new BookmarkResumeDispatchRequest(task.WorkflowExecutionId, UserTaskProtocol.StimulusType, task.Id,
-            JsonSerializer.SerializeToElement(task.Decision.Response), task.Decision.Response.CompletionId, "user-tasks", null, null, null,
+            JsonSerializer.SerializeToElement(task.Decision.Response, Elsa.Serialization.Core.JsonBaseline.Options), task.Decision.Response.CompletionId, "user-tasks", null, null, null,
             task.Recipient.BookmarkId, null) { ExpectedRecipient = task.Recipient };
         // Queue admission is deliberately not a journal terminal transition. Fresh recovery proves the canonical result.
         _ = await dispatcher.DispatchAsync(request, cancellationToken: ct);

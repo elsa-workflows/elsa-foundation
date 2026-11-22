@@ -214,7 +214,7 @@ internal sealed class HttpTestRunIngressMiddleware(
             return;
         }
 
-        var stimulusInput = JsonSerializer.SerializeToElement(requestModel);
+        var stimulusInput = Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(requestModel);
         if (authoredOptions.ResponseMode != ResponseMode.Sync)
             timeoutSource?.CancelAfter(authoredOptions.RequestTimeout!.Value);
         var cancellationToken = timeoutSource?.Token ?? context.RequestAborted;

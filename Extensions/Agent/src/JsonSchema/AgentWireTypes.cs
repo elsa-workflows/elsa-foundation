@@ -50,7 +50,7 @@ internal static class AgentWireTypes
         if (type is null) return false;
         try
         {
-            var result = value.Deserialize(type);
+            var result = Elsa.Serialization.Core.JsonConversionContract.Deserialize(value, type);
             return result is not double number || double.IsFinite(number);
         }
         catch (JsonException) { return false; }

@@ -16,6 +16,24 @@ public sealed class EfUserTaskStoreTests
 {
     private static readonly DateTimeOffset Now = new(2026, 11, 2, 12, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public async Task Durable_task_prefill_keeps_raw_json_across_a_new_context()
+    {
+        const string raw = """{ "OrderID":9007199254740993, "empty":null, "text":"Ren\u00e9", "amount":1.00 }""";
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options;
+        await using (var context = new RuntimeSqliteDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            await Executions(context).SaveAsync(Execution("run"));
+            Assert.True(await new EfUserTaskStore(context, new Accessor("tenant")).TryWriteAsync(Task("run", "raw") with { Prefill = JsonDocument.Parse(raw).RootElement.Clone() }, null));
+            Assert.Contains(raw, (await context.UserTasks.SingleAsync()).ContentJson, StringComparison.Ordinal);
+        }
+        await using var restarted = new RuntimeSqliteDbContext(options);
+        Assert.Equal(raw, (await new EfUserTaskStore(restarted, new Accessor("tenant")).FindAsync("tenant", "raw"))!.Prefill.GetRawText());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -48,10 +48,10 @@ internal sealed class AgentActivity(AgentNativeBinding binding, AgentTurnJournal
         foreach (var input in contract.Inputs.Values.OrderBy(x => x.Key, StringComparer.Ordinal))
         {
             if (AgentNativeControls.Enabled(descriptor) && input.Key == Elsa.Agent.Core.Models.AgentInvocationControls.InputKey) continue;
-            if (effectiveInputs.TryGetValue(input.Key, out var value)) values.Add(input.Name, value);
+            if (effectiveInputs.TryGetValue(input.Key, out var value)) values.Add(input.Name, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(value));
         }
         var request = new AgentTurnRequest(identity, descriptor, contract,
-            JsonSerializer.SerializeToElement(values), context.ActivityExecutionState.InputSnapshot.BindingFingerprint) { Continuation = controls.Continuation, EffectiveLimits = controls.Limits };
+            JsonSerializer.SerializeToElement(values, Elsa.Serialization.Core.JsonBaseline.Options), context.ActivityExecutionState.InputSnapshot.BindingFingerprint) { Continuation = controls.Continuation, EffectiveLimits = controls.Limits };
         _ = runner.ValidateRequest(request);
         if (context.ActivityExecutionState.PrivateState is not null)
         {

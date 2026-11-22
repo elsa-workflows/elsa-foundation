@@ -89,7 +89,7 @@ public sealed class WeaverSurfaceRequest
     public string Route { get; init; } = "/";
     public string? ResourceType { get; init; }
     public string? ResourceId { get; init; }
-    public object? Selection { get; init; }
+    public JsonElement? Selection { get; init; }
 }
 
 public sealed class WeaverClientContextRequest

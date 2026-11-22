@@ -467,7 +467,7 @@ public static class WeaverApi
             ["route"] = surface.Route,
             ["resourceType"] = surface.ResourceType ?? string.Empty,
             ["resourceId"] = surface.ResourceId ?? string.Empty,
-            ["selection"] = JsonSerializer.Serialize(surface.Selection)
+            ["selection"] = JsonSerializer.Serialize(surface.Selection, Elsa.Serialization.Core.JsonBaseline.Options)
         };
         try
         {

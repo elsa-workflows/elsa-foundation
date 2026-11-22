@@ -78,8 +78,8 @@ internal static class AgentNativeControls
         var session = accepted.Session ?? throw Invalid();
         var result = JsonNode.Parse(accepted.Result.GetRawText())!.AsObject();
         if (result.ContainsKey(AgentInvocationControls.OutputName)) throw Invalid();
-        result.Add(AgentInvocationControls.OutputName, JsonSerializer.SerializeToNode(new { conversationId = session.ConversationId, revision = session.Revision }));
-        return JsonSerializer.SerializeToElement(result);
+        result.Add(AgentInvocationControls.OutputName, JsonSerializer.SerializeToNode(new { conversationId = session.ConversationId, revision = session.Revision }, Elsa.Serialization.Core.JsonBaseline.Options));
+        return JsonSerializer.SerializeToElement(result, Elsa.Serialization.Core.JsonBaseline.Options);
     }
 
     private static bool JsonType(ValueTypeDescriptor type) => type.Alias == AgentInvocationControls.JsonType && type.CollectionKind == CollectionKind.Single && type.Schema is null && type.SchemaVersion is null;

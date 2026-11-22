@@ -120,9 +120,9 @@ public sealed class DecisionEngine : IDecisionCompiler, IDecisionEvaluator
                 if (table.Policy == "ANY" && outputs.Count > 0) continue;
                 for (var i = 0; i < table.Outputs.Length; i++) Tick();
                 outputs.Add(table.Outputs.Length == 1 ? Tagged(entry.Row.Values[0]) : JsonSerializer.SerializeToElement(
-                    table.Outputs.Select((output, i) => new KeyValuePair<string, JsonElement>(output.Name, Tagged(entry.Row.Values[i]))).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)));
+                    table.Outputs.Select((output, i) => new KeyValuePair<string, JsonElement>(output.Name, Tagged(entry.Row.Values[i]))).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal), Elsa.Serialization.Core.JsonBaseline.Options));
             }
-            return Result("Success", table.Policy is "RULE ORDER" or "COLLECT" ? JsonSerializer.SerializeToElement(outputs) : outputs[0]);
+            return Result("Success", table.Policy is "RULE ORDER" or "COLLECT" ? JsonSerializer.SerializeToElement(outputs, Elsa.Serialization.Core.JsonBaseline.Options) : outputs[0]);
         }
         catch (OperationCanceledException) { return Result("Cancelled", code: "Cancelled"); }
         catch (EvaluationBudgetException) { return Result("BudgetExceeded", code: "BudgetExceeded"); }
@@ -132,7 +132,7 @@ public sealed class DecisionEngine : IDecisionCompiler, IDecisionEvaluator
     }
 
     private static DecisionCompilation CompilationFailure(string code) => new(null, [new DecisionDiagnostic(code, "Decision content could not be compiled under the supported profile.")]);
-    private static JsonElement Tagged(DecisionValue value) => JsonSerializer.SerializeToElement(new { kind = value.Kind, value = value.Value });
+    private static JsonElement Tagged(DecisionValue value) => JsonSerializer.SerializeToElement(new { kind = value.Kind, value = value.Value }, Elsa.Serialization.Core.JsonBaseline.Options);
     private static bool ValidHash(string? hash) => hash?.Length == 64 && hash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
     private sealed class EvaluationBudgetException : Exception;
 }
