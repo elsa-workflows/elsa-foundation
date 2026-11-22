@@ -43,10 +43,11 @@ internal static class ActivityPlaybackQualificationControls
         services.PostConfigureAll<CookieAuthenticationOptions>(options => options.TimeProvider = TimeProvider.System);
         services.PostConfigure<SecurityStampValidatorOptions>(options => options.TimeProvider = TimeProvider.System);
         services.AddSingleton(state.ReadGate);
+        services.AddSingleton(state.DuplicateGate);
         services.AddHttpContextAccessor();
         services.AddIncidentStrategy<PlaybackHeldIncidentStrategy>();
         services.ConfigureDbContext<RuntimeSqliteDbContext>((provider, options) =>
-            options.AddInterceptors(provider.GetRequiredService<PlaybackReadGate>()));
+            options.AddInterceptors(provider.GetRequiredService<PlaybackReadGate>(), provider.GetRequiredService<PlaybackDuplicateGate>()));
     }
 
     internal static void MapEndpoints(IEndpointRouteBuilder endpoints, IShellRegistry registry)
@@ -65,6 +66,36 @@ internal static class ActivityPlaybackQualificationControls
         Protect(endpoints.MapPost("/__qualification/activity-playback/{workflowExecutionId}/advance-wait",
             (string workflowExecutionId, HttpContext http, PlaybackQualificationState state, CancellationToken token) =>
                 WithRun(registry, workflowExecutionId, http, token, (services, run) => AdvanceWait(services, run, state, token))));
+        Protect(endpoints.MapPost("/__qualification/activity-playback/{workflowExecutionId}/advance-expiry",
+            (string workflowExecutionId, HttpContext http, PlaybackQualificationState state, CancellationToken token) =>
+                WithRun(registry, workflowExecutionId, http, token, (services, run) => AdvanceWait(services, run, state, token, expiry: true))));
+        Protect(endpoints.MapPost("/__qualification/activity-playback/{workflowExecutionId}/duplicate-event",
+            (string workflowExecutionId, HttpContext http, PlaybackQualificationState state, CancellationToken token) =>
+                WithRun(registry, workflowExecutionId, http, token, async (services, run) =>
+                {
+                    var page = await services.GetRequiredService<IBookmarkStateStore>().ListPageAsync(new(run.WorkflowExecutionId, 2), token);
+                    if (run.Status is not (WorkflowExecutionStatus.Suspended or WorkflowExecutionStatus.Running) || page.NextContinuationToken is not null || page.Items.Count != 1 ||
+                        page.Items.Single().StimulusType != EventStimulus.StimulusType || page.Items.Single().ExpiresAt is not null)
+                        return Results.Conflict(new { reason = "one-native-unexpired-event-required" });
+                    var bookmark = page.Items.Single();
+                    var key = Guid.NewGuid().ToString("N");
+                    using var operation = state.DuplicateGate.Arm(run.WorkflowExecutionId, run.PinnedExecutable.ArtifactId, key);
+                    async Task<BookmarkResumeDispatchResult> Dispatch(int branch)
+                    {
+                        await using var child = services.CreateAsyncScope();
+                        child.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(PersistenceAccessContext.Scoped(new("default")));
+                        using var witness = state.DuplicateGate.Enter(key, branch);
+                        return await child.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(new(
+                            run.WorkflowExecutionId, bookmark.StimulusType, bookmark.StimulusHash, null, key,
+                            "owned-diagnostics", null, null, null, bookmark.BookmarkId, null), cancellationToken: token);
+                    }
+                    var results = await Task.WhenAll(Dispatch(1), Dispatch(2));
+                    var statuses = results.Select(result => result.Status.ToString()).Order().ToArray();
+                    if (state.DuplicateGate.MatchedBranches != 2 || !statuses.SequenceEqual(new[] { "Dispatched", "Duplicate" }))
+                        throw new InvalidOperationException("Both genuine lookups and exactly one dispatch/duplicate are required.");
+                    return Results.Ok(new { run.WorkflowExecutionId, bookmark.BookmarkId, key, matchedReadBranches = state.DuplicateGate.MatchedBranches,
+                        source = "Two genuine native bookmark lookups precede a finite barrier on actual executable SQL reads; no runtime port is replaced", statuses });
+                })));
         Protect(endpoints.MapPost("/__qualification/activity-playback/{workflowExecutionId}/purge-first-prefix",
             (string workflowExecutionId, HttpContext http, CancellationToken token) =>
                 WithRun(registry, workflowExecutionId, http, token, (services, run) => PurgePrefix(services, run, token))));
@@ -107,7 +138,7 @@ internal static class ActivityPlaybackQualificationControls
     }
 
     private static async Task<IResult> AdvanceWait(IServiceProvider services, WorkflowExecutionState run,
-        PlaybackQualificationState state, CancellationToken token)
+        PlaybackQualificationState state, CancellationToken token, bool expiry = false)
     {
         if (!await state.ClockChange.WaitAsync(0, token)) return Results.Conflict(new { reason = "clock-operation-active" });
         try
@@ -126,6 +157,8 @@ internal static class ActivityPlaybackQualificationControls
                 bookmarks.Items.Single().StimulusType != EventStimulus.StimulusType)
                 return Results.Conflict(new { reason = "one-real-event-wait-required" });
             var bookmark = bookmarks.Items.Single();
+            if (expiry && (bookmark.ExpiresAt is null || bookmark.ExpiresAt <= state.Clock.GetUtcNow() || bookmark.ExpiresAt > state.Clock.GetUtcNow().AddMinutes(50)))
+                return Results.Conflict(new { reason = "native-future-expiry-required" });
             var historyStore = services.GetRequiredService<IRuntimeHistoryStore>();
             var history = await historyStore.ReadPageAsync(
                 new RuntimeHistoryQuery(run.WorkflowExecutionId, 2, bookmarkId: bookmark.BookmarkId, name: "BookmarkCreated"), token);
@@ -158,7 +191,7 @@ internal static class ActivityPlaybackQualificationControls
             state.Clock.Advance52Minutes();
             state.AdvancedRuns.Add(run.WorkflowExecutionId);
             return Results.Ok(new { run.WorkflowExecutionId, bookmark.BookmarkId, bookmark.ActivityExecutionId,
-                bookmark.CreatedAt, creationCommittedAt = history.Items[0].OccurredAt,
+                bookmark.CreatedAt, bookmark.ExpiresAt, creationCommittedAt = history.Items[0].OccurredAt,
                 before, after = state.Clock.GetUtcNow(), advancedMinutes = 52,
                 sourceClockSelected = true, securityClocksUseWallTime = true,
                 schedulerEmpty = true, outboxSettled = true, noLiveLeases = true });
@@ -244,6 +277,7 @@ internal sealed class PlaybackQualificationState
 {
     internal PlaybackQualificationClock Clock { get; } = new();
     internal PlaybackReadGate ReadGate { get; } = new();
+    internal PlaybackDuplicateGate DuplicateGate { get; } = new();
     internal SemaphoreSlim ClockChange { get; } = new(1, 1);
     internal HashSet<string> AdvancedRuns { get; } = new(StringComparer.Ordinal);
 }
@@ -336,5 +370,62 @@ internal sealed class PlaybackReadGate : DbCommandInterceptor
         catch (TimeoutException) { lock (sync) selected.TimedOut = true; }
         finally { lock (sync) { selected.Released = true; selected.Continue.TrySetResult(); } }
         return result;
+    }
+}
+
+// Observes the real provider AFTER native bookmark lookup and BEFORE actor admission.
+// It returns the original DbDataReader, never manufactured rows or a replacement runtime port.
+internal sealed class PlaybackDuplicateGate : DbCommandInterceptor
+{
+    private sealed record Probe(string Key, int Branch);
+    private readonly AsyncLocal<Probe?> current = new();
+    private readonly object sync = new();
+    private string? key, artifact;
+    private readonly HashSet<int> branches = [];
+    private TaskCompletionSource? ready;
+    internal int MatchedBranches { get { lock (sync) return branches.Count; } }
+    internal IDisposable Arm(string run, string artifactId, string nonce)
+    {
+        lock (sync)
+        {
+            if (ready is not null) throw new InvalidOperationException("A duplicate witness is already active.");
+            key = nonce; artifact = artifactId; branches.Clear();
+            ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        return new Cleanup(() => { lock (sync) { ready?.TrySetCanceled(); ready = null; key = artifact = null; } });
+    }
+    internal IDisposable Enter(string nonce, int branch)
+    {
+        var previous = current.Value;
+        current.Value = new(nonce, branch);
+        return new Cleanup(() => current.Value = previous);
+    }
+    public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData data,
+        DbDataReader result, CancellationToken token = default)
+    {
+        Task? barrier = null;
+        lock (sync)
+        {
+            if (ready is not null && current.Value is { } probe && probe.Key == key &&
+                command.CommandText.Contains($"\"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\"", StringComparison.OrdinalIgnoreCase) &&
+                command.Parameters.Cast<DbParameter>().Any(parameter => parameter.Value is string value &&
+                    (value == EfRelationalIdentity.Encode(artifact!) || value == EfRelationalIdentity.Hash(artifact!))))
+            {
+                branches.Add(probe.Branch);
+                if (branches.Count == 2) ready.TrySetResult();
+                barrier = ready.Task;
+            }
+        }
+        if (barrier is not null)
+        {
+            try { await barrier.WaitAsync(TimeSpan.FromSeconds(15), token); }
+            catch { await result.DisposeAsync(); throw; }
+        }
+        return result;
+    }
+    private sealed class Cleanup(Action action) : IDisposable
+    {
+        private Action? pending = action;
+        public void Dispose() => Interlocked.Exchange(ref pending, null)?.Invoke();
     }
 }

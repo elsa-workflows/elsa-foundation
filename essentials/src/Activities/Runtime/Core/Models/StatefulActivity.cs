@@ -357,6 +357,9 @@ public sealed record ActivityTriggerRegistration<TTrigger> : IActivityTriggerReg
     public string ResumeTargetKey { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
+    /// <summary>Optional passive match deadline; it does not schedule a timeout or continuation.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? ExpiresAt { get; init; }
     public ActivityTriggerDeduplicationMode DeduplicationMode { get; }
     public ValueTypeDescriptor PayloadType { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
@@ -369,6 +372,7 @@ public interface IActivityTriggerRegistration
     string ResumeTargetKey { get; }
     string StimulusType { get; }
     string StimulusHash { get; }
+    DateTimeOffset? ExpiresAt => null;
     ActivityTriggerDeduplicationMode DeduplicationMode { get; }
     ValueTypeDescriptor PayloadType { get; }
     IReadOnlyDictionary<string, string> Metadata { get; }

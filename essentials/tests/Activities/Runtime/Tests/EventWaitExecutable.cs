@@ -10,7 +10,7 @@ internal static class EventWaitExecutable
 {
     private const string ExecutableNodeId = "node-event";
 
-    public static WorkflowExecutable Create(WorkflowExecutableIdentity identity, string eventName)
+    public static WorkflowExecutable Create(WorkflowExecutableIdentity identity, string eventName, DateTimeOffset? expiresAt = null)
     {
         var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(ExecutableNodeId, Event.ResumeTargetId);
         using var document = JsonDocument.Parse("""{"type":"test"}""");
@@ -24,7 +24,8 @@ internal static class EventWaitExecutable
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 [nameof(Event.EventName)] = Literal(nameof(Event.EventName), eventName),
-                [nameof(Event.CanStartWorkflow)] = Literal(nameof(Event.CanStartWorkflow), false)
+                [nameof(Event.CanStartWorkflow)] = Literal(nameof(Event.CanStartWorkflow), false),
+                [nameof(Event.ExpiresAt)] = Literal(nameof(Event.ExpiresAt), expiresAt!)
             },
             metadata: new Dictionary<string, string>());
 

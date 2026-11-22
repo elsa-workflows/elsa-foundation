@@ -6,6 +6,7 @@ import { getDefinition } from "../api/workflowDesign";
 import { isWaitingForIntervention } from "../compensationRuntime";
 import { isActiveIncident } from "../workflowRuntimeOverlays";
 import { formatDate } from "../workflowFormatting";
+import { hasUnattributedChildDefinition } from "../workflowInstanceInspection";
 import type { IncidentStateSummary, WorkflowInstanceSummary } from "../workflowTypes";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import type { IncidentNextStepGuidance } from "./useOperatorActions";
@@ -85,7 +86,8 @@ export function IncidentNextStep({
   definitionAccess?: DefinitionAccessObservation;
 }) {
   const sameRun = !!summary && incident.workflowExecutionId === summary.workflowExecutionId;
-  const definitionId = sameRun ? summary.definitionId?.trim() || null : null;
+  const unattributedChildDefinition = sameRun && hasUnattributedChildDefinition(summary);
+  const definitionId = sameRun && !unattributedChildDefinition ? summary?.definitionId?.trim() || null : null;
   const runHasEnded = sameRun && !!summary
     && ["completed", "faulted", "cancelled", "canceled"].includes(summary.status.trim().toLowerCase());
   const localDefinitionAccess = useDefinitionReviewAccess(context, definitionId, !suppliedDefinitionAccess);
@@ -154,6 +156,7 @@ export function IncidentNextStep({
         <p className="wf-incident-next-step-run"><span>Current run</span> <WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></p>
       ) : null}
       <p className="wf-incident-next-step-copy">{nextStep}</p>
+      {unattributedChildDefinition ? <p>Source definition is unavailable for this child run. Inspect its recorded run data or the parent dispatch.</p> : null}
       {definitionId ? (
         <div className="wf-incident-next-step-definition">
           <CopyableIdentifier label="Definition ID" value={definitionId} />

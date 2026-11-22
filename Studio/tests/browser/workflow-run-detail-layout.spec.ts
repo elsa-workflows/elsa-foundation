@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 test("run detail fills the shell cell and switches responsive inspector modes", async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });

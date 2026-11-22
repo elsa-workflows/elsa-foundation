@@ -1,3 +1,4 @@
+import { timelineDiagnosticsJourney } from "./timelineDiagnosticsJourney";
 import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
@@ -16,7 +17,11 @@ import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
 import { executionNavigationJourney } from "./executionNavigationJourney";
+import { historyOccurrenceQualificationJourney } from "./historyOccurrenceQualificationJourney";
+import { nativeHistoryOwnersJourney } from "./nativeHistoryOwnersJourney";
+import { timerHistoryJourney } from "./timerHistoryJourney";
 import { timelineSelectionJourney } from "./timelineSelectionJourney";
+import { playbackTransportJourney, playbackSeekingJourney, playbackLiveWaitJourney, playbackCoverageJourney } from "./activityPlaybackJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -77,6 +82,15 @@ type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
+
+test("native child and compensation history navigation", async ({ page }, info) => nativeHistoryOwnersJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+
+test("durable timer history and bookmark resumption", async ({ page }, info) => timerHistoryJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+
+test("recorded activity playback transport", async ({ page }, info) => playbackTransportJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback ordinal seeking", async ({ page }, info) => playbackSeekingJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback live bounds and waits", async ({ page }, info) => playbackLiveWaitJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback coverage and access", async ({ page }, info) => playbackCoverageJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
@@ -1093,6 +1107,10 @@ test("timeline selection retains its tab and exact occurrence", async ({ page },
   await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
+test("production history occurrence and approval qualification", async ({ page }, info) => {
+  await historyOccurrenceQualificationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
 test("explicit authored activity names survive publication and execution", async ({ page }, info) => {
   await authoredActivityNamesJourney(page, info, capture);
 });
@@ -1126,4 +1144,9 @@ test("native BPMN workflow blocks retain authoring boundaries", async ({ page },
 
 test("native BPMN reusable blocks retain authoring boundaries", async ({ page }, info) => {
   await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["activity"]);
+});
+
+test("timeline durable diagnostics and process restart", async ({ page }, info) => {
+  test.setTimeout(1_200_000);
+  await timelineDiagnosticsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

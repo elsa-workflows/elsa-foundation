@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ExecutableActivityGraph } from "../executableGraph";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionStateSummary } from "../workflowTypes";
+import { prepareAttachedExecution } from "../workflow-editor/prepareAttachedExecution";
 import { loadExecutionScope } from "../workflow-editor/executionScope";
 import { useAttachedExecutionSelection, type AttachedExecutionSelection } from "../workflow-editor/useAttachedExecutionSelection";
 
@@ -303,4 +304,18 @@ it.each(["incidents", "bookmarks"] as const)("keeps exact attached selection whe
   expect(current.scopes.map(item => item.execution[count])).toEqual([null, null, null]);
   expect(current.scopes.every(item => item.execution[ids] === undefined)).toBe(true);
   expect(current.error).toBe("");
+});
+
+it("prepares Journal execution identity without reading hidden captured-value payloads", async () => {
+  const selected = summary();
+  const captured = { name: "Result", evidenceId: "journal-output", subject: "ActivityOutput" as const,
+    captureMode: "Payload", captureState: "payloadCaptured", accessState: "resolutionAvailable", isSensitive: false,
+    capturedAt: "2026-11-02T09:00:00Z", captureReason: "Diagnostic policy", metadata: {} };
+  tree.set(selected.activityExecutionId, { ...inspection(selected), valueSnapshots: [captured] });
+  const scope = await loadExecutionScope(context, "run", selected, options());
+  const prepared = await prepareAttachedExecution(context, "run", selected, scope, graph, "write",
+    new AbortController().signal, undefined, undefined, [], false);
+  expect(prepared.inspection?.activityExecutionId).toBe(selected.activityExecutionId);
+  expect(prepared.inspection?.valueSnapshots).toEqual([captured]);
+  expect(prepared.values.size).toBe(0); expect(api.payload).not.toHaveBeenCalled();
 });

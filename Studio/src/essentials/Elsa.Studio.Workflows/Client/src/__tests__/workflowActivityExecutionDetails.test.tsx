@@ -335,7 +335,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     for (const [summary, expected] of cases) {
       rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
-      expect(metadataValue(container, "Bookmarks")).toBe(expected);
+      expect(metadataValue(container, "Current bookmarks")).toBe(expected);
     }
   });
 
@@ -949,7 +949,8 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     rerender(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={pairedCatalog} focusInputKey="a-b" />);
     await vi.waitFor(() => expect(document.activeElement).toBe(buttons[1]));
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Inputs");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution views"] [aria-selected="true"]')?.textContent).toBe("Data");
+    expect(container.querySelector('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')?.textContent).toBe("Inputs");
     expect(buttons[1]!.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(ids[1]!)?.hidden).toBe(false);
   });
@@ -1419,7 +1420,7 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
     const overview = container.querySelector<HTMLElement>(".wf-activity-overview")!;
-    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!;
+    const overviewTab = container.querySelector<HTMLButtonElement>('[role="tablist"][aria-label="Activity execution details"] [aria-selected="true"]')!;
     const overviewPanel = document.getElementById(overviewTab.getAttribute("aria-controls")!)!;
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
@@ -1955,4 +1956,17 @@ describe("buildInstanceCanvas", () => {
       domAttributes: { "aria-pressed": false }
     });
   });
+});
+
+
+it("keeps captured values behind an explicit Data view while an activity journal is being inspected", async () => {
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({ name: "Private input preview", captureMode: "DiagnosticSnapshot", accessState: "visible", snapshot: { kind: "string", preview: "permitted preview", length: 17, truncated: false } })]));
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} initialView="journal" />);
+  await vi.waitFor(() => expect(container.querySelector("[aria-label='Activity journal']")).toBeTruthy());
+  expect(container.textContent).not.toContain("Private input preview"); expect(container.textContent).not.toContain("permitted preview");
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  const data = [...container.querySelectorAll<HTMLButtonElement>("[role=tab]")].find(tab => tab.textContent === "Data");
+  flushSync(() => data!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Private input preview"));
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
 });
