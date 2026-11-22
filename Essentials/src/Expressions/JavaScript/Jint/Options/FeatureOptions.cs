@@ -3,6 +3,19 @@
 public sealed class FeatureOptions
 {
     /// <summary>
+    /// Requested evaluation-thread stack size in bytes. Default 16 MiB; supported range 16–64 MiB.
+    /// Raising this reserves more address space; it does not raise the execution budget.
+    /// </summary>
+    public int EvaluationThreadStackBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// Stack budget in bytes, checked at statements, calls and host-function entries. Default 512 KiB;
+    /// supported range 64–512 KiB. The Jint adapter enforces the ceiling independently of host configuration
+    /// to preserve its unwind reserve. Native recursion over deep data remains unsupported.
+    /// </summary>
+    public long EvaluationStackBudgetBytes { get; set; } = 512 * 1024;
+
+    /// <summary>
     /// Sandbox limit: the wall-clock execution timeout applied to a single script evaluation via
     /// a Jint timeout constraint. A pathological script (e.g. an infinite loop) is aborted once this
     /// elapses instead of hanging the executing thread. <c>null</c> disables the timeout constraint.
@@ -23,6 +36,14 @@ public sealed class FeatureOptions
     /// against unbounded recursion blowing the stack. <c>null</c> or a non-positive value disables the
     /// recursion constraint. Default 300.
     /// </summary>
+    /// <remarks>
+    /// Every call on the stack counts, whichever function it is (issue #4901). Whatever this is set to, an evaluation
+    /// also fails with a JavaScript <c>RangeError</c> ("Maximum call stack size exceeded") once it uses more stack than
+    /// its evaluation thread sets aside for running, so deep calls cannot overflow the host's stack. Recursion inside
+    /// Jint's own native code over deeply nested data (a very deep array or Proxy chain) is not bounded by either.
+    /// Native bound-function and Proxy forwarding can also omit Jint call-stack entries; statement-free calls through
+    /// those paths are outside the pre-parameter guard's guarantee.
+    /// </remarks>
     public int? MaxRecursionDepth { get; set; } = 300;
 
     /// <summary>Maximum managed memory, in bytes, that Jint may allocate during one evaluation.</summary>

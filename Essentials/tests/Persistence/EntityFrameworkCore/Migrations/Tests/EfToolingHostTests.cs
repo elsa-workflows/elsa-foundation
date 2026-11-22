@@ -128,6 +128,7 @@ public sealed class EfToolingHostTests : IDisposable
         var exitCode = await EfToolingContextOperation.RunAsync(request, response, context,
             [typeof(EfToolingHostTests).Assembly, .. ModuleContextCatalog.Modules,
                 typeof(WorkflowsPublishingFeature).Assembly, typeof(WorkflowsRuntimeApiFeature).Assembly,
+                typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(EventsFeature).Assembly, typeof(ApiCapabilitiesFeature).Assembly], CancellationToken.None);
 
         Assert.True(exitCode == EfToolingExitCode.Success,

@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { observeEditor } from "./diagnostics.mjs";
+import { observeWorkflowCreation, selectFlowchartRoot } from "./creation.mjs";
 
 const images = {
   workbench: {
@@ -42,6 +43,7 @@ let cleanupError;
 let ownershipApproved = false;
 let ownedWorkbenchContainerId;
 let editorDiagnostics;
+let creationDiagnostics;
 
 function log(message) {
   console.log(`[published-pair] ${message}`);
@@ -447,9 +449,11 @@ async function runBrowserJourney() {
   stage = "browser-login";
   await signIn(page);
   log("Authenticated through the published Studio and Workbench sign-in flow");
+  creationDiagnostics = observeWorkflowCreation(page, { backendOrigin: workbenchUrl });
   editorDiagnostics = observeEditor(page, {
     studioOrigin: studioUrl,
-    outputDir: path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "published-pair-diagnostics")
+    outputDir: path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "published-pair-diagnostics"),
+    creationState: () => creationDiagnostics.snapshot()
   });
 
   stage = "workflow-create";
@@ -458,10 +462,17 @@ async function runBrowserJourney() {
   await createButton.click();
   const createDialog = page.getByRole("dialog", { name: "Create Workflow" });
   await createDialog.getByLabel("Display name", { exact: true }).fill(workflowName);
+  stage = "workflow-root-selection";
+  creationDiagnostics.select(await selectFlowchartRoot(createDialog, state => {
+    stage = state.phase === "card-visible" ? "workflow-root-card-visible" : state.phase === "card-click" ? "workflow-root-card-click" : "workflow-root-selection";
+    creationDiagnostics.observeChoice(state);
+  }));
+  stage = "workflow-create";
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
   await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
   const definitionId = await page.evaluate(() => new URL(window.location.href).searchParams.get("definition"));
   assert.ok(definitionId, "created workflow definition ID is missing from the Studio URL");
+  creationDiagnostics.bindEditor(definitionId);
   log(`Created workflow definition ${definitionId} through the Studio UI`);
 
   stage = "activity-picker-trigger-visible";
@@ -757,6 +768,7 @@ try {
   process.exitCode = 1;
 } finally {
   try { editorDiagnostics?.dispose(); } catch {}
+  try { creationDiagnostics?.dispose(); } catch {}
   if (browser) await browser.close().catch(() => {});
   try {
     await cleanupOwnedResources();

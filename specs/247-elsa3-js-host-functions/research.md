@@ -87,7 +87,8 @@ In reusable mode, an input match resolves to the same binding `getInput("{name}"
   - **Decision:** a generated accessor whose name equals a built-in (for example a variable `CorrelationId`) is refused
     with `VF-IMP-002` and guidance to rename it. No guessing.
 - Generated accessors and built-ins override RunJavaScript's `setOutcome`/`setOutcomes`. This is irrelevant here,
-  because both are refused.
+  because both are refused. Spec 1208 (S-3), 2026-11, made `setOutcome`/`setOutcomes` convert in RunJavaScript
+  scripts, so this reasoning no longer holds there.
 
 ## R-4 Instance metadata binding (Elsa 4)
 
@@ -156,6 +157,8 @@ and per `While` pass (#977). Reading committed values keeps re-materialization s
 this is recorded in the ADR 0045 amendment rather than mitigated.
 
 ## R-6 Helpers
+
+> **Superseded in part by spec 1223** (S-1): the rows below for the GUID functions, `parseGuid`, `toJson`, `stringToBase64` and `stringFromBase64` no longer refuse. The GUID functions, `parseGuid` and the Base64 pair are Elsa 4 built-ins that return Elsa 3's text (spec 1223 FR-006, FR-007, FR-026); `toJson` is rewritten to `JSON.stringify` with a behaviour warning (FR-009). The byte and stream helpers and `getConfig` stay refused (FR-013).
 
 | Helper | Elsa 3 (`Handlers/ConfigureEngineWithCommonFunctions.cs`) | Decision |
 |---|---|---|

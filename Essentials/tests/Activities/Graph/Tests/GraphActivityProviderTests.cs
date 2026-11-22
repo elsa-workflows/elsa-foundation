@@ -593,6 +593,119 @@ public sealed partial class GraphActivityProviderTests
         Assert.Null(compilation.ExecutableRoot);
     }
 
+    // Spec 1208 FR-032: a Complete node may name several boundary outcomes through a literal 'outcomes' list.
+    [Fact]
+    public async Task Complete_compilation_accepts_a_literal_outcomes_list_and_reaches_each_named_outcome()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","other"]""")),
+            OutcomeContract(("succeed", "Succeeded"), ("fail", "Failed"), ("other", "Other"))));
+
+        Assert.Empty(compilation.Diagnostics);
+        var completeOutcomes = compilation.ExecutableRoot!.Descriptor.Payload.GetProperty("completeOutcomes")
+            .Deserialize<GraphActivityCompleteOutcomeDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(
+            [new GraphActivityCompleteOutcomeDescriptor("fail", "Failed"), new GraphActivityCompleteOutcomeDescriptor("other", "Other")],
+            completeOutcomes!);
+    }
+
+    [Fact]
+    public async Task Complete_compilation_accepts_a_stringified_literal_outcomes_list()
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", "\"[\\\"fail\\\",\\\"succeed\\\"]\""))));
+
+        Assert.Empty(compilation.Diagnostics);
+        Assert.NotNull(compilation.ExecutableRoot);
+    }
+
+    [Theory]
+    [InlineData("""["fail","missing"]""", "Literal", "activity.graph.complete.outcome-unknown")]
+    [InlineData("\"['fail']\"", "JavaScript", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""[]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""["fail",""]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("""["fail",1]""", "Literal", "activity.graph.complete.outcome-literal-required")]
+    [InlineData("\"fail\"", "Literal", "activity.graph.complete.outcome-literal-required")]
+    public async Task Complete_compilation_rejects_an_invalid_outcomes_list(string outcomesJson, string expressionType, string expectedCode)
+    {
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(CompleteNodeWithOutcomesJson("exit", outcomesJson, expressionType))));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == expectedCode);
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    [Fact]
+    public async Task Complete_compilation_rejects_a_node_that_sets_both_outcome_and_outcomes()
+    {
+        const string node = """
+            {
+              "nodeId": "exit",
+              "activityVersionId": "activity-ver-complete",
+              "inputs": [
+                { "referenceKey": "outcome", "value": { "value": "succeed", "expressionType": "Literal" } },
+                { "referenceKey": "outcomes", "value": { "value": ["fail"], "expressionType": "Literal" } }
+              ],
+              "outputs": [],
+              "structure": null
+            }
+            """;
+
+        var compilation = await _provider.CompileAsync(CompleteRequest(CompleteManifest(node)));
+
+        Assert.Contains(compilation.Diagnostics, x => x.Code == "activity.graph.complete.outcome-conflict");
+        Assert.Null(compilation.ExecutableRoot);
+    }
+
+    // Second local Code Review of PR #4314: publication reads a blank 'outcome' and an empty 'outcomes' list as unset,
+    // exactly as the Complete activity does when it runs, so an editor's empty default for the unused input is accepted.
+    [Theory]
+    [InlineData("\"\"", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("\"  \"", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("null", """["fail","other"]""", new[] { "fail", "other" })]
+    [InlineData("\"fail\"", """[]""", new[] { "fail" })]
+    [InlineData("\"fail\"", "\"[]\"", new[] { "fail" })]
+    [InlineData("\"fail\"", "null", new[] { "fail" })]
+    public async Task Complete_compilation_reads_an_empty_unused_input_as_unset(string outcomeJson, string outcomesJson, string[] expectedReferenceKeys)
+    {
+        var node = $$"""
+            {
+              "nodeId": "exit",
+              "activityVersionId": "activity-ver-complete",
+              "inputs": [
+                { "referenceKey": "outcome", "value": { "value": {{outcomeJson}}, "expressionType": "Literal" } },
+                { "referenceKey": "outcomes", "value": { "value": {{outcomesJson}}, "expressionType": "Literal" } }
+              ],
+              "outputs": [],
+              "structure": null
+            }
+            """;
+
+        var compilation = await _provider.CompileAsync(CompleteRequest(
+            CompleteManifest(node),
+            // The manifest maps 'succeed'; declare it plus exactly the outcomes the node names, so every outcome is reached.
+            OutcomeContract([("succeed", "Succeeded"), .. expectedReferenceKeys.Select(key => (key, key))])));
+
+        Assert.Empty(compilation.Diagnostics);
+        var completeOutcomes = compilation.ExecutableRoot!.Descriptor.Payload.GetProperty("completeOutcomes")
+            .Deserialize<GraphActivityCompleteOutcomeDescriptor[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(expectedReferenceKeys, completeOutcomes!.Select(outcome => outcome.ReferenceKey).ToArray());
+    }
+
+    [Fact]
+    public async Task Draft_validation_checks_each_name_in_a_Complete_outcomes_list()
+    {
+        var catalog = new TypeKeyActivityCatalog().Add("activity-ver-complete", GraphActivityProvider.CompleteActivityTypeKey);
+        var provider = ProviderWithCatalog(catalog);
+
+        var valid = await provider.ValidateAsync(CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","succeed"]""")), CompleteContract());
+        var unknown = await provider.ValidateAsync(CompleteManifest(CompleteNodeWithOutcomesJson("exit", """["fail","missing"]""")), CompleteContract());
+
+        Assert.Empty(valid);
+        var diagnostic = Assert.Single(unknown, x => x.Code == "activity.graph.complete.outcome-unknown");
+        Assert.Equal("missing", diagnostic.Location!.ReferenceKey);
+    }
+
     [Fact]
     public async Task Complete_compilation_rejects_a_Complete_node_in_schema_one()
     {
@@ -683,6 +796,17 @@ public sealed partial class GraphActivityProviderTests
           "nodeId": "{{nodeId}}",
           "activityVersionId": "activity-ver-complete",
           "inputs": [{ "referenceKey": "outcome", "value": { "value": "{{outcome}}", "expressionType": "{{expressionType}}" } }],
+          "outputs": [],
+          "structure": null
+        }
+        """;
+
+    // outcomesJson is the raw JSON of the input value: an array, or a JSON string holding one.
+    private static string CompleteNodeWithOutcomesJson(string nodeId, string outcomesJson, string expressionType = "Literal") => $$"""
+        {
+          "nodeId": "{{nodeId}}",
+          "activityVersionId": "activity-ver-complete",
+          "inputs": [{ "referenceKey": "outcomes", "value": { "value": {{outcomesJson}}, "expressionType": "{{expressionType}}" } }],
           "outputs": [],
           "structure": null
         }
@@ -1252,6 +1376,14 @@ public sealed partial class GraphActivityProviderTests
                 return [new("Sequence.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
             if (IsFlowchart(activity.Structure) && payload.TryGetProperty("activities", out activities))
                 return [new("Flowchart.Activities", activities.Deserialize<ActivityNode[]>(Options) ?? [])];
+            if (IsParallel(activity.Structure) && payload.TryGetProperty("branches", out var branches))
+                return branches.EnumerateArray()
+                    .Select(branch => new ActivityChildProjection(
+                        "Parallel." + branch.GetProperty("name").GetString(),
+                        branch.TryGetProperty("activity", out var branchActivity) && branchActivity.ValueKind == JsonValueKind.Object
+                            ? [branchActivity.Deserialize<ActivityNode>(Options)!]
+                            : []))
+                    .ToArray();
             if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
             {
                 var then = payload.TryGetProperty("then", out var thenElement) && thenElement.ValueKind == JsonValueKind.Object
@@ -1298,9 +1430,28 @@ public sealed partial class GraphActivityProviderTests
                 activity.Structure.SchemaVersion,
                 JsonSerializer.SerializeToElement(new { activities = childIds }, Options));
         }
+        // Spec 266 declarations of the test structures: a Sequence orders its children, a Parallel does not.
+        public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId)
+        {
+            if (activity.Structure is null || StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId))
+                return ActivityChildTimeRelation.FirstBeforeSecond;
+            if (IsParallel(activity.Structure))
+                return ActivityChildTimeRelation.Unordered;
+            if (StringComparer.Ordinal.Equals(activity.Structure.Kind, "If"))
+                return ActivityChildTimeRelation.MutuallyExclusive;
+            if (!IsSequence(activity.Structure))
+                return ActivityChildTimeRelation.Unspecified;
+            var ids = ProjectChildren(activity).SelectMany(x => x.Activities).Select(x => x.NodeId).ToList();
+            return ids.IndexOf(firstChildNodeId) < ids.IndexOf(secondChildNodeId)
+                ? ActivityChildTimeRelation.FirstBeforeSecond
+                : ActivityChildTimeRelation.SecondBeforeFirst;
+        }
+
+        public bool? CompletesAfterItsChildren(ActivityNode activity) => true;
+
         public bool HasHandler(ActivityNodeStructure structure) =>
             hasHandlers &&
-            (IsSequence(structure) ||
+            (IsSequence(structure) || IsParallel(structure) ||
              IsFlowchart(structure) ||
              StringComparer.Ordinal.Equals(structure.Kind, "If") &&
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1"));
@@ -1322,6 +1473,10 @@ public sealed partial class GraphActivityProviderTests
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1")) ||
             (StringComparer.Ordinal.Equals(structure.Kind, "elsa.sequence.structure") &&
              StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0"));
+
+        private static bool IsParallel(ActivityNodeStructure structure) =>
+            StringComparer.Ordinal.Equals(structure.Kind, "elsa.parallel.structure") &&
+            StringComparer.Ordinal.Equals(structure.SchemaVersion, "1.0.0");
 
         private static bool IsFlowchart(ActivityNodeStructure structure) =>
             StringComparer.Ordinal.Equals(structure.Kind, "elsa.flowchart.structure") &&

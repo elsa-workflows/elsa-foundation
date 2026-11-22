@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfWorkflowSchedulerPoisonStoreTests
+public sealed partial class EfWorkflowSchedulerPoisonStoreTests
 {
     private static readonly DateTimeOffset Now = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
 
@@ -314,6 +314,7 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         private readonly SqliteConnection connection;
         public readonly RuntimeSqliteDbContext Context;
         public readonly EfWorkflowSchedulerPoisonStore Store;
+        public readonly FixedAccessor Accessor;
 
         public Fixture(string connectionString, string scope, params IInterceptor[] interceptors)
         {
@@ -323,7 +324,8 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
             if (interceptors.Length > 0)
                 options.AddInterceptors(interceptors);
             Context = new RuntimeSqliteDbContext(options.Options);
-            Store = new EfWorkflowSchedulerPoisonStore(Context, new FixedAccessor(scope));
+            Accessor = new FixedAccessor(scope);
+            Store = new EfWorkflowSchedulerPoisonStore(Context, Accessor);
         }
 
         public async ValueTask DisposeAsync()

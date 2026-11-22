@@ -107,9 +107,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
-        { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
+        { typeof(TriggerFixtureActivity), "7D221A0FEEFBD55AEA961DECEFFBF4709A66D759F9AAB53FF065A8B310A9E1E3" },
         // Approved UX wording change: Start new workflows plus its help text.
-        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" }
+        // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
+        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
+        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" }
     };
 
     [Theory]
@@ -167,8 +169,9 @@ public sealed class ClrAssemblyScannerTests
         // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
         // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
         // with this PR rather than throwing on re-reconcile.
-        { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
-        { typeof(ComplexInputFixtureActivity), "950B126E699A6CEB156EA274E9DB0B9563BD628566AEE99C6BC5AE1E9623B7AE" }
+        // Spec 1228 FR-022: the CLR provider schema version went to 2, which moves both snapshots.
+        { typeof(PlainFixtureActivity), "4D43EA4D1174EF977273A98C264FCE3679229FC229C5CC430C5676415855C760" },
+        { typeof(ComplexInputFixtureActivity), "E903892E9FB46DB7E0A1972EC2804C62844F217530CEFA5535D3B0997EEDAD1B" }
     };
 
     [Theory]
@@ -408,6 +411,34 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(JsonValueKind.Number, input.DefaultValue?.ValueKind);
         Assert.Equal(1, input.DefaultValue?.GetInt32());
         Assert.Equal("Literal", input.DefaultSyntax);
+    }
+
+    [Theory]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Element), "{}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.NullableElement), "{\"a\":1}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Node), "[1,2]")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Object), "{}")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Array), "[]")]
+    public void ActivityInputAttribute_ParsesJsonTypedDefaultAsJson(string inputName, string expectedJson)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<JsonDefaultFixtureActivity>(CreateScanner().Scan(folder.Path), inputName);
+
+        Assert.Equal(expectedJson, input.DefaultValue?.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(nameof(JsonDefaultFixtureActivity.NotJson), "not json")]
+    [InlineData(nameof(JsonDefaultFixtureActivity.Text), "{}")]
+    public void ActivityInputAttribute_KeepsStringDefault_WhenInputIsNotJsonOrDefaultIsNotJson(string inputName, string expected)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<JsonDefaultFixtureActivity>(CreateScanner().Scan(folder.Path), inputName);
+
+        Assert.Equal(JsonValueKind.String, input.DefaultValue?.ValueKind);
+        Assert.Equal(expected, input.DefaultValue?.GetString());
     }
 
     [Fact]
@@ -814,10 +845,12 @@ public sealed class ClrAssemblyScannerTests
         // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
         // Approved UX wording change: Start new workflows plus its help text.
-        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" },
-        { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
-        { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }
+        // Spec 1208 FR-012a: SendHttpRequest's dynamic outcomes record that every completion selects one.
+        // Spec 1228 FR-022: the CLR provider schema version went to 2 (nested collection types), which moves every snapshot.
+        { typeof(HttpEndpoint), "F28E2D5C692AE81A7652872385379DDFC7D13A84C1EB196701AB439E277C9FCE" },
+        { typeof(WriteLine), "6447F219BF705C43390B61BF9478005F9C7AFD93FC07E9D3941EC0FF42BE1979" },
+        { typeof(ParallelActivity), "4748F128F029398F93C1D7BF29D3E266AFED437FCC4BD030DFDD4D4F8938FE61" },
+        { typeof(SendHttpRequest), "92CDE66B36CEAB09480364A18F334C879ECB5B0770730F2D427F0B8C1EB9634F" }
     };
 
     [Theory]
@@ -907,6 +940,23 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("Unmatched status code", dynamicOutcomes.GetProperty("unmatched").GetString());
     }
 
+    // Spec 1208: RunJavaScript's outcome facet names its script input, so draft validation can read the script, and
+    // declares that a completion need not select one of the configured outcomes (it keeps Done) with no catch-all.
+    [Fact]
+    public void RunJavaScript_OutcomeFacet_NamesTheScriptInputAndKeepsDoneWithoutACatchAll()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(Elsa.Activities.Scripting.Activities.RunJavaScript).FullName);
+        var facet = model.DesignFacets.Single(f => f.Kind == "elsa.outcomes");
+
+        Assert.Equal("script", facet.Payload.GetProperty("scriptInput").GetString());
+        var dynamicOutcomes = facet.Payload.GetProperty("dynamicOutcomes");
+        Assert.Equal(Elsa.Activities.Scripting.Activities.RunJavaScript.PossibleOutcomesInputKey, dynamicOutcomes.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.False, dynamicOutcomes.GetProperty("selectsOnEveryCompletion").ValueKind);
+        Assert.False(dynamicOutcomes.TryGetProperty("unmatched", out _), "RunJavaScript declares no catch-all outcome.");
+    }
+
     [Fact]
     public void SendHttpRequest_ResponseBody_IsDiscoveredAsFormattedContent()
     {
@@ -916,6 +966,43 @@ public sealed class ClrAssemblyScannerTests
         var responseBody = model.Outputs.Single(output => output.ReferenceKey == "ResponseBody");
 
         Assert.Equal(ValueRepresentation.FormattedContent, responseBody.SourceRepresentation);
+    }
+
+    // Spec 1231 FR-022, FR-026 (User Story 2 scenario 6, User Story 4 scenario 5): a variable-reference input reaches the
+    // catalog with its value type and direction, and the free-name marker as a design facet.
+    [Fact]
+    public void Variable_reference_inputs_carry_their_value_type_and_direction()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(VariableReferenceFixtureActivity).Assembly);
+        var inputs = CreateScanner().Scan(folder.Path)
+            .Single(model => model.ActivityTypeKey == typeof(VariableReferenceFixtureActivity).FullName)
+            .Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        var balance = inputs[nameof(VariableReferenceFixtureActivity.Balance)];
+        Assert.Equal((InputVariableAccess.ReadWrite, "Decimal"), (balance.VariableAccess, balance.Type.Alias));
+        Assert.Equal((InputVariableAccess.UiHint, InputVariableAccess.ExpressionType, true), (balance.UiHint, balance.DefaultSyntax, balance.IsRequired));
+        var currency = inputs[nameof(VariableReferenceFixtureActivity.Currency)];
+        Assert.Equal((InputVariableAccess.Read, "String"), (currency.VariableAccess, currency.Type.Alias));
+        Assert.Null(inputs[nameof(VariableReferenceFixtureActivity.Label)].VariableAccess);
+    }
+
+    [Fact]
+    public void The_free_name_marker_is_a_design_facet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(FreeNameFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        Assert.True(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(FreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.True(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(InheritedFreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.False(VariableAccessDesignFacet.AccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(VariableReferenceFixtureActivity).FullName).DesignFacets));
+        // A declared marker says so, so an analyzed script body never narrows it (spec 1231 FR-028).
+        Assert.True(VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(InheritedFreeNameFixtureActivity).FullName).DesignFacets));
+        Assert.True(VariableAccessDesignFacet.DeclaresAccessesUndeclaredVariables(
+            models.Single(model => model.ActivityTypeKey == typeof(FreeNameFixtureActivity).FullName).DesignFacets));
     }
 
     [Fact]

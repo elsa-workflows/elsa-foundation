@@ -77,24 +77,24 @@ public sealed class SetVariableDurabilityExecutionTests
 
         var persistedWorkflow = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal("initial:updated", persistedWorkflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, evaluator.Request!.Capabilities.Profile);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, evaluator.Request!.Capabilities.Profile);
         Assert.Equal(["current", "suffix"], evaluator.Request.ParameterValues.Keys);
         Assert.Equal("initial", evaluator.Request.ParameterValues["current"].GetString());
         Assert.Equal("updated", evaluator.Request.ParameterValues["suffix"].GetString());
     }
 
     [Theory]
-    [InlineData("getVariable('greeting') + '!'")]
-    [InlineData("variables.greeting + '!'")]
-    [InlineData("getGreeting() + '!'")]
-    public async Task Set_intrinsic_reads_the_visible_variable_through_the_javascript_ambient_surface(string script)
+    [InlineData("getVariable('greeting') + '!'", false)]
+    [InlineData("variables.greeting + '!'", false)]
+    [InlineData("getVariable(['greet', 'ing'].join('')) + '!'", true)]
+    public async Task Set_intrinsic_reads_the_visible_variable_by_name(string script, bool computed)
     {
-        // Issue #984: the loop-counter/variable-read case. A Set whose value is a native JavaScript expression must
-        // observe the variable lexically visible to it through variables.X / getVariable('X') / get<Name>() — not just
-        // statically declared args — and write the computed result back into the frame.
+        // Issue #984, spec 1222: the loop-counter/variable-read case. A Set whose value is a native JavaScript expression
+        // reads the visible variable by name, pinned at publish (variables.X, getVariable('X')) or through the recorded
+        // run-time lookup (a computed name), and writes the computed result back into the frame.
         await using var jsProvider = BuildJavaScriptProvider();
         await using var harness = await CreateHarnessAsync(
-            NewJavaScriptVariableWriteNode(script),
+            NewJavaScriptVariableWriteNode(script, computed),
             portableExpressionEvaluator: jsProvider.GetRequiredService<IPortableExpressionEvaluator>(),
             workflowVariables: [new RuntimeVariableDeclaration("greeting", "greeting", StringType, ValueProtectionPolicy.InstanceInline)]);
 
@@ -119,7 +119,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
         var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
         Assert.Equal(ActivityExecutionStatus.Completed, completed.Status);
-        Assert.Equal(expectedOutcome, completed.Completion!.OutcomeKey);
+        Assert.Equal(new[] { expectedOutcome }, completed.Completion!.OutcomeNames);
         if (expectedResult is null)
             Assert.Equal("Elsa.Activities.Runtime.Core.Models.ActivityUnit", completed.Completion.Result.Type.Alias);
         else
@@ -190,7 +190,7 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal(WorkflowExecutionStatus.Completed, commit.StateChanges.WorkflowExecution!.State.Status);
         Assert.Equal(Now, commit.StateChanges.WorkflowExecution.State.CompletedAt);
         var completed = Assert.Single(commit.StateChanges.ActivityExecutions).State;
-        Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
+        Assert.Equal(new[] { "Aborted" }, completed.Completion!.OutcomeNames);
     }
 
     [Theory]
@@ -272,7 +272,7 @@ public sealed class SetVariableDurabilityExecutionTests
                 ["suffix"] = new LiteralExpressionParameterBinding(JsonSerializer.SerializeToElement("updated"))
             },
             options: JsonSerializer.SerializeToElement(new { }),
-            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
+            capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExecutableNode(
             "node-set-expression",
             "authored-set-expression",
@@ -294,17 +294,26 @@ public sealed class SetVariableDurabilityExecutionTests
             intrinsicVariable: new RuntimeVariableReference("greeting", VariableReference.WorkflowScopeId));
     }
 
-    private static ExecutableNode NewJavaScriptVariableWriteNode(string script)
+    private static ExecutableNode NewJavaScriptVariableWriteNode(string script, bool computed)
     {
         using var descriptor = JsonDocument.Parse("{}");
+        // What publish compiles (spec 1222): a literal read is a pinned variables-surface parameter; a computed one
+        // carries the fallback marker. #972 unified model: the workflow-scope "greeting" declaration lives on the
+        // EXECUTABLE (workflow variables), not on a node structure — the harness passes it via CreateHarnessAsync.
         var expression = new RuntimeExpressionBinding(
             "JavaScript",
             script,
             new RuntimeValueTypeDescriptor("alias", "String", null),
-            capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1);
-        // #972 unified model: the workflow-scope "greeting" declaration lives on the EXECUTABLE (workflow
-        // variables), not on a node structure — the harness passes it via CreateHarnessAsync so the runtime
-        // projects it into the JavaScript ambient read surface from the canonical root frame.
+            parameters: computed
+                ? null
+                : new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["variables.greeting"] = new VariableExpressionParameterBinding(VariableReference.WorkflowScopeId, "greeting", ExpressionParameterSurfaces.Variables)
+                },
+            capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1,
+            variableReadFallback: computed
+                ? new VariableReadFallback([new VariableReadCandidate("greeting", VariableReference.WorkflowScopeId, "greeting")])
+                : null);
         return new ExecutableNode(
             "node-set-javascript",
             "authored-set-javascript",

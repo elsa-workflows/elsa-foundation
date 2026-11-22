@@ -16,7 +16,7 @@ internal static class Elsa3FlowchartFixtures
     [
         "decision-tree", "if-switch-done", "nested-single-child", "fork-wait-all", "fork-wait-all-active",
         "exclusive-wait-any", "implicit-join", "start-activity", "two-http-triggers", "two-triggers-into-wait-any",
-        "terminal-outbound"
+        "terminal-outbound", "script-done"
     ];
 
     public static Elsa3WorkflowDefinition Load(string name) =>

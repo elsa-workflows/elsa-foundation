@@ -68,7 +68,7 @@ public sealed class Elsa3TopLevelReturnTests
             ["o"] = JsonSerializer.SerializeToElement(new { name = "Ada" }),
         });
         Assert.Equal("Ada", value.GetProperty("name").GetString());
-        Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["o"]);
+        Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.o"]);
     }
 
     [Theory]
@@ -102,7 +102,7 @@ public sealed class Elsa3TopLevelReturnTests
         var result = await ConvertAsync(Sequence("root", script, write), new Elsa3Variable { Id = "total", Name = "total", TypeName = "Int32" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("var total = args.total;\nif (total > 1) { return 'big' }\nreturn 'small'", Text(Input(Node(result.Value!.State, "node"), "script")));
+        Assert.Equal("var total = variables.total;\nif (total > 1) { return 'big' }\nreturn 'small'", Text(Input(Node(result.Value!.State, "node"), "script")));
     }
 
     [Fact]

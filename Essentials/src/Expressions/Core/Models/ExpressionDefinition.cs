@@ -25,7 +25,8 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
         IReadOnlyDictionary<string, ExpressionParameterBinding> parameters,
         JsonElement options,
         string capabilityProfile,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        VariableReadFallback? variableReadFallback = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
@@ -38,6 +39,7 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
             throw new ArgumentException("Expression parameter names cannot be blank.", nameof(parameters));
         if (parameters.Values.Any(binding => binding is null))
             throw new ArgumentException("Expression parameter bindings cannot be null.", nameof(parameters));
+        ExpressionParameterSurfaces.Validate(parameters, nameof(parameters));
 
         Language = language;
         Source = source;
@@ -51,6 +53,7 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
             (metadata ?? new Dictionary<string, string>())
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
+        VariableReadFallback = variableReadFallback;
     }
 
     [JsonPropertyName("language")]
@@ -73,6 +76,14 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 
     [JsonPropertyName("metadata")]
     public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    /// <summary>
+    /// Present when publish found a computed or opaque variable read (spec 1222 FR-008, FR-009): the conservative read
+    /// report the runtime's recorded lookup serves. Absent on an expression with only literal reads.
+    /// </summary>
+    [JsonPropertyName("variableReadFallback")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public VariableReadFallback? VariableReadFallback { get; }
 
     [JsonIgnore]
     public string Fingerprint => ComputeFingerprint();
@@ -138,13 +149,127 @@ public sealed record WorkflowRequestExpressionParameterBinding : ExpressionParam
 
 public sealed record VariableExpressionParameterBinding : ExpressionParameterBinding
 {
-    public VariableExpressionParameterBinding(string declaringScopeNodeId, string variableKey)
+    [JsonConstructor]
+    public VariableExpressionParameterBinding(string declaringScopeNodeId, string variableKey, string? surface = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(declaringScopeNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(variableKey);
+        if (surface is not null && !StringComparer.Ordinal.Equals(surface, ExpressionParameterSurfaces.Variables))
+            throw new ArgumentException($"Variable parameter surface '{surface}' is not '{ExpressionParameterSurfaces.Variables}'; omit it for '{ExpressionParameterSurfaces.Args}'.", nameof(surface));
+        DeclaringScopeNodeId = declaringScopeNodeId;
+        VariableKey = variableKey;
+        Surface = surface;
+    }
+
+    [JsonPropertyName("declaringScopeNodeId")]
+    public string DeclaringScopeNodeId { get; }
+
+    [JsonPropertyName("variableKey")]
+    public string VariableKey { get; }
+
+    /// <summary>
+    /// Where a script sees the parameter (spec 1222 FR-003, ADR 0089): <see langword="null"/> for the <c>args</c> root,
+    /// <see cref="ExpressionParameterSurfaces.Variables"/> for a read publish pinned from <c>variables.X</c>,
+    /// <c>variables['X']</c> or <c>getVariable('X')</c>. Such a parameter is keyed <c>variables.&lt;name&gt;</c>.
+    /// </summary>
+    [JsonPropertyName("surface")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Surface { get; }
+
+    /// <summary>Whether a script reads this parameter through the <c>variables</c> root.</summary>
+    [JsonIgnore]
+    public bool IsVariablesSurface => Surface is not null;
+}
+
+/// <summary>The script roots a declared parameter can appear under (spec 1222 FR-003).</summary>
+public static class ExpressionParameterSurfaces
+{
+    public const string Args = "args";
+    public const string Variables = "variables";
+
+    /// <summary>The prefix of the parameter key of a <see cref="Variables"/>-surface parameter.</summary>
+    public const string VariablesKeyPrefix = "variables.";
+
+    /// <summary>The parameter key a pinned read of the named variable uses.</summary>
+    public static string VariablesKey(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return VariablesKeyPrefix + name;
+    }
+
+    /// <summary>Whether a parameter key names a <c>variables</c>-surface parameter, and the variable name it reads.</summary>
+    public static bool TryGetVariableName(string parameterKey, out string name)
+    {
+        ArgumentNullException.ThrowIfNull(parameterKey);
+        if (parameterKey.StartsWith(VariablesKeyPrefix, StringComparison.Ordinal) && parameterKey.Length > VariablesKeyPrefix.Length)
+        {
+            name = parameterKey[VariablesKeyPrefix.Length..];
+            return true;
+        }
+
+        name = "";
+        return false;
+    }
+
+    /// <summary>
+    /// Refuses a parameter map in which a <c>variables.</c> key and the <c>variables</c> surface disagree: a key
+    /// <c>variables.&lt;name&gt;</c> must be a <see cref="VariableExpressionParameterBinding"/> on the variables surface,
+    /// and a variables-surface binding must use such a key.
+    /// </summary>
+    public static void Validate(IReadOnlyDictionary<string, ExpressionParameterBinding> parameters, string parameterName)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        foreach (var (key, binding) in parameters)
+        {
+            var keyed = TryGetVariableName(key, out _);
+            var surfaced = binding is VariableExpressionParameterBinding { IsVariablesSurface: true };
+            if (keyed != surfaced)
+                throw new ArgumentException(
+                    $"Expression parameter '{key}': a parameter keyed '{VariablesKeyPrefix}<name>' must be a Variable binding on the '{Variables}' surface, and a '{Variables}'-surface binding must use such a key.",
+                    parameterName);
+        }
+    }
+}
+
+/// <summary>
+/// The fallback marker of a compiled expression (spec 1222 FR-008, FR-009, research R-2): publish found a computed or
+/// opaque variable read (<c>variables[expr]</c>, <c>getVariable(expr)</c>, <c>variables</c> used as a value, or a host
+/// function that reads variables). It carries the conservative read report: every variable visible at that point,
+/// nearest scope first. The runtime serves such reads with a recorded lookup; an expression without the marker pays no
+/// fallback cost.
+/// </summary>
+public sealed record VariableReadFallback
+{
+    [JsonConstructor]
+    public VariableReadFallback(IReadOnlyList<VariableReadCandidate> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        if (candidates.Any(candidate => candidate is null))
+            throw new ArgumentException("Variable read candidates cannot be null.", nameof(candidates));
+        Candidates = candidates.ToArray();
+    }
+
+    /// <summary>The variables the expression could read, nearest scope first, each name once (the innermost declaration).</summary>
+    [JsonPropertyName("candidates")]
+    public IReadOnlyList<VariableReadCandidate> Candidates { get; }
+}
+
+/// <summary>One variable a computed or opaque read could reach.</summary>
+public sealed record VariableReadCandidate
+{
+    [JsonConstructor]
+    public VariableReadCandidate(string name, string declaringScopeNodeId, string variableKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(declaringScopeNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(variableKey);
+        Name = name;
         DeclaringScopeNodeId = declaringScopeNodeId;
         VariableKey = variableKey;
     }
+
+    [JsonPropertyName("name")]
+    public string Name { get; }
 
     [JsonPropertyName("declaringScopeNodeId")]
     public string DeclaringScopeNodeId { get; }
@@ -201,34 +326,30 @@ public sealed record WorkflowInstanceExpressionParameterBinding : ExpressionPara
 
 public static class ExpressionCapabilityProfiles
 {
-    public const string BindingPureV1 = "binding-pure-v1";
+    public const string BindingReadonlyV1 = "binding-readonly-v1";
 }
 
 /// <summary>A complete immutable parameter snapshot supplied to a pure evaluator.</summary>
-public sealed class ExpressionEvaluationRequest
+public sealed record ExpressionEvaluationRequest
 {
     public ExpressionEvaluationRequest(
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement> parameterValues,
         CancellationToken cancellationToken)
-        : this(definition, parameterValues, ambientVariables: null, cancellationToken)
+        : this(definition, parameterValues, variableReader: null, cancellationToken)
     {
     }
 
     /// <summary>
-    /// Builds an evaluation request that, in addition to the exactly-declared <paramref name="parameterValues"/>,
-    /// carries a host-pinned snapshot of the variables lexically visible to the expression
-    /// (<paramref name="ambientVariables"/>, name → value). These are provided to the isolated engine as an
-    /// additional read-only surface (<c>variables.X</c> / <c>getVariable('X')</c> / <c>get&lt;Name&gt;()</c>) rather
-    /// than as declared parameters. They are host-pinned data, exactly like the declared parameters: determinism is
-    /// preserved (the same visible-frame snapshot always yields the same result), the engine never discovers workflow
-    /// state on its own, and the binding-pure-v1 capability grant is unchanged. Pure binding expressions supply no
-    /// ambient variables and therefore see no <c>variables</c> surface at all.
+    /// Builds an evaluation request whose script may also read variables it does not name literally (spec 1222 FR-008):
+    /// <paramref name="variableReader"/> is the host-side lookup that serves computed and opaque reads. The host
+    /// supplies one only for an expression that carries a <see cref="Models.VariableReadFallback"/>; it loaded the
+    /// candidates' values before evaluation, so the engine's reads stay synchronous, and it records every read it serves.
     /// </summary>
     public ExpressionEvaluationRequest(
         ExpressionDefinition definition,
         IReadOnlyDictionary<string, JsonElement> parameterValues,
-        IReadOnlyDictionary<string, JsonElement>? ambientVariables,
+        IExpressionVariableReader? variableReader,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -247,23 +368,42 @@ public sealed class ExpressionEvaluationRequest
         ParameterValues = new ReadOnlyDictionary<string, JsonElement>(
             parameterValues.OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
-        AmbientVariables = new ReadOnlyDictionary<string, JsonElement>(
-            (ambientVariables ?? new Dictionary<string, JsonElement>())
-                .OrderBy(item => item.Key, StringComparer.Ordinal)
-                .ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal));
+        VariableReader = variableReader;
         CancellationToken = cancellationToken;
     }
 
     public ExpressionDefinition Definition { get; }
     public ExpressionEvaluationCapabilities Capabilities { get; }
+
+    /// <summary>
+    /// Every declared parameter's pinned value. Keys <c>variables.&lt;name&gt;</c> are the <c>variables</c> root
+    /// (spec 1222 FR-003); the rest are <c>args</c>.
+    /// </summary>
     public IReadOnlyDictionary<string, JsonElement> ParameterValues { get; }
 
     /// <summary>
-    /// Host-pinned name → value snapshot of the variables lexically visible to the expression. Empty for pure
-    /// binding expressions. Exposed to the isolated engine as <c>variables.X</c> / <c>getVariable('X')</c> /
-    /// <c>get&lt;Name&gt;()</c>; never merged into <see cref="ParameterValues"/> or the declared-parameter contract.
+    /// The host-side lookup for variable reads publish could not pin, or <see langword="null"/> when the expression has
+    /// no computed or opaque read (FR-013).
     /// </summary>
-    public IReadOnlyDictionary<string, JsonElement> AmbientVariables { get; }
+    public IExpressionVariableReader? VariableReader { get; }
+
+    /// <summary>
+    /// Where the evaluator reports warnings (spec 1228, the shared run-time warning channel); <see langword="null"/>
+    /// when the caller records none. The runtime records them on the activity execution.
+    /// </summary>
+    public IExecutionWarningSink? Warnings { get; init; }
 
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>The pinned <c>variables</c>-root values, by variable name.</summary>
+    public IReadOnlyDictionary<string, JsonElement> PinnedVariableValues() =>
+        ParameterValues
+            .Where(item => ExpressionParameterSurfaces.TryGetVariableName(item.Key, out _))
+            .ToDictionary(item => item.Key[ExpressionParameterSurfaces.VariablesKeyPrefix.Length..], item => item.Value, StringComparer.Ordinal);
+
+    /// <summary>The <c>args</c>-root values, by parameter name.</summary>
+    public IReadOnlyDictionary<string, JsonElement> ArgumentValues() =>
+        ParameterValues
+            .Where(item => !ExpressionParameterSurfaces.TryGetVariableName(item.Key, out _))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }

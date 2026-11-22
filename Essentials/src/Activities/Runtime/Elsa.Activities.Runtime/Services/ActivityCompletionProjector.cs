@@ -19,7 +19,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         ActivityContract contract,
         ActivityTransition transition,
         DateTimeOffset completedAt) =>
-        ProjectCoreAsync(null, invocationId, attempt, contract, transition, completedAt, CancellationToken.None)
+        ProjectCoreAsync(null, invocationId, attempt, contract, transition, completedAt, CancellationToken.None, readProtection: null)
             .AsTask().GetAwaiter().GetResult();
 
     public ValueTask<ActivityCompletionProjection> ProjectAsync(
@@ -29,10 +29,26 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         ActivityContract contract,
         ActivityTransition transition,
         DateTimeOffset completedAt,
+        CancellationToken cancellationToken = default) =>
+        ProjectAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt, readProtection: null, cancellationToken);
+
+    /// <summary>
+    /// Projects a completion whose result also takes <paramref name="readProtection"/>: the strongest protection among
+    /// the values the step's body read through its variable session (spec 1228 US7, ADR 0092), so a script result is as
+    /// protected as what it read.
+    /// </summary>
+    public ValueTask<ActivityCompletionProjection> ProjectAsync(
+        string workflowExecutionId,
+        string invocationId,
+        ActivityAttempt attempt,
+        ActivityContract contract,
+        ActivityTransition transition,
+        DateTimeOffset completedAt,
+        ActivityValuePolicy? readProtection,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
-        return ProjectCoreAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt, cancellationToken);
+        return ProjectCoreAsync(workflowExecutionId, invocationId, attempt, contract, transition, completedAt, cancellationToken, readProtection);
     }
 
     private async ValueTask<ActivityCompletionProjection> ProjectCoreAsync(
@@ -42,7 +58,8 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         ActivityContract contract,
         ActivityTransition transition,
         DateTimeOffset completedAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ActivityValuePolicy? readProtection)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentNullException.ThrowIfNull(attempt);
@@ -51,8 +68,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
 
         if (transition is not IActivityCompletionTransition completion)
             throw new InvalidOperationException($"Transition '{transition.Kind}' cannot be projected as an activity completion.");
-        if (!contract.Outcomes.Contains(completion.Outcome, StringComparer.Ordinal))
-            throw new InvalidOperationException($"VF-ACT-006: Outcome '{completion.Outcome}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
+        ActivityOutcomeSelectionRules.Validate(contract, completion.Selection);
         if (contract.Result.IsRequired && completion.Result is null)
             throw new InvalidOperationException($"VF-ACT-006: Activity contract '{contract.ActivityTypeKey}' requires a result.");
         if (!contract.Result.Policy.IsPersistable)
@@ -60,7 +76,10 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
 
         var resultJson = JsonSerializer.SerializeToElement(completion.Result, completion.ResultType, ActivityValueJson.Options);
         var resultPolicy = contract.Result.Projections.Values.Aggregate(
-            contract.Result.Policy,
+            readProtection is null
+                ? contract.Result.Policy
+                : ValuePolicyCombiner.Combine(contract.Result.Policy, readProtection,
+                    $"Result of activity contract '{contract.ActivityTypeKey}', after its body's variable reads"),
             (policy, projection) => ValuePolicyCombiner.Combine(
                 policy,
                 projection.Policy,
@@ -124,7 +143,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
         return new ActivityCompletionProjection(durableCompletion, projections);
@@ -161,7 +180,7 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
             invocationId,
             attempt.AttemptId,
             resultEnvelope,
-            completion.Outcome,
+            completion.Selection,
             completedAt,
             contract.SchemaFingerprint);
 

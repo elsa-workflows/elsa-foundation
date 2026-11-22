@@ -81,7 +81,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             case ValueConversionOperation.RecursiveCollection when !ValueConversionCompatibility.CanRecursivelyWidenCollection(plan.SourceType, plan.TargetType):
                 throw Reject(plan, "recursive collection conversion does not have a safe element widening");
             case ValueConversionOperation.CanonicalAny when !ValueConversionCompatibility.IsCanonicalAnyTarget(plan.TargetType):
-                throw Reject(plan, "canonical dynamic projection requires the Elsa.Any target contract");
+                throw Reject(plan, "canonical dynamic projection requires the Any target contract");
         }
     }
 
@@ -180,7 +180,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
             throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is not a registered typed alias");
 
         var document = ReadXmlDocument(value, plan);
-        var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.CollectionKind);
+        var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteXmlAsJson(writer, document.Root!, targetType, plan, "$", depth: 1);
@@ -247,7 +247,7 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (!wellKnownTypeRegistry.TryGetTypeOrDefault(plan.TargetType.Alias, out var elementType) || elementType == typeof(object))
             throw Reject(plan, $"target contract '{plan.TargetType.Alias}' is not a registered typed alias");
 
-        var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.CollectionKind);
+        var targetType = TypeReferenceFactory.Close(elementType, plan.TargetType.ToTypeReference());
         ValidateJsonForType(root, targetType, plan, "$");
 
         return CanonicalizeAny(root, plan);

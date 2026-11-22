@@ -525,6 +525,50 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Equal((1, 1), (counts.Receipts, counts.WorkflowVersions));
     }
 
+    /// <summary>
+    /// Spec 235 R-8, #3921: the same Elsa 3 version converted differently by a later converter revision is a new Elsa 4
+    /// version, <c>{n}.{R}.0</c> under a new id, beside the earlier one; the earlier version is not rewritten, and the
+    /// re-import at the later revision is itself idempotent.
+    /// </summary>
+    [Fact]
+    public async Task A_later_converter_revision_imports_a_changed_conversion_beside_the_earlier_version_instead_of_colliding()
+    {
+        var service = Db.Service(access);
+        var original = await UploadAsync(service, Scope, Workflow("revised", "revised-v1", 1, false, Leaf("original")));
+        await service.ApplyAsync(original.Upload.CollectionHandle, original.PlanId, ["revised-v1"], "revision-first", Scope);
+        var before = await StoredVersionsAsync("revised");
+
+        // The converter changed what it emits for the same input, and its revision was bumped with it.
+        var revised = Db.Service(access, converterRevision: 1);
+        var changed = await UploadAsync(revised, Scope, Workflow("revised", "revised-v1", 1, false, Leaf("changed")));
+        var second = await revised.ApplyAsync(changed.Upload.CollectionHandle, changed.PlanId, ["revised-v1"], "revision-second", Scope);
+        var again = await UploadAsync(revised, Scope, Workflow("revised", "revised-v1", 1, false, Leaf("changed")));
+        await revised.ApplyAsync(again.Upload.CollectionHandle, again.PlanId, ["revised-v1"], "revision-third", Scope);
+
+        Assert.NotEqual(original.PlanId, changed.PlanId);
+        Assert.Equal(ReusableActivityImportResourceDisposition.Created, Assert.Single(second.Sources).WorkflowDisposition);
+        var counts = await Db.CountAsync();
+        Assert.Equal((3, 2), (counts.Receipts, counts.WorkflowVersions));
+        var versions = await StoredVersionsAsync("revised");
+        Assert.Equal(["1.0.0", "1.1.0"], versions.Select(version => version.Version));
+        Assert.Equal(["revised-v1", ReusableActivityImportIdentity.WorkflowVersion("revised-v1", 1)], versions.Select(version => version.Id));
+        // The earlier revision's row is byte-for-byte what it was; the later one holds the changed conversion.
+        var earlier = Assert.Single(before);
+        Assert.Equal((earlier.Id, earlier.Version, earlier.StateSource, earlier.LastModifiedAt), (versions[0].Id, versions[0].Version, versions[0].StateSource, versions[0].LastModifiedAt));
+        Assert.Contains("original", versions[0].StateSource, StringComparison.Ordinal);
+        Assert.Contains("changed", versions[1].StateSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("changed", versions[0].StateSource, StringComparison.Ordinal);
+    }
+
+    private async Task<List<WorkflowDefinitionVersion>> StoredVersionsAsync(string definitionId)
+    {
+        await using var workflows = Db.Workflows();
+        return await workflows.Versions.AsNoTracking()
+            .Where(version => version.DefinitionId == definitionId)
+            .OrderBy(version => version.SemVerSortKey)
+            .ToListAsync();
+    }
+
     [Fact]
     public async Task Serializer_failures_are_wrapped_before_writes_and_same_receipt_races_converge()
     {

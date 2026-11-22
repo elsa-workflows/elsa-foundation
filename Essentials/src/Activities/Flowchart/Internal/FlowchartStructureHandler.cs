@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Flowchart.Models;
@@ -30,6 +31,39 @@ internal sealed class FlowchartStructureHandler : IActivityStructureHandler
         var structure = ReadAuthoredStructure(activity);
         return [new ActivityChildProjection(FlowchartActivity.ActivitiesSlotName, structure.Activities)];
     }
+
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        var structure = ReadAuthoredStructure(activity);
+        var children = structure.Activities
+            .Select(child => child.NodeId)
+            .Where(nodeId => !string.IsNullOrWhiteSpace(nodeId))
+            .ToArray();
+        if (!children.Contains(producerChildNodeId, StringComparer.Ordinal) ||
+            !children.Contains(consumerChildNodeId, StringComparer.Ordinal))
+            return new(ActivityChildResultAvailability.Unavailable);
+
+        return FlowchartChildResultAnalysis.TryCreate(structure)
+                   ?.Assess(producerChildNodeId, consumerChildNodeId)
+               ?? new ActivityChildResultFacts(ActivityChildResultAvailability.Unknown);
+    }
+
+    // One analysis per authored structure node: the unordered-write analysis asks about many pairs of one Flowchart.
+    private readonly ConditionalWeakTable<ActivityNode, TimeRelationHolder> _timeRelations = new();
+
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        _timeRelations.GetValue(activity, node => new(FlowchartChildResultAnalysis.TryCreate(ReadAuthoredStructure(node))))
+            .Analysis?.Relate(firstChildNodeId, secondChildNodeId)
+        ?? ActivityChildTimeRelation.Unspecified;
+
+    private sealed record TimeRelationHolder(FlowchartChildResultAnalysis? Analysis);
+
+    // A first-wins race marks the losing paths cancelled in the Flowchart's state, but their running activities are not
+    // cancelled: the Flowchart can complete while they still run and commit (join initiative #4193). A Break cancels
+    // the running activities of the other paths (spec 266 research R-3, F-2).
+    public bool? CompletesAfterItsChildren(ActivityNode activity) =>
+        !ReadAuthoredStructure(activity).NodeMetadata.Values.Any(metadata =>
+            StringComparer.Ordinal.Equals(metadata?.PolicyKind, Policies.FlowchartPolicyKinds.FirstWins));
 
     public IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) =>
         ReadAuthoredStructure(activity).Connections

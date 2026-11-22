@@ -140,6 +140,11 @@ internal static class EfDesignSupport
     {
         var property = db.Entry(entity).Property<string>(ScopeKeyProperty);
         var stored = property.CurrentValue ?? property.OriginalValue;
+        EnsurePhysicalScope(stored, entity, operation);
+    }
+
+    internal static void EnsurePhysicalScope(string? stored, Elsa.Primitives.Entities.TenantEntity entity, string operation)
+    {
         if (!StringComparer.Ordinal.Equals(stored, ScopeKey(entity.TenantId)))
             throw new InvalidOperationException($"The {operation} returned a row with an invalid physical persistence scope.");
     }

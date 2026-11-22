@@ -100,14 +100,6 @@
   white-space: nowrap;
 }
 
-/* Result details occupy their own row without resizing or recentering primary commands. */
-.wf-editor-toolbar .wf-editor-actions.wf-editor-run-status {
-  grid-column: 1 / -1;
-  min-width: 0;
-  margin-left: 0;
-  justify-content: flex-start;
-}
-
 .wf-editor-toolbar .wf-publish-actions > button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);

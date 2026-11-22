@@ -277,7 +277,7 @@ internal sealed class BpmnProcessRuntime(BpmnStateCodec codec, BpmnWorkLedger le
             metadata[BpmnStartTrigger.StartElementIdMetadataKey] = start.StartElementHint;
         var iteration = start.IterationScope;
         var values = iteration?.Values.ToDictionary(pair => pair.Key, pair =>
-            ValueEnvelope.Inline(new ValueTypeDescriptor(pair.Value.TypeHint == BpmnValueTypes.Integer ? "Int32" : "Elsa.Any"),
+            ValueEnvelope.Inline(new ValueTypeDescriptor(pair.Value.TypeHint == BpmnValueTypes.Integer ? "Int32" : TypeAliasConvention.AnyAlias),
                 pair.Value.Json ?? throw new BpmnHostException("BPMN iteration value is not inline."), ValueProtectionPolicy.InstanceInline));
         var provenance = new Dictionary<string, string> { ["bpmn.targetNodeId"] = start.BindingRef, ["bpmn.elementId"] = start.ElementId };
         // Already accepted executables without a compiled declaration retain their ordinary dispatch policy.

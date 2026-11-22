@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsPage, WorkflowInstancesPage } from "../workflow-editor/pages";
 import {
   clampRunDetailInspectorWidth,
@@ -105,7 +105,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -131,7 +131,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -142,7 +142,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -154,7 +154,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -169,7 +169,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAgentRegistry}
+        ai={{} as StudioWeaverRegistry}
         navigate={() => {}}
       />
     ));
@@ -187,7 +187,7 @@ describe("Run detail page layout", () => {
       flushSync(() => root.render(
         <WorkflowInstanceDetailsPage
           context={{} as StudioEndpointContext}
-          ai={{} as StudioAgentRegistry}
+          ai={{} as StudioWeaverRegistry}
           navigate={() => {}}
         />
       ));

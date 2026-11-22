@@ -8,9 +8,10 @@ using Elsa.Serialization.SystemText;
 namespace Elsa.Activities.Behavioral.Drives;
 
 /// <summary>
-/// RunJavaScript: Done with no authored outcomes, and — with <c>PossibleOutcomes</c> authored — the port the
-/// script's return value names plus the unmatched catch-all (#1114). The dynamic ports are per-node data the
-/// publish compiler pins, so the drive supplies them on the node's contract exactly as the compiler would.
+/// RunJavaScript: Done with no authored outcomes, and — with <c>PossibleOutcomes</c> authored — the outcome the script
+/// selects by returning <c>complete(result, outcomes)</c>, or Done when it returns plain data (spec 1208). The dynamic
+/// ports are per-node data the publish compiler pins, so the drive supplies them on the node's contract exactly as the
+/// compiler would.
 /// </summary>
 public sealed class RunJavaScriptDrive : IActivityDrive
 {
@@ -21,9 +22,9 @@ public sealed class RunJavaScriptDrive : IActivityDrive
         // No authored outcomes: the implicit Done completion, with the result output populated.
         await RunAsync(recorder, "return { answer: 42 };", possibleOutcomes: null);
 
-        // Authored outcomes: the script routes by returning a declared name, then an undeclared one.
-        await RunAsync(recorder, "return 'approved';", ["approved", "rejected"], expectedOutcome: "approved");
-        await RunAsync(recorder, "return 'nope';", ["approved", "rejected"], expectedOutcome: RunJavaScript.UnmatchedOutcome);
+        // Authored outcomes: the script selects a declared name by returning complete(); returned data selects nothing.
+        await RunAsync(recorder, "return complete('order', 'approved');", ["approved", "rejected"], expectedOutcome: "approved");
+        await RunAsync(recorder, "return 'approved';", ["approved", "rejected"], expectedOutcome: "Done");
     }
 
     private async Task RunAsync(

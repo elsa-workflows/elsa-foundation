@@ -281,7 +281,7 @@ public sealed class ActivityIoTypeRegistrationTests
     private static IWellKnownTypeRegistry SeedPrimitives(IWellKnownTypeRegistry registry)
     {
         registry.RegisterType(typeof(string), "String");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         return registry;
     }
 

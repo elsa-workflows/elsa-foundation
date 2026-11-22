@@ -168,7 +168,7 @@ The committer then:
 There are two stores:
 
 - **In memory** (the default). Nothing survives a restart.
-- **Database** (EF Core). Writes everything in one transaction, plus a marker that makes replaying the same commit harmless.
+- **Database** (EF Core). Writes everything in one transaction, plus a marker that makes replaying the same commit harmless ([how a replay is answered](runtime-durable-resumption.md#the-idempotency-rule)).
 
 The Workbench uses SQLite: each EF module's `Provider` in `shells.json`, falling back to the `ConnectionStrings:Elsa` connection string. The database file is `elsa.db` next to the Workbench program.
 
@@ -216,8 +216,8 @@ The EF command budgets file records what each reference workflow costs on the ru
 
 | Reference workflow | Durable | Balanced |
 |---|---:|---:|
-| Ten WriteLine activities | 320 commands | 98 commands |
-| 4-activity HTTP workflow | 195 commands | 101 commands |
+| Ten WriteLine activities | 221 commands | 64 commands |
+| 4-activity HTTP workflow | 149 commands | 83 commands |
 
 SQLite allows one writer, and at its default `synchronous=FULL` each commit is an fsync, so requests queue behind each other's fsyncs. When *Durable* still committed every scheduler hop (about 106 commits per request of the HTTP reference workflow), that workflow plateaued at two concurrent clients on a cloud VM disk, about one request per second. This was measured, not inferred: fsyncs were counted per request, and injecting 5 ms into every fsync locally reproduced the plateau ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). The plateau has not been measured again for the per-activity *Durable*. Reducing the commit count further is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564).
 

@@ -31,7 +31,8 @@ public sealed class SecretBindingCompilationTests
     public static TheoryData<string?> SecretTypes => new() { "text", "rsa-key", null };
 
     public static TheoryData<string, CollectionKind, string?> TextTargets => Cross(
-        [("String", CollectionKind.Single), ("Elsa.Any", CollectionKind.Single), ("JsonNode", CollectionKind.Single)]);
+        // Object, Elsa.Any and JsonElement are names of the dynamic kind, Any (spec 1228 FR-018, FR-021).
+        [("String", CollectionKind.Single), ("Elsa.Any", CollectionKind.Single), ("Object", CollectionKind.Single), ("JsonElement", CollectionKind.Single), ("JsonNode", CollectionKind.Single)]);
 
     public static TheoryData<string, CollectionKind, string?> NonTextTargets => Cross(
     [
@@ -42,8 +43,6 @@ public sealed class SecretBindingCompilationTests
         ("System.DayOfWeek", CollectionKind.Single),
         ("Guid", CollectionKind.Single),
         ("Uri", CollectionKind.Single),
-        ("Object", CollectionKind.Single),
-        ("JsonElement", CollectionKind.Single),
         ("JsonObject", CollectionKind.Single),
         ("String", CollectionKind.List),
         ("Int32", CollectionKind.List)

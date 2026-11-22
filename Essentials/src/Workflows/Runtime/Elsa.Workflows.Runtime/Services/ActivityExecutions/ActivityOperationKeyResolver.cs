@@ -31,13 +31,16 @@ public static class ActivityOperationKeyResolver
         return state.TargetOperationKey;
     }
 
-    /// <summary>Returns <paramref name="context"/> carrying the keys resolved from <paramref name="state"/>.</summary>
+    /// <summary>
+    /// Returns <paramref name="context"/> carrying the keys resolved from <paramref name="state"/> and its logical
+    /// invocation identity (spec 1221, ADR 0092 decision 8 as amended).
+    /// </summary>
     public static ActivityExecutionContext WithResolvedOperationKeys(this ActivityExecutionContext context, ActivityExecutionState? state)
     {
         ArgumentNullException.ThrowIfNull(context);
         return state is null
             ? context
-            : context.WithOperationKeys(ResolveOperationKey(state), ResolveTargetOperationKey(state));
+            : context.WithOperationKeys(ResolveOperationKey(state), ResolveTargetOperationKey(state), state.LogicalInvocationId);
     }
 
 }

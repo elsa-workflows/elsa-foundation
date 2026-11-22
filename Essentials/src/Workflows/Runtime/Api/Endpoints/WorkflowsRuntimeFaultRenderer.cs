@@ -31,6 +31,9 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                 await context.Response.WriteAsJsonAsync(new UserTasks.UserTaskProblem(task.Code, task.Message, task.Errors is null ? null : System.Text.Json.JsonSerializer.SerializeToElement(task.Errors)), WorkflowsRuntimeJsonContext.Default.UserTaskProblem, cancellationToken: context.RequestAborted);
                 return true;
 
+            case InstanceComparisonRefusedSignal refused:
+                await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status409Conflict, refused.Code, refused.Detail);
+                return true;
             case RuntimeRunDeletionRejectedSignal deletion:
                 await RuntimeProblemWriting.ProblemAsync(context, deletion.Status, deletion.Detail);
                 return true;

@@ -1,13 +1,15 @@
 # Activities Change Variables As A Unit Of Work Committed With The Step
 
-Status: proposed (2026-10-24). Sipke Schoorstra, the decision holder, chose this design in a brainstorming session
-on 2026-10-24, started from the review of spec 266
-([#3286](https://github.com/elsa-workflows/elsa-foundation/pull/3286)). Acceptance needs agreement with Joey Barten
-(@j03y-nxxbz) and Frans van Ek (@FransVanEk), because it would overturn parts of an accepted ADR (0045 §4, §5 and
-§6) and changes what spec 266 analyses.
+Status: accepted (2026-11-16), as amended below (*Amendment*). Sipke Schoorstra, the decision holder, chose this
+design in a brainstorming session on 2026-10-24, started from the review of spec 266. It overturns parts of an accepted ADR (0045 §4,
+§5 and §6) and changes what spec 266 analyses, so it needed agreement with Joey Barten and Frans van Ek. The three
+architects agreed the amended text; Joey Barten recorded the agreement as coordinator. Decision 3 was amended on
+2026-11-17 (computed and opaque writes in scripts, from spec 1231 Q5), approved by Joey Barten as coordinator. C3's
+precision sentence was clarified on 2026-11-20 to match ADR 0046 V9, decision unchanged: a loss is accepted only by the
+host's precision policy, not per workflow.
 
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
-([program-goal registry](../program-goals/README.md#registry)). If accepted, it amends
+([program-goal registry](../program-goals/README.md#registry)). It amends
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §4, §5 and §6 and
 [ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md) (reads and writes in
 RunJavaScript), and partly reverses ADR 0045's supersession of ADR 0030's JavaScript write-back. Builds on
@@ -100,17 +102,33 @@ At publish, the same parser and nearest-scope rule as ADR 0089 resolves every to
 pins that target (scope and key). The value itself comes from the session at run time (decision 2), not from a
 pinned parameter snapshot. Publish refuses:
 
-- a computed name in any form (`variables[k]`, `getVariable(k)`, `setVariable(k, v)`, or passing `variables`,
-  `getVariable` or `setVariable` around as a value), as ADR 0089 decision 5 does;
-- an undeclared name (decision 5);
+- an undeclared literal name (decision 5);
 - a transient variable, except in host-interop mode (decision 8);
 - an assignment to, or a direct nested assignment into, a read-only target (a loop item or index).
 
 The may-write set is every variable the script assigns, mutates, or lets escape into a local, a function argument or
 a closure, because each of those can mutate it. Read-only targets are frozen, so their escapes are not writes.
 
-*Why.* Resolving at publish keeps one resolver for reads and writes, keeps "which nodes touch this variable?" exact,
-and gives spec 266 a sound write set. Counting escapes as possible writes is conservative: it can add concurrent-write
+**Computed and opaque writes (amended 2026-11-17).** A write whose target publish cannot name is allowed, not
+refused: a computed name (`variables[k] = v`, `setVariable(k, v)`) and a write through `variables` or `setVariable`
+used as a value (aliased, passed to a function, spread). It is treated as decision 4 treats a free-name C# activity:
+- Publish marks the node as possibly writing **every visible variable**: its may-write set is all variables visible at
+  that point, so the concurrent-write rule and inspection count it, and publication and Studio show the mark.
+- At run time the name resolves to the nearest visible scope, as ADR 0089's fallback does for computed reads. The
+  write is found by the same change-finding mechanism as every other script write (amendment C2) and commits with
+  the step (decision 6) under ADR 0092.
+- An undeclared name faults the step before its commit (decision 5); a transient variable faults the step, as a
+  computed read of one does (ADR 0089); a read-only target is frozen, so the write throws.
+
+A node with only literal writes keeps its exact may-write set; the conservative set applies only to a node that has a
+computed or opaque write.
+
+*Why.* Resolving at publish keeps one resolver for reads and writes, keeps "which nodes touch this variable?" exact
+where the names are literal, and gives spec 266 a sound write set. Computed and opaque writes are not refused because
+the may-write set only feeds diagnostics, and a conservative set keeps them sound: refusing would block a script that
+runs correctly, which goes against the platform principle (guardrails and diagnostics, not restrictions), and would
+refuse even the plain writes of a script that aliases `variables` only to read it. C# free names already get this
+answer (decision 4). Counting escapes as possible writes is conservative: it can add concurrent-write
 diagnostics for a script that only passes a variable to a helper (a refusal under ADR 0045 §4 today, a warning if
 spec 266 lands), but it never misses a write.
 
@@ -143,8 +161,9 @@ to every C# access); bound references only (unlike Elsa 3, and too strict for ge
 
 ### 5. Undeclared variables are refused
 
-A script that names an undeclared variable fails publication. A free-name C# access to an undeclared name faults the
-step before its commit. Nothing is created implicitly.
+A script that names an undeclared variable literally fails publication. A computed or opaque script write to an
+undeclared name (decision 3) and a free-name C# access to an undeclared name fault the step before its commit. Nothing
+is created implicitly.
 
 *Why.* An Elsa 4 variable has a declared type, storage driver and policy. Elsa 3's `setVariable` created variables
 on first write; an auto-created Elsa 4 variable would have none of these.
@@ -224,6 +243,161 @@ the author's own objects).
 Output captures, the Set, Merge and Reduce intrinsics, operator alterations, pure input bindings, and outputs as
 typed results.
 
+## Amendment: explicit writes instead of comparing serialized forms
+
+This amendment keeps the ADR's goal and changes how a step's changes are found.
+
+**Why.** Decision 2 rests on one premise (its *Why*): a durable variable is serializable, so "did it change?" is a
+comparison of serialized forms. That premise mixes up two things. The stored form is JSON, but the form an activity
+works with does not turn back into that same JSON. Probes on `main` (System.Text.Json with the options
+`main` uses, and Jint 4.9.1 with `IsolatedJintEngine.CreateValue` copied line for line) give:
+
+| Form a step holds | Read, then serialized again |
+|---|---|
+| Stored `JsonElement`, never rewritten | Identical: the only form that keeps its text |
+| `JsonNode` | Same meaning; different text (escaping, whitespace) |
+| C# class (typed `Get<T>`) | Loses data: unknown members dropped, defaults added, camelCase members not read, a `DateTime` with an offset turned into server time |
+| Script value (Jint) | Loses data: every number becomes a double (`9007199254740993` becomes `9007199254740992`, `1.0` becomes `1`), integer-like keys move first, duplicate keys collapse |
+| Value stored through EF | Re-escaped (`é` becomes `é`), so the stored text depends on which backend wrote it |
+
+The rounded number is one case of a general rule: deserializing and serializing again does not give back the original
+JSON. [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) V6 lets an adapter lose detail on
+purpose, and ADR 0091 decision 3 keeps stored data in
+the notation it arrived in. Under decisions 2 and 6, two failures follow:
+- **Nothing changed, but it is written.** Every read is tracked (decision 2), and the commit serializes the tracked
+  instance (decision 6). A step that only read a value therefore writes it, and in a background step decision 7 can
+  turn that into a false conflict. This cannot happen today, because nothing tracks reads: a test on `main` with
+  `9007199254740993`, `12345678901234567890` and `1234567890.123456789012345` left the stored text and the frame
+  revision unchanged.
+- **One field changed, the others are corrupted.** The write is rebuilt from the adapter's object and replaces the
+  whole value. In the probe, `o.name = 'b'` in a script also rounded `id` and turned `amount: 1.0` into `1`; in C#,
+  `Name = "b"` dropped the unknown member `extra`.
+
+A better comparison cures only the first failure. EF Core can rely on snapshots because it owns typed columns, compares
+property by property with value comparers, and writes only what changed. Here the stored form is raw JSON that Elsa does
+not own, and the write replaces the whole value.
+
+**What `main` already does.** Writes are explicit: Set, Merge and Reduce, and output captures, each a whole-value write
+with a frame revision. Reads are never tracked, so a spurious write cannot happen. Decisions 2 and 6 add implicit
+change detection on top. It is needed for one feature only: changing a read object without assigning it
+(`order.total = 1`, decision 2). Three other proposals already rule that out or make it unnecessary:
+- the ADR 0089 amendment reads through a read-only accessor;
+- ADR 0046 V9 keeps a script's changes on its own copy;
+- decision 3 of this ADR already works out the may-write set at publish.
+
+**The amendment.** The goal stays: a step is a unit of work, its changes commit with the step, and a fault or cancel
+saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (decision 7). What changes:
+
+- **C1. A read creates no write.** A read returns a value: in a script plain JavaScript values (ADR 0046 V9), in C# a
+  copy. A variable a script only read writes nothing. Actual reads are
+  still recorded in ADR 0092's read set, for protection and conflict checking; only tracking every read goes. Reading a variable again in the same step returns the step's current
+  value, so read-your-writes stays. This replaces "A read returns a tracked instance", and every read becomes what
+  decision 2 calls a read-only read.
+- **C2. A write is explicit.** A step changes a variable by assigning it: `variables.x = v`, `setVariable('x', v)`,
+  `context.Variables.Set(target, value)`. In a script, changing a member of a read value (`variables.order.total = 1`,
+  `getVariable('o').x = 1`) is also an explicit write, and a whole assignment (`variables.order = …`) is told apart
+  from a change to a member. Elsa 3's nested mutation therefore still converts inside RunJavaScript. In C#, changing a
+  copy without `Set` is not a write.
+  - **Behaviour, not mechanism.** This amendment requires the behaviour of C1–C4, not a particular way of finding a
+    script's changes. The expected approach is copy, compare, patch (ADR 0046 V9): after the script, each variable it
+    read is compared with a fresh conversion of its original JSON, JavaScript with JavaScript, and each changed path
+    becomes part of the variable's intent. That is not the comparison this amendment rejects: both sides went through
+    the same conversion, so a read never looks like a change. The implementing spec chooses the mechanism and
+    validates it against these behaviours.
+  - **Visibility,** which comes with write-through in scripts. Publication and inspection show which
+    variables a script step writes; decision 3 already works out the may-write set. A warning is recorded when a script
+    changes a read value without assigning it (`variables.order.total = 1` with no `variables.order = …`), so such a
+    write is never unnoticed. A script that only wants a local copy copies explicitly (`{...variables.order}`), and the
+    documentation says so.
+- **C3. The write keeps what the step did not touch.** An intent is assembled as the base value plus the step's
+  changes and applied as one whole-value intent, as decision 6 says. This is a change within one step, not the
+  cross-branch field patch rejected under *Alternatives considered*. What is kept is data, not notation (ADR 0091
+  decision 3): a variable the step did not change keeps its exact stored text. Once a value is changed and written
+  back, its formatting (whitespace, property order, escape spellings) may change, in its untouched members too, while
+  its data semantics are kept: property names and their casing, string contents, value types, array order, and a
+  missing member versus `null`. A known loss of numeric precision is not formatting: a value that lost precision and
+  reaches a write is refused unless the host's precision policy allows the loss; no workflow accepts it on its own
+  (ADR 0046 V9).
+  - **The array exception.** A changed array is written as a whole, so its untouched elements are rewritten from the
+    script's values as well. When that would lose precision, the write is refused with ADR 0046's whole-array
+    diagnostic, which names the array path, the elements that lost precision with their stored and written values,
+    and the remedy of passing integers beyond 2^53 as strings.
+  - **Replace or partial update** (reconciliation row 11b). Assigning a whole value (`variables.x = v`,
+    `setVariable('x', v)`, C# `Set(target, value)`) replaces it: the step said what the value is. Changing a member
+    in a script (`variables.order.total = 1`, C2) is a partial update: base plus that change. A whole-value
+    write never loses members silently: when C# writes back a value read as a type that dropped members of the stored
+    value (ADR 0046 V6's declared loss), a warning names the dropped members. A C# step that needs a partial update
+    reads the value as JSON (`JsonNode`) instead of a narrower type.
+  - **Dynamic values in C#.** `Get<T>` on a dynamic (`Any`) variable reads it as `JsonNode` by default, so it can be
+    changed and written back without losing members (ADR 0046: `Any` is plain JSON). Reading it as a narrower C#
+    class is an explicit choice whose loss is ADR 0046 V6's declared loss, with the write-back warning above.
+    Conversion into user types uses scoped serializer options, not host-wide ones.
+- **C4. A no-op assignment writes nothing.** Equality is equality of meaning in ADR 0091's canonical form, not of
+  text, so notation, escaping and key order do not make a value different. **Conflict checking comes first**
+  (reconciliation row 11c): a read-then-write is checked against its base version (C5) before C4 drops a no-op, so a
+  write that only looks like a no-op because another branch already wrote the same value is still a lost update
+  (ADR 0092 decision 2).
+  - **Two equalities, on purpose.** C2 and C4 judge equality differently. An explicit whole assignment
+    (`variables.x = v`, `setVariable('x', v)`, C# `Set`) is the author stating what the value is, so it is judged by
+    C4's meaning in ADR 0091's canonical form: assigning `…992` over a stored `…993` is a write. A member change in a
+    script is inferred from what the script did with what it read, so it is judged JavaScript against JavaScript: a
+    value that looks equal to the one read (`…992` over a stored `…993`) is unchanged, and writing it as a string
+    forces the write. Without this difference the same intent would be dropped in one form and written in the other.
+- **C5. Read-then-write conflicts follow ADR 0092.** Decision 7 no longer compares serialized values and no longer
+  faults by default. A step write is a write under ADR 0092 like any other:
+  - its base is the variable version the step read, recorded in ADR 0092's read set;
+  - a write on a stale base is a lost update: by default it applies (last write wins) with a lost-update warning;
+  - `[VariableConflictPolicy]` becomes ADR 0092's per-node mode, with `Fault` as the opt-in for strict
+    read-modify-write, declared by an activity type or set per node by an engineer through the design API (ADR 0092
+    decision 6);
+  - the digest, which lets 0 → 1 → 0 count as unchanged, compares meaning in ADR 0091's canonical form and is used
+    only under `Fault`;
+  - the rule is the same for inline and background steps.
+
+**A-3: writes are a general capability** (analysis A-3).
+- **Pure input expressions are the recommended path,** and input-binding expressions never write (decision 1).
+- **Transactional writes from script and C# activity bodies are a general capability,** for native and imported
+  workflows alike. They are not an Elsa 3 compatibility mode.
+- **What a step may change** is engine-owned state: variables, workflow outputs, correlation ID, instance name and
+  outcome selection. The changes commit atomically with the successful evaluation; a fault or cancellation discards
+  them. External effects are outside this rollback (D-2).
+- **Each evaluation is its own transaction:** an invoke, a resume, or a structural child notification. A later fault
+  does not discard earlier committed evaluations or child work.
+- **Order within one commit:** step writes first, output captures last, so a capture wins on overlap. Diagnostics and
+  inspection show the overlap.
+- **Correlation:** changing a workflow's correlation never silently rebinds existing bookmarks. Existing waits keep the
+  correlation they captured; later waits use their own.
+
+This answers A-3's question: writing from scripts is a general capability, not compatibility only. D-3 then reads
+"an output capture wins over a step write".
+
+**What it changes in this ADR.**
+- Decision 2: C1 and C2 replace "A read returns a tracked instance" and the mutation rule. The comparison of serialized
+  forms in its *Why* goes.
+- Decision 4: `Get<T>` returns a copy and `Set` is the write; `GetReadOnly<T>` is no longer a separate read. A
+  dynamic value is read as `JsonNode` by default (C3).
+- Decision 6: intents come from explicit writes (C2), assembled by C3; C4 replaces "compared with its base". The
+  comparison of serialized forms goes entirely.
+- Decision 7: C5. Its default (fault) and its value comparison go; ADR 0092's version check and default apply.
+- Decision 8: host-interop mode is the separately named, host-selected profile for script activities of the ADR 0046
+  amendment (V10); input-binding expressions never get it.
+- *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
+  C# authors expect to mutate what they read. This amendment adopts it for C# and keeps member mutation in scripts
+  (C2).
+- *Consequences*, cost: no serialization of read variables at commit; only written variables are serialized.
+- Open question 1 (a script read-only read) is gone: every read is read-only.
+
+**What it touches elsewhere.**
+- **ADR 0046 amendment, V9:** scripts get plain JavaScript values; their changes leave the script only as explicit
+  writes (C2), found by the mechanism the implementing spec chooses, copy, compare, patch being the expected one. Its
+  precision rules and whole-array diagnostic apply to C3.
+- **ADR 0089 amendment, A3:** the recorded reads are what C5 checks against.
+- **ADR 0091:** decision 3 rules out comparing stored text; its canonical form gives the equality of C4 and
+  the digest of C5.
+- **ADR 0092:** replaces decision 7's comparison and default (C5); a step that only read a variable produces no write.
+- **Decision D-3** says "an output capture wins over a tracked write". Under this amendment that becomes
+  a "step write"; the transaction model does not need tracking.
+
 ## Consequences
 
 - **ADR 0045.**
@@ -248,12 +422,15 @@ typed results.
 - **Spec 095.** Its expression-and-import contract says stateful scripts "use a separate graph-visible `Set` intrinsic
   when a variable must change". That stays true for input bindings and becomes optional for activities.
 - **Concurrent-write rule and spec 266 (#3286).** `ValueFlow/ConcurrentWrite` (a refusal today, spec 266's warning if
-  it lands) must add step writers through the may-write set and treat a marked free-name activity as touching every
-  visible variable. Its rationale becomes precise: static analysis sees every write except
-  those of marked free-name activities. Decision 7 uses value comparison, not the frame revision, so spec 266's
-  ADR 0048 §4 amendment does not conflict with it.
+  it lands) must add step writers through the may-write set and treat a marked free-name activity, and a script with a
+  computed or opaque write (decision 3), as touching every visible variable. Its rationale becomes precise: static
+  analysis sees every write except those of marked free-name activities and of such scripts, which it counts
+  conservatively. Decision 7 uses per-variable versions (C5), not the frame revision, so spec
+  266's ADR 0048 §4 amendment does not conflict with it.
 - **Converter (spec 247 follow-up).** Inside RunJavaScript, Elsa 3 `setVariable`, generated `set<Name>()` and
-  mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused.
+  mutation of a read value (`getVariable('o').x = 1`) become convertible. In expressions they stay refused. A
+  computed `setVariable` name converts to `variables[k] = v`, a computed write (decision 3): a declared name is
+  written, and an undeclared name faults the step.
 - **Inspection.** Each commit records which variables a step changed, which is the data #3290 (variable write
   history and the winning write) needs.
 - **Cost.** One serialization per tracked variable per commit, and one more comparison per conflict-checked variable.
@@ -268,6 +445,10 @@ Rejected as the only path; it stays the right choice for most activities.
 a clear error on mutation. Rejected because C# authors expect to mutate what they read, and a rule they must learn
 is a source of confusion.
 
+**Refuse computed and opaque writes in scripts (decision 3 as first written).** Keeps every may-write set exact.
+Rejected on 2026-11-17: the set only feeds diagnostics, a conservative set keeps them sound, and the refusal blocked
+scripts that run correctly, including the plain writes of a script that aliases `variables` only to read it.
+
 **Live store, as in Elsa 3.** Variables are shared live objects, written immediately. Impossible with durable,
 distributed execution: the next step may run on another node from the serialized value.
 
@@ -281,8 +462,10 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - A step reads committed values at invoke, not its pinned input snapshot.
 - Read-your-writes in scripts and C#, including nested mutation through an alias.
 - An unchanged value writes nothing; a changed nested field writes the whole value; a read-only read never writes.
-- Publish refuses computed and undeclared targets, writes to read-only targets, and unbound references, and the
-  may-write set feeds the concurrent-write rule.
+- Publish refuses undeclared literal targets, literal writes to read-only targets, and unbound references, and the
+  may-write set feeds the concurrent-write rule. A computed or opaque script write publishes with the node marked as
+  possibly writing every visible variable, resolves at run time, and faults the step on an undeclared or transient
+  name.
 - A background read-then-write conflict faults by default; a write to an unrelated variable in the same frame is not
   a conflict; the type default and the node override work; blind writes follow the concurrent-write rule.
 - A background step's intents and read bases are persisted with its worker result and applied, with the check, by
@@ -299,6 +482,13 @@ variable. Rejected for now: array patches by index land in the wrong place after
 - Elsa 3 `setVariable`, `set<Name>()` and nested mutation convert inside RunJavaScript and stay refused in
   expressions.
 - Serialization cost is measured against a large payload.
+- Under the amendment (reconciliation row 11d): the chosen mechanism finds nested changes, including through an
+  alias; a variable the step did not change keeps its exact stored text; a changed value keeps the data semantics of
+  its untouched members; a lost digit that reaches a write is refused unless the host's precision policy
+  allows it, and a changed array that would lose precision is refused with the whole-array diagnostic; an explicit
+  whole assignment of `…992` over `…993` writes, while an equal-looking member change does not; publication lists each
+  script step's written variables; a change without assignment is warned about; a narrower C# type written back warns
+  about the members it drops; a conflicted write that would be a no-op is still reported as a lost update.
 
 ## Open questions
 

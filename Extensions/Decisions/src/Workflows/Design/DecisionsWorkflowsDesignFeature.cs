@@ -2,6 +2,7 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -17,6 +18,7 @@ public class DecisionsWorkflowsDesignFeature : IShellFeature
         services.AddHttpContextAccessor();
         services.TryAddScoped<IDecisionPublicationAuthorizer, DecisionPublicationAuthorizer>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, DecisionPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityInputSourceConstraintProvider, DecisionInputSourceConstraintProvider>());
         services.AddSingleton<IShellInitializer>(new Cardinality(services));
     }
 

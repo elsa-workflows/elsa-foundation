@@ -171,6 +171,11 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityVersionDiffViewMappings)
     ];
 
+    // Additive #3922 contracts have their own explicit surface below. Keep the legacy fingerprint
+    // intact so introducing the context cannot silently ratify a change to an existing contract.
+    private static readonly Type[] ActivityDataSelectionContractTypes =
+        [typeof(ActivityDataSelectionContextRequest), typeof(ActivityDataSelectionContextResponse)];
+
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
@@ -180,7 +185,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
 
         Assert.Equal("Elsa.Activities.Design.Api", apiAssembly.GetName().Name);
 
-        foreach (var contractType in ContractTypes)
+        foreach (var contractType in ContractTypes.Concat(ActivityDataSelectionContractTypes))
         {
             Assert.Same(apiAssembly, contractType.Assembly);
             Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
@@ -199,8 +204,32 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
-            ContractTypes.Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
+            ContractTypes.Concat(ActivityDataSelectionContractTypes).Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
             exported);
+    }
+
+    [Fact]
+    public void Data_context_has_the_explicit_additive_record_surface()
+    {
+        AssertRecord(typeof(ActivityDataSelectionContextRequest),
+            ("DraftId", typeof(string)), ("ContractVersion", typeof(string)), ("ExpectedBaseRevision", typeof(long)),
+            ("DocumentRevision", typeof(string)), ("Target", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionTarget)),
+            ("Query", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionQuery)),
+            ("CurrentSnapshot", typeof(System.Text.Json.JsonElement?)), ("SnapshotHash", typeof(string)));
+        AssertRecord(typeof(ActivityDataSelectionContextResponse),
+            ("ContractVersion", typeof(string)), ("State", typeof(string)), ("Code", typeof(string)),
+            ("ResourceKind", typeof(string)), ("ResourceId", typeof(string)), ("BaseRevision", typeof(string)),
+            ("DocumentRevision", typeof(string)), ("SnapshotHash", typeof(string)), ("ContextRevision", typeof(string)),
+            ("Analysis", typeof(Elsa.Workflows.Design.Validations.Core.Models.ActivityDataSelectionAnalysis)));
+
+        static void AssertRecord(Type type, params (string Name, Type Type)[] fields)
+        {
+            var parameters = Assert.Single(type.GetConstructors()).GetParameters();
+            Assert.Equal(fields.Select(x => (x.Name, x.Type)), parameters.Select(x => (x.Name!, x.ParameterType)));
+            Assert.Equal(fields.OrderBy(x => x.Name), type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Select(x => (x.Name, x.PropertyType)).OrderBy(x => x.Name));
+            Assert.NotNull(type.GetMethod("Deconstruct", fields.Select(x => x.Type.MakeByRefType()).ToArray()));
+        }
     }
 
     [Fact]
@@ -231,7 +260,12 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved for DesignFacets as an additive body init property, preserving the existing positional API.
         // #3750 adds node-presentation body init properties and thin wire envelopes. The existing
         // command constructors/deconstructors are retained and explicitly covered above.
-        Assert.Equal("4180874702ea7eac813efba4dc50a9b2463bab7970f125ecd4a06796db22730d", PublicShapeHash(ContractTypes));
+        // It moved for RuntimeActivityType as an additive body init property on ActivityAuthoringDescriptorView: the declared
+        // runtime type (e.g. Elsa.HttpEndpoint) a compiled node carries for a CLR activity whose catalog key is its CLR full name.
+        // Spec 1231 moved it for VariableAccess, an optional trailing positional parameter on ActivityInputDescriptorView
+        // (as ConnectionType before it), and AccessesUndeclaredVariables, an additive body init property on
+        // ActivityAuthoringDescriptorView: an input's variable-reference direction and the free-name marker.
+        Assert.Equal("b62958b33e6d5393d406e685f7df2fd7f9bef3027127d6bffcce1f00faef8fd1", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

@@ -30,7 +30,7 @@ export function withWorkflowInputExpressionArgument(
     resultType: portableResultType(activityInput),
     parameters: {},
     options: {},
-    capabilityProfile: "binding-pure-v1"
+    capabilityProfile: "binding-readonly-v1"
   };
   const hasExisting = Object.prototype.hasOwnProperty.call(definition.parameters, workflowInput.name);
   const existing = hasExisting ? definition.parameters[workflowInput.name] : null;
@@ -62,8 +62,11 @@ function portableResultType(input: StudioActivityInputDescriptor): Record<string
     kind => kind.toLowerCase() === input.collectionKind?.toLowerCase()
   ) ?? "Single";
   const fullName = stripAssemblyQualifiers(input.typeName);
-  const alias = fullName.replace(/^System\.(String|Object|Boolean|Byte|SByte|Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Decimal|Char|DateTime|DateTimeOffset|TimeSpan|Guid)$/, "$1");
-  return { alias: alias || "Elsa.Any", collectionKind };
+  // .NET object is the dynamic kind, Any (spec 1228 FR-018), as the server's alias convention names it.
+  const alias = fullName === "System.Object"
+    ? "Any"
+    : fullName.replace(/^System\.(String|Boolean|Byte|SByte|Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Decimal|Char|DateTime|DateTimeOffset|TimeSpan|Guid|DateOnly|TimeOnly)$/, "$1");
+  return { alias: alias || "Any", collectionKind };
 }
 
 function stripAssemblyQualifiers(typeName: string): string {

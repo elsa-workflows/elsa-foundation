@@ -29,9 +29,9 @@ public sealed class Elsa3HttpRequestProjectionTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var state = result.Value!.State;
         var order = state.RootActivity!.Structure!.Payload.GetProperty("activities").EnumerateArray().Select(node => node.GetProperty("nodeId").GetString()).ToArray();
-        Assert.Equal(["endpoint", "endpoint.elsa3-http-headers", "direct", "script"], order);
+        Assert.Equal(["endpoint", "endpoint.http-headers", "direct", "script"], order);
 
-        var set = Node(state, "endpoint.elsa3-http-headers");
+        var set = Node(state, "endpoint.http-headers");
         Assert.Equal(Elsa3IntrinsicContracts.Set, set.ActivityVersionId);
         Assert.Equal("hdrs", set.Intrinsic!.Variable!.ReferenceKey);
         Assert.Equal(VariableReference.WorkflowScopeId, set.Intrinsic.Variable.DeclaringScopeId);
@@ -59,10 +59,10 @@ public sealed class Elsa3HttpRequestProjectionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var state = result.Value!.State;
-        Assert.Contains(state.Variables, variable => variable.ReferenceKey == "elsa3.http.endpoint.query");
-        Assert.Equal("elsa3.http.endpoint.query", Node(state, "endpoint.elsa3-http-query").Intrinsic!.Variable!.ReferenceKey);
+        Assert.Contains(state.Variables, variable => variable.ReferenceKey == "http.endpoint.query");
+        Assert.Equal("http.endpoint.query", Node(state, "endpoint.http-query").Intrinsic!.Variable!.ReferenceKey);
         var direct = Input(Node(state, "direct"), "text");
-        Assert.Equal("elsa3.http.endpoint.query", ((JsonElement)direct.Value.Value!).GetProperty("referenceKey").GetString());
+        Assert.Equal("http.endpoint.query", ((JsonElement)direct.Value.Value!).GetProperty("referenceKey").GetString());
     }
 
     [Fact]
@@ -73,8 +73,8 @@ public sealed class Elsa3HttpRequestProjectionTests
         var result = await ConvertAsync(root, new Elsa3Variable { Id = "h", Name = "h", TypeName = "Object" }, new Elsa3Variable { Id = "q", Name = "q", TypeName = "Object" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("h", Node(result.Value!.State, "endpoint.elsa3-http-headers").Intrinsic!.Variable!.ReferenceKey);
-        Assert.Equal("q", Node(result.Value.State, "endpoint.elsa3-http-query").Intrinsic!.Variable!.ReferenceKey);
+        Assert.Equal("h", Node(result.Value!.State, "endpoint.http-headers").Intrinsic!.Variable!.ReferenceKey);
+        Assert.Equal("q", Node(result.Value.State, "endpoint.http-query").Intrinsic!.Variable!.ReferenceKey);
     }
 
     [Fact]
@@ -101,7 +101,8 @@ public sealed class Elsa3HttpRequestProjectionTests
     {
         var root = Sequence("root",
             Endpoint(("parsedContent", Captured("body"))),
-            Activity("write", "Elsa.WriteLine", ("text", Captured("body"))));
+            // A dynamic input: request data into a typed one is refused (#4898).
+            Activity("write", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("body"))));
 
         var result = await ConvertAsync(root, new Elsa3Variable { Id = "body", Name = "body", TypeName = "Object" });
 
@@ -111,7 +112,7 @@ public sealed class Elsa3HttpRequestProjectionTests
         var target = (JsonElement)output.Value.Value!;
         Assert.Equal("body", target.GetProperty("referenceKey").GetString());
         Assert.Equal(VariableReference.WorkflowScopeId, target.GetProperty("declaringScopeId").GetString());
-        Assert.Equal("body", ((JsonElement)Input(Node(result.Value.State, "write"), "text").Value.Value!).GetProperty("referenceKey").GetString());
+        Assert.Equal("body", ((JsonElement)Input(Node(result.Value.State, "write"), "Payload").Value.Value!).GetProperty("referenceKey").GetString());
     }
 
     [Fact]
@@ -129,12 +130,13 @@ public sealed class Elsa3HttpRequestProjectionTests
     public async Task A_loop_value_captured_into_a_variable_is_the_loop_variable_inside_the_body()
     {
         var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[1,2]", "Object")), ("currentValue", Captured("item")));
-        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.WriteLine", ("text", Captured("item"))));
+        // A dynamic input: a loop item into a typed one is refused (#4898).
+        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("item"))));
 
         var result = await ConvertAsync(Sequence("root", loop), new Elsa3Variable { Id = "item", Name = "item", TypeName = "Object" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        var text = Input(Node(result.Value!.State, "inside"), "text");
+        var text = Input(Node(result.Value!.State, "inside"), "Payload");
         var reference = (JsonElement)text.Value.Value!;
         Assert.Equal("loop", reference.GetProperty("declaringScopeId").GetString());
         Assert.Equal("currentItem", reference.GetProperty("referenceKey").GetString());
@@ -168,9 +170,9 @@ public sealed class Elsa3HttpRequestProjectionTests
         var chart = result.Value!.State.RootActivity!;
         Assert.Equal(
             [
-                "endpoint.elsa3-http-headers:Done->direct",
-                "endpoint:Done->endpoint.elsa3-http-query",
-                "endpoint.elsa3-http-query:Done->endpoint.elsa3-http-headers"
+                "endpoint.http-headers:Done->direct",
+                "endpoint:Done->endpoint.http-query",
+                "endpoint.http-query:Done->endpoint.http-headers"
             ],
             Support.Elsa3FlowchartFixtures.Connections(chart));
         Assert.Equal("endpoint", Support.Elsa3FlowchartFixtures.StartNodeId(chart));

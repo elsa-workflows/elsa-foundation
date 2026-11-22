@@ -170,7 +170,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     {
         // An input whose catalog version declares a canonical any alias is compiled with a CanonicalAny plan from text.
         // Activation converts the resolved text with that plan, and the text reaches the activity.
-        var anyType = new ValueTypeDescriptor("Elsa.Any");
+        var anyType = new ValueTypeDescriptor("Any");
         var plan = new ValueConversionPlan(
             ValueConversionPlan.CurrentSchemaVersion,
             ValueRepresentation.TextValue,

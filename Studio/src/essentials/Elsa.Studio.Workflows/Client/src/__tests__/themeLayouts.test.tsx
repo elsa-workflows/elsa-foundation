@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Position } from "@xyflow/react";
 import { WorkflowFlowEdge } from "../workflow-editor/graph";
+import { WorkflowEdgeActionsContext } from "../workflow-editor/contexts";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 
@@ -11,7 +12,7 @@ vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
     ...actual,
-    BaseEdge: ({ path }: { path: string }) => <svg><path data-edge-path d={path} /></svg>,
+    BaseEdge: ({ path, label }: { path: string; label?: React.ReactNode }) => <svg><path data-edge-path d={path} />{label != null && <text data-edge-label>{label}</text>}</svg>,
     EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>
   };
 });
@@ -109,3 +110,17 @@ function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
     handleSidePanelResizeKeyDown: () => {}
   };
 }
+
+it.each([
+  [false, "Approve", "Approve", null],
+  [true, "Approve", "Approve", "Approve"],
+  [false, "Approve", "Manager approved", "Manager approved"],
+  [false, undefined, "Custom connection", "Custom connection"]
+] as const)("preserves custom/editable edge labels and removes a read-only port duplicate (%s, %s, %s)", (editable, sourceHandleId, label, expected) => {
+  const actions = editable ? { highlightedEdgeId: null, deleteEdge: vi.fn(), requestInsertActivity: vi.fn() } : null;
+  flushSync(() => root.render(<WorkflowEdgeActionsContext.Provider value={actions}>
+    <WorkflowFlowEdge id="edge" source="a" target="b" sourceX={0} sourceY={0} targetX={200} targetY={80}
+      sourcePosition={Position.Bottom} targetPosition={Position.Top} sourceHandleId={sourceHandleId} label={label} />
+  </WorkflowEdgeActionsContext.Provider>));
+  expect(container.querySelector("[data-edge-label]")?.textContent ?? null).toBe(expected);
+});

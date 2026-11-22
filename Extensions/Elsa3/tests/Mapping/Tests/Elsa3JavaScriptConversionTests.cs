@@ -23,14 +23,14 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("args.value")]
     [InlineData("getVariable('o').name = 'x'")]
     [InlineData("getOrderId()")]
-    [InlineData("Date.now")]
+    [InlineData("DateTime.Now")]
     [InlineData("typeof moment")]
     [InlineData("[DateTime][0]")]
-    [InlineData("function f(Date) { return Date; } Date.now()")]
+    [InlineData("function f(DateTime) { return DateTime; } DateTime.Now")]
     [InlineData("(() => { let moment = 1; return moment; })() + moment")]
     [InlineData("[1].map(Guid => Guid).concat([Guid])[0]")]
     [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })() + getOrderId()")]
-    [InlineData("(() => { try { return 1; } catch (Date) { return 2; } })() + Date.now()")]
+    [InlineData("(() => { try { return 1; } catch (DateTime) { return 2; } })() + DateTime.Now")]
     public async Task Constructs_elsa4_cannot_run_are_refused(string expression)
     {
         var result = await ConvertTextAsync(expression);
@@ -91,16 +91,52 @@ public sealed class Elsa3JavaScriptConversionTests
     }
 
     [Fact]
-    public async Task A_script_reads_through_arguments_and_returns_its_completion_value()
+    public async Task A_script_reads_a_variable_through_the_variables_root_and_returns_its_completion_value()
     {
+        // Spec 1222 FR-026a: the body reads variables over its session, so no arguments expression carries them.
         var script = Activity("node", "Elsa.RunJavaScript", ("script", Literal("var total = getVariable('total'); total + 1")));
 
         var result = await ConvertAsync(Sequence("root", script), new Elsa3Variable { Id = "total", Name = "total", TypeName = "Int32" });
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var node = Node(result.Value!.State, "node");
-        Assert.Equal("var total = args.total; return total + 1", Text(Input(node, "script")));
-        Assert.Equal("({ \"total\": args.total })", Source(Input(node, "arguments")));
+        Assert.Equal("var total = variables.total; return total + 1", Text(Input(node, "script")));
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "arguments");
+    }
+
+    [Fact]
+    public async Task A_script_reads_a_workflow_input_through_arguments()
+    {
+        // Inputs, activity results and metadata stay args (FR-035a).
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("var name = getInput('Customer'); name")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "Customer", Type = "String" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "node");
+        Assert.Equal("var name = args.Customer; return name", Text(Input(node, "script")));
+        Assert.Equal("({ \"Customer\": args.Customer })", Source(Input(node, "arguments")));
+    }
+
+    /// <summary>
+    /// #3287: the <c>arguments</c> expression declares the type of RunJavaScript's <c>arguments</c> input, because
+    /// publication requires the two to match exactly. It declared <c>Object</c>, and every script that read anything
+    /// was refused at publish.
+    /// </summary>
+    [Fact]
+    public async Task The_arguments_expression_declares_the_arguments_input_type()
+    {
+        var definition = ConversionServices.Definition(Sequence("root",
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal("return getInput('greeting');")))));
+        definition.Inputs = [new Elsa3WorkflowArgumentDefinition { Name = "greeting", Type = "String" }];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var arguments = Assert.IsType<JsonElement>(Input(Node(result.Value!.State, "node"), "arguments").Value.Value);
+        Assert.Equal("System.Text.Json.JsonElement", arguments.GetProperty("resultType").GetProperty("Alias").GetString());
     }
 
     [Fact]
@@ -114,8 +150,8 @@ public sealed class Elsa3JavaScriptConversionTests
         Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "arguments");
     }
 
+    // setOutcome in a script now converts (spec 1208 FR-027); see Elsa3JavaScriptHostFunctionTests.
     [Theory]
-    [InlineData("setOutcome('Done')")]
     [InlineData("getOrderId() + 1")]
     public async Task A_script_calling_an_elsa3_host_function_is_refused(string body)
     {

@@ -23,7 +23,7 @@ internal static class HttpResponseInstructionFixture
             valueType,
             JsonSerializer.SerializeToElement(instruction, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             ValueProtectionPolicy.InstanceInline);
-        var completion = new ActivityCompletion(invocationId, "attempt-1", result, "Done", now, "sha256:test");
+        var completion = new ActivityCompletion(invocationId, "attempt-1", result, Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"), now, "sha256:test");
         return await StoreWithCompletion(completion);
     }
 

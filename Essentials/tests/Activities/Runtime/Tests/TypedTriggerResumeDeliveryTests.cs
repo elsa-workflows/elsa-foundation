@@ -41,7 +41,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
         var completed = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(completed?.Completion);
-        Assert.Equal("Done", completed.Completion.OutcomeKey);
+        Assert.Equal(new[] { "Done" }, completed.Completion.OutcomeNames);
         Assert.Null(completed.PrivateState);
         Assert.Empty(completed.TriggerRegistrations!);
         Assert.Empty(completed.BookmarkIds);

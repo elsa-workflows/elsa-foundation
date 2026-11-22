@@ -45,7 +45,7 @@ public sealed class UnknownActivityVersionValidatorTests
         {
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.SetOutput,
-                new TypeReference("Elsa.Any"))
+                new TypeReference("Any"))
         };
         var state = StateWithRoot(intrinsic);
 

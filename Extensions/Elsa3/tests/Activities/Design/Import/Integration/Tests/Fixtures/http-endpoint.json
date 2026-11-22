@@ -1,0 +1,101 @@
+{
+  "id": "http-hello-v1",
+  "definitionId": "http-hello",
+  "name": "http-hello",
+  "description": "Test-owned flowchart: starts on a POST to elsa3/hello and answers with a literal text body.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "http-hello-root",
+    "nodeId": "http-hello-root",
+    "name": "http-hello-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {},
+    "variables": [],
+    "activities": [
+      {
+        "id": "endpoint",
+        "nodeId": "endpoint",
+        "name": "endpoint",
+        "type": "Elsa.HttpEndpoint",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": true,
+          "runAsynchronously": false
+        },
+        "metadata": {},
+        "path": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "elsa3/hello"
+          }
+        },
+        "supportedMethods": {
+          "typeName": "List<String>",
+          "expression": {
+            "type": "Object",
+            "value": "[\"POST\"]"
+          }
+        }
+      },
+      {
+        "id": "respond",
+        "nodeId": "respond",
+        "name": "respond",
+        "type": "Elsa.WriteHttpResponse",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {},
+        "content": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Hello from Elsa 3"
+          }
+        },
+        "contentType": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "text/plain"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "endpoint",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "respond",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ]
+  }
+}

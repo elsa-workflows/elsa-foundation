@@ -1200,7 +1200,7 @@ function toWorkflowInput(input: NonNullable<StudioActivityDefinitionContract["in
     storageDriverType: typeof input.storageDriverKey === "string" ? input.storageDriverKey : null,
     isNullable: input.isNullable === true,
     type: {
-      alias: typeof type.alias === "string" ? type.alias : "Object",
+      alias: typeof type.alias === "string" ? type.alias : "Any",
       collectionKind: isCollectionKind(type.collectionKind) ? type.collectionKind : "Single"
     }
   };
@@ -1333,7 +1333,7 @@ function toGraphCanvasMode(slot: ChildSlot | undefined): GraphCanvasMode {
 }
 
 function readTypeAlias(value: unknown) {
-  return isRecord(value) && typeof value.alias === "string" ? value.alias : "Object";
+  return isRecord(value) && typeof value.alias === "string" ? value.alias : "Any";
 }
 
 function isCollectionKind(value: unknown): value is WorkflowInput["type"]["collectionKind"] {

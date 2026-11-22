@@ -74,6 +74,18 @@ public sealed class CredentialLiteralEndpointTests
         Assert.Equal(refusal.Message, Assert.Single(errors.GetProperty("generalErrors").EnumerateArray()).GetString());
     }
 
+    [Fact]
+    public async Task A_static_data_reference_refusal_is_answered_with_400_and_located_findings()
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        var finding = new ValidationError("consumer/inputs/customerId", "ValueFlow/UnavailableProducer", "The selected producer is unavailable.");
+        host.Domain.PromoteFailure = new ActivityDataSelectionRejectedException([finding]);
+        using var response = await SendAsync(host, "DraftsPromote", State(ActivityVersionId, Bind(CredentialKey, "Secret")));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(finding.Message, Assert.Single(json.RootElement.GetProperty("errors").GetProperty(finding.Path).EnumerateArray()).GetString());
+    }
+
     /// <summary>
     /// Sends <paramref name="state"/> to <paramref name="route"/> and asserts the refusal's problem body: 400, one error
     /// keyed by the credential input's path whose message starts with the rule id, the bound value nowhere, no command run.

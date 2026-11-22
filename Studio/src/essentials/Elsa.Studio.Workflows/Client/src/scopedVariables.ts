@@ -100,6 +100,24 @@ export function scopedVariableSignature(state: WorkflowDefinitionState | null | 
   return parts.join(";");
 }
 
+/**
+ * The selected node's own authored state (its inputs and settings, not its children), or "" when no node is selected or
+ * it is not in the tree. A script activity's may-write set follows its script (spec 1231 FR-036).
+ */
+export function selectedNodeSignature(state: WorkflowDefinitionState | null | undefined, nodeId: string | null, catalog?: ActivityCatalogLookup): string {
+  if (!state?.rootActivity || nodeId === null) return "";
+  const pending: ActivityNode[] = [state.rootActivity];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.nodeId === nodeId) {
+      const { structure: _structure, ...own } = node;
+      return JSON.stringify(own);
+    }
+    getChildSlots(node, catalog).forEach(slot => pending.push(...slot.activities));
+  }
+  return "";
+}
+
 function declarationSignature(variables: VariableDefinition[] | null | undefined): string {
   return JSON.stringify((variables ?? []).map(variable => [variable.referenceKey, variable.name, variable.type]));
 }

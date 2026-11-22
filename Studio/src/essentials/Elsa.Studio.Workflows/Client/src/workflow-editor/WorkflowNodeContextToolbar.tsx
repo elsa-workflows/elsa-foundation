@@ -23,7 +23,7 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = 
   const menuRef = React.useRef<HTMLDivElement>(null);
   const openAtEndRef = React.useRef(false);
   const menuId = React.useId();
-  const outcomes = actions?.canAddAfter ? data.sourcePorts : [];
+  const outcomes = actions?.canAddAfter ? data.sourcePorts.filter(port => !port.missing) : [];
   const canToggleStart = Boolean(actions?.setWorkflowStart && data.workflowStartEnabled !== undefined);
   const toggleIndex = outcomes.length > 0 ? 1 : 0;
   const duplicateIndex = toggleIndex + (canToggleStart ? 1 : 0);

@@ -101,7 +101,8 @@ public static class ActivityContractSurface
             {
                 ["key"] = input.ReferenceKey,
                 ["name"] = input.Name,
-                ["type"] = input.Type.Alias,
+                // A nested collection shows its whole shape (spec 1228 FR-022).
+                ["type"] = input.Type.Element is null ? input.Type.Alias : input.Type.ToDisplayString(),
                 ["collectionKind"] = input.Type.CollectionKind.ToString(),
                 ["isRequired"] = input.IsRequired,
                 ["isNullable"] = input.IsNullable,
@@ -123,7 +124,7 @@ public static class ActivityContractSurface
             {
                 ["key"] = output.ReferenceKey,
                 ["name"] = output.Name,
-                ["type"] = output.Type.Alias,
+                ["type"] = output.Type.Element is null ? output.Type.Alias : output.Type.ToDisplayString(),
                 ["collectionKind"] = output.Type.CollectionKind.ToString(),
                 ["isRequired"] = output.IsRequired,
                 ["isNullable"] = output.IsNullable,

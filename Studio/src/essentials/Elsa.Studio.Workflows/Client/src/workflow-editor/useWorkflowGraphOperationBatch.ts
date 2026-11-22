@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { StudioAgentClientExecutionResult, StudioAgentPreparedInvocation, StudioAgentToolAvailability } from "@elsa-workflows/studio-sdk";
+import type { StudioWeaverClientExecutionResult, StudioWeaverPreparedInvocation, StudioWeaverToolAvailability } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import {
   applyWorkflowDesignerPosition,
   applyWorkflowOperationBatch,
@@ -27,7 +27,7 @@ export const workflowObservationMarginMs = 5000;
 
 type UndoPoint = { before: WorkflowDraft; afterRevision: string; generationId: string; previousReviewHold: boolean };
 type Pending = {
-  id: string; expectedRevision: string; resolve(value: StudioAgentClientExecutionResult): void; result: StudioAgentClientExecutionResult;
+  id: string; expectedRevision: string; resolve(value: StudioWeaverClientExecutionResult): void; result: StudioWeaverClientExecutionResult;
   timeout: ReturnType<typeof setTimeout>; previousReviewHold: boolean;
   /** Present for an Operation Batch: its history entry is recorded once the reducer reports it applied. */
   batch?: { id: string; applied: WorkflowDraft };
@@ -35,7 +35,7 @@ type Pending = {
 
 export function useWorkflowGraphOperationBatch({ draft, details, catalog, document, controller, holdForReview, reviewHeld, canEdit, setStatus, setError, history, resourceType }: {
   draft: WorkflowDraft | null; details: WorkflowDefinitionDetails | null; catalog: ActivityCatalogItem[];
-  document: WorkflowDocumentApi; controller?: WorkflowAgentController; holdForReview(held: boolean): boolean; reviewHeld: boolean;
+  document: WorkflowDocumentApi; controller?: WorkflowWeaverController; holdForReview(held: boolean): boolean; reviewHeld: boolean;
   canEdit?(): boolean; setStatus(value: string): void; setError(value: WorkflowErrorInput): void;
   /** The designer history an Operation Batch is recorded in and undone through; without it a batch is refused. */
   history?: WorkflowBatchHistory;
@@ -78,8 +78,8 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
 
   useEffect(() => {
     if (!controller) return;
-    const observe = (id: string, expectedRevision: string, result: StudioAgentClientExecutionResult, expiresAt: string, previousReviewHold: boolean,
-      batch?: Pending["batch"]) => new Promise<StudioAgentClientExecutionResult>(resolve => {
+    const observe = (id: string, expectedRevision: string, result: StudioWeaverClientExecutionResult, expiresAt: string, previousReviewHold: boolean,
+      batch?: Pending["batch"]) => new Promise<StudioWeaverClientExecutionResult>(resolve => {
       const timeout = setTimeout(() => {
         if (pending.current?.id !== id) return;
         pending.current = null;
@@ -87,11 +87,11 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       }, Math.max(1, Date.parse(expiresAt) - Date.now()));
       pending.current = { id, expectedRevision, result, resolve, timeout, previousReviewHold, batch };
     });
-    const refuse = (summary: string): StudioAgentClientExecutionResult => ({ outcome: "refused", summary });
+    const refuse = (summary: string): StudioWeaverClientExecutionResult => ({ outcome: "refused", summary });
 
     // The exact originating binding and target, checked before anything is applied. Anything else is refused as stale
     // with zero change: a change is never rebased onto, or retargeted to, the working state that is open now.
-    const bindingProblem = (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): string | null => {
+    const bindingProblem = (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): string | null => {
       const current = latest.current;
       const snapshot = controller.snapshot;
       if (pending.current) return "Another workflow edit is awaiting observation.";
@@ -105,7 +105,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       return null;
     };
 
-    const executeLayout = async (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult> => {
+    const executeLayout = async (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): Promise<StudioWeaverClientExecutionResult> => {
       const problem = bindingProblem(invocation, signal);
       if (problem) return refuse(problem);
       const current = latest.current;
@@ -122,7 +122,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       const undoToken = `workflow-undo-${invocation.invocationId}`;
       const previousReviewHold = holdForReview(true);
       undoPoints.current.set(undoToken, { previousReviewHold, before: cloneWorkflowDraftForUndo(base), afterRevision, generationId: invocation.client!.generationId });
-      const result: StudioAgentClientExecutionResult = { outcome: "applied", summary: "Changed the workflow layout in local working state; save or publish explicitly.",
+      const result: StudioWeaverClientExecutionResult = { outcome: "applied", summary: "Changed the workflow layout in local working state; save or publish explicitly.",
         after: { ...target, revision: afterRevision }, result: { typeId: "workflows.layout-change", schemaVersion: "1", data: { ...args, revision: afterRevision, undoToken, observed: true } } };
       const completion = observe(invocation.invocationId, afterRevision, result, invocation.expiresAt, previousReviewHold);
       const state = current.document.state;
@@ -131,7 +131,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       return completion;
     };
 
-    const executeBatch = async (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult> => {
+    const executeBatch = async (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): Promise<StudioWeaverClientExecutionResult> => {
       const problem = bindingProblem(invocation, signal);
       if (problem) return refuse(problem);
       const current = latest.current;
@@ -172,7 +172,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       history.flushFromLatest();
       const batchId = invocation.invocationId;
       const undoToken = `${batchUndoPrefix}${batchId}`;
-      const result: StudioAgentClientExecutionResult = {
+      const result: StudioWeaverClientExecutionResult = {
         outcome: "applied",
         summary: `Applied all ${applied.appliedCount} operations to the unsaved working draft as one Undo step. Save or publish explicitly.`,
         after: { ...target, revision: afterRevision },
@@ -189,14 +189,14 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
       return completion;
     };
 
-    const execute = (invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult> =>
+    const execute = (invocation: StudioWeaverPreparedInvocation, signal?: AbortSignal): Promise<StudioWeaverClientExecutionResult> =>
       invocation.toolName === workflowBatchToolName ? executeBatch(invocation, signal)
         : invocation.toolName === workflowLayoutToolName ? executeLayout(invocation, signal)
           : Promise.resolve(refuse("This workflow editor has no client handler for that tool."));
 
     // Reported before dispatch (spec 1189): a closed, remounted or reloaded editor, or a changed selection, is not the
     // originating target any more, and the operation is refused with zero effect rather than retargeted.
-    const targetAvailability = (invocation: StudioAgentPreparedInvocation): StudioAgentToolAvailability => {
+    const targetAvailability = (invocation: StudioWeaverPreparedInvocation): StudioWeaverToolAvailability => {
       const snapshot = controller.snapshot;
       if (!snapshot || latest.current.canEdit?.() === false) return { status: "unavailable", reason: "The originating workflow editor is unavailable. Nothing was applied." };
       if (!invocation.client || snapshot.client?.clientId !== invocation.client.clientId || snapshot.client?.generationId !== invocation.client.generationId)
@@ -221,7 +221,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
     // The review card's whole-change Undo for a batch is designer-history Undo of the batch entry, so a later history
     // Undo can never apply the batch twice. It acts only while the batch entry is the current position.
     const batchIdOf = (token: string) => token.startsWith(batchUndoPrefix) ? token.slice(batchUndoPrefix.length) : null;
-    const batch: NonNullable<WorkflowAgentController["batch"]> = {
+    const batch: NonNullable<WorkflowWeaverController["batch"]> = {
       state(token) {
         const id = batchIdOf(token);
         const current = latest.current;

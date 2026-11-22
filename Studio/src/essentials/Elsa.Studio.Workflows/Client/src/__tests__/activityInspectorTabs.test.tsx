@@ -67,7 +67,7 @@ const setVariableNode: ActivityNode = {
   intrinsic: {
     kind: "Set",
     variable: { referenceKey: "counter", declaringScopeId: "workflow" },
-    valueType: { alias: "Elsa.Any", collectionKind: "Single" }
+    valueType: { alias: "Any", collectionKind: "Single" }
   }
 };
 
@@ -279,6 +279,15 @@ describe("activity Inspector tabs", () => {
     const variablesPanel = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
     expect(variablesPanel.textContent).toContain("Container variables");
     expect(variablesPanel.querySelector(".wf-intrinsic-variable")).toBeNull();
+  });
+
+  it("keeps the runtime's lost-update settings out of the designer: Details offers no lost-update mode or refresh switch", () => {
+    const container = render(<Harness reusableDefinitionId="send-http-definition" />);
+
+    click(tabs(container).find(tab => tab.textContent === "Details")!);
+    const details = container.querySelector<HTMLElement>("[role='tabpanel']:not([hidden])")!;
+    expect(details.textContent).not.toMatch(/lost-update|Variable writes|inputs read at start/i);
+    expect(details.querySelector("select")).toBeNull();
   });
 
   it("keeps reusable identity and source actions in Version", () => {

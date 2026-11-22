@@ -30,7 +30,8 @@ export function ValidationPanel({
   onRepair,
   onSelectNode,
   onSetAsStartNode,
-  unavailable
+  unavailable,
+  pending
 }: {
   draft: WorkflowDraft;
   errors?: ValidationError[];
@@ -42,9 +43,17 @@ export function ValidationPanel({
    */
   onSetAsStartNode?(nodeId: string): void;
   unavailable?: boolean;
+  pending?: boolean;
 }) {
   const errors = providedErrors ?? (Array.isArray(draft.validationErrors) ? draft.validationErrors : []);
   if (!errors.length) {
+    if (pending) {
+      return (
+        <div className="wf-validation" role="status">
+          Checking validation…
+        </div>
+      );
+    }
     return (
       <div className="wf-validation ok">
         <Check size={14} /> No validation errors
@@ -116,6 +125,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
   if (!testRun) {
     return (
       <div className="wf-runtime-panel">
+        {executionControls}
         <div className="wf-empty">Run the draft to see Runtime Evidence.</div>
       </div>
     );
@@ -151,6 +161,13 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
           <h3>{stale ? "Earlier test run" : "Latest test run"}</h3>
           <WorkflowStatusBadge status={summary.status} />
         </header>
+        {workflowExecutionId || view.artifactId ? (
+          <div className="wf-runtime-actions">
+            {workflowExecutionId ? <StudioButton size="sm" variant="primary" onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
+            {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
+          </div>
+        ) : null}
+        {executionControls}
         <p className="wf-runtime-outcome" aria-live="polite">{summary.description}</p>
         <p className="wf-runtime-note">Temporary test · your draft is unchanged</p>
         {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
@@ -165,13 +182,6 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
             {workflowExecutionId ? <StudioButton size="sm" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</StudioButton> : null}
           </div>
         ) : null}
-        {workflowExecutionId || view.artifactId ? (
-          <div className="wf-runtime-actions">
-            {workflowExecutionId ? <StudioButton size="sm" variant="primary" onClick={() => onOpenRun(workflowExecutionId)}>Open run</StudioButton> : null}
-            {view.artifactId ? <StudioLink className="wf-runtime-artifact-link" href={`/workflows/executables/${encodeURIComponent(view.artifactId)}`}>View artifact</StudioLink> : null}
-          </div>
-        ) : null}
-        {executionControls}
         {equivalent ? (
           <div className="wf-runtime-equivalence">
             <Layers size={14} aria-hidden="true" /> Current draft has the same behavior as a published version.

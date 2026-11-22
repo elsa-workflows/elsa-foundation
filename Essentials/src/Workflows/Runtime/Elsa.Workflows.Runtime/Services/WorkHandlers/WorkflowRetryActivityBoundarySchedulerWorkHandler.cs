@@ -96,7 +96,9 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             enclosingExecutionScopeId,
             "activity-boundary-retry",
             provenanceMetadata,
-            attempt);
+            attempt)
+            // Spec 1229 FR-007: a retry is caused by what caused the attempt it repeats.
+            .WithCausedBy(prior.Provenance.CausedBy);
         var schedulePayload = new RuntimeScheduleActivityCommandPayload(
             command.PinnedExecutable,
             prior.Execution.ExecutableNodeId,

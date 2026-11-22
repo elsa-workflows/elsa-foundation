@@ -124,6 +124,21 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(result.Diagnostics).Code);
     }
 
+    /// <summary>Spec 1208 FR-029: several outcomes convert only in a reusable workflow; Elsa 4 'finish' names one.</summary>
+    [Fact]
+    public async Task Complete_with_several_outcomes_in_the_root_flowchart_of_a_plain_workflow_is_unconvertible()
+    {
+        var root = Activity("root", "Elsa.Flowchart");
+        root.Activities = [Activity("complete", "Elsa.Complete", ("outcomes", Literal("[\"a\",\"b\"]", "Object")))];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains("'finish'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("usable as an activity", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Duplicate_switch_labels_are_unconvertible()
     {
@@ -181,6 +196,91 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Contains("'case1'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Equal("$.root.activities[0].cases[1].condition", diagnostic.Path);
         Assert.Equal("cases", diagnostic.Metadata["Property"]);
+    }
+
+    /// <summary>
+    /// Spec 1208 FR-028: Elsa 3 MatchAny, in each form Elsa 3 serializes, becomes the Elsa 4 Switch's <c>MatchAny</c>
+    /// mode with one condition per case under its case identity, and no synthesized <c>Value</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("\"MatchAny\"")]
+    [InlineData("\"matchAny\"")]
+    [InlineData("\"1\"")]
+    [InlineData("1")]
+    public async Task Switch_match_any_becomes_the_match_any_mode_with_a_condition_per_case(string mode)
+    {
+        var @switch = Activity("switch", "Elsa.Switch", ("mode", JsonDocument.Parse(mode).RootElement));
+        @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
+        {
+            new { label = "big", condition = new { typeName = "Boolean", expression = new { type = "JavaScript", value = "1 < 2;" } } },
+            new { label = "always", condition = new { typeName = "Boolean", expression = new { type = "Literal", value = "true" } } },
+            new { label = "never" }
+        });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var node = Node(result.Value!.State, "switch");
+        Assert.DoesNotContain(node.Inputs, input => input.ReferenceKey == "Value");
+        var payload = node.Structure!.Payload;
+        Assert.Equal("MatchAny", payload.GetProperty("mode").GetString());
+        var cases = payload.GetProperty("cases").EnumerateArray().ToArray();
+        Assert.Equal(["big", "always", "never"], cases.Select(item => item.GetProperty("match").GetString()));
+        Assert.Equal(["case-0", "case-1", "case-2"], cases.Select(item => item.GetProperty("caseId").GetString()));
+        Assert.All(cases, item => Assert.Equal(JsonValueKind.Null, item.GetProperty("activity").ValueKind));
+        var conditions = cases.Select(item => item.GetProperty("condition").Deserialize<Elsa.Workflows.Design.Core.Models.ArgumentState>(
+            new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } })!).ToArray();
+        Assert.Equal("JavaScript", conditions[0].Value.ExpressionType);
+        Assert.Contains("(1 < 2)", Source(conditions[0]), StringComparison.Ordinal);
+        Assert.Equal(("Literal", "true"), (conditions[1].Value.ExpressionType, Text(conditions[1])));
+        Assert.Equal(("Literal", "false"), (conditions[2].Value.ExpressionType, Text(conditions[2])));
+    }
+
+    [Fact]
+    public async Task A_match_any_case_that_holds_an_activity_is_unconvertible()
+    {
+        var @switch = Activity("switch", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
+        {
+            new { label = "empty", condition = new { expression = new { type = "Literal", value = "true" } } },
+            new { label = "busy", condition = new { expression = new { type = "Literal", value = "true" } }, activity = Port(Activity("body", "Elsa.WriteLine", ("text", Literal("1")))) }
+        });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains("'busy'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("FlowSwitch", diagnostic.Guidance, StringComparison.Ordinal);
+        Assert.Equal("$.root.activities[0].cases[1].activity", diagnostic.Path);
+    }
+
+    [Theory]
+    [InlineData("\"MatchSome\"")]
+    [InlineData("2")]
+    public async Task An_unknown_switch_mode_is_unconvertible(string mode)
+    {
+        var @switch = Activity("switch", "Elsa.Switch", ("mode", JsonDocument.Parse(mode).RootElement));
+        @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[] { new { label = "one" } });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains("MatchAny", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A schema-2 Switch case needs a case identity to publish; MatchFirst cases get one too.</summary>
+    [Fact]
+    public async Task Match_first_cases_carry_a_case_identity()
+    {
+        var result = await ConvertSwitchAsync("true", "false");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var payload = Node(result.Value!.State, "switch").Structure!.Payload;
+        Assert.False(payload.TryGetProperty("mode", out _));
+        Assert.Equal(["case-0", "case-1"], payload.GetProperty("cases").EnumerateArray().Select(item => item.GetProperty("caseId").GetString()));
+        Assert.All(payload.GetProperty("cases").EnumerateArray(), item => Assert.False(item.TryGetProperty("condition", out _)));
     }
 
     private static Task<Elsa3MigrationResult<Elsa3.Mapping.Conversion.Elsa3ConvertedDefinition>> ConvertForkAsync(JsonElement joinMode)

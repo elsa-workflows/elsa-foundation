@@ -3,9 +3,10 @@
 A reconciliation **source** (§2.6.1 DI-source pattern) that discovers CLR activities by scanning a
 folder of assemblies and contributes one catalog row per discovered `IActivity` implementation. It
 plugs into the universal reconciliation lifecycle owned by `Elsa.Activities.Design.Reconciliation`
-without depending on that feature project — it references only `…Reconciliation.Core` (for the
-`IActivityReconciliationSource` contract + model) and `Elsa.Activities.Runtime.Core` (for the
-activity abstractions and the `[Version]` attribute it reads).
+without depending on that feature project. It references `Elsa.Activities.Design.Core` for source and
+shape contracts, `Elsa.Activities.Runtime.Core` for activity abstractions and the unchanged activity-value
+JSON profile, and `Elsa.Expressions.Core` for the activated selectable type catalog. It has no API or
+Runtime implementation dependency.
 
 ## What this feature provides
 
@@ -30,9 +31,37 @@ activity abstractions and the `[Version]` attribute it reads).
   assembly shares one catalog bucket.
 - **`ClrActivityReconciliationFeature`** — `IShellFeature` that registers the options plus the two
   resolvers, the scanner, and the source — each against its contract so an inheriting feature can
-  replace one in isolation (§2.5). `ConfigureServices` is `virtual`; the options instance is the only
-  singleton (an application-wide static value), everything else is scoped (§2.5.1). It does **not**
-  derive from the reconciliation feature.
+  replace one in isolation (§2.5). `ConfigureServices` is `virtual`; options and the default activated
+  type-capability snapshot are singleton, and executing sources/resolvers are scoped (§2.5.1). It also
+  contributes `IActivitySerializedShapeSource` and composes the base Expressions feature for selectable
+  type contracts, without requiring an expression language. It does **not** derive from the reconciliation feature.
+
+## Outgoing serialized member queries
+
+The metadata contribution describes an exact admitted CLR activity result/projection, including typed
+whole results without named Output declarations. Boundary/variable/current-item types are admitted
+through the same configured selectable type and capability catalogs in API and endpoint-free hosts.
+No alias is installed or resolved through Runtime. The caller retains resource and disclosure authority.
+
+Type admission alone does not establish serialized member names for a Workflow input, variable or current
+item. Request seeding preserves caller JsonElement keys and uses default System.Text.Json for CLR values
+(`RuntimeWorkflowStateSeed.Serialize`); expression materialization also uses default JSON options. Those
+keys can differ from the activity completion profile. This contribution returns Unknown with
+`activity.shape.serialization-profile-unbound`, retaining an admitted whole type but no selected type
+for a nonempty member path. Literal exact-key reads remain available with deferred fit; no source is
+normalized or case-folded. A future owner with an authoritative schema/profile can contribute the same port.
+
+For an admitted activity result, the reader uses the unchanged activity-value profile and metadata-only
+serialized names, ignores, conditional omission, outgoing nullability and collection facts. It constructs
+no DTO, attribute or converter and invokes no getter. Unsupported or opaque contracts remain unknown; missing or mismatched source
+assets remain unavailable. Limits bound the returned depth and one global member budget. Literal path
+segments retain dots and empty names, and selected subtrees preserve nullable/optional prefix facts.
+
+Profile/source/metadata revisions are separate from existing catalog hashes. Metadata revisions cover
+consulted declarations, inherited/interface/attribute assets and framed returned facts; file/module
+identity checks refuse changed assets behind an already loaded selectable type. Existing scanner
+catalog projections and input nullability WriteState remain unchanged. The shape query needs the existing
+catalog hasher to verify exact result-source projections; without that authority it returns unavailable.
 
 ## What the scanner reads from an activity
 

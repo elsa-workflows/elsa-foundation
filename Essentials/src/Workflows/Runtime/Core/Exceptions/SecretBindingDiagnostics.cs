@@ -63,8 +63,9 @@ public static class SecretBindingDiagnostics
     public static WithheldValueException WithheldBindingNotResolved(RuntimeInputBinding binding) =>
         binding.Source switch
         {
-            RuntimeInputBindingSource.VariableRead => WithheldVariableNotResolved(binding.Variable!.VariableKey),
-            RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.ActivityResult => WithheldSourceNotResolved(binding.InputName),
+            RuntimeInputBindingSource.VariableRead or RuntimeInputBindingSource.VariableMember => WithheldVariableNotResolved(binding.Variable!.VariableKey),
+            RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.ActivityResult or
+                RuntimeInputBindingSource.WorkflowRequestMember or RuntimeInputBindingSource.ActivityResultMember => WithheldSourceNotResolved(binding.InputName),
             _ => WithheldInputNotResolved(binding.InputName)
         };
 

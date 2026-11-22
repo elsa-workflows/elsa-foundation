@@ -33,8 +33,10 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// decided later by the workflow's authored <c>IIncidentStrategy</c>, applied by
 /// <c>IncidentStrategyResolutionDrainObserver</c> at quiescence, with
 /// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
-/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
-/// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
+/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch. A drain that is
+/// found there to have lost its run's ownership lease is turned away and writes nothing; one found to have lost it
+/// only when the poison record is written has made its queue change and records nothing (#4032). Otherwise the fault
+/// is poisoned by <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
 /// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal. A handler fault a
 /// checkpoint rule caused is marked <see cref="RuntimeSchedulerWorkItemResult.CheckpointRuleViolation"/>, and the drain
 /// orchestrator faults the workflow for it (#1780).</description></item>
@@ -54,6 +56,30 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     /// <c>RetryAfter</c> is poisoned rather than released to wait for a sweep nobody runs.
     /// </summary>
     internal bool HasResumptionRedriver { private get; init; }
+
+    /// <summary>
+    /// The accessor for the ambient ownership lease (#4032). Optional; the runtime composition root sets it. The
+    /// drainer reads it only when a work handler faults, and uses the lease only when it is a lease of the work
+    /// item's own execution. Under such a lease it asks <see cref="OwnershipService"/>, when that is set, before it
+    /// writes anything of the fault, and it writes the poison record under the lease when the poison store can check
+    /// it atomically (<see cref="ISchedulerPoisonFenceCapability"/>). Without the accessor neither happens, and the
+    /// record is written with no ownership check.
+    /// </summary>
+    public IRuntimeExecutionOwnershipContextAccessor? OwnershipContextAccessor { private get; init; }
+
+    /// <summary>
+    /// The ownership service the drainer asks, when a work handler faults under an ambient lease for the work item's
+    /// own execution, whether that lease is still the run's current one (#4032). Optional; the runtime composition
+    /// root sets it. It is asked before the drainer acknowledges, releases or re-enqueues the faulted step. A lease
+    /// that another owner took over, that expired, or that an alteration borrowed ends the drain with
+    /// <see cref="RuntimeStaleFencingTokenException"/>: the fault arm writes nothing, so the step is left as it was
+    /// and nothing is recorded. Only that answer stops the fault path, and the cancellation of the drain's own
+    /// token. When the service cannot answer, because its read failed, the fault path goes on as it does without the
+    /// service: the step is acknowledged or released, and the record is still written under the lease where the
+    /// poison store can check it. Without the service the drainer does not ask, and only a fenced poison record
+    /// checks the lease. It is not used without <see cref="OwnershipContextAccessor"/>.
+    /// </summary>
+    public IRuntimeExecutionOwnershipService? OwnershipService { private get; init; }
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _customHandlers;
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
@@ -384,6 +410,19 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (Exception exception)
         {
+            // #4032: before this arm writes anything, find out whether the drain still owns the run. A drain whose
+            // lease another owner took over, that expired, or that an alteration borrowed has no say over the step:
+            // its acknowledgement would remove a step the owner has to run, and its poison record would become a
+            // blocking incident on a run the owner runs correctly. A refusal leaves the drain as
+            // RuntimeStaleFencingTokenException, as a refused commit does above: this arm acknowledges, releases,
+            // re-enqueues and records nothing. The step stays queued, unless a checkpoint commit earlier in this
+            // dispatch already consumed its durable copy: outside a coalescing segment through the commit's own
+            // consume (WasConsumedDurably), inside one through a boundary or cap-fold flush that advanced the durable
+            // queue. Then the item is gone and what the owner has is that commit. The check comes first, so a
+            // refusal costs one ownership read and no poison-store read or retry decision. Whether the poison store
+            // can record under the lease is settled here as well, before the acknowledgement. Without an ambient
+            // lease for this execution there is no check and no fence.
+            var poisonFence = await EnsureOwnedAndResolvePoisonFenceAsync(workItem, activity, cancellationToken);
             var faultInfo = _faultCapturePolicy.Capture(exception);
             var innerFaultInfo = _faultCapturePolicy.CaptureInner(exception);
             // Persisted handler-name — this value is written into poison/drain records (RuntimeSchedulerPoisonRecord.HandlerName,
@@ -397,9 +436,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             }
 
             // Ack-delete before poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
-            // drainer stays alive and records the item to the poison store. Only the retry decision is read first. The
-            // source item must therefore be removed from the durable queue here, before HandleHandlerCrashAsync records
-            // poison / honors a RetryNow re-enqueue;
+            // drainer stays alive and records the item to the poison store. Three reads come first: the ownership check
+            // and the poison store's fence capability, both above, and then the retry decision. Because the fault is a
+            // decided outcome, the source item must be removed from the durable queue here, before
+            // HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
             // otherwise the still-queued source item would be re-driven by the sweep AND re-enqueued by RetryNow, and a
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
@@ -442,7 +482,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (releasedUntil is null && _consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
-            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, retry, releasedUntil, cancellationToken);
+            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, retry, releasedUntil, poisonFence, activity, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -456,6 +496,70 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 checkpointRuleViolation: RuntimeCheckpointCommitValidationException.IsCauseOf(exception));
         }
     }
+
+    // Only a lease of the item's own execution counts, as in RuntimeCheckpointCommitter.AttachExpectedFence. The
+    // ownership service is optional: without it the lease is not checked here, and a fenced record still checks it.
+    //
+    // Only a confirmed lost lease stops the fault path. The ownership read is a provider read and can fail, and so
+    // can the poison store's answer to whether it can record under the lease. Neither failure says the run was lost.
+    // Stopping on one would throw out of a drain that owns its run, and inside an active coalescing segment the
+    // orchestrator does not flush after a drain that threw, so the segment's buffered checkpoints would go to replay.
+    // So the fault path goes on, and the dispatch span is tagged. A failed ownership read does not switch the fence
+    // off: the record is still written under the lease where the store can check it, which turns a lost lease away
+    // there. A store that cannot say whether it can check has its record written with no ownership check.
+    private async ValueTask<PoisonFence?> EnsureOwnedAndResolvePoisonFenceAsync(
+        RuntimeSchedulerWorkItem workItem,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        if (OwnershipContextAccessor?.Current is not { } lease ||
+            !StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, workItem.WorkflowExecutionId))
+            return null;
+
+        if (OwnershipService is { } ownershipService)
+        {
+            try
+            {
+                await ownershipService.EnsureCurrentAsync(workItem.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+            }
+            catch (Exception failure) when (SaysNothingAboutOwnership(failure, cancellationToken))
+            {
+                TagFenceNotApplied(activity, failure);
+            }
+        }
+
+        try
+        {
+            return _poisonStore is ISchedulerPoisonFenceCapability { CanRecordFenced: true } store
+                ? new PoisonFence(store, lease.ToFence())
+                : null;
+        }
+        catch (Exception failure) when (SaysNothingAboutOwnership(failure, cancellationToken))
+        {
+            TagFenceNotApplied(activity, failure);
+            return null;
+        }
+    }
+
+    // Two exceptions do say something, and are let through: the stale fence, which is the lost lease, and the
+    // cancellation of this drain. Only an OperationCanceledException raised while the drain's own token is cancelled
+    // is that cancellation. A store whose client reports a timeout as one has failed like any other store.
+    private static bool SaysNothingAboutOwnership(Exception failure, CancellationToken cancellationToken) =>
+        failure is not RuntimeStaleFencingTokenException &&
+        !(failure is OperationCanceledException && cancellationToken.IsCancellationRequested);
+
+    // The innermost exception names the cause: a store that wraps provider failures would otherwise put its own
+    // exception type on every span.
+    private static void TagFenceNotApplied(Activity? activity, Exception failure)
+    {
+        if (activity is null)
+            return;
+
+        var cause = failure.GetBaseException().GetType();
+        activity.SetTag(WorkflowEngineTelemetry.PoisonFenceFallbackTag, cause.FullName ?? cause.Name);
+    }
+
+    private readonly record struct PoisonFence(ISchedulerPoisonFenceCapability Store, RuntimeExecutionFence Fence);
 
     private async ValueTask<RetryDecisionContext> DecideRetryAsync(
         RuntimeSchedulerWorkItem workItem,
@@ -525,6 +629,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         RuntimeFaultInfo? innerFaultInfo,
         RetryDecisionContext retry,
         DateTimeOffset? releasedUntil,
+        PoisonFence? poisonFence,
+        Activity? activity,
         CancellationToken cancellationToken)
     {
         var (now, existing, decision, policyFailure) = retry;
@@ -559,7 +665,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = "PolicyFailed";
             metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason] = policyFailure;
         }
-        await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
+        var record = new RuntimeSchedulerPoisonRecord(
             workflowExecutionId: workItem.WorkflowExecutionId,
             workItemId: workItem.WorkItemId,
             commandKind: workItem.CommandKind,
@@ -571,8 +677,41 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             lastFailedAt: now,
             nextRetryAt: nextRetryAt,
             metadata: metadata,
-            innerFault: innerFaultInfo),
-            cancellationToken);
+            innerFault: innerFaultInfo);
+
+        // #4032: a caller that has the ownership service checked the run's ownership before it wrote anything of this
+        // fault. Where the store can check the lease in the same unit of work, the record is written under it, which
+        // covers the time since that check. Only a lost lease refuses the record: RuntimeStaleFencingTokenException
+        // leaves the drain and nothing is recorded. The step's acknowledgement, its release or its RetryNow
+        // re-enqueue is not undone, so that refusal leaves what a process crash at this point leaves: the queue
+        // change without a record. In an active coalescing segment a re-enqueue, and the acknowledgement or release
+        // of a step claimed from the segment's overlay, are only in that overlay, and the orchestrator does not flush
+        // after a drain that threw, so nothing this arm writes is durable there.
+        //
+        // A fenced write that fails for any other reason says nothing about ownership: a write conflict the store
+        // gave up on, a transaction it could not open, a capability that changed its answer. So the record then
+        // goes the way it goes for a store without the capability. That record is unfenced: if the lease was in
+        // fact lost, it is written all the same. An owning drain therefore does not end with its step acknowledged
+        // and no record because the fenced write failed that way. It still can, as before, when its own token is
+        // cancelled here or when the unfenced RecordAsync fails as well. The dispatch span is tagged with the type
+        // of the failure's cause, so a host whose fenced write keeps failing can see that its records are unfenced.
+        // The cancellation of this drain is let through as well; an OperationCanceledException raised while the
+        // drain's token is not cancelled is a failed write like any other. With no lease for this execution, or a
+        // store that cannot check it, the record is written unfenced.
+        if (poisonFence is { } fenced)
+        {
+            try
+            {
+                await fenced.Store.RecordFencedAsync(record, fenced.Fence, cancellationToken);
+                return;
+            }
+            catch (Exception fencedFailure) when (SaysNothingAboutOwnership(fencedFailure, cancellationToken))
+            {
+                TagFenceNotApplied(activity, fencedFailure);
+            }
+        }
+
+        await _poisonStore.RecordAsync(record, cancellationToken);
     }
 
     private static Dictionary<string, string> BuildPoisonMetadata(
@@ -602,6 +741,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             metadata[RuntimeMetadataKeys.InputKey] = inputFailure.InputKey;
             metadata[RuntimeMetadataKeys.ExpressionLanguage] = inputFailure.ExpressionLanguage;
             metadata[RuntimeMetadataKeys.InputEvaluationPhase] = inputFailure.EvaluationPhase;
+        }
+        else if (exception is RuntimeReadSelectionException selectionFailure)
+        {
+            // A member read's VF-SEL code, beside the fault type and message, as an expression input failure's code is.
+            metadata[RuntimeMetadataKeys.InputFailureCode] = selectionFailure.Code;
+            metadata[RuntimeMetadataKeys.InputKey] = selectionFailure.InputKey;
         }
 
         // A later retry-policy decision replaces its two fields, while older records without a new decision retain

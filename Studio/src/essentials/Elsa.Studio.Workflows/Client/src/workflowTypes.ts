@@ -105,6 +105,11 @@ export interface WorkflowDraft {
   layout: DesignMetadataRecord[];
   activityPresentation?: ActivityPresentationRecord[];
   validationErrors: ValidationError[];
+  /**
+   * The server's identity of this saved draft, returned by the draft endpoints. Only the copy the server acknowledged
+   * is a valid request base; a live draft edited since keeps an older value.
+   */
+  authoringRevision?: string;
 }
 
 export interface IncidentStrategyReference {
@@ -210,6 +215,8 @@ export interface ActivityCatalogResponse {
 export interface ActivityCatalogItem {
   activityVersionId: string;
   activityTypeKey: string;
+  /** The runtime type a compiled node carries when the CLR activity declares one (e.g. `Elsa.HttpEndpoint`); absent otherwise. */
+  runtimeActivityType?: string | null;
   version: string;
   category: string;
   displayName: string;
@@ -221,6 +228,8 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  /** The activity type is marked `[AccessesUndeclaredVariables]` (spec 1231 FR-026); absent on older backends. */
+  accessesUndeclaredVariables?: boolean | null;
   paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
@@ -323,7 +332,8 @@ export type RuntimeDiagnosticsSubject =
   | "incidents"
   | "diagnostics"
   | "containerVariables"
-  | "durableValues";
+  | "durableValues"
+  | "variableWrites";
 
 export type RuntimeDiagnosticsSubjectOverrides = Partial<Record<RuntimeDiagnosticsSubject, RuntimeDiagnosticsEvidenceLevel>>;
 
@@ -463,6 +473,20 @@ export interface ScopedVariableShadowingWarning {
 export interface ScopedVariableAnalysisResponse {
   visibleVariables: VisibleVariableView[];
   shadowingWarnings: ScopedVariableShadowingWarning[];
+  /** For a selected script activity with a literal body: the variables the body may write (spec 1231 FR-036). */
+  scriptWrites?: ScriptBodyWriteSet | null;
+}
+
+// The variables one script body may write, resolved as publication pins them (backend ScriptBodyWriteSet).
+export interface ScriptBodyWriteSet {
+  variables: ScriptBodyWriteTarget[];
+  mayWriteEveryVisibleVariable: boolean;
+}
+
+export interface ScriptBodyWriteTarget {
+  name: string;
+  scopeId: string;
+  referenceKey: string;
 }
 
 export interface WorkflowManagementCapabilities {
@@ -504,6 +528,7 @@ export interface WorkflowOutput {
   description: string;
   category: string;
   [key: string]: unknown;
+  isNullable: boolean;
 }
 
 // A selectable argument element type from the Expressions domain's variable-types capability.
@@ -757,6 +782,8 @@ export interface WorkflowExecutableNode {
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+  /** Outcomes pinned in the executable, independent of the current authoring catalog. */
+  outcomes?: string[] | null;
   bpmnStructure?: WorkflowExecutableBpmnStructure | null;
 }
 
@@ -888,8 +915,18 @@ export interface WorkflowInstanceSummary {
   blockingIncidentCount?: number | null;
 }
 
+export interface WorkflowOutputValue {
+  value: unknown;
+  isRedacted: boolean;
+  redactionReason?: string | null;
+  capturedAt: string;
+  captureMode?: string | null;
+}
+
 export interface WorkflowInstanceDetails {
   instance: WorkflowInstanceSummary;
+  /** Missing on older hosts; an empty collection means no captured outputs. */
+  outputs?: Record<string, WorkflowOutputValue>;
   activities: ActivityExecutionStateSummary[];
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;
@@ -900,6 +937,8 @@ export interface WorkflowInstanceDetails {
   persistenceMode?: PersistenceMode | null;
   /** `activity-level` when Durable, otherwise `boundary-level`; absent on older Runtime hosts. */
   inspectionGranularity?: InspectionGranularity | null;
+  /** Spec 1229 FR-009: the run's lost-update warnings, summed over its activity executions; absent on older hosts. */
+  lostUpdateWarningCount?: number | null;
 }
 
 /** A display hint: the endpoints still enforce every permission. */
@@ -949,6 +988,86 @@ export interface ActivityExecutionInspection {
   attempt?: ActivityExecutionAttempt | null;
   boundary?: ActivityExecutionBoundary | null;
   metadata: Record<string, string>;
+  /** Spec 1221 write-history records of this execution; absent when it wrote no variable or on older hosts. */
+  variableWrites?: VariableWriteRecordView[] | null;
+  /** The completion a `Fault` lost update refused; its presence is when Accept recorded completion is offered. */
+  recordedCompletion?: RecordedCompletionView | null;
+  /** The input evaluations a background admission refresh superseded. */
+  inputRefreshes?: ActivityInputRefreshView[] | null;
+  /** Spec 1228: the warnings this execution raised, input expressions first; absent when none or on older hosts. */
+  warnings?: ExecutionWarningView[] | null;
+}
+
+/**
+ * One warning an execution raised (spec 1228, the shared run-time warning channel). It changed and refused nothing, and
+ * it never carries a value: `details` names paths, inputs and variables only.
+ */
+export interface ExecutionWarningView {
+  code: string;
+  severity: "Warning" | "Information" | string;
+  message: string;
+  /** `input` for an input expression's warning, `step` for the activity's own. */
+  source: "input" | "step" | string;
+  inputKey?: string | null;
+  executableNodeId: string;
+  activityExecutionId: string;
+  details: Record<string, string>;
+}
+
+/**
+ * Where a variable-lifecycle value stands (spec 1229 FR-006). The view never carries the value: a captured `null` is
+ * `captured`. `evidenceId` names the activity value evidence the payload read resolves; an operational value (overwritten
+ * or refused) becomes readable through the write-history read of spec 1229.
+ */
+export interface VariableLifecycleValueState {
+  state: "captured" | "omitted" | "redacted" | "expired" | string;
+  digest?: string | null;
+  evidenceId?: string | null;
+  isOperational?: boolean;
+}
+
+export interface VariableWriterView {
+  source: string;
+  executableNodeId?: string | null;
+  invocationId?: string | null;
+  attemptId?: string | null;
+}
+
+export type VariableWriteOutcome = "Blind" | "Current" | "LostUpdateWarning" | "ReturnedValue" | "LostUpdateFault" | "AcceptedOverride";
+
+export interface VariableWriteRecordView {
+  scopeId: string;
+  frameId?: string | null;
+  variableKey: string;
+  writer: VariableWriterView;
+  outcome: VariableWriteOutcome | string;
+  baseVersion?: number | null;
+  currentVersion: number;
+  newVersion: number;
+  commitOrder: number;
+  commitSequence?: number | null;
+  occurredAt: string;
+  overwrittenWriter?: VariableWriterView | null;
+  writtenValue?: VariableLifecycleValueState | null;
+  overwrittenValue?: VariableLifecycleValueState | null;
+  rejectedValue?: VariableLifecycleValueState | null;
+}
+
+export interface RecordedCompletionView {
+  selectionState: string;
+  outcomeNames: string[];
+  attemptId: string;
+  attemptOrdinal?: number | null;
+  variableWrites: Array<{ variableKey: string; value: VariableLifecycleValueState }>;
+}
+
+export interface ActivityInputRefreshView {
+  supersededEvaluation: number;
+  replacedByEvaluation: number;
+  supersededMaterializedAt: string;
+  refreshedAt: string;
+  changes: Array<{ scopeId: string; variableKey: string; readVersion: number; currentVersion: number }>;
+  supersededInputs: Array<{ inputKey: string; value: VariableLifecycleValueState }>;
 }
 
 export interface ActivityExecutionAttempt {

@@ -16,7 +16,8 @@ public sealed class WorkflowInstanceDetailsService(
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
     IActivityInspectionContextAsync authorization,
     RuntimePersistenceModeInspector persistenceModeInspector,
-    IWorkflowRuntimeOperatorAccess? operatorAccess = null) : IWorkflowInstanceDetailsService
+    IWorkflowRuntimeOperatorAccess? operatorAccess = null,
+    IActivityExecutionStateStore? activityExecutionStateStore = null) : IWorkflowInstanceDetailsService
 {
     public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
@@ -53,7 +54,7 @@ public sealed class WorkflowInstanceDetailsService(
         var outputs = outputProjections.ToDictionary(
             output => output.Name,
             output => canInspectSensitiveValues
-                ? new WorkflowOutputView(output.Value, output.IsRedacted, output.RedactionReason, output.CapturedAt)
+                ? WorkflowOutputView.From(output)
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
@@ -74,7 +75,9 @@ public sealed class WorkflowInstanceDetailsService(
             // manageable (fail closed).
             new WorkflowInstancePermissionsView(
                 operatorAccess is not null && await operatorAccess.CanManageAsync(state, cancellationToken),
-                canInspectSensitiveValues));
+                canInspectSensitiveValues),
+            // Spec 1229 FR-009: the lost-update warnings of the instance, summed from a store column (Q7).
+            activityExecutionStateStore is null ? 0 : await activityExecutionStateStore.SumLostUpdateWarningCountAsync(request.WorkflowExecutionId, cancellationToken));
     }
 }
 

@@ -3,17 +3,25 @@ name: CI
 # All source validation lives here; publishing and trusted maintenance have separate tokens.
 # Required check names stay stable. Marking a PR ready runs both tiers and maps in one suite;
 # splitting the required contexts across draft/ready suites can block protected merges (#3708).
-# Focused manual runs select a suite below.
+# A merge-queue entry (merge_group) runs both tiers on the exact merge result and reports all three
+# required checks. Focused manual runs select a suite below.
 # Path filters live in tools/ci/workflow-paths.json and are applied by plan-scope.
+# Pull requests to an initiative branch (docs/contributing/initiatives.md) run exactly what a pull request to main runs,
+# diffed against the initiative branch: the same tier selection and the same documentation-only fast path.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - main
+      - 'initiative/**'
   push:
     branches:
       - main
+  # The merge queue on main requires `Build & test`, `Generated maps fresh` and `Full tier` from this run. A required
+  # check that a merge_group run does not report keeps the entry waiting until the queue times it out.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
     inputs:
       # FR-008: the one way to run the full tier early, on any branch, a draft's head included. The literals "tier"
@@ -38,13 +46,15 @@ permissions:
 # A ready transition or newer head supersedes its own PR; one group prevents stale ready runs
 # surviving a later push. A newer push to main supersedes an older main run (#2622): five
 # queued main runs once each ran the whole EF matrix for an hour. Manual and scheduled runs get a group of
-# their own and are never cancelled. A cancelled run is not a failure, so the alert job below stays quiet
+# their own and are never cancelled. So are merge-queue runs: github.ref is the entry's own gh-readonly-queue
+# branch, and cancelling one would fail the entry. A cancelled run is not a failure, so the alert job below stays quiet
 # for it, and the jobs that use always()-style conditions use !cancelled() so a cancellation cannot turn
 # into a red aggregate that files a "main is red" issue.
 concurrency:
   group: >-
     ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
     || github.event_name == 'push' && format('ci-push-{0}', github.ref)
+    || github.event_name == 'merge_group' && format('ci-merge-group-{0}', github.ref)
     || format('ci-run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
@@ -99,19 +109,21 @@ jobs:
 
       - name: Classify the change scope
         id: scope
-        # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
-        # it cannot read classifies as a full run.
+        # Pull requests and merge-queue entries only; every other event is a full run. The classifier exits 0 whatever
+        # it finds, and a diff it cannot read classifies as a full run.
         #
-        # BASE_SHA is the first parent of the merge commit GitHub tests: today's main. The diff from it is exactly what
-        # the pull request would change. pull_request.base.sha is the base from when the PR was opened or last
-        # retargeted, so on an older PR it also counted everything merged into main since, and a documentation-only PR
-        # got a full run (#2683: one docs file, classified by an .editorconfig change on main). The same base serves
-        # the quarantine guard and the switch check below.
+        # BASE_SHA is the first parent of the merge commit GitHub tests: the base branch today (main or initiative/*).
+        # The diff from it is exactly what the pull request would change. pull_request.base.sha is the base from when the
+        # PR was opened or last retargeted, so on an older PR it also counted everything merged into main since, and a
+        # documentation-only PR got a full run (#2683: one docs file, classified by an .editorconfig change on main). A
+        # merge-queue entry's base is merge_group.base_sha, the commit the entry was built on; its head, GITHUB_SHA, is
+        # the merge result.
+        # The same base serves the quarantine guard and the switch check below.
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: |
           python3 tools/ci/change_scope.py --self-test
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == pull_request || "$GITHUB_EVENT_NAME" == merge_group ]]; then
             python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA" \
               --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
           else
@@ -132,6 +144,9 @@ jobs:
           python3 tools/ci/studio_image_tags.py --self-test
           python3 tools/ci/test_studio_docker_publish.py
 
+      - name: Check the package publish gate
+        run: python3 -m unittest discover -s tools/ci -p 'test_await_ci_result.py'
+
       # Same files and rules as CatalogLinkGuardTests, without the build. It is the documentation-reading check a
       # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
       - name: Check catalog and module README links
@@ -140,21 +155,24 @@ jobs:
       - name: Exercise the tier tooling
         run: |
           python3 -m unittest discover -s tools/ci -p 'test_workflow_scope.py'
+          python3 -m unittest discover -s tools/ci -p 'test_run_shard_retry_policy.py'
           python3 tools/ci/test_tiers.py --self-test
+          python3 tools/ci/affected_tests.py --self-test
           python3 tools/ci/test_results.py --self-test
           python3 tools/ci/test_tiers.py check-workflows
           python3 tools/ci/test_tiers.py check-docs
 
-      # FR-013. On a pull request only the entries its diff adds or changes, against today's main, are checked, so
-      # closing a tracking issue never turns unrelated PRs red. The checkout has full history, so the base is always
+      # FR-013. On a pull request or a merge-queue entry only the entries its diff adds or changes, against today's
+      # main, are checked, so closing a tracking issue never turns unrelated PRs red or stalls the queue. The checkout
+      # has full history, so the base is always
       # readable; check-quarantine exits 2 rather than widen the check if it is not. On main and nightly every entry is
       # checked, and a closed issue fails the run and files "main is red".
       - name: Check the quarantine list's tracking issues
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == pull_request || "$GITHUB_EVENT_NAME" == merge_group ]]; then
             python3 tools/ci/test_results.py check-quarantine --base "$BASE_SHA"
           else
             python3 tools/ci/test_results.py check-quarantine
@@ -165,17 +183,20 @@ jobs:
         env:
           # select reads ruleset main-2 when a change turns integrationLeavesPrTier on (FR-011); gh needs a token for it.
           GH_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           DISPATCH_TIER: ${{ inputs.tier }}
         run: |
           case "$GITHUB_EVENT_NAME" in
-            pull_request) tier="pr" ;;
+            # A merge-queue entry runs the PR tier here and the full tier through plan-full, as a ready PR does.
+            pull_request | merge_group) tier="pr" ;;
             schedule) tier="nightly" ;;
             workflow_dispatch) [[ "$DISPATCH_TIER" == pr ]] && tier="pr" || tier="nightly" ;;
             *) tier="push" ;;
           esac
+          # --event: on a pull request only the shards its changes can affect run (#3787); every other event, the
+          # merge queue included, runs them all. pr_count can be 0, and Build & test accepts skipped shards then.
           python3 tools/ci/test_tiers.py select --tier "$tier" ${BASE_SHA:+--base "$BASE_SHA" --head "$GITHUB_SHA"} \
-            --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+            --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
   # One shard of the PR tier. Each shard rebuilds the solution rather than downloading a shared build: the 4.2 GB
   # output takes about 6 minutes to download against a 3-minute build (spec 263 research R4).
@@ -275,6 +296,7 @@ jobs:
           PLAN: ${{ needs.plan-tiers.result }}
           DOCS_ONLY: ${{ needs.plan-tiers.outputs.docs_only }}
           SHARDS: ${{ needs.pr-shard.result }}
+          PR_COUNT: ${{ needs.plan-tiers.outputs.pr_count }}
           ARCHITECTURE: ${{ needs.architecture-guards.result }}
           CORE: ${{ needs.core-only.result }}
         run: |
@@ -283,6 +305,11 @@ jobs:
           fi
           if [[ "$DOCS_ONLY" == true ]]; then
             echo "Documentation-only change: the .NET build and tests were skipped (spec 257)."; exit 0
+          fi
+          # A pull request whose changes reach no PR-tier test selects no shard (#3787), and the shard job is skipped.
+          # Only an explicit count of 0 allows that; Architecture guards and Core-only still have to pass.
+          if [[ "$PR_COUNT" == 0 && "$SHARDS" == skipped ]]; then
+            echo "No PR-tier shard is affected by this change (see Plan tiers' summary)."; SHARDS=success
           fi
           failed=0
           for pair in "PR shards:$SHARDS" "Architecture guards:$ARCHITECTURE" "Core-only build & test:$CORE"; do
@@ -296,17 +323,17 @@ jobs:
     name: Integration shard (${{ matrix.shard }})
     needs: [plan-tiers, plan-full]
     if: >-
-      ${{ !cancelled() && (github.event_name == 'pull_request'
+      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
       && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.integration_count != '0'
-      || github.event_name != 'pull_request' && needs.plan-tiers.result == 'success'
+      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
       && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.integration_count != '0') }}
     runs-on: ubuntu-latest
-    # The serial native-host cases in integration-other can take almost 40 minutes.
+    # The serial BPMN host cases are split across two shards of about 25 minutes each (#3784).
     # Leave room for setup and artifact upload; run_shard.py still bounds each test.
-    timeout-minutes: ${{ matrix.shard == 'integration-other' && 60 || 45 }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(github.event_name == 'pull_request' && needs.plan-full.outputs.integration_matrix || needs.plan-tiers.outputs.integration_matrix) }}
+      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.integration_matrix || needs.plan-tiers.outputs.integration_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -369,15 +396,15 @@ jobs:
     name: EF container shard (${{ matrix.shard }})
     needs: [plan-tiers, plan-full]
     if: >-
-      ${{ !cancelled() && (github.event_name == 'pull_request'
+      ${{ !cancelled() && ((github.event_name == 'pull_request' || github.event_name == 'merge_group')
       && needs.plan-full.outputs.run == 'true' && needs.plan-full.outputs.container_count != '0'
-      || github.event_name != 'pull_request' && needs.plan-tiers.result == 'success'
+      || github.event_name != 'pull_request' && github.event_name != 'merge_group' && needs.plan-tiers.result == 'success'
       && needs.plan-tiers.outputs.docs_only != 'true' && needs.plan-tiers.outputs.container_count != '0') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(github.event_name == 'pull_request' && needs.plan-full.outputs.container_matrix || needs.plan-tiers.outputs.container_matrix) }}
+      matrix: ${{ fromJSON((github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.plan-full.outputs.container_matrix || needs.plan-tiers.outputs.container_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -430,7 +457,7 @@ jobs:
             dotnet build "$project" -c Release --no-restore -p:WarningsNotAsErrors=NU1603
           done < "$RUNNER_TEMP/projects.txt"
 
-      - name: Test the suites, retrying each failure once
+      - name: Test the suites using their declared retry policy
         env:
           SHARD: ${{ toJSON(matrix) }}
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
@@ -447,12 +474,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # One result for main/nightly alerts; the PR aggregate below owns the required Full tier context.
+  # One result for main/nightly alerts; the PR and merge-queue aggregate below owns the required Full tier context.
   # !cancelled() rather than always(): a cancelled run must not turn into a red aggregate that files a "main is red" issue.
   full-tier-result:
     name: Full tier result
     needs: [plan-tiers, integration-shard, ef-container-shard]
-    if: ${{ !cancelled() && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && (github.event_name != 'workflow_dispatch' || inputs.suite == 'ci') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -592,8 +619,9 @@ jobs:
       - core-only
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
     # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and on main it is the
-    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests, where the PR aggregate
-    # reports the full tier, and a skipped need is not a failure.
+    # only automatic run of the EF container suites. full-tier-result is skipped on pull requests and merge-queue entries,
+    # where the PR aggregate reports the full tier, and a skipped need is not a failure. A red merge-queue entry is
+    # removed from the queue and never lands, so it files nothing either.
     if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
@@ -679,7 +707,7 @@ jobs:
   # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
   # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
   # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
-  # queues. It runs on pull_request, push to main and this workflow's schedule, on every PR including
+  # queues. It runs on pull_request, merge_group, push to main and this workflow's schedule, on every PR including
   # documentation-only ones.
   #
   # This job is deliberately NOT among the alert job's needs, as the former maps workflow also kept these failures separate: stale filters are a request to open a refresh PR, and the actionable output is the refresh
@@ -891,8 +919,9 @@ jobs:
       - name: Commit the maps to the generated-maps branch
         run: bash tools/maps/publish-generated-maps.sh "$RUNNER_TEMP/maps" "$GITHUB_SHA"
 
+  # A pull request, or a merge-queue entry: the queue is where the full tier proves the exact merge result.
   plan-full:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     name: Plan full tier
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -909,12 +938,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # BASE_SHA is the first parent of the merge commit GitHub tests, today's main, so both diffs below see only what
-      # the pull request changes; pull_request.base.sha can be days old on an open PR (see ci.yml).
+      # BASE_SHA is the first parent of the merge commit GitHub tests, the base branch today (main or initiative/*), so
+      # both diffs below see only what the pull request changes; pull_request.base.sha can be days old on an open PR
+      # (see ci.yml). On a merge-queue entry it is merge_group.base_sha, the commit the entry was built on.
       - name: Classify the change scope
         id: scope
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: >-
           python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"
           --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
@@ -922,17 +952,19 @@ jobs:
       - name: Decide whether the full tier runs
         id: decide
         env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || '' }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
           DOCS_ONLY: ${{ steps.scope.outputs.docs_only }}
         run: |
           set -euo pipefail
           # The spec's "Manifest change" edge case: a draft that changes the tiers runs both tiers.
           tier_change=$(git diff --name-only --no-renames "$BASE_SHA...$GITHUB_SHA" -- \
-            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/test_results.py tools/ci/run_shard.py \
-            .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
+            tools/ci/test-tiers.json tools/ci/test_tiers.py tools/ci/affected_tests.py tools/ci/test_results.py \
+            tools/ci/run_shard.py .github/workflows/ci.yml tools/ci/workflow_scope.py tools/ci/workflow-paths.json | head -1)
           if [[ "$DOCS_ONLY" == true ]]; then
             run=false; reason="documentation only (spec 257)"
+          elif [[ "$GITHUB_EVENT_NAME" == merge_group ]]; then
+            run=true; reason="merge queue: the full tier proves the merge result"
           elif [[ "$DRAFT" != true ]]; then
             run=true; reason="the pull request is ready for review"
           elif [[ -n "$tier_change" ]]; then
@@ -943,17 +975,23 @@ jobs:
           echo "run=$run" >> "$GITHUB_OUTPUT"
           printf '### Full tier\n\n%s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
 
+      # On a pull request only the integration units and EF suites its changes can affect run (#3787); both counts can
+      # be 0, and the shard jobs are then skipped by their count conditions. A merge-queue entry runs them all.
       - name: Select the full-tier shards
         id: select
+        env:
+          # The same switch check as Plan tiers runs when a change turns integrationLeavesPrTier on; gh needs a token.
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
         run: >-
-          python3 tools/ci/test_tiers.py select --tier full
-          --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/test_tiers.py select --tier full --base "$BASE_SHA" --head "$GITHUB_SHA"
+          --event "$GITHUB_EVENT_NAME" --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
 
   full-tier:
-    name: "${{ github.event_name != 'pull_request' && 'Full tier (not requested)' || (needs.plan-full.result != 'success' || needs.plan-full.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
+    name: "${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' && 'Full tier (not requested)' || (needs.plan-full.result != 'success' || needs.plan-full.outputs.run == 'true' || !github.event.pull_request.draft) && 'Full tier' || 'Full tier (not run: draft)' }}"
     needs: [plan-full, integration-shard, ef-container-shard]
-    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -983,7 +1021,10 @@ jobs:
           if [[ ( "$INTEGRATION_COUNT" != 0 && "$INTEGRATION" != success ) || ( "$CONTAINER_COUNT" != 0 && "$CONTAINERS" != success ) ]]; then
             echo "::error::The full-tier shards did not succeed ($INTEGRATION, $CONTAINERS)."; exit 1
           fi
-          echo "Every integration shard and EF container shard passed."
+          if [[ "$INTEGRATION_COUNT" == 0 && "$CONTAINER_COUNT" == 0 ]]; then
+            echo "No full-tier shard is affected by this change (see Plan full tier's summary)."; exit 0
+          fi
+          echo "Every selected integration shard and EF container shard passed."
 
   studio-lint-and-test:
     needs: plan-scope
@@ -1042,8 +1083,23 @@ jobs:
         working-directory: Studio
 
       - name: Run browser tests
+        id: browser-tests
         run: pnpm test:browser --shard=${{ matrix.shard }}/2
         working-directory: Studio
+
+      # Playwright retains a trace and error context only for failed cases; specs also write their own screenshots there.
+      # Without this step the job discards the folder. Scoped to the test step so setup failures upload nothing, and
+      # including the cancelled outcome so a shard that hits the 45-minute job timeout still surfaces what failed first.
+      # always() only lifts the implicit success() gate that would otherwise skip this step on a red job; the outcome
+      # checks keep it off on green runs and on setup failures.
+      - name: Upload failed browser traces
+        if: ${{ always() && (steps.browser-tests.outcome == 'failure' || steps.browser-tests.outcome == 'cancelled') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures-${{ matrix.shard }}
+          path: Studio/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
 
   studio-ux-acceptance:
     name: UX acceptance (composed Studio)

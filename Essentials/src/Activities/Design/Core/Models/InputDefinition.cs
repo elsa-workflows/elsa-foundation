@@ -50,4 +50,56 @@ public sealed record InputDefinition(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsSensitive = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsCredential = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tier = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConnectionType = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConnectionType = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VariableAccess = null);
+
+/// <summary>
+/// The direction of an input that binds a variable (spec 1231 FR-022): <see cref="Read"/> for a
+/// <c>ReadOnlyVariableReference&lt;T&gt;</c>, <see cref="ReadWrite"/> for a <c>VariableReference&lt;T&gt;</c>. Such an
+/// input's <see cref="InputDefinition.Type"/> is the value type; its binding names a declared variable.
+/// </summary>
+public static class InputVariableAccess
+{
+    public const string Read = "Read";
+    public const string ReadWrite = "ReadWrite";
+
+    /// <summary>The authored expression type a variable-reference input accepts.</summary>
+    public const string ExpressionType = "Variable";
+
+    /// <summary>The editor hint the catalog gives a variable-reference input.</summary>
+    public const string UiHint = "variable-picker";
+}
+
+/// <summary>
+/// The design facet that marks an activity type <c>[AccessesUndeclaredVariables]</c> (spec 1231 FR-026): it may read
+/// and write any visible variable by free name.
+/// </summary>
+public static class VariableAccessDesignFacet
+{
+    public const string Kind = "elsa.variable-access";
+    public const string SchemaVersion = "1";
+    public const string AccessesUndeclaredVariablesMember = "accessesUndeclaredVariables";
+
+    /// <summary>
+    /// Set, and only then present, when the activity type declares <c>[AccessesUndeclaredVariables]</c> itself rather
+    /// than carrying the marker as an engine script activity (spec 1231 FR-028): its C# code may write any visible
+    /// variable whatever its script body writes.
+    /// </summary>
+    public const string DeclaredMember = "declared";
+
+    /// <summary>Whether <paramref name="facets"/> mark the activity as accessing undeclared variables.</summary>
+    public static bool AccessesUndeclaredVariables(IEnumerable<ActivityDesignFacet>? facets) =>
+        facets?.Any(facet =>
+            StringComparer.Ordinal.Equals(facet.Kind, Kind) &&
+            facet.Payload.ValueKind == JsonValueKind.Object &&
+            facet.Payload.TryGetProperty(AccessesUndeclaredVariablesMember, out var marked) &&
+            marked.ValueKind == JsonValueKind.True) == true;
+
+    /// <summary>Whether <paramref name="facets"/> mark an activity type that declares <c>[AccessesUndeclaredVariables]</c> itself.</summary>
+    public static bool DeclaresAccessesUndeclaredVariables(IEnumerable<ActivityDesignFacet>? facets) =>
+        facets?.Any(facet =>
+            StringComparer.Ordinal.Equals(facet.Kind, Kind) &&
+            facet.Payload.ValueKind == JsonValueKind.Object &&
+            facet.Payload.TryGetProperty(DeclaredMember, out var declared) &&
+            declared.ValueKind == JsonValueKind.True) == true;
+}

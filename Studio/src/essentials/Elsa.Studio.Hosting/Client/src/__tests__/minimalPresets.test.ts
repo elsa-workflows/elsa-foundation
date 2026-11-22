@@ -58,7 +58,7 @@ describe("minimal Studio theme definitions", () => {
   });
 
   it("accepts a persisted Minimal workspace without changing the other axes", () => {
-    const values = new Map([[appearanceStorageKeys.workspaceStyle, "minimal"], [appearanceStorageKeys.colorSchemeId, "builtin:graphite"], [appearanceStorageKeys.mode, "dim"], [appearanceStorageKeys.navigation, "top"]]);
+    const values = new Map<string, string>([[appearanceStorageKeys.workspaceStyle, "minimal"], [appearanceStorageKeys.colorSchemeId, "builtin:graphite"], [appearanceStorageKeys.mode, "dim"], [appearanceStorageKeys.navigation, "top"]]);
     const preferences = readAppearancePreferences({ getItem: key => values.get(key) ?? null, setItem: () => {}, removeItem: () => {} });
     expect(preferences).toMatchObject({ workspaceStyle: "minimal", colorSchemeId: "builtin:graphite", mode: "dim", navigation: "top" });
   });

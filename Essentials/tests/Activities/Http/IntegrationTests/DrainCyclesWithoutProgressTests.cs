@@ -17,8 +17,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// Drains far longer than the drain cycle limit complete under the default options in every persistence mode (#2661). The
 /// limit counts only cycles that dispatch no work item new to the drain, so a run that keeps advancing is not cut off. Each
 /// shape here spends cycles hop by hop: an External step precedes each WriteLine beside the suspended/faulted branch,
-/// so the shape still crosses the limit when suspension retains folding. Activities without a ReplaySafe profile are
-/// never fused.
+/// so the shape still crosses the limit when suspension retains folding. The host turns hop fusion off, so no step is
+/// fused (since spec 1221 an inline External leaf would otherwise fuse).
 /// Every test first checks that its drains ran more cycles than the limit, so a shape that stopped needing them would fail
 /// here instead of passing without covering anything. <see cref="ShapeLength"/> keeps every shape past the limit in every
 /// mode.
@@ -118,6 +118,9 @@ public sealed class DrainCyclesWithoutProgressTests(ITestOutputHelper output)
         {
             ReferenceWorkflowRuns.ComposeHost(services);
             services.Replace(ServiceDescriptor.Singleton<IWorkflowEngineTracer>(_cycles));
+            // Since spec 1221 an inline External leaf fuses too, so these shapes would no longer spend a cycle per hop.
+            // Fusion is turned off so every step stays a discrete hop and each shape still crosses the cycle limit.
+            services.AddSingleton(new RuntimeReplaySafeFusionOptions { Enabled = false });
             // These deliberately long drains test progress, not the HTTP deadline. Keep the client's
             // existing 100-second bound and opt into a longer server limit for these workflow shapes.
             services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(90));

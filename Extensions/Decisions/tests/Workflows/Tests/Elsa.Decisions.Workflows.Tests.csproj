@@ -1,11 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <ProjectReference Include="../../../src/Elsa.Decisions/Elsa.Decisions.csproj" />
     <ProjectReference Include="../../../src/Workflows/Design/Elsa.Decisions.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../src/Workflows/Runtime/Elsa.Decisions.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Canonical inline event pipeline used by the real source-analysis fixture. -->
+    <ProjectReference Include="../../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+  </ItemGroup>
+
 </Project>

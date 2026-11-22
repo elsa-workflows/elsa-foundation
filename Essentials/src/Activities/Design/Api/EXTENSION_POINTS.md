@@ -41,8 +41,8 @@ These are single-owner seams. Replace them through DI; do not register competing
 `ListAsync` and `CanReadAsync` accept no principal, permission string or tenant. The default applies the designer's own
 gate: the normalized request principal must hold `activities/design:read` in its tenant, checked through
 `IPermissionAuthorizationService` with the current request (`HttpContext`) as the resource, as the catalog route's
-policy handler has: the same principal and tenant. During a Weaver turn the current request is the agent's own (for
-example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the agent request,
+policy handler has: the same principal and tenant. During a Weaver turn the current request is Weaver's own (for
+example its messages request), so a host `IPermissionResourceHandler` keyed on route or path sees the Weaver request,
 not the catalog route. A missing request, an unnormalized
 principal or a refused permission is a denied result with no entries, and no catalog read. An allowed read is the
 designer's own `IActivityAuthoringCatalogReader` read with `Availability = All`, projected into Core models: every entry,
@@ -70,17 +70,17 @@ Foundation Identity Core, which this `.Core` does not reference. Duplicates are 
   configuration keeps one validator. `IWorkflowDefinitionAuthorizer`'s startup validator has the same Tasks condition.
 
 Consumers that resolve `IEnumerable<IActivityAuthoringCatalog>` must fail closed on zero or several implementations, as
-the Agent workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
+the Weaver workflow context does by reporting the catalog unavailable. This enumerable consumer of a replacement contract
 is the accepted exception that `IWorkflowDefinitionAuthorizer` also uses, so a duplicate added after the Tasks-less
-configuration still cannot select an implementation; the Agent-wide gap for existing contracts is #3633. Adding the
+configuration still cannot select an implementation; the Weaver-wide gap for existing contracts is #3633. Adding the
 contract is **Minor**, additive.
 
 ## Provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |
 |---|---|---|---|
-| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
-| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `SpecialistActivityProvider` *(cross-domain — Specialist Design)* |
+| `IActivityProvider` | Contributor keyed by stable provider identity. Provider features register implementations; `IActivityProviderRegistry` rejects duplicate keys and resolves exact provider/schema pairs. | Activity authoring, validation, migration, and capability projection services. | `GraphActivityProvider` *(cross-domain — Activities Graph Design)*; `AgentActivityProvider` *(cross-domain — Agent Design)* |
+| `IActivityProviderDiagnosticCatalog.DiagnosticDescriptors : IReadOnlyList<ActivityProviderDiagnosticDescriptor>` | Optional interface on a registered provider, template compiler or dependency discoverer. Declare at most 128 static public code/message/remediation entries, with optional fixed JSON pointer and action label. Each registry snapshots declarations at registration; no extra DI registration is needed. | `ActivityProviderRegistry`, `ActivityTemplateProviderCompilerRegistry` and `ActivityTemplateDependencyDiscovererRegistry` project recognized codes through the shared sanitizer. | `AgentActivityProvider` *(cross-domain — Agent Design)* |
 | `IActivityProviderReferenceRewriter` | Enumerable, provider/schema-aware contributor. Opaque manifests are never rewritten by universal JSON guessing. | Publishing upgrade-plan persistence invokes the matching provider rewriter for exact occurrence replacements. | `GraphActivityProviderReferenceRewriter` *(cross-domain — Activities Graph Design)* |
 | `IBuiltInAuthoringDescriptorProvider` | Enumerable. Contributes code-owned authoring-catalog descriptors that have no persisted CLR/JSON catalog row. The catalog handler always appends them and never gates them by availability policy. | `ListActivityAuthoringCatalog` merges the contributed descriptors into the available-activity list. | `IntrinsicAuthoringDescriptorProvider` — surfaces the Set Variable and Set Output engine intrinsics (ADR 0045) so the palette can author variable and output assignment. |
 
@@ -99,6 +99,38 @@ to that same provider; cross-provider migrations must declare exact provider-key
 projection reads these declarations without running a migration.
 
 ## Sources and reconciliation
+
+### `IActivitySerializedShapeSource` *(Core — `Elsa.Activities.Design.Core`)*
+
+Provider-owned, bounded outgoing serialized metadata for admitted source contracts:
+`DescribeResultAsync(IActivityDefinitionVersion admittedVersion, string projectionKey, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
+and `DescribeDeclaredTypeAsync(TypeReference declaredType, string ownerContractIdentity, ImmutableArray<string> memberPath, ActivitySerializedShapeLimits limits, CancellationToken)`
+both return `ValueTask<ActivitySerializedShape?>`. Resource/catalog/disclosure authorization remains with
+the caller. Null declines ownership; a matching opaque/missing contract returns Unknown/Unavailable;
+multiple matching owners are refused. Providers must not instantiate business values, getters,
+attributes/converters or install Runtime aliases to discover fields.
+
+`ClrActivitySerializedShapeSource`, registered scoped by CLR reconciliation with `TryAddEnumerable`, is
+the shipped implementation *(cross-domain — CLR reconciliation)*. It binds exact metadata assets and
+the unchanged activity-value profile independently of old catalog hashes, includes typed `$result`
+without named Output rows, and reports profile-unbound declared input/variable types honestly. Shared
+Workflows Design analysis consumes these facts in API and endpoint-free hosts.
+
+### Mandatory shared draft analysis
+
+`ActivitiesDesignApiFeature` depends on `WorkflowDesignValidations` and wraps the one configured
+`IActivityDraftValidator` with scoped `ActivityDataSelectionDraftValidator`. The inner validator's
+lifetime is preserved through a keyed registration; provider diagnostics remain, then the same scoped
+analysis authority validates the actual provider-owned graph through
+`IActivityDataSelectionDocumentProjector`. Missing/ambiguous analyzer or replaced/ambiguous wrapper
+fails composition; no optional validation skip is supported. The endpoint-free compiler independently
+admits executable material before writes.
+
+`DataSelectionDraftValidationRegistration : IStartupTask` validates the final wrapper registration
+once per shell activation when Tasks executes startup tasks. It also checks on registration and every
+wrapper resolution, including hosts without the Tasks runner. Copied shells inspect their own service
+collection; no recurring/background task is added. The source-context endpoint performs bounded,
+authorized, no-store read analysis and never saves a proposed snapshot while browsing.
 
 Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md). Persistence-specific seams are documented in their own catalog:
 

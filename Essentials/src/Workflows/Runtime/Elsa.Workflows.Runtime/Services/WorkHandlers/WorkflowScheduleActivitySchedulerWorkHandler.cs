@@ -112,6 +112,19 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 return null;
         }
 
+        // A parent that completed or was cancelled while this schedule was queued (a Flowchart that ended on Break,
+        // spec 266) will not take the child's completion. A parent never completes and schedules in one commit, so the
+        // schedule is stale and starts nothing.
+        if (schedulePayload.ParentActivityExecutionId is { } scheduleParentId &&
+            await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, scheduleParentId, cancellationToken) is
+                { Status: ActivityExecutionStatus.Completed or ActivityExecutionStatus.Cancelled } endedParent)
+        {
+            _logger.LogInformation(
+                "Acknowledged schedule {WorkItemId} of node {ExecutableNodeId} for workflow execution {WorkflowExecutionId} without scheduling it: its parent activity execution '{ParentActivityExecutionId}' is {Status}.",
+                workItem.WorkItemId, schedulePayload.ExecutableNodeId, workItem.WorkflowExecutionId, scheduleParentId, endedParent.Status);
+            return null;
+        }
+
         var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, schedulePayload.ExecutableNodeId, "ScheduleActivity");
 
         var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
@@ -124,7 +137,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                 await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
             else if (existing.Status == ActivityExecutionStatus.Running &&
                      executableNode.IntrinsicKind is null &&
-                     executableNode.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe)
+                     ReplaySafeFusionDriver.IsFusableNode(executableNode))
             {
                 if (existing.InputSnapshot is null)
                     throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{existing.InvocationId}' has no committed input snapshot.");
@@ -463,7 +476,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             provenance.ExecutionPathId,
             provenance.ExecutionScopeId ?? ReadMetadata(provenance.Metadata, RuntimeMetadataKeys.FlowchartExecutionScopeId),
             provenance.SchedulingCause ?? schedulePayload.Reason,
-            provenance.Metadata);
+            provenance.Metadata).WithCausedBy(provenance.CausedBy);
     }
 
     private static string? ReadMetadata(IReadOnlyDictionary<string, string> metadata, string key) =>

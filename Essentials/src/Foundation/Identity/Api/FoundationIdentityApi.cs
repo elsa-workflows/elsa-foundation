@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -154,25 +155,19 @@ public static class FoundationIdentityApi
             return;
         }
 
-        var subject = Subject(normalizedPrincipal);
-        if (string.IsNullOrWhiteSpace(subject))
+        if (!TryGetTokenSubject(normalizedPrincipal, out var tokenSubject, out var subject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
             return;
         }
 
-        var tenantId = normalizedPrincipal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
         var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission)
             .Select(x => x.Value)
             .ToArray();
-        var canonicalUsers = normalizedPrincipal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
-        if (canonicalUsers.Length > 1 || canonicalUsers.Length == 1 && string.IsNullOrWhiteSpace(canonicalUsers[0]))
-        {
-            await Results.Unauthorized().ExecuteAsync(context);
-            return;
-        }
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions) { CanonicalUserId = canonicalUsers.SingleOrDefault() }, context.RequestAborted);
+            .IssueAsync(
+                new TokenIssueRequest(subject, tokenSubject.TenantId, permissions) { CanonicalUserId = tokenSubject.UserId, Provider = tokenSubject.Provider },
+                context.RequestAborted);
 
         await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
     }
@@ -257,17 +252,15 @@ public static class FoundationIdentityApi
         await Results.NoContent().ExecuteAsync(context);
     }
 
-    // Revokes under the normalized subject, the one the token exchange issues under, so a stale tab can neither
-    // refresh nor keep its bearer. An un-normalized principal revokes nothing. False when revocation faulted.
+    // Revokes under the normalized principal's token subject, the one the token exchange issues under, so a stale tab
+    // can neither refresh nor keep its bearer. An un-normalized principal, or one with no token subject, revokes
+    // nothing: no token was issued under it. False when revocation faulted.
     private static async Task<bool> TryRevokeSubjectTokensAsync(HttpContext context, ClaimsPrincipal session)
     {
         var tokens = context.RequestServices.GetService<ITokenService>();
         if (tokens is null ||
-            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal))
-            return true;
-
-        var subject = Subject(principal);
-        if (string.IsNullOrWhiteSpace(subject))
+            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal) ||
+            !TryGetTokenSubject(principal, out var subject, out _))
             return true;
 
         try
@@ -361,6 +354,44 @@ public static class FoundationIdentityApi
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The identity a normalized principal's tokens are stored under, and the subject its JWT names. An Elsa user (one
+    /// <c>elsa.identity.user_id</c> claim) is keyed by tenant and user, whichever provider signed it in; any other
+    /// principal by tenant, its one provider and its subject, so a provider's <c>sub</c> never shares tokens with
+    /// another provider's, with the same <c>sub</c> in another tenant, or with an Elsa user id (#2848). On a first-party
+    /// bearer the provider claim names the issuing module, so the subject's own provider is read from the
+    /// <c>elsa.identity.subject_provider</c> claim the exchange stamped. A principal with several user ids or providers,
+    /// or with neither, has no token subject: it gets no token and revokes none.
+    /// </summary>
+    private static bool TryGetTokenSubject(ClaimsPrincipal principal, [NotNullWhen(true)] out TokenSubject? tokenSubject, [NotNullWhen(true)] out string? subject)
+    {
+        tokenSubject = null;
+        subject = Subject(principal);
+        var tenantId = principal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
+        var users = principal.FindAll(IdentityClaimTypes.UserId).Select(claim => claim.Value).ToArray();
+        var providers = principal.FindAll(IdentityClaimTypes.SubjectProvider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
+        if (providers.Length == 0)
+            providers = principal.FindAll(IdentityClaimTypes.Provider).Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId) || users.Length > 1 || providers.Length > 1)
+            return false;
+
+        if (users.Length == 1)
+        {
+            if (string.IsNullOrWhiteSpace(users[0]))
+                return false;
+            tokenSubject = TokenSubject.ForUser(tenantId, users[0]);
+            return true;
+        }
+
+        if (providers.Length == 1 && !string.IsNullOrWhiteSpace(providers[0]))
+        {
+            tokenSubject = TokenSubject.ForProviderSubject(tenantId, providers[0], subject);
+            return true;
+        }
+
+        return false;
     }
 
     private static string? Subject(ClaimsPrincipal principal) =>

@@ -61,7 +61,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         }
 
         // A bare memory slot: a synthesized workflow variable stands in for it (D-13).
-        var synthesized = $"elsa3.http.{Elsa3ConversionDiagnostics.NodeId(context.Activity)}.{suffix}";
+        var synthesized = $"http.{Elsa3ConversionDiagnostics.NodeId(context.Activity)}.{suffix}";
         if (!definition.Variables.Any(variable => StringComparer.Ordinal.Equals(variable.Id, synthesized)))
             definition.Variables.Add(new Elsa3Variable { Id = synthesized, Name = synthesized, TypeName = "Object" });
         context.Plan.MemoryAliases[memoryId] = synthesized;
@@ -88,7 +88,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             return;
         }
 
-        var nodeId = $"{Elsa3ConversionDiagnostics.NodeId(endpoint)}.elsa3-http-{suffix}";
+        var nodeId = $"{Elsa3ConversionDiagnostics.NodeId(endpoint)}.http-{suffix}";
         var source =
             "(function (values) { var shaped = {}; for (var key in values) { var list = values[key]; " +
             "shaped[key] = list.length === 0 ? null : list.length === 1 ? list[0] : list; } return shaped; })" +
@@ -98,13 +98,13 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         var expression = new ExpressionDefinition(
             "JavaScript",
             source,
-            new TypeReference("Object"),
+            new TypeReference(TypeAliasConvention.AnyAlias),
             new Dictionary<string, ExpressionParameterBinding>(StringComparer.Ordinal)
             {
                 ["request"] = new ActivityResultExpressionParameterBinding(Elsa3ConversionDiagnostics.NodeId(endpoint), RequestOutput)
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var setNode = new Elsa3Activity
         {
             Id = nodeId,
@@ -127,7 +127,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
             SynthesizedFrom = (endpoint, suffix == "query" ? "QueryStringData" : "Headers"),
             Intrinsic = new AuthoredWorkflowIntrinsic(
                 AuthoredWorkflowIntrinsicKind.Set,
-                new TypeReference("Object"),
+                new TypeReference(TypeAliasConvention.AnyAlias),
                 new VariableReference(variableKey, VariableReference.WorkflowScopeId))
         };
         context.Plan.Nodes[setNode] = setPlan;

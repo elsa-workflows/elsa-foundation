@@ -1,6 +1,5 @@
 #nullable enable
 Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator
-Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator.EvaluateAsync(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement?>
 Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator
 Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator.EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest
@@ -8,5 +7,267 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Arg
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.CancellationToken.get -> System.Threading.CancellationToken
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.JavaScriptScriptEvaluationRequest(string! source, System.Text.Json.JsonElement arguments, System.Threading.CancellationToken cancellationToken) -> void
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Source.get -> string!
-Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException
-Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException.JavaScriptBindingEvaluationException(string! message, System.Exception! innerException) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator.EvaluateAsync(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult!>
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.Code.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.JavaScriptCompletionException(string! message) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Empty = 2 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Named = 1 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Unspecified = 0 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptBuiltIns
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.JavaScriptScriptEvaluationResult(System.Text.Json.JsonElement? value, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState selectionState = Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState.Unspecified, System.Collections.Generic.IReadOnlyList<string!>? outcomeNames = null) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.OutcomeNames.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.SelectionState.get -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptOutcomeSelectionState
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationResult.Value.get -> System.Text.Json.JsonElement?
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptCompletionException.FaultCode = "VF-ACT-006" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptBuiltIns.Complete = "complete" -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptOutcomeAnalyzer.Analyze(string! script) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.LiteralOutcomes.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReservedNameDeclarations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingRange>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReturnedStrings.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Name.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ReadsVariables.init -> void
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.ToString() -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration? right) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Arguments.get -> System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Arguments.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.CancellationToken.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Deconstruct(out System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>! Arguments, out Elsa.Expressions.Core.Contracts.IExpressionVariableReader? Variables, out System.Threading.CancellationToken CancellationToken) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.JavaScriptHostFunctionCall(System.Collections.Generic.IReadOnlyList<System.Text.Json.JsonElement>! Arguments, Elsa.Expressions.Core.Contracts.IExpressionVariableReader? Variables, System.Threading.CancellationToken CancellationToken) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Variables.get -> Elsa.Expressions.Core.Contracts.IExpressionVariableReader?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Variables.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Deconstruct(out string! Name, out Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction! Implementation, out bool ReadsVariables) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.Implementation.get -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionDeclaration.JavaScriptHostFunctionDeclaration(string! Name, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction! Implementation, bool ReadsVariables = false) -> void
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.GetGuidString = "getGuidString" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.GetShortGuid = "getShortGuid" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.NewGuid = "newGuid" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.NewGuidString = "newGuidString" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.NewShortGuid = "newShortGuid" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ParseGuid = "parseGuid" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.StringFromBase64 = "stringFromBase64" -> string!
+const Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.StringToBase64 = "stringToBase64" -> string!
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.ToString() -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.Names.get -> System.Collections.Generic.IReadOnlySet<string!>!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptBuiltInFunctions.ReadRoots.get -> System.Collections.Generic.IReadOnlyList<string!>!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall? right) -> bool
+virtual Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunction.Invoke(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptHostFunctionCall! call) -> System.Text.Json.JsonElement
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.JavaScriptScriptOutcomeAnalysis(System.Collections.Generic.IReadOnlyList<string!>! literalOutcomes, System.Collections.Generic.IReadOnlyList<string!>! returnedStrings, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionToolingRange>! reservedNameDeclarations, System.Collections.Generic.IReadOnlyList<string!>? reservedRootDeclarations = null, System.Collections.Generic.IReadOnlyList<string!>? shadowedNameDeclarations = null) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ReservedRootDeclarations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptOutcomeAnalysis.ShadowedNameDeclarations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptDotNetUsageAnalyzer.Analyze(string! source, bool scriptBody = false, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? context = null) -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage!>?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Deconstruct(out string! Expression, out string! Message, out Elsa.Expressions.Core.Models.ExpressionToolingRange Range) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Expression.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Expression.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.JavaScriptDotNetUsage(string! Expression, string! Message, Elsa.Expressions.Core.Models.ExpressionToolingRange Range) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Message.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Message.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Range.get -> Elsa.Expressions.Core.Models.ExpressionToolingRange
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Range.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.Deconstruct(out System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind>! KnownValues) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.JavaScriptDotNetUsageContext(System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind>! KnownValues) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.KnownValues.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.KnownValues.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind.Collection = 2 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind.Guid = 1 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind.Object = 0 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetValueKind
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.ToString() -> string!
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.ToString() -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsage? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDotNetUsageContext? right) -> bool
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics
+const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.PrecisionLossRefused = "VF-PREC-001" -> string!
+const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.InputExpressionWrite = "VF-BIND-001" -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptPrecisionPolicy
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Path.get -> string!
+const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.PrecisionLossRead = "VF-PREC-002" -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Path.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Stored.get -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Stored.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Value.get -> double
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.IsInteger.get -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Value.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.IsInteger.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Held.get -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Held.init -> void
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.ToString() -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Path.get -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Path.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Entered.get -> Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!
+static Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.operator !=(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? left, Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Entered.init -> void
+static Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.operator ==(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? left, Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.ToString() -> string!
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Equals(object? obj) -> bool
+static Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.operator !=(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? left, Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Equals(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss? other) -> bool
+static Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.operator ==(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? left, Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.GetHashCode() -> int
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.WholeArrayPath.get -> string?
+override Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Equals(object? obj) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Equals(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? other) -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Deconstruct(out string! Path, out Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! Entered, out string! Written, out string? WholeArrayPath) -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Written.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Diagnostics.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.WholeArrayPath.init -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Allowed.get -> bool
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.Deconstruct(out string! Path, out string! Stored, out string! Held, out double Value, out bool IsInteger) -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.Written.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Allowed.init -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind.Unchanged = 0 -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.ToString() -> string!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind.MemberChange = 1 -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind.WholeAssignment = 2 -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Equals(object? obj) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Losses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Losses.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Target.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity.Warning = 0 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Target.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Deconstruct(out bool Allowed, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>! Diagnostics) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.ToString() -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext? right) -> bool
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.GetHashCode() -> int
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Equals(object? obj) -> bool
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.ToString() -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity.Error = 1 -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext? other) -> bool
+static Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.operator !=(Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? left, Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Losses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext!
+static Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.operator ==(Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? left, Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.GetHashCode() -> int
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Equals(object? obj) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.Deconstruct(out string! Target, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Losses.init -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Equals(Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite? other) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Deconstruct(out System.Text.Json.JsonElement? Value, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Key.get -> string!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Key.init -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Kind.get -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ToString() -> string!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Kind.init -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Value.get -> System.Text.Json.JsonElement?
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Value.init -> void
+static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.operator !=(Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? left, Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? right) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ChangedPaths.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ChangedPaths.init -> void
+static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.operator ==(Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? left, Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.GetHashCode() -> int
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Losses.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>!
+override Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Equals(object? obj) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Losses.init -> void
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Equals(Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange? other) -> bool
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Deconstruct(out string! Key, out Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind Kind, out System.Text.Json.JsonElement? Value, out System.Collections.Generic.IReadOnlyList<string!>! ChangedPaths, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Reason.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Reason.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Path.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Path.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Stored.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Remedy.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Stored.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Remedy.init -> void
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.ToString() -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.operator !=(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic? right) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Severity.get -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.operator ==(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic? left, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic? right) -> bool
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.GetHashCode() -> int
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Severity.init -> void
+override Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Equals(object? obj) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Equals(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic? other) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.<Clone>$() -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Deconstruct(out string! Path, out string! Stored, out string! Written, out string! Reason, out string! Remedy, out Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity Severity) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Written.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.Written.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptPrecisionPolicy.Decide(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext! context) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext.JavaScriptPrecisionContext(string! Target, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.JavaScriptPrecisionDecision(bool Allowed, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>! Diagnostics) -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.InputExpressionWriteException(string! variable, string! path, bool declared = true) -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.ValueFreeMessage.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.ValueFreeMessage.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.Write(string! name, System.Text.Json.JsonElement? value) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.HasReadProtectedValue.get -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession.IsReadOnly(string! name) -> bool
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Variables.get -> Elsa.Expressions.JavaScript.Core.Contracts.IScriptVariableSession?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Variables.init -> void
+const Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptValueDiagnostics.ChangeWithoutAssignment = "VF-WRITE-001" -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Path.get -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic.JavaScriptPrecisionDiagnostic(string! Path, string! Stored, string! Written, string! Reason, string! Remedy, Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptDiagnosticSeverity Severity) -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Code.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Variable.get -> string!
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Allow(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>? diagnostics = null) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.ScriptValueWrite(System.Text.Json.JsonElement? Value, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+static Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision.Refuse(System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>! diagnostics) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
+static Elsa.Expressions.JavaScript.Core.Exceptions.InputExpressionWriteException.Describe(string! variable, string! path) -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber.JavaScriptLossyNumber(string! Path, string! Stored, string! Held, double Value, bool IsInteger) -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.JavaScriptPrecisionException(string! target, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>! diagnostics) -> void
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss.JavaScriptPrecisionLoss(string! Path, Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! Entered, string! Written, string? WholeArrayPath = null) -> void
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.Code.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.Target.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptPrecisionException.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!>!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.ScriptValueChange(string! Key, Elsa.Expressions.JavaScript.Core.Models.ScriptValueChangeKind Kind, System.Text.Json.JsonElement? Value, System.Collections.Generic.IReadOnlyList<string!>! ChangedPaths, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss!>! Losses) -> void
+static Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange.Unchanged(string! key) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.get -> System.Text.Json.JsonElement?
+Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite.Value.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Warnings.init -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptValueReplacementContractAttribute
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptValueReplacementContractAttribute.JavaScriptValueReplacementContractAttribute() -> void

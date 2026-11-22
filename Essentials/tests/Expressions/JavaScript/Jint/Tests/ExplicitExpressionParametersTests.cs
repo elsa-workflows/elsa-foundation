@@ -66,7 +66,7 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
-    public async Task Args_are_deeply_read_only_and_cannot_mutate_the_request_snapshot()
+    public async Task Args_change_locally_and_never_mutate_the_request_snapshot()
     {
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -80,7 +80,8 @@ public sealed class ExplicitExpressionParametersTests
 
         var result = await evaluator.EvaluateAsync(request);
 
-        Assert.Equal("21:2:undefined", result.GetString());
+        // Spec 1228 FR-001: plain, changeable values; the args global itself stays in place.
+        Assert.Equal("0:3:number", result.GetString());
         Assert.Equal(21, request.ParameterValues["order"].GetProperty("total").GetInt32());
         Assert.Equal(2, request.ParameterValues["order"].GetProperty("lines").GetArrayLength());
     }
@@ -135,8 +136,10 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
-    public async Task Time_random_locale_and_environment_intrinsics_are_unavailable()
+    public async Task Time_random_and_locale_intrinsics_are_available_but_environment_intrinsics_are_not()
     {
+        // binding-readonly-v1 (spec 1223 FR-004, FR-005): Date, Temporal, Intl and Math.random are native; the host
+        // environment (crypto, performance, process) is still not part of the surface.
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
@@ -145,7 +148,7 @@ public sealed class ExplicitExpressionParametersTests
             "[typeof globalThis.Date, typeof globalThis.Temporal, typeof globalThis.Intl, typeof Math.random, typeof globalThis.crypto, typeof globalThis.performance, typeof globalThis.process].join(':')",
             new Dictionary<string, JsonElement>()));
 
-        Assert.Equal("undefined:undefined:undefined:undefined:undefined:undefined:undefined", result.GetString());
+        Assert.Equal("function:object:object:function:undefined:undefined:undefined", result.GetString());
     }
 
     [Fact]
@@ -360,7 +363,7 @@ public sealed class ExplicitExpressionParametersTests
             new TypeReference("Any"),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
     }
 }

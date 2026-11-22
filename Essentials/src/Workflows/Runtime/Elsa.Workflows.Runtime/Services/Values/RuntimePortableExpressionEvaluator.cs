@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -33,8 +32,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(ownerPolicy);
-        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
-            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
+        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingReadonlyV1))
+            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingReadonlyV1}'.");
 
         var portableEvaluator = portableExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
@@ -45,12 +44,16 @@ internal sealed class RuntimePortableExpressionEvaluator(
             expression.Parameters,
             expression.Options,
             expression.CapabilityProfile,
-            expression.Metadata);
+            expression.Metadata,
+            expression.VariableReadFallback);
         var effectivePolicy = ownerPolicy;
         var hasActivityResultDependency = expression.Parameters.Values
             .Any(static binding => binding is ActivityResultExpressionParameterBinding);
         var activityResultPolicyResolved = !hasActivityResultDependency;
         ExpressionEvaluationRequest request;
+        RuntimeVariableReadFallback? fallback = null;
+        // Spec 1228: an evaluation's warnings are kept only when it succeeds; a failed one reports its failure instead.
+        var warnings = new ExecutionWarningCollector();
         try
         {
             var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
@@ -62,33 +65,15 @@ internal sealed class RuntimePortableExpressionEvaluator(
                     $"Portable expression input '{inputName}' on executable node '{nodeId}'");
             activityResultPolicyResolved = true;
 
-            // Issue #984: a JavaScript expression may read lexically visible variables through the ambient
-            // variables.X / getVariable('X') / get<Name>() surface. Resolve exactly which visible variables the source
-            // references (or all of them when it performs computed access we cannot resolve statically), then fold their
-            // protection policy into the effective policy up front so a sensitive variable read cannot silently detaint
-            // the result — mirroring how declared parameter policies propagate. Only these referenced variables are
-            // materialized and handed to the engine, so an unrelated variable never triggers an external-payload read.
-            var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
-                ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
-                : EmptyAmbientVariables;
-            foreach (var (name, envelope) in referencedAmbient)
-            {
-                // The engine needs the variable's value, and a withheld value is not here to hand it.
-                // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
-                if (envelope.Presence == ValuePresence.Withheld)
-                    throw SecretBindingDiagnostics.WithheldVariableNotResolved(name);
-
-                effectivePolicy = ValuePolicyCombiner.Combine(
-                    effectivePolicy,
-                    envelope.Policy,
-                    $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
-            }
-
             var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
-            var ambientVariables = referencedAmbient.Count == 0
+
+            // Spec 1222 FR-008, FR-013: only an expression publish marked for a computed or opaque read gets the run-time
+            // lookup, and only then are the visible variables loaded. A literal-only expression reads its pinned
+            // parameters and nothing else.
+            fallback = expression.VariableReadFallback is null
                 ? null
-                : await MaterializeAmbientVariableValuesAsync(referencedAmbient, cancellationToken);
-            request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
+                : await RuntimeVariableReadFallback.LoadAsync(resolutionContext.VisibleVariables, externalPayloadStore, cancellationToken);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, fallback, cancellationToken) { Warnings = warnings };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -114,9 +99,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 conservativelyRedact: !activityResultPolicyResolved);
         }
 
+        JsonElement value;
         try
         {
-            return new PortableExpressionEvaluation(await portableEvaluator.EvaluateAsync(request), effectivePolicy);
+            value = await portableEvaluator.EvaluateAsync(request);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -128,6 +114,14 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
         catch (Exception exception)
         {
+            // The variables the script read before it failed taint the failure (FR-019), and a refused read is the
+            // fault, whatever the script made of it (FR-017a).
+            if (fallback is not null)
+            {
+                effectivePolicy = fallback.Commit(null, effectivePolicy, nodeId, inputName);
+                ThrowIfRefused(fallback, definition, expression, inputName, nodeId, effectivePolicy);
+            }
+
             throw NewInputFailure(
                 ExpressionInputFailureException.ExpressionEvaluationFailed,
                 ExpressionInputFailureException.EvaluationPhaseName,
@@ -138,7 +132,88 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 effectivePolicy,
                 exception);
         }
+
+        if (fallback is not null)
+        {
+            // Spec 1222 FR-010, FR-017a: the reads the script actually made join the step's input read set and taint
+            // the result; a refused read faults the step even when the script caught its error.
+            effectivePolicy = fallback.Commit(resolutionContext.VariableReadRecorder, effectivePolicy, nodeId, inputName);
+            ThrowIfRefused(fallback, definition, expression, inputName, nodeId, effectivePolicy);
+        }
+
+        // The diagnostic names the input and the two JSON kinds only, never the value, so it needs no redaction.
+        if (ShapeMismatch(targetType, value) is { } mismatch)
+        {
+            throw new ExpressionInputFailureException(
+                ExpressionInputFailureException.InputMaterializationFailed,
+                inputName,
+                expression.Language,
+                ExpressionInputFailureException.MaterializationPhase,
+                $"Input '{inputName}' on executable node '{nodeId}' is declared '{targetType.Alias}' and accepts only a JSON {mismatch.Expected}, but its expression returned a JSON {mismatch.Actual}.");
+        }
+
+        // A warning's member paths can name keys of a protected value it read: the protected form names roots only.
+        foreach (var warning in warnings.Warnings)
+            resolutionContext.Warnings?.Report(
+                ((Protects(effectivePolicy) ? warning.ProtectedForm : null) ?? warning).WithDetail("input", inputName));
+        return new PortableExpressionEvaluation(value, effectivePolicy);
     }
+
+    // A JsonObject or JsonArray input accepts the dynamic kind at publish; the shape is checked here, at run time
+    // (spec 1228 FR-021). Null is left to the input's own null rule.
+    private static (string Expected, string Actual)? ShapeMismatch(ValueTypeDescriptor targetType, JsonElement value)
+    {
+        if (targetType.CollectionKind != CollectionKind.Single ||
+            !TypeAliasConvention.IsShapedJson(targetType.Alias) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+
+        var expected = targetType.Alias.TrimEnd('?').EndsWith("JsonArray", StringComparison.Ordinal)
+            ? JsonValueKind.Array
+            : JsonValueKind.Object;
+        return value.ValueKind == expected
+            ? null
+            : (Describe(expected), Describe(value.ValueKind));
+
+        static string Describe(JsonValueKind kind) => kind switch
+        {
+            JsonValueKind.Object => "object",
+            JsonValueKind.Array => "array",
+            JsonValueKind.String => "string",
+            JsonValueKind.Number => "number",
+            _ => "boolean"
+        };
+    }
+
+    private static void ThrowIfRefused(
+        RuntimeVariableReadFallback fallback,
+        ExpressionDefinition definition,
+        RuntimeExpressionBinding expression,
+        string inputName,
+        string nodeId,
+        ValueProtectionPolicy effectivePolicy)
+    {
+        try
+        {
+            fallback.ThrowIfRefused(nodeId, inputName);
+        }
+        catch (RuntimeVariableReadRefusedException refused)
+        {
+            throw NewInputFailure(
+                ExpressionInputFailureException.ExpressionEvaluationFailed,
+                ExpressionInputFailureException.EvaluationPhaseName,
+                definition,
+                expression,
+                inputName,
+                nodeId,
+                effectivePolicy,
+                refused);
+        }
+    }
+
+    // Spec 1229 FR-006: a sensitive, encrypted or redacted value is not shown, nor anything that can come from it.
+    private static bool Protects(ValueProtectionPolicy policy) =>
+        policy.IsSensitive || policy.RequiresEncryption || !string.IsNullOrWhiteSpace(policy.RedactionMode);
 
     private static ExpressionInputFailureException NewInputFailure(
         string code,
@@ -152,12 +227,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         bool conservativelyRedact = false)
     {
         var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-        var cause = conservativelyRedact ||
-                    effectivePolicy.IsSensitive ||
-                    effectivePolicy.RequiresEncryption ||
-                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode)
-            ? new RedactedPortableExpressionException(exception.GetType())
-            : exception;
+        // A protected failure is redacted; one with a value-free form keeps that form, which names no member path and no
+        // computed name, so the diagnostic still says what went wrong.
+        var cause = !(conservativelyRedact || Protects(effectivePolicy))
+            ? exception
+            : exception is IValueFreeExpressionFailure valueFree
+                ? new RedactedPortableExpressionException(exception.GetType(), valueFree.ValueFreeMessage)
+                : new RedactedPortableExpressionException(exception.GetType());
         return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);
     }
 
@@ -255,88 +331,6 @@ internal sealed class RuntimePortableExpressionEvaluator(
         return new PortableExpressionParameters(values, dependencyPolicy);
     }
 
-    private static readonly IReadOnlyDictionary<string, ValueEnvelope> EmptyAmbientVariables =
-        new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-
-    // Only JavaScript expressions read the ambient variables.X / getVariable('X') / get<Name>() surface, and only
-    // when the host projected any visible variables. Liquid's portable handler ignores ambient variables, so it
-    // neither receives them nor takes their policy taint.
-    private static bool ExposesAmbientVariables(RuntimeExpressionBinding expression, RuntimeInputBindingResolutionContext context) =>
-        context.VisibleVariablesByName.Count > 0 &&
-        StringComparer.OrdinalIgnoreCase.Equals(expression.Language, "JavaScript");
-
-    /// <summary>
-    /// Selects the subset of visible variables the source actually reads (via <c>variables.X</c>,
-    /// <c>variables['X']</c>, <c>getVariable('X')</c>, or the <c>get&lt;Name&gt;()</c> accessor). When the source
-    /// performs computed ambient access whose target cannot be resolved statically, every visible variable is
-    /// selected so neither the exposed surface nor the policy taint is ever under-approximated.
-    /// </summary>
-    private static IReadOnlyDictionary<string, ValueEnvelope> ResolveReferencedAmbientVariables(
-        string source,
-        IReadOnlyDictionary<string, ValueEnvelope> visibleVariables)
-    {
-        if (visibleVariables.Count == 0 || HasComputedAmbientAccess(source))
-            return visibleVariables;
-
-        var referenced = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in visibleVariables)
-        {
-            if (IsAmbientVariableReferenced(source, name))
-                referenced[name] = envelope;
-        }
-
-        return referenced;
-    }
-
-    /// <summary>
-    /// Materializes the persistable value of each referenced ambient variable into the name → value snapshot the
-    /// isolated engine exposes. Transient (non-durable) variables cannot cross the expression boundary and are
-    /// omitted; an absent variable is omitted (it reads as <c>undefined</c>); an explicit null becomes JSON null.
-    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted. A withheld
-    /// variable never reaches here: <see cref="EvaluateAsync"/> refuses it first.
-    /// </summary>
-    private async ValueTask<IReadOnlyDictionary<string, JsonElement>> MaterializeAmbientVariableValuesAsync(
-        IReadOnlyDictionary<string, ValueEnvelope> referencedVariables,
-        CancellationToken cancellationToken)
-    {
-        var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        foreach (var (name, envelope) in referencedVariables)
-        {
-            if (envelope.Policy.Lifecycle == DurableValueLifecycle.None || envelope.Presence == ValuePresence.Absent)
-                continue;
-            if (envelope.Presence == ValuePresence.ExplicitNull)
-            {
-                result[name] = JsonSerializer.SerializeToElement<object?>(null);
-                continue;
-            }
-
-            if (envelope.InlineValue.HasValue)
-                result[name] = envelope.InlineValue.Value.Clone();
-            else if (envelope.ExternalReference is not null && externalPayloadStore is not null)
-                result[name] = await externalPayloadStore.ReadAsync(envelope.ExternalReference, cancellationToken);
-        }
-
-        return result;
-    }
-
-    private static bool IsAmbientVariableReferenced(string source, string name)
-    {
-        var escaped = Regex.Escape(name);
-        return Regex.IsMatch(source, $@"variables\s*\.\s*{escaped}(?![\w$])", RegexOptions.CultureInvariant) ||
-               Regex.IsMatch(source, $@"variables\s*\[\s*(['""]){escaped}\1", RegexOptions.CultureInvariant) ||
-               Regex.IsMatch(source, $@"getVariable\s*\(\s*(['""]){escaped}\1", RegexOptions.CultureInvariant) ||
-               Regex.IsMatch(source, $@"(?<![\w$.])get{Regex.Escape(ToPascalCase(name))}(?![\w$])", RegexOptions.CultureInvariant);
-    }
-
-    // A computed variables[...] index or a getVariable(...) whose argument is not a string literal cannot be
-    // resolved to a single variable name, so its referenced set is treated as "all visible variables".
-    private static bool HasComputedAmbientAccess(string source) =>
-        Regex.IsMatch(source, @"variables\s*\[\s*[^'""\]\s]", RegexOptions.CultureInvariant) ||
-        Regex.IsMatch(source, @"getVariable\s*\(\s*[^'"")\s]", RegexOptions.CultureInvariant);
-
-    private static string ToPascalCase(string name) =>
-        name.Length == 0 ? name : $"{char.ToUpperInvariant(name[0])}{name[1..]}";
-
     private PortableExpressionParameter ApplyParameterConversionPlan(
         RuntimeExpressionBinding expression,
         string parameterName,
@@ -405,6 +399,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var address = new RuntimeVariableValueAddress(binding.DeclaringScopeNodeId, binding.VariableKey);
         if (!context.VariableEnvelopes.TryGetValue(address, out var envelope))
             throw NewParameterException(parameterName, nodeId, inputName, $"references unavailable variable '{binding.VariableKey}' in scope '{binding.DeclaringScopeNodeId}'");
+        context.VariableReadRecorder?.Record(envelope);
+        // Spec 1222 FR-006: a script reads a declared variable with no value as JSON null, never undefined.
+        if (binding.IsVariablesSurface && envelope.Presence == ValuePresence.Absent && envelope.Policy.Lifecycle != DurableValueLifecycle.None)
+            return new PortableExpressionParameter(JsonSerializer.SerializeToElement<object?>(null), envelope.Policy);
         return new PortableExpressionParameter(
             await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);
@@ -516,8 +514,9 @@ internal sealed class RuntimePortableExpressionEvaluator(
         new($"Portable expression parameter '{parameterName}' for input '{inputName}' on executable node '{nodeId}' {reason}.");
 }
 
-internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType)
-    : Exception($"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
+internal sealed class RedactedPortableExpressionException(Type evaluatorExceptionType, string? valueFreeMessage = null)
+    : Exception(valueFreeMessage ??
+                $"Portable expression evaluator failure of type '{evaluatorExceptionType.FullName ?? evaluatorExceptionType.Name}' was redacted by value-protection policy.");
 
 internal sealed record PortableExpressionEvaluation(JsonElement Value, ValueProtectionPolicy EffectivePolicy);
 

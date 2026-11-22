@@ -122,7 +122,7 @@ public sealed class EventTriggerStimulusProviderTests
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
 
         Assert.Equal("order-shipped", completion.Result.EventName);
-        Assert.Equal("Done", completion.Outcome);
+        Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public sealed class EventTriggerStimulusProviderTests
         var completion = Assert.IsAssignableFrom<IActivityCompletionTransition<EventResult>>(transition);
         Assert.Equal("order-shipped", completion.Result.EventName);
         Assert.Equal(payload.GetRawText(), completion.Result.Payload?.GetRawText());
-        Assert.Equal("Done", completion.Outcome);
+        Assert.Equal(new[] { "Done" }, completion.Selection.ResolveNames());
     }
 
     /// <summary>
@@ -367,5 +367,5 @@ public sealed class EventTriggerStimulusProviderTests
                 "JavaScript",
                 "input.eventName",
                 new RuntimeValueTypeDescriptor("alias", "String", null),
-                capabilityProfile: ExpressionCapabilityProfiles.BindingPureV1));
+                capabilityProfile: ExpressionCapabilityProfiles.BindingReadonlyV1));
 }

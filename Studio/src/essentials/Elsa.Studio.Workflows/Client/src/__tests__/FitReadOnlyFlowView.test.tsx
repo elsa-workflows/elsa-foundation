@@ -1,15 +1,17 @@
 import React from "react";
+import { getViewportForBounds, type FitViewOptions } from "@xyflow/react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readOnlyMinimapFitViewOptions } from "../workflow-editor/readOnlyMinimap";
 
 const viewport = vi.hoisted(() => ({ x: 0, y: 0, zoom: 1 }));
-const fitView = vi.hoisted(() => vi.fn(async () => true));
+const fitView = vi.hoisted(() => vi.fn(async (_options: FitViewOptions) => true));
 const getViewport = vi.hoisted(() => vi.fn(() => ({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })));
 const pane = vi.hoisted(() => ({ initialized: true, width: 800, height: 600 }));
 
-vi.mock("@xyflow/react", () => ({
+vi.mock("@xyflow/react", async importOriginal => ({
+  ...await importOriginal<typeof import("@xyflow/react")>(),
   useNodesInitialized: () => pane.initialized,
   useReactFlow: () => ({ fitView, getViewport }),
   useStore: (selector: (state: { width: number; height: number }) => unknown) => selector({ width: pane.width, height: pane.height })
@@ -95,4 +97,12 @@ describe("FitReadOnlyFlowView", () => {
     flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={4} />));
     expect(fitView).not.toHaveBeenCalled();
   });
+});
+
+it("fits a sparse mobile graph with room for external outcome labels", () => {
+  pane.width = 360; pane.height = 280;
+  flushSync(() => root.render(<FitReadOnlyFlowView nodeCount={2} />));
+  const options = fitView.mock.calls[0][0];
+  const view = getViewportForBounds({ x: 0, y: 0, width: 220, height: 260 }, pane.width, pane.height, 0.1, 2, options.padding ?? 0);
+  expect(view.x + (220 + 88) * view.zoom).toBeLessThanOrEqual(pane.width);
 });

@@ -4,11 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Agent.Persistence.EntityFrameworkCore;
 
-/// <summary>Agent-owned session, record and audit model; installing the mappings in a consumer context is also supported.</summary>
+/// <summary>Agent-owned journal model; installing mappings in a consumer context is also supported.</summary>
 public abstract class AgentDbContext : DbContext
 {
     protected AgentDbContext(DbContextOptions options) : base(options) { }
-    internal DbSet<AgentSessionRow> Sessions => Set<AgentSessionRow>();
+    internal DbSet<AgentTurnRecord> Turns => Set<AgentTurnRecord>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasElsaDefaultSchema(this);

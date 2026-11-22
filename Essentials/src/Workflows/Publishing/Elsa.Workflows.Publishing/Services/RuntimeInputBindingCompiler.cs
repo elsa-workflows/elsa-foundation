@@ -36,6 +36,8 @@ public sealed class RuntimeInputBindingCompiler(
     private const string VariableExpressionType = "Variable";
     private const string WorkflowRequestExpressionType = "WorkflowRequest";
     private const string ActivityResultExpressionType = "ActivityResult";
+    private const string ActivityResultMemberExpressionType = "ActivityResultMember";
+    private const string VariableMemberExpressionType = "VariableMember";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
@@ -80,6 +82,7 @@ public sealed class RuntimeInputBindingCompiler(
             definitionsByKey.TryGetValue(key, out var definition) && definition.IsCredential == true ? definition.Name : null);
         EnsureConnectionBindings(nodeId, states, key =>
             definitionsByKey.TryGetValue(key, out var definition) && IsConnectionInput(definition));
+        EnsureVariableReferenceBindings(nodeId, definitions, states);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -112,6 +115,7 @@ public sealed class RuntimeInputBindingCompiler(
             contractsByKey.TryGetValue(key, out var contract) && contract.IsCredential ? contract.Name : null);
         EnsureConnectionBindings(nodeId, states, key =>
             contractsByKey.TryGetValue(key, out var contract) && IsConnectionInput(contract));
+        EnsureVariableReferenceBindings(nodeId, contracts.Select(ToInputDefinition).ToArray(), states);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -164,6 +168,27 @@ public sealed class RuntimeInputBindingCompiler(
                 $"Activity node '{nodeId}' input '{state.ReferenceKey}' must be a Connection reference (name and type), not a literal credential.");
         }
     }
+
+    /// <summary>
+    /// Spec 1231 FR-024: a variable-reference input (<c>VariableReference&lt;T&gt;</c> or
+    /// <c>ReadOnlyVariableReference&lt;T&gt;</c>) must be bound, and only to a declared variable through the
+    /// <c>Variable</c> expression. An unbound one, or one bound to any other expression, is refused, naming the input.
+    /// </summary>
+    private static void EnsureVariableReferenceBindings(string nodeId, IReadOnlyCollection<InputDefinition> definitions, IReadOnlyCollection<ArgumentState> states)
+    {
+        foreach (var definition in definitions.Where(IsVariableReferenceInput).OrderBy(definition => definition.ReferenceKey, StringComparer.Ordinal))
+        {
+            var state = states.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.ReferenceKey, definition.ReferenceKey));
+            if (state is null || !state.IsBound())
+                throw new ArgumentException(
+                    $"VF-VAR-001: Activity node '{nodeId}' input '{definition.ReferenceKey}' is a variable reference and must be bound to a declared variable.");
+            if (!string.Equals(state.Value!.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(
+                    $"VF-VAR-001: Activity node '{nodeId}' input '{definition.ReferenceKey}' is a variable reference and must be bound to a declared variable, not to a '{state.Value.ExpressionType}' expression.");
+        }
+    }
+
+    internal static bool IsVariableReferenceInput(InputDefinition definition) => !string.IsNullOrWhiteSpace(definition.VariableAccess);
 
     private static bool IsConnectionInput(InputDefinition definition) =>
         !string.IsNullOrWhiteSpace(definition.ConnectionType) || IsConnectionTyped(definition.Type.Alias);
@@ -366,7 +391,10 @@ public sealed class RuntimeInputBindingCompiler(
         DefaultValue: contract.DefaultValue,
         DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null,
         IsCredential: contract.IsCredential ? true : null,
-        ConnectionType: contract.ConnectionType);
+        ConnectionType: contract.ConnectionType,
+        VariableAccess: contract.VariableReference is { } reference
+            ? reference.Access == Elsa.Activities.Runtime.Core.Models.ActivityVariableAccess.ReadWrite ? InputVariableAccess.ReadWrite : InputVariableAccess.Read
+            : null);
 
     private static InputDefinition ToInputDefinition(ActivityInputContract contract) => new(
         contract.ReferenceKey,
@@ -426,8 +454,19 @@ public sealed class RuntimeInputBindingCompiler(
         ValueProtectionPolicy effectivePolicy,
         AuthoredValueConversionRequest? conversion)
     {
+        if (IsVariableReferenceInput(inputDefinition))
+            return CompileVariableReferenceInput(nodeId, inputDefinition, value);
+
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileLiteralInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
+        RefuseMemberSelectionOnWholeValueRead(nodeId, inputDefinition, value);
+
+        if (string.Equals(value.ExpressionType, ActivityResultMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileActivityResultMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
+        if (string.Equals(value.ExpressionType, VariableMemberExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileVariableMemberInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
 
         // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
         // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
@@ -621,6 +660,45 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition));
     }
 
+    /// <summary>
+    /// Compiles a variable-reference input (spec 1231 FR-022): the pinned binding is the variable it names, its declaring
+    /// scope and key, as an inline literal of <see cref="Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.Alias"/>.
+    /// It is never a value: the activity reads and writes the variable through its step's session.
+    /// </summary>
+    private static RuntimeInputBinding CompileVariableReferenceInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        if (!string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"VF-VAR-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' is a variable reference and must be bound to a declared variable, not to a '{value.ExpressionType}' expression.");
+
+        var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
+        var scopeId = reference.IsWorkflowScope ? VariableReference.WorkflowScopeId : reference.DeclaringScopeId!;
+        var name = ReadVariableName(value.Value) ?? reference.ReferenceKey;
+        var type = new ValueTypeDescriptor(Elsa.Activities.Runtime.Core.Models.VariableReferenceTypes.Alias);
+        var policy = ValueProtectionPolicy.InstanceInline;
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: type,
+            effectivePolicy: policy,
+            source: RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new { name, scopeId, variableKey = reference.ReferenceKey }), policy),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static string? ReadVariableName(object? value)
+    {
+        var element = value is JsonElement json ? json : JsonSerializer.SerializeToElement(value);
+        if (element.ValueKind != JsonValueKind.Object)
+            return null;
+        foreach (var member in new[] { "name", "Name" })
+        {
+            if (element.TryGetProperty(member, out var name) && name.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(name.GetString()))
+                return name.GetString();
+        }
+
+        return null;
+    }
+
     private static RuntimeInputBinding CompileWorkflowRequestInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value, ValueProtectionPolicy effectivePolicy)
     {
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, WorkflowRequestExpressionType);
@@ -646,7 +724,10 @@ public sealed class RuntimeInputBindingCompiler(
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, ActivityResultExpressionType);
         var producerNodeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerNodeId");
         var projectionKey = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "projectionKey");
-        var producerScopeId = RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId");
+        // A binding the server supplied declares no scope. One that an existing document declares must still be usable.
+        var producerScopeId = payload.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null
+            ? RequireStringProperty(nodeId, inputDefinition, payload, ActivityResultExpressionType, "producerScopeId")
+            : null;
         var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) &&
                          optionalElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
                          optionalElement.GetBoolean();
@@ -660,6 +741,110 @@ public sealed class RuntimeInputBindingCompiler(
             metadata: BuildInputMetadata(inputDefinition),
             conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
     }
+
+    /// <summary>
+    /// Compiles a read of one member of an activity result. The selection is compiled as deferred: the selected
+    /// member's contract is pinned only after the data selection analysis has typed it.
+    /// </summary>
+    private static RuntimeInputBinding CompileActivityResultMemberInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        var payload = value.Value is JsonElement element ? element : default;
+        if (payload.ValueKind != JsonValueKind.Object || payload.TryGetProperty("path", out _) ||
+            payload.TryGetProperty("producerScopeId", out var scope) && scope.ValueKind != JsonValueKind.Null)
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of an activity result names its producer and projection only, and declares no scope.");
+        var producerNodeId = ReadOptionalStringProperty(payload, "producerNodeId");
+        var projectionKey = ReadOptionalStringProperty(payload, "projectionKey");
+        if (string.IsNullOrWhiteSpace(producerNodeId) || string.IsNullOrWhiteSpace(projectionKey))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of an activity result names its producer and projection only, and declares no scope.");
+        var segments = ReadMemberPath(nodeId, inputDefinition, payload);
+        var isOptional = payload.TryGetProperty("isOptional", out var optionalElement) && optionalElement.ValueKind == JsonValueKind.True;
+
+        return new RuntimeInputBinding(
+            inputDefinition.ReferenceKey,
+            ToValueTypeDescriptor(inputDefinition),
+            effectivePolicy,
+            RuntimeInputBindingSource.ActivityResultMember,
+            new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
+            activityResult: new RuntimeActivityResultReference(producerNodeId, projectionKey, producerScopeId: null, isOptional),
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionRequest: AuthoredValueConversionMapper.ToRuntimeRequest(conversion));
+    }
+
+    /// <summary>
+    /// Compiles a read of one member of a variable. Its declaring scope is explicit, unlike a whole-value read's. The
+    /// selection is always deferred: a variable can hold JSON from any writer, so its member is checked when it is read,
+    /// and with nothing known to convert from, only the default conversion can be honoured.
+    /// </summary>
+    private static RuntimeInputBinding CompileVariableMemberInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        var payload = value.Value is JsonElement element ? element : default;
+        var variableKey = payload.ValueKind == JsonValueKind.Object ? ReadOptionalStringProperty(payload, "referenceKey") : null;
+        var scopeId = payload.ValueKind == JsonValueKind.Object ? ReadOptionalStringProperty(payload, "declaringScopeId") : null;
+        if (payload.ValueKind != JsonValueKind.Object || payload.TryGetProperty("path", out _) ||
+            string.IsNullOrWhiteSpace(variableKey) || string.IsNullOrWhiteSpace(scopeId))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidSource",
+                "A member read of a variable names the variable and its declaring scope.");
+        var segments = ReadMemberPath(nodeId, inputDefinition, payload);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        if (conversion is { Mode: not AuthoredValueConversionMode.Auto })
+            throw ValueConversionPublicationException.SourceContractUnavailable(
+                $"VF-COER-001: Variable member input '{inputDefinition.ReferenceKey}' on node '{nodeId}' requests a '{conversion.Mode}' conversion, " +
+                "but the selected member's contract is not known at publication.",
+                ValueConversionRejectionReason.SelectedMemberContractUnknown,
+                targetType,
+                AuthoredValueConversionMapper.Mode(conversion),
+                AuthoredValueConversionMapper.Profile(conversion),
+                InputBindingContext(nodeId, inputDefinition));
+
+        return new RuntimeInputBinding(
+            inputDefinition.ReferenceKey,
+            targetType,
+            effectivePolicy,
+            RuntimeInputBindingSource.VariableMember,
+            new RuntimeReadSelection(RuntimeReadSelection.CurrentSchemaVersion, segments, RuntimeReadSelectionMode.DeferredFit),
+            variable: new RuntimeVariableReference(variableKey, scopeId),
+            metadata: BuildInputMetadata(inputDefinition));
+    }
+
+    private static string[] ReadMemberPath(string nodeId, InputDefinition inputDefinition, JsonElement payload) =>
+        ActivityDataMemberPath.TryRead(payload, out var segments)
+            ? [.. segments]
+            : throw Refusal(nodeId, inputDefinition, "ActivityData/InvalidMemberPath",
+                $"A member path is a nonempty array of at most {ActivityDataMemberPath.MaximumSegments} strings of at most {ActivityDataMemberPath.MaximumLength} characters in total.");
+
+    // A member path, or a legacy path anywhere but a workflow request, on a whole-value read would otherwise be dropped
+    // and the whole value read instead; refuse it at the input, as the data selection analysis does.
+    private static void RefuseMemberSelectionOnWholeValueRead(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var wholeValueRole = value.ExpressionType switch
+        {
+            _ when string.Equals(value.ExpressionType, ActivityResultExpressionType, StringComparison.OrdinalIgnoreCase) => ActivityResultExpressionType,
+            _ when string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase) => VariableExpressionType,
+            _ when string.Equals(value.ExpressionType, WorkflowRequestExpressionType, StringComparison.OrdinalIgnoreCase) => WorkflowRequestExpressionType,
+            _ => null
+        };
+        if (wholeValueRole is null || value.Value is not JsonElement { ValueKind: JsonValueKind.Object } payload)
+            return;
+        if (payload.TryGetProperty("memberPath", out _) ||
+            wholeValueRole != WorkflowRequestExpressionType && payload.TryGetProperty("path", out _))
+            throw Refusal(nodeId, inputDefinition, "ActivityData/UnsupportedMemberSelection",
+                "A whole-value read cannot select a member; use the member read of its role.");
+    }
+
+    private static ActivityDataSelectionRejectedException Refusal(string nodeId, InputDefinition inputDefinition, string code, string message) =>
+        new([new ValidationError($"{nodeId}/inputs/{inputDefinition.ReferenceKey}", code, message)]);
 
     private RuntimeInputBinding CompileDefaultInput(string nodeId, InputDefinition inputDefinition, ValueProtectionPolicy effectivePolicy)
     {
@@ -709,7 +894,7 @@ public sealed class RuntimeInputBindingCompiler(
             // fault: surface it as the structured VF-COER-001 diagnostic (with node id + reference key) so preflight
             // returns a validation result instead of letting the raw JsonException/FormatException escape as a 500 (#924).
             throw ValueConversionPublicationException.LiteralCoercionFailed(
-                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"VF-COER-001: Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{DescribeAuthoredValue(value.Value)}' cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 ToValueTypeDescriptor(inputDefinition),
                 InputBindingContext(nodeId, inputDefinition),
                 exception);
@@ -794,7 +979,7 @@ public sealed class RuntimeInputBindingCompiler(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 exception);
         }
 
@@ -833,7 +1018,7 @@ public sealed class RuntimeInputBindingCompiler(
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.Alias}'.",
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to alias '{inputDefinition.Type.ToDisplayString()}'.",
                 exception);
         }
     }
@@ -842,6 +1027,9 @@ public sealed class RuntimeInputBindingCompiler(
     {
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
+
+        if (value.Value is not null and not string and not JsonElement and not ExpressionDefinition)
+            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' has an unsupported CLR expression payload. Supply plain text, ExpressionDefinition or JsonElement.");
 
         if (TryReadPortableExpressionDefinition(value.Value, out var definition))
             return CompilePortableExpressionInput(nodeId, inputDefinition, value.ExpressionType, definition, effectivePolicy);
@@ -875,11 +1063,10 @@ public sealed class RuntimeInputBindingCompiler(
                 $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' declares expression type '{authoredExpressionType}', but its portable definition declares language '{definition.Language}'.");
         }
 
-        if (!string.Equals(inputDefinition.Type.Alias, definition.ResultType.Alias, StringComparison.Ordinal) ||
-            inputDefinition.Type.CollectionKind != definition.ResultType.CollectionKind)
+        if (!DeclaredTypeFits(definition.ResultType, inputDefinition.Type))
         {
             throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' expects '{inputDefinition.Type.Alias}', but its portable expression declares result type '{definition.ResultType.Alias}'.");
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' expects '{inputDefinition.Type.ToDisplayString()}', but its portable expression declares result type '{definition.ResultType.ToDisplayString()}'.");
         }
 
         return new RuntimeInputBinding(
@@ -894,7 +1081,8 @@ public sealed class RuntimeInputBindingCompiler(
                 definition.Metadata,
                 definition.Parameters,
                 definition.Options,
-                definition.CapabilityProfile),
+                definition.CapabilityProfile,
+                variableReadFallback: definition.VariableReadFallback),
             metadata: BuildInputMetadata(inputDefinition));
     }
 
@@ -906,8 +1094,7 @@ public sealed class RuntimeInputBindingCompiler(
             return true;
         }
 
-        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value, DescriptorPayloadSerializer.Options));
-        if (element is not { ValueKind: JsonValueKind.Object } payload ||
+        if (value is not JsonElement { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("language", out _) ||
             !payload.TryGetProperty("source", out _) ||
             !payload.TryGetProperty("capabilityProfile", out _))
@@ -919,6 +1106,25 @@ public sealed class RuntimeInputBindingCompiler(
         definition = payload.Deserialize<ExpressionDefinition>(DescriptorPayloadSerializer.Options)
             ?? throw new ArgumentException("Portable expression definition payload could not be deserialized.");
         return true;
+    }
+
+    // A portable expression's declared result type fits an input when the two name the same type. The dynamic kind
+    // has several names (Any, JsonElement, JsonElement?, JsonNode, their full .NET names): they are one kind here, so
+    // an Any expression binds to a JsonElement input with no conversion step. A JsonObject or JsonArray input accepts
+    // the dynamic kind too, and the run time checks the shape (spec 1228 FR-021).
+    private static bool DeclaredTypeFits(TypeReference resultType, TypeReference inputType)
+    {
+        if (resultType.CollectionKind != inputType.CollectionKind)
+            return false;
+
+        if (string.Equals(resultType.Alias, inputType.Alias, StringComparison.Ordinal))
+            return Equals(resultType.Element, inputType.Element);
+
+        if (resultType.Element is not null || inputType.Element is not null)
+            return false;
+
+        return TypeAliasConvention.IsDynamicKind(resultType.Alias) &&
+               (TypeAliasConvention.IsDynamicKind(inputType.Alias) || TypeAliasConvention.IsShapedJson(inputType.Alias));
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
@@ -990,7 +1196,7 @@ public sealed class RuntimeInputBindingCompiler(
         };
 
     private static ValueTypeDescriptor ToValueTypeDescriptor(InputDefinition inputDefinition) =>
-        new(inputDefinition.Type.Alias, inputDefinition.Type.CollectionKind);
+        ValueTypeDescriptor.FromTypeReference(inputDefinition.Type);
 
     private static bool AcceptsNull(InputDefinition inputDefinition) =>
         inputDefinition.IsNullable;

@@ -21,11 +21,17 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// token. Both are backed by OpenIddict token-store entries so they can be revoked and rotated.</item>
 /// <item><b>Validate</b> runs OpenIddict's full local validation pipeline (signature, issuer, lifetime, and
 /// token-entry status — so revocation takes effect immediately).</item>
-/// <item><b>Refresh</b> redeems the stored refresh entry (single use; reuse after redemption or revocation
-/// fails) and issues a fresh access/refresh pair.</item>
+/// <item><b>Refresh</b> re-checks the user through <see cref="IUserTokenEligibility"/> (a disabled or deleted user
+/// gets nothing and loses every outstanding token), then redeems the stored refresh entry (single use; reuse after
+/// redemption or revocation fails) and issues a fresh access/refresh pair.</item>
 /// <item><b>Revoke</b> revokes the matching token entry, for access JWTs (via their embedded entry id) and
-/// opaque refresh tokens alike. <b>RevokeSubject</b> revokes every entry issued to a subject, which sign-out uses.</item>
+/// opaque refresh tokens alike. <b>RevokeSubject</b> revokes every entry issued to a <see cref="TokenSubject"/>, which
+/// sign-out uses.</item>
 /// </list>
+/// Entries are stored under a <see cref="TokenSubjectKey"/>: the Elsa user in its tenant, or a provider's subject in its
+/// tenant and provider. The JWT's <c>sub</c> stays the subject the request names. So one user's sign-out, disable or
+/// delete never touches another provider's equal <c>sub</c>, the same id in another tenant, or a provider <c>sub</c>
+/// that happens to equal an Elsa user id (#2848).
 /// Tokens are minted directly with the server's <see cref="OpenIddictServerOptions.JsonWebTokenHandler"/> and
 /// credentials rather than through the HTTP <c>/connect/token</c> pipeline, because issuance here is a
 /// first-party cookie→bearer exchange invoked from an endpoint (Workstream C), not an OAuth grant.
@@ -34,19 +40,21 @@ public sealed class OpenIddictTokenService(
     IOpenIddictTokenManager tokenManager,
     OpenIddictValidationService validationService,
     IOptionsMonitor<OpenIddictServerOptions> serverOptions,
-    IOptions<OpenIddictIdentityOptions> options) : ITokenService
+    IOptions<OpenIddictIdentityOptions> options,
+    IUserTokenEligibility userEligibility) : ITokenService
 {
     public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
+        var subjectKey = TokenSubjectKey.Create(SubjectOf(request));
         var now = DateTimeOffset.UtcNow;
         var accessExpiresAt = now.Add(options.Value.AccessTokenLifetime);
 
         var entryId = await CreateTokenEntryAsync(
-            request.SubjectId, OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
+            subjectKey, OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
             referenceId: null, payload: null, cancellationToken);
 
         var accessToken = CreateAccessTokenJwt(request, entryId, now, accessExpiresAt);
-        var refreshToken = await CreateRefreshTokenAsync(request, now, cancellationToken);
+        var refreshToken = await CreateRefreshTokenAsync(request, subjectKey, now, cancellationToken);
 
         return new TokenIssueResult(accessToken, accessExpiresAt, refreshToken);
     }
@@ -62,15 +70,42 @@ public sealed class OpenIddictTokenService(
         if (expiresAt is null || expiresAt <= DateTimeOffset.UtcNow)
             throw InvalidRefreshToken();
 
+        var subjectKey = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
+        var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
+        RefreshTokenPayload payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+        }
+        catch (JsonException)
+        {
+            throw InvalidRefreshToken();
+        }
+
+        // An entry written before subjects were scoped (#2848) carries no subject of its own: its stored subject was
+        // the subject itself. One that names neither an Elsa user nor a provider cannot be re-issued under a scoped
+        // key, so it is refused rather than guessed into one.
+        var subjectId = payload.SubjectId ?? subjectKey;
+        if (payload.CanonicalUserId is null && payload.Provider is null)
+            throw InvalidRefreshToken();
+
+        // The user is re-read before anything is issued: a refresh token outlives a sign-in by days, so a user disabled
+        // or deleted since then must get no new access token. The refusal also revokes every token the subject still
+        // holds, so that user's other refresh tokens stop working now rather than at their own next use. A subject
+        // that names no Elsa user (an external bearer's own subject) has no account to re-check and is left as issued.
+        if (payload.CanonicalUserId is { } userId && !await userEligibility.IsEligibleAsync(payload.TenantId, userId, cancellationToken))
+        {
+            await RevokeByKeyAsync(subjectKey, cancellationToken);
+            throw InvalidRefreshToken();
+        }
+
         // Rotation: a refresh token is single-use. Redeeming marks the entry, so replaying it fails above.
         if (!await tokenManager.TryRedeemAsync(entry, cancellationToken))
             throw InvalidRefreshToken();
 
-        var subject = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
-        var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
-        var payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
-
-        var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes) { CanonicalUserId = payload.CanonicalUserId }, cancellationToken);
+        var issued = await IssueAsync(
+            new TokenIssueRequest(subjectId, payload.TenantId, payload.Scopes) { CanonicalUserId = payload.CanonicalUserId, Provider = payload.Provider },
+            cancellationToken);
         return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);
     }
 
@@ -107,12 +142,15 @@ public sealed class OpenIddictTokenService(
             await tokenManager.TryRevokeAsync(entry, cancellationToken);
     }
 
-    public async ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default)
+    public ValueTask RevokeSubjectAsync(TokenSubject subject, CancellationToken cancellationToken = default) =>
+        RevokeByKeyAsync(TokenSubjectKey.Create(subject), cancellationToken);
+
+    private async ValueTask RevokeByKeyAsync(string subjectKey, CancellationToken cancellationToken)
     {
         // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
         // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
         var entries = new List<object>();
-        await foreach (var entry in tokenManager.FindBySubjectAsync(subjectId, cancellationToken))
+        await foreach (var entry in tokenManager.FindBySubjectAsync(subjectKey, cancellationToken))
             entries.Add(entry);
 
         // Live entries only: an expired or no-longer-valid entry is already dead, so it is left unwritten. Filtered
@@ -171,6 +209,12 @@ public sealed class OpenIddictTokenService(
             ArgumentException.ThrowIfNullOrWhiteSpace(userId);
             identity.AddClaim(new Claim(IdentityClaimTypes.UserId, userId));
         }
+        else if (request.Provider is { } subjectProvider)
+        {
+            // A subject that is no Elsa user is keyed by its provider: the token carries it, so a sign-out presenting
+            // this bearer alone finds the same TokenSubject the exchange issued under.
+            identity.AddClaim(new Claim(IdentityClaimTypes.SubjectProvider, subjectProvider));
+        }
         identity.AddClaim(new Claim(IdentityClaimTypes.Provider, options.Value.ProviderId));
 
         foreach (var scope in request.Scopes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
@@ -183,13 +227,14 @@ public sealed class OpenIddictTokenService(
         return identity;
     }
 
-    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, CancellationToken cancellationToken)
+    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, string subjectKey, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
-        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId));
+        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(
+            request.TenantId, request.Scopes.ToArray(), request.CanonicalUserId, request.SubjectId, request.Provider));
 
         await CreateTokenEntryAsync(
-            request.SubjectId, OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
+            subjectKey, OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
             referenceId, payload, cancellationToken);
 
         return referenceId;
@@ -234,7 +279,20 @@ public sealed class OpenIddictTokenService(
         return false;
     }
 
+    /// <summary>The identity the request's tokens are stored under: the Elsa user, else the provider's subject.</summary>
+    private static TokenSubject SubjectOf(TokenIssueRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.CanonicalUserId is { } userId)
+            return TokenSubject.ForUser(request.TenantId, userId);
+        if (request.Provider is { } provider)
+            return TokenSubject.ForProviderSubject(request.TenantId, provider, request.SubjectId);
+        throw new ArgumentException(
+            "A token subject that names no Elsa user needs the provider that authenticated it, so its tokens are scoped to that tenant and provider.",
+            nameof(request));
+    }
+
     private static InvalidOperationException InvalidRefreshToken() => new("Refresh token is invalid or expired.");
 
-    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes, string? CanonicalUserId = null);
+    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes, string? CanonicalUserId = null, string? SubjectId = null, string? Provider = null);
 }

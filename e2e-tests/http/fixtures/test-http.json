@@ -8,7 +8,7 @@
         "name": "InputRequest",
         "default": null,
         "type": {
-          "alias": "Object",
+          "alias": "Any",
           "collectionKind": "Single"
         },
         "storageDriverType": null
@@ -90,7 +90,7 @@
               "intrinsic": {
                 "kind": "SetCorrelationId",
                 "valueType": {
-                  "alias": "Elsa.Any",
+                  "alias": "Any",
                   "collectionKind": "Single"
                 }
               },

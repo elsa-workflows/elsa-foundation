@@ -37,18 +37,54 @@ internal static class RuntimeClosedScope
     /// </summary>
     public static VariableFrameState CreateFrame(
         ActivityExecutionState boundary,
-        IEnumerable<DurableValueState>? durableValues) => new(
-        FrameId(boundary.InvocationId),
-        boundary.Execution.ExecutableNodeId,
-        boundary.InvocationId,
-        parentFrameId: null,
-        VariableFrameKind.Root,
-        durableValues is null
-            ? new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal)
-            : RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(
-                durableValues,
-                boundary.InvocationId,
-                ActivityExecutionScopeValues.VariableRole));
+        IEnumerable<DurableValueState>? durableValues)
+    {
+        var rows = durableValues?.ToArray() ?? [];
+        return new(
+            FrameId(boundary.InvocationId),
+            boundary.Execution.ExecutableNodeId,
+            boundary.InvocationId,
+            parentFrameId: null,
+            VariableFrameKind.Root,
+            RuntimeInputBindingStateProjection.ProjectBoundaryEnvelopes(rows, boundary.InvocationId, ActivityExecutionScopeValues.VariableRole),
+            versions: RowVersions(rows, boundary.InvocationId));
+    }
+
+    /// <summary>
+    /// The versions a closed scope's variable rows carry (spec 1221 T003): read through this frame, a body node's read
+    /// set records them, and a capture into a row is judged against them, as for a frame.
+    /// </summary>
+    public static IReadOnlyDictionary<string, VariableVersion>? RowVersions(IEnumerable<DurableValueState> rows, string boundaryActivityExecutionId)
+    {
+        Dictionary<string, VariableVersion>? versions = null;
+        foreach (var row in rows.Where(row => StringComparer.Ordinal.Equals(row.SourceActivityExecutionId, boundaryActivityExecutionId)))
+        {
+            if (!row.Metadata.TryGetValue(RuntimeMetadataKeys.BoundaryReferenceKey, out var key) ||
+                !row.Metadata.TryGetValue(RuntimeMetadataKeys.RowVariableVersion, out var raw) ||
+                !long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version))
+                continue;
+            var writer = row.Metadata.TryGetValue(RuntimeMetadataKeys.RowVariableWriter, out var json)
+                ? System.Text.Json.JsonSerializer.Deserialize<VariableWriter>(json)
+                : null;
+            (versions ??= new Dictionary<string, VariableVersion>(StringComparer.Ordinal))[key] =
+                new VariableVersion(version, row.Metadata.GetValueOrDefault(RuntimeMetadataKeys.RowVariableDigest), writer);
+        }
+
+        return versions;
+    }
+
+    /// <summary>The row metadata that stores <paramref name="version"/> (spec 1221 T003).</summary>
+    public static IReadOnlyDictionary<string, string> WithRowVersion(IReadOnlyDictionary<string, string> metadata, VariableVersion version, bool hidesValue = false)
+    {
+        var result = metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        result[RuntimeMetadataKeys.RowVariableVersion] = version.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // Row metadata is not scanned as a value: a hidden value keeps no digest there.
+        if (version.Digest is not null && !hidesValue)
+            result[RuntimeMetadataKeys.RowVariableDigest] = version.Digest;
+        if (version.Writer is not null)
+            result[RuntimeMetadataKeys.RowVariableWriter] = System.Text.Json.JsonSerializer.Serialize(version.Writer);
+        return result;
+    }
 
     /// <summary>
     /// The request a body node reads below <paramref name="boundary"/>: the boundary's captured inputs by reference key,

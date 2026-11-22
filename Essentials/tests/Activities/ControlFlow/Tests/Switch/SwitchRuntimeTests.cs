@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
+using static Elsa.Activities.ControlFlow.Tests.NamedSelectionConformance;
 using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
 namespace Elsa.Activities.Switch.Tests;
@@ -84,6 +85,19 @@ public sealed class SwitchRuntimeTests
         run.AssertOutcomes("node-switch", ActivityOutcomes.Default);
         run.AssertRan("node-default");
         run.AssertDidNotRun("node-a", "node-b");
+    }
+
+    // Spec 1208 FR-002b: Switch declares no Done, so a match and the fallback both select by name.
+    [Theory]
+    [InlineData("b", "actexec-b", "b")]
+    [InlineData("no-match", "actexec-default", ActivityOutcomes.Default)]
+    public async Task Every_completion_selects_a_named_outcome(string value, string branchExecutionId, string expected)
+    {
+        await using var harness = NewHarness("actexec-switch", branchExecutionId);
+
+        var run = await harness.RunAsync(NewExecutable(value));
+
+        AssertNamedSelection(run, "node-switch", expected);
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>

@@ -406,11 +406,6 @@
           "Microsoft.IdentityModel.Tokens": "8.16.0"
         }
       },
-      "System.Security.Cryptography.Pkcs": {
-        "type": "Transitive",
-        "resolved": "9.0.13",
-        "contentHash": "dxJhkuoaelvWy588wPXjShNks+ZMiSgXnN75/u+DPbER5PqKrLPDftE0BvGM7nDK/scQAVlD+gRXlCAAjWi58Q=="
-      },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
         "resolved": "10.0.8",
@@ -552,6 +547,23 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "Acornima": "[1.6.1, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )"
+        }
+      },
+      "elsa.expressions.javascript.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
@@ -687,7 +699,10 @@
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
         }
       },
@@ -744,6 +759,7 @@
           "Acornima": "[1.6.1, )",
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
@@ -1016,6 +1032,12 @@
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
         }
+      },
+      "System.Security.Cryptography.Pkcs": {
+        "type": "CentralTransitive",
+        "requested": "[9.0.21, )",
+        "resolved": "9.0.21",
+        "contentHash": "KD+oHoYIxwNCajjVe58WVwq9cRpum+Pg3tRveDRtkcaw6w3oc7sNBoMRtb5P5OehI3bgv1ucMpgjf8lpj5J96A=="
       },
       "ValenceWorks.MinimalEndpoints": {
         "type": "CentralTransitive",

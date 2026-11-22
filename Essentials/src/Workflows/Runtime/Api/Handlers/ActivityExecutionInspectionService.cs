@@ -9,7 +9,8 @@ public sealed class ActivityExecutionInspectionService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionInspectionStore inspectionStore,
     IActivityInspectionContextAsync authorization,
-    IActivityExecutionHierarchyStore? hierarchyStore = null) : IActivityExecutionInspectionService
+    IActivityExecutionHierarchyStore? hierarchyStore = null,
+    IActivityExecutionStateStore? activityExecutionStateStore = null) : IActivityExecutionInspectionService
 {
     public async Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken)
     {
@@ -29,12 +30,20 @@ public sealed class ActivityExecutionInspectionService(
         var attempt = hierarchyStore is null
             ? null
             : await hierarchyStore.FindAttemptNavigationAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        // Spec 1221: the write history, a refused completion and superseded input evaluations live on the execution's
+        // durable state, not on the inspection projection; they are read here, as metadata and value states only.
+        var state = activityExecutionStateStore is null
+            ? null
+            : await activityExecutionStateStore.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
+        var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
+        var canResolveValuePayloads = await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken);
         return ActivityExecutionInspectionView.From(
             projection,
             boundary,
-            await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken),
+            canInspectSensitiveValues,
             attempt,
-            await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken));
+            canResolveValuePayloads)
+            .WithVariableLifecycle(state, canDiscloseDigest: canInspectSensitiveValues && canResolveValuePayloads);
     }
 }
 

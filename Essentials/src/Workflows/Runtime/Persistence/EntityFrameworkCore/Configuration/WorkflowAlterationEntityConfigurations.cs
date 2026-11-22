@@ -54,5 +54,7 @@ public sealed class WorkflowAlterationJobEntityConfiguration : IEntityTypeConfig
         b.HasIndex(x => new { x.ScopeKeyHash, x.PlanIdHash, x.CaptureOrdinal, x.JobIdOrderKey });
         b.HasIndex(x => new { x.ScopeKeyHash, x.PlanIdHash, x.Status, x.ClaimableAtUtcTicks, x.JobIdOrderKey });
         b.HasIndex(x => new { x.ScopeKeyHash, x.CheckpointCommitIdHash, x.CheckpointCommitId });
+        // Spec 1229 FR-005: an instance's alteration jobs, for its variable history.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash }).HasDatabaseName("IX_elsa_runtime_workflow_alteration_job_workflow");
     }
 }

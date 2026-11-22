@@ -36,3 +36,34 @@ of work, writing a continuation's scheduler work item inside the checkpoint tran
 not *inline dispatch*. Nothing runs until a drain claims the item, and the item exists if and only if the checkpoint
 committed. The decision above is unchanged: the commit still dispatches nothing, and every other kind of post-commit work,
 and every composition whose queue does not share that unit of work, keeps the outbox.
+
+## D-2 amendment
+
+**Status: accepted (2026-11-12).** This extends atomic recording to background admissions.
+Identity/retry semantics belong to [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#d-2-execution-contract);
+flush cadence belongs to [ADR 0032](0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md#d-2-amendment).
+
+Stage a background admission with the workflow-state changes and pinned inputs it depends on. Publish them through
+one atomic durable checkpoint: before commit a worker cannot claim the work; after commit its preceding state and
+admission exist together. A separate state commit followed by a visible enqueue leaves a gap and does not satisfy
+this rule.
+
+When the background queue shares the checkpoint unit of work, recording its work item in that transaction is the
+recording already allowed by the clarification above. When delivery crosses stores, atomically record an outbox
+intent with workflow state and deliver background work after commit. Delivery/claim handling tolerates duplicates
+under stable work identity. If the composition cannot provide atomic recording and recoverable delivery, reject
+unsupported placement with a clear diagnostic rather than offer best-effort durability. Neither case dispatches
+user work inside the checkpoint transaction.
+
+Several admissions and preceding state changes may share a commit under ADR 0032's bounded policy. Flush pending
+admissions before waiting for results and within the configured finite dispatch bound. The durable queue or pending
+intent is the source of recoverable work; a lost wake-up notification must not lose that work. Recording an identity
+before an external call and its result afterwards still cannot atomically include an arbitrary external effect.
+
+Publication order makes preceding committed changes visible to worker reads. It does not freeze every variable at
+admission: later reads may observe later eligible commits. Pin activity inputs separately and apply the shared
+version/conflict/protection rules on worker reads and coordinator finalization. Apply the same causal and defined
+queue-precedence rules across providers without promising the same winner for unordered workers.
+
+Implementing specs must prove pre-commit invisibility, state/admission atomicity, lost-wake-up recovery, duplicate
+delivery/claim safety, bounded dispatch and coordinator finalization. This amendment delivers no runtime/store change.

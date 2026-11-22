@@ -56,7 +56,7 @@ public sealed class SwitchActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal("a", continuation.OutcomeName);
+        Assert.Equal(new[] { "a" }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class SwitchActivityTests : IDisposable
 
         Assert.Empty(context.GetChildActivityScheduleRequests());
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Default, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Default }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class SwitchActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal("b", continuation.OutcomeName);
+        Assert.Equal(new[] { "b" }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class SwitchActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-default", "node-default", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Default, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Default }, continuation.OutcomeNames);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class SwitchActivityTests : IDisposable
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Break]));
 
         Assert.True(continuation.IsComplete);
-        Assert.Equal(ActivityOutcomes.Break, continuation.OutcomeName);
+        Assert.Equal(new[] { ActivityOutcomes.Break }, continuation.OutcomeNames);
     }
 
     [Fact]

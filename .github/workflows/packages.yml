@@ -19,6 +19,13 @@ name: Packages
 #                push the feed rejects by the input fingerprint of the feed's copy (FR-018), and writes the record back
 #                with this workflow's GITHUB_TOKEN (FR-017). A manual run can force-advance named packages (FR-003).
 #
+# A push to main first waits for that commit's own CI push run (#4002, tools/ci/await_ci_result.py). CI used to race
+# this workflow: 4.0.23-preview was published from a commit whose CI failed half an hour later. If the commit's CI
+# run fails or is cancelled by a newer push, this run fails before anything is packed, so no package reaches the
+# feed and docker.yml's admission (a successful Packages run) blocks the image build too; the newer commit's own run
+# publishes everything this one would have (FR-020). Manual runs do not wait: the operator chose the commit. If no
+# CI push run for the commit ever appears, the gate waits out its budget and fails; publish it with a manual run.
+#
 # A GitHub Release publishes nothing until the 4.0 release cut, #2085. The reserved contributor-preview prereleases
 # are metadata-only; every other release keeps the explicit refusal.
 #
@@ -59,6 +66,9 @@ concurrency:
 
 permissions:
   contents: read
+  # The CI gate below lists this repository's workflow runs; without actions: read the default token gets a 403 and
+  # every main push would fail to publish (docker.yml grants the same for the same query).
+  actions: read
 
 env:
   feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
@@ -68,7 +78,8 @@ jobs:
     name: Build packages
     if: ${{ github.event_name != 'release' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Main pushes wait for the commit's CI run (about an hour at the full tier) before the thirty-minute pack itself.
+    timeout-minutes: 120
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
       affected: ${{ steps.plan.outputs.affected }}
@@ -78,6 +89,15 @@ jobs:
         with:
           # The calculator compares trees at the commits the record names and proves ancestry (FR-021).
           fetch-depth: 0
+
+      # Publish only what CI has passed (#4002). Fails, rather than skips, when the commit's CI push run did not
+      # succeed, so a red commit produces no artifact, no publish and no image build.
+      - name: Wait for the commit's CI run to succeed
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # 85 minutes of waiting plus the thirty-minute pack stays inside the job's 120.
+        run: python3 tools/ci/await_ci_result.py --repository "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA" --timeout-minutes 85
 
       - uses: actions/setup-dotnet@v4
         with:
