@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext, StudioNotificationApi } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioSearchInput, StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar} from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioSearchInput, StudioPage, StudioPageHeader, StudioCollectionFooter, StudioCollectionToolbar } from "@elsa-workflows/studio-ui";
 import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
 import { ConnectionCreateDialog } from "./ConnectionCreateDialog";
@@ -38,14 +38,14 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   const selected = visibleItems.find(item => item.name === selectedName) ?? null;
   const editingConnection = editingName ? (visibleItems.find(item => item.name === editingName) ?? null) : null;
 
-  const load = useCallback(async (query: string) => {
+  const load = useCallback(async (query: string, knownDescriptors?: ConnectionDescriptorsResponse | null) => {
     const requestContext = context;
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     setLoadError(null);
     try {
       const [list, descriptorResponse] = await Promise.all([
-        listConnections(requestContext, query), getConnectionDescriptors(requestContext)
+        listConnections(requestContext, query), knownDescriptors ?? getConnectionDescriptors(requestContext)
       ]);
       if (requestId !== loadRequestRef.current || currentContextRef.current !== requestContext) return;
       setItems(list.items);
@@ -144,7 +144,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
       actions={<StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>} />
     <StudioCollectionToolbar>
       <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => event.preventDefault()}>
-        <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => { setSearch(event.target.value); void load(event.target.value); }} />
+        <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => { setSearch(event.target.value); void load(event.target.value, visibleDescriptors); }} />
       </form>
     </StudioCollectionToolbar>
     {!selected ? notification : null}
