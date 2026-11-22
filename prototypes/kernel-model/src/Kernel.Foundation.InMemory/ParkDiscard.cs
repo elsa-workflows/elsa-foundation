@@ -52,6 +52,27 @@ internal sealed partial class ActorAdapter
         return Durable.CascadeProtocol.Open(outcome, Durable.CascadeRegistry.From(row));
     }
 
+    private Durable.TurnOutcome OpenParkDelete(Durable.TurnInput input, Durable.InstanceRow row, Durable.InMemoryStore.ActorCheckpoint checkpoint)
+    {
+        var delivery = input.Taken[input.From];
+        var header = Header(checkpoint);
+        var protection = DeletionRefusal(header, row.State, input.Services.Now);
+        if (protection is not null)
+            return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, protection);
+
+        var expiry = store.FoundationExpiry(row);
+        var outcome = BeginClear(input, row, checkpoint.Park!, expiry, Durable.ParkClearKind.Delete);
+        if (expiry?.Armed is { } armed) outcome.Cancelled.Add(armed);
+        outcome.ReplyTo(delivery, "started");
+        return outcome;
+    }
+
+    private string? DeletionRefusal(Contract.ActorHeader header, string state, long now)
+    {
+        try { return actor.ProtectsDeletion(header, state, now) ? "Protected" : null; }
+        catch (Exception) { return "ProtectionUnavailable"; }
+    }
+
     private Durable.TurnOutcome ExpirePark(Durable.TurnInput input)
     {
         var message = input.Taken[input.From].Message;
@@ -101,6 +122,18 @@ internal sealed partial class ActorAdapter
         if (drain.Kind == Durable.ParkClearKind.Terminate)
             completed = completed with { Status = Durable.InstanceStatus.Cancelled, Suspended = false };
         var outcome = ParkCheckpoint(input, row, completed);
+        if (drain.Kind == Durable.ParkClearKind.Delete)
+        {
+            if (outcome.Row!.Parent is not null) outcome.Sent.Add(Notice(outcome.Row, null, final: true));
+            var retire = DeletionRefusal(Header(store.FoundationTurnHeader(row)), row.State, input.Services.Now) is null;
+            outcome.Journal = Durable.InMemoryStore.ParkDeleteJournal(retire, drain);
+            if (retire)
+            {
+                outcome.Row = Durable.CreationProtocol.Retire(row, Durable.CascadeRegistry.ForRetirement(row));
+                outcome.Delete = outcome.Unsubscribe = true;
+            }
+            return outcome;
+        }
         var resolution = drain.Kind switch
         {
             Durable.ParkClearKind.Terminate => "terminated",

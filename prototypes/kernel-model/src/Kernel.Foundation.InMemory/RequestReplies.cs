@@ -24,11 +24,12 @@ internal static class RequestReplies
 
         var reply = await completion.WaitAsync(cancellationToken);
         if (reply.Item is Durable.CreationResult refusal)
-            return new(null, null, Error: refusal.Result switch
+            return new(null, refusal.OwningOperation, Error: refusal.Result switch
             {
                 "StaleSelection" => "stale selection",
                 "InvalidRetrySelection" => "invalid retry selection",
                 "ResolutionOpen" => "resolution open",
+                "InProgress" => "in progress",
                 "ResolutionUnavailable" => "resolution unavailable",
                 "Protected" => "protected",
                 "ProtectionUnavailable" => "protection unavailable",

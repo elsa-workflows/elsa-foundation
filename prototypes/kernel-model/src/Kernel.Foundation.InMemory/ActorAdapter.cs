@@ -86,7 +86,16 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind == Durable.Kinds.Drain)
             return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
         if (input.Row is { ParkDiscard: not null } draining)
+        {
+            if (message is { Kind: Contract.Kinds.Delete, Operator: { } deletion } && draining.ParkDiscard.Kind == Durable.ParkClearKind.Delete)
+            {
+                var identity = store.FoundationIdentity(draining.Id, draining.Creation);
+                if (!store.MatchesFoundationSelection(identity.Tenant, identity.Reference, deletion.Selection))
+                    return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "StaleSelection");
+                return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "InProgress", draining.ParkDiscard.Operation);
+            }
             return RefuseDuringDiscard(input, draining);
+        }
         if (message.Kind == Contract.Kinds.Terminate &&
             input.Row is { Status: Durable.InstanceStatus.Running, ParkRecovery: not null } liveRecovery &&
             store.FoundationTurnHeader(liveRecovery).Park is { } recoveryPark)
@@ -147,17 +156,15 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && input.Row is { } ended)
         {
             var checkpoint = store.FoundationTurnHeader(ended);
-            if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null)
+            if (ended.Status == Durable.InstanceStatus.Running)
                 return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
-            try
-            {
-                if (actor.ProtectsDeletion(Header(checkpoint), ended.State, input.Services.Now))
-                    return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
-            }
-            catch (Exception)
-            {
-                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "ProtectionUnavailable");
-            }
+            if (checkpoint.Park is not null)
+                return message.Operator.Selection is null
+                    ? Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "StaleSelection")
+                    : OpenParkDelete(input, ended, checkpoint);
+            var protection = DeletionRefusal(Header(checkpoint), ended.State, input.Services.Now);
+            if (protection is not null)
+                return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, protection);
 
             var marker = Durable.CreationProtocol.Retire(ended, Durable.CascadeRegistry.ForRetirement(ended));
             return new(input.Actor)
