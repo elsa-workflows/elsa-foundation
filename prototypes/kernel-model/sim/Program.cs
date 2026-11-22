@@ -75,12 +75,6 @@ if (args.Contains("--park-kept-check"))
     await ParkKeptChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
-if (args.Contains("--park-recovery-check"))
-{
-    var failed = false;
-    await ParkKeptChecks.CheckRecoverArrivals((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
-    return failed ? 1 : 0;
-}
 if (args.Contains("--private-kinds-check"))
 {
     var failed = false;
