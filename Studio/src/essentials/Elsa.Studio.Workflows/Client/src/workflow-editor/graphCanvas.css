@@ -450,7 +450,6 @@ button.wf-node-slot-badge:focus-visible {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
   z-index: 2;
 }
