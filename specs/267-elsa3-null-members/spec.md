@@ -334,7 +334,7 @@ to set, or that the activity can be removed.
 
 ## Converter default follow-up — #3281
 
-**Follow-up status:** Draft requirements amendment; implementation has not started. The document-level Implemented
+**Follow-up status:** Implementation in progress on a separate implementation branch after proposal agreement/merge. The document-level Implemented
 status describes the original bare-JSON-null delivery only.
 
 The selected legacy baseline is 3.6.3, checked against 3.5.3. This follow-up applies the existing faithful-or-refuse
@@ -446,5 +446,4 @@ and missing computed-name rules remain owned by ADR0089/S-2/S-4.
   Review and coordinator merge remain gates. When S-2 implementation is available, recheck these corrected member
   values with its converter policy option on/off; unavailable S-2 integration is explicitly qualified.
 
-This is a requirements proposal. New production/runtime/corpus acceptance for #3281 remains **NOT RUN** until its
-separate implementation. Historical spec267 receipts and #3201's distinct receipts do not prove this follow-up.
+Final follow-up acceptance is recorded by the separate implementation PR; pending checks remain explicitly qualified. Historical spec267 receipts and #3201's distinct receipts do not prove this follow-up.

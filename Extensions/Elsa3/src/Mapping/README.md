@@ -116,7 +116,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     cannot be published: #3280).
 
   A null output is captured by nothing, and a null member of an activity resolved by name gets no binding. An input
-  holding a literal null converts as a JSON null does. Nothing above reports a warning, except one case (#3293). On an
+  holding a literal null follows that table except for the named declared-default corrections below. Nothing above
+  reports a warning, except one case (#3293). On an
   alias or a verbatim catalog key, Elsa 3 ran a null with its own activity's default, which the conversion cannot see.
   Where the Elsa 4 input declares a default, the member converts with `ELS3-BEHAVIOUR-NULL-TAKES-ELSA4-DEFAULT`, which
   names that default and says what to set to keep Elsa 3's value: the member in the Elsa 3 workflow, or the input on the
@@ -319,6 +320,26 @@ Known differences that convert without a diagnostic, because they depend on how 
 - A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
   (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004` (#3172).
 - Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
+
+## Missing, blank and deliberately null members (spec 267 follow-up)
+
+The built-in map distinguishes missing/defaulted Input wrappers (`{}`, typeName-only and typed `expression:{}`)
+from a resolved typed Literal with a null or omitted value. Malformed expression metadata is refused. Explicit
+collections and the String text `"null"` cannot acquire a declared default by being classified as unbound.
+
+| Member | Conversion |
+|---|---|
+| Both HTTP request ContentTypes | Missing/defaulted or null with potentially non-null Content refuses the legacy no-body mismatch. Blank ContentType emits `application/json`. Empty String Content with non-null ContentType refuses because the target omits its body/headers. Known-null Content retains no body. |
+| FlowSendHttpRequest.ExpectedStatusCodes | Missing/defaulted and bare JSON null emit `[200]`. Literal null, blank, `[]` and JSON-list text `[]` refuse: legacy Done on 404/500 differs from target Failed. Supported nonempty literal lists keep the existing outcome mapping. |
+| For.OuterBoundInclusive / Delay.TimeSpan | Missing/defaulted and bare JSON null retain true/one minute. Literal null/omitted Literal value and blank literals emit false/explicit zero duration. |
+| Timer.Interval | Missing/defaulted and bare JSON null retain one minute; authored intervals must be positive literals. Null, blank, zero, negative and invalid intervals refuse. |
+| Both HTTP Methods / WriteHttpResponse.StatusCode | Missing/defaulted retain GET/200. Method literal null retains GET; authored whitespace refuses. Response status literal null, nonpositive/invalid literals and unproven computed ranges refuse; positive literal statuses remain raw. |
+| Cron.CronExpression / RunJavaScript.Script | Missing/defaulted and blank uses refuse with guidance about disabled/no-work source behavior and the converted authoring contract. Fault.Message retains its accepted silent text difference. |
+
+Refusals name the original member and an edit in Elsa 3 terms. Null refusals use `ELS3-ACTIVITY-NULL-UNCONVERTIBLE`;
+other source shapes use the existing value-contract family, without a duplicate required-input refusal. Custom maps
+without these optional corrections keep their existing contracts. Runtime defaults, outcome selection and S-2's
+portable null/missing/undefined policies are unchanged.
 
 ## Nesting budget
 

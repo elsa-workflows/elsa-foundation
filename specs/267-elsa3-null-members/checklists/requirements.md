@@ -46,7 +46,7 @@
 - [x] Delivered bare-null and spec1232 policy/null-intrinsic ownership have explicit boundaries.
 - [x] Existing proposal/separate implementation stages and current local/CI workflow are concrete.
 - [x] Requirements, plan, tasks, model, diagnostic contract and verification route share one scope.
-- [ ] Coordinator agreement on the final pushed proposal head and initiative proposal gate/merge.
+- [x] Coordinator agreement on the final pushed proposal head and initiative proposal gate/merge.
 - [ ] Separate implementation with actual runtime/corpus/local review evidence.
 
 These are proposal-quality and pending-delivery checks, not #3281 completion.

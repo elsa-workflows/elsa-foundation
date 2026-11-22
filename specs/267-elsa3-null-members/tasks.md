@@ -117,7 +117,7 @@ this PR.
 Completed T001–T022 remain the original JSON-null delivery. The unchecked tasks below are #3281; no production
 implementation or runtime qualification is implied by this proposal.
 
-- [ ] T023 Obtain coordinator-only final-text agreement for `specs/267-elsa3-null-members/spec.md` under the initiative's
+- [x] T023 Obtain coordinator-only final-text agreement for `specs/267-elsa3-null-members/spec.md` under the initiative's
   recorded approval plan; satisfy the proposal gate and merge existing #3945 before D-18 implementation. Keep the
   initiative's main sync with its existing owner. A genuine new ADR change follows its separate agreement route.
 - [x] T024 Recheck exact 3.6.3/3.5.3 sources in `specs/267-elsa3-null-members/research.md`: wrapper loading/default

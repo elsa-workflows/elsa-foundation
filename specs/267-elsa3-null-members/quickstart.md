@@ -22,7 +22,7 @@ performance-bigdata past the `possibleOutcomes` error, and no definition that co
 
 ## #3281 follow-up verification
 
-The follow-up is unimplemented. Filtered commands above are development checks for the delivered unit, not whole
+The follow-up is being implemented separately. Filtered commands above are development checks for the delivered unit, not whole
 #3281 acceptance. After coordinator agreement and proposal merge, use the separate implementation branch and the
 SC-008 matrix plus owned real import host/local HTTP receiver for SC-009.
 
