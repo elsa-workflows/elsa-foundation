@@ -265,6 +265,20 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const o = getVariable('Order'); const h = { get first() { this.second = o; return 1; }, second: {} }; const copy = { ...h }; copy.second.Status = 'Paid'; return 1;")]
     [InlineData("const o = getVariable('Order'); let target = {}; Object.values({ get 2() { target.Status = 'Paid'; return 0; }, get 1() { target = o; return 0; } }); return 1;")]
     [InlineData("const o = getVariable('Order'); let target = {}; Object.assign({}, { get 2() { target.Status = 'Paid'; return 0; }, get 1() { target = o; return 0; } }); return 1;")]
+    [InlineData("const o = getVariable('Order'); const search = { toString() { o.Status = 'Paid'; return 'x'; } }; return 'x'.slice(0).includes(search);")]
+    [InlineData("const o = getVariable('Order'); const search = { toString() { o.Status = 'Paid'; return 'x'; } }; return 'x'.concat('y').includes(search);")]
+    [InlineData("const o = getVariable('Order'); const h = {}; Object.defineProperty(h, 'x', { get() { o.Status = 'Paid'; return 1; } }); try { delete h.x; } catch {} return h.x;")]
+    [InlineData("const h = {}; Object.defineProperty(h, 'x', { get() { const o = getVariable('Order'); o.Status = 'Paid'; return 1; } }); try { delete h.x; } catch {} return h.x;")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } return new H().x;")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } class C extends H {} return new C().x;")]
+    [InlineData("const o = getVariable('Order'); const h = { toJSON() { o.Status = 'Paid'; return 1; } }; return JSON.stringify([h]);")]
+    [InlineData("const o = getVariable('Order'); const h = { x: o }; if (getVariable('Total')) delete h.x; h.x.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); const a = { x: o }, b = { x: {} }; const h = getVariable('Total') ? a : b; delete h.x; a.x.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { return o; } } const h = new H(); h.x = {}; h.x.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } unknown(new H()); return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = {}; Object.defineProperty(h, 'x', { value: o }); h.x = {}; try { delete h.x; } catch {} h.x.Status = 'Paid'; return 1;")]
+    [InlineData("const h = { x: getVariable('Order') }; try { Object.defineProperty(h, 'x', undefined); } catch {} h.x.Status = 'Paid'; return 1;")]
+    [InlineData("const h = { x: getVariable('Order') }; try { Object.defineProperty(h, 'x', { get: 1 }); } catch {} h.x.Status = 'Paid'; return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -381,6 +395,19 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const o = getVariable('Order'); let target = {}; const shared = { get x() { return target.Status; } }; return JSON.stringify({ first: shared, switcher: { toJSON() { target = o; return 0; } }, second: shared });")]
     [InlineData("const o = getVariable('Order'); let target = o; JSON.stringify({ 2: { toJSON() { target.Status = 'Paid'; return 0; } }, 1: { toJSON() { target = {}; return 0; } } }); return 1;")]
     [InlineData("const o = getVariable('Order'); let target = o; Object.values({ get 2() { target.Status = 'Paid'; return 0; }, get 1() { target = {}; return 0; } }); return 1;")]
+    [InlineData("const o = getVariable('Order'); const search = { toString() { o.Status = 'Paid'; return 'x'; } }; return [search].slice(0).includes(search);")]
+    [InlineData("const o = getVariable('Order'); const search = { toString() { o.Status = 'Paid'; return 'x'; } }; return [search].concat([]).includes(search);")]
+    [InlineData("const o = getVariable('Order'); const h = { get x() { o.Status = 'Paid'; return 1; } }; delete h.x; return JSON.stringify(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { set x(value) { o.Status = 'Paid'; } }; delete h.x; return JSON.stringify(h);")]
+    [InlineData("const o = getVariable('Order'); const h = { x: o }; delete h.x; h.x.Status = 'Paid'; return 1;")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } return JSON.stringify(new H());")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } class C extends H {} return JSON.stringify(new C());")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } const h = new H(); delete h.x; return JSON.stringify(h);")]
+    [InlineData("const o = getVariable('Order'); class H { get x() { o.Status = 'Paid'; return 1; } } const h = new H(); Object.defineProperty(h, 'x', { value: {}, enumerable: true, configurable: true, writable: true }); return JSON.stringify(h);")]
+    [InlineData("const o = getVariable('Order'); const a = []; a.extra = { toJSON() { o.Status = 'Paid'; return 1; } }; return JSON.stringify(a);")]
+    [InlineData("const o = getVariable('Order'); const a = []; Object.defineProperty(a, 'extra', { get() { o.Status = 'Paid'; return 1; } }); return JSON.stringify(a);")]
+    [InlineData("const h = { x: 0 }; while (false) { delete h.x; h.x = 1; } return 1;")]
+    [InlineData("const o = getVariable('Order'); const h = {}; Object.defineProperty(h, 'x', { get() { o.Status = 'Paid'; return 1; }, configurable: true }); delete h.x; return JSON.stringify(h);")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));

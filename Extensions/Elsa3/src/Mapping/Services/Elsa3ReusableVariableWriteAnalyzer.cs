@@ -19,12 +19,20 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private sealed record Value(bool Session, ImmutableHashSet<Node> Objects, ImmutableHashSet<Node> Functions)
     {
         public bool UnknownSpread { get; init; }
+        public bool MayBeString { get; init; }
         public static readonly Value Local = new(false, [], []);
         public static readonly Value Owned = new(true, [], []);
+        public static readonly Value Text = Local with { MayBeString = true };
         public static Value Object(Node node) => new(false, [node], []);
         public static Value Function(Node node) => new(false, [], [node]);
-        public Value Union(Value other) => new(Session || other.Session, Objects.Union(other.Objects), Functions.Union(other.Functions)) { UnknownSpread = UnknownSpread || other.UnknownSpread };
-        public bool Same(Value other) => Session == other.Session && UnknownSpread == other.UnknownSpread && Objects.SetEquals(other.Objects) && Functions.SetEquals(other.Functions);
+        public Value Union(Value other) => new(Session || other.Session, Objects.Union(other.Objects), Functions.Union(other.Functions)) { UnknownSpread = UnknownSpread || other.UnknownSpread, MayBeString = MayBeString || other.MayBeString };
+        public bool Same(Value other) => Session == other.Session && UnknownSpread == other.UnknownSpread && MayBeString == other.MayBeString && Objects.SetEquals(other.Objects) && Functions.SetEquals(other.Functions);
+    }
+
+    private readonly record struct Attributes(bool Configurable, bool Enumerable, bool Writable)
+    {
+        public static readonly Attributes Ordinary = new(true, true, true);
+        public Attributes Union(Attributes other) => new(Configurable && other.Configurable, Enumerable || other.Enumerable, Writable || other.Writable);
     }
 
     private sealed class State
@@ -33,6 +41,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         public Dictionary<(Node Object, string Member), Value> Members { get; } = [];
         public Dictionary<Node, ImmutableList<string>> PropertyOrder { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Node> Unordered { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<(Node Object, string Member), Value> Getters { get; } = [];
+        public Dictionary<(Node Object, string Member), Value> Setters { get; } = [];
+        public Dictionary<(Node Object, string Member), Attributes> Properties { get; } = [];
+        public Dictionary<Node, Value> Prototypes { get; } = new(ReferenceEqualityComparer.Instance);
         public State Copy()
         {
             var copy = new State();
@@ -40,6 +52,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             foreach (var item in Members) copy.Members[item.Key] = item.Value;
             foreach (var item in PropertyOrder) copy.PropertyOrder[item.Key] = item.Value;
             copy.Unordered.UnionWith(Unordered);
+            foreach (var item in Getters) copy.Getters[item.Key] = item.Value;
+            foreach (var item in Setters) copy.Setters[item.Key] = item.Value;
+            foreach (var item in Properties) copy.Properties[item.Key] = item.Value;
+            foreach (var item in Prototypes) copy.Prototypes[item.Key] = item.Value;
             return copy;
         }
         public void Join(State other)
@@ -56,12 +72,20 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 else PropertyOrder[key] = order;
             }
             Unordered.UnionWith(other.Unordered);
+            foreach (var (key, value) in other.Getters) Getters[key] = Getters.GetValueOrDefault(key, Value.Local).Union(value);
+            foreach (var (key, value) in other.Setters) Setters[key] = Setters.GetValueOrDefault(key, Value.Local).Union(value);
+            foreach (var (key, value) in other.Properties) Properties[key] = Properties.TryGetValue(key, out var current) ? current.Union(value) : value;
+            foreach (var (key, value) in other.Prototypes) Prototypes[key] = Prototypes.GetValueOrDefault(key, Value.Local).Union(value);
         }
         public bool Same(State other) => Bindings.Count == other.Bindings.Count && Members.Count == other.Members.Count &&
             Bindings.All(item => other.Bindings.TryGetValue(item.Key, out var value) && item.Value.Same(value)) &&
             Members.All(item => other.Members.TryGetValue(item.Key, out var value) && item.Value.Same(value)) &&
             PropertyOrder.Count == other.PropertyOrder.Count && PropertyOrder.All(item => other.PropertyOrder.TryGetValue(item.Key, out var order) && item.Value.SequenceEqual(order)) &&
-            Unordered.SetEquals(other.Unordered);
+            Unordered.SetEquals(other.Unordered) && Getters.Count == other.Getters.Count && Setters.Count == other.Setters.Count && Properties.Count == other.Properties.Count && Prototypes.Count == other.Prototypes.Count &&
+            Getters.All(item => other.Getters.TryGetValue(item.Key, out var value) && item.Value.Same(value)) &&
+            Setters.All(item => other.Setters.TryGetValue(item.Key, out var value) && item.Value.Same(value)) &&
+            Properties.All(item => other.Properties.TryGetValue(item.Key, out var value) && item.Value == value) &&
+            Prototypes.All(item => other.Prototypes.TryGetValue(item.Key, out var value) && item.Value.Same(value));
     }
 
     private static State? Join(State? first, State? second)
@@ -94,14 +118,13 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private readonly List<State> _exceptionStates = [];
     private readonly List<Value> _receivers = [];
     private readonly List<Value> _arguments = [];
-    private readonly Dictionary<(Node Object, string Member), Value> _getters = [];
-    private readonly Dictionary<(Node Object, string Member), Value> _setters = [];
     private readonly HashSet<Node> _allocated = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Node> _summaryObjects = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, Value> _intrinsics = new(StringComparer.Ordinal);
     private readonly List<(string Name, Node Target)> _labels = [];
     private readonly Dictionary<Node, ClassInfo> _classes = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Node> _stringifyingArrays = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Node> _arrays = new(ReferenceEqualityComparer.Instance);
     private State _state = new();
     private bool _writes;
 
@@ -366,7 +389,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 result = Global(name.Name) ? name.Name == "variables" ? Value.Owned : name.Name == "arguments" ? _arguments.LastOrDefault() ?? Value.Local : NativeNamespace(name.Name) ? Intrinsic(name) : Value.Local : Read(name.Name);
                 break;
             case ThisExpression: result = _receivers.Count > 0 ? _receivers[^1] : Value.Local; break;
-            case Literal: result = Value.Local; break;
+            case Literal literal: result = literal.Value is string ? Value.Text : Value.Local; break;
             case IFunction: result = FunctionValue(node); break;
             case ClassExpression type: result = ClassValue(type, type.Id, type.Body, type.SuperClass); break;
             case MemberExpression member:
@@ -436,7 +459,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 {
                     var receiver = Evaluate(deleted.Object);
                     if (deleted.Computed) EvaluateKey(deleted.Property);
-                    _writes |= receiver.Session;
+                    DeleteMember(receiver, Name(deleted));
                 }
                 else
                 {
@@ -472,7 +495,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                         if (item.Kind is PropertyKind.Get or PropertyKind.Set)
                         {
                             RegisterProperty(node, PropertyName(item));
-                            (item.Kind == PropertyKind.Get ? _getters : _setters)[(node, PropertyName(item))] = propertyValue;
+                            _state.Members.Remove((node, PropertyName(item)));
+                            _state.Properties[(node, PropertyName(item))] = new(true, true, false);
+                            (item.Kind == PropertyKind.Get ? _state.Getters : _state.Setters)[(node, PropertyName(item))] = propertyValue;
                         }
                         else Put(result, PropertyName(item), propertyValue);
                     }
@@ -481,6 +506,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 break;
             case ArrayExpression array:
                 result = Allocate(node);
+                _arrays.Add(node);
                 for (var index = 0; index < array.Elements.Count; index++)
                     if (array.Elements[index] is { } item)
                         Put(result, item is SpreadElement ? "*" : index.ToString(System.Globalization.CultureInfo.InvariantCulture), item is SpreadElement spread ? Iterated(Evaluate(spread.Argument)) : Evaluate(item));
@@ -489,7 +515,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             case TemplateLiteral template:
                 // Untagged substitutions use ToString; tagged template arguments do not.
                 foreach (var expression in template.Expressions) Coerce([Evaluate(expression)], stringHint: true);
-                result = Value.Local; break;
+                result = Value.Text; break;
             case TaggedTemplateExpression tagged:
                 result = Apply(Evaluate(tagged.Tag), [Value.Object(tagged.Quasi), .. tagged.Quasi.Expressions.Select(Evaluate)], Value.Local);
                 break;
@@ -504,6 +530,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 }
                 else if (construction.Callee is Identifier native && Global(native.Name) && native.Name is "Date" or "RegExp" or "String" or "Number" or "Boolean")
                 {
+                    if (native.Name == "String") result = result with { MayBeString = true };
                     if (native.Name is "String" or "RegExp") Coerce(native.Name == "String" ? constructorArguments.Take(1) : constructorArguments.Take(2), stringHint: true);
                     else if (native.Name == "Number") Coerce(constructorArguments.Take(1));
                     else if (native.Name == "Date") Coerce(constructorArguments);
@@ -511,7 +538,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 }
                 else if (construction.Callee is Identifier { Name: "Object" } && Global("Object")) result = constructorArguments.FirstOrDefault() ?? result;
                 else if (construction.Callee is Identifier { Name: "Array" } && Global("Array"))
+                {
+                    _arrays.Add(node);
                     foreach (var argument in constructorArguments) Put(result, "*", Member(result, "*").Union(argument));
+                }
                 else if (construction.Callee is Identifier collection && Global(collection.Name) && collection.Name is "Set" or "Map" or "WeakSet" or "WeakMap")
                 {
                     if (constructorArguments.Length > 0) Put(result, "*", Iterated(constructorArguments[0]));
@@ -550,7 +580,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     {
                         if (item is RestElement rest)
                         {
-                            var remainder = LocalCopy(pattern, value);
+                            var remainder = LocalCopy(pattern, value, array: true);
                             Put(remainder, "*", Member(remainder, "*").Union(elements));
                             Bind(rest.Argument, remainder);
                         }
@@ -573,39 +603,92 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (receiver.Session) _writes = true;
         if (receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item)))) _writes = true;
         foreach (var item in receiver.Objects)
-            foreach (var (key, setter) in _setters.Where(entry => ReferenceEquals(entry.Key.Object, item) && (name == "*" || entry.Key.Member == name || entry.Key.Member == "*")).ToArray())
-                Apply(setter, [value], receiver);
-        Put(receiver, name, value);
+        {
+            var target = Value.Object(item);
+            var setter = Lookup(target, name, (owner, key) => _state.Setters.GetValueOrDefault((owner, key), Value.Local));
+            if (setter.Functions.Count > 0) Apply(setter, [value], target);
+            var accessor = Lookup(target, name, (owner, key) => _state.Getters.ContainsKey((owner, key)) || _state.Setters.ContainsKey((owner, key)) ? Value.Owned : Value.Local).Session;
+            var ownData = _state.Members.ContainsKey((item, name));
+            if (accessor && !ownData && name != "*") continue;
+            var readOnly = Lookup(target, name, (owner, key) => _state.Properties.TryGetValue((owner, key), out var attributes) && !attributes.Writable ? Value.Owned : Value.Local).Session;
+            if (readOnly && !accessor && name != "*") continue;
+            Put(target, name, value, weak: receiver.Objects.Count != 1 || accessor, define: false);
+        }
     }
     private Value Member(Value receiver, string name, Value? getterReceiver = null)
     {
         var result = StoredMember(receiver, name);
-        foreach (var item in receiver.Objects)
-        {
-            foreach (var (key, getter) in _getters.Where(entry => ReferenceEquals(entry.Key.Object, item) && (name == "*" || entry.Key.Member == name || entry.Key.Member == "*")).ToArray())
-                result = result.Union(Apply(getter, [], getterReceiver ?? receiver));
-        }
+        var getter = Lookup(receiver, name, (owner, key) => _state.Getters.GetValueOrDefault((owner, key), Value.Local));
+        if (getter.Functions.Count > 0) result = result.Union(Apply(getter, [], getterReceiver ?? receiver));
         return result;
     }
     private Value StoredMember(Value receiver, string name)
     {
         var result = receiver.Session ? Value.Owned : Value.Local;
         if (receiver.Objects.Any(item => _intrinsics.Values.Any(intrinsic => intrinsic.Objects.Contains(item)))) result = result.Union(receiver);
+        return result.Union(Lookup(receiver, name, (owner, key) => _state.Members.GetValueOrDefault((owner, key), Value.Local)));
+    }
+
+    private IEnumerable<string> PropertyNames(Value receiver, HashSet<Node>? seen = null)
+    {
+        seen ??= new(ReferenceEqualityComparer.Instance);
         foreach (var item in receiver.Objects)
         {
-            result = result.Union(_state.Members.GetValueOrDefault((item, name), Value.Local));
-            result = result.Union(_state.Members.GetValueOrDefault((item, "*"), Value.Local));
-            if (name == "*")
-                foreach (var (key, value) in _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item))) result = result.Union(value);
+            if (!seen.Add(item)) continue;
+            foreach (var name in _state.PropertyOrder.GetValueOrDefault(item, [])) yield return name;
+            foreach (var name in PropertyNames(_state.Prototypes.GetValueOrDefault(item, Value.Local), seen)) yield return name;
+        }
+    }
+
+    private Value Lookup(Value receiver, string name, Func<Node, string, Value> own, HashSet<Node>? seen = null)
+    {
+        if (name == "*")
+        {
+            var all = Value.Local;
+            foreach (var property in PropertyNames(receiver).Where(property => property != "*").Distinct()) all = all.Union(Lookup(receiver, property, own));
+            return all.Union(LookupWildcard(receiver, own, new(ReferenceEqualityComparer.Instance)));
+        }
+        seen ??= new(ReferenceEqualityComparer.Instance);
+        var result = Value.Local;
+        foreach (var item in receiver.Objects)
+        {
+            if (!seen.Add(item)) continue;
+            result = result.Union(own(item, name)).Union(own(item, "*"));
+            // An own data property shadows an inherited getter/setter, including a class prototype accessor.
+            if (!_state.Properties.ContainsKey((item, name)))
+                result = result.Union(Lookup(_state.Prototypes.GetValueOrDefault(item, Value.Local), name, own, seen));
         }
         return result;
     }
-    private void Put(Value receiver, string name, Value value)
+
+    private Value LookupWildcard(Value receiver, Func<Node, string, Value> own, HashSet<Node> seen)
+    {
+        var result = Value.Local;
+        foreach (var item in receiver.Objects)
+            if (seen.Add(item)) result = result.Union(own(item, "*")).Union(LookupWildcard(_state.Prototypes.GetValueOrDefault(item, Value.Local), own, seen));
+        return result;
+    }
+
+    private void DeleteMember(Value receiver, string name)
+    {
+        _writes |= receiver.Session;
+        // Deletion does not invoke a getter or setter. Only a unique, configurable own property can disappear
+        // definitely; unknown keys, allocation summaries and nonconfigurable descriptors retain their aliases.
+        if (receiver.Objects.Count != 1 || name == "*") return;
+        var item = receiver.Objects.Single();
+        if (_summaryObjects.Contains(item) || !_state.Properties.TryGetValue((item, name), out var attributes) || !attributes.Configurable) return;
+        _state.Members.Remove((item, name)); _state.Getters.Remove((item, name)); _state.Setters.Remove((item, name)); _state.Properties.Remove((item, name));
+        if (_state.PropertyOrder.TryGetValue(item, out var order)) _state.PropertyOrder[item] = order.Remove(name);
+    }
+
+    private void Put(Value receiver, string name, Value value, bool weak = false, bool define = true)
     {
         foreach (var item in receiver.Objects)
         {
             RegisterProperty(item, name);
-            _state.Members[(item, name)] = receiver.Objects.Count != 1 || name == "*" || _summaryObjects.Contains(item)
+            var mayAlias = weak || receiver.Objects.Count != 1 || name == "*" || _summaryObjects.Contains(item);
+            if (!mayAlias && define) { _state.Getters.Remove((item, name)); _state.Setters.Remove((item, name)); _state.Properties[(item, name)] = Attributes.Ordinary; }
+            _state.Members[(item, name)] = mayAlias
                 ? _state.Members.GetValueOrDefault((item, name), Value.Local).Union(value) : value;
         }
     }
@@ -614,6 +697,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     {
         var order = _state.PropertyOrder.GetValueOrDefault(item, []);
         if (!order.Contains(name)) _state.PropertyOrder[item] = order.Add(name);
+        _state.Properties.TryAdd((item, name), Attributes.Ordinary);
         if (name == "*") _state.Unordered.Add(item);
     }
 
@@ -631,7 +715,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             _state = entry.Copy();
             var receiver = Value.Object(item);
             var names = _state.PropertyOrder.GetValueOrDefault(item, [])
-                .Where(name => (symbols || !name.StartsWith("@@", StringComparison.Ordinal)) && (!elementsOnly || name == "*" || ArrayIndex(name) is not null))
+                .Where(name => _state.Properties.GetValueOrDefault((item, name), Attributes.Ordinary).Enumerable &&
+                    (symbols || !name.StartsWith("@@", StringComparison.Ordinal)) && (!elementsOnly || name == "*" || ArrayIndex(name) is not null))
                 .OrderBy(name => ArrayIndex(name) is not null ? 0 : name.StartsWith("@@", StringComparison.Ordinal) ? 2 : 1)
                 .ThenBy(name => ArrayIndex(name) ?? 0).ToArray();
             if (_state.Unordered.Contains(item))
@@ -652,9 +737,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
         _state = exits ?? entry;
     }
-    private Value LocalCopy(Node identity, Value source)
+    private Value LocalCopy(Node identity, Value source, bool array = false)
     {
         var copy = Allocate(identity);
+        if (array) _arrays.Add(identity);
         CopyMembers(copy, source);
         return copy;
     }
@@ -663,11 +749,46 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (source.Session) Put(target, "*", Value.Owned);
         OwnProperties(source, (_, name, value) => { if (assign) AssignMember(target, name, value); else Put(target, name, value); }, symbols: true);
     }
+
+    private void DefineProperty(Value target, string name, Value descriptor, Node syntax)
+    {
+        _writes |= target.Session;
+        // ToPropertyDescriptor reads these fields in this order, potentially executing descriptor getters.
+        var fields = new Dictionary<string, Value>(StringComparer.Ordinal);
+        foreach (var field in new[] { "enumerable", "configurable", "value", "writable", "get", "set" }) fields[field] = Member(descriptor, field);
+        var names = PropertyNames(descriptor).ToHashSet(StringComparer.Ordinal);
+        var plain = syntax is ObjectExpression literal && literal.Properties.All(item => item is Property { Computed: false, Kind: PropertyKind.Init });
+        bool? Flag(string field)
+        {
+            if (!plain) return null;
+            var property = ((ObjectExpression)syntax).Properties.OfType<Property>().LastOrDefault(item => PropertyName(item) == field);
+            return property is null ? false : property.Value is Literal { Value: bool flag } ? flag : null;
+        }
+        foreach (var item in target.Objects)
+        {
+            var key = (item, name);
+            var existed = _state.Properties.TryGetValue(key, out var previous);
+            var attributes = new Attributes(names.Contains("configurable") ? Flag("configurable") == true : existed && previous.Configurable,
+                names.Contains("enumerable") ? Flag("enumerable") != false : existed && previous.Enumerable,
+                names.Contains("writable") ? Flag("writable") != false : existed && previous.Writable);
+            var weak = target.Objects.Count != 1 || name == "*" || _summaryObjects.Contains(item) ||
+                existed && !previous.Configurable;
+            RegisterProperty(item, name);
+            if (!weak) { _state.Members.Remove(key); _state.Getters.Remove(key); _state.Setters.Remove(key); }
+            if (names.Contains("get")) _state.Getters[key] = weak ? _state.Getters.GetValueOrDefault(key, Value.Local).Union(fields["get"]) : fields["get"];
+            if (names.Contains("set")) _state.Setters[key] = weak ? _state.Setters.GetValueOrDefault(key, Value.Local).Union(fields["set"]) : fields["set"];
+            if (!names.Contains("get") && !names.Contains("set"))
+                _state.Members[key] = weak ? _state.Members.GetValueOrDefault(key, Value.Local).Union(fields["value"]) : fields["value"];
+            _state.Properties[key] = weak ? _state.Properties[key].Union(attributes) : attributes;
+        }
+    }
     private bool ContainsSession(Value value, HashSet<Node>? seen = null)
     {
         if (value.Session) return true;
         seen ??= new(ReferenceEqualityComparer.Instance);
-        return value.Objects.Any(item => seen.Add(item) && _state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item)).Any(entry => ContainsSession(entry.Value, seen))) ||
+        return value.Objects.Any(item => seen.Add(item) && (_state.Members.Where(entry => ReferenceEquals(entry.Key.Object, item)).Any(entry => ContainsSession(entry.Value, seen)) ||
+                   _state.Getters.Concat(_state.Setters).Where(entry => ReferenceEquals(entry.Key.Object, item)).Any(entry => ContainsSession(entry.Value, seen)) ||
+                   ContainsSession(_state.Prototypes.GetValueOrDefault(item, Value.Local), seen))) ||
                value.Functions.Any(item => seen.Add(item) && _closures.TryGetValue(item, out var closure) && closure.Captured.Values.Any(captured => ContainsSession(captured, seen)));
     }
 
@@ -687,6 +808,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             var value = FunctionValue(node).Union(Allocate(node));
             if (name is not null) Bind(name, value);
             _classes[node] = new ClassInfo(body, Evaluate(superClass));
+            var prototype = Allocate(body);
+            Put(value, "prototype", prototype);
+            _state.Properties[(node, "prototype")] = new(false, false, false);
+            var basePrototype = StoredMember(_classes[node].Super, "prototype");
+            _state.Prototypes[body] = basePrototype;
             _receivers.Add(value);
             try
             {
@@ -697,6 +823,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                         if (method.Computed) EvaluateKey(method.Key);
                         var function = FunctionValue(method.Value);
                         if (method.Static) DefineMethod(node, method, function);
+                        else if (method.Kind != PropertyKind.Constructor) DefineMethod(body, method, function);
                     }
                     else if (element is PropertyDefinition field)
                     {
@@ -718,9 +845,11 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (method.Kind is PropertyKind.Get or PropertyKind.Set)
         {
             RegisterProperty(target, name);
-            (method.Kind == PropertyKind.Get ? _getters : _setters)[(target, name)] = function;
+            _state.Members.Remove((target, name));
+            (method.Kind == PropertyKind.Get ? _state.Getters : _state.Setters)[(target, name)] = function;
         }
         else Put(Value.Object(target), name, function);
+        _state.Properties[(target, name)] = new(true, false, method.Kind is not (PropertyKind.Get or PropertyKind.Set));
     }
 
     private Value ConstructClass(Node node, ClassInfo type, IReadOnlyList<Value> arguments, Value receiver)
@@ -735,11 +864,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         {
             if (type.Super.Functions.Count > 0) Apply(type.Super, arguments, receiver);
             else if (type.Super.Objects.Count > 0) _writes |= arguments.Any(argument => OpaqueOwnership(argument));
+            foreach (var target in receiver.Objects) _state.Prototypes[target] = Value.Object(type.Body);
             foreach (var element in type.Body.Body)
             {
-                if (element is MethodDefinition { Static: false } method)
-                    foreach (var target in receiver.Objects) DefineMethod(target, method, FunctionValue(method.Value));
-                else if (element is PropertyDefinition { Static: false } field)
+                if (element is PropertyDefinition { Static: false } field)
                     Put(receiver, ClassMemberName(field.Key, field.Computed), Evaluate(field.Value));
             }
             var constructor = type.Body.Body.OfType<MethodDefinition>().FirstOrDefault(method => method.Kind == PropertyKind.Constructor);
@@ -781,6 +909,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 if (function.Params[index] is RestElement rest)
                 {
                     var restArray = Allocate(rest);
+                    _arrays.Add(rest);
                     for (var position = index; position < arguments.Count; position++)
                         Put(restArray, (position - index).ToString(System.Globalization.CultureInfo.InvariantCulture), arguments[position]);
                     foreach (var value in arguments.Skip(index).Where(value => value.UnknownSpread)) Put(restArray, "*", value);
@@ -842,7 +971,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (ContainsSession(value)) return true;
         foreach (var function in value.Functions) if (ContainsSession(Invoke(function, []))) return true;
         foreach (var item in value.Objects)
-            foreach (var (key, getter) in _getters.Where(entry => ReferenceEquals(entry.Key.Object, item)))
+            foreach (var (key, getter) in _state.Getters.Where(entry => ReferenceEquals(entry.Key.Object, item)))
                 if (ContainsSession(Apply(getter, [], value))) return true;
         return _writes;
     }
@@ -984,7 +1113,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         {
             _state = serializationEntry.Copy();
             if (!seen.Add(item)) continue;
-            try { OwnProperties(Value.Object(item), (receiver, _, member) => Serialize(member, replacer, receiver, seen)); }
+            try { OwnProperties(Value.Object(item), (receiver, _, member) => Serialize(member, replacer, receiver, seen), elementsOnly: KnownArray(Value.Object(item))); }
             // JSON's cycle stack is ancestry, not a cache: a shared reference is visited again in its later position
             // after intervening getters/toJSON calls may have changed the aliases captured by its accessors.
             finally { seen.Remove(item); }
@@ -994,10 +1123,9 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     }
 
     private static bool IsReference(Value value) => !value.Session && (value.Objects.Count > 0 || value.Functions.Count > 0);
-    private static bool KnownArray(Value value) => !value.Session && value.Objects.Count > 0 && value.Objects.All(item => item is ArrayExpression or RestElement ||
-        item is NewExpression { Callee: Identifier { Name: "Array" } } || item is CallExpression { Callee: MemberExpression member } &&
-        (member.Property is Identifier { Name: "map" or "filter" or "flatMap" or "concat" or "slice" or "splice" or "toReversed" or "toSorted" or "toSpliced" or "with" } ||
-         member is { Object: Identifier { Name: "Array" }, Property: Identifier { Name: "from" or "of" } }));
+    // Record array-producing executions. Method-name syntax is insufficient: slice/concat may return a string,
+    // and re-evaluating the source AST to classify a value would repeat user-visible effects.
+    private bool KnownArray(Value value) => !value.Session && !value.MayBeString && value.Objects.Count > 0 && value.Objects.All(_arrays.Contains);
 
     private Value ArrayString(Value value, bool locale = false, IReadOnlyList<Value>? arguments = null)
     {
@@ -1012,7 +1140,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 // A non-callable own join selects Object.prototype.toString and does not read the array elements.
                 var join = Member(receiver, "join");
                 if (join.Functions.Count > 0) return Apply(join, [], receiver);
-                if (receiver.Objects.All(item => _state.Members.ContainsKey((item, "join")) || _getters.ContainsKey((item, "join"))))
+                if (receiver.Objects.All(item => _state.Members.ContainsKey((item, "join")) || _state.Getters.ContainsKey((item, "join"))))
                 { Member(receiver, "@@toStringTag"); return Value.Local; }
             }
             OwnProperties(receiver, (_, _, element) =>
@@ -1112,10 +1240,16 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 Put(descriptor, "value", StoredMember(arguments[0], key));
                 foreach (var item in arguments[0].Objects)
                 {
-                    if (_getters.TryGetValue((item, key), out var getter)) Put(descriptor, "get", getter);
-                    if (_setters.TryGetValue((item, key), out var setter)) Put(descriptor, "set", setter);
+                    if (_state.Getters.TryGetValue((item, key), out var getter)) Put(descriptor, "get", getter);
+                    if (_state.Setters.TryGetValue((item, key), out var setter)) Put(descriptor, "set", setter);
                 }
                 return descriptor;
+            }
+            if (global.Name == "Object" && method == "defineProperty" && arguments.Length >= 3)
+            {
+                Coerce(arguments.Skip(1).Take(1), stringHint: true);
+                DefineProperty(arguments[0], Key(call.Arguments[1]), arguments[2], call.Arguments[2]);
+                return arguments[0];
             }
             if (global.Name == "Object" && method == "assign" && arguments.Length > 0)
             {
@@ -1142,12 +1276,14 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             if (global.Name == "Object" && method is "values" or "entries" && arguments.Length > 0)
             {
                 var listed = Allocate(call);
+                _arrays.Add(call);
                 var value = arguments[0].Session ? Value.Owned : Value.Local;
                 OwnProperties(arguments[0], (_, _, memberValue) => value = value.Union(memberValue));
                 if (method == "entries")
                 {
                     // Entry rows are new arrays; only their value column shares the source value.
                     var row = Allocate(call.Callee);
+                    _arrays.Add(call.Callee);
                     Put(row, "0", Value.Local); Put(row, "1", value);
                     value = row;
                 }
@@ -1158,6 +1294,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             {
                 var elements = Iterated(arguments[0]);
                 var mapped = Allocate(call);
+                _arrays.Add(call);
                 Put(mapped, "*", arguments.Length <= 1 || arguments[1].Functions.Count == 0 ? elements :
                     Apply(arguments[1], [elements, Value.Local], arguments.Length > 2 ? arguments[2] : Value.Local));
                 return mapped;
@@ -1219,18 +1356,27 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (method is "map" or "flatMap")
         {
             var mapped = Value.Object(call);
+            _arrays.Add(call);
             Put(mapped, "*", method == "flatMap" ? Member(callbackResult, "*") : callbackResult);
             return mapped;
         }
         if (method == "concat")
         {
-            var concatenated = LocalCopy(call, receiver);
+            var array = KnownArray(receiver);
+            if (!array) { Coerce([receiver], stringHint: true); Coerce(arguments, stringHint: true); }
+            if (receiver.MayBeString && receiver.Objects.Count == 0 && !receiver.Session) return Value.Text;
+            var concatenated = LocalCopy(call, receiver, array);
             foreach (var argument in arguments) Put(concatenated, "*", Member(concatenated, "*").Union(argument).Union(Member(argument, "*")));
-            return concatenated;
+            return concatenated with { MayBeString = !array };
         }
         if (method is "pop" or "shift") return Member(receiver, "*");
         if (method is "sort" or "reverse" or "fill" or "copyWithin") return receiver;
-        if (method is "slice" or "splice" or "filter" or "toReversed" or "toSorted" or "toSpliced" or "with") return LocalCopy(call, receiver);
+        if (method is "slice" or "splice" or "filter" or "toReversed" or "toSorted" or "toSpliced" or "with")
+        {
+            if (method == "slice" && receiver.MayBeString && receiver.Objects.Count == 0 && !receiver.Session) return Value.Text;
+            var array = method != "slice" || KnownArray(receiver);
+            return LocalCopy(call, receiver, array) with { MayBeString = !array };
+        }
         if (method is "at" or "find" or "findLast") return Member(receiver, "*");
         if (method is "push" or "unshift" or "splice" or "copyWithin" or "pop" or "shift" or "sort" or "reverse" or "fill" or
             "join" or "includes" or "indexOf" or "lastIndexOf" or "findIndex" or "findLastIndex" or "some" or "every" or "forEach" or "reduce" or "reduceRight" or
@@ -1240,7 +1386,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         {
             if (pure.Name != "Boolean") Coerce(arguments.Take(1), stringHint: pure.Name is "String" or "parseInt" or "parseFloat");
             if (pure.Name == "parseInt") Coerce(arguments.Skip(1).Take(1));
-            return Value.Local;
+            return pure.Name == "String" ? Value.Text : Value.Local;
         }
         if (call.Callee is Identifier { Name: "Object" } && Global("Object")) return arguments.FirstOrDefault() ?? Value.Object(call);
         // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
