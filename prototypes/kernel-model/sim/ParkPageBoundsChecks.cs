@@ -12,21 +12,26 @@ internal static class ParkPageBoundsChecks
     {
         foreach (var resolution in Enum.GetValues<Resolution>())
             await Run(resolution, check);
+        await Run(Resolution.Resume, check, aboveHighWater: true);
     }
 
-    private static async Task Run(Resolution resolution, Action<bool, string> check)
+    private static async Task Run(Resolution resolution, Action<bool, string> check, bool aboveHighWater = false)
     {
         const long start = 1_701_679_300_000;
         var now = start;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var scope = new Contract.BoundScope(new string('t', 64));
         var kind = new string('界', 85) + "k";
-        var probe = new Probe(kind);
+        var probe = new Probe(kind, () => store.Instances.Values.Any(row => row.ParkRecovery is not null));
         var ingress = new InMemoryIngress(store, new Requests("page-bounds"), "page-bounds", (_, _) => true);
         var pages = new List<IReadOnlyList<ParkPageRow>>();
+        var observedPressure = false;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (!landed) return;
+            if (aboveHighWater && store.Partitions[0].DueBacklog == 5 &&
+                store.Instances.Values.Any(row => row.ParkRecovery is not null))
+                observedPressure |= store.Messages.Values.Count(row => row is { Done: false, ReleasedBy: null, Message.Kind: "late" }) == 6;
             foreach (var turn in batch.Turns)
             {
                 var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
@@ -89,6 +94,9 @@ internal static class ParkPageBoundsChecks
             await Pump(initial, 1);
         check(pages is [{ Count: InMemoryStore.ParkPageLimit }] && pages[0][0].Cursor.Key == kept.MinBy(row => row.Seq)!.Message.InboxKey,
             $"S-5 {resolution}: page one includes the largest first input and stops at the row boundary");
+        if (aboveHighWater)
+            for (var i = 0; i < 6; i++)
+                await ingress.SendAsync(scope, target, $"unreleased-{i}", "late", "outside the recovery cohort");
         await initial.DisposeAsync();
 
         now++;
@@ -109,11 +117,19 @@ internal static class ParkPageBoundsChecks
               (resolution != Resolution.Resume || probe.Restored == firstBoundary),
             $"S-5 {resolution}: the cold owner finishes the one-row suffix within the projection budget (pages {string.Join(",", pages.Select(p => p.Count))}; restored {probe.Restored}; rows match {actual.SequenceEqual(expected)}; faults {row.Fault}; pending {store.Messages.Values.Count(m => !m.Done)}; kept {store.Messages.Values.Count(m => m.KeptBy is not null)}; recovery {row.ParkRecovery?.Cursor}, {row.ParkRecovery?.Control})");
 
+        if (aboveHighWater)
+            check(observedPressure && probe.LateOffers == 6 && !probe.OfferedLateDuringRecovery,
+                "M3-11 the partition remains above high water with unreleased arrivals while recovery advances, then offers those arrivals after Complete");
+
         InMemoryStore.ActorCheckpoint Read() => store.ReadFoundationActor(scope.Tenant, actor.Id).Actor!;
 
         async Task<IScopeActivation> Owner(string node) =>
             (await new DurableHost([new Worker(node, 0, wire, new ActorAdapter(store, probe),
-                new WorkerOptions { Monotonic = () => now - start })]).ActivateAsync(0))!;
+                new WorkerOptions
+                {
+                    Monotonic = () => now - start,
+                    Backlog = aboveHighWater ? new(4, 2, TimeSpan.FromMilliseconds(5), TimeSpan.FromMilliseconds(10)) : null
+                })]).ActivateAsync(0))!;
     }
 
     private static string WideId(int index)
@@ -132,10 +148,12 @@ internal static class ParkPageBoundsChecks
         }
     }
 
-    private sealed class Probe(string kind) : Contract.IActorType
+    private sealed class Probe(string kind, Func<bool> recoveryOpen) : Contract.IActorType
     {
         public string Type => "park-page-limits";
         public int Restored { get; private set; }
+        public int LateOffers { get; private set; }
+        public bool OfferedLateDuringRecovery { get; private set; }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
@@ -144,6 +162,9 @@ internal static class ParkPageBoundsChecks
                 if (input.Payload == "poison") throw new InvalidOperationException("retain the first maximal input");
                 Restored++;
             }
+            var late = turn.Inbox.Count(input => input.Kind == "late");
+            LateOffers += late;
+            OfferedLateDuringRecovery |= late != 0 && recoveryOpen();
             turn.State = "{}";
             return default;
         }
