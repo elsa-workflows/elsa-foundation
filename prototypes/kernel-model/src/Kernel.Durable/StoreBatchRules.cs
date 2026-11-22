@@ -28,7 +28,7 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
-            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null ||
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
@@ -71,6 +71,12 @@ public static class StoreBatchRules
         HashSet<InboxKey>? changed = null;
         foreach (var turn in batch.Turns)
         {
+            if (turn.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
+            {
+                changed ??= [];
+                if (timers.Rearms.Any(rearm => !changed.Add(rearm.Envelope.InboxKey)))
+                    throw new StoreException(Failure.Definite, "Each re-armed timer must have a distinct full key.");
+            }
             var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
             if (rows is null) continue;
             changed ??= [];
@@ -80,7 +86,8 @@ public static class StoreBatchRules
                 throw new StoreException(Failure.Definite, "A Park page must write a bounded set of distinct keys.");
         }
         if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
-                turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])))
+                turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])
+                    .Concat(turn.Sent.Select(message => message.InboxKey))))
             .Any(changed.Contains))
             throw new StoreException(Failure.Definite, "A Park page input cannot be changed elsewhere in the batch.");
     }

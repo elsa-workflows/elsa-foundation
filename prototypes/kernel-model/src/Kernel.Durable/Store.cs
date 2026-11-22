@@ -20,6 +20,7 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal long ParkResolutionGeneration { get; init; }
     internal ParkDiscardDrain? ParkDiscard { get; init; }
     internal ParkRecoveryDrain? ParkRecovery { get; init; }
+    internal string? ParkTimerDispositions { get; init; }
     internal ParkRelease? ParkCohort { get; init; }
     internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
@@ -158,6 +159,7 @@ public sealed record TurnCommit(
     internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
     internal ParkPageClear? FoundationParkClear { get; init; }
     internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
+    internal ParkTimerOpen? FoundationRecoveryTimers { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

@@ -84,7 +84,7 @@ if (args.Contains("--park-recovery-check"))
 if (args.Contains("--park-recovery-native-check"))
 {
     var failed = false;
-    await ContractNativeChecks.CheckRecoveredTimer((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    await ContractNativeChecks.CheckRecoveryTimers((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
     return failed ? 1 : 0;
 }
 if (args.Contains("--private-kinds-check"))

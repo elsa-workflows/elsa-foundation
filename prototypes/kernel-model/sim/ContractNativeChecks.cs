@@ -156,7 +156,14 @@ internal static class ContractNativeChecks
         }
     }
 
-    internal static async Task CheckRecoveredTimer(Action<bool, string> check)
+    internal static async Task CheckRecoveryTimers(Action<bool, string> check)
+    {
+        await CheckRecoveredTimer(check);
+        await CheckRearmedTimer(sweep: false, check);
+        await CheckRearmedTimer(sweep: true, check);
+    }
+
+    private static async Task CheckRecoveredTimer(Action<bool, string> check)
     {
         const long initial = 1_701_800_015_000;
         var now = initial;
@@ -205,6 +212,127 @@ internal static class ContractNativeChecks
             store.Messages.GetValueOrDefault(timerKey) is { Done: true, KeptBy: null } &&
             store.Messages.Values.Count(row => row.Message.Kind == NativeKinds.Timer) == 1,
             "qualified Resume delivers the kept timer under its original key and the Native handler advances its frame once");
+    }
+
+    private static async Task CheckRearmedTimer(bool sweep, Action<bool, string> check)
+    {
+        const long initial = 1_701_800_025_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now)
+        {
+            ParkedRetentionWindow = TimeSpan.FromMinutes(1), IngressDeduplicationWindow = TimeSpan.FromMilliseconds(100)
+        };
+        var scope = new Contract.BoundScope("native-rearm");
+        var registry = new WorkflowRegistry().Add(Wf.Workflow("timer", Wf.Sequence("sequence",
+            Wf.Delay("delay", 100), Wf.Set("finished-delay", "result", "continued"))));
+        var model = new NativeExecutionModel(registry);
+        var firstFault = false;
+        var secondFault = false;
+        var timerOffers = 0;
+        var timerOfferedDuringDrain = false;
+        Worker MakeWorker(string node) => new(node, 0, store, new ActorAdapter(store, new PublicWorkflow([model])), new WorkerOptions
+        {
+            Monotonic = () => now - initial,
+            OnTurn = (actor, inbox, _) =>
+            {
+                if (!firstFault && inbox.Any(message => message.Kind == NativeKinds.Timer))
+                {
+                    firstFault = true;
+                    throw new InvalidOperationException("fault with due timer");
+                }
+                if (!secondFault && inbox.Any(message => message.Id == "fault-recovery"))
+                {
+                    secondFault = true;
+                    throw new InvalidOperationException("fault after suppression");
+                }
+                if (inbox.Any(message => message.Kind == NativeKinds.Timer))
+                {
+                    timerOffers++;
+                    timerOfferedDuringDrain |= store.Instances[actor.Id].ParkRecovery is not null;
+                }
+            }
+        });
+        var worker = MakeWorker("native-rearm");
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var reads = new ActorList(store, 10);
+        var runtime = new PublicRuntime(ingress, reads);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("timer", Modes.Balanced))).Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        await Pump(owner);
+        var timer = store.Messages.Values.Single(row => row.Message.Kind == NativeKinds.Timer);
+        var envelope = timer.Message;
+        var key = envelope.InboxKey;
+        var seq = timer.Seq;
+        now += 100;
+        await Pump(owner);
+        var parked = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var firstPark = firstFault && timer is { Done: true, KeptBy: ParkKeepReason.Consumed } && timerOffers == 0 && parked.Park is not null;
+        check(firstPark, "a failed Native turn keeps its due timer consumed and leaves the saved frame waiting");
+        if (!firstPark) return;
+
+        var selection = (await reads.GetAsync(scope, reference))!.Selection!;
+        await ingress.SendAsync(scope, target, "fault-recovery", "act");
+        await Pump(owner);
+        await ingress.SendAsync(scope, target, "suppress", Contract.Kinds.Recover, Json.Write(new Contract.OperatorCommand(selection)));
+        await Pump(owner);
+        var interrupted = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var suppressed = secondFault && interrupted.Park == parked.Park && interrupted.Row is
+            { Status: InstanceStatus.Faulted, ParkRecovery: null, ParkTimerDispositions: not null } &&
+            timer is { Done: true, KeptBy: null } && timerOffers == 0;
+        check(suppressed, "Resume suppresses the consumed timer across a real re-park after clearing its kept row");
+        if (!suppressed) return;
+
+        // The finished marker is allowed to retain no payload. The invocation recipe must come from the model.
+        timer.Message = timer.Message with { Payload = null };
+        if (sweep)
+        {
+            now = timer.Message.KeepUntil!.Value + 1;
+            await store.SweepAsync();
+        }
+        var recipe = new ParkTimerRecipe(envelope.Id, envelope.Kind, envelope.Payload, envelope.Due!.Value);
+        check(store.Messages.ContainsKey(key) != sweep &&
+            store.PlanFoundationTimers(interrupted.Row, ParkRecoveryMode.Resume, [recipe]) is { Rearms.Count: 0 } &&
+            store.PlanFoundationTimers(interrupted.Row with { Creation = interrupted.Row.Creation + 1 }, ParkRecoveryMode.RetryAll, [recipe]) is null,
+            $"the {(sweep ? "swept" : "payload-free")} timer fixture is ready and its handle names only the original creation");
+        var admitted = await ingress.SendAsync(scope, target, "retry", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.RetryAll)));
+        await worker.PollAsync();
+        await worker.LoadAsync();
+        await worker.FlushAsync();
+        worker.RunTurn(interrupted.Row.Id);
+        await worker.FlushAsync();
+        var opened = admitted.Outcome == Contract.AdmissionOutcome.Accepted && store.Instances[interrupted.Row.Id].ParkRecovery is not null &&
+            store.Messages.GetValueOrDefault(key) is { Done: false, ReleasedBy: null, KeptBy: null, Seen: 0, Trial: 0, Attempts: 0 } rebuilt &&
+            rebuilt.Seq > seq && rebuilt.Message == envelope;
+        check(opened, "RetryAll rebuilds the exact timer envelope with a fresh sequence in the fenced Open");
+        if (!opened) return;
+
+        if (sweep)
+        {
+            var epoch = worker.Fences.Single().Epoch;
+            await owner.DisposeAsync();
+            var successor = MakeWorker("native-rearm-takeover");
+            await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+            check(successor.Fences.Single().Epoch > epoch, "the successor takes the partition after the re-arm and before the drain completes");
+            await Finish(next);
+        }
+        else await Finish(owner);
+        var checkpoint = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var state = Json.Read<NativeState>(checkpoint.Row.State);
+        check(checkpoint is { Park: null, Row: { Status: InstanceStatus.Finished, ParkTimerDispositions: null } } &&
+            !timerOfferedDuringDrain && timerOffers == 1 && state.Waits.Count == 0 &&
+            state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "continued" && !store.Messages.ContainsKey(key),
+            "the re-armed timer waits for Complete and resumes the real Native frame exactly once");
+
+        async Task Finish(IScopeActivation activation)
+        {
+            for (var step = 0; step < 4; step++)
+            {
+                now += 11;
+                await Pump(activation);
+            }
+        }
     }
 
     private static async Task CompletedJobRestore(Action<bool, string> check)
