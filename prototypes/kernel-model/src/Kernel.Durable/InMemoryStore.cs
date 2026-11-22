@@ -41,6 +41,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         internal ParkKeepReason? KeptBy;
         internal readonly int PayloadLength = checked(
             PayloadBytes(message.StoreStartInputOnce ? null : message.Payload) + PayloadBytes(message.Start?.Input));
+        // Cache the bounded deadline linkage at insertion. A recovery page never deserializes a ticket's arguments.
+        internal readonly (string? JobKey, string? Timer, long? At) JobTiming = ReadJobTiming(message);
         internal ParkRelease? ReleasedBy;
         internal bool ParkDeadLetter;
         public Message Message = message.StoreStartInputOnce ? message with { Payload = null, StoredEnvelope = null } : message;
@@ -49,6 +51,20 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         public bool Done, Held;
 
         private static int PayloadBytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
+
+        private static (string?, string?, long?) ReadJobTiming(Message envelope)
+        {
+            if (envelope.Payload is null || !envelope.HasIssuedTicket) return default;
+            try
+            {
+                if (envelope.Kind == Kinds.Job && envelope.Read<JobTicket>() is { Timer: not null } ticket)
+                    return (ticket.Key, ticket.Timer, ticket.Deadline);
+                if (envelope.Kind == Kinds.JobDeadline && envelope.Read<JobDeadline>() is { } deadline)
+                    return (deadline.Key, null, null);
+            }
+            catch (System.Text.Json.JsonException) { }
+            return default;
+        }
     }
 
     private readonly Lock _gate = new();
@@ -380,6 +396,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
                 ApplyFoundationRecoveryPage(turn, now);
                 ApplyFoundationTimerOpen(turn.FoundationRecoveryTimers);
+                ApplyFoundationJobOpen(turn.FoundationRecoveryJobs);
                 foreach (var id in turn.Done)
                 {
                     if (turn.FoundationKept?.TryGetValue(id, out var reason) == true)

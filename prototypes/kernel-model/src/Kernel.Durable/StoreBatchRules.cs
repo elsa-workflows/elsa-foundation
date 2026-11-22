@@ -28,7 +28,7 @@ public static class StoreBatchRules
         }
         foreach (var turn in batch.Turns)
         {
-            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null ||
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
@@ -74,13 +74,24 @@ public static class StoreBatchRules
         {
             if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observed)
                 (preserved ??= []).UnionWith(observed.Preserved);
+            if (turn.FoundationRecoveryJobs is { } observedJobs && (observedJobs.Pending.Count != 0 || observedJobs.Retained.Count != 0))
+            {
+                (preserved ??= []).UnionWith(observedJobs.Pending);
+                preserved.UnionWith(observedJobs.Retained);
+            }
             if (turn.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
             {
                 changed ??= [];
                 if (timers.Rearms.Any(rearm => !changed.Add(rearm.Envelope.InboxKey)))
                     throw new StoreException(Failure.Definite, "Each re-armed timer must have a distinct full key.");
             }
-            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
+            if (turn.FoundationRecoveryJobs is { Writes.Count: > 0 } jobs)
+            {
+                changed ??= [];
+                if (jobs.Writes.Any(job => !changed.Add(job.InboxKey)))
+                    throw new StoreException(Failure.Definite, "Each restarted job write must have a distinct full key.");
+            }
+            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Writes().ToArray();
             if (rows is null) continue;
             changed ??= [];
             if ((turn.FoundationParkClear is not null && turn.FoundationRecoveryPage is not null) ||

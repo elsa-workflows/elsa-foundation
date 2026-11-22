@@ -6,13 +6,13 @@ namespace Kernel.Durable;
 internal sealed record ParkTimerRecipe(string Id, string Kind, string? Payload, long Due);
 internal sealed record ParkTimerRearm(Message Envelope, long? DoneSequence);
 internal sealed record ParkTimerOpen(IReadOnlyList<ParkTimerRecipe> Recipes, IReadOnlyList<ParkTimerRearm> Rearms,
-    IReadOnlyList<InboxKey> Preserved, string? Dispositions);
+    IReadOnlyList<InboxKey> Preserved, string? Dispositions, long Bytes);
 
 public sealed partial class InMemoryStore
 {
     internal const int MaxRestoreWaits = 4096;
     private const int MaxRestoreBytes = 24 * 1024 * 1024;
-    private const int TimerAllowance = 5406;
+    private const int RestoreWaitAllowance = 5406;
     private const byte SuppressedTimer = 1;
     private const byte RearmedTimer = 2;
     private const int TimerDispositionEntryBytes = 33;
@@ -54,7 +54,7 @@ public sealed partial class InMemoryStore
                 { ActorAuthored = true, StorageId = physical }.AsIssued();
                 var key = envelope.InboxKey;
                 if (!keys.Add(key) || !FoundationMetadataLimits.FitsComposed(envelope)) return null;
-                bytes += TimerAllowance + (timer.Payload is null ? 0 : Encoding.UTF8.GetByteCount(timer.Payload));
+                bytes += RestoreWaitAllowance + (timer.Payload is null ? 0 : Encoding.UTF8.GetByteCount(timer.Payload));
                 if (bytes > MaxRestoreBytes) return null;
 
                 var stored = Messages.GetValueOrDefault(key);
@@ -91,7 +91,7 @@ public sealed partial class InMemoryStore
                 }
             }
         }
-        return new(recipes, rearms, preserved, WriteTimerDispositions(dispositions));
+        return new(recipes, rearms, preserved, WriteTimerDispositions(dispositions), bytes);
     }
 
     private static bool SameTimer(MessageRow stored, Message envelope)

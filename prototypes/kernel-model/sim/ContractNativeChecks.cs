@@ -198,6 +198,20 @@ internal static class ContractNativeChecks
             timer is { Done: true, KeptBy: ParkKeepReason.Arrived, Message.Payload: not null };
         check(kept, "a real Native Delay arrives with its original timer envelope while the workflow is parked");
         if (!kept) return;
+        var saved = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!.Row;
+        var original = timer.Message;
+        var recipes = new[] { new ParkTimerRecipe(original.Id, original.Kind, original.Payload, original.Due!.Value) };
+        timer.KeptBy = null;
+        timer.Message = original with { Payload = null };
+        var marker = store.PlanFoundationTimers(saved, ParkRecoveryMode.Resume, recipes);
+        store.Messages.Remove(timerKey);
+        var absent = store.PlanFoundationTimers(saved, ParkRecoveryMode.Resume, recipes);
+        timer.Message = original;
+        timer.KeptBy = ParkKeepReason.Arrived;
+        store.Messages.Add(timerKey, timer);
+        check(saved.ParkTimerDispositions is null && marker?.Rearms is [var present] && absent?.Rearms is [var swept] &&
+            present.DoneSequence == timer.Seq && swept.DoneSequence is null && present.Envelope == original && swept.Envelope == original,
+            "the first Open rebuilds the same timer from a done marker or an absent row without a prior disposition");
 
         var admitted = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
             Json.Write(new Contract.OperatorCommand(parked!.Selection!)));

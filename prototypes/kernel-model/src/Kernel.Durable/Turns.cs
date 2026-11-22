@@ -242,6 +242,7 @@ public sealed class TurnOutcome(string instance)
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;
     internal ParkTimerOpen? FoundationRecoveryTimers;
+    internal ParkJobOpen? FoundationRecoveryJobs;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
@@ -522,20 +523,31 @@ public sealed class DurableTurn
     {
         if (_jobs.Exists(job => job.Key == key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
         if (boundMessage) FoundationMetadataLimits.RequireContent(arguments, nameof(arguments));
-        var timer = deadline is null ? null : IssuedAt(_ordinal).Id;
+        var generation = _allocateJobGenerations ? _nextJobGeneration!.Value : 0;
+        var timer = deadline is null ? null : _allocateJobGenerations ? FoundationJobDeadlineId(Id, _input.Creation, generation) : IssuedAt(_ordinal).Id;
         var ticket = Json.Write(new JobTicket(_input.Model, key, arguments, deadline, timer));
         if (boundMessage) FoundationMetadataLimits.RequireContent(ticket, nameof(arguments));
 
-        var generation = _allocateJobGenerations ? _nextJobGeneration!.Value : 0;
         if (_allocateJobGenerations) _nextJobGeneration = checked(generation + 1);
         _jobs.Add(new(key, generation));
-        if (deadline is { } at) SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at));
+        if (deadline is { } at)
+        {
+            if (_allocateJobGenerations)
+            {
+                Send(InboxKey.Issued(timer!), Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at));
+                _ordinal++;
+            }
+            else SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at));
+        }
         _started.Add(key, timer);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
         Send(InboxKey.Ticket(Id, key, _input.Creation, generation), Actor, Kinds.Job, ticket, encodedPayload: true, jobGeneration: generation);
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
+
+    internal static string FoundationJobDeadlineId(string actor, long creation, long generation) =>
+        FormattableString.Invariant($"{CreationProtocol.Origin(actor, creation)}#job-deadline:{generation}");
 
     internal long? JobGeneration(string key)
     {

@@ -37,7 +37,12 @@ public sealed record ChildFinished(ActorRef Child, ActorStatus Status, string? O
 
 public sealed record TimerSpec(string Id, string Kind, string? Payload, long Due);
 
-public sealed record JobSpec(string Key, string? Arguments);
+public sealed record JobSpec(string Key, string? Arguments)
+{
+    /// <summary>The original absolute deadline on the actor's clock, when the job has a timeout.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public long? Deadline { get; init; }
+}
 
 public sealed record SubscriptionSpec(string Key, string Wait, bool Keep);
 

@@ -18,6 +18,9 @@ internal readonly record struct ParkRelease(long Creation, long Generation);
 internal sealed record ParkPageRow(ParkPageCursor Cursor, string Kind, string? Sender, ParkKeepReason? Reason, int PayloadBytes)
 {
     internal ParkRelease? ReleasedBy { get; init; }
+    internal bool ObsoleteJob { get; init; }
+    internal long? JobGeneration { get; init; }
+    internal ParkPageRow? PairedJobInput { get; init; }
 }
 
 internal sealed record ParkPageClear(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows);
@@ -33,12 +36,22 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
 
     internal bool Restores(ParkPageRow row, InstanceStatus status) => row.Kind == Kinds.Publish ||
         status != InstanceStatus.Running && row.Kind == Kinds.ChildFinished ||
-        (status == InstanceStatus.Running && row.Kind != Kinds.Meet &&
+        (status == InstanceStatus.Running && row.Kind != Kinds.Meet && !row.ObsoleteJob &&
             (row.Reason is null or ParkKeepReason.Arrived || Mode == ParkRecoveryMode.RetryAll ||
                 Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
 }
 
-internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false);
+internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false)
+{
+    internal IEnumerable<ParkPageRow> Writes()
+    {
+        foreach (var row in Rows)
+        {
+            if (row.PairedJobInput is { } paired) yield return paired;
+            yield return row;
+        }
+    }
+}
 
 public sealed partial class InMemoryStore
 {
@@ -72,6 +85,20 @@ public sealed partial class InMemoryStore
                 terminalInputs && current.Status == InstanceStatus.Running)
                 return null;
 
+            var jobs = recoveryGeneration is null || current.Jobs is null ? null : JobRegistry.Read(current.Jobs);
+            var currentJobs = jobs?.SelectMany(job => new[]
+                {
+                    InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation),
+                    InboxKey.JobResult(current.Id, job.Key, current.Creation, job.Generation)
+                }).ToHashSet();
+            HashSet<InboxKey>? restartedTickets = null;
+            if (terminalInputs && jobs is not null && current.ParkRestartedJobs is not null)
+            {
+                var restarts = ReadJobRestarts(current.ParkRestartedJobs);
+                // New tickets written by Open have no release tag and have not entered the model.
+                restartedTickets = jobs.Where(job => restarts.GetValueOrDefault(JobRestartDigest(job.Key), -1) == job.Generation)
+                    .Select(job => InboxKey.Ticket(current.Id, job.Key, current.Creation, job.Generation)).ToHashSet();
+            }
             var page = new PriorityQueue<MessageRow, ParkPageCursor>(limit,
                 Comparer<ParkPageCursor>.Create(static (left, right) => right.CompareTo(left)));
             foreach (var (key, row) in Messages)
@@ -80,8 +107,10 @@ public sealed partial class InMemoryStore
                 var kept = row.Done && row.KeptBy is not null;
                 var stale = !row.Done && current.Status == InstanceStatus.Running && recoveryGeneration is { } active &&
                     row.ReleasedBy is { } release && release.Creation == address.Creation && release.Generation < active;
-                var settling = terminalInputs && !row.Done && row.ReleasedBy is { } tag && tag.Creation == address.Creation &&
-                    tag.Generation <= recoveryGeneration && !ParkRecoveryCredit.IsTicket(row.Message.Kind) &&
+                var settling = terminalInputs && !row.Done && (restartedTickets?.Contains(key) == true ||
+                    row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true } && currentJobs?.Contains(key) == true ||
+                    row.ReleasedBy is { } tag && tag.Creation == address.Creation && tag.Generation <= recoveryGeneration) &&
+                    (row.Message.Kind == Kinds.Job || !ParkRecoveryCredit.IsTicket(row.Message.Kind)) &&
                     row.Message.Kind != Kinds.ChildFinished && !row.Message.IsControl;
                 if (terminalInputs ? !settling : !kept && !stale) continue;
 
@@ -91,17 +120,65 @@ public sealed partial class InMemoryStore
                 else page.Enqueue(row, cursor);
             }
 
-            var result = new ParkPageRow[page.Count];
-            for (var index = result.Length - 1; index >= 0; index--)
+            var deadlineJobs = !terminalInputs && current.ParkRecovery?.Mode == ParkRecoveryMode.RetryAll &&
+                current.Status == InstanceStatus.Running ? jobs?.ToDictionary(job => job.Key, job => job.Generation, StringComparer.Ordinal) : null;
+            var result = new List<ParkPageRow>(page.Count);
+            foreach (var (row, cursor) in page.UnorderedItems.OrderBy(item => item.Priority))
             {
-                page.TryDequeue(out var row, out var cursor);
-                result[index] = new(cursor, row!.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
+                var paired = deadlineJobs is not null ? ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs)
+                    : recoveryGeneration is not null && current.Status != InstanceStatus.Running &&
+                        row.Message.Kind == Kinds.Job && currentJobs?.Contains(cursor.Key) == true
+                        ? ReadTerminalJobDeadline(current, row, cursor, terminalInputs ? recoveryGeneration : null) : null;
+                if (paired is not null && result.Count + 2 > ParkPageLimit) break;
+                var isJob = row.Message.Kind == Kinds.Job || row.Message is { Kind: Kinds.JobFinished, FoundationJobResult: true };
+                result.Add(new(cursor, row.Message.Kind, row.Message.Sender, row.KeptBy, row.PayloadLength)
                 {
-                    ReleasedBy = row.ReleasedBy
-                };
+                    ReleasedBy = row.ReleasedBy,
+                    ObsoleteJob = recoveryGeneration is not null && isJob && currentJobs?.Contains(cursor.Key) != true,
+                    JobGeneration = recoveryGeneration is not null && isJob ? row.Message.JobGeneration : null,
+                    PairedJobInput = paired
+                });
+                if (paired is not null) break;
             }
             return result;
         }
+    }
+
+    private ParkPageRow? ReadTerminalJobDeadline(InstanceRow actor, MessageRow ticket, ParkPageCursor ticketCursor,
+        long? terminalGeneration)
+    {
+        if (ticket.JobTiming.Timer is not { } timer) return null;
+        var key = InboxKey.Issued(timer);
+        if (Messages.GetValueOrDefault(key) is not { Done: false, Message: { Kind: Kinds.JobDeadline } message } deadline ||
+            message.Target.Id != actor.Id || message.TargetCreation != actor.Creation || message.Sender != actor.Id ||
+            message.SenderCreation != actor.Creation || message.Due != ticket.JobTiming.At ||
+            !StringComparer.Ordinal.Equals(deadline.JobTiming.JobKey, ticket.JobTiming.JobKey))
+            return null;
+        var cursor = new ParkPageCursor(deadline.Seq, key);
+        // An earlier released deadline is already in this terminal scan's ordered prefix.
+        if (terminalGeneration is not null && cursor.CompareTo(ticketCursor) < 0 &&
+            deadline.ReleasedBy is { } release && release.Creation == actor.Creation && release.Generation <= terminalGeneration)
+            return null;
+        return new(cursor, Kinds.JobDeadline, message.Sender, deadline.KeptBy, deadline.PayloadLength)
+            { ReleasedBy = deadline.ReleasedBy };
+    }
+
+    private ParkPageRow? ReadDeadlinePrerequisite(InstanceRow actor, MessageRow deadline, ParkPageCursor cursor,
+        IReadOnlyDictionary<string, long> jobs)
+    {
+        var message = deadline.Message;
+        if (message.Kind != Kinds.JobDeadline || !cursor.Key.HasIssuedOrigin || message.Sender != actor.Id ||
+            message.SenderCreation != actor.Creation || deadline.JobTiming.JobKey is not { } key ||
+            !jobs.TryGetValue(key, out var generation))
+            return null;
+        var ticketKey = InboxKey.Ticket(actor.Id, key, actor.Creation, generation);
+        if (Messages.GetValueOrDefault(ticketKey) is not { Done: true, KeptBy: ParkKeepReason.Consumed } ticket ||
+            !IsJobEnvelope(ticket.Message, actor, Kinds.Job, generation) ||
+            ticket.JobTiming.Timer != message.Id || ticket.JobTiming.At != message.Due)
+            return null;
+        var later = new ParkPageCursor(ticket.Seq, ticketKey);
+        if (later.CompareTo(cursor) <= 0) return null;
+        return new(later, Kinds.Job, ticket.Message.Sender, ticket.KeptBy, ticket.PayloadLength) { ReleasedBy = ticket.ReleasedBy };
     }
 
     private ParkPageRow? ChangedFoundationParkInput(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs)
@@ -128,7 +205,7 @@ public sealed partial class InMemoryStore
         var drain = checkpoint.ParkRecovery!;
         var release = new ParkRelease(checkpoint.Creation, checkpoint.ParkResolutionGeneration);
         var until = now + (long)FoundationIngressWindow(null).TotalMilliseconds;
-        foreach (var row in page.Rows)
+        foreach (var row in page.Writes())
         {
             var stored = Messages[row.Cursor.Key];
             stored.Message = stored.Message with { KeepUntil = until };
@@ -139,7 +216,11 @@ public sealed partial class InMemoryStore
                 (stored.Done, stored.Held, stored.Trial, stored.Attempts) = (true, false, 0, 0);
                 continue;
             }
-            if (!drain.Restores(row, checkpoint.Status)) continue;
+            if (!drain.Restores(row, checkpoint.Status))
+            {
+                (stored.Done, stored.Held, stored.Trial) = (true, false, 0);
+                continue;
+            }
             (stored.Done, stored.Held, stored.ParkDeadLetter) = (false, false, false);
             (stored.Seen, stored.Trial, stored.Attempts) = (0, 0, 0);
             stored.ReleasedBy = release;
