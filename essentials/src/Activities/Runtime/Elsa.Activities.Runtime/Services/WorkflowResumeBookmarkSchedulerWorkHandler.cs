@@ -834,7 +834,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 stimulusType: registration.StimulusType,
                 stimulusHash: registration.StimulusHash,
                 payload: null,
-                expiresAt: null,
+                expiresAt: registration.ExpiresAt,
                 reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
                 metadata: registration.Metadata,
                 valueSnapshots: [],

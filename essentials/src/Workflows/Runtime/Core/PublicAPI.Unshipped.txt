@@ -12734,3 +12734,6 @@ Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ChildHistorySou
 Elsa.Workflows.Runtime.Core.Models.BookmarkResumeDispatchRequest.ChildHistorySource.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher.CanDispatchChildHistorySource(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IBookmarkResumeDispatcher.CanDispatchChildHistorySource(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryObservationWriter! writer, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeHistoryStore! reader) -> bool
+
+Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Workflows.Runtime.Core.Models.ActivityTriggerRegistration.ExpiresAt.init -> void

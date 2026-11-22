@@ -808,7 +808,7 @@ class OrchestrationTests(unittest.TestCase):
                 (assets / f'synthetic-workflow-module-{index:04d}.js').touch()
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 seed = None
                 features = {}
                 if dll == 'Elsa.Workbench.dll':
@@ -819,13 +819,15 @@ class OrchestrationTests(unittest.TestCase):
                 principals = settings.get('Qualification', {}).get('Principals', [])
                 events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready, tuple(sorted(item['username'] for item in principals)), {'history': features.get('WorkflowsRuntimeHistory'), 'omitted': 'PlaybackQualificationWithoutHistory' in features, 'cache': features.get('WorkflowsRuntimeEntityFrameworkCore', {}).get('CacheWorkflowExecutables')}))
                 process = SimpleNamespace(pid=1000 + len(events), returncode=None)
+                if on_started is not None:
+                    on_started(process)
                 try:
                     yield process
                 finally:
                     process.returncode = 0
                     events.append(('stop', directory.name, dll))
 
-            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None, pump=None):
                 if log.name == 'copy-asset-diagnostics.log':
                     diagnostics = Path(args[args.index('--outDir') + 1])
                     diagnostics.mkdir(parents=True)
@@ -970,7 +972,7 @@ class OrchestrationTests(unittest.TestCase):
             output = Path(temporary) / 'out'
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 starts.append(directory.name)
                 process = SimpleNamespace(pid=2000 + len(starts), returncode=None)
                 try:
@@ -978,7 +980,7 @@ class OrchestrationTests(unittest.TestCase):
                 finally:
                     process.returncode = 0
 
-            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None, pump=None):
                 if log.name == 'outlined-gallery.log':
                     self.write_gallery_fixture(args, env)
                     return
@@ -1273,6 +1275,91 @@ class FieldGalleryVerdictTests(unittest.TestCase):
                     if change == 'inline-only': row['results'][0]['attachments'] = [{'contentType': 'image/png', 'body': 'inline-only'}]
                     if change == 'external-image': row['results'][0]['attachments'][0]['path'] = str(root.parent / 'outside.png')
                     with self.assertRaises(ValueError): acceptance.field_gallery_verdict(broken, root)
+
+
+class OwnedRestartTests(unittest.TestCase):
+    def exercise(self, callback, fail_generation=None):
+        with tempfile.TemporaryDirectory() as temp, ExitStack() as outer:
+            root = Path(temp); backend = root / 'backend'; backend.mkdir()
+            (backend / 'host.dll').write_bytes(b'unchanged-owned-binary')
+            events, processes, report = [], {}, {'ownedPids': {}}
+            @contextmanager
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
+                process = SimpleNamespace(pid=10000 + len(events), returncode=None)
+                events.append(('start', directory, url, dict(env), log.name))
+                on_started(process)
+                try:
+                    if len(events) == fail_generation:
+                        raise RuntimeError('Owned fixture readiness failed')
+                    yield process
+                finally:
+                    process.returncode = 0
+                    events.append(('stop', process.pid))
+            with patch.object(acceptance, 'host', fake_host), patch.object(acceptance.subprocess, 'check_output', return_value=''):
+                owner = acceptance.OwnedBackendRestart(outer, {'backend': backend, 'backendUrl': 'http://localhost:12345'}, root,
+                    {'OWNED_FIXTURE': 'same-value'}, processes, report, root / 'control')
+                callback(owner, root, events, processes, report)
+                outer.close()
+                self.assertEqual(len([x for x in events if x[0] == 'start']), len([x for x in events if x[0] == 'stop']))
+
+    def request(self, owner, expected=0, request_id='a' * 32):
+        (owner.control / 'request.json').write_text(json.dumps({'requestId': request_id, 'expectedGeneration': expected}))
+        owner.pump()
+        return json.loads((owner.control / 'reply.json').read_text())
+
+    def test_restart_preserves_inputs_and_all_lifetimes_close_once(self):
+        def check(owner, root, events, processes, report):
+            first = self.request(owner)
+            self.assertEqual(first['generation'], 1)
+            self.assertNotEqual(first['beforePid'], first['afterPid'])
+            self.assertTrue(first['sameBinaryAndConfiguration'] and first['oldGroupGone'])
+            second = self.request(owner, 1, 'b' * 32)
+            self.assertEqual(second['generation'], 2)
+            starts = [x for x in events if x[0] == 'start']
+            self.assertEqual(len({x[1] for x in starts}), 1)
+            self.assertEqual(len({x[2] for x in starts}), 1)
+            self.assertTrue(all(x[3] == starts[0][3] for x in starts))
+            self.assertEqual(len({x[4] for x in starts}), 3)
+            self.assertEqual(len(processes), 3)
+        self.exercise(check)
+
+    def test_duplicate_request_is_idempotent(self):
+        def check(owner, *_):
+            first = self.request(owner)
+            self.assertEqual(first, self.request(owner))
+            self.assertEqual(owner.generation, 1)
+        self.exercise(check)
+
+    def test_stale_generation_never_stops_current_process(self):
+        def check(owner, root, events, *_):
+            result = self.request(owner, 7)
+            self.assertEqual(result['error'], 'stale-generation')
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_changed_inputs_refuse_before_stopping(self):
+        def check(owner, root, events, *_):
+            (owner.item['backend'] / 'host.dll').write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError, 'inputs changed'):
+                self.request(owner)
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_arbitrary_command_refused_before_stopping(self):
+        def check(owner, root, events, *_):
+            (owner.control / 'request.json').write_text(json.dumps({'requestId': 'a' * 32, 'expectedGeneration': 0, 'command': 'ignored'}))
+            with self.assertRaises(ValueError): owner.pump()
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_failed_readiness_stays_in_append_only_cleanup_receipt(self):
+        def check(owner, root, events, processes, report):
+            with self.assertRaisesRegex(RuntimeError, 'readiness failed'):
+                self.request(owner)
+            self.assertEqual(len(processes), 2)
+            self.assertEqual(len(report['ownedPids']), 2)
+            self.assertTrue(all(p.returncode == 0 for p in processes.values()))
+        self.exercise(check, fail_generation=3)
 
 
 if __name__ == '__main__':

@@ -317,6 +317,9 @@ public sealed record ActivityTriggerRegistration
     public ValueTypeDescriptor PayloadType { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
+    /// <summary>Optional passive match deadline; it does not schedule a timeout or continuation.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? ExpiresAt { get; init; }
     public ActivityTriggerDeduplicationPolicy DeduplicationPolicy { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }

@@ -845,6 +845,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 registration.ResumeTargetKey,
                 registration.StimulusType,
                 registration.StimulusHash,
+                expiresAt: registration.ExpiresAt,
                 metadata: registration.Metadata))
             .ToArray();
         BookmarkState[] bookmarks = [];

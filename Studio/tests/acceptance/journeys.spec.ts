@@ -1,3 +1,4 @@
+import { timelineDiagnosticsJourney } from "./timelineDiagnosticsJourney";
 import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
@@ -1143,4 +1144,9 @@ test("native BPMN workflow blocks retain authoring boundaries", async ({ page },
 
 test("native BPMN reusable blocks retain authoring boundaries", async ({ page }, info) => {
   await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["activity"]);
+});
+
+test("timeline durable diagnostics and process restart", async ({ page }, info) => {
+  test.setTimeout(660_000);
+  await timelineDiagnosticsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
