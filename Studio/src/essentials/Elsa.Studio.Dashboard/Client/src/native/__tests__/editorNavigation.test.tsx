@@ -45,7 +45,7 @@ function mount(api: ElsaStudioModuleApi, controller: DashboardAuthoringControlle
   draw();
   disposers.push(() => { flushSync(() => root.unmount()); container.remove(); });
   return {
-    container, navigate,
+    container: document.body, navigate,
     hide() { active = false; window.history.replaceState({}, "", "/dashboards"); draw(); },
     reveal() { active = true; window.history.replaceState({}, "", path); draw(); }
   };

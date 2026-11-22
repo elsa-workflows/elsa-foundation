@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEve
 import { ArrowRight, CircleAlert, LoaderCircle, Plus, Workflow } from "lucide-react";
 import { evaluateBackendRequirements, useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { isHomeWidgetFeatureEnabled } from "./homeLayout";
-import { useHomeDialogFocus } from "./useHomeDialogFocus";
+import { StudioButton, StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } from "./widgets/homeData";
 
 const designRead = "workflows/design:read";
@@ -41,7 +41,6 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
   const homeFallbackRef = useRef<HTMLElement>(null);
   const [dialogState, setDialogState] = useState<ActiveDialog | null>(null);
   const activeDialog = workflowsEnabled && dialogState?.authorityKey === authorityKey ? dialogState : null;
@@ -57,7 +56,6 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
       ? { ...current, discovery }
       : current);
   }, []);
-  useHomeDialogFocus(dialogRef, activeDialog ? closeDialog : null, homeFallbackRef);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -162,9 +160,13 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {accessLimited ? <span id="home-task-access" role="note">Create requires workflow design access. Continue and Browse require access to read workflow definitions.</span> : null}
       </div>
       {activeDialog ? (
-        <div className="dashboard-settings-backdrop">
-          <section ref={dialogRef} className="dashboard-settings-dialog home-continue-dialog" role="dialog" aria-modal="true" aria-labelledby="home-continue-title" tabIndex={-1}>
-            <h4 id="home-continue-title">Continue editing</h4>
+        <StudioDialog open title="Continue editing" onClose={closeDialog} className="home-continue-dialog" dismissOnOutsideClick={false}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            const opener = continueButtonRef.current;
+            if (document.activeElement === document.body) (opener?.isConnected && !opener.disabled ? opener : homeFallbackRef.current)?.focus();
+          }}
+          footer={<StudioDialogFooter onCancel={closeDialog} />}>
             {activeDialog.discovery.kind === "loading" ? <p role="status"><LoaderCircle size={16} aria-hidden="true" /> Checking current workflow drafts…</p> : null}
             {activeDialog.discovery.kind === "empty" ? <div>
               <p>No workflows have a current draft to continue.</p>
@@ -175,7 +177,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
             </div> : null}
             {activeDialog.discovery.kind === "failed" ? <div>
               <p role={activeDialog.discovery.denied ? "alert" : "status"}>{activeDialog.discovery.message}</p>
-              {!activeDialog.discovery.denied ? <button type="button" onClick={startDiscovery}>Retry</button> : null}
+              {!activeDialog.discovery.denied ? <StudioButton onClick={startDiscovery}>Retry</StudioButton> : null}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}
             {activeDialog.discovery.kind === "ready" ? <div>
@@ -194,9 +196,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
               </ul>
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse all workflows</a>
             </div> : null}
-            <div className="home-continue-dialog-actions"><button type="button" onClick={closeDialog}>Cancel</button></div>
-          </section>
-        </div>
+        </StudioDialog>
       ) : null}
     </section>
   );

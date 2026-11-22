@@ -15,7 +15,7 @@ const disposers: (() => void)[] = [];
 function mount(props: Props) {
   const view = document.createElement("div"); document.body.append(view); const root = createRoot(view);
   const update = (next: Props) => flushSync(() => root.render(<QuestionTile {...next} />)); update(props);
-  disposers.push(() => { flushSync(() => root.unmount()); view.remove(); }); return { view, update };
+  disposers.push(() => { flushSync(() => root.unmount()); view.remove(); }); return { view: document.body, update };
 }
 function fixture() {
   const module = stubApi(); const api = new DashboardApi(module.backend); const saved = dashboard();
@@ -104,7 +104,7 @@ describe("native tile disclosure lifetime", () => {
     await waitUntil(() => view.textContent?.includes("previous-aggregate-row") === true);
     flushSync(() => [...view.querySelectorAll("button")].find(button => button.textContent === "View matching records")!.click());
     await waitUntil(() => typeof complete === "function");
-    flushSync(() => [...view.querySelectorAll("button")].find(button => button.textContent === "Close")!.click());
+    flushSync(() => [...view.querySelectorAll("button")].find(button => button.getAttribute("aria-label") === "Close Matching source records")!.click());
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     expect(view.textContent).toContain("Investigation cancelled"); expect(view.textContent).toContain("Result values are withheld");
     complete(result("LATE-PRIVATE-ROW")); await new Promise(resolve => setTimeout(resolve, 0));

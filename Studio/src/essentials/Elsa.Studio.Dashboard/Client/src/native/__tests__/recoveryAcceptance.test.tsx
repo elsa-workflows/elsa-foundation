@@ -15,7 +15,7 @@ const result = (marker: string): QueryResult => ({ outcome: "succeeded", columns
 const cleanups: (() => void)[] = [];
 function mount(children: React.ReactNode) {
   const view = document.createElement("div"); document.body.append(view); const root = createRoot(view);
-  flushSync(() => root.render(children)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return view;
+  flushSync(() => root.render(children)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return document.body;
 }
 function click(view: HTMLElement, name: string) {
   const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === name || item.getAttribute("aria-label") === name);
