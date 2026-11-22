@@ -29,6 +29,29 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed partial class ActivityDraftTestRunServiceTests
 {
     [Fact]
+    public async Task Idempotency_compares_input_json_values_and_distinguishes_missing_null_and_exact_numbers()
+    {
+        var fixture = await CreateFixture();
+        StartActivityDraftTestRun Request(JsonElement? value) => fixture.Request with
+        {
+            Inputs = new Dictionary<string, ActivityDraftTestRunInput> { ["probe"] = new("Present", value) }
+        };
+        var first = await fixture.Service.StartAsync(Request(Json("{\"n\":100000000000000000000000000000000000001.0,\"text\":\"\\u0061\",\"nil\":null}")));
+        var replay = await fixture.Service.StartAsync(Request(Json("{\"nil\":null,\"text\":\"a\",\"n\":100000000000000000000000000000000000001}")));
+        Assert.Equal(first.TestRunId, replay.TestRunId);
+        foreach (var changed in new JsonElement?[]
+                 {
+                     Json("{\"n\":100000000000000000000000000000000000002,\"text\":\"a\",\"nil\":null}"),
+                     Json("{\"n\":100000000000000000000000000000000000001,\"text\":\"a\"}"),
+                     Json("null"), null
+                 })
+        {
+            var refusal = await Assert.ThrowsAsync<Elsa.Activities.Design.Api.Models.ActivityAuthoringException>(() => fixture.Service.StartAsync(Request(changed)));
+            Assert.Equal("activity.test-run.idempotency-mismatch", refusal.ErrorCode);
+        }
+    }
+
+    [Fact]
     public async Task Placement_failure_is_persisted_as_safe_pre_dispatch_validation_rejection()
     {
         var fixture = await CreateFixture();

@@ -1,6 +1,5 @@
-using System.Buffers;
 using System.Security.Cryptography;
-using System.Text.Json;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -14,7 +13,6 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, IPublicationSnapshotReviewStore store)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(Elsa.Serialization.Core.JsonBaseline.Options);
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
     private const int CleanupBatchSize = 128;
 
@@ -24,15 +22,12 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, 
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(layout);
-        var snapshot = JsonSerializer.SerializeToElement(
+        var snapshot = JsonHashInput.ProjectOpaqueClr(
             new PublicationCandidateSnapshot(
                 state,
                 layout.OrderBy(record => record.NodeId, StringComparer.Ordinal).ToArray()),
-            SerializerOptions);
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-            WriteCanonical(writer, snapshot);
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(buffer.WrittenSpan))}";
+            _ => null);
+        return $"sha256:{JsonHashInput.Hash(snapshot)}";
     }
 
     public async ValueTask<PublicationSnapshotReviewIssued> IssueAsync(
@@ -126,46 +121,6 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, 
                         StringComparer.Ordinal.Equals(review.ActivePublicationId, currentPlan.Slot?.ActiveActivationId);
         if (!isCurrent || !await store.TryConsumeAsync(preflightToken, cancellationToken))
             throw PublicationSnapshotReviewException.Stale();
-    }
-
-    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement value)
-    {
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.Object:
-                writer.WriteStartObject();
-                foreach (var property in value.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
-                {
-                    writer.WritePropertyName(property.Name);
-                    WriteCanonical(writer, property.Value);
-                }
-                writer.WriteEndObject();
-                break;
-            case JsonValueKind.Array:
-                writer.WriteStartArray();
-                foreach (var item in value.EnumerateArray())
-                    WriteCanonical(writer, item);
-                writer.WriteEndArray();
-                break;
-            case JsonValueKind.String:
-                writer.WriteStringValue(value.GetString());
-                break;
-            case JsonValueKind.Number:
-                writer.WriteRawValue(value.GetRawText(), skipInputValidation: true);
-                break;
-            case JsonValueKind.True:
-                writer.WriteBooleanValue(true);
-                break;
-            case JsonValueKind.False:
-                writer.WriteBooleanValue(false);
-                break;
-            case JsonValueKind.Null:
-            case JsonValueKind.Undefined:
-                writer.WriteNullValue();
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(value), value.ValueKind, "Unsupported JSON value kind.");
-        }
     }
 
     private sealed record PublicationCandidateSnapshot(

@@ -121,7 +121,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var input = new WorkflowArgumentState(descendant ? "Condition" : "Text", new ArgumentValue(payload, "JavaScript"), null, null, null, null);
         var root = descendant
             ? new ActivityNode("consumer", "activity-if", [input], [], new(IfActivity.StructureKind, IfActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new Elsa.Activities.If.Models.IfAuthoredStructure(Node("producer", Text("value"))))))
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new Elsa.Activities.If.Models.IfAuthoredStructure(Node("producer", Text("value"))))))
             : Node("consumer", input);
         var version = WorkflowVersion(root);
         var before = await CountPublishWritesAsync();
@@ -391,7 +391,18 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         var before = await CountPublishWritesAsync();
         var handler = Handler(version, _writeLineActivity, _sequenceActivity);
 
-        if (!earlierProducer)
+        if (form is "capital-parameters" or "nested-casing")
+        {
+            await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+                handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
+            Assert.Equal(before, await CountPublishWritesAsync());
+            Assert.Null(await _activationAuthority.FindAsync("definition-1", "default"));
+            return;
+        }
+
+        // Exact canonical names choose the lowercase decoy in mixed-case objects.
+        var selectedProducer = form is "parameter-alias" or "nested-alias" ? decoy : producer;
+        if (selectedProducer == "later")
         {
             var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
                 handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None));
@@ -407,8 +418,8 @@ public sealed partial class PublishWorkflowRequestHandlerTests
         Assert.NotNull(executable);
         var consumer = Assert.Single(executable.RootActivity.DescendantsAndSelf(), node => node.AuthoredActivityId == "consumer");
         var compiled = Assert.IsType<Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding>(consumer.InputBindings["Text"].Expression!.Parameters["customer"]);
-        Assert.Equal(producer, compiled.ProducerNodeId);
-        Assert.False(compiled.IsOptional);
+        Assert.Equal(selectedProducer, compiled.ProducerNodeId);
+        Assert.Equal(form == "nested-alias", compiled.IsOptional);
         Assert.NotEqual(before, await CountPublishWritesAsync());
         Assert.NotNull(await _activationAuthority.FindAsync("definition-1", "default"));
     }
@@ -1630,14 +1641,14 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task ComputesDifferentArtifactIdWhenLiteralInputTypeMetadataChanges()
     {
-        var workflowVersion = WorkflowVersion(Node("write-one", Text("1")));
-        var stringView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("String")))
-            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement(1), "Literal"), null, null, null, null)));
         var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("Int32")))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var longView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("Int64")))
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        Assert.NotEqual(stringView.ArtifactId, integerView.ArtifactId);
-        Assert.NotEqual(stringView.ArtifactHash, integerView.ArtifactHash);
+        Assert.NotEqual(integerView.ArtifactId, longView.ArtifactId);
+        Assert.NotEqual(integerView.ArtifactHash, longView.ArtifactHash);
     }
 
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();

@@ -204,7 +204,7 @@ public sealed partial class PublishWorkflowRequestHandlerTests
     }
 
     private static ActivityInputDefault ResultDefault(bool portable, string producer) => portable
-        ? new("JavaScript", JsonSerializer.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
+        ? new("JavaScript", Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new ExpressionDefinition("JavaScript", "p", new("String"),
             new Dictionary<string, ExpressionParameterBinding> { ["p"] = new ActivityResultExpressionParameterBinding(producer, "$result") },
             JsonSerializer.SerializeToElement(new { }), ExpressionCapabilityProfiles.BindingReadonlyV1)))
         : new("ActivityResult", JsonSerializer.SerializeToElement(new { producerNodeId = producer, projectionKey = "$result", producerScopeId = "workflow" }));

@@ -192,7 +192,8 @@ public sealed class PublishingSerializationContractTests
         var json = JsonSerializer.Serialize(view, options.GetTypeInfo(typeof(PublicationPolicyView))!);
 
         Assert.Contains("\"defaultAction\":\"requireExplicitSlot\"", json, StringComparison.Ordinal);
-        Assert.Equal(0, fallback.Calls);
+        Assert.DoesNotContain(fallback.Types, type => Elsa.Serialization.Core.JsonModuleMetadata.Owns(type, "Elsa.Workflows.Publishing"));
+        Assert.Contains(typeof(string), fallback.Types);
     }
 
     [Fact]
@@ -330,11 +331,14 @@ public sealed class PublishingSerializationContractTests
     private sealed class CountingResolver : IJsonTypeInfoResolver
     {
         public int Calls { get; private set; }
+        public List<Type> Types { get; } = [];
+        private readonly DefaultJsonTypeInfoResolver resolver = new();
 
         public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
         {
             Calls++;
-            return null;
+            Types.Add(type);
+            return resolver.GetTypeInfo(type, options);
         }
     }
 }

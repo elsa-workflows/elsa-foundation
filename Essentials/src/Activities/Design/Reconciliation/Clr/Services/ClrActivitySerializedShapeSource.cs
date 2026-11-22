@@ -188,9 +188,9 @@ internal sealed class ClrActivitySerializedShapeSource(
 
     private static string ResultRevision(IActivityDefinitionVersion version, string projectionKey)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new { version.Id, version.Version, version.Hash, version.ProviderKey,
+        var snapshot = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new { version.Id, version.Version, version.Hash, version.ProviderKey,
             version.ProviderSchemaVersion, version.ConsumerKey, version.ConsumerSchemaVersion, version.DescriptorPayload,
-            version.SourceKind, version.SourceId, ProjectionKey = projectionKey }, DescriptorOptions);
-        return "sha256:" + Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            version.SourceKind, version.SourceId, ProjectionKey = projectionKey }, _ => null);
+        return "sha256:" + Elsa.Serialization.Core.JsonHashInput.Hash(snapshot);
     }
 }

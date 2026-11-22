@@ -812,16 +812,17 @@ public sealed class ActivityDraftTestRunService(
             {
                 name = x.Key,
                 state = x.Value.State,
-                value = x.Value.Value?.GetRawText()
+                hasValue = x.Value.Value.HasValue,
+                value = x.Value.Value
             });
-        var canonical = JsonSerializer.Serialize(new
+        var canonical = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
             request.DraftId,
             request.ExpectedRevision,
             request.CorrelationId,
             inputs
-        });
-        return StableHash(canonical);
+        }, _ => null);
+        return Elsa.Serialization.Core.JsonHashInput.Hash(canonical);
     }
 
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompileInputs(

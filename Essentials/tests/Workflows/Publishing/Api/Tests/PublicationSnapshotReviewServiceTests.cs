@@ -15,12 +15,35 @@ public sealed class PublicationSnapshotReviewServiceTests
     private readonly WorkflowDefinitionState _state = WorkflowDefinitionState.Empty;
 
     [Fact]
+    public void Empty_candidate_has_a_fixed_first_stable_hash()
+    {
+        // SHA-256 independently pinned from the canonical empty layout/state JSON projection.
+        Assert.Equal("sha256:eb53c973042b5f07e7fb6a0d30beec54afb06efbd225a90ded92a95a73c85c12", _service.ComputeCandidateHash(_state, []));
+    }
+
+    [Fact]
     public void Candidate_hash_is_stable_across_opaque_layout_property_order()
     {
-        var first = Layout("""{"zoom":1,"label":"test"}""");
-        var second = Layout("""{"label":"test","zoom":1}""");
+        var first = Layout("""{"zoom":1.0,"label":"\u0074est"}""");
+        var second = Layout("""{"label":"test","zoom":1e0}""");
 
         Assert.Equal(_service.ComputeCandidateHash(_state, first), _service.ComputeCandidateHash(_state, second));
+    }
+
+    [Fact]
+    public void Candidate_hash_distinguishes_exact_data_and_opaque_node_identity()
+    {
+        var first = Layout("""{"n":100000000000000000000000000000000000001,"nil":null,"items":[1,2]}""");
+        foreach (var changed in new[]
+                 {
+                     """{"n":100000000000000000000000000000000000002,"nil":null,"items":[1,2]}""",
+                     """{"n":100000000000000000000000000000000000001,"items":[1,2]}""",
+                     """{"n":100000000000000000000000000000000000001,"nil":null,"items":[2,1]}""",
+                     """{"N":100000000000000000000000000000000000001,"nil":null,"items":[1,2]}"""
+                 })
+            Assert.NotEqual(_service.ComputeCandidateHash(_state, first), _service.ComputeCandidateHash(_state, Layout(changed)));
+        Assert.NotEqual(_service.ComputeCandidateHash(_state, [first[0] with { NodeId = "node\ud800" }]),
+            _service.ComputeCandidateHash(_state, [first[0] with { NodeId = "node\ufffd" }]));
     }
 
     [Fact]

@@ -98,7 +98,7 @@ internal sealed class ActivityPublicationReviewPolicy(
         IReadOnlyList<ActivityPublicationCapabilityReadinessView> runtime,
         IReadOnlyList<ActivityDiagnostic> diagnostics)
     {
-        var material = JsonSerializer.SerializeToUtf8Bytes(new
+        var material = Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(new
         {
             draft.Id,
             draft.TenantId,
@@ -154,8 +154,8 @@ internal sealed class ActivityPublicationReviewPolicy(
                 }),
                 Metadata = x.Metadata?.OrderBy(y => y.Key, StringComparer.Ordinal)
             })
-        });
-        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(material))}";
+        }, _ => null);
+        return $"sha256:{Elsa.Serialization.Core.JsonHashInput.Hash(material)}";
     }
 
     private IReadOnlyList<string> ValidVersionChoices(string? headVersion, ActivityVersionBump requiredBump)
