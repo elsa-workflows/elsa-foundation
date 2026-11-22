@@ -206,7 +206,7 @@ export class BackendConnections {
       candidate = await this.prepare(profile,operation);
       if (!current()) return;
       this.assertCanSwitch();
-      const approved = await reviewStudioNavigation(new URL(from).pathname + new URL(from).search,"/settings/backends");
+      const approved = await reviewStudioNavigation(window.location.pathname + window.location.search + window.location.hash,"/settings/backends");
       if (!approved || !current()) return;
       this.assertCanSwitch();
       // A beforeunload prompt may cancel location.assign. End the old lifetime only once the document leaves.
@@ -226,7 +226,7 @@ export class BackendConnections {
     this.update({busy:true,error:null});
     try {
       this.assertCanSwitch();
-      const approved = await reviewStudioNavigation(window.location.pathname + window.location.search,"/settings/backends");
+      const approved = await reviewStudioNavigation(window.location.pathname + window.location.search + window.location.hash,"/settings/backends");
       if (!approved || candidate !== this.signInCandidate || previous !== this.snapshot.active || window.location.href !== from) return;
       this.assertCanSwitch();
       sessionStorage.setItem(pendingKey,JSON.stringify({id:candidate.profile.id,baseUrl:candidate.profile.baseUrl,time:Date.now()}));

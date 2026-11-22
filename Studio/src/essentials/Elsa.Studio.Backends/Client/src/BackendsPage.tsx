@@ -62,6 +62,12 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   // A background workspace tab can re-render on a connection change while another tab owns the address bar.
   const routeLocation = useStudioRouteLocation();
   const path = explicitPath ?? routeLocation.pathname;
+  const routeOwner = useStudioWorkspaceTab();
+  const currentPath = useRef<string | null>(path);
+  useEffect(() => {
+    currentPath.current = path;
+    return () => {currentPath.current = null;};
+  }, [path]);
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   const segment = path.slice("/settings/backends".length).split("/").filter(Boolean);
   const create = segment[0] === "new";
@@ -75,7 +81,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
     <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current="Unavailable profile" navigate={navigate} />
     <StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert>
   </div></div>;
-  if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} />;
+  if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} onRemoved={() => {if (currentPath.current === path && (!routeOwner || routeOwner.isActive())) navigate("/settings/backends");}} />;
   return <section className="backends-page" aria-label="Backends">
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>
     {snapshot.profileError ? <StudioAlert tone="warning">{snapshot.profileError}</StudioAlert> : null}
@@ -86,7 +92,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   </section>;
 }
 
-function BackendDetails({connections,profile,navigate,detailPath,featureManagementAvailable}:{connections:BackendConnections;profile:StudioBackendProfile;navigate:(path:string)=>void;detailPath:string;featureManagementAvailable:boolean}) {
+function BackendDetails({connections,profile,navigate,detailPath,featureManagementAvailable,onRemoved}:{connections:BackendConnections;profile:StudioBackendProfile;navigate:(path:string)=>void;detailPath:string;featureManagementAvailable:boolean;onRemoved():void}) {
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   const [tab,setTab] = useState("connection");
   const tabsId = useId();
@@ -108,7 +114,7 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
       const latest = connections.getSnapshot();
       if (!confirmed || !current() || !latest.profiles.includes(profile) || latest.active?.profile.id === profile.id) return;
       await connections.remove(profile.id);
-      if (current()) navigate("/settings/backends");
+      onRemoved();
     } catch (error) {
       if (current()) setError(connectionError(error));
     } finally {
