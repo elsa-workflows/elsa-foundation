@@ -156,6 +156,57 @@ internal static class ContractNativeChecks
         }
     }
 
+    internal static async Task CheckRecoveredTimer(Action<bool, string> check)
+    {
+        const long initial = 1_701_800_015_000;
+        var now = initial;
+        var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromMinutes(1) };
+        var scope = new Contract.BoundScope("native-recovery");
+        var registry = new WorkflowRegistry().Add(Wf.Workflow("timer", Wf.Sequence("sequence",
+            Wf.Delay("delay", 100), Wf.Set("finished-delay", "result", "continued"))));
+        var model = new NativeExecutionModel(registry);
+        Contract.IActorReads reads = new ActorList(store, 10);
+        var timerOffers = 0;
+        var worker = new Worker("native-recovery", 0, store, new ActorAdapter(store, new PublicWorkflow([model])),
+            new WorkerOptions
+            {
+                Monotonic = () => now - initial,
+                OnTurn = (_, inbox, _) => timerOffers += inbox.Count(message => message.Kind == NativeKinds.Timer)
+            });
+        var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
+        var runtime = new PublicRuntime(ingress, reads);
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var reference = (await runtime.StartAsync(scope, "start", NativeExecutionModel.Start("timer", Modes.Balanced))).Actor!.Value;
+        var target = new Contract.Target.Ref(reference);
+        await Pump(owner);
+        var timer = store.Messages.Values.Single(row => row.Message.Kind == NativeKinds.Timer);
+        var timerKey = timer.Message.InboxKey;
+        await ingress.SendAsync(scope, target, "invalid-resume", NativeKinds.Resume, "{");
+        await Pump(owner);
+        var parked = await reads.GetAsync(scope, reference);
+        now += 100;
+        await Pump(owner);
+        var kept = parked is { Header.Status: Contract.ActorStatus.Faulted, Selection: not null } &&
+            timer is { Done: true, KeptBy: ParkKeepReason.Arrived, Message.Payload: not null };
+        check(kept, "a real Native Delay arrives with its original timer envelope while the workflow is parked");
+        if (!kept) return;
+
+        var admitted = await ingress.SendAsync(scope, target, "resume", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(parked!.Selection!)));
+        for (var step = 0; step < 4; step++)
+        {
+            now += 11;
+            await Pump(owner);
+        }
+        var checkpoint = store.ReadFoundationActor(scope.Tenant, reference.Id).Actor!;
+        var state = Json.Read<NativeState>(checkpoint.Row.State);
+        check(admitted.Outcome == Contract.AdmissionOutcome.Accepted && checkpoint is { Park: null, Row.Status: InstanceStatus.Finished } &&
+            state.Waits.Count == 0 && timerOffers == 1 && state.Variables.GetValueOrDefault("result")?.GetValue<string>() == "continued" &&
+            store.Messages.GetValueOrDefault(timerKey) is { Done: true, KeptBy: null } &&
+            store.Messages.Values.Count(row => row.Message.Kind == NativeKinds.Timer) == 1,
+            "qualified Resume delivers the kept timer under its original key and the Native handler advances its frame once");
+    }
+
     private static async Task CompletedJobRestore(Action<bool, string> check)
     {
         const long now = 1_701_800_000_000;
