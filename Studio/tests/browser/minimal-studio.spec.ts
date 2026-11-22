@@ -116,8 +116,8 @@ test("minimal logs preserve live controls, selected details and empty state", as
   await page.getByRole("row", { name: /Select Information structured log/ }).first().click();
   await expect(page.getByRole("complementary", { name: "Structured log details", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true, pressed: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Pause", exact: true, pressed: true }).click();
   await page.getByRole("button", { name: "Close structured log details", exact: true }).click();
   await page.getByRole("textbox", { name: "Filter by category", exact: true }).fill("empty");
   await expect(page.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(0);

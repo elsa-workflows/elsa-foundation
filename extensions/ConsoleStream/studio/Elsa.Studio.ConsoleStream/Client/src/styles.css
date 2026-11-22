@@ -63,6 +63,10 @@
   border-radius: 0;
 }
 
+.console-stream-hosts button:focus-visible {
+  outline-offset: -3px;
+}
+
 .console-stream-hosts button + button {
   border-left: 1px solid var(--cs-border);
 }
@@ -112,16 +116,10 @@
   padding: 0 28px 0 8px;
 }
 
-.console-stream-tools button:not(.active):hover {
+.console-stream-tools button:where(:not([aria-pressed="true"])):hover {
   border-color: var(--cs-accent);
   background: var(--cs-accent-soft);
   color: var(--cs-accent);
-}
-
-.console-stream-tools button.active[aria-pressed="true"] {
-  border-color: var(--cs-accent);
-  background: var(--cs-accent);
-  color: var(--cs-accent-text);
 }
 
 .console-stream-lines {

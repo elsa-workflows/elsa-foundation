@@ -33,6 +33,14 @@ export function StudioButton({
   );
 }
 
+/** A controlled toggle with a stable accessible name in both states. */
+export function StudioToggleButton({
+  pressed,
+  ...props
+}: Omit<React.ComponentPropsWithRef<"button">, "aria-pressed"> & { pressed: boolean; size?: StudioButtonSize }) {
+  return <StudioButton {...props} data-studio-toggle="" aria-pressed={pressed} />;
+}
+
 type StudioIconButtonProps = Omit<React.ComponentPropsWithoutRef<"button">, "aria-label" | "children"> & {
   "aria-label": string;
   children: React.ReactElement;

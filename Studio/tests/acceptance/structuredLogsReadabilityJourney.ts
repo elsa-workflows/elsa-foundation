@@ -60,7 +60,7 @@ export async function structuredLogsReadabilityJourney(page: Page, info: TestInf
   await table.getByRole("button", { name: "Reset filters", exact: true }).click();
   await expect(category).toBeFocused();
   await expect(category).toHaveValue("");
-  await expect(section.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+  await expect(section.getByRole("button", { name: "Pause", exact: true, pressed: true })).toBeVisible();
   await expect(row).toBeVisible();
   await capture(page, info, "readability-reset");
   await page.setViewportSize(originalViewport);

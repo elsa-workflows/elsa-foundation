@@ -101,7 +101,7 @@ for (const [theme, workspace] of [["linen", "linen"], ["classic", "minimal"]]) {
         await expect(categoryFilter).toHaveValue("");
         await expect(page.getByRole("combobox", { name: "Minimum log level", exact: true })).toHaveValue("Information");
         await expect(page.getByRole("combobox", { name: "Structured log source", exact: true })).toHaveValue("");
-        await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Pause", exact: true, pressed: true })).toBeVisible();
         await expect(table.getByRole("row", { name: /Select Information structured log/ })).toHaveCount(2);
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       });
@@ -162,5 +162,5 @@ test("dock reset restores filters and level focus after copying and scrolling", 
   await expect(level).toHaveValue("Information");
   await expect(sourceFilter).toHaveValue("");
   await expect(rows).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause", exact: true, pressed: true })).toBeVisible();
 });

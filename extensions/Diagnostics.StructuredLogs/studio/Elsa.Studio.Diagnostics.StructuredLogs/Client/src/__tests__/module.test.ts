@@ -173,7 +173,8 @@ describe("structured logs module", () => {
     expect(container.textContent).toContain("1 buffered while paused");
     expect(container.textContent).not.toContain("buffered streamed entry");
 
-    clickButton(container, "Resume");
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Pause");
+    clickButton(container, "Pause");
     expect(container.querySelectorAll(".structured-log-row")).toHaveLength(2);
     expect(container.textContent).toContain("buffered streamed entry");
 
@@ -402,7 +403,8 @@ describe("structured logs module", () => {
     clickButton(container, "Pause");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
-    clickButton(container, "Resume");
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Pause");
+    clickButton(container, "Pause");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
     await changeControlValue(container, "[aria-label='Minimum log level']", "Warning");
