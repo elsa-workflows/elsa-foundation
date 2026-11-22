@@ -76,6 +76,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Modularity.Api",
+          "path": "essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Persistence.Schema",
           "path": "essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj"
         },
