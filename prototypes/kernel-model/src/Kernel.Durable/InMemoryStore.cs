@@ -39,12 +39,16 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public sealed class MessageRow(Message message, long seq, long seen)
     {
         internal ParkKeepReason? KeptBy;
-        internal int KeptPayloadBytes;
+        internal readonly int PayloadLength = checked(
+            PayloadBytes(message.StoreStartInputOnce ? null : message.Payload) + PayloadBytes(message.Start?.Input));
+        internal ParkRelease? ReleasedBy;
         internal bool ParkDeadLetter;
         public Message Message = message.StoreStartInputOnce ? message with { Payload = null, StoredEnvelope = null } : message;
         public long Seq = seq, Seen = seen, Trial;
         public int Attempts;
         public bool Done, Held;
+
+        private static int PayloadBytes(string? value) => value is null ? 0 : Encoding.UTF8.GetByteCount(value);
     }
 
     private readonly Lock _gate = new();
@@ -236,7 +240,6 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
             Dictionary<InboxKey, ReferenceBinding>? childBindings = null;
             Dictionary<string, ReferenceBinding>? inlineRoots = null;
-            Dictionary<InboxKey, int>? keptPayloadSizes = null;
             Dictionary<string, Message>? initialExpiries = null;
             if (fenced)
             {
@@ -286,13 +289,6 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                                 Messages.GetValueOrDefault(id) is { Done: false } selected &&
                                 selected.Message.Target.Id == park.Id && selected.Message.TargetCreation == park.Creation))
                             throw new StoreException(Failure.Definite, "A kept delivery must be marked done by its exact Park.");
-                        foreach (var id in kept.Keys)
-                        {
-                            var stored = Messages[id].Message;
-                            var bodyBytes = stored.Payload is { } body ? Encoding.UTF8.GetByteCount(body) : 0;
-                            var inputBytes = stored.Start?.Input is { } input ? Encoding.UTF8.GetByteCount(input) : 0;
-                            (keptPayloadSizes ??= [])[id] = checked(bodyBytes + inputBytes);
-                        }
                     }
                     if (ChangedFoundationParkInput(turn, previous, epochs) is { } changed)
                         Diverged($"kept input {changed.Cursor.Key} changed before its Park page cleared");
@@ -381,13 +377,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var id in turn.Consumed) Messages.Remove(id);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
+                ApplyFoundationRecoveryPage(turn, now);
                 foreach (var id in turn.Done)
                 {
                     if (turn.FoundationKept?.TryGetValue(id, out var reason) == true)
                     {
                         var retained = Messages[id];
                         (retained.Done, retained.Held, retained.Trial, retained.KeptBy) = (true, false, 0, reason);
-                        retained.KeptPayloadBytes = keptPayloadSizes?.GetValueOrDefault(id) ?? 0;
                         continue;
                     }
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
@@ -529,6 +525,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 .OrderBy(m => m.Message.DeliveryOrder(m.Seq)).Take(limit)
                 .Select(m => new Stored(Materialize(m.Message), m.Seq, m.Seen, m.Attempts, m.Trial)
                 {
+                    ReleasedBy = m.ReleasedBy,
+                    PayloadLength = m.PayloadLength,
                     PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&
                         Instances.GetValueOrDefault(m.Message.Target.Id) is { Status: InstanceStatus.Running, Retired: false } row &&
                         row.Creation == m.Message.TargetCreation && _referenceBirths.ContainsKey(new(row.Id, row.Creation))

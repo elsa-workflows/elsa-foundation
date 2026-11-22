@@ -40,7 +40,10 @@ internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long 
     }
 
     internal bool MatchesIssued(Message message, InstanceRow row, ParkDiscardDrain drain) =>
-        message.HasIssuedTicket && drain.Control == Key(row, drain.Serial) && Matches(message, row, drain.Control);
+        MatchesIssued(message, row, drain.Serial, drain.Control);
+
+    internal bool MatchesIssued(Message message, InstanceRow row, long serial, InboxKey control) =>
+        message.HasIssuedTicket && control == Key(row, serial) && Matches(message, row, control);
 
     internal bool MatchesExpiry(Message message, InstanceRow row, ParkExpiry expiry) =>
         expiry.Armed is { } key && key == Key(row, expiry.Serial) && Matches(message, row, key, Kinds.ParkExpiry);
@@ -55,6 +58,15 @@ public sealed partial class InMemoryStore
         IReadOnlyDictionary<int, long> epochs, long now)
     {
         var next = turn.Row;
+        if (turn.FoundationRecoveryPage is not null)
+        {
+            ValidateRecoveryPage(turn, previous, epochs, now);
+            return null;
+        }
+        if (next is not null && next.ParkRecovery != previous?.ParkRecovery || previous?.ParkRecovery is not null &&
+            (turn.Delete || turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain)))
+            throw InvalidDrain();
+
         var before = previous?.ParkDiscard;
         var after = next?.ParkDiscard;
         if (before is not null && (turn.Delete || turn.FoundationKept is { Count: > 0 })) throw InvalidDrain();
@@ -145,8 +157,8 @@ public sealed partial class InMemoryStore
 
     private bool IsOutstandingDrain(InboxKey key) =>
         key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&
-        Instances.GetValueOrDefault(control.Message.Target.Id) is { ParkDiscard: { } drain } row &&
-        control.Message.TargetCreation == row.Creation && drain.Control == key;
+        Instances.GetValueOrDefault(control.Message.Target.Id) is { } row && control.Message.TargetCreation == row.Creation &&
+        (row.ParkDiscard?.Control == key || row.ParkRecovery?.Control == key);
 
     private static StoreException InvalidDrain() =>
         new(Failure.Definite, "A Park drain must consume its exact input and advance the same fenced checkpoint.");

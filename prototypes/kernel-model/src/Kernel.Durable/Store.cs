@@ -19,6 +19,7 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal FoundationHeaderChange? FoundationInlineHeader { get; init; }
     internal long ParkResolutionGeneration { get; init; }
     internal ParkDiscardDrain? ParkDiscard { get; init; }
+    internal ParkRecoveryDrain? ParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
@@ -39,6 +40,8 @@ public sealed record ActorLookup(string Requested, string Canonical, InstanceRow
 public sealed record Stored(Message Message, long Seq, long Seen, int Attempts, long Trial)
 {
     internal bool PersistedHold { get; init; }
+    internal ParkRelease? ReleasedBy { get; init; }
+    internal int PayloadLength { get; init; }
 }
 
 /// <summary>A wait of an instance; or, with <c>Start</c> and no instance, a definition that starts an instance for every event of the key.</summary>
@@ -128,7 +131,7 @@ public sealed record OwnedEpoch(int Partition, long Epoch);
 /// </summary>
 public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster Cluster);
 
-internal enum ParkKeepReason { Consumed, Arrived }
+internal enum ParkKeepReason { Consumed, Arrived, Selected }
 
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
@@ -152,6 +155,7 @@ public sealed record TurnCommit(
     internal bool OpensPark { get; init; }
     internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
     internal ParkPageClear? FoundationParkClear { get; init; }
+    internal ParkRecoveryPage? FoundationRecoveryPage { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

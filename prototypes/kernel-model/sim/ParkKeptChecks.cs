@@ -106,7 +106,6 @@ internal static class ParkKeptChecks
         await CheckKeptPages(store, successorWorker.Fences.Single(), row.Id, row.Creation, check);
         await CheckDiscardDrain(check);
         await CheckParkSelectionTarget(check);
-        await CheckRecoverArrivals(check);
         await CheckUnarmedParkExpiry(check);
         await CheckFiniteParkExpiry(manual: false, check);
         await CheckFiniteParkExpiry(manual: true, check);
@@ -261,7 +260,7 @@ internal static class ParkKeptChecks
         }
     }
 
-    private static async Task CheckRecoverArrivals(Action<bool, string> check)
+    internal static async Task CheckRecoverArrivals(Action<bool, string> check)
     {
         var now = 1_701_400_028_000L;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
@@ -723,6 +722,110 @@ internal static class ParkKeptChecks
         check(refused && front.All(item => store.Messages[item.Cursor.Key].KeptBy == item.Reason),
             "a parked row cannot clear inputs without an open drain");
 
+        await CheckInterruptedPage(store, fence, checkpoint.Id, park, keys, after, check);
+    }
+
+    private static async Task CheckInterruptedPage(InMemoryStore store, PartitionFence fence, string id,
+        InMemoryStore.FoundationParkMark park, InboxKey[] keys, ParkPageCursor after, Action<bool, string> check)
+    {
+        // Seed the durable row state of a previous recovery interrupted after one page. This fixture exercises
+        // the bounded store read. The operator-to-Worker recovery fixture exercises the real transition separately.
+        const long generation = 2;
+        var original = store.Instances[id];
+        var address = new CreationAddress(id, original.Creation);
+        var stale = store.Messages[keys[^1]];
+        var current = store.Messages[keys[^2]];
+        var foreign = store.Messages[keys[^3]];
+        var unmarked = store.Messages[keys[^4]];
+        var inactive = new[] { stale, current, foreign, unmarked };
+        var release = new ParkRelease(address.Creation, generation - 1);
+        var opening = original with { Status = InstanceStatus.Running, ParkResolutionGeneration = generation };
+        var envelope = ParkDrainEnvelope.For(opening, park);
+        var control = envelope.Issue(opening, 1);
+        var drain = new ParkRecoveryDrain("test-recovery", ParkRecoveryMode.Resume, after, 1, control.InboxKey);
+        opening = opening with { ParkRecovery = drain };
+        store.Instances[id] = opening;
+        store.Messages.Add(control.InboxKey, new(control, after.Seq, 0));
+        foreach (var row in inactive) (row.Done, row.KeptBy) = (false, null);
+        stale.ReleasedBy = release;
+        current.ReleasedBy = release with { Generation = generation };
+        foreign.ReleasedBy = release with { Creation = address.Creation + 1 };
+
+        var first = store.ReadFoundationRecoveryPage(address, park, generation, after, limit: 1);
+        var suffix = first is [var head]
+            ? store.ReadFoundationRecoveryPage(address, park, generation, head.Cursor) : null;
+        var ordered = first is [var released] && released.Cursor.Key == keys[^1] && released.Reason is null &&
+            released.ReleasedBy == release && released.PayloadBytes == stale.PayloadLength &&
+            suffix is not null && suffix.Select(item => item.Cursor.Key).SequenceEqual(keys.Reverse().Skip(4));
+        check(ordered, "a later recovery merges the older release into the kept order and skips current, foreign and unmarked rows");
+        check(store.ReadFoundationKeptPage(address, park, after)!.Select(item => item.Cursor.Key)
+            .SequenceEqual(keys.Reverse().Skip(4)) &&
+            store.ReadFoundationRecoveryPage(address, park, generation - 1, after) is null,
+            "a discard skips stale releases and an outdated recovery generation cannot read the page");
+        if (!ordered) return;
+
+        var arrivedKey = keys[^5];
+        var consumedKey = keys[^6];
+        var arrived = store.Messages[arrivedKey];
+        var consumed = store.Messages[consumedKey];
+        consumed.KeptBy = ParkKeepReason.Consumed;
+        stale.Held = true;
+        (stale.Seen, stale.Trial, stale.Attempts) = (fence.Epoch, fence.Epoch, 3);
+        (arrived.Seen, arrived.Trial, arrived.Attempts) = (fence.Epoch, fence.Epoch, 3);
+        var page = store.ReadFoundationRecoveryPage(address, park, generation, drain.Cursor, limit: 3)!;
+        var nextControl = envelope.Issue(opening, 2);
+        var next = opening with
+        {
+            Revision = opening.Revision + 1,
+            ParkRecovery = drain with
+            {
+                Cursor = page[^1].Cursor, Serial = 2, Control = nextControl.InboxKey,
+                Restored = 2, Cleared = 1, Gate = arrivedKey
+            }
+        };
+        var advance = new TurnCommit(id, next, opening.Revision, [control.InboxKey], [], [nextControl], [], [], null)
+        { FoundationRecoveryPage = new(park, page) };
+        var denied = await DefiniteRejection(() => Commit(fence, new TurnCommit(id, null, null, [control.InboxKey], [], [], [], [], null)));
+        var lostFence = await Commit(fence with { Epoch = fence.Epoch - 1 }, advance);
+        check(denied && !lostFence.Landed && store.Instances[id] == opening && stale.ReleasedBy == release &&
+            store.Messages.ContainsKey(control.InboxKey) && !store.Messages.ContainsKey(nextControl.InboxKey),
+            "a recovery page requires an advancing checkpoint and the current partition fence");
+
+        var altered = page.ToArray();
+        altered[^1] = altered[^1] with { Reason = ParkKeepReason.Arrived };
+        var rolledBack = false;
+        try { await Commit(fence, advance with { FoundationRecoveryPage = new(park, altered) }); }
+        catch (StoreException error) when (error.Failure == Failure.Unknown) { rolledBack = true; }
+        check(rolledBack && store.Instances[id] == opening && stale.ReleasedBy == release && arrived.Done &&
+            consumed.KeptBy == ParkKeepReason.Consumed && store.Messages.ContainsKey(control.InboxKey) &&
+            !store.Messages.ContainsKey(nextControl.InboxKey),
+            "a changed kept reason rolls back the recovery cursor, control and all page rows");
+
+        var written = await Commit(fence, advance);
+        var polled = await store.PollAsync(fence.Partition, fence.Epoch, TimeSpan.Zero, 1024);
+        var active = new ParkRelease(address.Creation, generation);
+        check(written.Landed && store.Instances[id] == next && !store.Messages.ContainsKey(control.InboxKey) &&
+            store.Messages.ContainsKey(nextControl.InboxKey) &&
+            stale is { Done: false, Held: false, Seen: 0, Trial: 0, Attempts: 0, KeptBy: null } && stale.ReleasedBy == active &&
+            arrived is { Done: false, KeptBy: null, Trial: 0, Attempts: 0 } && arrived.ReleasedBy == active &&
+            consumed is { Done: true, KeptBy: null } &&
+            polled.Messages.Any(row => row.Message.InboxKey == keys[^1] && row.ReleasedBy == active &&
+                row.PayloadLength == stale.PayloadLength && row.Seq == page[0].Cursor.Seq && row.Message.Payload == stale.Message.Payload),
+            "a fenced page clears consumed work, resets restored poison counters and publishes the generation through poll");
+        if (!written.Landed) return;
+
+        await store.ReleaseAsync(fence.Partition, fence.Epoch);
+        var successor = await store.TakeAsync(fence.Partition, "recovery-page-takeover", Defaults.Lease);
+        var nextPage = store.ReadFoundationRecoveryPage(address, park, generation, next.ParkRecovery!.Cursor, limit: 1);
+        var recoveredPoll = successor is null ? null : await store.PollAsync(fence.Partition, successor.Epoch, TimeSpan.Zero, 1024);
+        check(successor is { Epoch: var epoch } && epoch > fence.Epoch && nextPage is [{ Cursor.Key: var nextKey }] &&
+            nextKey == keys[^7] && recoveredPoll is not null &&
+            recoveredPoll.Messages.Any(row => row.Message.InboxKey == nextControl.InboxKey) &&
+            recoveredPoll.Messages.Any(row => row.Message.InboxKey == keys[^1] && row.ReleasedBy == active),
+            "a takeover keeps the released identity and continues with the next tuple and its stored control");
+
+        ValueTask<Committed> Commit(PartitionFence authority, TurnCommit turn) =>
+            store.CommitAsync(new(authority.Partition, authority.Epoch, authority.Position, Defaults.Lease, false, [turn], [], []));
     }
 
     private static async Task CaptureParkedCompletion(bool timed, Action<bool, string> check)
