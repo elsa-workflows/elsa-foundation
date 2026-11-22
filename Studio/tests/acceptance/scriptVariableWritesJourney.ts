@@ -23,7 +23,7 @@ export async function scriptVariableWritesJourney(page: Page, info: TestInfo, ca
     return entry!.definition.headVersionId;
   }
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
-  const scriptVersion = await version("Elsa.RunJavaScript");
+  const scriptVersion = await version("Elsa.Activities.Scripting.Activities.RunJavaScript");
   const variable = (referenceKey: string, name: string) => ({ referenceKey, name, type: { alias: "Object", collectionKind: "Single" }, storageDriverType: null, default: null });
   const literal = "setVariable('total', 1); variables.order = { total: 2 };";
   const computed = "const key = 'total'; variables[key] = 3;";
