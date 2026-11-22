@@ -1,0 +1,4 @@
+<Project>
+  <!-- The independent Studio consumer resolves the same centrally managed SDK closure as its source modules. -->
+  <Import Project="../../../Studio/Directory.Packages.props" />
+</Project>
