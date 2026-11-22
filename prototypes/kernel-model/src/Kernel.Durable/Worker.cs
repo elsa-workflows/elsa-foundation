@@ -2844,7 +2844,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             foreach (var unit in units)
             {
                 if (unit.Row is { } row) unit.Row = CommitClockFacts.Stamp(row, result.Now);
-                if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed && unit.FoundationCascade is not null)
+                if (result.CascadeRemovals?.GetValueOrDefault(unit.Instance) is { } removed)
                 {
                     unit.Cancelled.AddRange(removed);
                     _woken = true;
