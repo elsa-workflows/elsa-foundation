@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Kernel.Runtime;
 
 namespace Kernel.Durable;
@@ -82,6 +83,7 @@ public interface ITurnServices
     long Now { get; }
     bool CommitClockAvailable { get; }
     bool CreationIdentityAvailable { get; }
+    bool SupportsCascadePages => false;
 
     /// <summary>How many partitions the store has: to place an actor in another one.</summary>
     int Partitions { get; }
@@ -251,6 +253,8 @@ public sealed class TurnOutcome(string instance)
     internal TimeSpan? FoundationCatchUpBudget;
     internal int? FoundationCatchUpExpected;
     internal ParkCatchUpFailure? FoundationCatchUpFailed;
+    internal long? FoundationPublicationSequence;
+    internal CascadeCommit? FoundationCascade;
     public string Instance => instance;
     public InstanceRow? Row;
     public long? Expected;
@@ -456,6 +460,7 @@ public sealed class DurableTurn
     /// <summary>A message the actor type composed itself: a parent's notice, say. It takes no ordinal.</summary>
     public void Add(Message message)
     {
+        message = message.WithoutCascadeOrigin();
         Kinds.RequireApplicationSend(message.Kind);
         if (_input.Creation > 0 && CreationProtocol.IsCompatibleTerminalHandle(message.Id, Origin))
             throw new ArgumentException("A qualified actor's reserved end handle requires AddTerminalNotice.", nameof(message));
@@ -561,6 +566,14 @@ public sealed class DurableTurn
     {
         var index = _jobs.FindIndex(job => job.Key == key);
         return index >= 0 ? _jobs[index].Generation : null;
+    }
+
+    internal ImmutableArray<JobRegistration> MoveJobsToCascade()
+    {
+        foreach (var key in _started.Keys.ToArray()) CancelJob(key);
+        var entries = _jobs.ToImmutableArray();
+        _jobs.Clear();
+        return entries;
     }
 
     public void CancelJob(string key) =>

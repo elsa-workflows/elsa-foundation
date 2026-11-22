@@ -12,6 +12,10 @@ public static class StoreBatchRules
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
             throw new StoreException(Failure.Definite, "A job trial clear requires supported, distinct keys in a separate fenced batch.");
+        if (batch.PublicationReservation is { } publication && (!supportsFoundationParkResolution ||
+            batch.Trial is not [var key] || key != publication.Key || batch.Seen.Count != 0 || batch.Turns.Count != 0 ||
+            batch.ClearJobTrials.Count != 0))
+            throw new StoreException(Failure.Definite, "A publication reservation requires its own fenced commit.");
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
@@ -22,6 +26,9 @@ public static class StoreBatchRules
         if (batch.Turns.Any(turn => turn.FoundationCatchUpFailed is not null) &&
             (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
             throw new StoreException(Failure.Definite, "A catch-up failure is recorded in its own fenced commit.");
+        if (batch.Turns.Any(turn => turn.FoundationPublicationSequence is not null) &&
+            (batch.Turns.Count != 1 || batch.Seen.Count != 0 || batch.Trial.Count != 0 || batch.ClearJobTrials.Count != 0))
+            throw new StoreException(Failure.Definite, "A publication page requires its own fenced commit.");
         if (batch.Turns.Any(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 }))
         {
             var restoring = batch.Turns.Where(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 })
@@ -43,7 +50,8 @@ public static class StoreBatchRules
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
-                turn.FoundationCatchUpExpected is not null ||
+                turn.FoundationCatchUpExpected is not null || turn.FoundationPublicationSequence is not null ||
+                turn.FoundationCascade is not null || turn.Row?.HasCascadeObligation == true ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
@@ -66,8 +74,10 @@ public static class StoreBatchRules
                 if (turn.Row is { } marker && (turn.Journal is null || !marker.Retired || marker.Creation < 0 ||
                     marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
                     marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
-                    marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,
-                        History:History.Minimal,Creation:marker.Creation,Retired:true)))
+                    marker != new InstanceRow(marker.Id, "", "", marker.Status, "null", expected + 1,
+                        marker.HeldCascade is null ? null : marker.Parent, History: History.Minimal, Creation: marker.Creation,
+                        Retired: true, ParentCreation: marker.HeldCascade is null ? 0 : marker.ParentCreation)
+                        { Cascade = marker.Cascade, HeldCascade = marker.HeldCascade }))
                     throw new StoreException(Failure.Definite,"A row-bearing Delete must be a canonical retirement marker.");
             }
             if (turn.Row is { } value) ValidateIdentity(value);
@@ -181,13 +191,18 @@ public static class StoreBatchRules
 
     internal static void ValidateActorSends(TurnCommit turn, InstanceRow? previous)
     {
-        List<CreationAddress>? children = null;
+        IReadOnlyCollection<CreationAddress>? children = null;
         foreach (var message in turn.Sent)
         {
+            if (message.CascadeOrigin && (message.Kind != Kinds.Terminate || !message.HasIssuedTicket ||
+                message.InboxScope != InboxKey.Issued(message.Id).Scope || (turn.Row ?? previous) is not { } issuer ||
+                message.Sender != issuer.Id || message.SenderCreation != issuer.Creation || issuer.Id != turn.Instance))
+                throw new StoreException(Failure.Definite, "A cascade terminate requires an issued origin from the committing creation.");
             if (!message.ActorControl) continue;
             if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
             {
-                children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
+                children ??= turn.FoundationCascade is { Input: null } opening ? opening.Entries.Children :
+                    ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
                 if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
             }
 

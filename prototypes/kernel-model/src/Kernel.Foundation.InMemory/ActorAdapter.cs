@@ -12,8 +12,6 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     private const int MaxTurnSends = 10_000;
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
-    private const int TerminalChildBytes = 384;
-    private const int TerminalJobBytes = 12_416;
     private const int MaxFaultTextBytes = 4_096;
 
     public bool SupportsFoundationOperator(Durable.InstanceRow? row) => row?.Model == actor.Type;
@@ -87,6 +85,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
+        if (message.CascadeOrigin && !Durable.CreationProtocol.MatchesCascadeParent(input.Row, message))
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "WrongParent");
         if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
             return OpenDiscard(input);
         if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
@@ -138,8 +138,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message is { Kind: Contract.Kinds.Delete, Operator: not null } && input.Row is { } ended)
         {
             var checkpoint = store.FoundationTurnHeader(ended);
-            if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null ||
-                ended.Children is not null || ended.Jobs is not null)
+            if (ended.Status == Durable.InstanceStatus.Running || checkpoint.Park is not null)
                 return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "Protected");
             try
             {
@@ -151,7 +150,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 return Durable.CreationProtocol.Refuse(input.Actor, ended, input.Taken, "ProtectionUnavailable");
             }
 
-            var marker = Durable.CreationProtocol.Retire(ended);
+            var marker = Durable.CreationProtocol.Retire(ended, Durable.CascadeRegistry.ForRetirement(ended));
             return new(input.Actor)
             {
                 Row = marker, Expected = ended.Revision, Revision = marker.Revision, Status = ended.Status,
@@ -161,9 +160,18 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
             message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
-        if (message is { ActorAuthored: true, Kind: Contract.Kinds.Terminate } &&
-            input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
-            return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
+        if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
+        {
+            if (terminal.Cascade is not null || message.ActorAuthored || message.CascadeOrigin && terminal is { Children: null, Jobs: null })
+                return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
+            if (!message.CascadeOrigin) return null;
+            var next = terminal with { Revision = checked(terminal.Revision + 1) };
+            return Durable.CascadeProtocol.Open(new(input.Actor)
+            {
+                Row = next, Expected = terminal.Revision, Revision = next.Revision, Status = terminal.Status,
+                Consumed = [.. input.Taken]
+            }, Durable.CascadeRegistry.From(terminal));
+        }
         if (message.Kind != Contract.Kinds.ChildFinished) return null;
 
         if (!IsChildNotice(input.Row, message))
@@ -254,8 +262,9 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
         var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
         var jobs = Durable.JobRegistry.Read(row.Jobs).Count;
-        var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
-            + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
+        var registryBytes = Math.Max(Bytes(row.Children), children * (long)Durable.CascadeRegistry.ChildBytes)
+            + Math.Max(Bytes(row.Jobs), jobs * (long)Durable.CascadeRegistry.JobBytes)
+            + (row.Cascade?.Entries.StorageBytes ?? 0);
         var headerBytes = row.Status == Durable.InstanceStatus.Running ? HeaderLimits.VariableHeaderReserve
             : Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
         var bytes = TerminalHeaderReserve + registryBytes + headerBytes

@@ -73,9 +73,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public PartitionRow[] Partitions { get; } = Enumerable.Range(0, partitions).Select(_ => new PartitionRow()).ToArray();
     public Dictionary<string, InstanceRow> Instances { get; } = new(StringComparer.Ordinal);
     public Dictionary<InboxKey, MessageRow> Messages { get; } = [];
-    public HashSet<SubscriptionRow> Subscriptions { get; } = new(EqualityComparer<SubscriptionRow>.Create(
+    private readonly HashSet<SubscriptionRow> _subscriptions = new(EqualityComparer<SubscriptionRow>.Create(
         (a, b) => a is null || b is null ? a == b : (a.Key, a.Instance, a.Wait) == (b.Key, b.Instance, b.Wait),
         row => HashCode.Combine(row.Key, row.Instance, row.Wait)));
+    public IReadOnlySet<SubscriptionRow> Subscriptions => _subscriptions;
     public Dictionary<(string Key, string Id), EventRow> EventRows { get; } = [];
     private readonly Dictionary<(string Key, string Id), EventRow> _foundationEvents = [];
     internal IReadOnlyDictionary<(string Key, string Id), EventRow> FoundationEvents => _foundationEvents;
@@ -91,7 +92,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     private SubscriptionRow? RegisteredSubscription(SubscriptionRow requested)
     {
-        if (Subscriptions.TryGetValue(requested, out var stored) && stored.FoundationTenant == requested.FoundationTenant)
+        if (_subscriptions.TryGetValue(requested, out var stored) && stored.FoundationTenant == requested.FoundationTenant)
             return stored;
         if (requested.FoundationTenant is null || _foundationEventEquality == StringComparer.Ordinal) return null;
 
@@ -175,7 +176,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (died && !expired.Contains(p.Owner!)) continue;
             if (died || (Has(Flaw.EveryTakeCounts) && p.Owner is not null))
                 foreach (var row in Messages.Values)
-                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition && row.Message.ParkCatchUp is null)
+                    if (row.Trial == p.Epoch && !row.Done && row.Message.Target.Partition == partition && !row.Message.HasFencedEventStep)
                         row.Attempts++;
             CountAbandonedParkCatchUpTrials(partition, p.Epoch);
             (p.Owner, p.Epoch) = (node, p.Epoch + 1);
@@ -204,6 +205,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
     public Action<int>? Locking { get; set; }
 
     public bool SupportsCommitWindow => true;
+    bool IKernelStore.SupportsCascadePages => true;
     public bool SupportsJobTrialClear => true;
 
     // FenceSubset: the batch cut to the partitions whose fence matches, or null when none does or every one does.
@@ -262,6 +264,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             Dictionary<string, Message>? initialExpiries = null;
             Dictionary<string, Message>? catchUpOpens = null;
             Dictionary<InboxKey, CatchUpStep>? catchUpSteps = null;
+            PublicationPage? publicationPage = null;
+            Dictionary<TurnCommit, CascadeInputs>? cascades = null;
             if (fenced)
             {
                 // Everything is checked before anything is written: a statement that fails aborts the transaction.
@@ -271,6 +275,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 HashSet<string>? childReferences = null;
                 long? expiryFrom = null, expiryUntil = null;
                 var revoked = CatchUpRevocations(batch);
+                var earlier = batch.Turns.Any(turn => turn.FoundationCascade is not null) ? new HashSet<InboxKey>() : null;
+                var competing = earlier is not null
+                    ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
+                        .Concat(turn.Sent.Select(message => message.InboxKey)))
+                        .Concat(batch.Seen).Concat(batch.Trial).Concat(batch.ClearJobTrials).ToHashSet()
+                    : [];
                 foreach (var turn in batch.Turns)
                 {
                     if (turn.Delete && Instances.GetValueOrDefault(turn.Instance)?.Revision != turn.Expected) Diverged($"instance {turn.Instance} to delete is not at revision {turn.Expected}");
@@ -283,6 +293,16 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                     var previous = Instances.GetValueOrDefault(turn.Instance);
                     CreationProtocol.Validate(turn, previous);
+                    if ((PrepareCascade(turn, previous, epochs, earlier, competing) ??
+                        PrepareTerminalJobDeadlines(turn, previous, epochs, batch)) is { } cascade)
+                    {
+                        if (cascade.Kept.Count != 0) _ = checked(now + (long)IngressDeduplicationWindow.TotalMilliseconds);
+                        (cascades ??= new(ReferenceEqualityComparer.Instance)).Add(turn, cascade);
+                        earlier?.UnionWith(cascade.Pending);
+                        earlier?.UnionWith(cascade.Kept);
+                    }
+                    earlier?.UnionWith(turn.Consumed);
+                    earlier?.UnionWith(turn.Done);
                     if (turn.Row is { Retired: false } owner && previous?.Creation == owner.Creation &&
                         previous.NextJobGeneration is { } oldGeneration &&
                         (owner.NextJobGeneration is null || owner.NextJobGeneration.Value < oldGeneration))
@@ -294,7 +314,9 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         if (expiryWindow.Due) expiryFrom = Math.Max(expiryFrom ?? long.MinValue, expiryWindow.At);
                         else expiryUntil = Math.Min(expiryUntil ?? long.MaxValue, expiryWindow.At);
                     }
-                    if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
+                    if (turn.FoundationPublicationSequence is not null)
+                        publicationPage = PreparePublicationPage(turn, epochs);
+                    else if (PrepareParkCatchUp(turn, epochs, revoked) is { } catchUp &&
                         !(catchUpSteps ??= []).TryAdd(turn.FoundationCatchUpStep!.Value, catchUp))
                         throw new StoreException(Failure.Definite, "A catch-up ticket can advance only once per batch.");
                     if (PrepareParkCatchUpOpen(turn, now) is { } firstCatchUp)
@@ -412,9 +434,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                         Deleted[key.Partition]++;
                     }
                 }
-                ApplyParkCatchUpFailure(turn);
-                if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
+                if (turn.FoundationPublicationSequence is null)
+                {
+                    ApplyParkCatchUpFailure(turn);
+                    if (turn.FoundationCatchUpStep is { } catchUpSource) ClearParkCatchUpTrial(catchUpSource, Messages[catchUpSource]);
+                }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
+                if (cascades?.GetValueOrDefault(turn) is { } cascade)
+                    ApplyCascade(cascade, now);
                 foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 ClearFoundationParkPage(turn.FoundationParkClear, now);
                 ApplyFoundationRecoveryPage(turn, now);
@@ -447,20 +474,17 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     RestoreFoundationSubscriptions(turn, catchUpOpens?.GetValueOrDefault(turn.Instance), now);
                 else
                     foreach (var subscription in turn.Subscribed)
-                        if (RegisteredSubscription(subscription) is null) Subscriptions.Add(subscription);
+                        if (RegisteredSubscription(subscription) is null) AddRegisteredSubscription(subscription);
                 foreach (var subscription in turn.Unsubscribed)
                     if (RegisteredSubscription(subscription) is { } found &&
                         (subscription.FoundationTenant is null || found.Creation == subscription.Creation))
                         RemoveRegisteredSubscription(found);
                 if (turn.Unsubscribe)
-                    Subscriptions.RemoveWhere(subscription =>
-                    {
-                        if (subscription.Instance != turn.Instance) return false;
-                        RemoveCatchUpCoverage(subscription);
-                        return true;
-                    });
+                    foreach (var subscription in Subscriptions.Where(subscription => subscription.Instance == turn.Instance).ToArray())
+                        RemoveRegisteredSubscription(subscription);
                 if (turn.FoundationCatchUpStep is { } step && catchUpSteps?.GetValueOrDefault(step) is { } prepared)
                     ApplyParkCatchUp(prepared);
+                if (publicationPage is not null) ApplyPublicationPage(publicationPage);
                 if (turn.Journal is not null)
                 {
                     var creation = turn.Row?.Creation ?? Instances.GetValueOrDefault(turn.Instance)?.Creation ?? 0;
@@ -480,7 +504,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 if (Messages.GetValueOrDefault(id) is { } tried)
                 {
                     (tried.Seen, tried.Trial) = (MarkEpoch(tried), MarkEpoch(tried));
-                    if (tried.Message.ParkCatchUp is not null) MarkParkCatchUpTrial(id, tried);
+                    if (tried.Message.HasFencedEventStep) MarkParkCatchUpTrial(id, tried);
                 }
             foreach (var id in batch.ClearJobTrials) Messages[id].Trial = 0;
             foreach (var id in batch.Turns.SelectMany(s => s.Held ?? []))
@@ -494,7 +518,12 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 foreach (var (address, checkpoint, receiptPosition) in deletes)
                     if (_watchedDeletes!.Remove(address, out var watch))
                         watch.SetResult(checkpoint with { Receipt = receiptPosition is { } slot ? Journal.GetValueOrDefault(slot) : null });
-            return new(new Committed(fenced, now, seqs) { ParkExpiries = armedExpiries ?? [] });
+            return new(new Committed(fenced, now, seqs)
+            {
+                ParkExpiries = armedExpiries ?? [],
+                CascadeRemovals = cascades?.GroupBy(page => page.Key.Instance, StringComparer.Ordinal).ToDictionary(
+                    pages => pages.Key, pages => (IReadOnlyList<InboxKey>)pages.SelectMany(page => page.Value.All).Distinct().ToArray(), StringComparer.Ordinal)
+            });
 
             // A count that does not match: memory and rows have parted. At the current epoch and position that is a kernel bug.
             void Diverged(string what)
@@ -560,7 +589,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             if (row.Owner != node || row.Epoch != epoch) return new((Lease?)null);
             if (countDeaths)
                 foreach (var message in Messages.Values)
-                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition && message.Message.ParkCatchUp is null)
+                    if (message.Trial == row.Epoch && !message.Done && message.Message.Target.Partition == partition && !message.Message.HasFencedEventStep)
                         message.Attempts++;
             CountAbandonedParkCatchUpTrials(partition, row.Epoch);
             row.Epoch++;
@@ -623,7 +652,18 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         ValidateEventIdentity(delivery);
         if (Messages.TryGetValue(delivery.Message.InboxKey, out var existing))
             return new(false, existing.Message.Target);
-        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++_eventSerial));
+        var serial = _eventSerial;
+        var write = PrepareEventWrite(delivery, ref serial);
+        ApplyEventWrite(write);
+        _eventSerial = serial;
+        return new(true, write.Delivery.Target);
+    }
+
+    private sealed record EventWrite(Message Delivery, Message? Creator = null, ReferenceBinding? Birth = null);
+
+    private EventWrite PrepareEventWrite(EventDelivery delivery, ref long serial)
+    {
+        var message = delivery.Message.Start is null ? delivery.Message : delivery.At(checked(++serial));
         if (delivery.FoundationTenant is { } tenant && message.Start is { } start)
         {
             var address = new CreationAddress(message.Target.Id, 1);
@@ -645,12 +685,22 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var reference = ReferenceFor(tenant, address);
             var binding = new ReferenceBinding(tenant, reference, address, creator.InboxKey,
                 CreationProtocol.Fingerprint(start, creator.Kind, creator.Payload)!);
-            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
-            InsertReference(binding);
+            if (Messages.ContainsKey(creator.InboxKey) || Instances.ContainsKey(address.Id) ||
+                _referenceBindings.ContainsKey(reference) || _referenceBirths.ContainsKey(address))
+                throw new StoreException(Failure.Definite, "The event start address already has a creator.");
+            return new(message, creator, binding);
         }
+        return new(message);
+    }
 
-        Messages.Add(message.InboxKey, new MessageRow(message, ++_seq, 0));
-        return new(true, message.Target);
+    private void ApplyEventWrite(EventWrite write)
+    {
+        if (write.Creator is { } creator)
+        {
+            Messages.Add(creator.InboxKey, new MessageRow(creator, ++_seq, 0));
+            InsertReference(write.Birth!);
+        }
+        Messages.Add(write.Delivery.InboxKey, new MessageRow(write.Delivery, ++_seq, 0));
     }
 
     /// <summary>
@@ -696,9 +746,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         if (reuseUntil is not null)
             request = request with { FoundationOccurrence = checked(_foundationEventOccurrence + 1) };
         request = IdentifyPublication(request);
-        var equality = EventEquality(request);
-        var deliveries = Subscriptions.Where(wait => wait.FoundationTenant == request.FoundationTenant && equality.Equals(wait.Key, request.Key))
-            .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal)
+        var waits = request.FoundationTenant is { } tenant ? FoundationWaits(tenant, request.Key) :
+            Subscriptions.Where(wait => wait.FoundationTenant is null && wait.Key == request.Key)
+                .OrderBy(wait => wait.Instance, StringComparer.Ordinal).ThenBy(wait => wait.Wait, StringComparer.Ordinal);
+        var deliveries = waits
             .Select(wait => MatchRoute(request, wait).Delivery(partitions, replyTo)).ToArray();
         if (deliveries.Length == 0 && requiresWait) return null;
 
@@ -753,7 +804,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             }
             if (start is null) return;
 
-            Subscriptions.Add(row);
+            AddRegisteredSubscription(row);
 
             var now = clock();
             foreach (var @event in FoundationEvents.Values.Where(@event => @event.FoundationTenant == tenant &&
@@ -806,7 +857,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         lock (_gate)
         {
             RequireSameSubscriptionScope(subscription);
-            if (RegisteredSubscription(subscription) is null) Subscriptions.Add(subscription);
+            if (RegisteredSubscription(subscription) is null) AddRegisteredSubscription(subscription);
         }
         return default;
     }
@@ -818,7 +869,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             : subscription.Creation > 0 ? _referenceBirths.GetValueOrDefault(target)?.Tenant : null;
         if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
-        if (Subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant &&
+        if (_subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant &&
             RegisteredSubscription(subscription) is null)
             throw new StoreException(Failure.Definite, "The subscription key is already registered in another scope.");
     }
@@ -830,9 +881,14 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
 
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken cancellationToken = default)
     {
-        lock (_gate) return new(EventsFor(published).TryGetValue((published.Key, published.Id), out var stored)
-            ? Subscriptions.Where(s => s.FoundationTenant == stored.FoundationTenant && EventEquality(stored).Equals(s.Key, stored.Key))
-                .OrderBy(s => s.Instance, StringComparer.Ordinal).Select(s => MatchRoute(stored, s)).ToList() : []);
+        lock (_gate)
+        {
+            if (!EventsFor(published).TryGetValue((published.Key, published.Id), out var stored)) return new([]);
+            var waits = stored.FoundationTenant is { } tenant ? FoundationWaits(tenant, stored.Key) :
+                Subscriptions.Where(wait => wait.FoundationTenant is null && wait.Key == stored.Key)
+                    .OrderBy(wait => wait.Instance, StringComparer.Ordinal);
+            return new(waits.Select(wait => MatchRoute(stored, wait)).ToList());
+        }
     }
 
     public ValueTask<IReadOnlyList<EventRoute>> KeptMatchesAsync(IReadOnlyList<SubscriptionRow> waits, CancellationToken cancellationToken = default)
@@ -940,12 +996,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             bool UnsettledPublication(EventRow publication)
             {
                 if (publication.FoundationPublishTicket is { } ticket)
-                    return Messages.GetValueOrDefault(ticket) is { } work && Active(work);
+                    return Messages.GetValueOrDefault(ticket) is { } work &&
+                        (work.Message.FoundationPublish is not null || Active(work));
                 if (publication.FoundationIncarnation is not null || !publication.Id.StartsWith('~')) return false;
 
                 // A pre-upgrade turn publication may still be paired with a live legacy ticket.
                 // The next publish retry records that link and keeps the existing event identity.
-                unlinkedTickets ??= Messages.Values.Where(row => row.Message.Kind == Kinds.Publish && Active(row))
+                unlinkedTickets ??= Messages.Values.Where(row => row.Message.Kind == Kinds.Publish && row.Message.FoundationPublish is null && Active(row))
                     .Select(row => FoundationEventTicket.ReadScopedIdentity(row.Message)).OfType<(string Key, string Id)>()
                     .ToHashSet(_foundationEvents.Comparer);
                 return unlinkedTickets.Contains((publication.Key, publication.Id));

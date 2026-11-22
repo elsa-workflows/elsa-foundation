@@ -357,6 +357,16 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     give; the operator terminates each child by its own selection. The marker's shape, its bound and when the
     obligation clears are on the data lifecycle page ([the qualified
     delete](data-lifecycle.md#proposed-the-qualified-delete)).
+    The K3 [retirement fixture](../../prototypes/kernel-model/sim/RetirementCascadeChecks.cs) runs the
+    in-memory Worker through qualified Delete of an already-ended child with live descendants. An operator
+    terminate leaves its obligation held. The recorded parent's terminate opens it, and one-page and
+    two-page schedules check progress across takeover and one send per exact child. The fixture also checks
+    the fenced retirement's job-pair and parent checks. A timed job's cancellation callback can fail after
+    Delete commits. The Worker finishes applying the commit and the cascade recalls the generation-addressed
+    deadline even if the retired run's job ticket has already been consumed. A legacy job ticket carries the
+    only link to its ordinal deadline. A terminal checkpoint that consumes the ticket settles that exact
+    linked deadline in the same fenced commit, before or after Delete. Park-drain Complete, ThenDelete and physical providers have
+    separate qualification.
 - **A terminate from the child's own parent needs no `ParkSelection`.** A parent's tree terminate is composed by the
   actor type (`WorkflowInstance.cs`, the terminate path); a combiner's FailFast under large fan-out decision 5 sends
   `kernel.terminate` through `ITurn.Send`, an application send. Neither carries a Park identity, and requiring one
@@ -417,6 +427,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **What the review's trace needed.** The fourth round's RT-1 supplied the binding in its fixture before its live
     termination (`ParentBound`, `experiments/Review4.Blockers/Rt1.cs` 329–330, used at 352–357). The proposal puts
     that check in the actor type's control path, ahead of `Terminate`, for cascade-marked terminates.
+    The in-memory origin slice checks the actual committing sender and creation and binds delivery to the recipient's
+    recorded parent. The real Worker checks an unrelated parent, a stale parent creation, and the ordinary terminate
+    control. Paged cascades, Park termination and retirement obligations have separate cases.
   - **An operator's terminate is not parent-bound.** It is an outside add, whose scope the entry point resets to the
     ordinary one (`Messages.cs` 49), so it never has an issued origin or the mark, whatever `Sender` it names. Its
     authority is the terminate permission checked at ingress, and at a parked or draining row its `ParkSelection`,
@@ -462,10 +475,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     It acts only when its full key equals `Cascade.Control`; any other is consumed and dropped (reason control). It
     passes withholding, is never a suspect and is exempt from the poison check, as `kernel.drain` is. At a marker the
     worker's refusal path consumes it as `RetiredCreation` and, for the outstanding control, composes the next page
-    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark: a cascade starts
-    only at a row that has ended, at a marker, or under a discard, expiry, terminate or delete drain, whose Open
-    cleared any mark; a model end clears the mark in its own commit, and so does a terminate's commit at a running
-    row, which ends the model.
+    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark. An ended row,
+    a marker or an open discard, expiry, terminate or delete drain has cleared that mark. A Foundation actor may
+    consume Terminate and stay Running under FC-8. Its cascade control runs before its next authored turn, including
+    any remaining cohort input. The actor retains its Running status and the cohort resumes after the discharge.
   - **The idempotent cancel** (R5-B1). A job entry names the ticket whose key derives from (instance id, creation,
     job key, `JobGeneration`). The owner decides the ticket's presence under its own fence: a job ticket of instance
     A lives in A's partition inbox, which only A's current owner consumes, so what the owner reads in its memory, or
@@ -558,6 +571,15 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **The check.** Termination is feasible for every admitted registry: each page is bounded by `P_cascade` and moves
     the cursor by at least one entry, so a list of n entries ends in ⌈n / `P_cascade`⌉ page commits. The review's
     10,001 children end in 11.
+  - **In-memory live path.** The ending commit moves the live registry to the durable obligation and sends the
+    first page. A consumed Terminate still starts the cascade when the actor keeps its Running status (FC-8).
+    That actor discharges the captured registry before its next authored turn. Qualified Delete carries forward
+    an existing discharge on an ended actor. The Worker handles the outstanding control at the live row or its
+    retirement marker and the store checks the exact successor before applying
+    the page. `--cascade-pages-check` covers the 1,000, 1,001 and 10,001 entry boundaries, job and result
+    settlement, lost outcomes, Delete and keyed reuse, and the real Native tree with 1,001 live children. This
+    evidence covers live discharge and its transfer on Delete. Starting from a held retirement marker, Park
+    terminate paths, and `ThenDelete` have separate cases. Physical provider encoding and cost remain at K4 and K12.
 - **Which path each fan-out takes.** A combiner's FailFast is the application send above. Release 1's parallel
   ForEach runs its bodies as frames inside one instance ([large fan-out](large-fan-out.md)), so its FailFast cancels
   frames in the model and sends no kernel terminate; a body's child workflow is cancelled through its parent's
@@ -1648,6 +1670,17 @@ calls one new model hook.
       before its first delivery (SB-5 run (x)). Each step is at-least-once: a step
       whose owner is lost runs again from the committed cursor, and a delivery it adds again is a duplicate by its
       digest identity. The step deadline and attempt count below apply per step.
+      - **Broadcast ordering (owner, 22 November).** Each wait receives broadcasts in match commit order.
+        Overlapping publications can commit their deliveries in different orders at different waits. The publish
+        receipt acknowledges acceptance. Direct messages retain FIFO from one sender to one target.
+        The SB-6 ordering run places two publication tickets on separate partitions. The first publication's
+        byte allowance lets it reach one wait before the second matches both. The first publication's next page
+        reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
+        that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
+        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 also
+        races two transactions matching the same wait. Pause the first while it assigns inbox order and let the
+        second try to commit. The resulting delivery order must follow commit visibility. If the provider serializes
+        order assignment for that wait, verify that the second transaction waits and that the first delivery stays first.
       - **A byte allowance per step (proposed, sixth review R6-M4).** `P_page` counts rows, and a delivery carries
         the whole payload, so 170 deliveries of a payload at the source limit would write about 2.6 GiB in one step.
         So each match step, which pages subscriptions, and each meet step, which pages matches, writes deliveries in
@@ -1950,6 +1983,14 @@ calls one new model hook.
         answers the existing incarnation; an admission after the sweep answers a new one, so a caller can tell a
         new publication from the old one, and every waiting subscription, a continuing keeping wait included,
         receives the new publication once, whatever is left of the old one's deliveries (case EI-1).
+      - **In-memory qualification.** The typed outside send inserts the event and its payload-free ticket under one
+        store lock. On each page the owner reserves the ticket, compares its sequence and attempt under the fence,
+        and commits the delivery rows, any start creators and references, and the cursor together. A continuing
+        ticket keeps its key and receives a new sequence, so a delayed request for the previous page cannot use
+        a reservation on the next one. At exhaustion the bound receipt reports `DeadLettered`. The focused
+        `--paged-publication-check` runs the real Worker. Provider locks and sizes remain at K4, step and fairness
+        costs at K12, and the alert, dead-letter listing and replay at K11. The turn publisher and the request/reply
+        route have separate cases.
       - **Cost.** One small ticket row per outside publish, inserted and consumed and kept `Done` for the window; the
         payload is written once, in the event row, which moves from after the match to the publish's own
         transaction. The delivery waits for the owner's next poll. The deliveries move from the caller to the owner

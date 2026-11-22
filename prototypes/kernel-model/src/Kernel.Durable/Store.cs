@@ -25,6 +25,9 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal ParkRelease? ParkCohort { get; init; }
     internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
+    internal CascadeDischarge? Cascade { get; init; }
+    internal CascadeRegistry? HeldCascade { get; init; }
+    internal bool HasCascadeObligation => Cascade is not null || HeldCascade is not null;
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
         ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };
@@ -75,6 +78,8 @@ public sealed record EventRow(
     internal Guid? FoundationIncarnation { get; init; }
 
     internal InboxKey? FoundationPublishTicket { get; init; }
+    internal long? FoundationAcceptedAt { get; init; }
+    internal bool FoundationPublishFailed { get; init; }
 }
 
 public sealed record JournalRow(int Partition, long Position, string Instance, long Revision, string Entries)
@@ -171,6 +176,8 @@ public sealed record TurnCommit(
     internal long? FoundationCatchUpBefore { get; init; }
     internal int? FoundationCatchUpExpected { get; init; }
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
+    internal long? FoundationPublicationSequence { get; init; }
+    internal CascadeCommit? FoundationCascade { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
@@ -182,6 +189,8 @@ public sealed record CommitBatch(
 {
     /// <summary>Counted clears of pending job trials at this batch's exact fence epochs.</summary>
     public IReadOnlyList<InboxKey> ClearJobTrials { get; init; } = [];
+
+    internal FoundationPublicationReservation? PublicationReservation { get; init; }
 
     /// <summary>
     /// How far the position moves: one per journal row. It counts the whole batch, while <c>Position</c> is the lowest
@@ -226,6 +235,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
 {
     // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
+    internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 
 public sealed record CommitWindow(long FromInclusive, long UntilExclusive)
@@ -258,6 +268,7 @@ public interface IKernelStore : IMembership
 
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
+    bool SupportsCascadePages => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
     /// <summary>Irreversible empty markers for generated physical addresses, independent of positive generations.</summary>
@@ -463,6 +474,9 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
     internal StringComparer? FoundationKeyEquality { get; init; }
 
     public EventDelivery Delivery(int partitions = 1, string? replyTo = null)
+        => Delivery(partitions, replyTo, null);
+
+    internal EventDelivery Delivery(int partitions, string? replyTo, InboxKey? scopedKey)
     {
         if (Event.FoundationTenant != Wait.FoundationTenant ||
             !(FoundationKeyEquality ?? StringComparer.Ordinal).Equals(Event.Key, Wait.Key))
@@ -470,12 +484,14 @@ public sealed record EventRoute(EventRow Event, SubscriptionRow Wait)
         var delivery = Events.Deliver(Event, Wait, partitions) with { ReplyTo = replyTo };
         if (Event is { FoundationTenant: not null, FoundationIncarnation: { } incarnation })
         {
+            var key = scopedKey ?? new InboxKey(FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                InboxKey.EventDeliveryScope, FoundationEventIdentity.Match(Event, incarnation));
             delivery = delivery with
             {
-                Id = FoundationEventIdentity.DeliveryId(Event, Wait, incarnation),
+                Id = key.Id,
                 Payload = FoundationEventDelivery.Encode(Event, Wait, incarnation)
             };
-            return new(delivery, FoundationEventIdentity.Match(Event, incarnation), Wait.FoundationTenant);
+            return new(delivery, key.Match!, Wait.FoundationTenant);
         }
         var match = new EventMatch(Wait.Key, Event.Id, Wait.Instance, Wait.Wait, Wait.Creation)
         {

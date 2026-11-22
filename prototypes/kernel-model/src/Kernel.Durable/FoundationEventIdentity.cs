@@ -27,6 +27,15 @@ internal static class FoundationEventIdentity
         return "ev:" + Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    internal static string PublishId(EventRow publication, Guid incarnation)
+    {
+        using var hash = VersionedHash((byte)'P');
+        AppendName(hash, publication.Key);
+        AppendName(hash, publication.Id);
+        AppendIncarnation(hash, incarnation);
+        return "pub:" + Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
     internal static string CatchUpId(InboxKey first)
     {
         using var hash = VersionedHash((byte)'C', 1);

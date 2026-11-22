@@ -76,7 +76,8 @@ public static class CreationProtocol
     private static bool IsPhysicalRetirement(TurnCommit turn) => turn.Row is { Creation: 0, Retired: true } row &&
         StringComparer.Ordinal.Equals(turn.Instance,row.Id) && IsPhysicalAddress(row.Id) && row.Status != InstanceStatus.Running && turn.Delete &&
         turn.Expected is { } expected && expected < long.MaxValue && row.Revision == expected + 1 &&
-        row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true);
+        row == new InstanceRow(row.Id, "", "", row.Status, "null", row.Revision, null, History: History.Minimal, Retired: true)
+            { Cascade = row.Cascade };
 
     private static bool Qualified(StartSpec? spec) => spec?.Creation is not null || (spec?.ParentCreation ?? 0) != 0;
     public static bool Qualified(Message message) => message.SenderCreation != 0 || message.TargetCreation is not null || Qualified(message.Start);
@@ -95,6 +96,7 @@ public static class CreationProtocol
         if (previous is { Retired: false })
             return previous.Creation == creation.Generation && previous.StartIntent == Fingerprint(start, kind, payload)
                 ? previous.PendingStart == message ? null : "ExistingCreation" : "StartConflict";
+        if (previous?.HasCascadeObligation == true) return "ObligationOutstanding";
         var high = previous?.Creation ?? 0;
         if (high == long.MaxValue) return "CreationExhausted";
         return creation.Previous == high && creation.Generation == high + 1 ? null : "RetiredOrConflictingCreation";
@@ -108,6 +110,9 @@ public static class CreationProtocol
         return row?.Creation > 0 ? "IdentityRequired" : null;
     }
 
+    internal static bool MatchesCascadeParent(InstanceRow? row, Message message) =>
+        row?.Parent is { } parent && message.Sender == parent && message.SenderCreation == row.ParentCreation;
+
     public static TurnOutcome Refuse(string actor, InstanceRow? row, IReadOnlyList<Delivery> taken, string reason)
     {
         var outcome = new TurnOutcome(actor) { Consumed = [.. taken], Status = row?.Status, CreationRefused = true };
@@ -116,8 +121,15 @@ public static class CreationProtocol
         return outcome;
     }
 
-    public static InstanceRow Retire(InstanceRow row) => new(row.Id, "", "", row.Status, "null", row.Revision + 1, null,
-        History: History.Minimal, Creation: row.Creation, Retired: true);
+    public static InstanceRow Retire(InstanceRow row) => Retire(row, null);
+
+    internal static InstanceRow Retire(InstanceRow row, CascadeRegistry? obligation)
+    {
+        var marker = new InstanceRow(row.Id, "", "", row.Status, "null", checked(row.Revision + 1), null,
+            History: History.Minimal, Creation: row.Creation, Retired: true) { Cascade = row.Cascade };
+        if (row is not { Creation: > 0, Parent: not null, Cascade: null } || obligation is not { Count: > 0 }) return marker;
+        return marker with { Parent = row.Parent, ParentCreation = row.ParentCreation, HeldCascade = obligation };
+    }
 
     /// <summary>
     /// The creation-header facts a committed row satisfies on its own, with no creator, predecessor or turn in view.
@@ -148,7 +160,8 @@ public static class CreationProtocol
             RefuseWrite("qualified Delete must retain the lifecycle high-water mark");
         if (turn.Row is not { } row) return;
         if (HeaderError(row, born: previous is null or { Retired: true }) is { } header) RefuseWrite(header);
-        if (row is { Creation: 0, Retired: true } && !IsPhysicalRetirement(turn)) RefuseWrite("legacy row cannot carry a partial creation header");
+        var continuesRetired = row.Retired && previous is { Retired: true, HasCascadeObligation: true } && turn.FoundationCascade is not null;
+        if (row is { Creation: 0, Retired: true } && !continuesRetired && !IsPhysicalRetirement(turn)) RefuseWrite("legacy row cannot carry a partial creation header");
         if (row.PendingStart is { } pending && (previous is { Retired: false } && previous.PendingStart != pending ||
             previous?.PendingStart != pending && turn.Held?.Contains(pending) != true &&
             !(row.FoundationInlineBirth?.Creator == pending && turn.FoundationHeldPromotions?.Contains(pending) == true &&
@@ -158,13 +171,18 @@ public static class CreationProtocol
             !turn.Consumed.Concat(turn.Done).Contains(retained)) RefuseWrite("held start cleared without consuming its delivery");
         if (row.Retired)
         {
-            if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) || row.Status == InstanceStatus.Running || row != Retire(previous))
+            if (continuesRetired) return; // The cascade validator checks the source command and the exact next marker.
+            if (!turn.Delete || previous is not { Retired: false } || previous.Creation == 0 && !IsPhysicalAddress(previous.Id) ||
+                row.Status == InstanceStatus.Running || row != Retire(previous, row.HeldCascade))
                 RefuseWrite("invalid lifecycle retirement");
+            ValidateRetirementObligation(previous!, row.HeldCascade);
             return;
         }
+        if (row.HeldCascade is not null) RefuseWrite("only a retirement marker can hold an obligation");
         if (previous is { Retired: true, Creation: 0 }) RefuseWrite("physical run identity is retired");
         if (previous is { Retired: true })
         {
+            if (previous.HasCascadeObligation) RefuseWrite("ObligationOutstanding");
             if (previous.Creation == long.MaxValue || row.Creation != previous.Creation + 1)
                 RefuseWrite("creation did not advance the retained high-water mark");
         }
@@ -176,6 +194,24 @@ public static class CreationProtocol
         }
         else if (row.Creation > 0 && row.Creation != 1)
             RefuseWrite("new actor must begin at creation one");
+    }
+
+    private static void ValidateRetirementObligation(InstanceRow previous, CascadeRegistry? held)
+    {
+        var mustKeep = previous is { Creation: > 0, Parent: not null, Cascade: null } &&
+            (previous.Children is not null || previous.Jobs is not null);
+        if (mustKeep != (held is not null)) RefuseWrite("invalid retirement obligation");
+        if (held is null) return;
+
+        var jobs = JobRegistry.Read(previous.Jobs).ToHashSet();
+        if (held.Count == 0 || held.StorageBytes > CascadeRegistry.MaxBytes ||
+            held.Jobs.Length != jobs.Count || !held.Jobs.ToHashSet().SetEquals(jobs) ||
+            held.Jobs.Any(job => job.Generation < 0 || !FoundationMetadataLimits.FitsName(job.Key, preservesCodeUnits: true)) ||
+            held.Children.Distinct().Count() != held.Children.Length ||
+            held.Children.Any(child => child.Creation <= 0 || !FoundationMetadataLimits.FitsTarget(child.Id) ||
+                StoreBatchRules.AddressPartition(child.Id) is null) ||
+            sizeof(char) * (long)Json.Write(held).Length > CascadeRegistry.MaxBytes)
+            RefuseWrite("invalid retirement obligation");
     }
 
     private static void RefuseWrite(string error) => throw new StoreException(Failure.Definite, error);
