@@ -21,7 +21,7 @@ import { registerBuiltInSettingEditors,
   StudioTabs,
   StudioTabPanel,
   StudioToolbar,
-  StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+  StudioShellBreadcrumbs, StudioToolbarGroup, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { buildCapabilityGroups, getCapabilityDefinition } from "./capabilities";
 import "./styles.css";
 
@@ -638,6 +638,8 @@ export function FeatureManagementPage() {
     ?? filteredDraft.find(feature => feature.enabled)
     ?? filteredDraft[0]
     ?? null;
+  const priorFeatureId = hostState.navigationHistory.at(-1)?.selectedId;
+  const priorFeature = draft.find(feature => feature.id === priorFeatureId);
   const selectedRelationships = selectedFeature ? getFeatureRelationships(selectedFeature, draft) : null;
   const selectedFeaturePending = selectedFeature
     ? isFeaturePending(baselineById.get(normalizeType(selectedFeature.id)), selectedFeature)
@@ -1043,10 +1045,8 @@ export function FeatureManagementPage() {
       ) : null}
       <div className={`feature-management-layout${isOverview ? " overview" : ""}`}>
         <div className="feature-management-list-column">
+          {hostState.navigationHistory.length > 0 ? <StudioShellBreadcrumbs items={[{ label: priorFeature?.displayName || priorFeatureId || "Features", onClick: backToPreviousFeature }]} current={selectedFeature?.displayName || selectedId || "Features"} /> : null}
           <nav className="feature-management-browse-nav" aria-label="Feature views">
-            {hostState.navigationHistory.length > 0 ? (
-              <button type="button" onClick={backToPreviousFeature} aria-label="Back to previous feature">Back</button>
-            ) : null}
             <button type="button" aria-pressed={isOverview} onClick={openOverview}>Capabilities</button>
             <button type="button" aria-pressed={!isOverview && hostState.browseView !== "group"} onClick={openAllFeatures}>All features</button>
             {hostState.browseView === "group" && selectedCapability ? (

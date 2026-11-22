@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
 import { Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioShellBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -281,9 +281,9 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       ) : null}
       <WorkflowEditorToolbarFrame
         className="wf-executable-toolbar"
-        identity={<StudioBreadcrumbs items={[{ href: "/workflows/executables", label: "Executables" }]} current={
-          <h2 className="wf-editor-title"><strong title={pageTitle}>{pageTitle}</strong></h2>
-        } renderLink={item => <StudioLink href={item.href}>{item.label}</StudioLink>} />}
+        identity={<><StudioShellBreadcrumbs items={[{ href: "/workflows/executables", label: "Executables" }]} current={pageTitle}
+          renderLink={item => <StudioLink href={item.href}>{item.label}</StudioLink>} />
+          <h2 className="wf-editor-title"><strong title={pageTitle}>{pageTitle}</strong></h2></>}
         metadata={chosenReference ? <span className="wf-executable-header-meta">{formatExecutableSourceKind(chosenReference.sourceKind)} · {formatReferenceScope(chosenReference.scope)}</span> : null}
         actions={<>
           <StudioButton type="button" size="sm" aria-label="Refresh executable" title="Refresh executable" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>

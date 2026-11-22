@@ -1,7 +1,7 @@
 import { StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { getNotifications, useNotificationGuard } from "./workflow-editor/notifications";
 import React, { useEffect, useMemo, useState } from "react";
-import { Info, DatabaseZap, Save, ShieldCheck } from "lucide-react";
+import { DatabaseZap, Info, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/runtime";
 import type {
@@ -78,7 +78,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
 
   return (
     <section className="studio-page wf-page runtime-diagnostics-page">
-      <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime evidence settings</>} description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
+      <StudioPageHeader headingLevel={2} title="Runtime evidence settings" description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
           <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
             {saving ? "Saving..." : "Save"}

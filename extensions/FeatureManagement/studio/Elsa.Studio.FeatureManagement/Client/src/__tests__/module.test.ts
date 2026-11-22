@@ -2443,7 +2443,7 @@ describe("feature capability browsing", () => {
 
       await click(relationships?.querySelector("[aria-label='Open Storage']") ?? null);
       expect(page.container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Storage");
-      await click(page.container.querySelector("[aria-label='Back to previous feature']"));
+      await click(page.container.querySelector("nav[aria-label='Breadcrumb'] button"));
       expect(page.container.querySelector<HTMLInputElement>("[aria-label='Filter features']")?.value).toBe("Consumer");
       expect(page.container.querySelector(".feature-management-inspector h3")?.textContent).toBe("Consumer");
     } finally {

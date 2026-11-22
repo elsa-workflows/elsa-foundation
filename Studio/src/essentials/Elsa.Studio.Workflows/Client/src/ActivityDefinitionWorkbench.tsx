@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioBreadcrumbs } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionDraftManagementView,
@@ -200,7 +200,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   if (!detail && detailQuery.isPending && !detailFailure) return <main className="ad-page ad-workbench" aria-busy="true"><div className="ad-skeleton" role="status">Loading the Activity Definition workbench…</div></main>;
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
-      <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
+      <StudioShellBreadcrumbs items={[{ label: "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
       <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Try again</button></section>
     </main>;
   }
@@ -251,24 +251,23 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
-    <header className="ad-workbench-header ad-definition-header">
-      <div className="ad-definition-identity">
-        <StudioBreadcrumbs items={[{ href: "/workflows/activity-definitions", label: "Activity Definitions" }]} current={
-          <h1 id="activity-definition-title">{detail.definition.displayName}</h1>
-        } renderLink={item => <StudioLink href={item.href} navigateToStudioPath={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>{item.label}</StudioLink>} />
-        {detail.definition.description ? <p>{detail.definition.description}</p> : null}
-      </div>
-      <div className="ad-header-actions">
-        {returnDesignerHref ? <StudioLink className="ad-back-to-designer" href={returnDesignerHref} navigateToStudioPath={returnToDesigner}><ArrowLeft size={15} aria-hidden /> Back to designer</StudioLink> : null}
-        {designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
+    <StudioShellBreadcrumbs items={[
+      { href: "/workflows/activity-definitions", label: "Activity definitions" },
+      ...(returnDesignerHref ? [{ href: returnDesignerHref, label: "Designer" }] : [])
+    ]} current={detail.definition.displayName} renderLink={item =>
+      <StudioLink href={item.href} navigateToStudioPath={item.href === returnDesignerHref ? returnToDesigner :
+        () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>{item.label}</StudioLink>
+    } />
+    <StudioPageHeader compact headingLevel={2} title={detail.definition.displayName} titleId="activity-definition-title"
+      description={detail.definition.description} actions={<>
+        {designOwned ? <StudioButton type="button" variant="primary" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
           <Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}
-        </button> : null}
-        {canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}
-        <button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
+        </StudioButton> : null}
+        {canFork ? <StudioButton type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</StudioButton> : null}
+        <StudioButton type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
           <RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}
-        </button>
-      </div>
-    </header>
+        </StudioButton>
+      </>} />
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}
     {startError ? <div className="ad-inline-error" role="alert">{startError}</div> : null}

@@ -10,6 +10,7 @@ export function StudioPage({ className, ...props }: React.ComponentPropsWithoutR
 
 export interface StudioPageHeaderProps extends Omit<React.ComponentPropsWithoutRef<"header">, "title"> {
   title: React.ReactNode;
+  compact?: boolean;
   breadcrumbs?: React.ReactNode;
   description?: React.ReactNode;
   /** Optional context, only when it adds information beyond the title/navigation. */
@@ -24,9 +25,9 @@ export interface StudioPageHeaderProps extends Omit<React.ComponentPropsWithoutR
   headingLevel?: 1 | 2;
 }
 
-export function StudioPageHeader({ title, breadcrumbs, description, eyebrow, icon, actions, actionsLabel, refresh, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
+export function StudioPageHeader({ title, compact, breadcrumbs, description, eyebrow, icon, actions, actionsLabel, refresh, titleId, headingLevel = 1, className, children, ...props }: StudioPageHeaderProps) {
   const Heading = headingLevel === 2 ? "h2" : "h1";
-  return <header className={["studio-page-header", className].filter(Boolean).join(" ")} {...props}>
+  return <header className={["studio-page-header", compact && "studio-page-header--compact", className].filter(Boolean).join(" ")} {...props}>
     <div className="studio-page-header-copy">
       {breadcrumbs}
       {eyebrow ? <span className="studio-page-eyebrow">{eyebrow}</span> : null}

@@ -1,4 +1,5 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { runPath } from "./AgentInvocationPage";
+import { StudioShellBreadcrumbs, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { CheckCircle2, RefreshCw, UserCheck, XCircle } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -23,11 +24,13 @@ const receiptMessages: Record<ReceiptStatus, string> = {
   Refused: "Your decision was not admitted. Check your permission and submit again."
 };
 
-export function HumanReviewPage({ context, reference: given }: { context: StudioEndpointContext; reference?: ReviewReference | null }) {
+export function HumanReviewPage({ context, reference: given, navigate }: { context: StudioEndpointContext; navigate?(path: string): void; reference?: ReviewReference | null }) {
   const reference = given ?? readReviewReference(window.location.pathname);
   // Each exact wait gets its own page state, so content, comment, receipt and request ID never carry over to another review.
   const key = reference ? `${reference.workflowExecutionId}/${reference.activityExecutionId}` : "";
-  return <ReviewScreen key={key} context={context} reference={reference} />;
+  const run = reference ? runPath(reference) : "/workflows/instances";
+  return <><StudioShellBreadcrumbs items={navigate ? [{ label: reference ? "Workflow run" : "Runs", onClick: () => navigate(run) }] : [{ href: run, label: reference ? "Workflow run" : "Runs" }]} current="Human review" />
+    <ReviewScreen key={key} context={context} reference={reference} /></>;
 }
 
 function ReviewScreen({ context, reference }: { context: StudioEndpointContext; reference: ReviewReference | null }) {
@@ -101,7 +104,7 @@ function ReviewScreen({ context, reference }: { context: StudioEndpointContext; 
     <StudioPage className="agent-review" data-status={review.status}>
       <StudioPageHeader
         icon={<UserCheck aria-hidden="true" size={18} />}
-        eyebrow="Human review"
+        compact
         title={review.title?.trim() || "Content awaiting review"}
         description={<span data-testid="review-status">{statusLabel(review)}</span>}
         actions={<StudioButton aria-label="Refresh review" onClick={() => void refresh()}><RefreshCw aria-hidden="true" size={14} /> Refresh</StudioButton>} />

@@ -861,7 +861,7 @@ for (const width of [1440, 390]) {
     await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions");
 
     const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
-    await expect(page.getByRole("link", { name: "Back to designer", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Designer", exact: true })).toHaveCount(0);
     await expect(breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true })).toHaveAttribute("href", "/workflows/activity-definitions");
     await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Invoice evaluator");
     const versionRow = page.getByRole("button", { name: /1\.0\.0/ });
@@ -905,7 +905,7 @@ test("Activity Definition draft History returns to the exact editor and preserve
   await expect(page).toHaveURL(/section=versions.*originDraft=activity-draft-browser.*returnPlan=plan-exact/);
 
   await page.reload();
-  const returnLink = page.getByRole("link", { name: "Back to designer", exact: true });
+  const returnLink = page.getByRole("link", { name: "Designer", exact: true });
   await expect(returnLink).toHaveAttribute("href", /section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
   await returnLink.click();
   await expect(page).toHaveURL(/section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
@@ -924,7 +924,7 @@ test("Activity Definition published-version History returns to its origin after 
   await expect(page).toHaveURL(/version=version-2.*originVersion=version-1/);
   await page.reload();
 
-  const backToDesigner = page.getByRole("link", { name: "Back to designer", exact: true });
+  const backToDesigner = page.getByRole("link", { name: "Designer", exact: true });
   await expect(backToDesigner).toHaveAttribute("href", /section=editor.*version=version-1/);
   await page.getByRole("tab", { name: "Drafts", exact: true }).click();
   await expect(page).toHaveURL(/section=drafts.*originVersion=version-1/);
