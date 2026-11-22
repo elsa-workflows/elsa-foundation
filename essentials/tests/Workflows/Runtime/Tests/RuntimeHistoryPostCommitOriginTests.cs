@@ -31,6 +31,25 @@ public sealed class RuntimeHistoryPostCommitOriginTests
         Assert.NotEqual(RuntimeCheckpointCommitFingerprint.ComputeIntent(absent), RuntimeCheckpointCommitFingerprint.ComputeIntent(present));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void In_process_child_source_handles_never_enter_start_or_resume_request_wires(bool web)
+    {
+        var intent = new RuntimePostCommitIntent("child", "run", WorkflowDispatchLifecycle.StartChildIntentKind, At, "activity", null, null);
+        var item = new RuntimePostCommitOutboxItem("commit:child", intent, RuntimePostCommitOutboxStatus.Delivering, At, At,
+            deliveringOwnerId: "private-owner", deliveryStartedAt: At, deliveryFencingToken: 3, deliveryVisibleAfter: At.AddMinutes(1));
+        var source = new PostCommitDeliveryContext(new(item, "private-owner", 3, At, At.AddMinutes(1)), Scope);
+        var options = web ? new JsonSerializerOptions(JsonSerializerDefaults.Web) : new JsonSerializerOptions();
+        object[] requests = [new WorkflowExecutionStartDispatchRequest("artifact", "caller") { ChildHistorySource = source },
+            new BookmarkResumeDispatchRequest("run", "stimulus", "hash") { ChildHistorySource = source }];
+        foreach (var request in requests)
+        {
+            var wire = JsonSerializer.Serialize(request, options);
+            Assert.DoesNotContain("private-owner", wire); Assert.DoesNotContain("ChildHistorySource", wire, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("FencingToken", wire, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [Fact]
     public void The_pre_history_checkpoint_and_source_intent_formats_remain_unchanged()
     {

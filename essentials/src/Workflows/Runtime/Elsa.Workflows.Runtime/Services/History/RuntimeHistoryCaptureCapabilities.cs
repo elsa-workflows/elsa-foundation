@@ -23,7 +23,7 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
         ? services.GetService<IRuntimeHistoryTimerSupport>()?.CanCapture == true
         : owner.SourceIntentKind is not { } kind ?
         (ReferenceEquals(owner, RuntimeHistoryRegistration.BoundaryRetrySources)
-            ? services.GetServices<IWorkflowSchedulerWorkHandler>().Any(handler => handler is WorkflowRetryActivityBoundarySchedulerWorkHandler)
+            ? DefaultBoundaryRetryOwnsSelection()
             : !ReferenceEquals(owner, RuntimeHistoryRegistration.AlterationSources) ||
          services.GetService<IWorkflowAlterationCheckpointWriter>() is RuntimeWorkflowAlterationCheckpointWriter alteration &&
          services.GetService<RuntimeCheckpointCommitter>() is { } committer && alteration.OwnsHistoryCommitter(committer)) :
@@ -31,6 +31,23 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
         services.GetService<RuntimeCheckpointCommitter>()?.CanSupplyHistorySource(kind, source) == true &&
         services.GetService<IRuntimeHistoryObservationWriter>() is { } writer && services.GetService<IRuntimeHistoryStore>() is { } reader &&
         writer.CanRecordHistory(reader) && services.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, writer, reader) == true;
+
+    private bool DefaultBoundaryRetryOwnsSelection()
+    {
+        foreach (var handler in services.GetServices<IWorkflowSchedulerWorkHandler>())
+        {
+            if (handler is IFallbackWorkflowSchedulerWorkHandler) continue;
+            if (handler is WorkflowRetryActivityBoundarySchedulerWorkHandler) return true;
+            // These exact built-ins have closed, different command kinds. An earlier unknown
+            // replacement may own retry work, so its registration cannot qualify the unused default.
+            var type = handler.GetType();
+            if (type != typeof(WorkflowStartSchedulerWorkHandler) && type != typeof(WorkflowScheduleActivitySchedulerWorkHandler) &&
+                type != typeof(WorkflowStartActivitySchedulerWorkHandler) && type != typeof(WorkflowCompleteActivitySchedulerWorkHandler) &&
+                type != typeof(WorkflowCreateBookmarkSchedulerWorkHandler) && type != typeof(WorkflowCheckpointSchedulerWorkHandler) &&
+                type != typeof(WorkflowCancelSchedulerWorkHandler) && type != typeof(WorkflowCancelActivityScopeSchedulerWorkHandler)) return false;
+        }
+        return false;
+    }
 
     internal static IEnumerable<string> Kinds(RuntimeHistorySourceSupport owner) => owner.Kinds.Select(RuntimeHistorySourceFacts.EventName)
         .Concat(owner.TimerOwner ? DurableTimerHistoryFacts.Kinds : [])

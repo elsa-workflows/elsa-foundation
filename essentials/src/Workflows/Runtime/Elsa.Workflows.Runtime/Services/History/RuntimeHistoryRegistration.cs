@@ -40,6 +40,7 @@ internal static class RuntimeHistoryRegistration
         services.TryAdd(ServiceDescriptor.Scoped(typeof(IRuntimeHistoryObservationWriter), ObservationFactory));
         services.TryAddScoped<IRuntimeHistorySourceExtension, DefaultRuntimeHistorySourceExtension>();
         services.TryAddScoped<RuntimeHistoryCaptureCapabilities>();
+        services.TryAddScoped<NativeChildHistoryTransport>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, RuntimeHistoryCapture>());
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, CoreSources))) services.AddSingleton(CoreSources);
         if (!services.Any(descriptor => ReferenceEquals(descriptor.ImplementationInstance, AlterationSources))) services.AddSingleton(AlterationSources);

@@ -32,7 +32,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHa
     bool IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
         ChildDispatchHistory.CanRecord(_historyServices, _timeProvider, writer, reader) &&
         ReferenceEquals(_workflowStartDispatcher, _historyServices?.GetService<IWorkflowStartDispatcher>()) &&
-        _workflowStartDispatcher.CanPreserveHistoryCausation(WorkflowDispatchLifecycle.StartChildIntentKind, writer, reader);
+        _workflowStartDispatcher.CanPreserveHistoryCausation(WorkflowDispatchLifecycle.StartChildIntentKind, writer, reader) &&
+        _workflowStartDispatcher.CanDispatchChildHistorySource(writer, reader);
 
     async ValueTask IRuntimePostCommitDurableSourceIntentHandler.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
@@ -228,7 +229,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHa
                             payload.DispatchNodeId!)
                         : null,
                     dispatchNestingDepth: payload.DispatchNestingDepth,
-                    testScope: testScope) { HistoryCausation = source?.Intent.HistoryCausation },
+                    testScope: testScope) { ChildHistorySource = source },
                 WorkflowExecutableReferenceScope.Published,
                 cancellationToken: cancellationToken);
         }

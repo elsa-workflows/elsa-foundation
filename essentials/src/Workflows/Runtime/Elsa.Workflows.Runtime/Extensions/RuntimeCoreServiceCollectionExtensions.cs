@@ -629,6 +629,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowExecutableInputValidator>())
             {
                 HistoryAdmission = workflowExecutionId => RuntimeHistoryRegistration.ResolveAdmission(serviceProvider, workflowExecutionId),
+                ChildHistoryResolver = () => serviceProvider.GetService<NativeChildHistoryTransport>(),
                 HistoryProvidersResolver = () => (serviceProvider.GetService<IRuntimeHistoryObservationWriter>(), serviceProvider.GetService<IRuntimeHistoryStore>())
             };
         });

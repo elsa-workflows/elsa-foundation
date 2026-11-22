@@ -15,6 +15,16 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     internal Func<string, (RuntimeHistoryCapturePolicy? Policy, bool? Enabled)>? HistoryAdmission { get; init; }
     internal Func<(IRuntimeHistoryObservationWriter? Writer, IRuntimeHistoryStore? Reader)>? HistoryProvidersResolver { get; init; }
 
+    internal Func<NativeChildHistoryTransport?>? ChildHistoryResolver { get; init; }
+    bool IWorkflowStartDispatcher.CanDispatchChildHistorySource(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        ChildHistoryResolver?.Invoke()?.CanRecord(writer, reader, _workflowExecutionStateStore, _timeProvider, _workflowDispatchStore) == true;
+
+    private ValueTask ValidateChildHistoryAsync(WorkflowExecutionStartDispatchRequest request, CancellationToken token) =>
+        request.ChildHistorySource is not { } source ? ValueTask.CompletedTask :
+        (ChildHistoryResolver?.Invoke() ?? throw new RuntimePostCommitSourceBoundaryException(source.SourceOutboxItemId, source.Intent.Kind,
+            new NotSupportedException("The selected start transport cannot preserve native child history responsibility."), true))
+            .ValidateAsync(source, request.WorkflowExecutionId ?? throw new InvalidDataException("A native child source requires its deterministic recipient."), null, token);
+
     bool IWorkflowStartDispatcher.CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentKind); ArgumentNullException.ThrowIfNull(writer); ArgumentNullException.ThrowIfNull(reader);
@@ -187,6 +197,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        await ValidateChildHistoryAsync(request, cancellationToken);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
         if (request.StartAuthority?.ModelWork is { } modelWorkOrigin)
@@ -245,7 +256,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             saved?.Origin,
             dispatchOptions,
             cancellationToken,
-            saved?.HistoryCausation ?? request.HistoryCausation);
+            saved?.HistoryCausation ?? request.ChildHistorySource?.Intent.HistoryCausation);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
@@ -613,6 +624,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
+        await ValidateChildHistoryAsync(request, cancellationToken);
         var dispatchResult = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
 
         return new WorkflowExecutionStartDispatchResult(

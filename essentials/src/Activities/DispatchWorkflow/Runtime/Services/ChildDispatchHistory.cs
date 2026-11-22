@@ -130,7 +130,7 @@ internal static class ChildDispatchHistory
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception failure) { throw Boundary(source, failure); }
     }
-    private static RuntimePostCommitSourceBoundaryException Boundary(PostCommitDeliveryContext source, Exception failure) =>
+    internal static RuntimePostCommitSourceBoundaryException Boundary(PostCommitDeliveryContext source, Exception failure) =>
         new(source.SourceOutboxItemId, source.Intent.Kind, failure, IsUnavailable(failure));
 
     private static bool IsUnavailable(Exception failure)

@@ -5,9 +5,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
-    /// <summary>Diagnostic origin from the calling native owner; supplies no start or source authority.</summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public RuntimeHistoryCausation? HistoryCausation { get; init; }
+    /// <summary>In-process native child history responsibility; never serialized and never start authority.</summary>
+    [JsonIgnore]
+    public PostCommitDeliveryContext? ChildHistorySource { get; init; }
 
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,

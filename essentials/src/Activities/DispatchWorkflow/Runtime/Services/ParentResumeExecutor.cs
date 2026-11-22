@@ -33,12 +33,15 @@ public sealed class ParentResumeExecutor(
     bool IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
         ChildDispatchHistory.CanRecord(_historyServices, _clock, writer, reader) &&
         ReferenceEquals(bookmarkResumeDispatcher, _historyServices?.GetService<IBookmarkResumeDispatcher>()) &&
-        bookmarkResumeDispatcher.CanRecordHistory(writer, reader);
+        bookmarkResumeDispatcher.CanRecordHistory(writer, reader) && bookmarkResumeDispatcher.CanDispatchChildHistorySource(writer, reader);
 
     async ValueTask IRuntimePostCommitDurableSourceIntentHandler.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         _ = await ChildDispatchHistory.VerifyAsync(_historyServices, _clock, source, cancellationToken);
-        await HandleCoreAsync(source.Intent, source, cancellationToken);
+        try { await HandleCoreAsync(source.Intent, source, cancellationToken); }
+        catch (Exception failure) when (failure is RuntimeHistoryUnavailableException or RuntimeHistoryIntegrityException ||
+            failure is RuntimeSchedulerWorkUnavailableException { Code: "runtime.history.capture-unavailable" })
+        { throw ChildDispatchHistory.Boundary(source, failure); }
     }
 
     public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
@@ -89,7 +92,8 @@ public sealed class ParentResumeExecutor(
                 payloadType: new ValueTypeDescriptor(
                     TypeAliasConvention.CanonicalAlias(typeof(WorkflowDispatchParentResumePayload)),
                     schemaVersion: 1),
-                providerId: DispatchWorkflowConstants.ParentResumeProviderId) { HistoryCausation = source?.Intent.HistoryCausation },
+                providerId: DispatchWorkflowConstants.ParentResumeProviderId,
+                bookmarkId: source is null ? null : payload.BookmarkId) { HistoryCausation = source?.Intent.HistoryCausation, ChildHistorySource = source },
             cancellationToken: cancellationToken);
 
         if (result.Bookmark is { } resolvedBookmark)

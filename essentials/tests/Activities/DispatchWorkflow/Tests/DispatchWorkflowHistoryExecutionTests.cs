@@ -121,11 +121,42 @@ public sealed class DispatchWorkflowHistoryExecutionTests
         Assert.DoesNotContain(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId), item => item.Status == WorkflowDispatchStatus.DispatchFailed);
     }
 
-    private sealed class UnavailableObservation(IRuntimeHistoryObservationWriter inner, bool afterEffect) : IRuntimeHistoryObservationWriter
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Parent_resume_history_outage_preserves_source_responsibility_before_or_after_consumption(bool afterEffect)
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync(configureServices: services =>
+        {
+            services.AddWorkflowRuntimeHistory(); services.AddWorkflowStimulusRouter();
+            services.Replace(ServiceDescriptor.Singleton<IPersistenceAccessContextAccessor>(new Access()));
+            var original = services.Single(item => item.ServiceType == typeof(IRuntimeHistoryObservationWriter));
+            services.Remove(original);
+            services.AddScoped<IRuntimeHistoryObservationWriter>(provider => new UnavailableObservation(
+                (IRuntimeHistoryObservationWriter)original.ImplementationFactory!(provider), afterEffect,
+                afterEffect ? "DeliveryDispatched" : "DeliveryReceived"));
+        });
+        var run = await fixture.StartParentAsync("parent-receipt-outage-" + afterEffect, "parent-receipt-run-" + afterEffect, "correlation",
+            waitForCompletion: true, parentPartition: new("tenant-42"));
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        Assert.Equal(1, (await processor.ProcessAsync(new(1, intentKind: WorkflowDispatchLifecycle.StartChildIntentKind))).DeliveredCount);
+        var origin = Assert.Single(await EventsAsync(scope.ServiceProvider.GetRequiredService<IRuntimeHistoryStore>(), run.Identity.ChildWorkflowExecutionId),
+            e => e.Name == "ChildWorkflowSettled");
+        var id = origin.Metadata["history.sourceDeliveryId"];
+        var failure = await Assert.ThrowsAsync<RuntimePostCommitSourceBoundaryException>(async () =>
+            await processor.ProcessAsync(new(1, intentKind: WorkflowDispatchLifecycle.ResumeParentIntentKind)));
+        Assert.True(failure.IsUnavailable); Assert.Equal(id, failure.SourceOutboxItemId);
+        var source = (await scope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(id))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, source.Status); Assert.Equal(0, source.DeliveryAttemptCount);
+        var bookmark = await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>().FindAsync(run.Start.WorkflowExecutionId, run.Identity.WaitBookmarkId);
+        if (afterEffect) Assert.Null(bookmark); else Assert.NotNull(bookmark);
+    }
+
+    private sealed class UnavailableObservation(IRuntimeHistoryObservationWriter inner, bool afterEffect, string? kind = null) : IRuntimeHistoryObservationWriter
     {
         public bool CanRecordHistory(IRuntimeHistoryStore reader) => inner.CanRecordHistory(reader);
         public ValueTask<RuntimeHistoryObservationResult> RecordAsync(RuntimeHistoryObservation observation, CancellationToken cancellationToken = default) =>
-            observation.Event.Name == (afterEffect ? "ChildStartDispositionObserved" : "ChildStartAttemptObserved")
+            observation.Event.Name == (kind ?? (afterEffect ? "ChildStartDispositionObserved" : "ChildStartAttemptObserved"))
                 ? ValueTask.FromException<RuntimeHistoryObservationResult>(new IOException("owned-child-history-outage"))
                 : inner.RecordAsync(observation, cancellationToken);
     }
