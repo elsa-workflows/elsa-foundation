@@ -151,3 +151,27 @@ for (const theme of ["light", "dark"]) for (const width of [320, 1280]) {
     await expect(playback.getByRole("button", { name: "Next", exact: true })).toBeEnabled();
   });
 }
+
+for (const theme of ["light", "dark"]) for (const width of [320, 390]) {
+  test(`ending a pending selection preserves a pointer target at ${width}px ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/activity-playback.html?theme=${theme}&scenario=pointer-ended`);
+    const playback = page.getByRole("region", { name: "Activity playback", exact: true });
+    await expect(playback).toContainText("Step 1 of 2");
+    await page.evaluate(() => { window.__activityPlaybackFixture.hold = true; });
+    await playback.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(playback).toContainText("Loading step 2");
+    const target = page.getByRole("button", { name: "Inspect occurrence below playback", exact: true });
+    await target.scrollIntoViewIfNeeded();
+    const before = await target.boundingBox(); expect(before).not.toBeNull();
+    await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+    await page.mouse.down();
+    let after;
+    try {
+      await expect(playback.locator(".wf-playback-state")).toHaveText("End of available segment");
+      after = await target.boundingBox(); expect(after).not.toBeNull();
+    } finally { await page.mouse.up(); }
+    expect(after!.y, "A completed selection cannot move an inspection target between pointerdown and click").toBeCloseTo(before!.y, 1);
+    await expect(page.getByLabel("Inspected fixture occurrence")).toHaveText("fixture-execution-1");
+  });
+}

@@ -18,7 +18,7 @@ const palette = getTheme("classic")![parameters.get("theme") === "dark" ? "dark"
 for (const token of themeTokenNames) document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
 document.documentElement.style.setProperty("--studio-font-ui", "system-ui, sans-serif");
 document.body.style.cssText = "margin:0;background:var(--studio-surface);color:var(--studio-text);font-family:var(--studio-font-ui)";
-const count = scenario === "empty" ? 0 : scenario === "one" ? 1 : 200;
+const count = scenario === "pointer-ended" ? 2 : scenario === "empty" ? 0 : scenario === "one" ? 1 : 200;
 const held = new Map<string, (() => void)[]>();
 const controls: FixtureState = { requests: [], hold: false, failOnce: false, denied: false,
   release(position) { const pending = held.get(position) ?? []; held.delete(position); pending.forEach(finish => finish()); } };
@@ -66,11 +66,11 @@ function Fixture() {
   const playback = useActivityPlayback({ context, workflowExecutionId: "fixture-run", enabled: true,
     prepareSelection: async entry => ({ commit: () => setSelected(entry.activityExecutionId),
       limitation: scenario === "missing-pin" ? "Pinned diagram unavailable; recorded occurrence remains inspectable." : "" }) });
-  return <main style={{ minWidth: 0, padding: scenario === "pointer" ? 0 : 12 }}><h1 style={{ fontSize: 18 }}>Isolated playback fixture</h1>
+  return <main style={{ minWidth: 0, padding: scenario === "pointer" || scenario === "pointer-ended" ? 0 : 12 }}><h1 style={{ fontSize: 18 }}>Isolated playback fixture</h1>
     <p>These responses test presentation behavior; they are not real runtime evidence.</p>
     <ActivityPlaybackControls playback={playback} scopeLabel="Entire fixture run" labelFor={entry => `Repeated activity ${Number(entry.position) % 3}`} />
     <output aria-label="Confirmed fixture occurrence">{selected || "None"}</output>
-    {scenario === "pointer" ? <div onPointerDownCapture={() => playback.pause()}>
+    {scenario === "pointer" || scenario === "pointer-ended" ? <div onPointerDownCapture={() => { if (scenario === "pointer-ended") controls.release("1"); else playback.pause(); }}>
       <button type="button" onClick={() => setInspected(selected)}>Inspect occurrence below playback</button>
       <output aria-label="Inspected fixture occurrence">{inspected || "None"}</output>
     </div> : null}
