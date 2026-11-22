@@ -266,21 +266,21 @@ Workflows:
   "Run workflow" has no primary emphasis.
 - [ ] **X3.3** (#5039) [source] `OperatorActionDialog.tsx:55–162`. Uses `data-tone` for destructive styling.
   `needs: K2`
-- [ ] **X3.4** (#5040) [source] `MoveWorkflowDefinitionsDialog.tsx:103–132`.
+- [x] **X3.4** (#5040) [source] `MoveWorkflowDefinitionsDialog.tsx:103–132`. (PR #5301)
 - [ ] **X3.5** (#5041) [source] `HttpTestRequestDialog.tsx:240–247`.
 - [ ] **X3.6** (#5042) [source] `ActivityVersionChangeDialog.tsx:94–226`.
 - [ ] **X3.7** (#5043) [source] Inline dialog in `WorkflowEditor.tsx:1611–1624`.
 - [x] **X3.8** (#5044) [source] `SaveWorkflowTemplateDialog.tsx:16–35`. Backdrop lacks `role="presentation"`;
   footer is raw with `.wf-primary-button`. (PR #5287)
-- [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
+- [x] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`. (PR #5301)
 - [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
   `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
 - [x] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`. (PR #5296)
-- [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
-  `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
-- [ ] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`).
-- [ ] **X3.14** (#5050) [source] Folder picker drawer in `WorkflowFolderNavigation.tsx:686`
-  (`.wf-folder-drawer`, bare `<strong>` heading).
+- [x] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
+  `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action. (PR #5301)
+- [x] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`). (PR #5301)
+- [x] **X3.14** (#5050) [source] Folder picker drawer in `WorkflowFolderNavigation.tsx:686`
+  (`.wf-folder-drawer`, bare `<strong>` heading). (PR #5301)
 - [ ] **X3.15** (#5051) [source] Incident details dialog in `WorkflowInstances.tsx:3149–3166`.
 
 Activity definitions:
