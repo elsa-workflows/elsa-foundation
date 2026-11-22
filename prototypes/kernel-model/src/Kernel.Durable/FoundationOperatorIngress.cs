@@ -7,7 +7,8 @@ public sealed partial class InMemoryStore
     private static string FoundationOperatorKey(string tenant, string id) => tenant + "_" + id;
 
     internal (OperatorAdmission Outcome, string? Reference) AdmitFoundationOperator(string tenant, string? reference, string? callerKey,
-        string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo, ParkRecoveryMode? recoverMode = null)
+        string id, string kind, string? payload, long? due, TimeSpan? keepFor, string? selection, string? replyTo, ParkRecoveryMode? recoverMode = null,
+        IReadOnlyList<string>? recoverHandles = null)
     {
         lock (_gate)
         {
@@ -31,7 +32,8 @@ public sealed partial class InMemoryStore
             if (resolvesPark && !MatchesFoundationSelection(tenant, reference, selection))
                 return (OperatorAdmission.StaleSelection, null);
 
-            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: new(selection) { RecoverMode = recoverMode }) switch
+            var command = new FoundationOperatorCommand(selection) { RecoverMode = recoverMode, RecoverHandles = recoverHandles };
+            return AddFoundationMessage(tenant, reference, id, kind, payload, due, keepFor, replyTo: replyTo, @operator: command) switch
             {
                 true => (OperatorAdmission.Accepted, reference),
                 false => (OperatorAdmission.Duplicate, reference),

@@ -1210,6 +1210,10 @@ Park decision.
   flag. Open marks the selected kept rows `Selected` and re-arms the selected suppressed timers (see "Checks" below), so
   the Resolution never stores the selection and Open writes at most `P` rows beside the plan's waits. An interruption reverts `Selected` to `Consumed` by `Target AND KeptBy = Selected`,
   at most `P` rows, so the next recover starts from the Park's own reasons.
+  The in-memory implementation supports older deliveries whose full key exceeds the direct handle encoding,
+  including JSON event matches. Their sealed handle contains a digest of the full key and the row's sequence.
+  Open resolves it within the selected creation under the store lock, requires one matching retained row, then
+  marks that row by its full key. A physical provider's bounded lookup for those sequences belongs to K4.
 - **The page bound.** Proposed: `P` = 500 rows, the default `MaxBatch`, below the 1,000 rows per statement of the
   owned commit, and `B` = 4 MiB of metadata. A page takes at most `P_page` = min(`P`, ⌊`B` / `M`⌋) = 170 rows, so its
   metadata is at most `B` by construction: a plain row limit that every provider supports, with no byte count in the
@@ -2068,15 +2072,18 @@ calls one new model hook.
   ticket g finds it of an obsolete generation and clears it. Ticket g is therefore never restored beside g + 1, and
   the job runs at most twice, once as g before the Park and once as g + 1 (fifth review).
 
-  For retry-all, a kept deadline whose current-generation ticket is still kept `Consumed` may sort before that
-  ticket. The page that releases the deadline also releases the paired ticket in the same fenced commit. The match
+  A kept deadline may sort before its current-generation ticket, whether retry-all restores the ticket or an explicit
+  retry selects it. The page that releases the deadline also releases the paired ticket in the same fenced commit. The match
   uses the creation, generation, issued deadline id and its original due time. Both rows count against the page
   limit. If only one position remains, the page ends before the deadline. The cursor advances to the deadline's
   position, and the later ticket is already released when a subsequent page reaches that position. The ticket is
   exempt from handoff credit under the usual ticket rule. This lets the deadline settle the pending ticket as a
   timeout while preserving the absolute due time and the current job generation. The in-memory reference store
   projects the linkage from the metadata saved with each row at insertion. Physical provider projection and its
-  cost are part of K4 qualification.
+  cost are part of K4 qualification. If the deadline is absent or its ordinary done marker remains, the fenced Open
+  re-arms it from the retained ticket at the same issued key and original absolute time. A private deadline kept
+  `Consumed` that the current retry would otherwise clear also re-arms. The plan charges the re-arm and the worker
+  refreshes that key so a stale cached copy cannot replace the reissued deadline.
 
   **The re-arm.** A timer is re-armed under its own full key from one durable source, whichever branch the
   disposition step's point lookup chose. The plan's `TimerSpec`, from the model's committed state, gives `Kind`,

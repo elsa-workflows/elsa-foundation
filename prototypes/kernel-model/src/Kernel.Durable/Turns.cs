@@ -242,6 +242,7 @@ public sealed class TurnOutcome(string instance)
     internal ParkKeepReason? FoundationKeep;
     internal ParkPageClear? FoundationParkClear;
     internal ParkRecoveryPage? FoundationRecoveryPage;
+    internal ParkRetryOpen? FoundationRetry;
     internal ParkTimerOpen? FoundationRecoveryTimers;
     internal ParkJobOpen? FoundationRecoveryJobs;
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;

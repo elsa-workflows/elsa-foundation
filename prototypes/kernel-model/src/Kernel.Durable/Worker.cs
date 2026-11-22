@@ -2568,9 +2568,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
         }
         var units = _queue.GetRange(0, Math.Min(_queue.Count, _options.MaxBatch));     // rows per flush are capped
-        var changing = units.Exists(unit => unit.FoundationRecoveryPage is not null || unit.FoundationRecoveryTimers is { Rearms.Count: > 0 })
+        var changing = units.Exists(unit => unit.FoundationRecoveryPage is not null || unit.FoundationRecoveryTimers is { Rearms.Count: > 0 } ||
+            unit.FoundationRecoveryJobs is { DeadlineRearms.Count: > 0 })
             ? units.SelectMany(unit => (unit.FoundationRecoveryPage?.Writes().Select(row => row.Cursor.Key) ?? [])
-                .Concat(unit.FoundationRecoveryTimers?.Rearms.Select(rearm => rearm.Envelope.InboxKey) ?? [])).ToHashSet()
+                .Concat(unit.FoundationRecoveryTimers?.Rearms.Select(rearm => rearm.Envelope.InboxKey) ?? [])
+                .Concat(unit.FoundationRecoveryJobs?.DeadlineRearms.Select(rearm => rearm.Envelope.InboxKey) ?? [])).ToHashSet()
             : null;
         var markable = changing is null ? _items.Values.AsEnumerable()
             : _items.Values.Where(item => !changing.Contains(item.Message.InboxKey));
@@ -2870,6 +2872,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
             FoundationKept = kept,
             FoundationParkClear = unit.FoundationParkClear,
             FoundationRecoveryPage = unit.FoundationRecoveryPage,
+            FoundationRetry = unit.FoundationRetry,
             FoundationRecoveryTimers = unit.FoundationRecoveryTimers,
             FoundationRecoveryJobs = unit.FoundationRecoveryJobs,
             FoundationRecoverySubscriptions = unit.FoundationRecoverySubscriptions,
@@ -3086,9 +3089,9 @@ public sealed class Worker : IScopeActivation, ITurnServices
             }
             _woken = true;
         }
-        if (unit.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
+        if (unit.FoundationRecoveryTimers is { Rearms.Count: > 0 } || unit.FoundationRecoveryJobs is { DeadlineRearms.Count: > 0 })
         {
-            foreach (var rearm in timers.Rearms)
+            foreach (var rearm in (unit.FoundationRecoveryTimers?.Rearms ?? []).Concat(unit.FoundationRecoveryJobs?.DeadlineRearms ?? []))
             {
                 var key = rearm.Envelope.InboxKey;
                 if (_items.TryGetValue(key, out var cached)) Forget(cached);

@@ -30,11 +30,23 @@ internal static class FoundationEventIdentity
     internal static string CatchUpId(InboxKey first)
     {
         using var hash = VersionedHash((byte)'C', 1);
-        AppendName(hash, first.Id);
-        AppendNumber(hash, first.Scope);
-        hash.AppendData([first.Match is null ? (byte)0 : (byte)1]);
-        if (first.Match is { } match) AppendName(hash, match);
+        AppendInboxKey(hash, first);
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    internal static byte[] RetryKey(InboxKey key)
+    {
+        using var hash = VersionedHash((byte)'R', 1);
+        AppendInboxKey(hash, key);
+        return hash.GetHashAndReset();
+    }
+
+    private static void AppendInboxKey(IncrementalHash hash, InboxKey key)
+    {
+        AppendName(hash, key.Id);
+        AppendNumber(hash, key.Scope);
+        hash.AppendData([key.Match is null ? (byte)0 : (byte)1]);
+        if (key.Match is { } match) AppendName(hash, match);
     }
 
     internal static string CatchUpSuccessor(string chain, long page)

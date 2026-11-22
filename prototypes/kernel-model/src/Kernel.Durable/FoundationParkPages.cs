@@ -33,12 +33,15 @@ internal sealed record ParkRecoveryDrain(string Operation, ParkRecoveryMode Mode
     internal long Restored { get; init; }
     internal long Cleared { get; init; }
     internal InboxKey? Gate { get; init; }
+    internal int AlreadyRearmed { get; init; }
 
     internal bool Restores(ParkPageRow row, InstanceStatus status) => row.Kind == Kinds.Publish ||
         status != InstanceStatus.Running && row.Kind == Kinds.ChildFinished ||
-        (status == InstanceStatus.Running && row.Kind != Kinds.Meet && !row.ObsoleteJob &&
-            (row.Reason is null or ParkKeepReason.Arrived || Mode == ParkRecoveryMode.RetryAll ||
-                Mode == ParkRecoveryMode.Retry && row.Reason == ParkKeepReason.Selected));
+        status == InstanceStatus.Running && row.Kind != Kinds.Meet && !row.ObsoleteJob && RestoresKept(row.Reason);
+
+    internal bool RestoresKept(ParkKeepReason? reason) =>
+        reason is null or ParkKeepReason.Arrived || Mode == ParkRecoveryMode.RetryAll ||
+        Mode == ParkRecoveryMode.Retry && reason == ParkKeepReason.Selected;
 }
 
 internal sealed record ParkRecoveryPage(InMemoryStore.FoundationParkMark Park, IReadOnlyList<ParkPageRow> Rows, bool TerminalInputs = false)
@@ -120,12 +123,13 @@ public sealed partial class InMemoryStore
                 else page.Enqueue(row, cursor);
             }
 
-            var deadlineJobs = !terminalInputs && current.ParkRecovery?.Mode == ParkRecoveryMode.RetryAll &&
+            var recovery = current.ParkRecovery;
+            var deadlineJobs = !terminalInputs && recovery?.Mode is (ParkRecoveryMode.RetryAll or ParkRecoveryMode.Retry) &&
                 current.Status == InstanceStatus.Running ? jobs?.ToDictionary(job => job.Key, job => job.Generation, StringComparer.Ordinal) : null;
             var result = new List<ParkPageRow>(page.Count);
             foreach (var (row, cursor) in page.UnorderedItems.OrderBy(item => item.Priority))
             {
-                var paired = deadlineJobs is not null ? ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs)
+                var paired = deadlineJobs is not null ? ReadDeadlinePrerequisite(current, row, cursor, deadlineJobs, recovery!)
                     : recoveryGeneration is not null && current.Status != InstanceStatus.Running &&
                         row.Message.Kind == Kinds.Job && currentJobs?.Contains(cursor.Key) == true
                         ? ReadTerminalJobDeadline(current, row, cursor, terminalInputs ? recoveryGeneration : null) : null;
@@ -164,15 +168,16 @@ public sealed partial class InMemoryStore
     }
 
     private ParkPageRow? ReadDeadlinePrerequisite(InstanceRow actor, MessageRow deadline, ParkPageCursor cursor,
-        IReadOnlyDictionary<string, long> jobs)
+        IReadOnlyDictionary<string, long> jobs, ParkRecoveryDrain recovery)
     {
         var message = deadline.Message;
         if (message.Kind != Kinds.JobDeadline || !cursor.Key.HasIssuedOrigin || message.Sender != actor.Id ||
             message.SenderCreation != actor.Creation || deadline.JobTiming.JobKey is not { } key ||
-            !jobs.TryGetValue(key, out var generation))
+            !jobs.TryGetValue(key, out var generation) || !recovery.RestoresKept(deadline.KeptBy))
             return null;
         var ticketKey = InboxKey.Ticket(actor.Id, key, actor.Creation, generation);
-        if (Messages.GetValueOrDefault(ticketKey) is not { Done: true, KeptBy: ParkKeepReason.Consumed } ticket ||
+        if (Messages.GetValueOrDefault(ticketKey) is not { Done: true, KeptBy: ParkKeepReason.Consumed or ParkKeepReason.Selected } ticket ||
+            !recovery.RestoresKept(ticket.KeptBy) ||
             !IsJobEnvelope(ticket.Message, actor, Kinds.Job, generation) ||
             ticket.JobTiming.Timer != message.Id || ticket.JobTiming.At != message.Due)
             return null;
@@ -180,6 +185,21 @@ public sealed partial class InMemoryStore
         if (later.CompareTo(cursor) <= 0) return null;
         return new(later, Kinds.Job, ticket.Message.Sender, ticket.KeptBy, ticket.PayloadLength) { ReleasedBy = ticket.ReleasedBy };
     }
+
+    private static HashSet<InboxKey>? CurrentParkJobKeys(InstanceRow actor)
+    {
+        if (actor.Jobs is null) return null;
+        var keys = new HashSet<InboxKey>();
+        foreach (var job in JobRegistry.Read(actor.Jobs))
+        {
+            keys.Add(InboxKey.Ticket(actor.Id, job.Key, actor.Creation, job.Generation));
+            keys.Add(InboxKey.JobResult(actor.Id, job.Key, actor.Creation, job.Generation));
+        }
+        return keys;
+    }
+
+    private static bool IsObsoleteParkJob(Message message, InboxKey key, HashSet<InboxKey>? currentKeys) =>
+        (message.Kind == Kinds.Job || message.FoundationJobResult) && currentKeys?.Contains(key) != true;
 
     private ParkPageRow? ChangedFoundationParkInput(TurnCommit turn, InstanceRow? previous, IReadOnlyDictionary<int, long> epochs)
     {
