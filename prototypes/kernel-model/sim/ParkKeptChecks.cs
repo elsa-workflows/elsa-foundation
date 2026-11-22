@@ -678,11 +678,12 @@ internal static class ParkKeptChecks
         await CheckFailedCatchUp(check, recoverAfterFailure: false);
         await CheckFailedCatchUp(check, recoverAfterFailure: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true);
+        await CheckFailedCatchUp(check, recoverAfterFailure: false, delayedResponse: true, realMonotonic: true);
         await CheckFailedCatchUp(check, recoverAfterFailure: false, revoked: true);
     }
 
     private static async Task CheckFailedCatchUp(Action<bool, string> check, bool recoverAfterFailure,
-        bool delayedResponse = false, bool revoked = false)
+        bool delayedResponse = false, bool revoked = false, bool realMonotonic = false)
     {
         var now = 1_701_400_030_200L;
         var store = new InMemoryStore(1, () => now);
@@ -709,8 +710,9 @@ internal static class ParkKeptChecks
         Worker NewOwner(string name) => new(name, 0, forward, new ActorAdapter(store, probe),
             new WorkerOptions
             {
-                Monotonic = () => 0, MaxAttempts = 2,
-                ParkCatchUpTimeout = delayedResponse ? TimeSpan.FromMilliseconds(30) : null
+                Monotonic = realMonotonic ? static () => Environment.TickCount64 : static () => 0, MaxAttempts = 2,
+                Lease = realMonotonic ? TimeSpan.FromSeconds(1) : Defaults.Lease,
+                ParkCatchUpTimeout = delayedResponse && !realMonotonic ? TimeSpan.FromMilliseconds(30) : null
             });
         var worker = NewOwner("first-catch-up");
         var ingress = new InMemoryIngress(store, new Requests(worker.Node), worker.Node, (_, kind) => kind == Contract.Kinds.Recover);
@@ -760,6 +762,7 @@ internal static class ParkKeptChecks
             { Done: false, Attempts: 2, Message.ParkCatchUp.Page: 0 } &&
             store.Instances[id].ParkRecovery?.Control == originalControl &&
             store.Messages.Values.All(row => row.Message.Kind != Kinds.Event),
+            realMonotonic ? "the default timeout leaves live lease time for a fenced failure write without a heartbeat" :
             delayedResponse ? "the owner stops waiting on a stalled store request and records one failure" :
                 "the step deadline at equality writes no page and the successor counts its second failure");
         if (delayed is not null)

@@ -1817,7 +1817,9 @@ calls one new model hook.
           waiting, a committed page and the failed-attempt write compete on that exact row. A page that lands removes
           the old ticket. A failed-attempt write that wins invalidates a late page with the previous count. Only a
           chain retaining coverage can re-park the instance. An exhausted superseded chain settles without touching
-          the instance or its new waits. The physical-provider deadline and query-cost cases remain at K4 and K12.
+          the instance or its new waits. The step budget is capped at one lease and leaves a reserve inside the
+          current owner's local lease deadline for the failure write. The physical-provider deadline and query-cost
+          cases remain at K4 and K12.
         - a start subscription's meet ticket has no instance to park: it is set aside as a dead letter with an alert,
           and its coverage entries are released, so the sweep may delete the events it still owed;
         - a turn's publish ticket parks its publishing instance. Park keeps the ticket, so the sweep's ticket check

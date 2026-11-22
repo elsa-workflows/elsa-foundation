@@ -47,12 +47,14 @@ internal static class FoundationEventSendChecks
         now += 20;
         var onBoundary = await ingress.SendAsync(scope, topic, "reusable", "duplicate", keep);
         now++;
+        var beforeSweep = await ingress.SendAsync(scope, topic, "reusable", "premature", keep);
+        await store.SweepAsync();
         var second = await ingress.SendAsync(scope, topic, "reusable", "second", keep);
         await Pump(activation);
         check(first.Outcome == Contract.AdmissionOutcome.Accepted && second.Outcome == Contract.AdmissionOutcome.Accepted &&
-            onBoundary.Outcome == Contract.AdmissionOutcome.Duplicate &&
+            onBoundary.Outcome == Contract.AdmissionOutcome.Duplicate && beforeSweep.Outcome == Contract.AdmissionOutcome.Duplicate &&
             Json.Read<List<string>>(store.ReadFoundationActor(scope.Tenant, liveRef).Actor!.Row.State).SequenceEqual(["first", "second"]),
-            "an event id can be admitted after expiry before sweep and its old match cannot suppress the new delivery");
+            "an expired publication stays the receipt until sweep and its old match cannot suppress the new delivery");
     }
 
     public static async Task SubscriptionLifecycle(Action<bool, string> check)

@@ -247,6 +247,7 @@ public sealed class TurnOutcome(string instance)
     internal IReadOnlyList<ParkSubscriptionRecipe>? FoundationRecoverySubscriptions;
     internal InboxKey? FoundationCatchUpStep;
     internal long? FoundationCatchUpBefore;
+    internal TimeSpan? FoundationCatchUpBudget;
     internal int? FoundationCatchUpExpected;
     internal ParkCatchUpFailure? FoundationCatchUpFailed;
     public string Instance => instance;

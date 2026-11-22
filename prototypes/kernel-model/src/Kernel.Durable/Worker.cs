@@ -2439,8 +2439,10 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         else
         {
+            if (ParkCatchUpBudget() is not { } budget) return;
             step.FoundationCatchUpStep = failure.Key;
-            step.FoundationCatchUpBefore = checked(Now + (long)CatchUpTimeout.TotalMilliseconds);
+            step.FoundationCatchUpBefore = checked(Now + (long)budget.TotalMilliseconds);
+            step.FoundationCatchUpBudget = budget;
             step.FoundationCatchUpExpected = ticket.Attempts;
         }
         ticket.Taken = true;
@@ -2464,7 +2466,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
     }
 
-    private TimeSpan CatchUpTimeout => _options.ParkCatchUpTimeout ?? _options.Lease;
+    private TimeSpan? ParkCatchUpBudget()
+    {
+        var limit = _options.ParkCatchUpTimeout ?? _options.Lease;
+        if (Has(Flaw.IgnoreLeaseDeadline)) return limit;
+        var now = _options.Monotonic();
+        var until = Volatile.Read(ref _safeUntil);
+        if (until <= now) return null;
+
+        // Reserve part of the existing ownership window for the fenced failure write.
+        var reserve = Math.Clamp((long)_options.Lease.TotalMilliseconds / 8, 1, 1000);
+        var remaining = until - now - reserve;
+        return remaining > 0 ? TimeSpan.FromMilliseconds(Math.Min(limit.TotalMilliseconds, remaining)) : null;
+    }
 
     // ---- the committer -------------------------------------------------------------------------------------------
 
@@ -2701,12 +2715,12 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 StoreBatchRules.RequirePhysicalCapability(batch,_store.PhysicalRetirementAvailable);
                 if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(batch, physicalRetirement: _store.PhysicalRetirementAvailable);
                 if (!CommitClockAvailable) CommitClockFacts.RejectUnsupported(batch);
-                if (units is [{ FoundationCatchUpStep: not null }])
+                if (units is [{ FoundationCatchUpBudget: { } budget }])
                 {
                     using var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     try
                     {
-                        result = await _store.CommitAsync(batch, attempt.Token).AsTask().WaitAsync(CatchUpTimeout, cancellationToken);
+                        result = await _store.CommitAsync(batch, attempt.Token).AsTask().WaitAsync(budget, cancellationToken);
                     }
                     catch (TimeoutException)
                     {
