@@ -186,6 +186,8 @@ internal sealed class Elsa3DefinitionConverter(
         var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
         var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
         await LowerAsync(plan, cancellationToken);
+        if (!plan.HasErrors)
+            Elsa3SwitchSafety.Validate(plan);
         if (request.IsReusable)
             RefuseIntrinsics(plan);
         return (plan, boundaryOutcomes);
@@ -206,6 +208,7 @@ internal sealed class Elsa3DefinitionConverter(
         var inventory = await memoryReferenceGraph.CollectAsync(
             plan.Definition.Root, node => ContractOf(plan, node), jsonPaths, cancellationToken, plan.SourceName);
         plan.Diagnostics.AddRange(valueFlowLowerer.Lower(
+            (node, names) => { if (plan.Find(node) is { } script) script.EffectiveScriptOutcomes = names; },
             plan.Definition,
             inventory,
             plan.Request.DiagnosticMetadata,

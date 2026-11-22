@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActivityNode } from "../workflowTypes";
-import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, type CollectionSlot } from "../collectionSlots";
+import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, setSwitchMode, type CollectionSlot } from "../collectionSlots";
 import "./collectionSlotEditor.css";
 
 export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch, renderCondition, hasOutgoingConnections }: {
@@ -13,16 +13,34 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
   renderCondition?(item: Record<string, unknown>): ReactNode;
   hasOutgoingConnections?(index: number): boolean;
 }) {
+  const modeId = useId();
   const items = collectionSlotItems(activity, collection);
   if (!items) return null;
   const noun = collection.itemName[0].toUpperCase() + collection.itemName.slice(1);
+  const isSwitch = activity.structure?.kind === "elsa.switch.structure" && collection.property === "cases";
+  const rawMode = activity.structure?.payload.mode;
+  const mode = rawMode == null || rawMode === "MatchFirst" ? "MatchFirst" : String(rawMode);
   return (
     <section className="wf-slot-collection-slots" aria-label={collection.displayName}>
       <div className="wf-slot-collection-heading">
         <h4>{collection.displayName}</h4>
         {!readOnly ? <button type="button" onClick={() => onChange(addCollectionItem(activity, collection))}><Plus size={14} /> Add {collection.itemName}</button> : null}
       </div>
-      {collection.conditionProperty ? <p className="wf-muted">Cases run in order. The first true condition wins; otherwise Default runs.</p> : null}
+      {isSwitch ? <>
+        <label htmlFor={modeId}>Match mode</label>
+        <select id={modeId} value={mode} disabled={readOnly} onChange={event => {
+          if (!readOnly && (event.target.value === "MatchFirst" || event.target.value === "MatchAny"))
+            onChange(setSwitchMode(activity, event.target.value));
+        }}>
+          <option value="MatchFirst">Match first</option>
+          <option value="MatchAny">Match any</option>
+          {mode !== "MatchFirst" && mode !== "MatchAny" ? <option value={mode}>Unknown mode: {mode}</option> : null}
+        </select>
+        <p className="wf-muted">{mode === "MatchAny"
+          ? "All matching cases run. Their activities can wait independently; the Switch completes after all selected activities finish. Default runs only when no case matches."
+          : mode === "MatchFirst" ? "Cases run in order. The first true condition wins; otherwise Default runs."
+            : "Choose a supported match mode before publishing."}</p>
+      </> : null}
       {!items.length ? <p className="wf-muted">No {collection.displayName.toLowerCase()} yet.</p> : null}
       {items.map((item, index) => (
         <CollectionItemRow

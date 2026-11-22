@@ -4,9 +4,9 @@
 
 **Created**: 2026-11-22
 
-**Status**: Approved
+**Status**: In progress
 
-This status is the prepared record for final proposal agreement; a status line alone is not agreement. Production implementation starts only after the agreed proposal is merged into the initiative branch.
+The requirements are approved. Implementation continues in the same PR under the coordinator's explicit delivery instruction; final review and initiative merge gates still apply.
 
 **Input**: Run the activity of every matching Switch case in MatchAny mode, including faithfully imported Elsa 3 Switch definitions.
 

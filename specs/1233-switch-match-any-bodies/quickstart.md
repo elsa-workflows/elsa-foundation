@@ -17,8 +17,8 @@ dotnet test Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.Contro
 dotnet test Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj
 dotnet test Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 dotnet test Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj
-dotnet test Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj --filter FullyQualifiedName~ExplicitOutcomesRunTests
-dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --filter FullyQualifiedName~SwitchRecoveryEfTests
+dotnet test Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj --filter FullyQualifiedName~SwitchMatchAnyRunTests|FullyQualifiedName~ExplicitOutcomesRunTests
+dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --filter FullyQualifiedName~MatchAny_recovers_after_child_commit
 ```
 
 Use equivalent commands on the permitted Linux host. Record source, executable/toolchain, counts and failures. Broaden only for changed runtime mechanisms or concrete unresolved risk.

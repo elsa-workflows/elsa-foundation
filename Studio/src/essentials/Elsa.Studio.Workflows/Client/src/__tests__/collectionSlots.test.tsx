@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeCollectionItem, renameCollectionItem } from "../collectionSlots";
+import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeCollectionItem, renameCollectionItem, setSwitchMode } from "../collectionSlots";
 import { createActivityNode } from "../workflowAdapter";
 import { CollectionSlotEditor } from "../workflow-editor/CollectionSlotEditor";
 import { collectionActivity, sequenceNode, leafNode } from "./fixtures";
@@ -42,6 +42,40 @@ function type(input: HTMLInputElement, value: string) {
 function enter(input: HTMLInputElement) { flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))); }
 
 describe("catalog collection slots", () => {
+  it("changes Switch mode without replacing cases, bodies or unknown payload members", () => {
+    const node = addCollectionItem(empty(), descriptor);
+    node.structure!.payload.extra = { keep: true };
+    const items = collectionSlotItems(node, descriptor)!;
+    items[0].activity = sequenceNode("body", [leafNode("nested")]);
+    const any = setSwitchMode(node, "MatchAny");
+    expect(any.structure!.payload.mode).toBe("MatchAny");
+    expect(any.structure!.payload.cases).toBe(node.structure!.payload.cases);
+    expect(any.structure!.payload.extra).toBe(node.structure!.payload.extra);
+    expect(setSwitchMode(any, "MatchFirst").structure!.payload.mode).toBeUndefined();
+    expect(node.structure!.payload.mode).toBeUndefined();
+  });
+
+  it("exposes mode and accurate help, respects read-only and retains unknown modes", () => {
+    const node = empty();
+    const view = mount(node);
+    const select = view.element.querySelector("select")!;
+    expect(select.value).toBe("MatchFirst");
+    flushSync(() => { select.value = "MatchAny"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(view.current().structure!.payload.mode).toBe("MatchAny");
+    expect(view.element.textContent).toContain("All matching cases run");
+    view.replace({ ...view.current(), structure: { ...view.current().structure!, payload: { ...view.current().structure!.payload, mode: "Future" } } });
+    expect(select.value).toBe("Future");
+    expect(view.element.textContent).toContain("Choose a supported match mode");
+  });
+
+  it("rejects programmatic mode changes in read-only views", () => {
+    const node = setSwitchMode(empty(), "MatchAny");
+    const view = mount(node, true);
+    const select = view.element.querySelector("select")!;
+    expect(select.disabled).toBe(true);
+    flushSync(() => { select.value = "MatchFirst"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(view.current()).toBe(node);
+  });
   it.each(["switch", "parallel"] as const)("admits empty %s collections and creates unique labels", kind => {
     const item = collectionActivity(kind), node = createActivityNode(item, kind), slot = getCollectionSlots(node, item)[0];
     expect(slot).toBeDefined();

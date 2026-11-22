@@ -2,7 +2,10 @@ using System.Text.Json;
 using Elsa.Activities.ControlFlow.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Switch.Models;
+using Elsa.Activities.Testing;
 using Elsa.Expressions.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -16,6 +19,96 @@ namespace Elsa.Activities.Switch.Tests;
 public sealed class SwitchActivityTests : IDisposable
 {
     private readonly ServiceProvider _serviceProvider = new ServiceCollection().BuildServiceProvider();
+
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Suspended)]
+    [InlineData(ActivityExecutionStatus.Faulted)]
+    [InlineData(ActivityExecutionStatus.Cancelled)]
+    public async Task MatchAny_waits_for_every_current_selected_body(ActivityExecutionStatus pendingStatus)
+    {
+        var store = new InMemoryActivityExecutionStateStore();
+        var node = MatchAnyNode();
+        var context = NewContext(node, null);
+        await store.SaveAsync(ChildState("a", "act-a", ActivityExecutionStatus.Completed));
+        await store.SaveAsync(ChildState("c", "act-c", pendingStatus));
+        await store.SaveAsync(ChildState("c", "foreign-c", ActivityExecutionStatus.Completed) with { ParentActivityExecutionId = "other-switch" });
+        await store.SaveAsync(ChildState("b", "unselected-b", ActivityExecutionStatus.Completed));
+        var activity = BoundMatchAny(store);
+        var first = await activity.OnChildCompletedAsync(new(context, "act-a", "a", [ActivityOutcomes.Done]));
+        Assert.True(first.IsDeferred);
+        await store.SaveAsync(ChildState("c", "act-c", ActivityExecutionStatus.Completed));
+        var last = await BoundMatchAny(store).OnChildCompletedAsync(new(context, "act-c", "c", [ActivityOutcomes.Done]));
+        Assert.Equal(new[] { "Approved", "Notify" }, last.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task MatchAny_uses_committed_Break_even_when_its_callback_is_delayed()
+    {
+        var store = new InMemoryActivityExecutionStateStore();
+        var context = NewContext(MatchAnyNode(), null);
+        await store.SaveAsync(ChildState("a", "act-a", ActivityExecutionStatus.Completed, ActivityOutcomes.Break));
+        await store.SaveAsync(ChildState("c", "act-c", ActivityExecutionStatus.Completed));
+        var result = await BoundMatchAny(store).OnChildCompletedAsync(new(context, "act-c", "c", [ActivityOutcomes.Done]));
+        Assert.Equal(new[] { ActivityOutcomes.Break }, result.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task MatchAny_no_match_rejects_unselected_callback_while_Default_waits()
+    {
+        var store = new InMemoryActivityExecutionStateStore();
+        var context = NewContext(MatchAnyNode(approved: false, notify: false), null);
+        await store.SaveAsync(ChildState("a", "act-a", ActivityExecutionStatus.Completed));
+        var activity = BoundMatchAny(store, approved: false, notify: false);
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => activity.OnChildCompletedAsync(new(context, "act-a", "a", [ActivityOutcomes.Done])).AsTask());
+    }
+
+    private static ExecutableNode MatchAnyNode(bool approved = true, bool notify = true) =>
+        SwitchMatchAnyTests.Executable(SwitchModes.MatchAny, approved, false, notify,
+            new Dictionary<string, ExecutableNode> { ["a"] = WorkflowExecutionHarness.NewProbeNode("a"), ["c"] = WorkflowExecutionHarness.NewProbeNode("c") }).RootActivity;
+
+    [Theory]
+    [InlineData("superseded")]
+    [InlineData("descendant")]
+    [InlineData("default")]
+    public async Task Non_current_or_non_selected_success_cannot_satisfy_a_selected_body(string form)
+    {
+        var store = new InMemoryActivityExecutionStateStore();
+        var context = NewContext(MatchAnyNode(), null);
+        await store.SaveAsync(ChildState("a", "act-a", ActivityExecutionStatus.Completed));
+        var other = ChildState(form == "default" ? "fallback" : "c", "other", ActivityExecutionStatus.Completed);
+        if (form == "superseded") other = other with { SupersededByActivityExecutionId = "replacement" };
+        if (form == "descendant") other = other with { ParentActivityExecutionId = "act-a" };
+        await store.SaveAsync(other);
+        var result = await BoundMatchAny(store).OnChildCompletedAsync(new(context, "act-a", "a", [ActivityOutcomes.Done]));
+        Assert.True(result.IsDeferred);
+        // Redelivery before the last success cannot complete it either.
+        Assert.True((await BoundMatchAny(store).OnChildCompletedAsync(new(context, "act-a", "a", [ActivityOutcomes.Done]))).IsDeferred);
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => BoundMatchAny(store)
+            .OnChildCompletedAsync(new(context, "unknown-invocation", "a", [ActivityOutcomes.Done])).AsTask());
+    }
+
+    private static SwitchActivity BoundMatchAny(IActivityExecutionStateStore store, bool approved = true, bool notify = true)
+    {
+        var activity = new SwitchActivity(store);
+        activity.BindStructureInputs(new Dictionary<string, ValueEnvelope>
+        {
+            [SwitchActivity.ConditionInputKey("a")] = Bool(approved),
+            [SwitchActivity.ConditionInputKey("b")] = Bool(false),
+            [SwitchActivity.ConditionInputKey("c")] = Bool(notify)
+        });
+        return activity;
+    }
+
+    private static ValueEnvelope Bool(bool value) => ValueEnvelope.Inline(new("Boolean"), JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
+
+    private static ActivityExecutionState ChildState(string nodeId, string executionId, ActivityExecutionStatus status, string outcome = ActivityOutcomes.Done) =>
+        NewRunningState() with
+        {
+            Execution = new(executionId, "wfexec-1", nodeId, nodeId, "test/probe", "1.0.0"),
+            ParentActivityExecutionId = "actexec-switch", Status = status,
+            Completion = status == ActivityExecutionStatus.Completed
+                ? new ActivityCompletion(executionId, "attempt", Bool(true), OutcomeSelection.Named(outcome), DateTimeOffset.UnixEpoch, "fingerprint") : null
+        };
 
     [Fact]
     public async Task Execute_SchedulesMatchingCaseBranch()
@@ -80,7 +173,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
             @default: NewNode("node-default")), value: "b");
 
-        var continuation = await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity(new InMemoryActivityExecutionStateStore()).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
@@ -94,7 +187,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: NewNode("node-default")), value: "zzz");
 
-        var continuation = await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity(new InMemoryActivityExecutionStateStore()).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-default", "node-default", [ActivityOutcomes.Done]));
 
         Assert.True(continuation.IsComplete);
@@ -110,7 +203,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
             @default: NewNode("node-default")), value: "b");
 
-        var continuation = await new SwitchActivity().OnChildCompletedAsync(
+        var continuation = await new SwitchActivity(new InMemoryActivityExecutionStateStore()).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Break]));
 
         Assert.True(continuation.IsComplete);
@@ -124,7 +217,7 @@ public sealed class SwitchActivityTests : IDisposable
             cases: [("a", NewNode("node-a"))],
             @default: NewNode("node-default")), value: "a");
 
-        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new SwitchActivity()
+        await Assert.ThrowsAsync<ControlFlowExecutionException>(() => new SwitchActivity(new InMemoryActivityExecutionStateStore())
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
             .AsTask());
     }
@@ -183,9 +276,9 @@ public sealed class SwitchActivityTests : IDisposable
     private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
         ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
-    private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, string value)
+    private SimpleActivityExecutionContext NewContext(ExecutableNode executableNode, string? value)
     {
-        var activity = new SwitchActivity { Value = value };
+        var activity = new SwitchActivity(new InMemoryActivityExecutionStateStore()) { Value = value };
         var context = new SimpleActivityExecutionContext(
             activity,
             CancellationToken.None,

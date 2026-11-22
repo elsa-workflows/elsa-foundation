@@ -106,8 +106,12 @@ After every implementation review round, verify findings against source/reproduc
 
 ## Approval and delivery sequence
 
-This branch is a proposal only. Final coordinator spec agreement (including Break), the initiative pre-merge gate and authorized proposal merge precede production work. The separate main-sync helper remains the only active sync lane. Once the proposal and dependencies merge, cut a separate implementation branch from current initiative and open its implementation PR against that branch. Set this spec to Implemented in that PR only after tasks/acceptance complete. Formal review/merge gates remain explicit.
+The coordinator approved the prepared requirements and explicitly directed implementation in this same PR, overriding the earlier separate implementation branch/proposal-merge prerequisite for S-12. The separate main-sync helper remains the only active sync lane. Set the spec to Implemented only after tasks/acceptance complete. Final initiative integration, review and authorized merge gates remain explicit; this delivery instruction grants no merge permission.
 
 ## Complexity Tracking
 
 No ratified-gate exception is planned. Provisional catalog/versioning text remains context, not newly ratified policy. A potential public constructor break is tracked rather than hidden behind a nullable service or global store.
+
+## Implemented API classification
+
+Switch construction changes from `Switch()` to `Switch(IActivityExecutionStateStore)`: this is a Major public C# source/binary break accepted under pre-GA cleanup. The owning ControlFlow project has no PublicAPI baseline files; no unrelated baseline or package version is fabricated. CLR activation uses existing DI. Activity version 4.1.0, descriptor shape and structure schema 2.0.0 stay unchanged: existing artifacts retain the same pinned contract shape, and new bodies already participate in structure/artifact hashing. No stored-state schema or new versioning policy is introduced.

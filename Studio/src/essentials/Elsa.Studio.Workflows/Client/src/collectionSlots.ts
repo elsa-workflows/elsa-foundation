@@ -73,6 +73,14 @@ export function removeCollectionItem(activity: ActivityNode, collection: Collect
 
 export const caseConditionInputKey = (caseId: string) => `Case:${caseId}:Condition`;
 
+export function setSwitchMode(activity: ActivityNode, mode: "MatchFirst" | "MatchAny"): ActivityNode {
+  if (activity.structure?.kind !== "elsa.switch.structure" || !isRecord(activity.structure.payload)) return activity;
+  const payload = { ...activity.structure.payload };
+  if (mode === "MatchAny") payload.mode = mode;
+  else delete payload.mode;
+  return { ...activity, structure: { ...activity.structure, payload } };
+}
+
 export function setCollectionCondition(activity: ActivityNode, collection: CollectionSlot, caseId: string, state: unknown): ActivityNode {
   const items = collectionSlotItems(activity, collection);
   if (!items || !collection.itemIdProperty || !collection.conditionProperty) return activity;
