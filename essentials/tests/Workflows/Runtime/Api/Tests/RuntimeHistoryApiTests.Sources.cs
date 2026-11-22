@@ -334,7 +334,8 @@ public sealed partial class RuntimeHistoryApiTests
         var metadata = new Dictionary<string, string> { ["history.reasonCode"] = "detached-child-settled", ["history.relatedWorkflowExecutionId"] = "parent" };
         if (linked) metadata.Add("history.sourceDeliveryId", "outgoing");
         var projection = new SourceProjection { Head = head, Refreshed = head, Items =
-            [Origin() with { Name = "ChildWorkflowSettled", Metadata = metadata }] };
+            [new RuntimeHistoryEvent("origin", "run", 1, RuntimeHistoryEventCategory.SchedulerLifecycle, "ChildWorkflowSettled", Now, metadata: metadata)
+                { Authority = RuntimeHistoryAuthority.CommittedTransition }] };
         var lookup = new SourceLookup(projection) { Item = SourceItem(RuntimePostCommitOutboxStatus.Pending, target: "parent", kind: WorkflowDispatchLifecycle.ResumeParentIntentKind) };
         using var provider = await SourceServices(projection, lookup);
         var view = await provider.GetRequiredService<RuntimeHistoryInspectionService>().ReadAsync(new("run"));
