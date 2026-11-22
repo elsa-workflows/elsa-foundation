@@ -76,7 +76,7 @@ describe("Activity Definitions experience", () => {
     const createActivity = buttonByText(rendered.container, "New activity definition");
     expect(createActivity.getAttribute("aria-label") ?? createActivity.textContent).toContain("New activity definition");
     click(createActivity);
-    await waitForText(rendered.container, "New activity definition");
+    await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
     click(rendered.container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!);
     expect(buttonByText(rendered.container, "Browse built-in activities")).toBeTruthy();
 

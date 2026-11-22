@@ -2115,7 +2115,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "Hello World");
     await click(buttonByText(container, "New workflow"));
-    await waitForText(document.body, "New workflow");
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     const rootCards = dialog(container).querySelectorAll(".wf-root-card");
     expect(rootCards).toHaveLength(3);
     expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence", "BPMN"]);
@@ -2185,7 +2185,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "Hello World");
     await click(buttonByText(container, "New workflow"));
-    await waitForText(document.body, "New workflow");
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     await fill(inputByLabel(dialog(container), "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
 
@@ -4879,7 +4879,7 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
     await click(buttonByText(container, "New workflow"));
-    await waitForText(document.body, "New workflow");
+    await vi.waitFor(() => expect(dialog(container).querySelector("h2")?.textContent).toBe("New workflow"));
     await fill(inputByLabel(dialog(container), "Display name"), "Placed workflow");
     await click(buttonByText(dialog(container), "Create"));
     await vi.waitFor(() => expect(definitionPost).toMatchObject({ name: "Placed workflow", folderId: "folder-root" }));
@@ -5729,7 +5729,7 @@ async function openCreateDialogWithSuggest() {
 
   await waitForText(rendered.container, "Hello World");
   await click(buttonByText(rendered.container, "New workflow"));
-  await waitForText(document.body, "New workflow");
+  await vi.waitFor(() => expect(dialog(rendered.container).querySelector("h2")?.textContent).toBe("New workflow"));
   // The button reveals the intent field rather than firing a context-free prompt.
   await click(buttonByText(dialog(rendered.container), "Suggest name and description"));
 

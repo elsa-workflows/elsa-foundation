@@ -585,7 +585,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(rendered.container, "No designed activities yet");
     click(buttonByText(rendered.container, "New activity definition"));
-    await waitForText(rendered.container, "New activity definition");
+    await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
     await waitFor(() => expect(rendered.container.querySelector("select[name='provider']")).not.toBeNull());
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
