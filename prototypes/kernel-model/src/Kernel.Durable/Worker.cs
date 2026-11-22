@@ -1747,14 +1747,14 @@ public sealed class Worker : IScopeActivation, ITurnServices
     // During recovery, each mature command keeps its boundary until it leaves the inbox. A late wake can
     // discover several at once. Pick the earliest maturity, with same-source order for equal maturities.
     // Compare the two source heads by first observation: volatile posts have no database sequence.
-    private Delivery? RecoveryBoundary(Slot slot, long now, bool recovering)
+    private Delivery? RecoveryBoundary(Slot slot, long now, bool recovering, Delivery? skip = null)
     {
         Delivery? durable = null, local = null;
         var earliest = long.MaxValue;
         if (!recovering && !slot.Inbox.Exists(i => i.RecoveryOrdering || i.Suspect)) return null;
         foreach (var item in slot.Inbox)
         {
-            if (item.Taken || !item.Message.IsControl || item.Message.Kind == Kinds.Suspend && Has(Flaw.SuspendDuringTrial)) continue;
+            if (item == skip || item.Taken || !item.Message.IsControl || item.Message.Kind == Kinds.Suspend && Has(Flaw.SuspendDuringTrial)) continue;
             if (slot.CurrentRow?.ParkRecovery is not null && item.Held && HeldCommandStimulus(slot, item, now) == 0) continue;
             var at = item.Message.Due ?? item.ObservedAt;
             if (at > now) continue;
@@ -1800,11 +1800,19 @@ public sealed class Worker : IScopeActivation, ITurnServices
         var open = slot.CurrentRow?.ParkRecovery is not null;
         var head = FirstUnheldRecoveryInput(slot);
         var control = RecoveryBoundary(slot, now, onTrial || open);
-        if (open && !onTrial && control is not null)
-            return Awaits(control) || control.UncheckedReference is not null ? [] : [control];
-        if (head is { } first && !slot.Inbox.Exists(item => RecoveryOrder(item) == first)) return [];
+        Delivery? waitingDrain = null;
+        if (open && !onTrial && control is { Message: { Kind: Kinds.Drain, Due: not null } drain } &&
+            drain.InboxKey == slot.CurrentRow?.ParkRecovery?.Control)
+        {
+            // A reissued control is waiting on credit, a handoff or suspension. Another mature control
+            // retains priority. Otherwise let an eligible cohort input advance before probing again.
+            waitingDrain = control;
+            control = RecoveryBoundary(slot, now, recovering: true, skip: waitingDrain);
+        }
+        if (open && !onTrial && control is not null) return ReadyControl(control);
+        if (head is { } first && !slot.Inbox.Exists(item => RecoveryOrder(item) == first)) return ReadyControl(waitingDrain);
         var cohortFirst = slot.CurrentRow?.ParkCohort is not null && head is not null;
-        bool Eligible(Delivery item) => !item.Ticket && !item.Taken && !(item.Message.Due > now) && !WithheldByRecovery(item, slot) && (!cohortFirst || CohortInput(item, slot))
+        bool Eligible(Delivery item) => item != waitingDrain && !item.Ticket && !item.Taken && !(item.Message.Due > now) && !WithheldByRecovery(item, slot) && (!cohortFirst || CohortInput(item, slot))
             && (!suspended || DiscardedAt(item, slot) || item.Message.IsControl || CanSettleWhileWithheld(slot, item) ||
                 CreationError(slot, item.Message) is not null);
         bool InFront(Delivery item) => CohortInput(item, slot) || TrialItems.Contains(item) || BeforeRecoveryControl(item, control);
@@ -1867,8 +1875,11 @@ public sealed class Worker : IScopeActivation, ITurnServices
         // A terminal child notice can also settle a registry entry without a new model stimulus.
         return due.TrueForAll(i => i.Held && !ObsoleteJobAt(i, slot.CurrentRow) &&
             (i.Message.Kind != Kinds.ChildFinished || slot.CurrentRow?.Status == InstanceStatus.Running ||
-                !CanSettleWhileWithheld(slot, i))) ? [] : due;
+                !CanSettleWhileWithheld(slot, i))) ? ReadyControl(waitingDrain) : due;
     }
+
+    private List<Delivery> ReadyControl(Delivery? item) =>
+        item is null || Awaits(item) || item.UncheckedReference is not null ? [] : [item];
 
     private long HeldCommandStimulus(Slot slot, Delivery held, long now) => slot.Inbox
         .Where(item => !item.Held && !item.Taken && !item.Ticket && !(item.Message.Due > now) &&

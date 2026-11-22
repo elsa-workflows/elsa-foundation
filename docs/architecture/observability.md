@@ -1345,6 +1345,11 @@ Park decision.
     been polled, and a control with priority could restore page after page before any model work (the fifth review's
     R5-M3 trace; FR-1's page tested its gate only on the empty-page branch, `experiments/Review4.Blockers/Fr1.cs`
     725–749).
+  - **A delayed credit check yields to ready cohort work.** A newly issued page control keeps its normal priority.
+    When a page reissues its control with a delay while waiting for credit, handoff or suspension, another mature
+    control retains priority. With no other mature control, the Worker hands off any ready cohort input before
+    checking the page again. A pass that repeatedly arrives after the delay therefore still advances the model.
+    This ordering also applies after takeover. The gate, the cursor and the set of eligible rows stay the same.
   - **The partition's backlog is no part of the gate.** The trace it avoids: rows that arrive during a recover drain
     are withheld as unreleased rows, yet they count in the partition's backlog; a gate on that backlog above the high
     water mark would make every page wait, the withheld rows would never be released, and the backlog would never
