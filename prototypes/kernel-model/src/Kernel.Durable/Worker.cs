@@ -2622,6 +2622,28 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 Apply(unit, seqs, handOver, cancellationToken, ReplyRelease.AfterCommit, fenced);
                 if (!LeaseUsable()) return Outcome.Lost;
             }
+            if (result.ParkExpiries.Count > 0)
+            {
+                lock (_turnSync)
+                {
+                    if (generation != _generation || !LeaseUsable()) return Outcome.Lost;
+                    foreach (var expiry in result.ParkExpiries)
+                    {
+                        var timer = expiry.Message;
+                        var partition = timer.Target.Partition;
+                        if (!_held.TryGetValue(partition, out var ownership)) continue;
+                        if (handOver && expiry.Seen == ownership.Epoch)
+                            Hold(timer, expiry.Seq, durable: true, marked: true, cancellationToken: cancellationToken);
+                        else
+                        {
+                            if (timer.Due <= Now + (long)_options.Horizon.TotalMilliseconds)
+                                _behind[timer.InboxKey] = partition;
+                            _caughtUp = false;
+                            _woken = true;
+                        }
+                    }
+                }
+            }
             foreach (var item in marks.Concat(trial))
                 if (item.Key is not null && _items.ContainsKey(item.Message.InboxKey)) StartJob(item, cancellationToken);
             if (!LeaseUsable()) return Outcome.Lost;
