@@ -14,9 +14,6 @@
 
 .ad-designed-collection .ad-collection-state { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .ad-designed-collection .ad-collection-state small { flex-basis: 100%; color: var(--studio-text-muted); font-family: var(--studio-font-ui); }
-.ad-designed-collection .ad-status-chip { display: inline-flex; width: fit-content; padding: .2rem .5rem; border-radius: 999px; font-size: var(--studio-label-size); font-weight: 700; }
-.ad-designed-collection .ad-status-chip.is-draft { color: var(--studio-warning-fg); background: color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface)); }
-.ad-designed-collection .ad-status-chip.is-published { color: var(--studio-success-fg); background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface)); }
 .ad-designed-collection .ad-status-copy { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
 .ad-designed-collection .ad-collection-empty > div { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: .4rem; }
 

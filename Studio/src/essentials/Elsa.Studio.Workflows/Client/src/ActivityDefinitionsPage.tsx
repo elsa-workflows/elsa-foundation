@@ -12,7 +12,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
-import { StudioCollectionFooter, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioCollectionFooter, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioPageHeader, StudioSearchInput, StudioResultState, SkeletonRows, StudioField, StudioTimestamp, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import {
   isActivityDefinitionEnumValue,
   type ActivityDefinitionCollectionRequest,
@@ -506,8 +506,8 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               <p>{providerKey ? `Provider: ${providerKey} · ` : ""}Authority: {authorityKind}</p>
             </WorkflowListIdentifiers></span>
             <span role="cell" data-label="State" className="ad-collection-state">
-              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
-              {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}
+              {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <StatusChip tone="warning">Draft</StatusChip> : null}
+              {definition.lifecycle.versionCount > 0 ? <StatusChip tone="success">Published</StatusChip> : null}
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount === 0 ? <span className="ad-status-copy">No versions yet</span> : null}
               {recommendedVersion ? <small title={`Exact recommended version ${recommendedVersion.full}`}>Recommended {recommendedVersion.short}</small> : definition.lifecycle.versionCount > 0 ? <small>No recommended version</small> : null}
             </span>

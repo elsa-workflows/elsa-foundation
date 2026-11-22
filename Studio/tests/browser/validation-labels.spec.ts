@@ -63,7 +63,7 @@ for (const theme of ["light", "dark"]) {
     await page.goto(`/?mode=validation-labels&theme=${theme}`);
     const summary = page.getByRole("region", { name: "Test run summary", exact: true });
     await expect(summary.locator(".wf-runtime-status-outcome")).toBeVisible();
-    await expect(summary.locator(".wf-status-badge")).toHaveText("Rejected");
+    await expect(summary.locator(".studio-status-chip")).toHaveText("Rejected");
     await expect(page.locator(".wf-runtime-reason")).toContainText("Say hello");
     await expect(page.getByRole("region", { name: "Test Run controls" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Reconnect execution" })).toHaveCount(0);

@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
@@ -376,13 +377,13 @@ export function ReusableBoundaryInspector({
           {frames.map((frame, index) => (
             <span key={frame.key} className="wf-boundary-breadcrumb">
               {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
-              <button
+              <StudioButton
                 type="button"
                 aria-current={index === frames.length - 1 ? "page" : undefined}
                 onClick={() => navigateToFrame(index)}
               >
                 {frame.label}
-              </button>
+              </StudioButton>
             </span>
           ))}
           <WorkflowStatusBadge status={activeFrame.inspection.status} subStatus={activeFrame.inspection.subStatus} />
@@ -391,7 +392,7 @@ export function ReusableBoundaryInspector({
 
       <div className="wf-boundary-controls">
         <div className="wf-boundary-pane-tabs" role="tablist" aria-label="Activity details">
-          <button
+          <StudioButton
             type="button"
             role="tab"
             id={stepsTabId}
@@ -407,8 +408,8 @@ export function ReusableBoundaryInspector({
             {activeFrame.evidence.committedThroughSequence !== null
               ? <small aria-hidden="true">{activeFrame.evidence.items.length}</small>
               : null}
-          </button>
-          <button
+          </StudioButton>
+          <StudioButton
             type="button"
             role="tab"
             id={definitionTabId}
@@ -421,7 +422,7 @@ export function ReusableBoundaryInspector({
             onKeyDown={event => moveBoundaryTab(event, activeFrame.activePane, setPane)}
           >
             Definition
-          </button>
+          </StudioButton>
         </div>
         <AuthorizedBoundaryDefinitionLink
           context={context}
@@ -559,7 +560,7 @@ function BoundaryStructurePane({
     return (
       <div className="wf-boundary-panel-message" role="alert">
         <p>Authorized historical structure is unavailable. {frame.layoutError}</p>
-        <button type="button" onClick={onRetry}><RotateCcw size={13} /> Retry structure</button>
+        <StudioButton type="button" onClick={onRetry}><RotateCcw size={13} /> Retry structure</StudioButton>
       </div>
     );
   }
@@ -607,7 +608,7 @@ export function HistoricalBoundaryLayout({ layout, onSelectNode, selectedExecuta
 
           return (
             <div className="wf-boundary-layout-list-row" data-selected={selected ? "true" : undefined} key={node.executableNodeId} title={nodeDescription(node)}>
-              {onSelectNode ? <button className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</button>
+              {onSelectNode ? <StudioButton className="wf-boundary-layout-list-action" type="button" aria-pressed={selected} onClick={() => onSelectNode(node.executableNodeId)}>{contents}</StudioButton>
                 : <div className="wf-boundary-layout-list-action">{contents}</div>}
             </div>
           );
@@ -723,9 +724,9 @@ function BoundaryEvidencePane({
             ? `${evidence.items.length} recorded step${evidence.items.length === 1 ? "" : "s"}`
             : "Waiting for recorded steps"}
         </small>
-        <button type="button" aria-label="Refresh activity steps" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
+        <StudioButton type="button" aria-label="Refresh activity steps" onClick={onRestart} disabled={frame.evidenceStatus === "loading"}>
           <RefreshCw size={13} /> Refresh
-        </button>
+        </StudioButton>
       </header>
 
       {evidence.staleReason ? (
@@ -735,14 +736,14 @@ function BoundaryEvidencePane({
             <strong>This steps view is out of date.</strong>
             <small>Refresh from the first page to load a new snapshot. Steps from different snapshots are kept separate.</small>
           </span>
-          <button type="button" onClick={onRestart}>Refresh steps</button>
+          <StudioButton type="button" onClick={onRestart}>Refresh steps</StudioButton>
         </div>
       ) : null}
       {openError ? <p className="wf-boundary-error" role="alert">{openError}</p> : null}
       {frame.evidenceStatus === "failed" ? (
         <div className="wf-boundary-panel-message" role="alert">
           <p>Activity steps are unavailable. {frame.evidenceError}</p>
-          <button type="button" onClick={onRestart}><RotateCcw size={13} /> Retry</button>
+          <StudioButton type="button" onClick={onRestart}><RotateCcw size={13} /> Retry</StudioButton>
         </div>
       ) : null}
       {!hasLoadedEvidence && frame.evidenceStatus === "loading"
@@ -763,14 +764,14 @@ function BoundaryEvidencePane({
         />
       ) : null}
       {evidence.nextCursor && !evidence.staleReason ? (
-        <button
+        <StudioButton
           type="button"
           className="wf-boundary-load-more"
           disabled={frame.evidenceStatus === "loading"}
           onClick={onLoadMore}
         >
           {frame.evidenceStatus === "loading" ? "Loading more steps..." : "Load more steps"}
-        </button>
+        </StudioButton>
       ) : null}
       {frame.selectedActivityExecutionId ? (
         <SelectedExecutionEvidence
@@ -895,7 +896,7 @@ function VirtualizedHierarchy({
                 <strong>{historicalActivityLabel(item.activityType)}</strong>
                 {item.relativeDepth > 1 ? <small>Nested step</small> : null}
                 {item.boundary ? (
-                  <button
+                  <StudioButton
                     type="button"
                     className="wf-boundary-open"
                     disabled={openingActivityExecutionId !== null}
@@ -906,7 +907,7 @@ function VirtualizedHierarchy({
                   >
                     <CornerDownRight size={13} />
                     {openingActivityExecutionId === item.activityExecutionId ? "Opening…" : "View steps"}
-                  </button>
+                  </StudioButton>
                 ) : null}
               </span>
               <span className="wf-boundary-hierarchy-state">
@@ -1024,11 +1025,11 @@ function BoundaryTechnicalDetails({
       {selectedLinks.length > 0 ? (
         <div className="wf-boundary-causal-links" aria-label="Related execution links">
           {selectedLinks.map(link => (
-            <button type="button" key={`${link.label}:${link.id}`} onClick={() => onSelect(link.id)}>
+            <StudioButton type="button" key={`${link.label}:${link.id}`} onClick={() => onSelect(link.id)}>
               <GitBranch size={12} aria-hidden="true" />
               <span>{link.label}</span>
               <small>{link.id}{loadedIds.has(link.id) ? " · loaded step" : ""}</small>
-            </button>
+            </StudioButton>
           ))}
         </div>
       ) : null}
