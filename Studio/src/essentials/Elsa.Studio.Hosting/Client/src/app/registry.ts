@@ -80,6 +80,7 @@ export function createStudioRegistry(
     userTaskForms: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskForms"]>>>({ slot: studioSlots.userTaskForms, hostPolicy }),
     userTaskFieldControls: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["userTaskFieldControls"]>>>({ slot: studioSlots.userTaskFieldControls, hostPolicy }),
     workflowRunInputEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunInputEditors"]>>>({ slot: studioSlots.workflowRunInputEditors,hostPolicy }),
+    triggerConfigurationEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["triggerConfigurationEditors"]>>>({ slot: studioSlots.triggerConfigurationEditors,hostPolicy }),
     workflowTestStimulusEditors: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowTestStimulusEditors"]>>>({ slot: studioSlots.workflowTestStimulusEditors,hostPolicy }),
     workflowRunRelatedLinks: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["workflowRunRelatedLinks"]>>>({ slot: studioSlots.workflowRunRelatedLinks,hostPolicy }),
     incidentRootCauseProviders: createContributionRegistry<RegistryItem<NonNullable<ElsaStudioModuleApi["incidentRootCauseProviders"]>>>({ slot: studioSlots.incidentRootCauseProviders,hostPolicy }),

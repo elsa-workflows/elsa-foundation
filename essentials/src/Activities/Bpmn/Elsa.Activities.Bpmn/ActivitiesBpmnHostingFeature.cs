@@ -49,6 +49,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddSingleton(new BpmnModelHostingOptions(AdmitNewExecutions));
         services.TryAddScoped<IBpmnModelRuntime, BpmnModelRuntime>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITriggerTargetModelSource, BpmnTriggerModelSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeModelExecutionOutcomeProjector, BpmnModelExecutionOutcomeProjector>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStandaloneTriggerRuntimeTarget, BpmnTriggerTarget>());
         services.AddSingleton<IShellInitializer>(new BpmnModelHostingRegistrationInitializer(services));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeExecutionProtocolSource, BpmnProtocolSource>());

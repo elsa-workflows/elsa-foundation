@@ -18,6 +18,7 @@ import {
 } from "./workflowTestStimulusEditors";
 import { registerWorkflowWeaver } from "./workflowWeaver";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
+import type { WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 
 const WorkflowTagsRoute = lazy(() => import("./workflow-editor/WorkflowTagsPage").then(module => ({ default: module.WorkflowTagsRoute })));
 const WorkflowViewsRoute = lazy(() => import("./workflow-editor/WorkflowViewsPage").then(module => ({ default: module.WorkflowViewsRoute })));
@@ -33,6 +34,8 @@ const ActivityUpgradeWorkbenchPage = lazy(() => import("./ActivityUpgradeWorkben
 const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").then(module => ({ default: module.Elsa3ReusableImportPage })));
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
+const StandaloneTriggersRoute = lazy(() => import("./standalone-triggers/TriggersRoute").then(module => ({ default: module.TriggersRoute })));
+const StandaloneWorkflowTriggersPanel = lazy(() => import("./standalone-triggers/Subscriptions").then(module => ({ default: module.WorkflowTriggersPanel })));
 
 // register() has no host-provided teardown to unregister this listener, and it can run more than once
 // (module reloads, tests). Keeping the handler as a stable module-level reference makes repeat
@@ -106,6 +109,11 @@ export function register(api: ElsaStudioModuleApi) {
   const incidentRootCauseProviders = () => api.incidentRootCauseProviders?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
     <WorkflowLazyBoundary label={label}>{content}</WorkflowLazyBoundary>;
+  api.workflowDesigner.panels.add({
+    id: "workflows.standalone-triggers", title: "Triggers", side: "right", order: 15,
+    supportedResourceKinds: ["workflow-definition"],
+    component: ({ context }) => deferred("workflow triggers", <StandaloneWorkflowTriggersPanel api={api} context={context as WorkflowDesignerPanelContext} />)
+  });
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",
@@ -135,10 +143,17 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-elsa3-import", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Import from Elsa 3", path: "/workflows/activity-definitions/import-elsa3", placement: "build", parentId: "library", order: 35 },
         { id: "workflows-templates", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1",relations:["workflow-templates"]}], title: "Templates", path: "/workflows/templates", iconColor: "var(--studio-nav-icon-blue)", placement: "build", parentId: "library", order: 25 },
         { id: "workflows-runtime-diagnostics", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1",relations:["runtime-diagnostics"]}], title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "var(--studio-nav-icon-blue)", placement: "runtime", order: 40 },
-        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 }
+        { id: "workflows-activity-availability", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}], title: "Activity availability", path: "/workflows/activity-availability", iconColor: "var(--studio-nav-icon-teal)", placement: "authoring", order: 50 },
+        { id: "workflows-triggers", requiresBackend: [{id:"elsa.api.standalone-triggers",contractVersion:"1"}], title: "Triggers", path: "/workflows/triggers", iconColor: "var(--studio-nav-icon-amber)", placement: "operate", order: 35 }
       ]
     },
     routes: [
+      ...([ ["list", "/workflows/triggers", "Triggers"], ["create", "/workflows/triggers/new", "Create trigger"], ["delivery", "/workflows/triggers/deliveries/:deliveryId", "Trigger delivery"], ["details", "/workflows/triggers/:triggerId", "Trigger details"] ] as const).map(([view, path, label]) => ({
+        id: `workflows-triggers-${view}`, path, label,
+        requiresBackend: [{ id: "elsa.api.standalone-triggers", contractVersion: "1", relations: [view === "delivery" ? "delivery" : "triggers"] }],
+        workspace: { resourceKey: (location: URL) => view === "details" || view === "delivery" ? `standalone-trigger-${view}:${location.pathname.split("/").at(-1)}` : null },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred("standalone triggers", <StandaloneTriggersRoute api={api} view={view} navigate={navigate} />)
+      })),
       ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "New workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
         id: `workflows-tags-${view}`,
         requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],

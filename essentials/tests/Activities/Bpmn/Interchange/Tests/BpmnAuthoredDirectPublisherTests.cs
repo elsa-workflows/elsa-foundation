@@ -380,6 +380,30 @@ public sealed class BpmnAuthoredDirectPublisherTests
         businessErrorCode = "etl-business-failure", faultPolicy = new { formatVersion = 1, disposition = "HoldForRetry", maxAttempts = 3 }
     }, Web)!.AsObject();
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Published_optional_input_contract_preserves_authored_nullability(bool nullable, bool immutableSource)
+    {
+        var fixture = new Fixture();
+        fixture.Version.State = fixture.Version.State with
+        {
+            Inputs = [new("value", "value", new("String"), null, "Value", null, nullable,
+                DefaultValue: JsonSerializer.SerializeToElement("fallback"), DefaultSyntax: "Literal", IsRequired: false)]
+        };
+        if (immutableSource) fixture.Version.StateSource = JsonSerializer.Serialize(fixture.Version.State, Web);
+        var before = JsonSerializer.Serialize(fixture.Version.State, Web);
+        await fixture.Publish();
+        var retained = JsonSerializer.Deserialize<WorkflowExecutableInputContract>(JsonSerializer.Serialize(fixture.InputContract, Web), Web)!;
+        var declared = Assert.Single(retained.Inputs);
+        Assert.Equal(nullable, declared.IsNullable);
+        Assert.False(declared.IsRequired);
+        Assert.Equal("fallback", declared.DefaultValue!.Value.GetString());
+        Assert.Equal(before, JsonSerializer.Serialize(fixture.Version.State, Web));
+    }
+
     [Fact]
     public async Task Declared_model_inputs_and_version_two_worker_mapping_are_projected_without_native_bindings()
     {

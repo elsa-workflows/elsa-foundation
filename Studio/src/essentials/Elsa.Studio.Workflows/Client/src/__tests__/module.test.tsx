@@ -179,9 +179,14 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-elsa3-import", label: "Import from Elsa 3", parentId: "library" }),
       expect.objectContaining({ id: "workflows-templates", label: "Templates", path: "/workflows/templates", placement: "build", parentId: "library" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", placement: "runtime", parentId: undefined }),
-      expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined })
+      expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability", placement: "authoring", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-triggers", label: "Triggers", path: "/workflows/triggers", parentId: undefined, placement: "operate" })
     ]);
     expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-triggers-list", path: "/workflows/triggers" }),
+      expect.objectContaining({ id: "workflows-triggers-create", path: "/workflows/triggers/new" }),
+      expect.objectContaining({ id: "workflows-triggers-delivery", path: "/workflows/triggers/deliveries/:deliveryId" }),
+      expect.objectContaining({ id: "workflows-triggers-details", path: "/workflows/triggers/:triggerId" }),
       expect.objectContaining({ id: "workflows-tags-list", path: "/workflows/tags" }),
       expect.objectContaining({ id: "workflows-tags-create", path: "/workflows/tags/new" }),
       expect.objectContaining({ id: "workflows-tags-edit", path: "/workflows/tags/:tagId" }),

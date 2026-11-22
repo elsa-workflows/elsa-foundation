@@ -11,8 +11,8 @@ export function nativeBlockPlannerContext(context: NativeBlockContext, createPos
 }
 
 export function nativeBlockEditorDocument(document: NativeBlockDocument, catalog: ActivityCatalogItem[]): NativeBlockDocument {
-  // Match the host's ordinary structure normalization before its one history edit. In particular,
-  // generated leaf transfers need explicit null structure, so the host effect adds no following edit.
+  // Match the host's ordinary structure normalization before its one history edit,
+  // preserving absent leaf structures so the host effect adds no following edit.
   const root = normalizeActivityStructures(document.rootActivity, catalog) ?? document.rootActivity;
   return { ...document, rootActivity: expandStateFromWire({ rootActivity: root }).rootActivity ?? root };
 }

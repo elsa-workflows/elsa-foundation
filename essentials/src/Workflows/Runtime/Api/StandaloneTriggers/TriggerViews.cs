@@ -37,13 +37,20 @@ internal sealed record TriggerSubscriptionView(string Id, string TriggerId, long
     TriggerGrantView InvocationGrant, string Compatibility, IReadOnlyList<TriggerFinding> Findings,
     TriggerServing? Serving, IReadOnlyList<TriggerAction> Actions, object? TriggerSummary = null);
 internal sealed record TriggerPage<T>(IReadOnlyList<T> Items, string? Next);
+internal sealed record TriggerConfigurationFieldView(string Key, string Label, string Type, bool Required,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? DefaultValue,
+    IReadOnlyList<TriggerFieldChoice>? Choices, string? Description, bool Sensitive, bool ReadOnly)
+{
+    internal static TriggerConfigurationFieldView From(TriggerConfigurationField field) => new(field.Key, field.Label,
+        field.Type, field.Required, field.DefaultValue, field.Choices, field.Description, field.Sensitive, field.ReadOnly);
+}
 internal sealed record TriggerTypeView(string TypeKey, string SchemaVersion, string DisplayName, string Family,
-    IReadOnlyList<TriggerConfigurationField> ConfigurationFields, bool CanCreate, string? Description)
+    IReadOnlyList<TriggerConfigurationFieldView> ConfigurationFields, bool CanCreate, string? Description)
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ConfigurationEditorId { get; init; }
 }
-internal sealed record TriggerImpact(string Label, string? Before = null, string? After = null, string? Description = null);
+internal sealed record TriggerImpact(string Label, string? Before = null, string? After = null, string? Description = null, TriggerTargetSelector? Target = null);
 internal sealed record TriggerPreview(string PreviewId, DateTimeOffset ExpiresAt, long ObservedRevision,
     string CommandFingerprint, bool CanApply, IReadOnlyList<TriggerImpact> Impact, IReadOnlyList<TriggerFinding> Findings);
 internal sealed record TriggerChangeResult(string RequestId, string Disposition, long Revision, TriggerView? Trigger,

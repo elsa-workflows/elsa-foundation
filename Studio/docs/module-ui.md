@@ -360,3 +360,19 @@ Use the shared page spacing tokens and restrained navigation surfaces in every t
 `StudioExpressionEditorContribution.variableAdditionPreservation` proves only the existing variable-addition operation. Promotion into a reusable graph asks the language owner separately through optional `reusableBoundaryPreservation` (`language`, `revision`, `allows`). Its verdict must prove that the unchanged source observes only explicit parameters and survives a closed value boundary. Workflows rewrites owned parameter identities, never language source. Missing, duplicate, faulting or unproved contributions refuse promotion; the revision and contribution identities participate in preview freshness.
 
 The JavaScript module currently admits the same finite direct `args.<declared parameter>`/numeric-operand grammar used by its existing preservation implementation. The separate contribution names the stronger closed-dependency guarantee explicitly. It does not authorize arbitrary scripts or replace ordinary backend validation/publication. T006 composes this contribution in both resource editors.
+
+## Standalone trigger configuration editors
+
+The Workflows module provides the [standalone trigger collection and association surfaces](../../specs/1217-standalone-triggers/ux-acceptance.md).
+They discover routes and supported types through the selected backend's `elsa.api.standalone-triggers` capability.
+The backend continues to own permissions, protected configuration, revisions, invocation grants and delivery authority.
+
+A module can contribute a `StudioTriggerConfigurationEditorContribution` through the optional
+`api.triggerConfigurationEditors` registry (`workflow.trigger.configuration-editors`). Match the backend's
+`typeKey`, `schemaVersion` and, when supplied, `configurationEditorId`. The component receives JSON configuration,
+validation findings and a disabled state; `onChange` returns the complete configuration, including preserved fields.
+It supplies configuration authoring only. The normal backend preview/apply flow still controls changes.
+
+Without one matching editor, or if an editor throws, Studio uses the backend's generic configuration fields and
+preserves saved values. The registry is optional so modules also work with older hosts. Use the public SDK and
+shared UI components; see the existing [configuration form](../src/essentials/Elsa.Studio.Workflows/Client/src/standalone-triggers/ConfigurationForm.tsx).
