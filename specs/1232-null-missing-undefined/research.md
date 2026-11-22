@@ -51,13 +51,14 @@ spec approval or implementation.
 
 ## R-3 Admission that always completes the request
 
-- **What #3731 already does**: `WorkflowStartDispatcher.ApplyInputContract` is the one admission step. Every start
-  reaches it: the runtime API, the stimulus router (triggers, live and saved), BPMN, test runs
+- **What #3731 already does**: `WorkflowStartDispatcher.ApplyInputContract` is the native workflow admission step.
+  Native starts reach it through the runtime API, the stimulus router (triggers, live and saved), BPMN native workers, test runs
   (`TestRunTargetDispatcher`) and DispatchWorkflow children (retained dispatch). It runs after the keyed and retained
   duplicate answers and before the start policy and enqueue, so before the start checkpoint. It fills declared
   defaults, refuses a missing required input, and normalizes the bag the start command carries. The early checks in
   `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow` stay, because they refuse before their own side effects.
-  BPMN declares no workflow inputs, so nothing changes for it.
+  Standalone BPMN model inputs use their model-specific shared-validator callers and retain model semantics;
+  they do not inherit policies from a source workflow or a native worker.
 - **Decision**: S-2 extends that step and adds no new one (no `WorkflowRequestAdmission`, no change to
   `WorkflowStartSchedulerWorkHandler`):
   1. check requiredness first in complete-bag mode, then fill declared defaults, preserving the distinction between
