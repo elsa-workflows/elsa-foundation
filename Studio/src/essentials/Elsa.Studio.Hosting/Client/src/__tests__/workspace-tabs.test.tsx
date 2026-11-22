@@ -123,6 +123,29 @@ describe("workspace tabs", () => {
     expect(readHistoryTabId(window.history.state)).toBe(tabId);
   });
 
+  it("keeps a dirty editor mounted during browser Back and completes the original traversal once", async () => {
+    await mount("/list");
+    await act(() => controller.navigate("/editor"));
+    const tabId = controller.state.activeId;
+    let decide!: (allowed: boolean) => void;
+    const review = vi.fn(() => new Promise<boolean>(resolve => { decide = resolve; }));
+    const guard = (event: Event) => (event as CustomEvent<StudioNavigationRequest>).detail.confirmWith?.(review);
+    window.addEventListener(studioNavigationRequestedEvent, guard);
+    try {
+      await act(() => window.history.back());
+      expect(currentLocation()).toBe("/editor");
+      expect(visiblePanel().querySelector(".editor")).not.toBeNull();
+      await act(() => decide(false));
+      expect(controller.path).toBe("/editor");
+      await act(() => window.history.back());
+      await act(() => decide(true));
+      expect(controller.path).toBe("/list");
+      expect(currentLocation()).toBe("/list");
+      expect(controller.state.activeId).toBe(tabId);
+      expect(review).toHaveBeenCalledTimes(2);
+    } finally { window.removeEventListener(studioNavigationRequestedEvent, guard); }
+  });
+
   it("keeps a background editor's unsaved edits while tearing down its effects", async () => {
     await mount("/editor?definition=a");
     await act(async () => click("Edit"));

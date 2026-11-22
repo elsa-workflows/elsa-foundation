@@ -299,13 +299,19 @@ function ResourceEditor({ api, native, initial, newMetadata, review, datasets, s
       const editorPath = view === "edit" ? `${resourcePath(initial.kind, initial.id)}/edit` : resourcePath(initial.kind, initial.id || "new");
       if (detail?.fromPath && new URL(detail.fromPath, window.location.origin).pathname !== editorPath) return;
       if (detail?.intent === "probe" || operation.current || busyRef.current) { event.preventDefault(); return; }
-      if (!window.confirm("Discard unsaved changes to this question or dashboard?")) event.preventDefault();
+      if (!detail?.confirmWith) { event.preventDefault(); return; }
+      const version = workingRevision.current;
+      const current = lifetime.capture();
+      detail.confirmWith(async () => {
+        const approved = await api.dialogs.confirm({ title: "Discard unsaved changes", message: `Discard your unsaved changes to this ${kind}?`, confirmLabel: "Discard changes", tone: "danger" });
+        return approved && current() && (!tabRef.current || tabRef.current.isActive()) && version === workingRevision.current && !operation.current && !busyRef.current;
+      });
     };
     const unload = (event: BeforeUnloadEvent) => { if (held()) { event.preventDefault(); event.returnValue = ""; } };
     if (!guardEnabled) { notifyStudioNavigationGuardReleased(); return; }
     window.addEventListener(studioNavigationRequestedEvent, guard); window.addEventListener("beforeunload", unload);
     return () => { window.removeEventListener(studioNavigationRequestedEvent, guard); window.removeEventListener("beforeunload", unload); };
-  }, [initial.id, initial.kind, view, kind, canEdit, guardEnabled]);
+  }, [api.dialogs, lifetime, initial.id, initial.kind, view, kind, canEdit, guardEnabled]);
   useEffect(() => { if (!dirty && !busy) notifyStudioNavigationGuardReleased(); }, [dirty, busy]);
 
   useEffect(() => {

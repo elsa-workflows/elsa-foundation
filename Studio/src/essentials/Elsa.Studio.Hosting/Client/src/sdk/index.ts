@@ -1993,14 +1993,43 @@ export interface StudioNavigationRequest {
   toPath: string;
   /** Absent on requests from hosts that predate workspace tabs; treat it as `navigate`. */
   intent?: StudioNavigationIntent;
+  /** Register a shared-dialog decision. A synchronous probe or legacy host cannot defer its action. */
+  confirmWith?(review: () => Promise<boolean>): void;
+}
+
+function dispatchNavigationRequest(detail: StudioNavigationRequest) {
+  return typeof window === "undefined" || window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
+    cancelable: true, detail
+  }));
 }
 
 export function requestStudioNavigation(fromPath: string, toPath: string, intent: StudioNavigationIntent = "navigate") {
-  if (typeof window === "undefined") return true;
-  return window.dispatchEvent(new CustomEvent<StudioNavigationRequest>(studioNavigationRequestedEvent, {
-    cancelable: true,
-    detail: { fromPath, toPath, intent }
-  }));
+  return dispatchNavigationRequest({ fromPath, toPath, intent });
+}
+
+let latestNavigationReview = 0;
+
+/** Synchronous guards keep ordinary navigation immediate. A newer action supersedes a pending review. */
+export function reviewStudioNavigation(fromPath: string, toPath: string, intent: StudioNavigationIntent = "navigate"): boolean | Promise<boolean> {
+  if (intent === "probe") return requestStudioNavigation(fromPath, toPath, intent);
+  const generation = ++latestNavigationReview;
+  const reviews: Array<() => Promise<boolean>> = [];
+  if (!dispatchNavigationRequest({ fromPath, toPath, intent, confirmWith: review => reviews.push(review) })) return false;
+  if (!reviews.length) return true;
+  return (async () => {
+    try {
+      for (const review of reviews) {
+        if (generation !== latestNavigationReview || !await review()) return false;
+      }
+      return generation === latestNavigationReview;
+    } catch { return false; }
+  })();
+}
+
+/** Carry out an immediate decision in the current event or observe a deferred one once it settles. */
+export function settleStudioNavigationReview(review: boolean | Promise<boolean>, decide: (allowed: boolean) => void) {
+  if (typeof review === "boolean") decide(review);
+  else void review.then(decide);
 }
 
 export interface StudioActivityDefinitionLayoutRecord {
