@@ -889,7 +889,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)
     {
         var kind = typeof(ClrActivityDescriptor).FullName!;
-        return (kind, JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType))));
+        return (kind, JsonSerializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)), JsonBaseline.Options));
     }
 
     private static ValueTypeDescriptor NewValueType(Type type)

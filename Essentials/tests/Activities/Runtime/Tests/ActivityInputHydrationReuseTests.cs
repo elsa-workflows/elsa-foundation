@@ -37,7 +37,7 @@ public sealed class ActivityInputHydrationReuseTests(ITestOutputHelper output)
         Assert.Equal("Ada", activity.Message?.Name);
         var warning = Assert.Single(warnings.Warnings);
         Assert.Equal("json-unmatched-member", warning.Code);
-        Assert.Equal(sensitive ? "args.message" : "args.message.privateCustomerKey", warning.Details!["path"]);
+        Assert.Equal(sensitive ? "args.message" : "args.message[\"privateCustomerKey\"]", warning.Details!["path"]);
         if (sensitive) Assert.DoesNotContain("privateCustomerKey", warning.Message);
     }
 
