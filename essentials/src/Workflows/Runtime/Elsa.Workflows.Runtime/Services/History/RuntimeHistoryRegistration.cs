@@ -66,7 +66,7 @@ internal static class RuntimeHistoryRegistration
             var availability = provider.GetRequiredService<RuntimeHistoryCaptureCapabilities>();
             var kinds = provider.GetServices<RuntimeHistorySourceSupport>().Where(availability.SourceOwner)
                 .SelectMany(RuntimeHistoryCaptureCapabilities.Kinds);
-            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v3", 3, true,
+            var policy = new RuntimeHistoryCapturePolicy("runtime-history-v4", 4, true,
                 RuntimeHistoryCapture.Kinds.Concat(RuntimeHistoryCapture.Version2Kinds).Concat(RuntimeHistoryDeliveryObservations.Kinds).Concat(kinds).ToArray());
             if (!provider.GetServices<IRuntimeCheckpointCommitEnricher>().OfType<IRuntimeHistoryCaptureSupport>().Any(capture => capture.CanCapture(policy)))
                 throw Unavailable("The selected actual source/value/capture chain cannot supply this admission profile.");

@@ -30,11 +30,11 @@ public sealed partial class RuntimeHistoryInspectionService
         {
             var page = await occurrences.ReadOccurrencesAsync(query, token);
             ValidateOccurrences(query, page);
-            // A pending provider read must not disclose its result after access/profile retirement.
+            var coverage = await CoverageAsync(workflow, page.Head, token);
+            // Coverage also awaits native-source reads; recheck after every read before disclosure.
             workflow = await AuthorizeAsync(request.WorkflowExecutionId, token);
             var currentBinding = await OccurrenceAccessBinding!(workflow, await BindingAsync(token), token);
             if (currentBinding != query.AccessBinding) throw new RuntimeResourceMissingSignal();
-            var coverage = await CoverageAsync(workflow, page.Head, token);
             var state = page.Availability switch
             {
                 RuntimeHistoryOccurrenceAvailability.Available => coverage.State == "partial" ? "partial" : "available",

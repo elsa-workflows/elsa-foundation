@@ -18,7 +18,9 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
         services.GetService<IRuntimeHistoryStore>() is { } reader && writer.CanRecordHistory(reader) &&
         services.GetService<IBookmarkResumeDispatcher>()?.CanRecordHistory(writer, reader) == true;
 
-    internal bool SourceOwner(RuntimeHistorySourceSupport owner) => owner.SourceIntentKind is not { } kind ?
+    internal bool SourceOwner(RuntimeHistorySourceSupport owner) => owner.TimerOwner
+        ? services.GetService<IRuntimeHistoryTimerSupport>()?.CanCapture == true
+        : owner.SourceIntentKind is not { } kind ?
         (!ReferenceEquals(owner, RuntimeHistoryRegistration.AlterationSources) ||
          services.GetService<IWorkflowAlterationCheckpointWriter>() is RuntimeWorkflowAlterationCheckpointWriter alteration &&
          services.GetService<RuntimeCheckpointCommitter>() is { } committer && alteration.OwnsHistoryCommitter(committer)) :
@@ -28,6 +30,7 @@ internal sealed class RuntimeHistoryCaptureCapabilities(IServiceProvider service
         writer.CanRecordHistory(reader) && services.GetService<IRuntimePostCommitIntentDispatcher>()?.CanRecordHistory(kind, writer, reader) == true;
 
     internal static IEnumerable<string> Kinds(RuntimeHistorySourceSupport owner) => owner.Kinds.Select(RuntimeHistorySourceFacts.EventName)
+        .Concat(owner.TimerOwner ? DurableTimerHistoryFacts.Kinds : [])
         .Concat(owner.SourceIntentKind is not null && owner.Kinds.Contains(RuntimeHistorySourceFactKind.StimulusPublicationCommitted)
             ? RuntimeHistorySourceFacts.PublicationObservationKinds : []);
 }

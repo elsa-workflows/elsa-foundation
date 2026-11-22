@@ -35,6 +35,17 @@ public sealed partial class EfRuntimePostCommitOutboxStore : IRuntimePostCommitO
     private readonly IWorkflowExecutableRootWriteLeaseManager? retentionLeases;
     private readonly EfWorkflowExecutableSourceReferenceStore? retentionReferences;
 
+    bool IPostCommitOutboxLookupStore.CanInspectHistorySources(IRuntimeHistoryStore history)
+    {
+        if (history is not EfRuntimeHistoryStore reader || !reader.Uses(context, accessContextAccessor, RuntimeHistoryEfModule.Chain)) return false;
+        try
+        {
+            _ = accessContextAccessor.Current.RequireScope();
+            return context.Database.IsRelational() && RuntimeHistoryEfModule.HasProjectionModel(context);
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
     public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
         : this(context, accessContextAccessor, TimeProvider.System) { }
 
