@@ -182,19 +182,6 @@
   gap: 8px;
 }
 
-.wf-detail-header__identity > .studio-breadcrumbs {
-  flex: 1 1 0;
-  margin-bottom: 0;
-}
-
-.wf-detail-header__identity > .studio-breadcrumbs ol {
-  flex-wrap: nowrap;
-}
-
-.wf-detail-header__identity > .studio-breadcrumbs li:last-child {
-  flex: 1 1 0;
-}
-
 .wf-detail-header__title {
   min-width: 0;
   overflow: hidden;

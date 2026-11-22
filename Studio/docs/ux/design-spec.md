@@ -100,7 +100,7 @@ Module authors must not copy a snapshot of host component CSS.
 
 Purposeful differences remain: template catalogs and dashboard widgets may use
 cards; authoring canvases, staged review workflows and diagnostic streams retain
-their task layout. Embedded headers can use the compact variant. These exceptions
+their task layout. Detail pages use the compact StudioPageHeader with a 16px, weight-600 title, a status chip when a resource has a status, and contextual actions. The active shell shows the clickable ancestor trail. Designer and inspection toolbars retain their domain actions and use the same title size and weight. Embedded headers can also use the compact variant. These exceptions
 still use the shared theme tokens, control recipes, typography and feedback.
 
 ## Live workflow execution (#3392)

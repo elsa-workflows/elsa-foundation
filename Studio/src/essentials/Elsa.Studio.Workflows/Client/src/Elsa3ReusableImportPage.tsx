@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioShellBreadcrumbs, StudioPageHeader, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useEffect,
   useMemo,
@@ -7,7 +7,6 @@ import {
   type CSSProperties
 } from "react";
 import {
-  ArrowLeft,
   CheckCircle2,
   FileArchive,
   Link2,
@@ -473,10 +472,8 @@ export function Elsa3ReusableImportPage({
       aria-labelledby="elsa3-import-title"
       style={message && !receipt ? { paddingBlockEnd: "5.5rem" } : undefined}
     >
-      <button type="button" className="ad-back" disabled={applyStatus === "loading"} onClick={() => navigate("/workflows/activity-definitions")}>
-        <ArrowLeft size={16} aria-hidden /> Activity Definitions
-      </button>
-      <StudioPageHeader headingLevel={1} title={<>Import from Elsa 3</>} titleId="elsa3-import-title" description={<>
+      <StudioShellBreadcrumbs items={[{ label: "Activity definitions", disabled: applyStatus === "loading", onClick: () => navigate("/workflows/activity-definitions") }]} current="Import from Elsa 3" />
+      <StudioPageHeader headingLevel={2} title={<>Import from Elsa 3</>} titleId="elsa3-import-title" description={<>
             Reusable Elsa 3 definitions become Activity Definitions with exact immutable versions and wrapper Workflows.
             Ordinary consuming Workflows remain Workflows with exact reusable references rewritten.
           </>} actions={<><span style={styles.safetyBadge}><ShieldCheck size={16} /> No Execute-Workflow fallback</span></>} />

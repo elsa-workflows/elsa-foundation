@@ -1,14 +1,14 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Plus, Server } from "lucide-react";
 import { qualifyStudioBackendPath, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, AnchoredPopover, StudioBreadcrumbs, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
+import { studioRowInteraction, AnchoredPopover, StudioShellBreadcrumbs, StudioPageHeader, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
 export const backendNavigation = {id:"backends",label:"Backends",path:"/settings/backends",activePathPrefix:"/settings/backends",placement:"settings" as const,order:20};
 
 function BackendBreadcrumbs({items,current,navigate}:{items:StudioBreadcrumbLink[];current:React.ReactNode;navigate:(path:string)=>void}) {
-  return <StudioBreadcrumbs items={items} current={current} renderLink={item => {
+  return <StudioShellBreadcrumbs items={items} current={current} renderLink={item => {
     const href = qualifyStudioBackendPath(item.href);
     return <a href={href} onClick={event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -105,13 +105,13 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
     finally {if (mounted.current) setChecking(false);}
   }
   return <section className="backends-page" aria-label={`${profile.name} backend`}>
-    <div className="backends-heading"><div><BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
-      <h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
+    <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
+    <StudioPageHeader compact headingLevel={2} title={profile.name} description={profile.baseUrl} actions={<>
       <StudioButton variant="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.disposed && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.disposed && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</StudioButton>
       <StudioButton type="button" disabled={checking || snapshot.busy} onClick={() => {void inspect();}}>{checking ? "Checking…" : "Test connection"}</StudioButton>
       {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" onClick={() => navigate(`${detailPath}/edit`)}>Edit</StudioButton> : null}
       {active && featureManagementAvailable ? <StudioButton type="button" onClick={() => navigate("/features?target=server")}>Manage features</StudioButton> : null}
-    </div></div>
+    </>} />
     {error ? <StudioAlert tone="warning">{error}</StudioAlert> : null}
     <StudioTabs baseId={tabsId} tabs={[{id:"connection",label:"Connection"},{id:"capabilities",label:"Capabilities"}]} activeTab={tab} onSelect={setTab} ariaLabel="Backend details" />
     <StudioTabPanel baseId={tabsId} index={0} hidden={tab !== "connection"}>

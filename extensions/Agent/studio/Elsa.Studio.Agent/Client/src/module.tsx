@@ -100,7 +100,7 @@ export function register(api: ElsaStudioModuleApi) {
     requiresBackend: [{ id: "elsa.api.agent-reviews", contractVersion: "1" }],
     path: "/agents/reviews/:workflowExecutionId/:activityExecutionId",
     label: "Review",
-    component: () => <HumanReviewPage context={api.backend} />
+    component: ({ navigate }) => <HumanReviewPage context={api.backend} navigate={navigate} />
   });
   // Provide tailored root cause guidance for agent model turn failures.
   const agentIncidentProvider: StudioIncidentRootCauseProviderContribution = {

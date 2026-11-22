@@ -44,6 +44,8 @@
 }
 
 .wf-editor-title > strong {
+  font-size: var(--studio-section-title-size);
+  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

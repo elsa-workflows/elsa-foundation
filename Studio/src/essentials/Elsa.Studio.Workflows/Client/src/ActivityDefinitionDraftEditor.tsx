@@ -6,7 +6,7 @@ import { validateActivityDefinitionCandidate } from "./api/activityDesign";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { tabElementIds, StudioBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
+import { tabElementIds, StudioShellBreadcrumbs, StudioField, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Code2, CopyPlus, ListTree, LogIn, LogOut, Play, RefreshCw, Variable, Workflow as WorkflowIcon } from "lucide-react";
 import {
   studioNavigationRequestedEvent,
@@ -956,16 +956,16 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
     <div className="ad-draft-editor-toolbar">
       <WorkflowEditorToolbarFrame
         className="ad-workbench-header"
-        identity={<StudioBreadcrumbs
+        identity={<><StudioShellBreadcrumbs
           items={[{ href: "/workflows/activity-definitions", label: onManage ? "Activity Definitions" : "Activity Definition" }]}
-          current={<span className="wf-editor-title"><strong id="activity-draft-title" role="heading" aria-level={1} title={draftHeaderTitle(definitionDisplayName, draft)}>{draftHeaderTitle(definitionDisplayName, draft)}</strong><span className="wf-chip">{draftIsActive ? "Draft" : "Published"}</span></span>}
+          current={draftHeaderTitle(definitionDisplayName, draft)}
           renderLink={item => <StudioLink href={item.href} aria-disabled={revisionSensitiveActionsBlocked || undefined} tabIndex={revisionSensitiveActionsBlocked ? -1 : undefined} onClick={event => {
             if (revisionSensitiveActionsBlocked) { event.preventDefault(); return; }
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
             onBack();
-          }}>{item.label}</StudioLink>}
-        />}
+          }}>{item.label}</StudioLink>} />
+          <span className="wf-editor-title"><strong id="activity-draft-title" role="heading" aria-level={1} title={draftHeaderTitle(definitionDisplayName, draft)}>{draftHeaderTitle(definitionDisplayName, draft)}</strong><span className="wf-chip">{draftIsActive ? "Draft" : "Published"}</span></span></>}
         metadata={<div className="ad-draft-context">
           {publishedVersion && !draftIsActive ? <><span>Version {publishedVersion}</span><span aria-hidden>·</span></> : !onManage || draftIsActive || status !== "saved" || codeBufferState.dirty ? <><span>{onManage ? "Unpublished changes" : draftIsActive ? "Draft" : "Published draft"}</span><span aria-hidden>·</span></> : null}
           {draft.validation || validationFailure || codeBufferState.dirty ? <button type="button" className={`ad-draft-diagnostics-link${draftErrorCount || validationFailure || codeBufferState.dirty ? " needs-attention" : ""}`} aria-label={diagnosticsLabel} title={diagnosticsLabel} aria-controls={draftDiagnosticsId} onClick={viewDraftDiagnostics}>

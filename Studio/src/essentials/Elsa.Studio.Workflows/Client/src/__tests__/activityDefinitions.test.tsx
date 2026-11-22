@@ -185,7 +185,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Versions");
     expect(new URLSearchParams(window.location.search).get("section")).toBe("versions");
     expect(window.history.state.elsaActivityDefinitions.collection.searchInput).toBe("invoice");
-    click(elementByText(rendered.container, "Activity Definitions"));
+    click(elementByText(rendered.container, "Activity definitions"));
     await waitForText(rendered.container, "Invoice evaluator");
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("invoice");
     await rendered.unmount();
@@ -956,7 +956,7 @@ describe("Activity Definitions experience", () => {
     const details = rendered.container.querySelector<HTMLDetailsElement>(".ad-technical-disclosure")!;
     expect(details.open).toBe(false);
     expect(details.textContent).toContain("Contoso.InvoiceEvaluator");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
@@ -985,7 +985,7 @@ describe("Activity Definitions experience", () => {
     const postJson = vi.fn();
     const rendered = renderOverview({ drafts, versions, actions, definitionView, postJson });
     await waitForText(rendered.container, "Build your activity");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
     expect(primaryAction.textContent?.trim()).toBe("Open drafts");
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit draft"))).toBe(false);
@@ -1024,7 +1024,7 @@ describe("Activity Definitions experience", () => {
       actions: [{ action: "create-draft", allowed: true }], postJson
     });
     await waitForText(rendered.container, "No open drafts");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("section")).toBe("editor"));
@@ -1043,7 +1043,7 @@ describe("Activity Definitions experience", () => {
       activityEditors: [graphContribution()]
     });
     await waitForText(rendered.container, "No open drafts");
-    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>('.studio-page-header [data-variant="primary"]')!;
     const actionName = primaryAction.textContent?.trim();
     click(primaryAction);
 

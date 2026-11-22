@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { SkeletonRows, StudioField } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { matchesMemberOffer, matchesParameterOffer, type ActivityDataParameterSource, type ActivityDataBinding, type ActivityDataContextResult, type ActivityDataSourceFacts, type ActivityDataTarget } from "./api/activityDataSelection";
 import type { ActivityDataSelectionHost } from "./activityDataSelection";
 import { activityDataBreadcrumbs, activityDataMemberBrowser, activityDataTypeLabel, appendActivityDataMember,
@@ -137,7 +137,7 @@ export function ActivityDataMemberBrowser({ host, target, result, current, refre
     {result.target?.type ? <p className="wf-data-chooser-note">Input type: {activityDataTypeLabel(result.target.type)}</p> : null}
     {shown ? <>
       <div className="wf-data-member-heading">
-        <button type="button" onClick={() => memberNavigation && (selection?.path ?? shown.path).length ? changePath((selection?.path ?? shown.path).slice(0, -1)) : setSelection(null)}>Back</button>
+        <StudioButton type="button" size="sm" onClick={() => memberNavigation && (selection?.path ?? shown.path).length ? changePath((selection?.path ?? shown.path).slice(0, -1)) : setSelection(null)}>Back</StudioButton>
         <strong>{shown.label}</strong>
       </div>
       {memberNavigation ? <nav aria-label="Member path" className="wf-data-member-path">
