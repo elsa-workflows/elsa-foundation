@@ -137,6 +137,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
     private readonly Dictionary<Node, ClassInfo> _classes = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Node> _stringifyingArrays = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Node> _arrays = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Node> _ordinaryObjects = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Node> _unprovenConstructions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Node, string> _primitiveBoxes = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Node, Value> _homes = new(ReferenceEqualityComparer.Instance);
     private readonly List<Value> _supers = [];
@@ -561,11 +563,15 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 result = Allocate(node);
                 if (constructor.Functions.Count > 0)
                 {
+                    if (!constructor.Session && constructor.Functions.IsSupersetOf(constructor.Objects) &&
+                        constructor.Functions.All(target => OrdinaryConstructor(target))) _ordinaryObjects.Add(node);
+                    else _unprovenConstructions.Add(node);
                     var explicitResult = Apply(constructor, constructorArguments, result);
                     result = result.Union(explicitResult);
                 }
                 else if (construction.Callee is Identifier native && Global(native.Name) && native.Name is "Date" or "RegExp" or "String" or "Number" or "Boolean")
                 {
+                    _ordinaryObjects.Add(node);
                     if (native.Name == "String") result = result with { MayBeString = true };
                     if (native.Name is "String" or "Number" or "Boolean" or "Date") _primitiveBoxes[node] = native.Name;
                     if (native.Name is "String" or "RegExp") Coerce(native.Name == "String" ? constructorArguments.Take(1) : constructorArguments.Take(2), stringHint: true);
@@ -573,7 +579,12 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                     else if (native.Name == "Date") Coerce(constructorArguments);
                     // Boolean conversion tests truthiness and never calls object conversion hooks.
                 }
-                else if (construction.Callee is Identifier { Name: "Object" } && Global("Object")) result = constructorArguments.FirstOrDefault() ?? result;
+                else if (construction.Callee is Identifier { Name: "Object" } && Global("Object"))
+                {
+                    _ordinaryObjects.Add(node);
+                    if (constructorArguments.FirstOrDefault() is { } wrapped &&
+                        (wrapped.Session || wrapped.Objects.Count > 0 || wrapped.Functions.Count > 0)) result = wrapped;
+                }
                 else if (construction.Callee is Identifier { Name: "Array" } && Global("Array"))
                 {
                     _arrays.Add(node);
@@ -581,9 +592,14 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 }
                 else if (construction.Callee is Identifier collection && Global(collection.Name) && collection.Name is "Set" or "Map" or "WeakSet" or "WeakMap")
                 {
+                    _ordinaryObjects.Add(node);
                     if (constructorArguments.Length > 0) Put(result, "*", Iterated(constructorArguments[0]));
                 }
-                else _writes |= constructorArguments.Any(argument => OpaqueOwnership(argument));
+                else
+                {
+                    _unprovenConstructions.Add(node);
+                    _writes |= constructorArguments.Any(argument => OpaqueOwnership(argument));
+                }
                 break;
             default:
                 foreach (var child in node.ChildNodes)
@@ -1081,6 +1097,16 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         }
     }
 
+    private bool OrdinaryConstructor(Node target, HashSet<Node>? seen = null)
+    {
+        if (target is IFunction) return true;
+        seen ??= new(ReferenceEqualityComparer.Instance);
+        if (!seen.Add(target) || !_classes.TryGetValue(target, out var type)) return false;
+        return !type.Derived || !type.Super.Session && type.Super.Functions.Count > 0 &&
+            type.Super.Functions.IsSupersetOf(type.Super.Objects) &&
+            type.Super.Functions.All(parent => OrdinaryConstructor(parent, new HashSet<Node>(seen, ReferenceEqualityComparer.Instance)));
+    }
+
     private Value ArgumentObject(Node identity, IReadOnlyList<Value> arguments)
     {
         var value = Allocate(identity);
@@ -1379,6 +1405,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
                 return element.ValueKind == JsonValueKind.String ? Value.Text : Value.Local;
             var value = Allocate(identity);
             if (!root) { _summaryObjects.Add(identity); _state.Unordered.Add(identity); }
+            if (root && element.ValueKind == JsonValueKind.Object) _ordinaryObjects.Add(identity);
             if (root && element.ValueKind == JsonValueKind.Array) _arrays.Add(identity);
             if (element.ValueKind == JsonValueKind.Object)
                 foreach (var property in element.EnumerateObject()) Put(value, property.Name, Data(property.Value, call.Callee));
@@ -1479,6 +1506,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             if (global.Name == "Object" && method == "getOwnPropertyDescriptor" && arguments.Length >= 2)
             {
                 var descriptor = Allocate(call);
+                _ordinaryObjects.Add(call);
                 Coerce(arguments.Skip(1).Take(1), stringHint: true);
                 var key = call.Arguments.Count >= 2 ? Key(call.Arguments[1]) : "*";
                 Put(descriptor, "value", StoredMember(arguments[0], key));
@@ -1498,6 +1526,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             if (global.Name == "Object" && method == "create")
             {
                 var created = Allocate(call);
+                _ordinaryObjects.Add(call);
                 _state.Prototypes[call] = arguments.FirstOrDefault() ?? Value.Local;
                 if (arguments.Length > 1)
                     OwnProperties(arguments[1], (_, name, descriptor) =>
@@ -1690,6 +1719,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         if (call.Callee is Identifier { Name: "Object" } && Global("Object"))
         {
             if (arguments.FirstOrDefault() is { } value && (value.Session || value.Objects.Count > 0 || value.Functions.Count > 0)) return value;
+            _ordinaryObjects.Add(call);
             return Allocate(call);
         }
         // An opaque helper receiving a workflow-owned object (including inside a local wrapper or closure) could
@@ -1706,8 +1736,10 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
         // flatMap reads returned array indices immediately after each callback, including non-enumerable indices.
         // Ordinary object/function returns are not flattened. Unknown native containers may be arrays or objects.
         var possibleArrays = source.Objects.Where(item => _arrays.Contains(item) ||
-            item is not (ObjectExpression or IFunction) && !_primitiveBoxes.ContainsKey(item)).ToImmutableHashSet();
-        var result = source with { Objects = source.Objects.Except(_arrays).ToImmutableHashSet() };
+            _unprovenConstructions.Contains(item) || item is not (ObjectExpression or IFunction) &&
+            !_ordinaryObjects.Contains(item) && !_primitiveBoxes.ContainsKey(item)).ToImmutableHashSet();
+        var result = source with { Objects = source.Objects.Where(item => !_arrays.Contains(item) ||
+            _ordinaryObjects.Contains(item) || _unprovenConstructions.Contains(item)).ToImmutableHashSet() };
         OwnProperties(source with { Session = false, Objects = possibleArrays, Functions = [] },
             (_, _, element) => result = result.Union(element), elementsOnly: true);
         foreach (var item in possibleArrays)
