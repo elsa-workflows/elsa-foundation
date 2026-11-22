@@ -48,11 +48,11 @@ for (const width of [320, 1440]) {
     const select = page.getByRole("combobox", { name: "API token", exact: true });
 
     await firstRequestStarted;
-    await expect(status).toHaveText("Loading Secret metadata...");
+    await expect(status).toHaveText("Loading secret metadata...");
     await expectPickerLayout(syntax, status, metadata);
 
     releaseFirstResponse();
-    await expect(status).toHaveText("No active Secrets are available.");
+    await expect(status).toHaveText("No active secrets are available.");
     await expectPickerLayout(syntax, status, metadata);
 
     await chooseSyntax(page, "Literal");

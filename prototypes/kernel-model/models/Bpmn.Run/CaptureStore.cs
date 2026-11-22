@@ -3,6 +3,8 @@ namespace Kernel.Bpmn.Run;
 /// <summary>Captures actual committed sends before their normal consumption removes them.</summary>
 internal sealed class CaptureStore(IKernelStore inner) : IKernelStore
 {
+    public Func<long>? FoundationClock => inner.FoundationClock;
+
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
     public ValueTask<EventAcceptance> AddEventAsync(EventDelivery delivery, CancellationToken token = default) => inner.AddEventAsync(delivery, token);
     public ValueTask<IReadOnlyList<EventRoute>> PublishedMatchesAsync(EventRow published, CancellationToken token = default) => inner.PublishedMatchesAsync(published, token);
@@ -10,6 +12,8 @@ internal sealed class CaptureStore(IKernelStore inner) : IKernelStore
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;
     public bool CommitClockAvailable => inner.CommitClockAvailable;
+    public bool OwnedSetsAvailable => inner.OwnedSetsAvailable;
+    public ValueTask<Lease?> RetakeAsync(int partition, string node, long epoch, TimeSpan lease, CancellationToken cancellationToken = default) => inner.RetakeAsync(partition, node, epoch, lease, cancellationToken);
     internal List<Message> Sent { get; } = [];
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {

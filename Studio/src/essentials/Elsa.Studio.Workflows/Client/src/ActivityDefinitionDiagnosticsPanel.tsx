@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { StatusChip } from "@elsa-workflows/studio-ui";
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
+import { useEffect, useState, type RefObject } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, LocateFixed, Undo2 } from "lucide-react";
 import type {
   StudioActivityDiagnostic,
@@ -22,7 +24,9 @@ export interface ActivityDefinitionLocalDiagnostic {
 }
 
 export function ActivityDefinitionDiagnosticsPanel({
+  id,
   validation,
+  panelRef,
   failure,
   localDiagnostics = [],
   focusAnnouncement,
@@ -30,7 +34,9 @@ export function ActivityDefinitionDiagnosticsPanel({
   onFocus,
   onReturn
 }: {
+  id?: string;
   validation?: ActivityDraftValidationView | null;
+  panelRef?: RefObject<HTMLElement | null>;
   failure?: ActivityDraftValidationFailure | null;
   localDiagnostics?: ActivityDefinitionLocalDiagnostic[];
   focusAnnouncement?: string | null;
@@ -53,7 +59,7 @@ export function ActivityDefinitionDiagnosticsPanel({
   const counts = countSeverities(diagnostics, localDiagnostics);
   const groups = groupDiagnostics(diagnostics);
 
-  return <section className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
+  return <section ref={panelRef} id={id} tabIndex={-1} className="ad-diagnostics-panel" aria-labelledby="activity-diagnostics-title">
     <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>
         <h2 id="activity-diagnostics-title"><ChevronRight className="ad-diagnostics-chevron" size={14} aria-hidden />Draft diagnostics</h2>
@@ -74,10 +80,10 @@ export function ActivityDefinitionDiagnosticsPanel({
             ? validationFailureMessage(failure)
             : "Local authoring diagnostics must be resolved or reset before revision-sensitive actions can continue."}</p>
       </div>
-      {validation ? <span className={`ad-validation-result is-${validation.isValid ? "valid" : "invalid"}`}>
+      {validation ? <StatusChip tone={validation.isValid ? "success" : "danger"}>
         {validation.isValid ? <CheckCircle2 size={16} aria-hidden /> : <AlertCircle size={16} aria-hidden />}
         {validation.isValid ? "Valid draft" : "Draft rejected"}
-      </span> : null}
+      </StatusChip> : null}
       </header>
     {groups.map(group => <section key={group.area} className="ad-diagnostic-group" aria-labelledby={`activity-diagnostics-${group.id}`}>
       <h3 id={`activity-diagnostics-${group.id}`}>{group.area}</h3>
@@ -131,8 +137,9 @@ function DiagnosticItem({
   const code = safeDiagnosticCode(diagnostic.code);
   const severity = safeSeverity(diagnostic.severity);
   const context = diagnosticContext(diagnostic);
+  const action = diagnostic.metadata?.actionLabel?.trim();
 
-  return <li className={`ad-diagnostic-item is-${severity}`}>
+  return <li tabIndex={-1} className={`ad-diagnostic-item is-${severity}`}>
     <div className="ad-diagnostic-item-heading">
       <span className="ad-diagnostic-severity">{severityIcon(severity)} {severityLabel(severity)}</span>
       <code className="ad-diagnostic-code">{code}</code>
@@ -142,10 +149,10 @@ function DiagnosticItem({
     <span className="ad-diagnostic-subject">{context}</span>
     <button
       type="button"
-      aria-label={`Focus ${code}`}
+      aria-label={action && action.length <= 80 ? action : `Focus ${code}`}
       onClick={event => void onFocus(diagnostic, event.currentTarget)}
     >
-      <LocateFixed size={15} aria-hidden /> Focus location
+      <LocateFixed size={15} aria-hidden /> {action && action.length <= 80 ? action : "Go to setting"}
     </button>
   </li>;
 }
@@ -187,8 +194,8 @@ function diagnosticArea(diagnostic: StudioActivityDiagnostic) {
 }
 
 function safeSeverity(severity: string): DiagnosticTone {
-  if (severity === "Error") return "error";
-  if (severity === "Warning") return "warning";
+  if (activityDiagnosticSeverity(severity) === "Error") return "error";
+  if (activityDiagnosticSeverity(severity) === "Warning") return "warning";
   return "info";
 }
 

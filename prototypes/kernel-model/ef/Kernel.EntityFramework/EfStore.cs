@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Update;
 using Npgsql;
 
@@ -12,7 +13,6 @@ public sealed class PartitionEntity
     public long Epoch { get; set; }
     public long? WindowStart { get; set; }
     public long? WindowEnd { get; set; }
-    public long LeaseUntil { get; set; }
     public long Position { get; set; }
     public bool Died { get; set; }          // the last take found another owner's lease expired
 }
@@ -21,6 +21,7 @@ public sealed class NodeEntity
 {
     public string Id { get; set; } = "";
     public long SeenAt { get; set; }        // database time of the last heartbeat
+    public long LeaseUntil { get; set; }    // K1b, the node lease: database time until which no other process may take this one's partitions
 }
 
 public sealed class InstanceEntity
@@ -125,6 +126,12 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.ReplaceService<IComparer<IReadOnlyModificationCommand>, SendOrderComparer>();
+        // D5 (K1), ENGINES.md E7: SQL Server's and MySQL's providers put at most 42 statements in one command unless told,
+        // so a flush of 100 instances was several round trips. The store tells them 1,000, as the cost runs do; a context
+        // that sets its own MaxBatchSize keeps it.
+        if (optionsBuilder.Options.Extensions.OfType<RelationalOptionsExtension>().FirstOrDefault() is { MaxBatchSize: null } relational &&
+            relational.GetType().Name is "SqlServerOptionsExtension" or "MySQLOptionsExtension")
+            ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(relational.WithMaxBatchSize(1000));
         MySqlCommandBatchPreparer.Configure(optionsBuilder);
         optionsBuilder.AddInterceptors(AliasUpdateGuard.Instance);
     }
@@ -138,7 +145,11 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
             e.Property(p => p.Epoch).IsConcurrencyToken();      // the fence, when it rides in the batch
             e.Property(p => p.Position).IsConcurrencyToken();
         });
-        model.Entity<NodeEntity>(e => e.ToTable("Nodes"));
+        model.Entity<NodeEntity>(e =>
+        {
+            e.ToTable("Nodes");
+            e.Property(n => n.LeaseUntil).HasDefaultValue(0L);      // the membership heartbeat's insert names SeenAt only
+        });
         model.Entity<InstanceEntity>(e =>
         {
             e.ToTable("Instances");
@@ -211,23 +222,30 @@ public sealed class KernelDb(DbContextOptions<KernelDb> options) : DbContext(opt
 }
 
 /// <summary>
-/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL. A commit is: the fence, checked; then
-/// one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
+/// The storage interface on Entity Framework Core, for PostgreSQL and SQLite, and with an <see cref="Engine"/> for SQL Server and MySQL.
+/// Since round 5 B the commit is the store's own SQL by default (EfStore.Owned.cs, COMMIT-SQL.md): the fence first, then every
+/// row with its count checked, in one command per round trip; <see cref="CommitSql"/> chooses, and
+/// <c>CommitSql.EntityFramework</c> keeps the path described here as the reference. On that path a commit is: the fence,
+/// checked; then one SaveChanges with everything else; then COMMIT. With the fence in the batch it rides in the SaveChanges as
 /// concurrency tokens on epoch and position, which saves a round trip and takes the lease time from this machine's
 /// clock instead of the database's. <paramref name="fenceInBatch"/> chooses; null takes the engine's default
 /// (<see cref="FenceInBatch"/>).
 /// </summary>
-public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
+public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInBatch = null, bool enableCommitWindow = false) : IKernelStore
 {
+    public Func<long>? FoundationClock => null;
+
     /// <summary>
-    /// Whether the fence rides in the batch. The default (decided 12 and 13 November) is in the batch on every engine
-    /// but SQL Server, whose default is the checked fence: there the fence in the batch deadlocks takes (ENGINES.md E9).
+    /// Whether the fence rides in the batch. The default is in the batch on every engine (decided 12 November; SQL Server
+    /// 16 November, for the owned commit: ENGINES.md E9; with <c>CommitSql.EntityFramework</c> SQL Server keeps the checked
+    /// fence). The checked fence stays selectable.
     /// </summary>
     private bool _windowInstalled;
     public bool PhysicalRetirementAvailable => true;
     public bool SupportsCommitWindow => _windowInstalled;
 
-    public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault ?? true;
+    public bool FenceInBatch => fenceInBatch ?? Engine?.FenceInBatchByDefault(OwnedCommit) ?? true;
+
 
     /// <summary>MUTATION, for the stress test only: the fence statement loses its epoch and position conditions.</summary>
     public bool Unfenced { get; init; }
@@ -268,9 +286,17 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
     private string False => postgres && Engine is null ? "false" : "0";
     private string Q(string sql) => Engine?.Sql(sql) ?? sql;
 
+    /// <summary>The partition rows, written in one transaction when the database was created.</summary>
+    public async ValueTask<int?> PartitionCountAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = create();
+        return await db.Partitions.CountAsync(cancellationToken);
+    }
+
     /// <summary>
-    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default (the owner's of 12
-    /// November) 64 on a server database and 1 on SQLite.
+    /// Creates the tables and the partition rows. The number of partitions is fixed here; by default the 1,024 virtual
+    /// partitions (K1 slice 7), each with its own fence row, on a server database and on SQLite. Opening a database that
+    /// has its rows already checks the count, and refuses another (definite).
     /// </summary>
     public async Task CreateAsync(int? partitions = null)
     {
@@ -306,32 +332,21 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
             await db.Database.ExecuteSqlRawAsync(mysql.Sql(EventInsert.InstallMySql.Replace("CREATE PROCEDURE", "CREATE PROCEDURE IF NOT EXISTS")));
         }
         if (Engine is not null) await Engine.CreatedAsync(db, default);
-        if (await db.Partitions.AnyAsync()) return;
+        // The count is fixed when the database is created: one opened at another count would address partitions with no
+        // row, or leave some unserved. Nothing is migrated (K1 slice 7; no data exists before release): recreate it. The
+        // rows are written in one SaveChanges, one transaction, so an open cut short leaves all of them or none.
+        if (await db.Partitions.CountAsync() is var rows and > 0)
+        {
+            if (rows != count) throw new StoreException(Failure.Definite, $"The database has {rows} partitions and was opened with {count}. The count is fixed at creation: recreate the database.");
+            return;
+        }
         db.Partitions.AddRange(Enumerable.Range(0, count).Select(id => new PartitionEntity { Id = id }));
         db.Projections.AddRange(Enumerable.Range(0, count).Select(id => new ProjectionEntity { Partition = id }));
         await db.SaveChangesAsync();
     }
 
-    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default)
-    {
-        await using var db = create();
-        await using var transaction = await (Engine?.BeginTakeAsync(db, cancellationToken) ?? db.Database.BeginTransactionAsync(cancellationToken));
-        Engine.TakeRow? taken;
-        if (Engine is not null) taken = await Engine.TakeAsync(db, partition, node, (long)lease.TotalMilliseconds, cancellationToken);
-        else
-        {
-            var rows = await db.Database.SqlQueryRaw<Engine.TakeRow>(
-                $"""UPDATE "Partitions" SET "Died" = ("Owner" IS NOT NULL AND "Owner" <> {"{0}"}), "Owner" = {"{0}"}, "Epoch" = "Epoch" + 1, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Owner" IS NULL OR "LeaseUntil" < {Now} OR "Owner" = {"{0}"}) RETURNING "Epoch", "Position", {Now} AS "Now", "Died" """,
-                node, (long)lease.TotalMilliseconds, partition).ToListAsync(cancellationToken);
-            taken = rows.Count == 1 ? rows[0] : null;
-        }
-        if (taken is null) return null;
-        // Taken from another owner, so its lease had expired: one more attempt for what it had on trial.
-        if (taken.Died)
-            await db.Database.ExecuteSqlRawAsync(Q($"""UPDATE "Messages" SET "Attempts" = "Attempts" + 1 WHERE "Partition" = {"{0}"} AND "Trial" = {"{1}"} AND "Done" = {False}"""), [partition, taken.Epoch - 1], cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new Lease(taken.Epoch, taken.Position, taken.Now);
-    }
+    public async ValueTask<Lease?> TakeAsync(int partition, string node, TimeSpan lease, CancellationToken cancellationToken = default) =>
+        await TakeAsync([partition], node, lease, cancellationToken) is { Taken: [var one] } set ? new Lease(one.Epoch, one.Position, set.Now) : null;
 
     public async ValueTask<Cluster> HeartbeatAsync(string node, TimeSpan window, CancellationToken cancellationToken = default)
     {
@@ -339,8 +354,15 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         var now = Engine is not null ? await Engine.HeartbeatAsync(db, node, cancellationToken) : (await db.Database.SqlQueryRaw<long>(
             $"""INSERT INTO "Nodes" ("Id", "SeenAt") VALUES ({"{0}"}, {Now}) ON CONFLICT ("Id") DO UPDATE SET "SeenAt" = excluded."SeenAt" RETURNING "SeenAt" AS "Value" """,
             node).ToListAsync(cancellationToken))[0];
+        return await MembershipAsync(db, now, window, cancellationToken);
+    }
+
+    // The membership reads: the nodes heard within the window, and the free partitions. Under the node lease a partition
+    // is free when it has no owner, or its owner's node record is missing or expired.
+    private async Task<Cluster> MembershipAsync(KernelDb db, long now, TimeSpan window, CancellationToken cancellationToken)
+    {
         var nodes = await db.Nodes.CountAsync(n => n.SeenAt >= now - (long)window.TotalMilliseconds, cancellationToken);
-        var free = await db.Partitions.Where(p => p.Owner == null || p.LeaseUntil < now).Select(p => p.Id).ToListAsync(cancellationToken);
+        var free = await db.Partitions.Where(p => p.Owner == null || !db.Nodes.Any(n => n.Id == p.Owner && n.LeaseUntil >= now)).OrderBy(p => p.Id).Select(p => p.Id).ToListAsync(cancellationToken);
         return new Cluster(nodes, free, now);
     }
 
@@ -352,7 +374,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
 
     public async ValueTask<Committed> CommitAsync(CommitBatch batch, CancellationToken cancellationToken = default)
     {
-        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases);
+        StoreBatchRules.Validate(batch,deferUpdateAliases:true,deferInsertAliases:HasActorAliases,ownedSets:OwnedSetsAvailable);
         // Marker shape uses the canonical row address. A raw update's alternate spelling is
         // authorized separately by the database-column predicate in AliasUpdateGuard.
         var qualification=batch.Turns.Any(t=>t.Row is {} r && t.Instance!=r.Id)
@@ -368,12 +390,18 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
             throw new NotSupportedException("This provider cannot enforce the requested commit window.");
         var waits = Waits(batch);
         var careful = false;
+        // The commit-step deadline counts from the first send: the careful retry below is the same batch, sent again.
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
         while (true)
         {
-            try { return await CommitOnceAsync(batch, waits, careful, cancellationToken); }
+            try { return await CommitOnceAsync(batch, waits, careful, sentAt, cancellationToken); }
             catch (PostgresException error) when (error.SqlState == PgCommitWindow.Expired)
             {
                 throw new StoreException(Failure.WindowExpired, "Database commit window expired.", error);
+            }
+            catch (OutsideFencedSet outside)
+            {
+                throw new StoreException(Failure.Definite, outside.Message);      // every fence held; the transaction was rolled back
             }
             catch (DbUpdateConcurrencyException e) when (!careful && e.Entries.Any(x => x.Entity is SubscriptionEntity))
             {
@@ -409,7 +437,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                     }
                 }
                 // A key violation may be a subscription that is there already; the batch was rolled back whole.
-                if (!careful && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
+                if (!careful && !OwnedCommit && failure.Failure is Failure.Definite && waits.ContainsValue(true)) { careful = true; continue; }
                 throw failure;
             }
         }
@@ -430,8 +458,9 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         return waits;
     }
 
-    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, CancellationToken cancellationToken)
+    private async Task<Committed> CommitOnceAsync(CommitBatch batch, Dictionary<(string Key, string Instance, string Wait), bool> waits, bool careful, long sentAt, CancellationToken cancellationToken)
     {
+        if (OwnedCommit) return await CommitOwnedAsync(batch, waits, sentAt, cancellationToken);      // EfStore.Owned.cs
         await using var db = create();
         foreach(var turn in batch.Turns.Where(t=>t.Row is {} r && t.Instance!=r.Id))
         {
@@ -459,8 +488,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
                 db.Entry(fence).Property(p => p.WindowEnd).IsModified = true;
             }
             fence.Position = batch.Position + batch.Positions;
-            fence.LeaseUntil = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)batch.Lease.TotalMilliseconds;
-            db.Entry(fence).Property(p => p.LeaseUntil).IsModified = true;     // also when nothing else changes: the fence must always be sent
+            db.Entry(fence).Property(p => p.Position).IsModified = true;     // a fence must still lock and count the row when k = 0
         }
         else if (Engine is not null)
         {
@@ -470,9 +498,10 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         else
         {
             // Statement 1, and the check that it changed exactly one row before anything else is sent.
+            // The node lease renews nothing here: the unchanged update still locks the row and is counted.
             var fence = await db.Database.SqlQueryRaw<long>(
-                $"""UPDATE "Partitions" SET "Position" = {"{0}"}, "LeaseUntil" = {Now} + {"{1}"} WHERE "Id" = {"{2}"} AND ("Epoch" = {"{3}"} AND "Position" = {"{4}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
-                batch.Position + batch.Positions, (long)batch.Lease.TotalMilliseconds, batch.Partition, batch.Epoch, batch.Position).ToListAsync(cancellationToken);
+                $"""UPDATE "Partitions" SET "Position" = {"{0}"} WHERE "Id" = {"{1}"} AND ("Epoch" = {"{2}"} AND "Position" = {"{3}"} OR {(Unfenced ? "1 = 1" : "1 = 0")}) RETURNING {Now} AS "Value" """,
+                [batch.Position + batch.Positions, batch.Partition, batch.Epoch, batch.Position]).ToListAsync(cancellationToken);
             if (fence.Count != 1) return new Committed(false, 0, []);       // disposing the transaction rolls it back
             now = fence[0];
         }
@@ -546,6 +575,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
             if (turn.Delete)
                 await db.Database.ExecuteSqlRawAsync(Q("""DELETE FROM "Journal" WHERE "Partition" = {0} AND "Instance" = {1} AND "Revision" > 0"""), [batch.Partition, turn.Instance], cancellationToken);
         }
+        if (PastCommitStep(sentAt, batch)) return new Committed(false, 0, []);      // disposing the transaction rolls it back
         await transaction.CommitAsync(cancellationToken);
         return new Committed(true, now, sent.Select(m => m.Seq).ToList());
     }
@@ -555,23 +585,34 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
     private const string SubscribeIfAbsent = """INSERT INTO "Subscriptions" ("Key", "Instance", "Wait", "Partition") VALUES ({0}, {1}, {2}, {3}) ON CONFLICT DO NOTHING""";
     private const string Unsubscribing = """DELETE FROM "Subscriptions" WHERE "Key" = {0} AND "Instance" = {1} AND "Wait" = {2} AND "Partition" = {3}""";
 
+    /// <summary>Whether every fence of the batch still holds: one read over its k rows.</summary>
     private async Task<bool> HoldsAsync(CommitBatch batch, CancellationToken cancellationToken)
     {
         await using var db = create();
-        return await db.Partitions.AsNoTracking().AnyAsync(p => p.Id == batch.Partition && p.Epoch == batch.Epoch && p.Position == batch.Position, cancellationToken);
+        var fenced = batch.Fenced;
+        var ids = fenced.Select(f => f.Partition).ToList();
+        var rows = await db.Partitions.AsNoTracking().Where(p => ids.Contains(p.Id)).Select(p => new PartitionFence(p.Id, p.Epoch, p.Position)).ToListAsync(cancellationToken);
+        return fenced.All(rows.Contains);
     }
 
     public async ValueTask<Polled> PollAsync(int partition, long epoch, TimeSpan horizon, int limit, CancellationToken cancellationToken = default)
     {
         await using var db = create();
         // A plain read. The left join returns database time even when no message does.
-        var rows = await db.Database.SqlQueryRaw<PollRow>(Engine?.Poll ??
-            $"""
-             SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
-             FROM (SELECT {Now} AS now) t
-             LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
-             ORDER BY m."Seq" LIMIT {"{3}"}
-             """, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken);
+        return ToPolled(await db.Database.SqlQueryRaw<PollRow>(PollSql, partition, epoch, (long)horizon.TotalMilliseconds, limit).ToListAsync(cancellationToken));
+    }
+
+    // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
+    private string PollSql => Engine?.Poll ??
+        $"""
+         SELECT t.now AS "Now", m."Id", NULL AS "IssuedWire", m."InboxScope", m."EventMatch", m."Seq", m."Target", m."Kind", m."Payload", m."Sender", m."Start", m."Due", m."Seen", m."Attempts", m."Trial", m."KeepUntil", m."ReplyTo"
+         FROM (SELECT {Now} AS now) t
+         LEFT JOIN "Messages" m ON m."Partition" = {"{0}"} AND m."Seen" < {"{1}"} AND m."Done" = {False} AND m."Due" <= t.now + {"{2}"}
+         ORDER BY m."Seq" LIMIT {"{3}"}
+         """;
+
+    private Polled ToPolled(List<PollRow> rows)
+    {
         var messages = rows.Where(r => r.Id is not null).Select(r =>
         {
             var key = new InboxKey(r.Id!, r.InboxScope!.Value, r.EventMatch is null ? null : System.Text.Encoding.UTF8.GetString(r.EventMatch));
@@ -851,7 +892,7 @@ public sealed class EfStore(Func<KernelDb> create, bool postgres, bool? fenceInB
         {
             if (Engine?.Classify(inner) is { } failure) return new StoreException(failure, inner.Message, e);
             if (inner is PostgresException pg)
-                return new StoreException(pg.SqlState is "40001" or "40P01" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
+                return new StoreException(pg.SqlState is "40001" or "40P01" or "55P03" ? Failure.Transient : pg.SqlState.StartsWith("22") || pg.SqlState.StartsWith("23") ? Failure.Definite : Failure.Unknown, pg.MessageText, e);
             if (inner is SqliteException lite)
                 return new StoreException(lite.SqliteErrorCode is 5 or 6 ? Failure.Transient : lite.SqliteErrorCode == 19 ? Failure.Definite : Failure.Unknown, lite.Message, e);     // BUSY is retry, not reset
         }

@@ -16,7 +16,7 @@ function projection(): ActivityStateView {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getActivityExecutionInspection).mockRejectedValue(new Error("Additional value evidence unavailable"));
+  vi.mocked(getActivityExecutionInspection).mockRejectedValue(new Error("Additional value data unavailable"));
   vi.mocked(supportsActivityStateView).mockResolvedValue(true);
   vi.mocked(getActivityStateView).mockResolvedValue(projection());
 });

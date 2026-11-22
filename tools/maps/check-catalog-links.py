@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report relative Markdown links that do not resolve.
 
-Checks every tracked EXTENSION_POINTS.md and every tracked README.md under Essentials/ and Extensions/.
+Checks every tracked EXTENSION_POINTS.md and every tracked README.md under essentials/ and extensions/.
 External links (scheme or protocol-relative) and same-file anchors are skipped; a link's #fragment and
 ?query are dropped before the target is checked. Links inside fenced code blocks and inline code are
 ignored. A leading '/' resolves against the repository root, the way GitHub renders it. A target must be a
@@ -70,7 +70,7 @@ def broken_links(root, relative_path, tracked_paths):
 
 def main():
     root = subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip()
-    pathspecs = [":(glob)**/EXTENSION_POINTS.md", ":(glob)Essentials/**/README.md", ":(glob)Extensions/**/README.md"]
+    pathspecs = [":(glob)**/EXTENSION_POINTS.md", ":(glob)essentials/**/README.md", ":(glob)apps/**/README.md", ":(glob)extensions/**/README.md"]
     if "--all-readmes" in sys.argv:
         pathspecs.append(":(glob)**/README.md")
 

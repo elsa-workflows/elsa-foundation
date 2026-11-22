@@ -1,0 +1,4 @@
+.browser-form-designer { min-height: 100vh; background: var(--studio-app-bg); color: var(--studio-text); }
+.browser-form-designer > .user-tasks--editing { height: 100vh; min-height: 100vh; }
+.browser-form-designer .user-task-form-editor { min-height: calc(100vh - 8rem); }
+.browser-form-designer [data-testid="published-form"] { display: none; }

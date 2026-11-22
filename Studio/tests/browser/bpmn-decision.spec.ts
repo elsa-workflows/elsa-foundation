@@ -19,9 +19,9 @@ for (const host of ["workflow", "activity"]) {
     await expect(element(page).locator(".wf-bpmn-gateway-marker")).toHaveText("×");
     await element(page).click();
     await outcome(page).fill("High");
-    await routing(page).getByLabel("Condition outcome for flow to High", { exact: true }).fill("High");
+    await routing(page).getByLabel("Match outcome for flow to High", { exact: true }).fill("High");
     await routing(page).getByLabel("Default flow to Low", { exact: true }).check();
-    await expect(routing(page).getByLabel("Condition outcome for flow to Low", { exact: true })).toBeDisabled();
+    await expect(routing(page).getByLabel("Match outcome for flow to Low", { exact: true })).toBeDisabled();
     await expect(page.locator(".react-flow__edge[data-id='high-flow']")).toHaveCount(1);
     await routing(page).getByLabel("Gateway type").selectOption("inclusiveGateway");
     await expect(element(page).locator(".wf-bpmn-gateway-marker")).toHaveText("O");
@@ -30,7 +30,7 @@ for (const host of ["workflow", "activity"]) {
     await page.reload();
     await element(page).click();
     await expect(routing(page).getByLabel("Gateway type")).toHaveValue("inclusiveGateway");
-    await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toHaveValue("High");
+    await expect(routing(page).getByLabel("Match outcome for flow to High", { exact: true })).toHaveValue("High");
     await expect(routing(page).getByLabel("Default flow to Low", { exact: true })).toBeChecked();
     await expect(outcome(page)).toHaveValue("High");
   });
@@ -43,13 +43,13 @@ for (const host of ["workflow", "activity"]) {
     const expression = '2000 > 1000 ? "High" : "Low"';
     await page.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
     await page.locator(".cm-content[contenteditable='true']").fill(expression);
-    await routing(page).getByLabel("Condition outcome for flow to High", { exact: true }).fill("High");
+    await routing(page).getByLabel("Match outcome for flow to High", { exact: true }).fill("High");
     if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
     await page.reload();
     await element(page).click();
     await expect(page.getByRole("button", { name: "Outcome expression syntax: JavaScript", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /JavaScript expression.*Activate to edit/ })).toContainText(expression);
-    await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toHaveValue("High");
+    await expect(routing(page).getByLabel("Match outcome for flow to High", { exact: true })).toHaveValue("High");
   });
 
   test(`${host} preserves task loop settings by explaining and disabling gateway conversion`, async ({ page }) => {
@@ -67,20 +67,70 @@ for (const host of ["workflow", "activity"]) {
     await page.locator(".wf-bpmn-node[data-element-type='exclusiveGateway']").click();
     await page.getByRole("button", { name: "Add decision", exact: true }).click();
     await expect(page.getByRole("button", { name: /^Outcome expression syntax:/ })).toBeVisible();
-    await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toBeVisible();
+    await expect(routing(page).getByLabel("Match outcome for flow to High", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Add decision", exact: true })).toHaveCount(0);
     await page.getByRole("searchbox", { name: "Search element palette" }).fill("BPMN Decision");
     await page.getByRole("treeitem", { name: /^BPMN Decision,/ }).click();
     await expect(page.locator(".wf-bpmn-node[data-element-type='exclusiveGateway']")).toHaveCount(2);
     await expect(page.locator(".wf-bpmn-node[data-element-type='task']")).toHaveCount(0);
   });
+
+  test(`${host} edits a bound BPMN element name in Details and persists it`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&bpmn-decision=bound&theme=light`);
+    await element(page).click();
+    await expect(routing(page).getByLabel("Name", { exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Details", exact: true }).click();
+
+    const name = page.getByLabel("BPMN element name", { exact: true });
+    await name.fill("Approval gate");
+    if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.reload();
+    await element(page).click();
+    await page.getByRole("tab", { name: "Details", exact: true }).click();
+    await expect(page.getByLabel("BPMN element name", { exact: true })).toHaveValue("Approval gate");
+    await page.getByLabel("Activity inspector sections").getByRole("tab", { name: "Inputs", exact: true }).click();
+    await expect(routing(page).getByLabel("Match outcome for flow to High", { exact: true })).toBeVisible();
+  });
+
+  test(`${host} keeps standalone BPMN names in routing`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&bpmn-decision=unbound&theme=dark`);
+    await page.locator(".wf-bpmn-node[data-element-type='exclusiveGateway']").click();
+
+    await expect(routing(page).getByLabel("Name", { exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveCount(0);
+  });
 }
+
+test("workflow summarizes and keyboard-expands a simple task path", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&host=workflow&composition=bpmn&run-layout&theme=dark");
+  await page.locator(".wf-bpmn-node[data-runtime-node-id='write-one']").click();
+
+  const panel = routing(page);
+  const disclosure = panel.getByRole("button", { name: /End event.*Any outcome/ });
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+
+  const matchOutcome = panel.getByLabel(/^Match outcome/);
+  await expect(matchOutcome).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await matchOutcome.fill("Done");
+  await matchOutcome.fill("");
+  await expect(matchOutcome).toBeFocused();
+  await expect(matchOutcome).toBeVisible();
+});
 
 test("locked Activity Definition keeps Decision and routing controls read-only", async ({ page }) => {
   await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=bpmn&palette-context&bpmn-decision=bound&read-only&theme=dark");
   await element(page).click();
   await expect(routing(page).getByLabel("Gateway type")).toBeDisabled();
-  await expect(routing(page).getByLabel("Name", { exact: true })).toBeDisabled();
-  await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toBeDisabled();
+  await expect(routing(page).getByLabel("Name", { exact: true })).toHaveCount(0);
+  await expect(routing(page).getByLabel("Match outcome for flow to High", { exact: true })).toBeDisabled();
   await expect(routing(page).getByLabel("Default flow to Low", { exact: true })).toBeDisabled();
+  await page.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(page.getByLabel("BPMN element name", { exact: true })).toBeDisabled();
 });

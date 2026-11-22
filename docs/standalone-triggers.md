@@ -1,6 +1,6 @@
 # Standalone triggers
 
-Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#standalone-trigger-authoring-and-source-boundaries).
+Use this guide to configure shared HTTP, Event, Timer and Cron entry points without changing a workflow's graph. Terminology is maintained in the [Elsa glossary](glossary/elsa.md); module contracts are maintained in the [Runtime extension catalog](../essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 
 **Implementation status:** This guide describes the source implementation being prepared for [#3582](https://github.com/elsa-workflows/elsa-foundation/issues/3582). The examples are source-checked request shapes, not passing host, provider, restart or Studio acceptance evidence. The [qualification guide](../specs/1217-standalone-triggers/quickstart.md) records the required checks. The [specification and proposed contracts](../specs/1217-standalone-triggers/spec.md) also contain requirements whose acceptance remains open.
 
@@ -17,7 +17,7 @@ Install the following features in the shell that owns the resources. Feature nam
 | HTTP request intake | `ActivitiesHttp`, with its `WorkflowsRuntimeHttp` dependency and the ordinary Runtime composition |
 | Timer/Cron intake | `StandaloneScheduleTriggers`, with its `WorkflowsRuntimeRecurringTriggers` dependency, ordinary Runtime scheduling and the normal Tasks lifecycle |
 | Workflow-origin broadcast Events | `ActivitiesPrimitives` and the ordinary durable `PublishEvent`/Runtime delivery composition |
-| Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../Essentials/src/Activities/Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
+| Application-origin Event producer | `AddStandaloneEventIngress<TSource>` plus the application's trusted scoped source context; see the [Event module example](../essentials/src/Activities/Primitives/Elsa.Activities.Primitives/StandaloneTriggers/README.md#application-owned-event-producer) |
 | Restart-surviving storage candidate | The complete `WorkflowsRuntimeEntityFrameworkCore` provider, including its resource, ingress, publication, material, queue and checkpoint participants |
 
 Authoring metadata does not install intake. `StandaloneTriggersApi` deliberately does not start Runtime, an HTTP listener or a schedule pump. A Design-only host can manage never-activated paused resources only when a resource store, target discovery and input mapper have been supplied. Its default authoring committer refuses enabled associations, activation and changes to previously activated resources. Installing the API feature alone supplies none of those three replacement services.
@@ -33,6 +33,23 @@ Open **More tools → Triggers** on a backend advertising standalone-trigger con
 The workflow editor's **Triggers** inspector tab edits the same live associations. Saving an association does not save or publish the business graph. Map each declared serving input, authorize the shared resource and enable the association before enabling the trigger. Review the server's impact and findings before applying a change. Source-owned settings and unavailable actions retain their projected restrictions.
 
 HTTP creation asks who responds, then exposes the per-trigger admission policy for asynchronous fan-out. Delivery details keep the captured version, current serving version, committed dispatch, actual run and transport observation separate. Use **Inspect actual run** only when an execution has been observed; a planned ID or sealed command is not a run receipt. Recovery and cancel-pending also require a fresh impact review.
+
+## Activity triggers, standalone triggers and module authors
+
+An activity trigger belongs to a workflow graph; publication establishes its start bindings. A standalone trigger is an independently managed resource whose subscriptions select serving publication slots and supply workflow inputs. Both forms remain available. Mid-workflow waits retain their separate bookmark/resume semantics.
+
+The source machinery is shared. Timer/Cron resources use the ordinary recurrence calculator, schedule store and pump. HTTP resources participate in the common exclusive endpoint ownership and routing system. Event subscriptions join the existing committed Event delivery cohorts. Standalone sources use the ordinary Runtime admission, outbox, captured target and dispatch/recovery boundaries; they do not execute a hidden trigger workflow.
+
+Third-party modules can introduce their own types without modifying Runtime or Studio:
+
+1. Contribute `IStandaloneTriggerTypeSource` metadata and one scoped `ITriggerConfigurationValidator` per type key. Include configuration fields and source payload paths so the generic Studio forms work without a custom editor. Metadata alone installs no listener or invocation authority.
+2. Register `AddStandaloneTriggerIngress<TSource>(descriptor)` and one trusted scoped `IStandaloneTriggerSourceContext<TSource>`. The module owns its listener or occurrence source, establishes scope and authorizes access to the actual resource. Never derive tenant or invocation authority from an untrusted signal body.
+3. Submit a `StandaloneTriggerSignal` through `IStandaloneTriggerIngress<TSource>.AdmitAsync`. Use a stable source key for the same occurrence. Runtime selects eligible subscriptions, maps inputs and captures accepted responsibility. The producer acknowledges the actual admission result; it does not claim workflow completion.
+4. Optionally contribute a public `StudioTriggerConfigurationEditorContribution` matching the type, schema version and editor identity. Missing, conflicting or failing editors fall back to generic metadata fields while preserving saved values. Backend validation and preview/apply remain authoritative.
+
+The independently compiled [Core-only source/type consumer](../essentials/tests/Workflows/Runtime/Fixtures/StandaloneTriggerConsumer/ConsumerModule.cs) and its [behavioral controls](../essentials/tests/Workflows/Runtime/Tests/StandaloneTriggerPublicConsumerTests.cs) demonstrate registration, admission, replay, authorization and producer isolation. The separate [Studio editor consumer](../tools/ux-acceptance/extensions/TriggerEditor/wwwroot/modules/acceptance-trigger-editor/module.js) demonstrates the optional public SDK slot.
+
+A module can expose both an activity and a standalone resource over shared source services. Adding an activity alone does not automatically provide independent resource configuration, subscriptions or activation. Those are explicit contributions, with their own ownership and lifecycle.
 
 ## Create a paused resource
 

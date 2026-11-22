@@ -89,10 +89,10 @@ def reviewed_host_template():
         for node in group.iter('ProjectReference'):
             if node.get('Condition') or group.get('Condition'):
                 raise ValueError('The dedicated host requires unconditional reviewed dependencies')
-    base = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+    base = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
     expected = {(base.parent / item.attrib['Include'].replace('\\', '/')).resolve()
                 for item in ET.parse(base).iter('ProjectReference')}
-    expected.add(ROOT / 'Extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj')
+    expected.add(ROOT / 'extensions/Examples/src/Acme.Processing/Module/Acme.Processing.csproj')
     actual = {Path(item.attrib['Include'].replace('__SOURCE_ROOT__', str(ROOT))).resolve()
               for item in tree.iter('ProjectReference')}
     if actual != expected:
@@ -109,7 +109,7 @@ def materialize(output):
     host.mkdir()
     project = host / f'{HOST_NAME}.csproj'
     project.write_text(reviewed_host_template())
-    program = (ROOT / 'Essentials/apps/Elsa.Workbench/Program.cs').read_text()
+    program = (ROOT / 'apps/Elsa.Workbench/Program.cs').read_text()
     hook = 'builder.Services.AddHostedService(services => services.GetRequiredService<DashboardQualificationBootstrap>());'
     program = replace_once(program, hook, hook + '\nvar liveDashboardCounters = new DashboardLiveCounters();\nbuilder.Services.AddSingleton(liveDashboardCounters);\nvar dashboardStartClock = new DashboardQualificationStartClock();\nbuilder.Services.AddSingleton(dashboardStartClock);')
     hook = '            typeof(WeaverGitHubCopilotFeature).Assembly,'
@@ -147,7 +147,7 @@ def materialize(output):
     inputs = {'hostTemplate': sha(HERE / 'live/Host.csproj.in'),
               'observer': sha(HERE / 'live/DashboardLiveQualification.cs'),
               'startClock': sha(HERE / 'live/DashboardQualificationStartClock.cs'),
-              'nativeProgram': sha(ROOT / 'Essentials/apps/Elsa.Workbench/Program.cs'),
+              'nativeProgram': sha(ROOT / 'apps/Elsa.Workbench/Program.cs'),
               'generatedProgram': sha(host / 'Program.cs')}
     (output / 'source-inputs.json').write_text(json.dumps(inputs, indent=2) + '\n')
     return project, owned, seeded
@@ -570,7 +570,7 @@ def execute_live(output, options, native, report):
         backend, studio = data / 'backend', data / 'studio'
         copy_runtime(output / 'artifacts/bin' / HOST_NAME / 'debug', backend)
         copy_runtime(output / 'artifacts/bin/Elsa.Studio.Web/debug', studio)
-        backend_source = ROOT / 'Essentials/apps/Elsa.Workbench'
+        backend_source = ROOT / 'apps/Elsa.Workbench'
         studio_source = ROOT / 'Studio/src/apps/Elsa.Studio.Web'
         for target, source in [(backend, backend_source), (studio, studio_source)]:
             for name in ('appsettings.json', 'shells.json'):

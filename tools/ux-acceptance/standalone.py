@@ -363,7 +363,7 @@ class OwnedBackend:
             raise ValueError('Concurrent qualification requires one running owned primary and its selected source boundary')
         directory = self.concurrent_directory
         if not directory.exists():
-            prepare_host(ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj', directory)
+            prepare_host(ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj', directory)
         settings = json.loads((self.directory / 'appsettings.json').read_text())
         connection = f'Data Source={self.directory / "elsa.db"}'
         settings['ConnectionStrings']['Elsa'] = connection
@@ -821,7 +821,7 @@ def run(output, suite='all', journey=None, studio_shape='coordinated-sdk'):
         report['executionSuite'] = execution_suite
         if dirty:
             raise ValueError('Commit source changes before acceptance; a dirty run cannot certify a revision')
-        backend_project = ROOT / 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+        backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
         if studio_shape not in {'application', 'coordinated-sdk'}:
             raise ValueError('Unknown owned Studio composition')
         application_project = ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj'

@@ -7,9 +7,15 @@ type Fields = Record<string, unknown>;
 type Refuse = (code: string, path: string, message: string) => never;
 const record = (value: unknown): value is Fields => value !== null && typeof value === "object" && !Array.isArray(value);
 
+export interface NativeBlockResultRouting {
+  reservedIds?: ReadonlySet<string>;
+  assertTransfer(producerId: string, consumerId: string, hasExplicitScope: boolean, path: string): void;
+  insertCaptures(body: Fields, captures: Map<string, ActivityNode[]>, allocate: (suffix: string) => string, document: NativeBlockDocument): void;
+}
+
 /** Explicit ordinary Set/variable transfers; the server still admits the complete proposed document. */
 export function transferNativeBlockResults(context: NativeBlockContext, proposed: NativeBlockDocument,
-  ownerId: string, blockId: string, selected: Set<string>, refuse: Refuse, flowchartStart?: string): NativeBlockDocument {
+  ownerId: string, blockId: string, selected: Set<string>, refuse: Refuse, flowchartStart?: string, routing?: NativeBlockResultRouting): NativeBlockDocument {
   const locations: { node: ActivityNode; parent: ActivityNode | null; moved: boolean }[] = [];
   const visit = (node: ActivityNode, parent: ActivityNode | null = null, moved = false) => {
     moved ||= selected.has(node.nodeId);
@@ -85,7 +91,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
   if (declarations != null && (!Array.isArray(declarations) || declarations.some(item => !record(item) || typeof item.referenceKey !== "string")))
     refuse("malformed-variables", `nodes.${ownerId}.structure.payload.variables`, "Repair the enclosing variable declarations before transferring a result.");
   const transfers = new Map<string, { producerId: string; projection: string; scope?: string; key: string; nodeId: string }>();
-  const occupied = new Set([...locations.map(item => item.node.nodeId), ...context.document.layout.map(item => item.nodeId),
+  const occupied = new Set([...(routing?.reservedIds ?? []), ...locations.map(item => item.node.nodeId), ...context.document.layout.map(item => item.nodeId),
     ...context.document.activityPresentation.map(item => item.nodeId), ...(Array.isArray(declarations) ? declarations.map(item => (item as Fields).referenceKey as string) : [])]);
   for (const { node } of locations) if (node.structure?.kind === flowchartStructureKind) {
     const payload = node.structure.payload;
@@ -132,6 +138,10 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
         refuse("unproven-result-transfer", reference.path, "The result reader must be the selected Flowchart region's normal continuation.");
     }
     const declaredScope = typeof reference.binding.producerScopeId === "string" ? reference.binding.producerScopeId : undefined;
+    if (scopeKind !== sequenceStructureKind && scopeKind !== flowchartStructureKind) {
+      if (!routing) refuse("unproven-result-transfer", reference.path, "This structure needs an explicit routing and occurrence proof before transferring a result.");
+      routing.assertTransfer(producerId, consumer.node.nodeId, !!declaredScope, reference.path);
+    }
     if (!declaredScope) {
       // A new direct read without a declared execution scope must not invent a loop's occurrence.
       // Root Sequences and whole linear Flowcharts establish the single-run profile themselves.
@@ -196,6 +206,7 @@ export function transferNativeBlockResults(context: NativeBlockContext, proposed
       });
     }
   }
+  routing?.insertCaptures(body, captures, allocate, result);
   // Rewrite only owned typed reads; authored expression source and unrelated argument fields survive.
   for (const reference of references) {
     const transfer = transfers.get(JSON.stringify([reference.binding.producerNodeId, reference.binding.projectionKey]))!;

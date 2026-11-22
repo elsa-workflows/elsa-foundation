@@ -1,5 +1,6 @@
 import { getChildSlots, sequenceStructureKind, flowchartStructureKind } from "../workflowAdapter";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
+import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement } from "../bpmn/bpmnTypes";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 import type { NativeBlockDocument } from "./nativeBlocks";
 
@@ -11,6 +12,8 @@ export interface NativeBlockPreview {
   addedVariables: string[];
   removedConnections: string[];
   addedConnections: string[];
+  removedElements: string[];
+  addedElements: string[];
 }
 
 /** Human-readable projection of the exact proposal. The full authored snapshots remain available for inspection. */
@@ -19,6 +22,7 @@ export function describeNativeBlockChange(before: NativeBlockDocument, after: Na
     const nodes = new Map<string, NodePosition>();
     const variables = new Map<string, string>();
     const connections = new Map<string, string>();
+    const elements = new Map<string, string>();
     const presentation = indexActivityPresentation(document.activityPresentation);
     const items = new Map(catalog.map(item => [item.activityVersionId, item]));
     const label = (id: string) => {
@@ -46,15 +50,26 @@ export function describeNativeBlockChange(before: NativeBlockDocument, after: Na
         if (!value.source?.nodeId || !value.target?.nodeId) continue;
         connections.set(JSON.stringify([node.nodeId, connection]), `${label(value.source.nodeId)} (${value.source.port || "Done"}) → ${label(value.target.nodeId)} in ${label(node.nodeId)}`);
       }
+      if (node.structure?.kind === bpmnStructureKind && Array.isArray(payload?.elements)) {
+        const authored = payload.elements as BpmnElement[];
+        const elementLabel = (id: string) => {
+          const element = authored.find(item => item.elementId === id);
+          return element?.name?.trim() || (element?.childNodeId ? label(element.childNodeId) : element ? bpmnElementTypeLabel(element) : id);
+        };
+        for (const element of authored)
+          elements.set(JSON.stringify([node.nodeId, element]), `${elementLabel(element.elementId)} in ${label(node.nodeId)}`);
+        if (Array.isArray(payload.sequenceFlows)) for (const flow of payload.sequenceFlows as { sourceRef: string; targetRef: string }[])
+          connections.set(JSON.stringify([node.nodeId, flow]), `${elementLabel(flow.sourceRef)} → ${elementLabel(flow.targetRef)} in ${label(node.nodeId)}`);
+      }
     }
-    return { nodes, variables, connections, label };
+    return { nodes, variables, connections, elements, label };
   }
   const old = index(before), next = index(after);
   const containers: NativeBlockPreview["containers"] = [];
   for (const [source, other, change] of [[next, old, "add"], [old, next, "remove"]] as const) {
     for (const [id, { node }] of source.nodes) {
       if (other.nodes.has(id)) continue;
-      const kind = node.structure?.kind === sequenceStructureKind ? "Sequence" : node.structure?.kind === flowchartStructureKind ? "Flowchart" : null;
+      const kind = node.structure?.kind === sequenceStructureKind ? "Sequence" : node.structure?.kind === flowchartStructureKind ? "Flowchart" : node.structure?.kind === bpmnStructureKind ? "BPMN subprocess" : null;
       if (kind) containers.push({ id, name: source.label(id), kind, children: getChildSlots(node, catalog).reduce((sum, slot) => sum + slot.activities.length, 0), change });
     }
   }
@@ -64,6 +79,8 @@ export function describeNativeBlockChange(before: NativeBlockDocument, after: Na
     addedSteps: [...next.nodes].filter(([id]) => !old.nodes.has(id) && !containers.some(container => container.change === "add" && container.id === id)).map(([id]) => next.label(id)),
     addedVariables: [...next.variables].filter(([id]) => !old.variables.has(id)).map(([, label]) => label),
     removedConnections: [...old.connections].filter(([id]) => !next.connections.has(id)).map(([, label]) => label),
-    addedConnections: [...next.connections].filter(([id]) => !old.connections.has(id)).map(([, label]) => label)
+    addedConnections: [...next.connections].filter(([id]) => !old.connections.has(id)).map(([, label]) => label),
+    removedElements: [...old.elements].filter(([id]) => !next.elements.has(id)).map(([, label]) => label),
+    addedElements: [...next.elements].filter(([id]) => !old.elements.has(id)).map(([, label]) => label)
   };
 }

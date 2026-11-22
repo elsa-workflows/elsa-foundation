@@ -8,7 +8,8 @@ namespace Kernel.Store.Conformance;
 /// </summary>
 public enum Level { Required, Reference }
 
-public sealed record Case(string Name, Level Level, Func<Context, Task> Body);
+/// <param name="Partitions">How many partitions the case's fresh store has.</param>
+public sealed record Case(string Name, Level Level, Func<Context, Task> Body, int Partitions = 2);
 
 public sealed record Outcome(Case Case, bool Passed, bool Skipped, string Detail, TimeSpan Took);
 
@@ -23,11 +24,14 @@ public sealed class Context(ProvidedStore provided)
     public IKernelStore S => provided.Store;
     public List<string> Notes { get; } = [];
 
+    /// <summary>The defects the run switched on, for a case whose mutation lives in the case's own steps (<see cref="Flaw.StableNodeName"/>).</summary>
+    public Flaw Flaws { get; init; }
+
     public static readonly TimeSpan Long = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<(int, long), TimeSpan> _leases = [];
 
-    /// <summary>A commit renews the lease for as long as the take that started the epoch asked for.</summary>
+    /// <summary>The commit-step deadline defaults to the lease requested by the take.</summary>
     private TimeSpan LeaseOf(int partition, long epoch) => _leases.GetValueOrDefault((partition, epoch), Long);
 
     public async Task<Lease> Take(int partition, string node = "a", TimeSpan? lease = null)
@@ -154,6 +158,8 @@ public static class Semantics
         IdentityClockChecks.Case,
         IdentityTerminalJobsChecks.Case,
         StoredStateChecks.Case,
+        .. OwnedSetChecks.Cases,
+        .. NodeLeaseChecks.Cases,
         new("actor addressing: an unwritten workflow retains its identity, state and owed job on alias delivery", Level.Required, VirtualActorAliases.Run),
         new("actor addressing: requested spellings resolve under the provider actor collation in one snapshot", Level.Required, async c =>
         {
@@ -474,15 +480,12 @@ public static class Semantics
             Context.Equal(0L, (await c.Row(1, "0/i#1.0001"))!.Seen, "seen of a message to another partition");
             Context.Equal(0L, (await c.Row(0, "0/j#1.0000"))!.Seen, "seen of an own message without hand-over");
         }),
-        new("commit: an empty commit renews the lease", Level.Required, async c =>
+        new("commit: an empty commit leaves the node lease deadline alone", Level.Required, async c =>
         {
             var lease = await c.Take(0, "a", TimeSpan.FromMilliseconds(600));
-            await Task.Delay(350);
-            await c.Lands(() => c.Commit(lease, 0, [], leaseFor: TimeSpan.FromMilliseconds(600)), "the beat");
-            await Task.Delay(350);
-            Context.That(await c.S.TakeAsync(0, "b", Context.Long) is null, "b took the partition although the owner's beat renewed the lease");
-            await Task.Delay(500);
-            Context.That(await c.S.TakeAsync(0, "b", Context.Long) is not null, "b could not take after the renewed lease expired");
+            await c.Lands(() => c.Commit(lease, 0, [], leaseFor: Context.Long), "the empty fence");
+            await Task.Delay(800);
+            Context.That(await c.S.TakeAsync(0, "b", Context.Long) is not null, "the empty fence extended the node lease");
         }),
         new("commit: an empty commit tells a stale owner", Level.Required, async c =>
         {
@@ -1246,9 +1249,9 @@ public static class Semantics
         {
             var watch = Stopwatch.StartNew();
             Outcome outcome;
-            await using (var provided = await provider.CreateAsync(2, setup ?? new StoreSetup()))
+            await using (var provided = await provider.CreateAsync(@case.Partitions, setup ?? new StoreSetup()))
             {
-                var context = new Context(provided);
+                var context = new Context(provided) { Flaws = setup?.Flaws ?? Flaw.None };
                 try
                 {
                     await @case.Body(context).WaitAsync(TimeSpan.FromSeconds(60));

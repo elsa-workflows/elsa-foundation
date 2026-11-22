@@ -12,8 +12,11 @@ namespace Elsa.Workbench.ActivityDataSelectionProof;
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class GetCustomer : Activity<CustomerResult>
 {
+    [ActivityInput(Key = "customerId", DefaultValue = "cust-1042", DefaultSyntax = "Literal")]
+    public string CustomerId { get; set; } = "cust-1042";
+
     protected override ValueTask<ActivityTransition<CustomerResult>> ExecuteAsync(ActivityExecutionContext context) =>
-        ValueTask.FromResult(ActivityTransition.Complete(new CustomerResult()));
+        ValueTask.FromResult(ActivityTransition.Complete(new CustomerResult { Customer = new Customer { CustomerId = this.CustomerId } }));
 }
 
 public sealed record CustomerResult
@@ -31,3 +34,19 @@ public sealed record Customer
 
     public string? Nickname { get; init; }
 }
+
+// TEST ONLY. A plain String producer that is not a trigger, so a copied whole-value reference can run in any
+// position. It returns its authored Value unchanged as its one String Result.
+[Activity(Icon = "TextCursorInput")]
+[ActivityOutcome("Done")]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
+public sealed class EchoValue : Activity<EchoValueResult>
+{
+    [ActivityInput(Key = "Value")]
+    public string Value { get; set; } = "";
+
+    protected override ValueTask<ActivityTransition<EchoValueResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new EchoValueResult(this.Value)));
+}
+
+public sealed record EchoValueResult([property: Output(Key = "Result", Path = "result")] string Result);

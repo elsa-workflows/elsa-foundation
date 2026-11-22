@@ -1,9 +1,8 @@
 import { StudioField } from "@elsa-workflows/studio-ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
 import { createActivityDefinitionDraft, useActivityAuthoringCapabilities } from "./api/activityDesign";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
 import { ActivityDefinitionVersionPicker } from "./ActivityDefinitionVersionPicker";
 import {
@@ -39,8 +38,6 @@ export function ActivityDefinitionDraftDialog({
   const [presentationLabel, setPresentationLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!provider && choices.length === 1) setProvider(choiceValue(choices[0]));
@@ -73,7 +70,7 @@ export function ActivityDefinitionDraftDialog({
     }
   };
 
-  return <ActivityDefinitionManagementDialogShell dialogRef={dialogRef} title="Create parallel draft" kicker="Design-owned mutable work" submitting={submitting} onClose={onClose}>
+  return <ActivityDefinitionManagementDialogShell title="Create parallel draft" submitting={submitting} onClose={onClose}>
     <fieldset className="ad-choice-grid">
       <legend>Starting point</legend>
       <label><input type="radio" name="draft-mode" checked={mode === "blank"} onChange={() => setMode("blank")} /> <span><strong>Blank</strong><small>Start from an advertised authoring provider and its required contract outcomes.</small></span></label>

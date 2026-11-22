@@ -5,10 +5,10 @@ import { captureDashboardAppearances } from "./nativeDashboardsJourney";
 type Layout = { source: string; revision?: string; schemaVersion: number; value: { widgets: { id: string; size: string; visible: boolean; options?: unknown }[] } };
 const canonicalAuthenticatedHome = ["home.get-started", "home.quick-actions", "home.recent-workflows", "home.recent-runs", "home.needs-attention", "home.tasks"];
 const homeOwners = {
-  authenticatedDefault: "Essentials/src/Studio/Preferences/Core/StudioHomeLayout.cs",
+  authenticatedDefault: "essentials/src/Studio/Preferences/Core/StudioHomeLayout.cs",
   page: "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/HomePage.tsx",
   anonymousFallback: "Studio/src/essentials/Elsa.Studio.Dashboard/Client/src/homeLayout.ts",
-  moduleRegistration: "Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx"
+  moduleRegistration: "extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client/src/module.tsx"
 };
 
 /** Existing module-contributed Home widgets and preference/default authorities remain the native Home. */

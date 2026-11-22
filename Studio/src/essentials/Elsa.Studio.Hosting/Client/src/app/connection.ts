@@ -7,7 +7,7 @@ export class ConfiguredBackendConnection implements StudioConnectionController {
   private ended=false;
   private initializing?: Promise<void>;
   constructor(readonly hostContext:StudioEndpointContext,readonly hostIdentity:AuthSession,
-    private readonly manager:AuthProviderManager|null,private readonly baseUrl:string,private readonly id="legacy") {}
+    private readonly manager:AuthProviderManager|null,private readonly baseUrl:string,private readonly id="default") {}
   getSnapshot = () => this.snapshot;
   subscribe = (listener:() => void) => {this.listeners.add(listener);return () => {this.listeners.delete(listener);};};
   private update(value:Partial<StudioConnectionSnapshot>) {this.snapshot={...this.snapshot,...value};for(const listener of this.listeners)listener();}

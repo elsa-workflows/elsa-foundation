@@ -1,0 +1,369 @@
+.console-stream-panel {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+}
+
+.console-stream-page {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--studio-text);
+}
+
+.console-stream-page {
+  overflow: hidden;
+}
+
+.console-stream-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
+}
+
+.console-stream-hosts {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  overflow: hidden;
+}
+
+.console-stream-hosts button {
+  border: 0;
+  border-radius: 0;
+}
+
+.console-stream-hosts button:focus-visible {
+  outline-offset: -3px;
+}
+
+.console-stream-hosts button + button {
+  border-left: 1px solid var(--studio-border);
+}
+
+.console-stream-tools > span:not(.console-stream-status) {
+  padding: 3px 7px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+}
+
+.console-stream-status {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--studio-radius-pill);
+  background: var(--studio-text-muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-text-muted) 14%, transparent);
+}
+
+.console-stream-status.online {
+  background: var(--studio-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-success) 18%, transparent);
+}
+
+.console-stream-tools button {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.console-stream-tools select {
+  height: 28px;
+  max-width: min(260px, 32vw);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
+  padding: 0 28px 0 8px;
+}
+
+.console-stream-tools button:where(:not([aria-pressed="true"])):hover {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.console-stream-lines {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 16px 16px;
+  font-family: var(--studio-font-mono);
+  font-size: var(--studio-label-size);
+  line-height: 1.5;
+}
+
+.console-stream-line {
+  display: grid;
+  grid-template-columns: 86px minmax(118px, 220px) minmax(0, 1fr);
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.console-stream-line > span {
+  color: var(--studio-text-muted);
+}
+
+.console-stream-line small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--studio-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-stream-line code {
+  overflow-wrap: anywhere;
+  color: var(--studio-text);
+  white-space: pre-wrap;
+}
+
+.console-stream-line.stderr code {
+  color: var(--studio-danger);
+}
+
+.console-stream-line.stdout code {
+  color: var(--studio-success);
+}
+
+.console-stream-ansi-bold {
+  font-weight: bold;
+}
+
+.console-stream-ansi-dim {
+  opacity: 0.72;
+}
+
+/* ANSI terminal color palette — intentionally hardcoded and exempt from
+   tokenization. These are the literal SGR color slots a program emits (red,
+   green, cyan, …); they must render as those specific terminal colors, not as
+   theme chrome, so they are not aliased onto --studio-*. Legibility is handled
+   instead by the light-mode/dark-mode split below. */
+
+/* ANSI foreground palette — light mode (default): darker, saturated variants
+   that stay legible on the soft surface. */
+.console-stream-ansi-fg-black,
+.console-stream-ansi-fg-bright-black {
+  color: #5a6b71;
+}
+
+.console-stream-ansi-fg-red {
+  color: #c0392b;
+}
+
+.console-stream-ansi-fg-green {
+  color: #1e8e4f;
+}
+
+.console-stream-ansi-fg-yellow {
+  color: #b7791f;
+}
+
+.console-stream-ansi-fg-blue {
+  color: #2563c0;
+}
+
+.console-stream-ansi-fg-magenta {
+  color: #9b3fb5;
+}
+
+.console-stream-ansi-fg-cyan {
+  color: #0e8a99;
+}
+
+.console-stream-ansi-fg-white,
+.console-stream-ansi-fg-bright-white {
+  color: var(--studio-text);
+}
+
+.console-stream-ansi-fg-bright-red {
+  color: #d9534f;
+}
+
+.console-stream-ansi-fg-bright-green {
+  color: #27ae60;
+}
+
+.console-stream-ansi-fg-bright-yellow {
+  color: #d68910;
+}
+
+.console-stream-ansi-fg-bright-blue {
+  color: #3b82f6;
+}
+
+.console-stream-ansi-fg-bright-magenta {
+  color: #b15cd0;
+}
+
+.console-stream-ansi-fg-bright-cyan {
+  color: #15a0b0;
+}
+
+.console-stream-ansi-bg-black,
+.console-stream-ansi-bg-bright-black {
+  background: rgba(90, 107, 113, 0.16);
+}
+
+.console-stream-ansi-bg-red,
+.console-stream-ansi-bg-bright-red {
+  background: rgba(192, 57, 43, 0.14);
+}
+
+.console-stream-ansi-bg-green,
+.console-stream-ansi-bg-bright-green {
+  background: rgba(30, 142, 79, 0.14);
+}
+
+.console-stream-ansi-bg-yellow,
+.console-stream-ansi-bg-bright-yellow {
+  background: rgba(183, 121, 31, 0.16);
+}
+
+.console-stream-ansi-bg-blue,
+.console-stream-ansi-bg-bright-blue {
+  background: rgba(37, 99, 192, 0.14);
+}
+
+.console-stream-ansi-bg-magenta,
+.console-stream-ansi-bg-bright-magenta {
+  background: rgba(155, 63, 181, 0.14);
+}
+
+.console-stream-ansi-bg-cyan,
+.console-stream-ansi-bg-bright-cyan {
+  background: rgba(14, 138, 153, 0.14);
+}
+
+.console-stream-ansi-bg-white,
+.console-stream-ansi-bg-bright-white {
+  background: rgba(21, 32, 36, 0.1);
+}
+
+/* ANSI palette — dark mode: restore the original bright terminal colors. */
+html[data-theme-mode="dark"] .console-stream-ansi-fg-black,
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-black {
+  color: #7f9298;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-red {
+  color: #ff8f8a;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-green {
+  color: #64d99c;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-yellow {
+  color: #e9c46a;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-blue {
+  color: #8dbbff;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-magenta {
+  color: #d7a6ff;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-cyan {
+  color: #72d7df;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-red {
+  color: #ffb8b5;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-green {
+  color: #bde7d3;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-yellow {
+  color: #ffe08a;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-blue {
+  color: #b7d3ff;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-magenta {
+  color: #eccbff;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-fg-bright-cyan {
+  color: #a3edf0;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-black,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-black {
+  background: #1e2a2e;
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-red,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-red {
+  background: rgba(255, 123, 117, 0.18);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-green,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-green {
+  background: rgba(71, 201, 139, 0.18);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-yellow,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-yellow {
+  background: rgba(224, 164, 77, 0.2);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-blue,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-blue {
+  background: rgba(141, 187, 255, 0.18);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-magenta,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-magenta {
+  background: rgba(215, 166, 255, 0.18);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-cyan,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-cyan {
+  background: rgba(114, 215, 223, 0.18);
+}
+
+html[data-theme-mode="dark"] .console-stream-ansi-bg-white,
+html[data-theme-mode="dark"] .console-stream-ansi-bg-bright-white {
+  background: rgba(242, 247, 248, 0.18);
+}
+
+@media (max-width: 720px) {
+
+  .console-stream-tools {
+    justify-content: flex-start;
+  }
+
+  .console-stream-line {
+    grid-template-columns: max-content minmax(0, 1fr);
+    row-gap: var(--studio-space-1);
+  }
+
+  .console-stream-line code {
+    grid-column: 1 / -1;
+  }
+}

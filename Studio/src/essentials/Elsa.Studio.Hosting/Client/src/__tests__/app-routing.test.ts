@@ -30,6 +30,14 @@ describe("app route matching", () => {
 });
 
 describe("workspace screen description", () => {
+  it("names a registered child screen inside an active navigation section", () => {
+    const parent = "/workflows/activity-definitions";
+    const path = parent + "/upgrades";
+    const routes = [{ path, label: "Activity definition upgrades" }];
+    const navigation = [{ id: "activities", path: parent, label: "Activity definitions" }];
+    expect(describeScreen(path, routes, navigation, [], []).title).toBe("Activity definition upgrades");
+  });
+
   it("survives a malformed percent-encoded segment in a restored address", () => {
     const routes = [{ path: "/workflows/instances/:workflowExecutionId", label: "Workflow run" }];
     expect(() => describeScreen("/workflows/instances/%E0%A4%A", routes, [], [], [])).not.toThrow();

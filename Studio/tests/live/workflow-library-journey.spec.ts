@@ -33,8 +33,8 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await expect(folderDialog).toBeHidden();
   await page.getByRole("treeitem", { name: new RegExp(folderName) }).click();
 
-  await page.getByRole("group", { name: "Workflow definition page actions", exact: true }).getByRole("button", { name: "Create workflow", exact: true }).click();
-  const create = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  await page.getByRole("group", { name: "Workflow definition page actions", exact: true }).getByRole("button", { name: "New workflow", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "New workflow", exact: true });
   await create.getByLabel("Display name").fill(workflowName);
   const sequence = create.getByRole("radio", { name: "Sequence" });
   await expect(sequence).toBeEnabled();
@@ -46,7 +46,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await create.getByRole("button", { name: "Create", exact: true }).click();
   const creation = await (await creationResponse).json() as { definition: { id: string }; draft: { id: string } };
   const editorUrl = page.url();
-  await expect(page.getByRole("button", { name: "Definitions", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true })).toBeVisible();
 
   // An empty Sequence is deliberately triggerless. Its publication must still enter
   // the authority-backed Published query without manufacturing a trigger or tag.
@@ -58,16 +58,16 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   const published = page.getByRole("dialog", { name: "Published", exact: true });
   await expect(published).toBeVisible({ timeout: 60_000 });
   await published.getByRole("button", { name: "Close", exact: true }).click();
-  await page.getByRole("button", { name: "Definitions", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true }).click();
   await expect(workflowRow(page)).toBeVisible();
 
   await page.getByRole("link", { name: "Manage tags", exact: true }).click();
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await page.getByRole("button", { name: "New tag", exact: true }).click();
   const catalog = page.locator(".wf-tag-page");
   await catalog.getByLabel("Tag name", { exact: true }).fill(tagName);
-  await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
+  await catalog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
-  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
+  await catalog.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Workflow tags", exact: true }).click();
   await page.getByRole("link", { name: tagName, exact: true }).click();
   await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   const selectedTagUrl = page.url();
@@ -85,8 +85,8 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await catalog.getByRole("button", { name: "Save tag", exact: true }).click();
   const restoredTagReceipt = await (await restoredResponse).json() as { id: string; deprecated: boolean };
   expect(restoredTagReceipt).toMatchObject({ id: retiredTagReceipt.id, deprecated: false });
-  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await catalog.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Workflow tags", exact: true }).click();
+  await page.getByRole("button", { name: "New tag", exact: true }).click();
   await catalog.getByLabel("Tag name", { exact: true }).fill(teamName);
   await catalog.getByLabel("Tag kind", { exact: true }).selectOption("controlled");
   await catalog.getByRole("button", { name: "Add controlled value", exact: true }).click();
@@ -95,13 +95,13 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await catalog.getByLabel("Value name 2", { exact: true }).fill("Operations");
   const controlledResponse = page.waitForResponse(response => response.request().method() === "POST" &&
     new URL(response.url()).pathname.endsWith("/tags"));
-  await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
+  await catalog.getByRole("button", { name: "Create", exact: true }).click();
   const controlledTagReceipt = await (await controlledResponse).json() as { values: { id: string; name: string }[] };
   await expect(catalog.getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   expect(controlledTagReceipt.values).toHaveLength(2);
   expect(controlledTagReceipt.values.every(value => value.id.startsWith("value-"))).toBe(true);
-  await catalog.getByRole("button", { name: "Back to tags", exact: true }).click();
-  await page.getByRole("button", { name: "Back to workflows", exact: true }).click();
+  await catalog.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Workflow tags", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true }).click();
 
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Edit tags…", exact: true }).click();
@@ -168,7 +168,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   expect(details.definition.versionCount).toBe(1);
   expect(details.versions).toHaveLength(1);
   if (details.draft) expect(details.draft.id).toBe(creation.draft.id);
-  await page.getByRole("button", { name: "Definitions", exact: true }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Definitions", exact: true }).click();
   await expect(page).toHaveURL(savedUrl);
   await expect(workflowRow(page)).toBeVisible();
 

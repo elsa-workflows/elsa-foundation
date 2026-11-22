@@ -18,7 +18,7 @@ import { publicationPreflight, publishedSlot } from "./fixtures/publicationSlots
 // replay-safe warning, or a Connections warning) are listed under their own heading with an icon and never block; errors
 // still block; an entry without a severity is an error.
 
-const replaySafeWarning = "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.";
+const replaySafeWarning = "\"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key.";
 const connectionWarning = "The connection 'crm' is not available in this environment.";
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;

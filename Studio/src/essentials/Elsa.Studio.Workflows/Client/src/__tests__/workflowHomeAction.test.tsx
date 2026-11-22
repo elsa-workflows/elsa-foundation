@@ -29,7 +29,8 @@ describe("Home workflow actions", () => {
 
     await waitForText(rendered.container, "No active workflow definitions");
     await vi.dynamicImportSettled();
-    await waitForCondition(() => expect(rendered.container.querySelector("[role='dialog']")).not.toBeNull());
+    const createDialog = () => document.querySelector<HTMLElement>('form[role="dialog"]');
+    await waitForCondition(() => expect(createDialog()).not.toBeNull());
     await waitForCondition(() => {
       expect(`${window.location.pathname}${window.location.search}${window.location.hash}`)
         .toBe("/workflows/definitions?keep=one&keep=two#home-anchor");
@@ -37,11 +38,11 @@ describe("Home workflow actions", () => {
       expect(window.history.state).toMatchObject(originalHistoryState);
       expect(historyState).toEqual(originalHistoryState);
     });
-    await click(button(rendered.container, "Cancel"));
-    expect(rendered.container.querySelector("[role='dialog']")).toBeNull();
+    await click(button(createDialog()!, "Cancel"));
+    expect(createDialog()).toBeNull();
 
     window.dispatchEvent(new PopStateEvent("popstate"));
-    await waitForCondition(() => expect(rendered.container.querySelector("[role='dialog']")).toBeNull());
+    await waitForCondition(() => expect(createDialog()).toBeNull());
     expect(window.location.search).toBe("?keep=one&keep=two");
   });
 
@@ -65,7 +66,7 @@ describe("Home workflow actions", () => {
     );
 
     await waitForCondition(() => expect(detailRequests).toContain("/design/workflows/definitions/chosen"));
-    expect(rendered.container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("chosen");
     expect(new URLSearchParams(window.location.search).has("homeAction")).toBe(false);
     expect(new URLSearchParams(window.location.search).get("keep")).toBe("one");

@@ -1,23 +1,16 @@
-import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useState } from "react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowWeaverController } from "../workflowWeaver";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
-import {
-  formatExecutableInspectorPageTitle,
-  type ExecutableInspectorIdentity
-} from "./executableInspectorIdentity";
 
 const WorkflowExecutableInspectorWorkbench = lazy(() => import("./WorkflowExecutableInspector").then(module => ({ default: module.WorkflowExecutableInspectorWorkbench })));
 
 export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputEditors }: { context: StudioEndpointContext; ai: StudioWeaverRegistry; weaver?: WorkflowWeaverController; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
-  const [identity, setIdentity] = useState<ExecutableInspectorIdentity | null>(null);
 
   useEffect(() => {
     const syncFromLocation = () => {
       setLocation(readExecutableInspectorLocation());
-      setIdentity(null);
     };
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
@@ -38,12 +31,8 @@ export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputE
     setLocation(readExecutableInspectorLocation());
   }, []);
 
-  const pageTitle = formatExecutableInspectorPageTitle(identity?.definitionName, location.artifactId, identity?.version);
-  const resolvedName = identity?.definitionName?.trim();
-
   return (
-    <section className="studio-page wf-page wf-page--run-workbench">
-      <StudioPageHeader title={pageTitle} eyebrow={resolvedName ? "Inspector" : undefined} headingLevel={2} />
+    <section className="studio-page wf-page wf-page--run-workbench wf-page--executable-inspector wf-editor" data-studio-workspace-backdrop="none">
       <WorkflowLazyBoundary label="executable inspector">
         <WorkflowExecutableInspectorWorkbench
           context={context}
@@ -53,7 +42,6 @@ export function WorkflowExecutableInspectorPage({ context, ai, weaver, runInputE
           artifactId={location.artifactId}
           sourceReferenceId={location.sourceReferenceId}
           onSelectReference={selectReference}
-          onIdentityChange={setIdentity}
         />
       </WorkflowLazyBoundary>
     </section>

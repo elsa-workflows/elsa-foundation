@@ -6,10 +6,10 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.cs
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
-import { EtlDefinitionsPage } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlDefinitionsPage";
-import { EtlPublishedSelectionEditor } from "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlPublishedSelectionEditor";
+import { EtlDefinitionsPage } from "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlDefinitionsPage";
+import { EtlPublishedSelectionEditor } from "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/EtlPublishedSelectionEditor";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
-import "../../../Extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
+import "../../../extensions/Etl/studio/Elsa.Studio.Etl/Client/src/styles.css";
 
 const notifications = createNotificationController();
 const endpoint = createEndpointContext(`${window.location.origin}/fixture-etl`);

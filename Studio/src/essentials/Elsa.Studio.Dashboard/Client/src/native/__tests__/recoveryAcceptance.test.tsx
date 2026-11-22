@@ -7,7 +7,7 @@ import { DashboardApi } from "../api";
 import { NamedDashboardsRoute, QuestionTile } from "../NamedDashboards";
 import { ShareDialog, HistoryDialog } from "../ResourceDialogs";
 import { initialDefinition, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { selectResourceAction, stubApi, waitUntil } from "../../__tests__/testSupport";
 
 const dataset: DatasetDeclaration = { id: "acme", ownerModuleId: "Acme", schemaRevision: "1", title: "Processing", description: "Declared data", fields: [], metrics: [] };
 const resource = (): DashboardResource => ({ id: "q1", kind: "question", revision: "r1", name: "Shared question", description: "", ownerId: "owner", capabilities: { canRead: true, canEdit: true, canShare: true, canDelete: true, canCopy: true }, definition: initialDefinition(dataset), definitionState: "available", createdAt: "", updatedAt: "" });
@@ -15,10 +15,10 @@ const result = (marker: string): QueryResult => ({ outcome: "succeeded", columns
 const cleanups: (() => void)[] = [];
 function mount(children: React.ReactNode) {
   const view = document.createElement("div"); document.body.append(view); const root = createRoot(view);
-  flushSync(() => root.render(children)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return view;
+  flushSync(() => root.render(children)); cleanups.push(() => { flushSync(() => root.unmount()); view.remove(); }); return document.body;
 }
 function click(view: HTMLElement, name: string) {
-  const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === name);
+  const button = [...view.querySelectorAll("button")].find(item => item.textContent?.trim() === name || item.getAttribute("aria-label") === name);
   expect(button, `Action ${name}`).toBeDefined(); flushSync(() => button!.click());
 }
 function edit(input: HTMLInputElement, value: string) {
@@ -26,15 +26,16 @@ function edit(input: HTMLInputElement, value: string) {
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
 }
 function editor(saved: DashboardResource) {
-  window.history.replaceState({}, "", `/${saved.kind}s/${saved.id}`);
+  const view = saved.kind === "dashboard" ? "edit" : "detail";
+  window.history.replaceState({}, "", `/${saved.kind}s/${saved.id}${view === "edit" ? "/edit" : ""}`);
   const api = stubApi();
   const dialogs = { confirm: vi.fn(async (_options: unknown) => true), prompt: vi.fn(async (_options: unknown) => null), alert: vi.fn(async (_options: unknown) => undefined) };
   const full = { ...api, dialogs };
   api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [dataset] } : url.includes("/dashboards/") ? saved : resource()) as typeof api.backend.http.getJson;
   if (saved.kind === "question") api.backend.http.getJson = vi.fn(async (url: string) => url.includes("dashboard-datasets") ? { items: [dataset] } : saved) as typeof api.backend.http.getJson;
   api.backend.http.postJson = vi.fn(async () => result("0")) as typeof api.backend.http.postJson;
-  const view = mount(<AnonymousAuthProvider><NamedDashboardsRoute api={full} kind={saved.kind} view="detail" navigate={vi.fn()} /></AnonymousAuthProvider>);
-  return { api, dialogs, view };
+  const container = mount(<AnonymousAuthProvider><NamedDashboardsRoute api={full} kind={saved.kind} view={view} navigate={vi.fn()} /></AnonymousAuthProvider>);
+  return { api, dialogs, view: container };
 }
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); });
 
@@ -59,7 +60,8 @@ describe("native product recovery", () => {
     vi.spyOn(DashboardApi.prototype, "revision").mockRejectedValue(Object.assign(new Error("History read revoked"), { status: 403 }));
     await waitUntil(() => view.querySelector(".named-query-controls") !== null);
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("891357") === true);
-    click(view, "History"); await waitUntil(() => view.textContent?.includes("PRIVATE-REVISION") === true);
+    selectResourceAction(view, "Question actions", "History"); await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    expect(view.textContent).not.toContain("PRIVATE-REVISION");
     click(view, "Inspect revision r0"); await waitUntil(() => view.textContent?.includes("History read revoked") === true);
     if (view.querySelector('[role="dialog"]')) click(view, "Close");
     expect(view.textContent).not.toContain("891357");
@@ -71,7 +73,8 @@ describe("native product recovery", () => {
     vi.spyOn(api, "history").mockResolvedValue({ items: [{ revision: "r0", name: "PROTECTED-HISTORICAL-NAME", updatedAt: "2026-11-01T00:00:00Z", description: "", actorId: "owner" }] });
     vi.spyOn(api, "revision").mockRejectedValue(Object.assign(new Error("Revision unavailable"), { status }));
     const view = mount(<HistoryDialog api={api} resource={resource()} onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={vi.fn()} />);
-    await waitUntil(() => view.textContent?.includes("PROTECTED-HISTORICAL-NAME") === true);
+    await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    expect(view.textContent).not.toContain("PROTECTED-HISTORICAL-NAME");
     click(view, "Inspect revision r0"); await waitUntil(() => view.textContent?.includes("Revision unavailable") === true);
     expect(view.textContent).not.toContain("PROTECTED-HISTORICAL-NAME");
     expect(view.textContent).not.toContain("Inspect revision r0");
@@ -155,6 +158,111 @@ describe("native product recovery", () => {
     dialogs.confirm.mockResolvedValueOnce(false); click(view, "Save question");
     await waitUntil(() => dialogs.confirm.mock.calls.length === 1); expect(put).not.toHaveBeenCalled();
     expect(dialogs.confirm.mock.calls[0][0]).toMatchObject({ message: expect.stringContaining("Save draft as new question") });
+  });
+
+  it("marks the current revision, previews older definitions, and confirms before replacing unsaved edits", async () => {
+    const api = new DashboardApi(stubApi().backend);
+    const saved = resource();
+    const older = { ...saved, revision: "r0", name: "Earlier title", description: "Earlier description" };
+    vi.spyOn(api, "history").mockResolvedValue({ items: [
+      { revision: "r1", name: saved.name, description: saved.description, actorId: "owner", updatedAt: "2026-11-02T00:00:00Z" },
+      { revision: "r0", name: older.name, description: older.description, actorId: "owner", updatedAt: "2026-11-01T00:00:00Z" }
+    ] });
+    const readRevision = vi.spyOn(api, "revision").mockResolvedValue(older);
+    const restore = vi.spyOn(api, "restore").mockResolvedValue({ ...saved, revision: "r2" });
+    const onRestored = vi.fn();
+    const view = mount(<HistoryDialog api={api} resource={saved} hasUnsavedChanges onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={onRestored} />);
+
+    await waitUntil(() => view.textContent?.includes("Current") === true);
+    expect(view.querySelector('[aria-label="Inspect revision r1"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(view.querySelector('[aria-label="Restore revision r1"]')).toBeNull();
+    expect(readRevision).not.toHaveBeenCalled();
+
+    click(view, "Inspect revision r0");
+    await waitUntil(() => view.textContent?.includes("Earlier description") === true);
+    expect(view.querySelector('.named-history-technical button')?.getAttribute("aria-expanded")).toBe("false");
+    click(view, "Restore revision r0");
+    await waitUntil(() => view.textContent?.includes("Unsaved changes will be replaced") === true);
+    expect(restore).not.toHaveBeenCalled();
+    click(view, "Cancel restore");
+    expect(restore).not.toHaveBeenCalled();
+
+    click(view, "Restore revision r0");
+    click(view, "Confirm restore r0");
+    await waitUntil(() => restore.mock.calls.length === 1);
+    expect(restore.mock.calls[0][1]).toBe("r0");
+    expect(onRestored).toHaveBeenCalledWith(expect.objectContaining({ revision: "r2" }));
+  });
+
+  it("allows read-only revision inspection without offering restore", async () => {
+    const api = new DashboardApi(stubApi().backend);
+    const saved = { ...resource(), capabilities: { ...resource().capabilities, canEdit: false } };
+    const older = { ...saved, revision: "r0", name: "Read-only historical title", description: "Read-only historical description" };
+    vi.spyOn(api, "history").mockResolvedValue({ items: [
+      { revision: saved.revision, name: saved.name, description: saved.description, actorId: "owner", updatedAt: "2026-11-02T00:00:00Z" },
+      { revision: older.revision, name: older.name, description: older.description, actorId: "owner", updatedAt: "2026-11-01T00:00:00Z" }
+    ] });
+    vi.spyOn(api, "revision").mockResolvedValue(older);
+    const view = mount(<HistoryDialog api={api} resource={saved} onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={vi.fn()} />);
+
+    await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    click(view, "Inspect revision r0");
+    await waitUntil(() => view.textContent?.includes("Read-only historical description") === true);
+    expect(view.querySelector('[aria-label="Restore revision r0"]')).toBeNull();
+    expect(view.textContent).not.toContain("Restore this revision");
+  });
+
+  it("does not render a withheld historical definition", async () => {
+    const api = new DashboardApi(stubApi().backend);
+    const saved = { ...resource(), revision: "r2" };
+    vi.spyOn(api, "history").mockResolvedValue({ items: [
+      { revision: "r0", name: "PROTECTED-SUMMARY-NAME", description: "", actorId: "owner", updatedAt: "2026-11-01T00:00:00Z" }
+    ] });
+    vi.spyOn(api, "revision").mockResolvedValue({ ...saved, revision: "r0", name: "PROTECTED-DETAIL-NAME", description: "PROTECTED-DESCRIPTION", definition: undefined, definitionState: "withheld" });
+    const view = mount(<HistoryDialog api={api} resource={saved} onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={vi.fn()} />);
+
+    await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    expect(view.textContent).not.toContain("PROTECTED-SUMMARY-NAME");
+    click(view, "Inspect revision r0");
+    await waitUntil(() => view.textContent?.includes("withheld") === true);
+    expect(view.textContent).not.toContain("PROTECTED-DETAIL-NAME");
+    expect(view.textContent).not.toContain("PROTECTED-DESCRIPTION");
+    expect(view.querySelector("pre")).toBeNull();
+  });
+
+  it("shows an empty state after a successful history load and retries a failed load", async () => {
+    const api = new DashboardApi(stubApi().backend);
+    const history = vi.spyOn(api, "history").mockRejectedValueOnce(new Error("History temporarily unavailable")).mockResolvedValueOnce({ items: [] });
+    const view = mount(<HistoryDialog api={api} resource={resource()} onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={vi.fn()} />);
+
+    await waitUntil(() => view.textContent?.includes("History temporarily unavailable") === true);
+    click(view, "Retry history");
+    await waitUntil(() => view.textContent?.includes("No saved revisions yet") === true);
+    expect(history).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores a late revision snapshot after another version has been selected", async () => {
+    const api = new DashboardApi(stubApi().backend);
+    const saved = { ...resource(), revision: "r2" };
+    const requests = new Map<string, (value: DashboardResource) => void>();
+    vi.spyOn(api, "history").mockResolvedValue({ items: [
+      { revision: "r2", name: "", description: "", actorId: "owner", updatedAt: "2026-11-02T00:00:00Z" },
+      { revision: "r1", name: "", description: "", actorId: "owner", updatedAt: "2026-11-01T00:00:00Z" },
+      { revision: "r0", name: "", description: "", actorId: "owner", updatedAt: "2026-10-31T00:00:00Z" }
+    ] });
+    vi.spyOn(api, "revision").mockImplementation((_resource, revision) => new Promise(resolve => requests.set(revision, resolve)));
+    const view = mount(<HistoryDialog api={api} resource={saved} onAccessLost={vi.fn()} onClose={vi.fn()} onRestored={vi.fn()} />);
+
+    await waitUntil(() => view.querySelector('[aria-label="Inspect revision r0"]') !== null);
+    click(view, "Inspect revision r0");
+    click(view, "Inspect revision r1");
+    await waitUntil(() => requests.size === 2);
+    flushSync(() => requests.get("r1")!({ ...saved, revision: "r1", name: "Selected newer snapshot" }));
+    await waitUntil(() => view.textContent?.includes("Selected newer snapshot") === true);
+    flushSync(() => requests.get("r0")!({ ...saved, revision: "r0", name: "Stale older snapshot" }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(view.textContent).toContain("Selected newer snapshot");
+    expect(view.textContent).not.toContain("Stale older snapshot");
   });
 
   it("cancels a tile refresh, withholds values and ignores a late success from transport", async () => {

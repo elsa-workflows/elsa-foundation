@@ -5,7 +5,9 @@ import { ThemeProvider, useTheme } from "../../src/essentials/Elsa.Studio.Hostin
 import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";
 import { ThemeBuilderPage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/modules/ThemeBuilderPage";
 import { ToastHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/feedback/ToastHost";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/components.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/settings.css";
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 
 const context: StudioEndpointContext = { baseUrl: location.origin, http: createHttpClient(location.origin) };

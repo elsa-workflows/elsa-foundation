@@ -28,7 +28,7 @@ it("registers independent BPMN navigation for a selected Runtime-only backend", 
   await vi.waitFor(() => expect(page.container.textContent).toContain("New starts are disabled"), { timeout: 5000 });
   const area = page.api.featureAreas.list().find(item => item.id === "workflows")!;
   const navigation = "items" in area.nav ? area.nav.items.filter(item => item.path.startsWith("/workflows/bpmn")) : [];
-  expect(navigation).toHaveLength(2); expect(navigation.every(item => item.placement === "main")).toBe(true);
+  expect(navigation).toHaveLength(2); expect(navigation.map(item => item.placement)).toEqual(["build", "operate"]);
   expect(navigation.every(item => item.requiresBackend?.every(requirement => requirement.id === "elsa.api.bpmn-catalog"))).toBe(true);
   const runs = page.container.querySelector<HTMLAnchorElement>("nav[aria-label='BPMN views'] a[href*='/runs']")!;
   flushSync(() => runs.click());
@@ -51,6 +51,7 @@ it("refuses a direct navigation whose selected backend lacks the optional capabi
     Object.defineProperty(api, "backendSession", { value: { key: "unsupported", profile: { id: "unsupported", baseUrl: api.backend.baseUrl, name: "Backend", environment: "Test", source: "configuration" },
       context: api.backend, capabilities, identity: { status: "authenticated", subject: "author", roles: [], permissions: [] }, disposed: false, pendingWrites: 0, refreshCapabilities: async () => capabilities } satisfies StudioBackendSession });
   }, false, capabilities);
-  await vi.waitFor(() => expect(page.container.textContent).toContain("BPMN navigation is unavailable"));
+  await vi.waitFor(() => expect(page.container.textContent).toContain("BPMN unavailable"));
+  expect(page.container.textContent).toContain("Choose a backend with BPMN support to open processes and runs.");
   expect(fetch).not.toHaveBeenCalled(); await page.unmount();
 });

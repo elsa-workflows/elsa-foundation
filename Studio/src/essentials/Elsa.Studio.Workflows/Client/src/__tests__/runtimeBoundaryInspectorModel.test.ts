@@ -79,7 +79,7 @@ describe("runtime boundary inspector snapshot model", () => {
   );
 });
 
-describe("selected runtime value evidence presentation", () => {
+describe("selected captured run data presentation", () => {
   it.each([
     [{ state: "captured", snapshot: { kind: "string", preview: "visible" } }, "captured"],
     [{ captureState: "captureFailed" }, "capture-failed"],

@@ -4,8 +4,11 @@ import { expect, it, vi } from "vitest";
 import type { WorkflowDraft } from "../workflowTypes";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 
-const editor = vi.hoisted(() => ({ props: null as unknown as { readOnly: boolean; document: { value: string }; onChange(value: { value: string }): void } }));
-vi.mock("@elsa-workflows/studio-code-editor", () => ({ StudioCodeEditor: (props: typeof editor.props) => {
+const editor = vi.hoisted(() => ({
+  jsonLanguageAdapter: { language: "json", displayName: "JSON", loadEditor: vi.fn() },
+  props: null as unknown as { readOnly: boolean; document: { value: string }; languageAdapter: { language: string; displayName: string; loadEditor?: unknown }; onChange(value: { value: string }): void }
+}));
+vi.mock("@elsa-workflows/studio-code-editor", () => ({ jsonLanguageAdapter: editor.jsonLanguageAdapter, StudioCodeEditor: (props: typeof editor.props) => {
   editor.props = props;
   return <textarea aria-label="Workflow JSON" readOnly={props.readOnly} value={props.document.value} onChange={event => props.onChange({ value: event.currentTarget.value })} />;
 } }));
@@ -17,7 +20,10 @@ it("keeps unapplied authoring JSON while displaying an immutable captured snapsh
   const onApply = vi.fn(() => null);
   const render = (inspectionSnapshot?: WorkflowDraft) => flushSync(() => root.render(<WorkflowCodeView draft={draft} inspectionSnapshot={inspectionSnapshot} onApply={onApply} />));
   try {
-    render(); flushSync(() => editor.props.onChange({ value: "unapplied authoring JSON" }));
+    render();
+    expect(editor.props.languageAdapter).toBe(editor.jsonLanguageAdapter);
+    expect(editor.props.languageAdapter.loadEditor).toBeTypeOf("function");
+    flushSync(() => editor.props.onChange({ value: "unapplied authoring JSON" }));
     expect(editor.props.document.value).toBe("unapplied authoring JSON");
     render(snapshot); expect(editor.props.readOnly).toBe(true); expect(editor.props.document.value).toContain("captured");
     flushSync(() => editor.props.onChange({ value: "attempted snapshot mutation" }));

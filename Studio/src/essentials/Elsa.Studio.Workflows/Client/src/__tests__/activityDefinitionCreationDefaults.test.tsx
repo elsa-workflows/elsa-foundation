@@ -40,12 +40,12 @@ it.each([false, true])("selects and submits Sequence when Flowchart is missing o
   const root = createRoot(container);
   unmount = () => { flushSync(() => root.unmount()); container.remove(); };
   flushSync(() => root.render(<ActivityDefinitionCreateDialog context={testApi().backend} activityEditors={[contribution]} onClose={vi.fn()} onCreated={vi.fn()} />));
-  const name = container.querySelector<HTMLInputElement>('[aria-label="Display name"]') ?? container.querySelector<HTMLInputElement>("input");
+  const name = document.querySelector<HTMLInputElement>('[aria-label="Display name"]') ?? document.querySelector<HTMLInputElement>("input");
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   flushSync(() => { setValue.call(name, "Reusable sequence"); name!.dispatchEvent(new Event("input", { bubbles: true })); });
-  expect(container.querySelector<HTMLInputElement>('[aria-label="Sequence"]')?.checked).toBe(true);
-  expect(container.querySelector<HTMLInputElement>('[aria-label="Flowchart"]')?.disabled).toBe(true);
-  const create = [...container.querySelectorAll("button")].find(button => button.textContent === "Create definition")!;
+  expect(document.querySelector<HTMLInputElement>('[aria-label="Sequence"]')?.checked).toBe(true);
+  expect(document.querySelector<HTMLInputElement>('[aria-label="Flowchart"]')?.disabled).toBe(true);
+  const create = [...document.querySelectorAll("button")].find(button => button.textContent === "Create")!;
   await vi.waitFor(() => expect(create.disabled).toBe(false));
   flushSync(() => create.click());
   await vi.waitFor(() => expect(api.create).toHaveBeenCalledOnce());

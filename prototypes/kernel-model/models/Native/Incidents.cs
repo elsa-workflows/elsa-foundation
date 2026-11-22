@@ -83,7 +83,7 @@ internal sealed partial class Burst
     private void InitializeIntervention()
     {
         if (!_wf.InterventionRequested) return;
-        if (turn.Instance.Creation <= 0 || _s.Mode is not (Modes.Balanced or Modes.Durable))
+        if (!turn.HasExactIdentity || _s.Mode is not (Modes.Balanced or Modes.Durable))
             throw new NotSupportedException("Native intervention requires a qualified Balanced/Durable invocation.");
         _s.InterventionEnabled = true;
         _s.InterventionPolicy = 5;
@@ -105,7 +105,7 @@ internal sealed partial class Burst
         frame.RecoveryStateful = typeof(IStateful).IsAssignableFrom(node.Type);
         frame.RecoveryMaterial = NativeRecoveryMaterial.Describe(_wf);
         frame.RecoveryInputs = (JsonObject)snapshot.DeepClone();
-        frame.OperationKey = CreationProtocol.Origin(turn.Instance.Ref.Id, turn.Instance.Creation) + "/activity/" + frame.Id;
+        frame.OperationKey = turn.OperationOrigin + "/activity/" + frame.Id;
         return snapshot;
     }
 

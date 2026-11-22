@@ -66,7 +66,22 @@ const activityLabels = createValidationActivityLabels({
   catalogByVersion
 });
 
-const rawErrors: ValidationError[] = [
+const warningFooter = new URLSearchParams(window.location.search).get("warnings") === "1";
+
+const rawErrors: ValidationError[] = warningFooter ? [
+  {
+    type: "CompensationScope/ReplaySafeStep",
+    message: "\"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may not know whether it ran. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make retries safe with an idempotency key.",
+    path: "scope/steps/0",
+    severity: "Warning"
+  },
+  {
+    type: "CompensationScope/ReplaySafeHandler",
+    message: "The compensation of \"Charge card\" is marked safe to repeat, so if the process stops before Elsa records its attempt, recovery may run the undo again. If this is demo-only logging, no action is needed. If it performs a real external operation, replace it with an External activity and make the undo safe to retry with an idempotency key.",
+    path: "scope/steps/0",
+    severity: "Warning"
+  }
+] : [
   {
     type: "InputOutput/MissingRequired",
     message: `Required input 'Text' on activity '${namedId}' is missing or empty.`,

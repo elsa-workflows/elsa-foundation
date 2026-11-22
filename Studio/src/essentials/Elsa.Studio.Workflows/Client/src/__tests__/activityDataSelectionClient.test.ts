@@ -1,6 +1,8 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { flowchartStructureKind } from "../flowchartStartNode";
 import {
   hasWorkflowActivityDataSelection,
   readActivityDataContextResult,
@@ -247,9 +249,72 @@ describe("activity data source client", () => {
     const result = readActivityDataContextResult({ ...supportedResponse("rev-1"), state: "stale", code: "activity-data.base-changed" }, "rev-1");
     expect(result).toMatchObject({ state: "stale", code: "activity-data.base-changed", baseRevision: "base-1", sources: [], target: null });
   });
+
+  it("only accepts literal true for JSON-string conversion eligibility", () => {
+    const response = supportedResponse("rev-1");
+    const bindingConversion = {
+      sourceType: { alias: "Customer", collectionKind: "Single" },
+      targetType: { alias: "String", collectionKind: "Single" },
+      operation: null,
+      rejection: "No automatic conversion is available."
+    };
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: true } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(true);
+    expect(readActivityDataContextResult({ ...response, analysis: { ...response.analysis,
+      bindingConversion: { ...bindingConversion, canSerializeJsonString: "true" } } }, "rev-1")
+      .bindingConversion?.canSerializeJsonString).toBe(false);
+  });
 });
 
 describe("a chosen activity output on the wire", () => {
+  it("keeps the activity id, not its BPMN element id, through save and reopen", async () => {
+    const bindingValue = { producerNodeId: "producer-activity", projectionKey: "$result", isOptional: false };
+    const producer: ActivityNode = { nodeId: "producer-activity", activityVersionId: "get-customer-v1", inputs: [], outputs: [] };
+    const consumer: ActivityNode = {
+      nodeId: "consumer-activity", activityVersionId: "invoice-v1", inputs: [], outputs: [],
+      customerId: { typeName: "System.String", expression: { type: "ActivityResult", value: bindingValue } }
+    };
+    const process: ActivityNode = {
+      nodeId: "bpmn-process", activityVersionId: "bpmn@1", inputs: [], outputs: [],
+      structure: { kind: bpmnStructureKind, schemaVersion: "1.0.0", payload: {
+        elements: [
+          { elementId: "producer-element", elementType: "task", childNodeId: producer.nodeId },
+          { elementId: "consumer-element", elementType: "task", childNodeId: consumer.nodeId }
+        ],
+        sequenceFlows: [{ flowId: "linear-flow", sourceRef: "producer-element", targetRef: "consumer-element" }],
+        activities: [producer, consumer]
+      } }
+    };
+    const authored: WorkflowDefinitionState = {
+      variables: [], inputs: [], outputs: [],
+      rootActivity: {
+        nodeId: "workflow-root", activityVersionId: "sequence", inputs: [], outputs: [],
+        structure: { kind: flowchartStructureKind, schemaVersion: "1.0.0", payload: { activities: [process], startNodeId: process.nodeId } }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(authored);
+    const wireProcess = (wire.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const wireConsumer = (wireProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect(wireConsumer.inputs).toEqual([{ referenceKey: "customerId", value: { expressionType: "ActivityResult", value: bindingValue } }]);
+
+    const reopened = expandStateFromWire(JSON.parse(JSON.stringify(wire)));
+    const reopenedProcess = (reopened.rootActivity!.structure!.payload as { activities: ActivityNode[] }).activities[0]!;
+    const reopenedConsumer = (reopenedProcess.structure!.payload as { activities: ActivityNode[] }).activities[1]!;
+    expect((reopenedConsumer.customerId as { expression: unknown }).expression)
+      .toEqual({ type: "ActivityResult", value: bindingValue });
+    expect(JSON.stringify(canonicalizeStateForWire(reopened))).toBe(JSON.stringify(wire));
+
+    const putJson = vi.fn(async (_path: string, body: { state: WorkflowDefinitionState; layout: [] }) => ({
+      id: "draft-1", definitionId: "definition-1", state: body.state, layout: body.layout, validationErrors: [], authoringRevision: "base-2"
+    }));
+    await updateDraft(context(vi.fn(), capabilityDocument, putJson), {
+      id: "draft-1", definitionId: "definition-1", state: authored, layout: [], validationErrors: []
+    });
+    expect(putJson.mock.calls[0]![1].state).toEqual(wire);
+  });
+
   it("survives save, Code Apply and reopen as the same object, legacy scope included", async () => {
     const legacy = { producerNodeId: "get-customer", projectionKey: "$result", producerScopeId: "scope:root", isOptional: false };
     const authored: WorkflowDefinitionState = JSON.parse(JSON.stringify(state));
@@ -409,4 +474,57 @@ describe("member metadata and focused queries", () => {
     expect(result).toMatchObject({ sources: [], target: null, memberReadsEnabled: false });
   });
 
+});
+
+
+describe("canonical portable expression metadata", () => {
+  const parameter = { kind: "ActivityResult" as const, producerNodeId: "get-customer", projectionKey: "$result", isOptional: false };
+  const path = ["a.b", "", "quoted\"key"];
+  function response() {
+    const base = supportedResponse("rev-1");
+    return { ...base, analysis: { ...base.analysis, hasMoreSources: false, memberReadsEnabled: false,
+      expressionParametersEnabled: true, expressionType: "JavaScript",
+      sources: [{ ...base.analysis.sources[0], binding: null, reasonCode: "EarlierProducerRun", parameterSource: parameter, parameterPath: path }] } };
+  }
+  function request() {
+    return { definitionId: "definition-1", draftId: "draft-1", expectedBaseRevision: "base-1", documentRevision: "rev-1",
+      target: { nodeId: "consumer", inputKey: "customerId" }, snapshot: {} as WorkflowDefinitionState,
+      query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path, expectedSnapshotHash: "hash" } };
+  }
+  it("accepts a fresh portable-only path with native member reads off and pins the root snapshot", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => response()); const result = await requestWorkflowActivityData(context(post), request());
+    expect(result.state).toBe("supported"); expect(result.memberReadsEnabled).toBe(false); expect(result.expressionParametersEnabled).toBe(true);
+    expect(result.sources[0].binding).toBeNull(); expect(result.sources[0].parameterSource).toEqual(parameter);
+    expect(result.sources[0].parameterPath).toEqual(path);
+    expect(post.mock.calls[0][1]).toMatchObject({ expectedSnapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect((post.mock.calls[0][1] as { query: unknown }).query).not.toHaveProperty("source");
+    expect(parameter).not.toHaveProperty("memberPath");
+  });
+  it("uses the activity-definition owner's snapshotHash field for the same shared query", async () => {
+    const post = vi.fn(async (_path: string, _body: unknown) => ({ ...response(), resourceKind: "ActivityDefinition", baseRevision: "5" }));
+    const result = await requestActivityDefinitionActivityData(context(post), { draftId: "draft-1", expectedBaseRevision: 5, documentRevision: "rev-1",
+      target: request().target, currentSnapshot: {}, query: request().query });
+    expect(result.state).toBe("supported"); expect(post.mock.calls[0][1]).toMatchObject({ snapshotHash: "hash", query: { expressionType: "JavaScript", parameterSource: parameter, memberPath: path } });
+    expect(post.mock.calls[0][1]).not.toHaveProperty("expectedSnapshotHash");
+  });
+  it.each(["old-server", "wrong-syntax", "wrong-path", "wrong-source", "wrong-optional", "wrong-snapshot", "no-offer"])("refuses %s without inventing a portable offer", async scenario => {
+    const post = vi.fn(async () => {
+      const value = response();
+      if (scenario === "old-server") value.analysis.expressionParametersEnabled = false;
+      if (scenario === "wrong-syntax") value.analysis.expressionType = "Liquid";
+      if (scenario === "wrong-path") value.analysis.sources[0].parameterPath = [];
+      if (scenario === "wrong-source") value.analysis.sources[0].parameterSource = { ...parameter, projectionKey: "different" };
+      if (scenario === "wrong-optional") value.analysis.sources[0].parameterSource = { ...parameter, isOptional: true };
+      if (scenario === "wrong-snapshot") value.snapshotHash = "different";
+      if (scenario === "no-offer") value.analysis.sources = [];
+      return value;
+    });
+    expect(await requestWorkflowActivityData(context(post), request())).toMatchObject({ state: "incompatible", sources: [], expressionParametersEnabled: false });
+  });
+  it("rejects mixed modes and unsupported parameter fields before requesting metadata", async () => {
+    const post = vi.fn(); const host = context(post);
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, source: binding } })).rejects.toThrow();
+    await expect(requestWorkflowActivityData(host, { ...request(), query: { ...request().query, parameterSource: { ...parameter, memberPath: ["secret"] } as typeof parameter } })).rejects.toThrow();
+    expect(post).not.toHaveBeenCalled();
+  });
 });
