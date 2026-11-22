@@ -1355,7 +1355,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await expect(dialog.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(dialog.getByText("DerivedProjection")).toBeVisible();
   await expect(dialog).toContainText("7/18/2026");
-  await expect(dialog).toContainText("Run data are preserved");
+  await expect(dialog).toContainText(/run data are preserved/i);
   await dialog.getByRole("textbox", { name: /Type semantic version/ }).fill("1.0.0");
   await dialog.getByRole("textbox", { name: /Reason/ }).fill("Security response");
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();

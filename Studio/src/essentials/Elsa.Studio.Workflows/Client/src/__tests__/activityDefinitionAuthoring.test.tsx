@@ -1610,8 +1610,8 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.querySelector<HTMLInputElement>(".ad-draft-label input")?.disabled).toBe(true);
 
     const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!;
-    expect(advanced.getAttribute("aria-expanded")).toBe("false");
-    click(advanced);
+    expect(advanced.open).toBe(false);
+    openDetails(advanced);
     click(buttonByText(advanced, "Edit code"));
     await waitFor(() => expect(rendered.container.querySelector("[data-tab-id='code']")).not.toBeNull());
     expect(rendered.container.querySelector<HTMLElement>(".studio-code-editor")?.dataset.readonly).toBe("true");
