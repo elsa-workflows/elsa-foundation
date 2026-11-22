@@ -112,6 +112,10 @@ The audit reviewed the following composed Studio states at 360–390px widths. T
 | Decisions Tests and Settings | [Saved decision at both widths](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/3d6c772650353cea14f07f8800303da448dfd68a/Studio/qa-evidence/5340-273b42af20-visual.zip) |
 | Dark dialogs | [Form and Decision creation](https://github.com/elsa-workflows/elsa-foundation/pull/5331#issuecomment-7072854830), [dashboard discard confirmation](https://github.com/elsa-workflows/elsa-foundation/pull/5319) |
 
+### Visual coverage follow-up
+
+The narrow viewport table above also records the A2 menu, dock, activity authoring and Decisions evidence. The run detail review exercised Timeline, Activity, Issues and Details on a published workflow at both widths. See the [run tab evidence on #5262](https://github.com/elsa-workflows/elsa-foundation/issues/5262#issuecomment-7072982431) and the [five optional extension captures](https://github.com/elsa-workflows/elsa-foundation/pull/5326#issuecomment-7072814127).
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -687,7 +691,7 @@ Raw font sizes, weights, radii and colours:
 | `WF/workflow-editor/boundaryInspector.css` | 20 | 0 | 0 | 0 | [source] |
 | `WF/activityDataChooser.css` | 17 | 0 | 1 | 0 | [source] |
 
-- [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
+- [x] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens. (PR #5347)
   Many raw radii are `999px` pills; check each one before changing it.
   Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294). Extension Builder completed in PR #5326.
 - [x] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`, (PR #5337)
@@ -872,7 +876,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [x] **A1** (#5261) Source audit of the extensions with no completed report: ETL, Extension Builder, Feature
   management, Identity, Console stream, OpenTelemetry, Structured logs, Weather sample, Weaver
   workflows, JavaScript and Liquid expression editors. (PR #5326)
-- [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
+- [x] **A2** (#5262) Capture and review the surfaces listed as not captured under (PR #5347)
   [Coverage gaps](#coverage-gaps).
 - [x] **A3** (#5263) Review dark mode, including dialogs. (PR #5350)
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
