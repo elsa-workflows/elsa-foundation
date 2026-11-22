@@ -389,7 +389,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             }
         }
 
-        var workflowMatches = variablesById.GetValueOrDefault(id) ?? [];
+        // The normalized definition also contains generated projection state. Only an Elsa 3 declaration can satisfy
+        // an object-valued Variable expression; bare memory references keep their separate generated aliases.
+        var workflowMatches = (variablesById.GetValueOrDefault(id) ?? [])
+            .Where(variable => plan is null || plan.WorkflowVariableTypes.ContainsKey(variable)).ToArray();
         if (workflowMatches.Length > 1)
         {
             Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
