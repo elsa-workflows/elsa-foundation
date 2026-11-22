@@ -341,6 +341,7 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("let o = {}, next = getVariable('Order'); [1, ,].forEach(() => { o = next; next = {}; }); o.Status = 'Paid'; return 1;")]
     [InlineData("let o = {}, next = getVariable('Order'); [1, 2].forEach((x, i, a) => { o = next; next = {}; a.length = 0; }); o.Status = 'Paid'; return 1;")]
     [InlineData("let o = {}; let step = () => { o = getVariable('Order'); step = () => { o = {}; }; return true; }; [1, 2].some(() => step()); o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = [].reduce(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
     public async Task A_write_in_a_reusable_workflows_script_is_refused(string source)
     {
         // A graph activity's variables are a closed scope a step cannot write yet (#4805): the script would fail every run.
@@ -518,6 +519,9 @@ public sealed class Elsa3VariableWriteConversionTests
     [InlineData("const o = getVariable('Order'); [{ toString() { o.Status = 'Paid'; return 'x'; } }].sort(); return 1;")]
     [InlineData("const o = getVariable('Order'); [].toSorted(() => { o.Status = 'Paid'; return 0; }); return 1;")]
     [InlineData("let o = {}, next = getVariable('Order'); Array.from([1, 2], () => { o = next; next = {}; }); o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = [1].reduce(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = [1].reduceRight(() => ({}), getVariable('Order')); o.Status = 'Paid'; return 1;")]
+    [InlineData("const o = [getVariable('Order'), 1].reduce(() => ({})); o.Status = 'Paid'; return 1;")]
     public async Task A_reusable_script_can_read_aliases_and_mutate_local_copies(string source)
     {
         var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal(source))));

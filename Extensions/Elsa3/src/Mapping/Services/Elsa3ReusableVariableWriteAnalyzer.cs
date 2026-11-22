@@ -1639,7 +1639,8 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             else if (arguments.Length > 1) Coerce([arguments[1]], stringHint: true);
             return Value.Local;
         }
-        if (method is "reduce" or "reduceRight") return callbackResult.Union(arguments.Length > 1 ? arguments[1] : Member(receiver, "*"));
+        if (method is "reduce" or "reduceRight") return arguments.FirstOrDefault()?.Functions.Count > 0
+            ? callbackResult : arguments.Length > 1 ? arguments[1] : Member(receiver, "*");
         if (method is "map" or "flatMap")
         {
             var mapped = Value.Object(call);
@@ -1707,6 +1708,7 @@ internal sealed class Elsa3ReusableVariableWriteAnalyzer(
             // while retaining every possible returned value and exit prefix. Early-stopping methods, holes and
             // callback deletions can all perform fewer calls than the maximum.
             var accumulator = result;
+            if (minimumCalls > 0) result = Value.Local;
             State? exits = minimumCalls == 0 ? _state.Copy() : null;
             for (var index = 0; index < bound && !_writes; index++)
             {
