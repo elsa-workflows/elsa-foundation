@@ -55,7 +55,7 @@ describe("catalog collection slots", () => {
     expect(node.structure!.payload.mode).toBeUndefined();
   });
 
-  it.each(["", " \t\n"])("presents blank mode %j as the supported MatchFirst default", mode => {
+  it.each(["", " \t\n", "\u0085", "\u2003"])("presents blank mode %j as the supported MatchFirst default", mode => {
     const node = empty();
     node.structure!.payload.mode = mode;
     const view = mount(node);
@@ -63,6 +63,15 @@ describe("catalog collection slots", () => {
     expect(view.element.textContent).toContain("The first true condition wins");
     expect(view.element.textContent).not.toContain("Unknown mode");
     expect(view.current().structure!.payload.mode).toBe(mode);
+  });
+
+  it("retains a BOM mode as unsupported instead of displaying the default", () => {
+    const node = empty();
+    node.structure!.payload.mode = "\uFEFF";
+    const view = mount(node);
+    expect(view.element.querySelector("select")!.value).toBe("\uFEFF");
+    expect(view.element.textContent).toContain("Choose a supported match mode");
+    expect(view.current().structure!.payload.mode).toBe("\uFEFF");
   });
 
   it("exposes mode and accurate help, respects read-only and retains unknown modes", () => {

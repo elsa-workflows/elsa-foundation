@@ -19,7 +19,9 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
   const noun = collection.itemName[0].toUpperCase() + collection.itemName.slice(1);
   const isSwitch = activity.structure?.kind === "elsa.switch.structure" && collection.property === "cases";
   const rawMode = activity.structure?.payload.mode;
-  const mode = rawMode == null || (typeof rawMode === "string" && !rawMode.trim()) || rawMode === "MatchFirst" ? "MatchFirst" : String(rawMode);
+  // Match .NET IsNullOrWhiteSpace: trim() also removes BOM and omits NEXT LINE.
+  const defaultMode = rawMode == null || (typeof rawMode === "string" && /^\p{White_Space}*$/u.test(rawMode));
+  const mode = defaultMode || rawMode === "MatchFirst" ? "MatchFirst" : String(rawMode);
   return (
     <section className="wf-slot-collection-slots" aria-label={collection.displayName}>
       <div className="wf-slot-collection-heading">

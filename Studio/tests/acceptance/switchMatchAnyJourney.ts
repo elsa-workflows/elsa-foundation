@@ -24,11 +24,12 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   const sequence = await version("Elsa.Activities.Sequence.Activities.Sequence");
   const switchVersion = await version("Elsa.Activities.Switch.Activities.Switch");
   const line = await version("Elsa.Activities.Primitives.Activities.WriteLine");
+  // NEXT LINE is a native blank/default mode, even though JavaScript trim() does not remove it.
   const submitted = await api<{ definition: { id: string }; draftId: string }>("/design/workflows/definitions/submit", "POST", {
     name: `Switch matches ${info.project.name} ${Date.now()}`,
     state: { inputs: [], outputs: [], variables: [], rootActivity: { nodeId: "root", activityVersionId: sequence, inputs: [], outputs: [],
       structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [
-        { nodeId: "switch", activityVersionId: switchVersion, inputs: [], outputs: [], structure: { kind: "elsa.switch.structure", schemaVersion: "2.0.0", payload: { cases: [] } } },
+        { nodeId: "switch", activityVersionId: switchVersion, inputs: [], outputs: [], structure: { kind: "elsa.switch.structure", schemaVersion: "2.0.0", payload: { cases: [], mode: "\u0085" } } },
         { nodeId: "after", activityVersionId: line, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "after all matches" } }], outputs: [] }
       ] } } } }
   });
@@ -112,6 +113,7 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await open();
   await capture(page, info, "reference");
   const mode = cases().getByRole("combobox", { name: "Match mode", exact: true });
+  await expect(mode).toHaveValue("MatchFirst");
   await mode.focus(); await mode.press("End"); await mode.press("Enter");
   await expect(mode).toHaveValue("MatchAny");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
