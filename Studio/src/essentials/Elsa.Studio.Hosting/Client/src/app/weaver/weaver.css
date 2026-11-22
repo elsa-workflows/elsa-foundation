@@ -34,7 +34,7 @@
 }
 
 .weaver-surface-title { display: flex; flex-direction: column; line-height: 1.2; }
-.weaver-surface-title span { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--studio-text-muted); }
+.weaver-surface-title span { font-size: 0.7rem; letter-spacing: 0.08em; color: var(--studio-text-muted); }
 .weaver-surface-title strong { font-size: 0.95rem; }
 
 .weaver-surface-actions { display: flex; align-items: center; gap: 0.5rem; }
@@ -71,12 +71,8 @@
 }
 
 .weaver-mode-menu {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  z-index: 65;
   display: grid;
-  width: min(22rem, calc(100vw - 2rem));
+  max-width: 22rem;
   overflow: hidden;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
@@ -255,22 +251,6 @@
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
 }
-.weaver-code-collapse { margin: 0.5rem 0; }
-.weaver-code-collapse > summary {
-  cursor: pointer;
-  font-size: 0.75rem;
-  color: var(--studio-text-muted, var(--studio-accent));
-  padding: 0.3rem 0.5rem;
-  border: 1px dashed var(--studio-border);
-  border-radius: var(--studio-radius-sm);
-  user-select: none;
-  list-style: none;
-}
-.weaver-code-collapse > summary::-webkit-details-marker { display: none; }
-.weaver-code-collapse > summary::before { content: "▸ "; }
-.weaver-code-collapse[open] > summary::before { content: "▾ "; }
-.weaver-code-collapse[open] > summary { margin-bottom: 0.4rem; }
-.weaver-code-collapse > pre { margin: 0; }
 .weaver-markdown table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
 .weaver-markdown th, .weaver-markdown td { border: 1px solid var(--studio-border); padding: 0.3rem 0.5rem; text-align: left; }
 .weaver-markdown a { color: var(--studio-accent); }
@@ -405,7 +385,6 @@ html[data-theme-material] .weaver-mode-menu,
 html[data-theme-material] .weaver-close,
 html[data-theme-material] .weaver-message-avatar,
 html[data-theme-material] .weaver-markdown pre,
-html[data-theme-material] .weaver-code-collapse > summary,
 html[data-theme-material] .weaver-plan,
 html[data-theme-material] .weaver-followup-chip,
 html[data-theme-material] .weaver-composer-input textarea {

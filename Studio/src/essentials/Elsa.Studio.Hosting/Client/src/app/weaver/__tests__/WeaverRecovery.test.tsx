@@ -815,7 +815,7 @@ function autonomyState(container: HTMLElement) {
 
 function chooseMode(container: HTMLElement, label: string) {
   click(modeButton(container));
-  click([...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(item => item.querySelector("strong")?.textContent === label));
+  click([...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(item => item.querySelector("strong")?.textContent === label));
 }
 
 function policyLabel(container: HTMLElement, messageId: string) {
