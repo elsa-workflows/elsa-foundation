@@ -10,7 +10,6 @@ import { bpmnStructureKind, type BpmnElement } from "../bpmn/bpmnTypes";
 import { useDialogFocus } from "../workflow-editor/useDialogFocus";
 import { applyNativeBlockPlan, planCreateNativeBlock, planExtractNativeBlock, planUngroupNativeBlock, type NativeBlockContext, type NativeBlockDocument, type NativeBlockKind, type NativeBlockPlan } from "./nativeBlocks";
 import { nativeBlockEditorDocument, nativeBlockPlannerContext } from "./nativeBlockEditorContext";
-import { useNativeBlockAuthority } from "./nativeBlockAuthority";
 import type { BlockPromotionHost } from "./BlockPromotionDialog";
 import type { ActivityNode } from "../workflowTypes";
 import "./nativeBlockCommands.css";
@@ -40,7 +39,6 @@ export interface NativeBlockCommandProps {
   toolbarHost?: HTMLElement | null;
 }
 export function NativeBlockCommands(props: NativeBlockCommandProps) {
-  const authority = useNativeBlockAuthority();
   const current = useRef(props);
   current.current = props;
   const [action, setAction] = useState<Action | null>(null);

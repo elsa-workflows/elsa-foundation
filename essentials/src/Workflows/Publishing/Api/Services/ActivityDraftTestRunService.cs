@@ -29,8 +29,12 @@ public interface IActivityDraftTestRunService
     /// identifies the Test Run and preserves the infrastructure cause. Retry the same key.</exception>
     /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
     Task<ActivityDraftTestRunView> StartAsync(StartActivityDraftTestRun request, CancellationToken cancellationToken = default);
+    Task<ActivityDraftTestRunView> StartVersionAsync(StartActivityVersionTestRun request, CancellationToken cancellationToken = default) =>
+        Task.FromException<ActivityDraftTestRunView>(new NotSupportedException("Published activity Test Runs are not supported by this service."));
     Task<ActivityDraftTestRunView> GetAsync(string testRunId, CancellationToken cancellationToken = default);
     Task<ActivityDraftTestRunView> GetByIdempotencyKeyAsync(string draftId, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<ActivityDraftTestRunView> GetVersionByIdempotencyKeyAsync(string versionId, string idempotencyKey, CancellationToken cancellationToken = default) =>
+        Task.FromException<ActivityDraftTestRunView>(new NotSupportedException("Published activity Test Runs are not supported by this service."));
     Task<ActivityDraftTestRunView> CancelAsync(string testRunId, CancellationToken cancellationToken = default);
 }
 
@@ -61,7 +65,8 @@ public sealed class ActivityDraftTestRunService(
     IWorkflowExecutionActorProvider actorProvider,
     IRuntimeExecutionIdGenerator runtimeIds,
     TimeProvider timeProvider,
-    IWorkflowExecutableRootWriteLeaseManager rootWrites) : IActivityDraftTestRunService
+    IWorkflowExecutableRootWriteLeaseManager rootWrites,
+    IActivityDefinitionVersionPublicationStore? versionPublications = null) : IActivityDraftTestRunService
 {
     // Preserve the original CLR constructor. Direct callers retain the built-in lease defaults;
     // DI uses the additive constructor and the host's selected coordinator/options.
@@ -78,12 +83,28 @@ public sealed class ActivityDraftTestRunService(
             hasher, workflowExecutables, startDispatcher, testScopeStore, partitionAccessor, testRuns,
             workflowExecutions, activityExecutions, cancellationPolicy, actorProvider, runtimeIds, timeProvider,
             new WorkflowExecutableRootWriteLeaseManager(workflowExecutables,
-                Options.Create(new WorkflowExecutableGarbageCollectionOptions()), timeProvider)) { }
+                Options.Create(new WorkflowExecutableGarbageCollectionOptions()), timeProvider), null) { }
+
+    public ActivityDraftTestRunService(IActivityDefinitionStore definitions, IActivityDefinitionDraftStore drafts,
+        IActivityDefinitionLayoutStore layouts, IActivityTemplateCompiler compiler, IActivityPublishingAuthorizationContext authorization,
+        IExecutableActivityTemplateStore activityTemplates, IWorkflowExecutableSourceReferenceStore sourceReferences,
+        ActivityTemplatePlacer placer, WorkflowExecutableHasher hasher, IWorkflowExecutableStore workflowExecutables,
+        IWorkflowStartDispatcher startDispatcher, IWorkflowTestScopeStore testScopeStore,
+        IWorkflowExecutionPartitionAccessor partitionAccessor, IActivityDraftTestRunStore testRuns,
+        IWorkflowExecutionStateStore workflowExecutions, IActivityExecutionStateStore activityExecutions,
+        IActivityDraftTestRunCancellationPolicy cancellationPolicy, IWorkflowExecutionActorProvider actorProvider,
+        IRuntimeExecutionIdGenerator runtimeIds, TimeProvider timeProvider,
+        IWorkflowExecutableRootWriteLeaseManager rootWrites)
+        : this(definitions, drafts, layouts, compiler, authorization, activityTemplates, sourceReferences, placer,
+            hasher, workflowExecutables, startDispatcher, testScopeStore, partitionAccessor, testRuns,
+            workflowExecutions, activityExecutions, cancellationPolicy, actorProvider, runtimeIds, timeProvider,
+            rootWrites, null) { }
 
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan DefaultReceiptRetention = TimeSpan.FromDays(7);
     private static readonly IReadOnlyDictionary<string, RuntimeOutputCapture> NoOutputCaptures =
         new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
+    private const string ActivityVersionReceiptPrefix = "activity-version:";
 
     /// <inheritdoc />
     public async Task<ActivityDraftTestRunView> StartAsync(
@@ -102,7 +123,7 @@ public sealed class ActivityDraftTestRunService(
         {
             EnsureReceiptAuthorized(existing);
             EnsureMatchingRequest(existing, requestFingerprint);
-            var resumed = await ResumeExistingAsync(existing, request, cancellationToken);
+            var resumed = await ResumeExistingAsync(existing, request.CorrelationId, cancellationToken);
             if (resumed is not null)
                 return resumed;
         }
@@ -166,7 +187,7 @@ public sealed class ActivityDraftTestRunService(
         EnsureMatchingRequest(receipt, requestFingerprint);
         if (!create.Created)
         {
-            var resumed = await ResumeExistingAsync(receipt, request, cancellationToken);
+            var resumed = await ResumeExistingAsync(receipt, request.CorrelationId, cancellationToken);
             if (resumed is not null)
                 return resumed;
         }
@@ -322,6 +343,180 @@ public sealed class ActivityDraftTestRunService(
             expiresAt,
             LayoutSidecar: placement.LayoutSidecar,
             ActivityPresentation: placement.ActivityPresentation);
+        return await PersistAndDispatchAsync(receipt, executable, wrapperReference, request.CorrelationId, cancellationToken);
+    }
+
+    public async Task<ActivityDraftTestRunView> StartVersionAsync(
+        StartActivityVersionTestRun request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequestIdentity(request.IdempotencyKey, request.CorrelationId);
+        if (versionPublications is null)
+            throw Reject("activity.test-run.version-unavailable", "Published Activity Definition Test Runs are not available on this Runtime.");
+
+        var operationScope = ActivityDraftTestRunIdentity.CreateOperationScope(authorization.TenantId);
+        var resourceId = ActivityVersionReceiptId(request.VersionId);
+        var requestFingerprint = RequestFingerprint(request);
+        var existing = await testRuns.FindByIdempotencyKeyAsync(operationScope, resourceId, request.IdempotencyKey, cancellationToken);
+        if (existing is not null)
+        {
+            EnsureReceiptAuthorized(existing);
+            EnsureMatchingRequest(existing, requestFingerprint);
+            var resumed = await ResumeExistingAsync(existing, request.CorrelationId, cancellationToken);
+            if (resumed is not null) return resumed;
+        }
+
+        var version = await versionPublications.FindAsync(request.VersionId, cancellationToken)
+                      ?? throw Reject("activity.version.not-found", "The requested published activity version was not found.");
+        EnsureAuthorized(version.TenantId);
+        if (!StringComparer.Ordinal.Equals(request.VersionId, version.DefinitionVersionId))
+            throw Reject("activity.version.not-found", "The requested published activity version was not found.");
+        var definition = await definitions.GetAsync(version.DefinitionId, cancellationToken);
+        EnsureAuthorized(definition.TenantId);
+        if (!StringComparer.Ordinal.Equals(definition.TenantId, version.TenantId))
+            throw Reject("activity.tenant.reference-denied", "The requested activity identity is outside the caller's authorized scope.");
+
+        var now = timeProvider.GetUtcNow();
+        var testRunId = ActivityDraftTestRunIdentity.CreateTestRunId(operationScope, resourceId, request.IdempotencyKey);
+        var initial = new ActivityDraftTestRunReceipt(
+            testRunId,
+            operationScope,
+            ActivityDraftTestRunIdentity.HashIdempotencyKey(request.IdempotencyKey),
+            resourceId,
+            0,
+            definition.Id,
+            authorization.TenantId,
+            version.TenantId,
+            requestFingerprint,
+            ActivityDraftTestRunIdentity.CreateWorkflowExecutionId(operationScope, resourceId, request.IdempotencyKey),
+            ActivityDraftTestRunReceiptStatus.Preparing,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now,
+            now.Add(DefaultRetention),
+            now.Add(DefaultReceiptRetention),
+            ActivityDraftTestRunCancellationStatus.Unavailable,
+            1);
+        var create = await testRuns.TryCreateAsync(initial, cancellationToken);
+        var receipt = create.Receipt;
+        EnsureReceiptAuthorized(receipt);
+        EnsureMatchingRequest(receipt, requestFingerprint);
+        if (!create.Created)
+        {
+            var resumed = await ResumeExistingAsync(receipt, request.CorrelationId, cancellationToken);
+            if (resumed is not null) return resumed;
+        }
+
+        if (version.Lifecycle != ActivityDefinitionVersionLifecycle.Active)
+            return await RejectValidationAsync(receipt, "activity.test-run.version-not-runnable",
+                "This published activity version is not available for a Test Run.", [], cancellationToken);
+        if (!activityTemplates.CanMaintainReferences(workflowExecutables, sourceReferences) ||
+            !sourceReferences.CanWriteRootReferences(workflowExecutables))
+            return await RejectValidationAsync(receipt, "activity.test-run.preparation-unavailable",
+                "This published activity version cannot be prepared for a Test Run in this Runtime.", [], cancellationToken);
+
+        var template = await activityTemplates.FindAsync(version.TemplateId, cancellationToken);
+        var sourceReference = await sourceReferences.FindAsync(version.SourceReferenceId, cancellationToken);
+        if (template is null || sourceReference is null ||
+            !StringComparer.Ordinal.Equals(template.TemplateId, version.TemplateId) ||
+            !StringComparer.Ordinal.Equals(template.TemplateHash, version.TemplateHash) ||
+            !StringComparer.Ordinal.Equals(sourceReference.SourceReferenceId, version.SourceReferenceId) ||
+            !StringComparer.Ordinal.Equals(sourceReference.ArtifactId, version.TemplateId) ||
+            !StringComparer.Ordinal.Equals(sourceReference.DefinitionVersionId, version.DefinitionVersionId))
+            return await RejectValidationAsync(receipt, "activity.test-run.version-material-unavailable",
+                "The exact published activity material is unavailable for a Test Run.", [], cancellationToken);
+
+        var latest = await versionPublications.FindAsync(request.VersionId, cancellationToken);
+        if (latest is null || latest.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
+            !StringComparer.Ordinal.Equals(latest.TemplateId, version.TemplateId) ||
+            !StringComparer.Ordinal.Equals(latest.TemplateHash, version.TemplateHash) ||
+            !StringComparer.Ordinal.Equals(latest.SourceReferenceId, version.SourceReferenceId))
+            return await RejectValidationAsync(receipt, "activity.test-run.version-not-runnable",
+                "The published activity version changed before the Test Run could be prepared.", [], cancellationToken);
+
+        IReadOnlyDictionary<string, RuntimeInputBinding> suppliedInputs;
+        try
+        {
+            suppliedInputs = CompileInputs(version.Contract, request.Inputs);
+        }
+        catch (ActivityPublicationRejectedException exception)
+        {
+            return await RejectValidationAsync(receipt, exception.ErrorCode, exception.Message, exception.Diagnostics, cancellationToken);
+        }
+
+        var origin = new ActivityInvocationOrigin([
+            new(ActivityInvocationOriginSegmentKind.WorkflowRoot, $"activity-test-wrapper:{definition.Id}"),
+            new(ActivityInvocationOriginSegmentKind.AuthoredNode, "activity-under-test"),
+            new(ActivityInvocationOriginSegmentKind.TemplateBoundary, version.DefinitionVersionId)
+        ]);
+        ActivityTemplatePlacement placement;
+        try
+        {
+            placement = await placer.PlaceAsync(new(version, template, sourceReference, origin, definition.ActivityTypeKey,
+                suppliedInputs, NoOutputCaptures), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ActivityTemplateMissingRequiredInputException)
+        {
+            return await RejectValidationAsync(receipt, "activity.test-run.required-input",
+                "A required activity input has no value or default. Provide values for required inputs before running the Test Run.", [], cancellationToken);
+        }
+        catch (Exception)
+        {
+            return await RejectValidationAsync(receipt, "activity.test-run.preparation-failed",
+                "The published activity version could not be prepared for a Test Run.", [], cancellationToken);
+        }
+
+        var artifactHash = hasher.ComputeHash(placement.Root);
+        var artifactId = hasher.CreateArtifactId("artifact-", artifactHash);
+        var wrapperDefinitionId = $"activity-test-wrapper:{definition.Id}";
+        var wrapperVersionId = $"activity-test-wrapper:version:{version.DefinitionVersionId}";
+        var executable = new WorkflowExecutable(
+            new(artifactId, wrapperDefinitionId, wrapperVersionId, version.Version, artifactHash),
+            placement.Root,
+            placement.ResumeTargets,
+            now,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["runtime.scope"] = "activity-version-test-run",
+                ["activity.versionId"] = version.DefinitionVersionId,
+                ["activity.version"] = version.Version,
+                ["activity.templateHash"] = template.TemplateHash
+            },
+            IncidentStrategyBuiltIns.FaultReference);
+        var wrapperReference = new WorkflowExecutableSourceReference(
+            $"activity-test-source-ref-{StableHash(testRunId)}",
+            artifactId,
+            "ActivityDefinitionVersionTestRun",
+            version.DefinitionVersionId,
+            version.Version,
+            definition.Id,
+            version.DefinitionVersionId,
+            version.Version,
+            now,
+            null,
+            WorkflowExecutableReferenceScope.TestRun,
+            receipt.SourceReferenceExpiresAt,
+            LayoutSidecar: placement.LayoutSidecar,
+            ActivityPresentation: placement.ActivityPresentation);
+        return await PersistAndDispatchAsync(receipt, executable, wrapperReference, request.CorrelationId, cancellationToken);
+    }
+
+    private async Task<ActivityDraftTestRunView> PersistAndDispatchAsync(
+        ActivityDraftTestRunReceipt receipt,
+        WorkflowExecutable executable,
+        WorkflowExecutableSourceReference wrapperReference,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        var testRunId = receipt.TestRunId;
+        var artifactId = executable.Identity.ArtifactId;
         try
         {
             await workflowExecutables.SaveAsync(executable, cancellationToken);
@@ -355,7 +550,7 @@ public sealed class ActivityDraftTestRunService(
         if (receipt.Status != ActivityDraftTestRunReceiptStatus.Dispatching)
             return await ProjectAsync(receipt, cancellationToken);
 
-        return await DispatchPersistedAsync(receipt, request, cancellationToken);
+        return await DispatchPersistedAsync(receipt, correlationId, cancellationToken);
     }
 
     private static void RequireMatchingWrapper(WorkflowExecutable stored, WorkflowExecutable proposed)
@@ -375,7 +570,7 @@ public sealed class ActivityDraftTestRunService(
 
     private async Task<ActivityDraftTestRunView?> ResumeExistingAsync(
         ActivityDraftTestRunReceipt receipt,
-        StartActivityDraftTestRun request,
+        string? correlationId,
         CancellationToken cancellationToken)
     {
         if (receipt.Status is not ActivityDraftTestRunReceiptStatus.Preparing
@@ -400,14 +595,14 @@ public sealed class ActivityDraftTestRunService(
 
         if (receipt.Status is ActivityDraftTestRunReceiptStatus.Dispatching
             or ActivityDraftTestRunReceiptStatus.DispatchAmbiguous)
-            return await DispatchPersistedAsync(receipt, request, cancellationToken);
+            return await DispatchPersistedAsync(receipt, correlationId, cancellationToken);
 
         return null;
     }
 
     private async Task<ActivityDraftTestRunView> DispatchPersistedAsync(
         ActivityDraftTestRunReceipt receipt,
-        StartActivityDraftTestRun request,
+        string? correlationId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(receipt.ArtifactId) || string.IsNullOrWhiteSpace(receipt.SourceReferenceId))
@@ -429,12 +624,20 @@ public sealed class ActivityDraftTestRunService(
         {
             ["runtime.scope"] = "test-run",
             ["runtime.testRunId"] = receipt.TestRunId,
-            ["runtime.sourceReferenceId"] = receipt.SourceReferenceId,
-            ["activity.draftId"] = receipt.DraftId,
-            ["activity.draftRevision"] = receipt.DraftRevision.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ["runtime.sourceReferenceId"] = receipt.SourceReferenceId
         };
-        if (!string.IsNullOrWhiteSpace(request.CorrelationId))
-            metadata["runtime.correlationId"] = request.CorrelationId;
+        var sourceVersionId = ReadActivityVersionReceiptId(receipt.DraftId);
+        if (sourceVersionId is null)
+        {
+            metadata["activity.draftId"] = receipt.DraftId;
+            metadata["activity.draftRevision"] = receipt.DraftRevision.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            metadata["activity.versionId"] = sourceVersionId;
+        }
+        if (!string.IsNullOrWhiteSpace(correlationId))
+            metadata["runtime.correlationId"] = correlationId;
 
         var partition = partitionAccessor.Current;
         var testScope = new WorkflowTestScope(
@@ -461,7 +664,7 @@ public sealed class ActivityDraftTestRunService(
                     sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: receipt.SourceReferenceId),
                     provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference,
                     parentWorkflowExecutionId: null,
-                    correlationId: request.CorrelationId,
+                    correlationId: correlationId,
                     tenantId: receipt.TenantId,
                     partition: partition,
                     authority: null,
@@ -557,6 +760,22 @@ public sealed class ActivityDraftTestRunService(
         return await ProjectAsync(receipt, cancellationToken);
     }
 
+    public async Task<ActivityDraftTestRunView> GetVersionByIdempotencyKeyAsync(
+        string versionId,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRequestIdentity(idempotencyKey, null);
+        var operationScope = ActivityDraftTestRunIdentity.CreateOperationScope(authorization.TenantId);
+        var resourceId = ActivityVersionReceiptId(versionId);
+        var receipt = await testRuns.FindByIdempotencyKeyAsync(operationScope, resourceId, idempotencyKey, cancellationToken)
+                      ?? throw Reject("activity.test-run.not-found", "The requested activity Test Run was not found.");
+        EnsureReceiptAuthorized(receipt);
+        if (!StringComparer.Ordinal.Equals(ReadActivityVersionReceiptId(receipt.DraftId), versionId))
+            throw Reject("activity.test-run.not-found", "The requested activity Test Run was not found.");
+        return await ProjectAsync(receipt, cancellationToken);
+    }
+
     public async Task<ActivityDraftTestRunView> CancelAsync(
         string testRunId,
         CancellationToken cancellationToken = default)
@@ -583,7 +802,9 @@ public sealed class ActivityDraftTestRunService(
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["runtime.testRunId"] = receipt.TestRunId,
-            ["runtime.cancellationSource"] = "activity-draft-test-run"
+            ["runtime.cancellationSource"] = ReadActivityVersionReceiptId(receipt.DraftId) is null
+                ? "activity-draft-test-run"
+                : "activity-version-test-run"
         };
         var command = new WorkflowExecutionCommand(
             runtimeIds.NewWorkflowExecutionCommandId(),
@@ -706,9 +927,10 @@ public sealed class ActivityDraftTestRunService(
         var status = execution?.Status.ToString() ?? receipt.Status.ToString();
         var reason = receipt.Failure?.Message;
 
+        var sourceVersionId = ReadActivityVersionReceiptId(receipt.DraftId);
         return new(
             receipt.TestRunId,
-            receipt.DraftId,
+            sourceVersionId is null ? receipt.DraftId : string.Empty,
             receipt.DraftRevision,
             receipt.ArtifactId,
             receipt.SourceReferenceId,
@@ -740,7 +962,10 @@ public sealed class ActivityDraftTestRunService(
                 cancellationStatus.ToString(),
                 cancellation.Reason),
             receipt.RequestedAt,
-            receipt.UpdatedAt);
+            receipt.UpdatedAt)
+        {
+            SourceVersionId = sourceVersionId
+        };
     }
 
     private async Task<ActivityDraftTestRunReceipt> UpdateAsync(
@@ -832,6 +1057,32 @@ public sealed class ActivityDraftTestRunService(
         });
         return StableHash(canonical);
     }
+
+    private static string RequestFingerprint(StartActivityVersionTestRun request)
+    {
+        var inputs = (request.Inputs ?? new Dictionary<string, ActivityDraftTestRunInput>())
+            .OrderBy(x => x.Key, StringComparer.Ordinal)
+            .Select(x => new
+            {
+                name = x.Key,
+                state = x.Value.State,
+                value = x.Value.Value?.GetRawText()
+            });
+        return StableHash(JsonSerializer.Serialize(new
+        {
+            request.VersionId,
+            request.CorrelationId,
+            inputs
+        }));
+    }
+
+    private static string ActivityVersionReceiptId(string versionId) =>
+        string.Concat(ActivityVersionReceiptPrefix, versionId);
+
+    private static string? ReadActivityVersionReceiptId(string receiptResourceId) =>
+        receiptResourceId.StartsWith(ActivityVersionReceiptPrefix, StringComparison.Ordinal)
+            ? receiptResourceId[ActivityVersionReceiptPrefix.Length..]
+            : null;
 
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompileInputs(
         ActivityContract contract,

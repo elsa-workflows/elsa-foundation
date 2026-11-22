@@ -26,13 +26,12 @@ import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
-import { formatExecutableRunError } from "./editorHelpers";
-import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { notifyPublishedRunStarted, resolvePublishedDefinitionRunTarget, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
-import { useNotificationGuard } from "./notifications";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
+);
+const WorkflowDefinitionRunAction = lazy(() =>
+  import("./WorkflowDefinitionRunAction").then(module => ({ default: module.WorkflowDefinitionRunAction }))
 );
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
@@ -179,24 +178,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
   const bulkDeleteInFlight = useRef<object | null>(null);
   const bulkDeleteButtonRef = useRef<HTMLButtonElement>(null);
   const bulkDeleteResultRef = useRef<HTMLDivElement>(null);
-  const captureRunNotificationGuard = useNotificationGuard(context);
-  const pendingRunFeedback = useRef<{ canNotify: (() => boolean) | null; name: string }>({ canNotify: null, name: "" });
-  const publishedRun = useExecutableWorkflowRun({
-    context,
-    onDispatchStart: () => undefined,
-    onStarted: (_target, result) => {
-      const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) notifyPublishedRunStarted(feedback.name, result);
-    },
-    onError: error => {
-      const feedback = pendingRunFeedback.current;
-      if (feedback.canNotify?.()) getNotifications().notify({
-        level: "error",
-        title: `Couldn't start ${feedback.name}`,
-        message: formatExecutableRunError(error)
-      });
-    }
-  });
+  const [runRequest, setRunRequest] = useState<{ id: number; definition: WorkflowDefinitionSummary } | null>(null);
+  const runRequestId = useRef(0);
   const currentSelectionScope = useRef(scopeRevision);
   currentSelectionScope.current = scopeRevision;
   const [bulkDeleteResult, setBulkDeleteResult] = useState<{ scope: number; deleted: number; failures: { id: string; message: string }[] } | null>(null);
@@ -444,7 +427,7 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     setCreateError("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
-      const { getCreateInitialDocument } = await import("./editorHelpers");
+      const { getCreateInitialDocument } = await import("./createWorkflowInitialDocument");
       const initialDocument = getCreateInitialDocument(createDraft, catalog);
       if (!initialDocument.initialState?.rootActivity) {
         throw new Error("Choose a starting activity that has an authoring template before creating this workflow.");
@@ -580,28 +563,8 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
     catch (caught) { if (isCurrentGeneration()) setRequestError({ identity: targetIdentity, message: caught instanceof Error ? caught.message : "Couldn't change this favorite." }); }
   };
 
-  const runDefinition = async (definition: WorkflowDefinitionSummary) => {
-    const canNotify = captureRunNotificationGuard();
-    pendingRunFeedback.current = { canNotify, name: definition.name };
-    try {
-      const target = await resolvePublishedDefinitionRunTarget(context, definition.id);
-      if (!canNotify()) return;
-      if (!target) {
-        getNotifications().notify({
-          level: "error",
-          title: `Couldn't start ${definition.name}`,
-          message: "No live published version is available to run."
-        });
-        return;
-      }
-      await publishedRun.request(target);
-    } catch (error) {
-      if (canNotify()) getNotifications().notify({
-        level: "error",
-        title: `Couldn't start ${definition.name}`,
-        message: formatExecutableRunError(error)
-      });
-    }
+  const runDefinition = (definition: WorkflowDefinitionSummary) => {
+    setRunRequest({ id: ++runRequestId.current, definition });
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
@@ -1038,13 +1001,17 @@ export function WorkflowDefinitions({ context, ai, weaver, onOpen, session, home
       </div>
       {librarySupport?.organization && organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowTagsDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {librarySupport?.bulk && bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
-      {publishedRun.pending ? <WorkflowRunInputDialog
-        inputs={publishedRun.pending.inputs}
-        editors={runInputEditors}
-        busy={!!publishedRun.runningArtifactId}
-        onSubmit={inputs => { void publishedRun.confirm(inputs); }}
-        onCancel={publishedRun.cancel}
-      /> : null}
+      {runRequest ? (
+        <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading workflow run…</div>}>
+          <WorkflowDefinitionRunAction
+            key={runRequest.id}
+            context={context}
+            definition={runRequest.definition}
+            requestId={runRequest.id}
+            runInputEditors={runInputEditors}
+          />
+        </Suspense>
+      ) : null}
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
           <CreateWorkflowDialog

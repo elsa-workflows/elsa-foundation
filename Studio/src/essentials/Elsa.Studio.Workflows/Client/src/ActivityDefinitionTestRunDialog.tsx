@@ -60,6 +60,7 @@ import { WorkflowRunInputField } from "./workflow-editor/WorkflowRunInputDialog"
 import { CopyValueButton } from "./workflow-editor/executableShared";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { StudioLink } from "./StudioLink";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
 
 type PreparationPhase = "saving" | "validating" | "ready" | "failed";
 type DispatchPhase = "idle" | "dispatching" | "reconciling" | "tracking" | "cancelling";
@@ -73,6 +74,7 @@ export function ActivityDefinitionTestRunDialog({
   context,
   draft,
   sourceVersion = null,
+  publishedRunAvailability = null,
   definitionLabel,
   inputEditors,
   prepareExactRevision,
@@ -83,6 +85,7 @@ export function ActivityDefinitionTestRunDialog({
   context: StudioEndpointContext;
   draft: ActivityDefinitionDraftView;
   sourceVersion?: ActivityDefinitionVersionView | null;
+  publishedRunAvailability?: "unavailable" | "unverified" | null;
   definitionLabel: string;
   inputEditors: StudioWorkflowRunInputEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -278,6 +281,11 @@ export function ActivityDefinitionTestRunDialog({
           });
       recordRun(view);
     } catch (error) {
+      if (sourceVersion && (error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError)) {
+        setDispatchPhase("idle");
+        setOperationError("Published-version Test Run is no longer available on this server. Restart Workbench with the current Foundation build and reload Studio. No Runtime execution was started.");
+        return;
+      }
       if (error instanceof StudioHttpError && error.status < 500) {
         setDispatchPhase("idle");
         setOperationError(dispatchRejectionDescription(error.status));
@@ -303,7 +311,7 @@ export function ActivityDefinitionTestRunDialog({
     }
   };
 
-  const validation = prepared?.validation;
+  const validation = publishedRunAvailability ? undefined : prepared?.validation;
   const busy = blocksClose;
   const canRerun = Boolean(stage && isTerminalActivityTestRun(stage));
   useDialogFocus(dialogRef, busy ? null : onClose);
@@ -325,6 +333,13 @@ export function ActivityDefinitionTestRunDialog({
         </header>
 
         <div className="ad-test-run-body">
+          {publishedRunAvailability ? (
+            <section className="ad-historical-contract ad-test-run-rejection" role="alert">
+              <p>{publishedRunAvailability === "unavailable"
+                ? "This server does not advertise published Test Run dispatch and receipt lookup. Restart Workbench with the current Foundation build, then reload Studio. No inputs were entered and no Runtime execution was started."
+                : "Studio could not verify published Test Run support. Check that the Workbench server is reachable, then reload Studio. No inputs were entered and no Runtime execution was started."}</p>
+            </section>
+          ) : null}
           {preparation !== "ready" ? (
             <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
               <strong>{preparationLabel(preparation)}</strong>

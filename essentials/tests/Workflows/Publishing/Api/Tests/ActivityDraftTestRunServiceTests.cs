@@ -174,6 +174,58 @@ public sealed partial class ActivityDraftTestRunServiceTests
         Assert.False(fixture.Dispatcher.WasCalled);
     }
 
+    [Fact]
+    public async Task Published_version_test_run_uses_the_exact_version_and_replays_without_reading_a_draft()
+    {
+        var fixture = await CreateFixture(childTemplate: ValidChildTemplate(), includePublishedVersion: true, acceptDispatch: true);
+        var version = Assert.IsType<ActivityDefinitionVersionPublication>(fixture.PublishedVersion);
+        var request = new StartActivityVersionTestRun(version.DefinitionVersionId, "published-test-run-1");
+
+        var response = await fixture.Service.StartVersionAsync(request);
+
+        Assert.Equal(version.DefinitionVersionId, response.SourceVersionId);
+        Assert.Equal(string.Empty, response.DraftId);
+        Assert.Equal(0, response.DraftRevision);
+        Assert.Equal("DispatchAccepted", response.Status);
+        Assert.Equal("Accepted", response.CommandDispatchStatus);
+        Assert.Equal(0, fixture.DraftStore.FindCount);
+        Assert.Equal(response.ArtifactId, fixture.Dispatcher.LastRequest?.ArtifactId);
+        var storedTemplate = await fixture.Templates.FindAsync(version.TemplateId);
+        Assert.NotNull(storedTemplate);
+        Assert.Equal(version.TemplateHash, storedTemplate.TemplateHash);
+        Assert.Equal(version.DefinitionVersionId, fixture.Dispatcher.LastRequest?.Metadata["activity.versionId"]);
+        Assert.DoesNotContain("activity.draftId", fixture.Dispatcher.LastRequest!.Metadata.Keys);
+        Assert.Equal(1, fixture.Dispatcher.DispatchCount);
+
+        var replay = await fixture.Service.StartVersionAsync(request);
+        var lookup = await fixture.Service.GetVersionByIdempotencyKeyAsync(version.DefinitionVersionId, request.IdempotencyKey);
+
+        Assert.Equal(response.TestRunId, replay.TestRunId);
+        Assert.Equal(response.TestRunId, lookup.TestRunId);
+        Assert.Equal(version.DefinitionVersionId, lookup.SourceVersionId);
+        Assert.Equal(1, fixture.Dispatcher.DispatchCount);
+        Assert.Equal(0, fixture.DraftStore.FindCount);
+    }
+
+    [Fact]
+    public async Task Published_version_test_run_rejects_an_unauthorized_tenant_before_receipt_or_dispatch()
+    {
+        var fixture = await CreateFixture(childTemplate: ValidChildTemplate(), includePublishedVersion: true,
+            publishedVersionTenantId: "tenant-other", acceptDispatch: true);
+        var version = Assert.IsType<ActivityDefinitionVersionPublication>(fixture.PublishedVersion);
+
+        var exception = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() => fixture.Service.StartVersionAsync(
+            new StartActivityVersionTestRun(version.DefinitionVersionId, "unauthorized-published-test-run")));
+
+        Assert.Equal("activity.tenant.reference-denied", exception.ErrorCode);
+        Assert.False(fixture.Dispatcher.WasCalled);
+        Assert.Equal(0, fixture.DraftStore.FindCount);
+        Assert.Null(await fixture.Receipts.FindByIdempotencyKeyAsync(
+            ActivityDraftTestRunIdentity.CreateOperationScope(null),
+            $"activity-version:{version.DefinitionVersionId}",
+            "unauthorized-published-test-run"));
+    }
+
     private static async Task<TestRunFixture> CreateFixture(
         Func<InMemoryExecutableActivityTemplateStore, IExecutableActivityTemplateStore>? wrapTemplates = null,
         IActivityDraftTestRunStore? receipts = null,
@@ -181,7 +233,10 @@ public sealed partial class ActivityDraftTestRunServiceTests
         IServiceProvider? runtimeServices = null,
         Func<IWorkflowExecutableRootWriteLeaseManager, IWorkflowExecutableRootWriteLeaseManager>? wrapRootWrites = null,
         Func<IExecutableActivityTemplateStore, IWorkflowExecutableSourceReferenceStore,
-            (IExecutableActivityTemplateStore Templates, IWorkflowExecutableSourceReferenceStore References)>? selectRootPorts = null)
+            (IExecutableActivityTemplateStore Templates, IWorkflowExecutableSourceReferenceStore References)>? selectRootPorts = null,
+        bool includePublishedVersion = false,
+        bool acceptDispatch = false,
+        string? publishedVersionTenantId = null)
     {
         var now = new DateTimeOffset(2026, 10, 17, 9, 0, 0, TimeSpan.Zero);
         var clock = runtimeServices is null ? new FakeTimeProvider(now) : (FakeTimeProvider)runtimeServices.GetRequiredService<TimeProvider>();
@@ -225,19 +280,43 @@ public sealed partial class ActivityDraftTestRunServiceTests
             Category = "Tests",
             DisplayName = "Activity under test"
         };
+        ActivityDefinitionVersionPublication? publishedVersion = null;
+        if (includePublishedVersion)
+        {
+            publishedVersion = Publication(definition.Id, "published-version-1", definition.ActivityTypeKey,
+                rootTemplate, "published-source-reference", publishedVersionTenantId);
+            var publishedReference = new WorkflowExecutableSourceReference(
+                publishedVersion.SourceReferenceId,
+                rootTemplate.TemplateId,
+                "ActivityDefinitionVersion",
+                definition.Id,
+                publishedVersion.Version,
+                definition.Id,
+                publishedVersion.DefinitionVersionId,
+                publishedVersion.Version,
+                now,
+                now,
+                WorkflowExecutableReferenceScope.Published);
+            await innerTemplates.SaveAsync(rootTemplate);
+            await sourceReferences.SaveAsync(publishedReference);
+        }
         var layout = new ActivityDefinitionDraftLayout { Id = "layout-1", DraftId = draft.Id, Revision = draft.Revision };
         receipts ??= new InMemoryActivityDraftTestRunStore();
-        var dispatcher = new RejectIfDispatched();
+        var publications = new PublicationStore(publishedVersion is null ? [childPublication] : [childPublication, publishedVersion]);
+        ITestRunDispatcher dispatcher = acceptDispatch
+            ? new CapturingAcceptedDispatcher(artifacts, now)
+            : new RejectIfDispatched();
+        var draftStore = new DraftStore(draft);
         var service = new ActivityDraftTestRunService(
             new DefinitionStore(definition),
-            new DraftStore(draft),
+            draftStore,
             new DraftLayoutStore(layout),
             new TemplateCompiler(rootTemplate),
             new TestActivityPublishingAuthorizationContext(),
             templates,
             sourceReferences,
             new ActivityTemplatePlacer(
-                new PublicationStore(childPublication),
+                publications,
                 templates,
                 sourceReferences,
                 new Sha256ActivityPlacementHasher(),
@@ -260,8 +339,10 @@ public sealed partial class ActivityDraftTestRunServiceTests
                 Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock))
             ?? runtimeServices?.GetRequiredService<IWorkflowExecutableRootWriteLeaseManager>()
             ?? new WorkflowExecutableRootWriteLeaseManager(artifacts,
-                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock));
-        return new(service, draft, new(draft.Id, draft.Revision, "placement-fails"), receipts, dispatcher, templates, sourceReferences, artifacts, clock, rootTemplate);
+                Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Configuration.WorkflowExecutableGarbageCollectionOptions()), clock),
+            publications);
+        return new(service, draft, new(draft.Id, draft.Revision, "placement-fails"), receipts, dispatcher, templates, sourceReferences, artifacts, clock,
+            rootTemplate, draftStore, publishedVersion);
     }
 
     private static ExecutableActivityTemplate RequiredInputTemplate() => ChildTemplate(includeRequiredInput: true);
@@ -349,9 +430,12 @@ public sealed partial class ActivityDraftTestRunServiceTests
         string definitionId,
         string versionId,
         string activityTypeKey,
-        ExecutableActivityTemplate template) => new()
+        ExecutableActivityTemplate template,
+        string sourceReferenceId = "child-source-reference",
+        string? tenantId = null) => new()
     {
         DefinitionId = definitionId,
+        TenantId = tenantId,
         DefinitionVersionId = versionId,
         Version = "1",
         ActivityTypeKey = activityTypeKey,
@@ -359,12 +443,13 @@ public sealed partial class ActivityDraftTestRunServiceTests
         Provider = new("test.provider", "1", Json("{}")),
         TemplateId = template.TemplateId,
         TemplateHash = template.TemplateHash,
-        SourceReferenceId = "child-source-reference",
+        SourceReferenceId = sourceReferenceId,
         ProviderFingerprint = template.ProviderFingerprint,
         DirectDependencyCount = template.DirectDependencies.Count,
         ClosedTemplateCount = template.ClosedTemplates.Count,
         RuntimeRequirements = [],
-        PublishedAt = DateTimeOffset.UnixEpoch
+        PublishedAt = DateTimeOffset.UnixEpoch,
+        Lifecycle = ActivityDefinitionVersionLifecycle.Active
     };
 
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
@@ -374,12 +459,14 @@ public sealed partial class ActivityDraftTestRunServiceTests
         ActivityDefinitionDraft Draft,
         StartActivityDraftTestRun Request,
         IActivityDraftTestRunStore Receipts,
-        RejectIfDispatched Dispatcher,
+        ITestRunDispatcher Dispatcher,
         IExecutableActivityTemplateStore Templates,
         IWorkflowExecutableSourceReferenceStore References,
         IWorkflowExecutableStore Artifacts,
         FakeTimeProvider Clock,
-        ExecutableActivityTemplate RootTemplate);
+        ExecutableActivityTemplate RootTemplate,
+        DraftStore DraftStore,
+        ActivityDefinitionVersionPublication? PublishedVersion);
 
     private sealed class CancelOnDependencyReadTemplateStore(
         IExecutableActivityTemplateStore inner,
@@ -487,7 +574,12 @@ public sealed partial class ActivityDraftTestRunServiceTests
 
     private sealed class DraftStore(ActivityDefinitionDraft draft) : IActivityDefinitionDraftStore
     {
-        public Task<ActivityDefinitionDraft?> FindAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult<ActivityDefinitionDraft?>(draft);
+        public int FindCount { get; private set; }
+        public Task<ActivityDefinitionDraft?> FindAsync(string draftId, CancellationToken cancellationToken = default)
+        {
+            FindCount++;
+            return Task.FromResult<ActivityDefinitionDraft?>(draft);
+        }
         public Task<IReadOnlyList<ActivityDefinitionDraft>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ActivityDefinitionDraft>>([draft]);
     }
 
@@ -507,13 +599,13 @@ public sealed partial class ActivityDraftTestRunServiceTests
                 []));
     }
 
-    private sealed class PublicationStore(ActivityDefinitionVersionPublication publication) : IActivityDefinitionVersionPublicationStore
+    private sealed class PublicationStore(params ActivityDefinitionVersionPublication[] publications) : IActivityDefinitionVersionPublicationStore
     {
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<ActivityDefinitionVersionPublication?>(StringComparer.Ordinal.Equals(definitionVersionId, publication.DefinitionVersionId) ? publication : null);
+            Task.FromResult(publications.FirstOrDefault(publication => StringComparer.Ordinal.Equals(definitionVersionId, publication.DefinitionVersionId)));
 
         public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>([publication]);
+            Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>(publications.Where(publication => StringComparer.Ordinal.Equals(definitionId, publication.DefinitionId)).ToArray());
     }
 
     private sealed class FixedPartitionAccessor : IWorkflowExecutionPartitionAccessor
@@ -521,9 +613,18 @@ public sealed partial class ActivityDraftTestRunServiceTests
         public WorkflowExecutionPartition Current { get; } = new(WorkflowExecutionPartition.DefaultValue);
     }
 
-    private sealed class RejectIfDispatched : IWorkflowStartDispatcher
+    private interface ITestRunDispatcher : IWorkflowStartDispatcher
+    {
+        bool WasCalled { get; }
+        int DispatchCount { get; }
+        WorkflowExecutionStartDispatchRequest? LastRequest { get; }
+    }
+
+    private sealed class RejectIfDispatched : ITestRunDispatcher
     {
         public bool WasCalled { get; private set; }
+        public int DispatchCount { get; private set; }
+        public WorkflowExecutionStartDispatchRequest? LastRequest => null;
 
         public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
             WorkflowExecutionStartDispatchRequest request,
@@ -532,7 +633,35 @@ public sealed partial class ActivityDraftTestRunServiceTests
             CancellationToken cancellationToken = default)
         {
             WasCalled = true;
+            DispatchCount++;
             throw new InvalidOperationException("The test run must not reach Runtime dispatch.");
+        }
+    }
+
+    private sealed class CapturingAcceptedDispatcher(IWorkflowExecutableStore executables, DateTimeOffset now) : ITestRunDispatcher
+    {
+        public bool WasCalled => DispatchCount > 0;
+        public int DispatchCount { get; private set; }
+        public WorkflowExecutionStartDispatchRequest? LastRequest { get; private set; }
+
+        public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            DispatchCount++;
+            LastRequest = request;
+            var executionId = request.WorkflowExecutionId ?? throw new InvalidOperationException("The test run execution ID is required.");
+            var executable = await executables.FindAsync(request.ArtifactId, cancellationToken)
+                             ?? throw new InvalidOperationException("The persisted Test Run wrapper was not found.");
+            return new WorkflowExecutionStartDispatchResult(
+                executionId,
+                executable.Identity,
+                new WorkflowExecutionCommandDispatchResult("accepted-envelope", executionId,
+                    WorkflowExecutionCommandDispatchStatus.Accepted, now),
+                new WorkflowExecutionActorDescriptor(executionId, "test-agent", "test-provider",
+                    WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.InProcessMailbox, now));
         }
     }
 }

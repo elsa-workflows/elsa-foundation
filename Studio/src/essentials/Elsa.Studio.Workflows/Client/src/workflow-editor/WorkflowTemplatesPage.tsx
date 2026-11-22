@@ -9,7 +9,7 @@ import { listActivities } from "../api/activityDesign";
 import { createDefinition } from "../api/workflowDesign";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { deleteWorkflowTemplate, listWorkflowTemplates, saveWorkflowTemplate, templateAvailabilityReason, type WorkflowTemplate } from "../workflowTemplates";
-import { getCreateInitialState } from "./editorHelpers";
+import { getCreateInitialState } from "./createWorkflowInitialDocument";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { createTemplateDocumentAdapter } from "./templateDocumentAdapter";

@@ -9,6 +9,7 @@ import { EvaluationPanel } from "../EvaluationPanel";
 import { createNotificationController, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { decisionFailure, failureMessage } from "../decisionsApi";
+import { decisionDiagnosticMessage } from "../decisionDiagnosticMessage";
 import { asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
@@ -496,8 +497,8 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("Boundary"));
     click(button(host, "Run saved cases"));
     await vi.waitFor(() => expect(host.textContent).toContain("The exact candidate cannot be evaluated."));
-    expect(host.querySelectorAll(".decision-diagnostic-group")).toHaveLength(1);
-    expect(host.querySelectorAll(".decision-diagnostic-message")).toHaveLength(1);
+    expect(host.querySelectorAll(".decision-diagnostic-group")).toHaveLength(2);
+    expect(host.querySelectorAll(".decision-diagnostic-message")).toHaveLength(2);
     const review = button(host, "Rule 1 · Column amount");
     click(review);
     expect(onReviewRules).toHaveBeenCalledWith([expect.objectContaining({ clauseId: table.inputs[0].id })]);
@@ -716,16 +717,60 @@ describe("Decisions Studio journeys", () => {
     expect(decisionFailure(legacy).diagnostics).toEqual([]);
     expect(failureMessage(new Error("Network unavailable"))).toBe("Network unavailable");
   });
-  it("shows expression examples only for unsupported expressions when table source is available", () => {
-    const table = parseTable(asset.xml!), unsupported = [{ code: "UnsupportedExpression", message: "This condition is not supported by the selected profile." }];
-    const { host: supportedSource } = mount(<DecisionDiagnostics diagnostics={unsupported} table={table} label="Decision diagnostics" />);
-    expect(supportedSource.querySelectorAll(".decision-expression-guidance")).toHaveLength(1);
-    expect(supportedSource.textContent).toContain("< 21"); expect(supportedSource.textContent).toContain('"male"');
+  it("explains unsupported expressions using the affected column role and type", () => {
+    const source = parseTable(asset.xml!);
+    const table = {
+      ...source,
+      inputs: [
+        { id: "amount-input", name: "amount", type: "number" },
+        { id: "category-input", name: "category", type: "string" },
+        { id: "active-input", name: "active", type: "boolean" }
+      ],
+      outputs: [
+        { id: "count-output", name: "count", type: "number" },
+        { id: "label-output", name: "label", type: "string" },
+        { id: "enabled-output", name: "enabled", type: "boolean" }
+      ]
+    };
+    const diagnostic = (clauseId: string) => ({ code: "UnsupportedExpression", message: "This expression is not supported.", clauseId });
+    expect(decisionDiagnosticMessage(diagnostic("amount-input"), table)).toContain("The “amount” input already supplies the value. Enter a condition such as < 21, not “amount < 21”.");
+    expect(decisionDiagnosticMessage(diagnostic("category-input"), table)).toContain('Match text with a quoted value such as "male".');
+    expect(decisionDiagnosticMessage(diagnostic("active-input"), table)).toContain("Use true or false as the condition.");
+    expect(decisionDiagnosticMessage(diagnostic("count-output"), table)).toContain("expects a number value, not a condition");
+    expect(decisionDiagnosticMessage(diagnostic("label-output"), table)).toContain('expects a quoted text value, such as "Approved".');
+    expect(decisionDiagnosticMessage(diagnostic("enabled-output"), table)).toContain("expects true or false as the result value.");
+  });
+  it("groups equivalent cell errors while preserving every review location", () => {
+    const source = parseTable(asset.xml!), table = { ...source, rules: [{ ...source.rules[0], id: "rule-a" }, { ...source.rules[0], id: "rule-b" }] };
+    const onReview = vi.fn(), message = "This expression is not supported.";
+    const amountId = table.inputs[0].id, outputId = table.outputs[0].id;
+    const diagnostics = [
+      { code: "UnsupportedExpression", message, ruleId: "rule-a", clauseId: amountId },
+      { code: "UnsupportedExpression", message, ruleId: "rule-b", clauseId: amountId },
+      { code: "UnsupportedExpression", message, ruleId: "rule-a", clauseId: outputId }
+    ];
+    const { host } = mount(<DecisionDiagnostics diagnostics={diagnostics} table={table} label="Decision diagnostics" onReview={onReview} />);
+    const groups = host.querySelectorAll(".decision-diagnostic-group");
+    expect(groups).toHaveLength(2);
+    const numberGroup = Array.from(groups).find(group => group.textContent?.includes("input already supplies the value"))!;
+    expect(numberGroup.querySelectorAll(".decision-diagnostic-locations button")).toHaveLength(2);
+    expect(numberGroup.querySelector(".decision-diagnostic-summary")?.textContent).toBe("2 affected cells need review.");
+    click(button(numberGroup as HTMLElement, "Rule 2 · Column amount"));
+    expect(onReview).toHaveBeenCalledWith(diagnostics[1]);
+    const outputGroup = Array.from(groups).find(group => group.textContent?.includes("output expects a quoted text value"))!;
+    expect(outputGroup.textContent).toContain("output expects a quoted text value");
+    expect(outputGroup.querySelector(".decision-diagnostic-summary")?.textContent).toBe("1 affected cell needs review.");
+  });
+  it("retains authoritative messages when diagnostic context or type is unavailable", () => {
+    const table = parseTable(asset.xml!), message = "The server reported an unsupported expression.";
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message, clauseId: "missing" }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "OtherError", message, clauseId: table.inputs[0].id }, table)).toBe(message);
+    expect(decisionDiagnosticMessage({ code: "UnsupportedExpression", message, clauseId: table.inputs[0].id }, null)).toBe(message);
 
-    const { host: generic } = mount(<DecisionDiagnostics diagnostics={[{ code: "InvalidRange", message: "The range is invalid." }]} table={table} label="Decision diagnostics" />);
-    expect(generic.querySelector(".decision-expression-guidance")).toBeNull();
-    const { host: unavailableSource } = mount(<DecisionDiagnostics diagnostics={unsupported} table={null} label="Decision diagnostics" />);
-    expect(unavailableSource.querySelector(".decision-expression-guidance")).toBeNull();
+    const { host } = mount(<DecisionDiagnostics diagnostics={[{ code: "InvalidRange", message: "The range is invalid." }]} table={table} label="Decision diagnostics" />);
+    expect(host.textContent).toContain("The range is invalid.");
+    expect(host.querySelector(".decision-diagnostic-summary")).toBeNull();
   });
   it("reviews saved-case diagnostics, clears stale results, and allows correction and retry", async () => {
     const api = stubApi(), table = parseTable(asset.xml!);
@@ -748,13 +793,13 @@ describe("Decisions Studio journeys", () => {
     expect(host.textContent).toContain("Saved cases could not run");
     expect(host.textContent).not.toContain("All cases passed");
     expect(host.textContent).toContain("This condition is not supported by the selected profile.");
-    expect(host.querySelectorAll(".decision-expression-guidance")).toHaveLength(1);
-    expect(host.textContent).toContain('"male"');
+    expect(host.textContent).toContain("The “amount” input already supplies the value.");
+    expect(host.textContent).toContain("not “amount < 21”.");
     expect(host.textContent).toContain("Rule 1"); expect(host.textContent).toContain("Column amount"); expect(host.textContent).not.toContain(table.rules[0].id);
     click(button(host, "Review rules"));
     const cell = gridCell(host, "Rule 1, input amount");
     await vi.waitFor(() => expect(document.activeElement).toBe(cell));
-    expect(host.textContent).toContain("UnsupportedExpression");
+    expect(cell.querySelector(".decision-cell-diagnostic")?.textContent).toContain("The “amount” input already supplies the value.");
     editGridCell(host, "Rule 1, input amount", "< 21");
     click(button(host, "Save"));
     await vi.waitFor(() => expect(api.backend.http.putJson).toHaveBeenCalledWith("/tenant/decisions/approval", expect.objectContaining({ xml: correctedXml, expectedRevision: "r1" })));

@@ -36,7 +36,7 @@ import { ActivityDefinitionDiagnosticsPanel, type ActivityDraftValidationFailure
 import { ActivityDefinitionPublicationReview } from "./ActivityDefinitionPublicationReview";
 import { ActivityDefinitionContractProposalReview } from "./ActivityDefinitionContractProposalReview";
 import { ActivityDefinitionProviderMigrationDialog } from "./ActivityDefinitionDraftManagementDialogs";
-import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError } from "./api/capabilities";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds, hasCapabilityLink } from "./api/capabilities";
 import type { ActivityPublicationOutcome } from "./api/publishing";
 import type { PreparedActivityTestRunRevision } from "./ActivityDefinitionTestRunDialog";
 import {
@@ -194,6 +194,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
   const [publicationPending, setPublicationPending] = useState(false);
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
+  const [publishedTestRunAvailability, setPublishedTestRunAvailability] = useState<"unavailable" | "unverified" | null>(null);
+  const [checkingPublishedTestRunAvailability, setCheckingPublishedTestRunAvailability] = useState(false);
   const [workspaceTestHostRevision, setWorkspaceTestHostRevision] = useState<number | null>(null);
   const [workspaceTestHostPanel, setWorkspaceTestHostPanel] = useState<"editor" | "test">("editor");
   const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
@@ -755,6 +757,25 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
   const revisionSensitiveActionsBlocked = publicationPending || status !== "saved" || !contractLocallyValid || proposalApplying || codeBufferState.dirty;
   const dependentActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !draftIsActive || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty;
   const testRunActionsBlocked = readOnly || publicationPending || Boolean(recovery) || !contractLocallyValid || status === "conflict" || validating || proposalApplying || codeBufferState.dirty || (!draftIsActive && (Boolean(draft.draftId) || !initialVersion));
+  const openTestRun = async () => {
+    if (!initialVersion || draft.draftId) {
+      setTestRunOpen(true);
+      return;
+    }
+    setCheckingPublishedTestRunAvailability(true);
+    try {
+      const links = await Promise.all([
+        hasCapabilityLink(context, capabilityIds.publishing, "activity-version-test-run-dispatch"),
+        hasCapabilityLink(context, capabilityIds.publishing, "activity-version-test-run-idempotency-status")
+      ]);
+      setPublishedTestRunAvailability(links.every(Boolean) ? null : "unavailable");
+    } catch {
+      setPublishedTestRunAvailability("unverified");
+    } finally {
+      setCheckingPublishedTestRunAvailability(false);
+      setTestRunOpen(true);
+    }
+  };
   useLayoutEffect(() => {
     if (!publicationFocusPendingRef.current || draftIsActive) return;
     publicationFocusPendingRef.current = false;
@@ -1033,8 +1054,8 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
             event.currentTarget.closest(".ad-draft-editor-toolbar")?.querySelectorAll<HTMLDetailsElement>("details[open]").forEach(disclosure => {
               disclosure.open = false;
             });
-            setTestRunOpen(true);
-          }} disabled={testRunActionsBlocked} title={initialVersion && !draft.draftId ? `Test published version ${initialVersion.version}` : "Test the exact saved draft revision"}><Play size={15} aria-hidden="true" /> Test Run</button>}
+            void openTestRun();
+          }} disabled={testRunActionsBlocked || checkingPublishedTestRunAvailability} title={initialVersion && !draft.draftId ? `Test published version ${initialVersion.version}` : "Test the exact saved draft revision"}><Play size={15} aria-hidden="true" /> Test Run</button>}
           <details className="ad-authoring-more-actions" onKeyDown={event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
@@ -1088,12 +1109,13 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, initialVer
       context={context}
       draft={draft}
       sourceVersion={!draft.draftId ? initialVersion : null}
+      publishedRunAvailability={publishedTestRunAvailability}
       definitionLabel={definitionLabel}
       inputEditors={inputEditors}
       expressionEditors={expressionEditors}
       prepareExactRevision={prepareExactTestRunRevision}
       onFocusDiagnostic={focusDiagnostic}
-      onClose={() => setTestRunOpen(false)}
+      onClose={() => { setTestRunOpen(false); setPublishedTestRunAvailability(null); }}
       onOpenRun={onOpenStudioPath}
     /></Suspense> : null}
     {recovery ? <section className="ad-recovery-card" role="alert"><div><h2>Unsaved local recovery available</h2><p>Captured {formatRecoveryTime(recovery.capturedAt)} from saved revision {recovery.baseRevision}; it expires {formatRecoveryTime(recovery.expiresAt)}. {!canEditProvider ? "The exact provider editor is unavailable, so Studio will preserve the server draft and will not apply this opaque state." : recovery.baseRevision === draft.revision ? "Review the recovered content before applying; Studio never restores it silently." : `The server is now at revision ${draft.revision}, so recovery creates a parallel draft and never overwrites it.`}</p><details onToggle={event => { if (event.currentTarget.open) setRecoveryReviewed(true); }}><summary>Review recovered content</summary><pre>{formatRecoveryPreview(recovery)}</pre></details></div><div>{canEditProvider ? <button type="button" onClick={() => void applyRecovery()} disabled={copying || !recoveryReviewed}>{copying ? "Creating recovery draft…" : !recoveryReviewed ? "Review content before recovery" : recovery.baseRevision === draft.revision ? "Apply local recovery" : "Create recovery draft"}</button> : null}<button type="button" onClick={() => { recoveryStore?.clear(initialDraft); setRecovery(null); }} disabled={copying}>Discard recovery</button>{copyError ? <span>Recovery could not be confirmed. The local snapshot remains available.</span> : null}</div></section> : null}

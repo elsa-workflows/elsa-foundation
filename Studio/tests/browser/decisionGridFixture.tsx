@@ -35,14 +35,15 @@ const composedXml = (() => {
   return xml;
 })();
 const recoveryTable = parseTable(composedXml);
-const recoveryXml = editTable(composedXml, { kind: "cell", ruleId: recoveryTable.rules[0].id, output: false, column: 0, text: "male" });
-const recoveryDiagnostics: Diagnostic[] = recoveryTable.rules.flatMap(rule => [...recoveryTable.inputs, ...recoveryTable.outputs].map(clause => ({
+let recoveryXml = editTable(composedXml, { kind: "cell", ruleId: recoveryTable.rules[0].id, output: false, column: 0, text: "amount <= 21" });
+recoveryXml = editTable(recoveryXml, { kind: "cell", ruleId: recoveryTable.rules[1].id, output: false, column: 0, text: "amount > 21" });
+const recoveryDiagnostics: Diagnostic[] = recoveryTable.rules.slice(0, 2).map(rule => ({
   code: "UnsupportedExpression",
   message: "This condition is not supported by the selected profile.",
   decisionId: recoveryTable.id,
   ruleId: rule.id,
-  clauseId: clause.id
-})));
+  clauseId: recoveryTable.inputs[0].id
+}));
 const composedAsset: DecisionAsset = {
   id: "approval",
   name: "Approval",

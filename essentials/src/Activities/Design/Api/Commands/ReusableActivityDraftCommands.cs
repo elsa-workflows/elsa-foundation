@@ -217,3 +217,13 @@ public sealed record ValidateReusableActivityCandidate(
 {
     public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
 }
+
+/// <summary>Validates an unsaved proposal against the exact published version without writing a draft.</summary>
+public sealed record ValidateReusableActivityVersionCandidate(
+    [property: JsonIgnore] string VersionId,
+    ActivityContractView Contract,
+    ActivityProviderManifest Provider,
+    IReadOnlyList<ActivityLayoutRecord> Layout)
+{
+    public ActivityNodePresentationPayload? ActivityPresentation { get; init; }
+}

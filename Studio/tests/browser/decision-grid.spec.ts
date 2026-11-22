@@ -638,13 +638,11 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await expect(diagnostics).toContainText("This condition is not supported by the selected profile.");
     await expect(diagnostics).toContainText("Rule 1 · Column amount");
     await expect(diagnostics.locator(".decision-diagnostic-group")).toHaveCount(1);
-    await expect(diagnostics.locator(".decision-diagnostic-locations button")).toHaveCount(12);
+    await expect(diagnostics.locator(".decision-diagnostic-locations button")).toHaveCount(2);
+    await expect(diagnostics.locator(".decision-diagnostic-summary")).toHaveText("2 affected cells need review.");
     await expect(diagnostics).not.toContainText("decision_");
     await expect(page.getByRole("heading", { name: "Saved cases could not run", exact: true })).toBeVisible();
-    const guidance = diagnostics.locator(".decision-expression-guidance");
-    await expect(guidance).toHaveCount(1);
-    await expect(guidance).toContainText("< 21");
-    await expect(guidance).toContainText('"male"');
+    await expect(diagnostics).toContainText('The “amount” input already supplies the value. Enter a condition such as < 21, not “amount < 21”.');
     const recovery = page.locator(".decision-case-run-recovery");
     await expect(recovery).toContainText("Review the affected cells in Rules. Correct the expressions, save the draft, then run the cases again.");
     const alertBounds = await alert.boundingBox();
@@ -665,14 +663,20 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
 
     await page.getByRole("button", { name: "Review rules", exact: true }).click();
     const cell = page.getByRole("gridcell", { name: "Rule 1, input amount", exact: true });
+    const secondCell = page.getByRole("gridcell", { name: "Rule 2, input amount", exact: true });
     await expect(cell).toBeFocused();
-    await expect(cell.locator(".decision-cell-diagnostic")).toContainText("This condition is not supported by the selected profile.");
+    await expect(cell.locator(".decision-cell-diagnostic")).toContainText('not “amount < 21”.');
+    await expect(secondCell.locator(".decision-cell-diagnostic")).toContainText('not “amount < 21”.');
     await expect(page.getByRole("region", { name: "Compatibility and validation" })).toContainText("Rule 1 · Column amount");
     await cell.press("Enter");
     const editor = page.getByRole("textbox", { name: "Edit selected cell", exact: true });
     await editor.fill("< 21");
     await editor.press("Enter");
     await expect(cell).toHaveText("< 21");
+    await secondCell.press("Enter");
+    await page.getByRole("textbox", { name: "Edit selected cell", exact: true }).fill("> 21");
+    await page.getByRole("textbox", { name: "Edit selected cell", exact: true }).press("Enter");
+    await expect(secondCell).toHaveText("> 21");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(() => page.evaluate(() => document.querySelector(".decision-draft-status")?.textContent)).toBe("Saved draft");
 

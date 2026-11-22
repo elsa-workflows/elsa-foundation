@@ -46,7 +46,8 @@ function name(value: string) {
 async function settle() { await new Promise(resolve => setTimeout(resolve, 0)); flushSync(() => {}); }
 
 it("allows published block proposals without a separate Start editing action", async () => {
-  const authority = { sourceKey: "published:1", canEdit: true, canApply: () => true, validate };
+  const validateCandidate = vi.fn(async () => ({ state: "validated" as const, messages: [] }));
+  const authority = { sourceKey: "published:1", canEdit: true, canApply: () => true, validate: validateCandidate };
   const before = structuredClone(context.document);
   render(authority);
   expect(container.textContent).not.toContain("Start editing");

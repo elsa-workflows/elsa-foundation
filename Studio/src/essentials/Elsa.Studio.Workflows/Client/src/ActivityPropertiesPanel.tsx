@@ -1293,12 +1293,15 @@ function PropertyRow({
   const isEmptyActivityJavaScriptValue = isActivityDefinitionGraph && syntax.toLowerCase() === "javascript" &&
     portableDefinition == null && (value == null || (typeof value === "string" && value.trim().length === 0));
   const canEditWorkflowInputArguments = wrapped != null && !secretOnly && !valueMasked && editingMode === "text" &&
-    syntax.toLowerCase() === "javascript" && !isEmptyActivityJavaScriptValue && (workflowInputs.length > 0 || hasWorkflowInputBinding) &&
+    syntax.toLowerCase() === "javascript" && (workflowInputs.length > 0 || hasWorkflowInputBinding) &&
     (value == null || typeof value !== "object" || portableDefinition != null);
   const canBindActivityInputDirectly = isActivityDefinitionGraph && wrapped != null && !secretOnly && !valueMasked &&
     (workflowInputs.length > 0 || activityInputReferenceKey != null) &&
     (syntax.toLowerCase() === "workflowrequest" || isEmptyActivityJavaScriptValue || (syntax.toLowerCase() === "literal" &&
       (value == null || typeof value !== "object" || portableDefinition != null)));
+  const inputBindingMode = canEditWorkflowInputArguments && canBindActivityInputDirectly ? "both"
+    : canEditWorkflowInputArguments ? "arguments"
+      : canBindActivityInputDirectly ? "direct" : null;
   const canRevealInputBindings = canEditWorkflowInputArguments || canBindActivityInputDirectly;
   const workflowInputBindingCount = readWorkflowInputExpressionArguments(value, syntax).length;
   const activityInputBindingCount = canEditWorkflowInputArguments ? workflowInputBindingCount : activityInputReferenceKey ? 1 : 0;
@@ -1418,11 +1421,11 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
-      {canEditWorkflowInputArguments ? (
+      {inputBindingMode ? (
         <WorkflowInputArgumentBindings
           inputs={workflowInputs}
           inputBindingTarget={isActivityDefinitionGraph ? "referenceKey" : "name"}
-          bindingMode="arguments"
+          bindingMode={inputBindingMode}
           value={value}
           syntax={syntax}
           activityInput={input}
@@ -1431,26 +1434,10 @@ function PropertyRow({
           expanded={inputBindingsOpenForCurrentValue}
           bindingsId={inputBindingsRegionId}
           onChange={next => onChange(writeInputValue(activity, input, next), input)}
-          onExpandedChange={setInputBindingsOpen}
-          onEscape={() => inputBindingsToggleRef.current?.focus()}
-        />
-      ) : canBindActivityInputDirectly ? (
-        <WorkflowInputArgumentBindings
-          inputs={workflowInputs}
-          inputBindingTarget="referenceKey"
-          bindingMode="direct"
-          value={value}
-          syntax={syntax}
-          activityInput={input}
-          wrapped={wrapped!}
-          disabled={readOnly}
-          expanded={inputBindingsOpenForCurrentValue}
-          bindingsId={inputBindingsRegionId}
-          onChange={next => onChange(writeInputValue(activity, input, next), input)}
-          onDirectInputSelect={selected => chooseData({
+          onDirectInputSelect={canBindActivityInputDirectly ? selected => chooseData({
             expressionType: "WorkflowRequest",
             value: { memberKey: selected.referenceKey, path: null }
-          })}
+          }) : undefined}
           onExpandedChange={setInputBindingsOpen}
           onEscape={() => inputBindingsToggleRef.current?.focus()}
         />

@@ -433,7 +433,8 @@ test("Activity editor starts a draft only on the first change and keeps that cha
   await expect(page).toHaveURL(/draft=activity-draft-browser-follow-up/);
   await page.reload();
   await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: /^Inputs/ }).click();
-  await expect(page.getByRole("region", { name: "Customer note", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Customer note/ })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Customer note");
   expect(state.draftCreationRequests).toHaveLength(1);
   await page.screenshot({ path: testInfo.outputPath("first-change-persisted.png") });
 });
@@ -466,17 +467,47 @@ test("Activity Definition Test Run runs the exact published version without crea
   expect(state.testRunWrites).toBe(1);
 });
 
+for (const missingRelation of ["activity-version-test-run-dispatch", "activity-version-test-run-idempotency-status"] as const) {
+  test(`Activity Definition Test Run explains missing ${missingRelation} before asking for inputs`, async ({ page }) => {
+    const state = await mockActivityDefinitionAuthoring(page);
+    await createBrowserActivity(page);
+    state.draft.status = "published";
+    state.draftsById.set(state.draft.draftId, state.draft);
+    state.headVersionId = "published-version-exact";
+    state.recommendedVersionId = "published-version-exact";
+    state.publishedVersions.push({ versionId: "published-version-exact", version: "1.2.3", draft: structuredClone(state.draft) });
+    await page.route("**/capabilities", async route => {
+      const body = authoringApiCapabilities();
+      const publishing = body.capabilities.find(capability => capability.id === "elsa.api.publishing")!;
+      publishing.links = publishing.links.filter(link => link.rel !== missingRelation);
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await mockEditorEntry(page, state);
+    await page.goto("/?mode=activity-definitions&definition=activity-def-browser&section=editor&version=published-version-exact");
+    const dialog = page.getByRole("dialog", { name: "Test run: Browser graph activity" });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await expect(dialog.getByText("This server does not advertise published Test Run dispatch and receipt lookup. Restart Workbench with the current Foundation build, then reload Studio. No inputs were entered and no Runtime execution was started.")).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Inputs" })).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "Run test" })).toHaveCount(0);
+    expect(state.testRunWrites).toBe(0);
+    expect(state.draftCreationRequests).toHaveLength(0);
+  });
+}
+
 test("Activity editor previews published block changes without a draft and creates one on Apply", async ({ page }, testInfo) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
   state.validationMode = "valid";
   state.draft.layout = [{ nodeId: "root", data: { position: { x: 37, y: 61 } } }];
   state.draft.status = "published";
-  state.headVersionId = "published-version";
-  state.recommendedVersionId = "published-version";
-  state.publishedVersions.push({ versionId: "published-version", version: "1.0.0", draft: structuredClone(state.draft) });
+  state.headVersionId = "published-version-newer";
+  state.recommendedVersionId = "published-version-newer";
+  state.publishedVersions.push(
+    { versionId: "published-version", version: "1.0.0", draft: structuredClone(state.draft) },
+    { versionId: "published-version-newer", version: "2.0.0", draft: { ...structuredClone(state.draft), layout: [{ nodeId: "root", data: { position: { x: 300, y: 400 } } }] } }
+  );
   await mockEditorEntry(page, state);
-  await page.goto("/?mode=activity-definitions&definition=activity-def-browser&theme=dark");
+  await page.goto("/?mode=activity-definitions&definition=activity-def-browser&section=editor&version=published-version&theme=dark");
   await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
   const commands = page.getByRole("group", { name: "Named block commands", exact: true });
   const blocksMenu = commands.getByRole("button", { name: "Blocks", exact: true });
@@ -3302,7 +3333,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
         sourceVersionId: item.draft.sourceVersionId,
         contract: item.draft.contract,
         provider: item.draft.provider,
-        activityPresentation: item.draft.activityPresentation ?? [],
+        activityPresentation: [],
         lifecycle: "Active",
         publishedAt: "2026-07-17T11:00:00Z"
       })

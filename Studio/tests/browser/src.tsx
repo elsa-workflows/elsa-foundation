@@ -258,7 +258,7 @@ function ActivityDefinitionGraphAuthoringFixture() {
     manifestFingerprint: draft.provider.manifestFingerprint,
     contract: draft.contract,
     propertyEditors: [],
-    expressionEditors: [],
+    expressionEditors: expressionCodeEditors,
     graphAuthoringPanels: [],
     historyResetKey: `${draft.draftId}:${draft.provider.schemaVersion}`,
     value: { payload: draft.provider.payload, layout: draft.layout },

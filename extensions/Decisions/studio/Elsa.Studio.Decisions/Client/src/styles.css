@@ -192,13 +192,12 @@
 .decision-diagnostic-message strong { flex: 0 0 auto; }
 .decision-diagnostic-locations { display: flex; flex-wrap: wrap; gap: .35rem; }
 .decision-diagnostic-locations .decision-link { padding: .15rem .4rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-control, 6px); background: var(--studio-surface); font-size: .8rem; }
+.decision-diagnostic-summary { margin: 0; color: var(--studio-text-muted); font-size: .8rem; }
 .decision-case-run-failure { display: grid; gap: 1rem; min-width: 0; }
 .decision-case-run-failure-summary { display: grid; gap: .5rem; min-width: 0; }
 .decision-case-run-failure-summary h3 { margin: 0; font-size: 1rem; }
 .decision-case-run-recovery { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-top: .75rem; border-top: 1px solid var(--studio-border); }
 .decision-case-run-recovery p { margin: 0; color: var(--studio-text-muted); font-size: .875rem; overflow-wrap: anywhere; }
-.decision-expression-guidance { padding: .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-card, 8px); background: var(--studio-surface); color: var(--studio-text-muted); line-height: 1.5; overflow-wrap: anywhere; }
-.decision-expression-guidance p { margin: 0; }
 .decision-case-dialog-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--studio-text) 42%, transparent); }
 .decision-case-dialog { display: flex; flex-direction: column; width: min(48rem, 100%); max-height: min(52rem, calc(100dvh - 2rem)); min-height: min(26rem, calc(100dvh - 2rem)); overflow: hidden; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-card, 8px); background: var(--studio-surface); color: var(--studio-text); }
 .decision-case-dialog-heading { flex: 0 0 auto; padding: .9rem 1.1rem; border-bottom: 1px solid var(--studio-border); }
