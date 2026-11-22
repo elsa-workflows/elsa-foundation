@@ -578,6 +578,8 @@
   gap: 6px;
 }
 
+.wf-workflow-picker-input .studio-search-input { font-weight: 400; }
+
 .wf-workflow-picker-input > .studio-search {
   flex: 1 1 0;
   min-width: 0;
@@ -709,7 +711,6 @@
 }
 
 .wf-run-filter-field [data-studio-field-control] {
-  font-weight: 400;
   max-width: 100%;
   min-width: 0;
 }

@@ -515,10 +515,15 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
           </div>;
           })}
         </div>
-        <StudioCollectionFooter aria-label="Activity Definition pagination"
-          summary={<span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} definitions</span>}
-          pageSize={{ label: "Rows per page", value: pageSize, sizes: [10, 25, 50], onChange: size => setPageSize(size as PageSize) }}><div><StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={15} aria-hidden /> Previous</StudioButton><StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={15} aria-hidden /></StudioButton></div></StudioCollectionFooter>
       </> : null}
+      <StudioCollectionFooter aria-label="Activity Definition pagination"
+        summary={data ? <span>Page {cursorIndex + 1} · {data.count} of {data.totalCount} definitions</span> : undefined}
+        pageSize={{ label: "Rows per page", value: pageSize, sizes: [10, 25, 50], onChange: size => setPageSize(size as PageSize) }}>
+        {data && data.items.length > 0 ? <div>
+          <StudioButton size="sm" onClick={() => setCursorIndex(current => Math.max(0, current - 1))} disabled={cursorIndex === 0}><ChevronLeft size={16} aria-hidden /> Previous</StudioButton>
+          <StudioButton size="sm" onClick={nextPage} disabled={!data.hasMore || !data.continuation}>Next <ChevronRight size={16} aria-hidden /></StudioButton>
+        </div> : null}
+      </StudioCollectionFooter>
       {createOpen ? <WorkflowLazyBoundary label="create activity definition"><ActivityDefinitionCreateDialog context={context} activityEditors={activityEditors} onClose={() => setCreateOpen(false)} onCreated={response => { setCreateOpen(false); onCreated(response.definition.definitionId, response.draft.draftId); }} /></WorkflowLazyBoundary> : null}
     </main>
   );
