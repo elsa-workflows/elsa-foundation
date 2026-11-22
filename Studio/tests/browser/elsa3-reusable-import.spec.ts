@@ -43,7 +43,7 @@ test("Elsa 3 import pages exact rows, preserves a valid subset, expands closure,
   await page.goto("/workflows/activity-definitions/import-elsa3");
   await expect(page.getByRole("heading", { name: "Import from Elsa 3" })).toBeVisible();
   await expect(page.getByText("Uses reusable activities directly")).toBeVisible();
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
+  await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
 
   await expect(page.getByText("100 / 102 versions")).toBeVisible();
@@ -122,7 +122,7 @@ test("Elsa 3 import reports an idempotent Already imported receipt without a sec
   });
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
+  await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
@@ -229,7 +229,7 @@ test("captures Classic light receipt screenshots when asked", async ({ page }) =
   await page.goto("/workflows/activity-definitions/import-elsa3?theme=classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
-  await page.getByPlaceholder("Authorized collection handle").fill("collection");
+  await page.getByPlaceholder("Collection ID").fill("collection");
   await page.getByRole("button", { name: "Analyze collection" }).click();
   await page.getByRole("checkbox", { name: "Select owner exact source version 1" }).check();
   await page.getByRole("button", { name: "Review exact import" }).click();
@@ -248,11 +248,11 @@ test("Elsa 3 expired handles require a fresh collection without retaining an ana
   }, 410));
 
   await page.goto("/workflows/activity-definitions/import-elsa3");
-  await page.getByPlaceholder("Authorized collection handle").fill("expired");
+  await page.getByPlaceholder("Collection ID").fill("expired");
   await page.getByRole("button", { name: "Analyze collection" }).click();
 
   await expect(page.getByText("The immutable Elsa 3 collection expired. Upload the source again to create a fresh handle and run a new preview.")).toBeVisible();
-  await expect(page.getByPlaceholder("Authorized collection handle")).toHaveValue("");
+  await expect(page.getByPlaceholder("Collection ID")).toHaveValue("");
   await expect(page.getByText("Plan ID")).toHaveCount(0);
 });
 

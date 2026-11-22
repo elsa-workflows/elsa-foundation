@@ -91,7 +91,7 @@ describe("Elsa 3 reusable import workbench", () => {
     const navigate = vi.fn();
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={navigate} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     expect(checkbox(container, "Select invalid-cycle exact source version 1").disabled).toBe(true);
@@ -141,7 +141,7 @@ describe("Elsa 3 reusable import workbench", () => {
     ));
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
@@ -167,7 +167,7 @@ describe("Elsa 3 reusable import workbench", () => {
     ));
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("protected-owner-v1"));
     click(checkbox(container, "Select protected-owner exact source version 1"));
@@ -175,7 +175,7 @@ describe("Elsa 3 reusable import workbench", () => {
     await waitFor(() => expect(container.textContent).toContain("Retained analysis and receipt details were cleared"));
     expect(container.textContent).not.toContain("protected-owner-v1");
     expect(container.textContent).not.toContain("secret");
-    expect((container.querySelector("input[placeholder='Authorized collection handle']") as HTMLInputElement).value).toBe("");
+    expect((container.querySelector("input[placeholder='Collection ID']") as HTMLInputElement).value).toBe("");
   });
 
   it("cancels preview and ignores a late response", async () => {
@@ -187,7 +187,7 @@ describe("Elsa 3 reusable import workbench", () => {
     );
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     click(button(container, "Cancel analysis"));
     resolveAnalysis(page([item("late-owner", "late-owner-v1")]));
@@ -239,7 +239,7 @@ describe("Elsa 3 reusable import workbench", () => {
     );
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
@@ -247,7 +247,7 @@ describe("Elsa 3 reusable import workbench", () => {
     click(button(container, "Review exact import"));
     click(button(container, "Apply reviewed import"));
 
-    const handleInput = container.querySelector("input[placeholder='Authorized collection handle']") as HTMLInputElement;
+    const handleInput = container.querySelector("input[placeholder='Collection ID']") as HTMLInputElement;
     expect(handleInput.disabled).toBe(true);
     expect(checkbox(container, "Select owner exact source version 1").disabled).toBe(true);
     expect((button(container, "Review exact import") as HTMLButtonElement).disabled).toBe(true);
@@ -255,7 +255,7 @@ describe("Elsa 3 reusable import workbench", () => {
 
     // Simulate an external host invalidating the controlled field despite the UI freeze.
     handleInput.disabled = false;
-    input(container, "Authorized collection handle", "fresh-collection");
+    input(container, "Collection ID", "fresh-collection");
     resolveApply(receipt("Applied"));
 
     await waitFor(() => expect(handleInput.value).toBe("fresh-collection"));
@@ -286,7 +286,7 @@ describe("Elsa 3 reusable import workbench", () => {
     ));
 
     const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-    input(container, "Authorized collection handle", "collection");
+    input(container, "Collection ID", "collection");
     click(button(container, "Analyze collection"));
     await waitFor(() => expect(container.textContent).toContain("owner-v1"));
     click(checkbox(container, "Select owner exact source version 1"));
@@ -561,7 +561,7 @@ async function applyReviewedImport(applied: Elsa3ReusableImportReceipt) {
   });
   vi.mocked(applyElsa3ReusableImport).mockResolvedValue(applied);
   const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
-  input(container, "Authorized collection handle", "collection");
+  input(container, "Collection ID", "collection");
   click(button(container, "Analyze collection"));
   await waitFor(() => expect(container.textContent).toContain("owner-v1"));
   click(checkbox(container, "Select owner exact source version 1"));

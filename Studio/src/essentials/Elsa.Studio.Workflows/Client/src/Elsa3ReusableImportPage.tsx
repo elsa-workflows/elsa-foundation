@@ -507,8 +507,8 @@ export function Elsa3ReusableImportPage({
               value={collectionHandleInput}
               disabled={uploadStatus === "loading" || applyStatus === "loading"}
               onChange={event => changeCollectionHandle(event.target.value)}
-              placeholder="Authorized collection handle"
-            /><small>The handle is scope-bound and expires according to the server.</small></StudioField>
+              placeholder="Collection ID"
+            /><small>Use an unexpired collection ID from this backend and account.</small></StudioField>
         </div>
         <div className="elsa3-import-actions">
           <StudioButton type="button" onClick={() => void upload()} disabled={!file || uploadStatus === "loading" || applyStatus === "loading"}>
@@ -936,7 +936,7 @@ function importErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof StudioHttpError)) return fallback;
   const payload = error.payload as { detail?: string } | null;
   if (error.status === 401 || error.status === 403 || error.status === 404) {
-    return "The authorized Elsa 3 import resource could not be confirmed. No hidden collection or plan identity was disclosed.";
+    return "This import is unavailable. Check your access and whether this backend supports Elsa 3 imports.";
   }
   return payload?.detail || error.message || fallback;
 }
