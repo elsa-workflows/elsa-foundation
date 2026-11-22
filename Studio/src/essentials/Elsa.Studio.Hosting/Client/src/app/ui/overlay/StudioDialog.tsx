@@ -8,6 +8,8 @@ export interface StudioDialogProps {
   onClose(): void;
   title: React.ReactNode;
   id?: string;
+  role?: "dialog" | "alertdialog";
+  noValidate?: boolean;
   closeLabel?: string;
   description?: React.ReactNode;
   children?: React.ReactNode;
@@ -29,6 +31,8 @@ export function StudioDialog({
   onClose,
   title,
   id,
+  role = "dialog",
+  noValidate,
   closeLabel = "Close dialog",
   description,
   children,
@@ -67,6 +71,7 @@ export function StudioDialog({
           asChild
           {...(id ? { id } : {})}
           className={className ? `studio-dialog ${className}` : "studio-dialog"}
+          role={role}
           aria-modal="true"
           data-has-close={!hideCloseButton || undefined}
           {...(!hasDescription ? { "aria-describedby": undefined } : {})}
@@ -87,7 +92,7 @@ export function StudioDialog({
             if (document.activeElement === document.body && target?.isConnected) target.focus();
           })}
         >
-          {onSubmit ? <form onSubmit={onSubmit}>{content}</form> : <div>{content}</div>}
+          {onSubmit ? <form noValidate={noValidate} onSubmit={onSubmit}>{content}</form> : <div>{content}</div>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
