@@ -174,13 +174,14 @@ export function register(api: ElsaStudioModuleApi) {
         workspace: workspaceResource("activity-upgrade-plan", "plan"),
         component: ({ navigate }) => deferred("Activity definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
-      {
-        id: "workflows-activity-definitions", requiresBackend: [{id:"elsa.api.activity-design",contractVersion:"1"}],
-        path: "/workflows/activity-definitions",
-        label: "Activity definitions",
+      ...[
+        { id: "workflows-activity-definitions", path: "/workflows/activity-definitions", label: "Activity definitions" },
+        { id: "agent-activity-definition", path: "/agents/definitions", label: "Agent" }
+      ].map(({ id, path, label }) => ({
+        id, path, label, requiresBackend: [{ id: "elsa.api.activity-design", contractVersion: "1" }],
         workspace: activityDefinitionWorkspace,
-        component: ({ navigate }) => deferred("activity definitions", <ActivityDefinitionsPage context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
-      },
+        component: ({ navigate }: { navigate(path: string): void }) => deferred(label, <ActivityDefinitionsPage agentWorkspace={path === "/agents/definitions"} context={api.backend} activityEditors={() => api.activityEditors.list()} graphExtensions={() => ({ properties: api.propertyEditors.list(), expressions: api.expressionEditors.list(), panels: api.workflowDesigner.panels.list() })} inputEditors={runInputEditors} runtime={api.runtime} navigateToStudioPath={navigate} />)
+      })),
       {
         id: "workflows-definitions", requiresBackend: [{id:"elsa.api.workflow-design",contractVersion:"1"}],
         path: "/workflows/definitions",

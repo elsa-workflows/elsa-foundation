@@ -303,7 +303,7 @@ describe("agent playground", () => {
     await submit(container);
     expect(button(container, "Continue this conversation")).not.toBeNull();
 
-    button(container, "Reload draft")!.click();
+    container.querySelector<HTMLButtonElement>('button[aria-label="Reload draft"]')!.click();
     await settle();
     expect(container.textContent).toContain("Draft revision 4");
     expect(button(container, "Continue this conversation")).toBeNull();

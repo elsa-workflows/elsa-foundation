@@ -225,17 +225,16 @@ describe("agents page", () => {
     await settle();
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    const name = container.querySelector(".agent-create-form input");
+    const name = document.querySelector('[role="dialog"] input');
     expect(document.activeElement).toBe(name);
     finish({ items: [row("a")], totalCount: 1 });
     await settle();
 
-    expect(container.querySelector(".agent-collection-count")).toBeNull();
+    expect(container.querySelector(".agent-collection-count")?.textContent).toContain("1 agent");
     expect(document.activeElement).toBe(name);
-    [...container.querySelectorAll("button")].find(x => x.textContent === "Cancel")!.click();
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(x => x.textContent === "Cancel")!.click();
     await settle();
     expect(container.querySelector(".agent-collection-count")?.textContent).toBe("1 agent");
   });
@@ -278,13 +277,12 @@ describe("agents page", () => {
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    input(container.querySelector(".agent-create-form input")!, "Copywriter");
-    input(container.querySelector(".agent-create-form textarea")!, "Writes short articles.");
+    input(document.querySelector('[role="dialog"] input')!, "Copywriter");
+    input(document.querySelector('[role="dialog"] textarea')!, "Writes short articles.");
     await settle();
-    (container.querySelector(".agent-create-form") as HTMLFormElement).requestSubmit();
+    (document.querySelector('form[role="dialog"]') as HTMLFormElement).requestSubmit();
     await settle();
 
     const [path, body] = postJson.mock.calls[0] as [string, Record<string, unknown>];
@@ -295,7 +293,7 @@ describe("agents page", () => {
       payload: { instructions: "", allowContinuity: false, limits: { maximumModelCalls: 8, timeoutMilliseconds: 300000 } } });
     expect(body.contract).toEqual({ contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] });
     expect(navigate).toHaveBeenCalledWith(activityDefinitionPath("new-agent", "draft-1"));
-    expect(activityDefinitionPath("new-agent", "draft-1")).toBe("/workflows/activity-definitions?definition=new-agent&section=editor&draft=draft-1");
+    expect(activityDefinitionPath("new-agent", "draft-1")).toBe("/agents/definitions?definition=new-agent&section=editor&draft=draft-1");
   });
 
   it("offers no creation to a signed-in reader without the manage permission", async () => {
@@ -315,8 +313,8 @@ describe("agents page", () => {
 
     newAgent()!.click();
     await settle();
-    expect(document.activeElement).toBe(container.querySelector(".agent-create-form input"));
-    [...container.querySelectorAll("button")].find(x => x.textContent === "Cancel")!.click();
+    expect(document.activeElement).toBe(document.querySelector('[role="dialog"] input'));
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(x => x.textContent === "Cancel")!.click();
     await settle();
 
     expect(document.activeElement).toBe(newAgent());
@@ -329,12 +327,11 @@ describe("agents page", () => {
 
     [...container.querySelectorAll("button")].find(x => x.textContent?.includes("New agent"))!.click();
     await settle();
-    expect(container.querySelector('[aria-label="Search agents"]')).toBeNull();
-    expect(container.querySelector('[role="table"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     await settle();
-    input(container.querySelector(".agent-create-form input")!, "Copywriter");
+    input(document.querySelector('[role="dialog"] input')!, "Copywriter");
     await settle();
-    (container.querySelector(".agent-create-form") as HTMLFormElement).requestSubmit();
+    (document.querySelector('form[role="dialog"]') as HTMLFormElement).requestSubmit();
     await settle();
 
     expect(document.activeElement?.textContent).toBe("The agent could not be created. Nothing was saved.");
@@ -362,7 +359,7 @@ describe("agents page", () => {
     finish(["draft-1"]);
     await settle();
 
-    expect(navigate.mock.calls.map(call => call[0])).toEqual(["/workflows/activity-definitions?definition=a&version=a-v1"]);
+    expect(navigate.mock.calls.map(call => call[0])).toEqual(["/agents/definitions?definition=a&version=a-v1"]);
   });
 
   it("opens a row's own resource: its published version, its only draft, or the definition to choose from", async () => {
@@ -380,9 +377,9 @@ describe("agents page", () => {
     await open("two");
 
     expect(navigate.mock.calls.map(call => call[0])).toEqual([
-      "/workflows/activity-definitions?definition=a&version=a-v1",
-      "/workflows/activity-definitions?definition=one&section=editor&draft=draft-1",
-      "/workflows/activity-definitions?definition=two&section=drafts"
+      "/agents/definitions?definition=a&version=a-v1",
+      "/agents/definitions?definition=one&section=editor&draft=draft-1",
+      "/agents/definitions?definition=two&section=drafts"
     ]);
     const draftQuery = new URL(getJson.mock.calls.map(call => String(call[0])).find(path => path.includes("/one/drafts"))!, "http://studio").searchParams;
     expect(Object.fromEntries(draftQuery)).toEqual({ limit: "2", providerKey: "elsa.agent", status: "Active" });
