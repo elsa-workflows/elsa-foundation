@@ -240,7 +240,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.workflow-run-health__table-scroll :is(th, td) { text-align: right; }
+.workflow-run-health__table-scroll .studio-table { min-width: max-content; }
+.workflow-run-health__table-scroll :is(th, td) { text-align: right; white-space: nowrap; }
 
 .workflow-run-health__table-scroll tr > :first-child {
   text-align: left;
