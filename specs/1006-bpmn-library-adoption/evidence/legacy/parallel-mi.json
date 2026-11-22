@@ -6,8 +6,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
-  "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+  "databaseSha256": "a7926a224b97c845424a649df6b21c1495f8486c06220c8f0514b16b06dceca3",
+  "compressedSha256": "c296765120f95dac63800a556aafde1a772b47ccee0874426792bb73da866f99",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -65,5 +65,17 @@
     ],
     "bookmarkCount": 3,
     "queuedIds": []
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+    "inputCompressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+    "changedContracts": 2,
+    "changedDescriptors": 4,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation"
   }
 }

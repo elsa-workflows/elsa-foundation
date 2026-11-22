@@ -1,5 +1,17 @@
 # Actual legacy execution checkpoints
 
+The checked-in databases are S-9's pre-stable fixture regeneration of the historical captures described below.
+Spec 1207 changes only CLR descriptor member spelling (`TypeAlias` to `typeAlias`) and the corresponding pinned
+activity-contract fingerprints inside the stored executable. Every other database column, including all BPMN
+private state, queue/outbox items, bookmarks, incidents and execution identities, was compared before and after
+and retained exactly. No historical hash verifier or runtime migration was added.
+
+Each receipt's `s9Regeneration` records the original database/compressed digests and the transformation extent;
+its top-level digests identify the current transformed fixture. The capture revisions, old-host controls and
+historical test results below describe the original input bytes, which remain recoverable from the parent Git
+revision. They do not claim the old host wrote or accepted the S-9-transformed bytes. Current reader acceptance
+must come from a fresh run of `BpmnUpgradeRecoveryEfTests` against these exact regenerated fixtures.
+
 Captured on 25 October 2026 from **`d81a4c88a2924708ea8afcc2db20b8a77b84f703`**, using the real Foundation BPMN writer and EF Runtime SQLite store. Production BPMN source and package pins are unchanged from parity merge `fbe694d2f3d126e324c3e46578bc1a560b0217f1`: Model/Interchange `0.1.1-preview.19`, private alias `Elsa.Bpmn.ExecutionState`, version 1. The capture code is in that commit's `LegacyBpmnCheckpointEfTests.cs`; its source revision is permanent even after the old writer/generator is removed.
 
 These are actual committed executions. A SQLite online backup runs after a committed transaction while the single test actor is still awaiting it. The backup includes the complete Runtime database: executable, parent and direct/terminal child documents, variable frames/values, bookmarks, scheduler queue, incidents, operational ownership, hierarchy/inspection projections, post-commit outbox status/claims and checkpoint replay markers. No states were constructed by hand to substitute for host execution.

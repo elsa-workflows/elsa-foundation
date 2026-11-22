@@ -7,8 +7,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
-  "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+  "databaseSha256": "47eb90dc517daf5c02191b74a0e57ac573c8b77c63af47b73dfe8349fba42f3f",
+  "compressedSha256": "7347a919e53fdb9dc79ad05aa11c0840f2858c6063aafd3e86605d19cd6c8ad9",
   "oldHostControl": "fresh provider over a separate exact database copy passed",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -154,7 +154,7 @@
         "status": 1,
         "resolutionOutcome": {
           "actionKind": "FaultWorkflow",
-          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
+          "appliedAt": "2026-10-28T15:23:27.644631\u002B00:00",
           "strategy": {
             "alias": "Fault",
             "version": "1"
@@ -164,7 +164,7 @@
         },
         "failureType": "ActivityReturnedFault",
         "message": "BPMN process faulted because child node \u0027node-listener\u0027 faulted: a faulted child cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
-        "createdAt": "2026-10-28T15:23:27.644631+00:00",
+        "createdAt": "2026-10-28T15:23:27.644631\u002B00:00",
         "resolvedAt": null,
         "metadata": {
           "runtime.parentCompletionReason": "ParentCompletionEvaluation",
@@ -190,7 +190,7 @@
         "status": 1,
         "resolutionOutcome": {
           "actionKind": "FaultWorkflow",
-          "appliedAt": "2026-10-28T15:23:27.644631+00:00",
+          "appliedAt": "2026-10-28T15:23:27.644631\u002B00:00",
           "strategy": {
             "alias": "Fault",
             "version": "1"
@@ -200,7 +200,7 @@
         },
         "failureType": "ActivityReturnedFault",
         "message": "Actual legacy outcome wait faulted.",
-        "createdAt": "2026-10-28T15:23:27.644631+00:00",
+        "createdAt": "2026-10-28T15:23:27.644631\u002B00:00",
         "resolvedAt": null,
         "metadata": {
           "runtime.bookmarkId": "legacy-activity-3:attempt:1:trigger:1",
@@ -219,5 +219,17 @@
         "isBlocking": true
       }
     ]
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404",
+    "inputCompressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+    "changedContracts": 4,
+    "changedDescriptors": 8,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation"
   }
 }

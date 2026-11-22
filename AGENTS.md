@@ -8,6 +8,8 @@ The org-wide [AGENTS.md][org-agents] is the protocol for finding, claiming, bran
 
 ## Repository intent
 
+Serialization work follows the [pre-stable regeneration and first-stable freeze rule](docs/serialization.md#baseline-deviations): regenerate changed fixtures now; change frozen formats and hashes only through an explicit decision after Elsa 4's first stable release.
+
 `elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.

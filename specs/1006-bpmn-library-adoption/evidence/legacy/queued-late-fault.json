@@ -7,8 +7,8 @@
   "interchangePackage": "0.1.1-preview.19",
   "stateAlias": "Elsa.Bpmn.ExecutionState",
   "stateVersion": 1,
-  "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
-  "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+  "databaseSha256": "65b6a8e4419eba42c68c3714fa4796b7badd1ee7fd498deb1da31284d65e65c4",
+  "compressedSha256": "b62a3362c753e491803e5bd820dbdcfe2c16ffcef335f2e2ad16b6c22ca95bb6",
   "oldHostControl": "fresh old provider ignores canceled-token fault but leaves original incident blocking, workflow Faulted and BPMN/final catch parked; known legacy incident-absorption gap",
   "facts": {
     "parentId": "legacy-activity-0",
@@ -36,7 +36,7 @@
       "resolutionOutcome": null,
       "failureType": "ActivityReturnedFault",
       "message": "Branch \u0027node-loser\u0027 faulted.",
-      "createdAt": "2026-10-25T17:52:57.27019+00:00",
+      "createdAt": "2026-10-25T17:52:57.27019\u002B00:00",
       "resolvedAt": null,
       "metadata": {
         "runtime.schedulerWorkItemId": "90576540c4875c39:invoke:legacy-activity-2",
@@ -81,5 +81,17 @@
       "8535a6fe0b56198a:parent:legacy-activity-0:child:legacy-activity-1",
       "c0a6142754f9bc68:child-fault-parent:legacy-activity-0:child:legacy-activity-2"
     ]
+  },
+  "s9Regeneration": {
+    "spec": 1207,
+    "inputDatabaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+    "inputCompressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+    "changedContracts": 4,
+    "changedDescriptors": 8,
+    "changedFields": [
+      "workflow_executable.ContentJson/activityContract/schemaFingerprint",
+      "workflow_executable.ContentJson/descriptorPayload/typeAlias"
+    ],
+    "historicalControl": "oldHostControl applies to the original input capture, before the S-9 transformation"
   }
 }
