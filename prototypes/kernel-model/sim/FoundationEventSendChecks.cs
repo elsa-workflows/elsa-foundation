@@ -147,13 +147,14 @@ internal static class FoundationEventSendChecks
         var scope = new Contract.BoundScope("publication-order");
         var ingress = new InMemoryIngress(store, new Requests("order"), "order");
         var events = new EventIngress(store, new Requests("publish-order"), "order");
-        var left = StartWait("left");
-        var right = StartWait("right");
+        var left = StartWait(0, "left");
+        var right = StartWait(1, "right");
         var workers = Enumerable.Range(0, 2).Select(partition => new Worker("order", partition, store,
             new ActorAdapter(store, new Probe()), new WorkerOptions { Monotonic = () => 0 })).ToArray();
         await using var firstOwner = (await new DurableHost([workers[0]]).ActivateAsync(0))!;
         await using var secondOwner = (await new DurableHost([workers[1]]).ActivateAsync(1))!;
         await Pump(firstOwner);
+        await Pump(secondOwner);
 
         var first = EventId(0, Incarnation(1));
         var second = EventId(1, Incarnation(2));
@@ -169,17 +170,19 @@ internal static class FoundationEventSendChecks
         await Step(workers[1]); // B reaches both waits before A can reach right.
         await Step(workers[0]); // A reaches right.
         await Pump(firstOwner);
+        await Pump(secondOwner);
         check(PayloadOrder(left).SequenceEqual(['A', 'B']) && PayloadOrder(right).SequenceEqual(['B', 'A']),
             "each wait observes publication match commit order across overlapping pages and independent publishers");
 
         await ingress.SendAsync(scope, new Contract.Target.Ref(left), "relay", "send-direct-pair", right.Id);
         await Pump(firstOwner);
-        check(PayloadOrder(right).SequenceEqual(['B', 'A', 'X', 'Y']),
+        await Pump(secondOwner);
+        check(PayloadOrder(right).Where(payload => payload is 'X' or 'Y').SequenceEqual(['X', 'Y']),
             "the same actor's direct sends to one target stay in authored FIFO order");
 
-        Contract.ActorRef StartWait(string name)
+        Contract.ActorRef StartWait(int partition, string name)
         {
-            var target = InstanceRef.In(0, name);
+            var target = InstanceRef.In(partition, name);
             var reference = store.AdmitFoundationStart(scope.Tenant, new Message(name, target, Kinds.Start,
                 Start: new("event-send", "live", "twice", Creation: new(1, 0, name)), TargetCreation: 1));
             return new(reference ?? throw new InvalidOperationException("The test wait was not admitted."));

@@ -1655,8 +1655,10 @@ calls one new model hook.
         byte allowance lets it reach one wait before the second matches both. The first publication's next page
         reaches the remaining wait. The test reads opposite broadcast orders from the two actors and confirms
         that two subsequent direct sends from one actor arrive in authored order. The in-memory run is in
-        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 qualifies
-        the same interleaving on the physical providers.
+        [FoundationEventSendChecks](../../prototypes/kernel-model/sim/FoundationEventSendChecks.cs). K4 also
+        races two transactions matching the same wait. Pause the first while it assigns inbox order and let the
+        second try to commit. The resulting delivery order must follow commit visibility. If the provider serializes
+        order assignment for that wait, verify that the second transaction waits and that the first delivery stays first.
       - **A byte allowance per step (proposed, sixth review R6-M4).** `P_page` counts rows, and a delivery carries
         the whole payload, so 170 deliveries of a payload at the source limit would write about 2.6 GiB in one step.
         So each match step, which pages subscriptions, and each meet step, which pages matches, writes deliveries in
