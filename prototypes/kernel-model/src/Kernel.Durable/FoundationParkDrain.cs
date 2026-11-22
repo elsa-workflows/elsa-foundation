@@ -1,6 +1,6 @@
 namespace Kernel.Durable;
 
-internal enum ParkClearKind { Discard, Expiry, Terminate }
+internal enum ParkClearKind { Discard, Expiry, Terminate, Delete }
 
 internal sealed record ParkDiscardDrain(string Operation, ParkPageCursor? Cursor, long Cleared, long Serial, InboxKey Control)
 {
@@ -104,16 +104,17 @@ public sealed partial class InMemoryStore
             (turn.Delete || turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Any(IsOutstandingDrain))))
             throw InvalidDrain();
 
-        if (before is not null && (turn.Delete || turn.FoundationKept is { Count: > 0 })) throw InvalidDrain();
+        var retiring = before?.Kind == ParkClearKind.Delete && turn.Delete && after is null;
+        if (before is not null && (turn.Delete && !retiring || turn.FoundationKept is { Count: > 0 })) throw InvalidDrain();
         var expiry = previous is null ? null : _foundationParkExpiries.GetValueOrDefault(new(previous.Id, previous.Creation));
         if (expiry?.Armed is not null && (turn.Delete || next is { Status: InstanceStatus.Running })) throw InvalidDrain();
 
         var takesOutstanding = turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
             .Any(key => IsOutstandingDrain(key) || IsOutstandingExpiry(key));
-        if (next is not null && (previous?.ParkTimerDispositions != next.ParkTimerDispositions || previous?.ParkRestartedJobs != next.ParkRestartedJobs) &&
+        if (!retiring && next is not null && (previous?.ParkTimerDispositions != next.ParkTimerDispositions || previous?.ParkRestartedJobs != next.ParkRestartedJobs) &&
             !(before is not null && after is null && next.ParkDiscarded && next.ParkTimerDispositions is null && next.ParkRestartedJobs is null))
             throw InvalidDrain();
-        if (!takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(IsParkControl) &&
+        if (!retiring && !takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(IsParkControl) &&
             (next is null || turn.Delete || before == after &&
             (previous?.ParkDiscarded ?? false) == next.ParkDiscarded &&
             (previous?.ParkResolutionGeneration ?? 0) == next.ParkResolutionGeneration))
@@ -123,7 +124,7 @@ public sealed partial class InMemoryStore
         var terminal = terminating && after is null;
         var runningTermination = terminating && previous?.Status == InstanceStatus.Running && (interrupted is not null || before is not null);
         var activeStatus = runningTermination ? InstanceStatus.Running : InstanceStatus.Faulted;
-        if (next is not { Retired: false } || next.Status != (terminal ? InstanceStatus.Cancelled : activeStatus) ||
+        if (next is null || next.Retired != retiring || next.Status != (terminal ? InstanceStatus.Cancelled : activeStatus) ||
             previous is not { Retired: false } || previous.Status != activeStatus || previous.Creation != next.Creation ||
             next.Revision != previous.Revision + 1 ||
             StoreBatchRules.AddressPartition(next.Id) is not { } partition || !epochs.ContainsKey(partition) ||
@@ -142,7 +143,8 @@ public sealed partial class InMemoryStore
 
         var controls = turn.Sent.Where(IsParkControl).ToArray();
         var envelope = ParkDrainEnvelope.For(next, park);
-        if (terminating && (turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }))
+        var deleting = before?.Kind == ParkClearKind.Delete || after?.Kind == ParkClearKind.Delete;
+        if ((terminating || deleting) && (turn.Subscribed.Count != 0 || turn.Unsubscribed.Count != 0 || turn.Held is { Count: > 0 }))
             throw InvalidDrain();
         if (input.Kind == Kinds.ParkExpiry && after is null)
         {
@@ -187,25 +189,42 @@ public sealed partial class InMemoryStore
                     turn.Sent.Count != controls.Length + turn.Sent.Count(message => message.CascadeOrigin || message.Kind == Kinds.Cascade))
                     throw InvalidDrain();
             }
-            else if (after.Kind != ParkClearKind.Discard ||
-                input is not { Kind: "kernel.discard", Operator.Selection: { } selection } ||
+            else if (after.Kind is not (ParkClearKind.Discard or ParkClearKind.Delete) ||
+                input.Kind != (after.Kind == ParkClearKind.Delete ? Kinds.Delete : "kernel.discard") ||
+                input.Operator?.Selection is not { } selection ||
                 !_referenceBirths.TryGetValue(new(next.Id, next.Creation), out var binding) ||
                 !MatchesFoundationSelection(binding.Tenant, binding.Reference, selection))
                 throw InvalidDrain();
+            if (after.Kind == ParkClearKind.Delete && (turn.Sent.Count != 1 || turn.Journal is not null || turn.Unsubscribe ||
+                next != (previous with { Revision = next.Revision, ParkDiscard = after, ParkResolutionGeneration = next.ParkResolutionGeneration })))
+                throw InvalidDrain();
         }
-        else if (next.ParkResolutionGeneration != previous.ParkResolutionGeneration || !envelope.Matches(input, previous, before.Control))
+        else if (!retiring && next.ParkResolutionGeneration != previous.ParkResolutionGeneration ||
+            !ParkDrainEnvelope.For(previous, park).Matches(input, previous, before.Control))
             throw InvalidDrain();
         else if (after is null)
         {
-            if (!next.ParkDiscarded || controls.Length != 0 || turn.FoundationParkClear is not null ||
+            if (!retiring && !next.ParkDiscarded || controls.Length != 0 || turn.FoundationParkClear is not null ||
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, after: null, limit: 1) is not { Count: 0 })
                 throw InvalidDrain();
-            if (terminal && (turn.Unsubscribe || !MatchesTerminateNotice(turn.Sent, next) || next != (previous with
+            if (terminal && (turn.Unsubscribe || !MatchesFinalNotice(turn.Sent, next) || next != (previous with
                 {
                     Revision = next.Revision, Status = InstanceStatus.Cancelled, Suspended = false, ParkDiscard = null,
                     ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null
                 })))
                 throw InvalidDrain();
+            if (before.Kind == ParkClearKind.Delete)
+            {
+                var expired = previous with
+                {
+                    Revision = next.Revision, ParkDiscard = null, ParkDiscarded = true, ParkTimerDispositions = null, ParkRestartedJobs = null
+                };
+                // CreationProtocol.Validate already checked the submitted obligation against the prior registries.
+                var expected = retiring ? CreationProtocol.Retire(previous, next.HeldCascade) : expired;
+                if (next != expected || !MatchesFinalNotice(turn.Sent, expired) || turn.Unsubscribe != retiring ||
+                    turn.Journal != ParkDeleteJournal(retiring, before))
+                    throw InvalidDrain();
+            }
             return null;
         }
         else if (turn.FoundationParkClear is not { } page || page.Park != park || next.ParkDiscarded ||
@@ -215,7 +234,7 @@ public sealed partial class InMemoryStore
                 ReadFoundationKeptPage(new(next.Id, next.Creation), park, before.Cursor)!.Select(row => row.Cursor)))
             throw InvalidDrain();
 
-        if (terminating && before is not null && (turn.Sent.Count != 1 || turn.Journal is not null || turn.Unsubscribe ||
+        if ((terminating || deleting) && before is not null && (turn.Sent.Count != 1 || turn.Journal is not null || turn.Unsubscribe ||
             next != (previous with { Revision = next.Revision, ParkDiscard = after })))
             throw InvalidDrain();
 
@@ -228,12 +247,16 @@ public sealed partial class InMemoryStore
             ParkDrainEnvelope.For(previous, park).MatchesExpiry(input, previous, expiry);
     }
 
-    private static bool MatchesTerminateNotice(IReadOnlyList<Message> sent, InstanceRow row) => row.Parent is null
+    private static bool MatchesFinalNotice(IReadOnlyList<Message> sent, InstanceRow row) => row.Parent is null
         ? sent.Count == 0
         : sent is [var notice] && notice == FoundationChildNotice.Create(row, null, final: true);
 
     internal static string? InterruptedRecoverJournal(ParkRecoveryDrain? recovery) =>
         recovery is null ? null : Json.Write(new { Outcome = "interrupted", recovery.Operation });
+
+    internal static string ParkDeleteJournal(bool retiring, ParkDiscardDrain drain) => retiring
+        ? Json.Write(new { Outcome = "deleted", drain.Operation, drain.Cleared })
+        : Json.Write(new { Outcome = "protected", Disposition = "discarded", drain.Operation, drain.Cleared });
 
     private bool IsOutstandingDrain(InboxKey key) =>
         key.Scope == ParkDrainEnvelope.Scope && Messages.GetValueOrDefault(key) is { Done: false, Message.Kind: Kinds.Drain } control &&
