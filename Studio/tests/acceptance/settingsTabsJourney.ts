@@ -125,7 +125,8 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-overview");
   await read("theme-overview-content", theme.getByRole("textbox", { name: "Name", exact: true }));
-  await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
   const name = theme.getByRole("textbox", { name: "Name", exact: true });
   await expect(name).toBeEditable();
   const edited = `Panel navigation ${info.project.name}`;
@@ -153,7 +154,7 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-preview");
   await read("theme-preview-content", theme.locator(".theme-preview-card"));
-  await read("theme-preview-validation", theme.getByRole("button", { name: "Apply preview", exact: true }));
+  await read("theme-preview-validation", theme.getByRole("button", { name: "Preview theme", exact: true }));
   await selectByKey(views, "Home", /^Overview$/);
   await expect(name).toHaveValue(edited);
   await assertLinkedTabs(theme);
@@ -162,7 +163,8 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await expect(primary).toHaveValue(editedPrimary);
   await selectByKey(views, "Home", /^Overview$/);
   await expect(name).toHaveValue(edited);
-  await theme.getByRole("button", { name: "Delete", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete theme", exact: true }).click();
   await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect(name).toBeDisabled();
   await assertLinkedTabs(theme);

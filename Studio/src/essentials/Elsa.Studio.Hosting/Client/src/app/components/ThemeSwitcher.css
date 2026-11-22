@@ -164,7 +164,6 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--muted-foreground);
-  text-transform: uppercase;
   letter-spacing: 0.8px;
   opacity: 0.8;
 }
