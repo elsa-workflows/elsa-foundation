@@ -46,6 +46,9 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await page.goto(designerUrl.toString());
   await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
   await page.locator('.wf-sequence-step[data-id="message"]').click();
+  if (info.project.name.startsWith("narrow")) {
+    await page.getByRole("button", { name: "Expand inspector panel", exact: true }).click();
+  }
   const inspectorSections = page.getByRole("tablist", { name: "Activity inspector sections", exact: true });
   await inspectorSections.getByRole("tab", { name: "Outputs", exact: true }).click();
   await expect(inspectorSections.getByRole("tab", { name: "Outputs", exact: true })).toHaveAttribute("aria-selected", "true");
@@ -76,6 +79,11 @@ export async function variableRenameJourney(page: Page, info: TestInfo, capture:
   await expect(text).toBeVisible();
   await expect(text).toContainText("variables.purchase.total");
   await expect(text).toContainText("variables['ord' + 'er']");
+  // This host activates CodeMirror lazily; retain evidence after the rendered editor has taken focus.
+  const renderedEditor = text.locator('[data-studio-code-editor-surface="codemirror"] .cm-content');
+  await expect(renderedEditor).toBeVisible();
+  await expect(renderedEditor).toContainText("variables.purchase.total");
+  await expect(renderedEditor).toBeFocused();
   // Go to moves focus into the flagged input's editor.
   await expect(text.locator("[data-studio-code-editor] :focus")).toHaveCount(1);
   await capture(page, info, "flagged-reference");
