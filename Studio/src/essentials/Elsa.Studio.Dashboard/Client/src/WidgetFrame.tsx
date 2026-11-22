@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
-import { StudioButton, OverflowMenu, selectSettingEditor, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { SkeletonRows, StudioAlert, StudioButton, OverflowMenu, selectSettingEditor, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
@@ -85,11 +85,11 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
       )}
     </header>
     <div className="dashboard-widget-body">
-      {runtime.state.status === "loading" ? <div role="status">Loading…</div> : null}
-      {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <div role="alert">{runtime.state.error} <button type="button" onClick={() => void runtime.refresh()}>Retry</button></div> : null}
+      {runtime.state.status === "loading" ? <SkeletonRows rows={3} label={`Loading ${widget.title}`} /> : null}
+      {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <StudioAlert tone="danger">{runtime.state.error} <StudioButton onClick={() => void runtime.refresh()}>Retry</StudioButton></StudioAlert> : null}
       {bodyVisible ? (
         <WidgetBodyBoundary title={widget.title} resetKey={bodyResetKey} onRetry={retryBody}>
-          <React.Suspense fallback={<div role="status">Loading…</div>}>
+          <React.Suspense fallback={<SkeletonRows rows={3} label={`Loading ${widget.title}`} />}>
             <DashboardWidgetBody widget={widget} snapshot={snapshot} settings={settings} size={size} />
           </React.Suspense>
         </WidgetBodyBoundary>
@@ -144,9 +144,9 @@ class WidgetBodyBoundary extends React.Component<{
   render() {
     if (this.state.failed) {
       return (
-        <div role="alert">
-          {this.props.title} could not be rendered. <button type="button" onClick={this.props.onRetry}>Retry</button>
-        </div>
+        <StudioAlert tone="danger">
+          {this.props.title} could not be rendered. <StudioButton onClick={this.props.onRetry}>Retry</StudioButton>
+        </StudioAlert>
       );
     }
 

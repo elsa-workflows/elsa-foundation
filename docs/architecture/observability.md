@@ -140,8 +140,10 @@ needs two additions, which **extend** the
 13 November decision. The owner adopted them on 17 November (decision 2). The in-memory foundation keeps the durable
 inputs consumed by Park and other durable arrivals while it is unresolved. The in-memory sweep skips these rows.
 An in-flight completion for a parked public actor lands as an authenticated result before a later turn keeps it.
-`--park-kept-check` exercises both reasons, the result conversion and takeover. The expiry control and the resolution
-paths remain proposed.
+`--park-kept-check` exercises both reasons, result conversion, bounded discard and finite expiry on the
+in-memory Foundation. Park's fenced commit arms the timer at database time. An owner that sees its timer early
+replaces it at the same deadline. Takeover preserves the deadline and, once a drain opens, its cursor.
+Restore and recovery, the remaining resolution kinds and the physical providers retain their milestone cases.
 
 1. **Park keeps the deliveries it consumes, and the arrivals while parked,** as done rows with a kept reason. A
    nullable `KeptBy` column on the message row holds `Consumed` (the Park's commit, or a later re-park, consumed it)

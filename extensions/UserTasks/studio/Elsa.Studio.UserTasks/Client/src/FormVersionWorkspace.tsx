@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import { StudioTimestamp, StatusChip, StudioTabPanel, StudioTabs } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioTimestamp, StatusChip, StudioTabPanel, StudioTabs } from "@elsa-workflows/studio-ui";
 import type { TaskForm } from "./taskApi";
 
 export type FormWorkspaceTab = "form" | "versions";
@@ -44,7 +44,7 @@ export function PublishedFormSnapshot({ form, createdAt, latestVersion, actions 
           {isLatest ? <StatusChip tone="success">Latest</StatusChip> : null}
         </div>
         <h2>Published version {form.version}</h2>
-        <p>{form.id}</p>
+        <CopyableIdentifier label="Form ID" value={form.id} />
         {form.description ? <p>{form.description}</p> : null}
         {createdAt ? <p><StudioTimestamp value={createdAt} /></p> : null}
       </div>

@@ -647,14 +647,13 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
   const selectedVersion = artifactSelection ? versions.find(version => version.selection === artifactSelection) : null;
 
   return <section className="studio-page etl-shell etl-definitions-page" aria-labelledby={`${pageId}-heading`}>
-    <StudioPageHeader headingLevel={1} title={definition ?? profile.title} titleId={`${pageId}-heading`} description={definition ? "Review, validate and publish this pipeline draft." : profile.description} actions={definition ? <StudioButton disabled={mutation !== null} onClick={() => void returnToDefinitions()}>Back to definitions</StudioButton> : <div className="studio-page-actions">
-        <StudioButton type="button" variant="primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
+    <StudioPageHeader headingLevel={1} title={definition ?? profile.title} titleId={`${pageId}-heading`} description={definition ? "Review, validate and publish this pipeline draft." : profile.description}
+      refresh={definition ? undefined : { id: "etl-definitions", label: "Refresh definitions", onRefresh: refreshDefinitions,
+        refreshing: definitionsLoading, disabled: !contextIsLoaded, autoRefresh: mutation === null }}
+      actions={definition ? <StudioButton disabled={mutation !== null} onClick={() => void returnToDefinitions()}>Back to definitions</StudioButton> :
+        <StudioButton variant="primary" disabled={!contextIsLoaded || mutation !== null} onClick={() => void createNewDefinition()}>
           {mutation === "creating" ? "Creating draft…" : "New definition"}
-        </StudioButton>
-        <StudioButton type="button" disabled={!contextIsLoaded || definitionsLoading} onClick={refreshDefinitions}>
-          {definitionsLoading && visibleDefinitions.length > 0 ? "Refreshing…" : "Refresh definitions"}
-        </StudioButton>
-      </div>} />
+        </StudioButton>} />
 
     {!definition ? <section className="etl-editor-section" aria-labelledby={`${pageId}-definitions`}>
       <div className="etl-editor-section-heading">
