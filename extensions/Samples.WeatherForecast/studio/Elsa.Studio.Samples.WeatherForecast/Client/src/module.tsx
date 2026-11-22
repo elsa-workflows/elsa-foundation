@@ -20,7 +20,7 @@ export function register(api: ElsaStudioModuleApi) {
     path: "/weather",
     placement: "operate",
     order: 120,
-    iconColor: "#14b8a6"
+    iconColor: "var(--studio-nav-icon-teal)"
   });
 
   api.routes.add({

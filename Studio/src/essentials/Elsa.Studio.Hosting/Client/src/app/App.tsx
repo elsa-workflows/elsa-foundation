@@ -140,12 +140,12 @@ type DiagnosticsWidgetBoundaryState = {
 // (The HostHealthRegistry/HostHealthEntry types that #192 added here alongside this map now live in
 // hooks/useHostHealth.ts after the #189 Query migration, so they are intentionally not re-added.)
 const navIconColors = {
-  dashboard: "#0ea5e9",
-  weather: "#14b8a6",
-  diagnostics: "#10b981",
-  modules: "#8b5cf6",
-  feeds: "#f59e0b",
-  themes: "#0f766e"
+  dashboard: "var(--studio-nav-icon-blue)",
+  weather: "var(--studio-nav-icon-teal)",
+  diagnostics: "var(--studio-success-fg)",
+  modules: "var(--studio-nav-icon-violet)",
+  feeds: "var(--studio-nav-icon-amber)",
+  themes: "var(--studio-nav-icon-teal)"
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
@@ -1703,7 +1703,7 @@ function getDefaultNavIconColor(id: string) {
   if (id.includes("modules")) return navIconColors.modules;
   if (id.includes("theme")) return navIconColors.themes;
   if (id.includes("feeds")) return navIconColors.feeds;
-  return "var(--primary)";
+  return "var(--studio-accent)";
 }
 
 export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";

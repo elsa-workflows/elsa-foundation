@@ -165,7 +165,7 @@ export function register(api: ElsaStudioModuleApi) {
     activePathPrefix: "/diagnostics/console",
     parentId: "diagnostics",
     order: 840,
-    iconColor: "#10b981"
+    iconColor: "var(--studio-success-fg)"
   });
 
   api.routes.add({
