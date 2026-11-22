@@ -575,7 +575,7 @@ Replace local date formatting with `StudioTimestamp`.
   `EXT/UserTasks/FormVersionWorkspace.tsx:43–46` (form id),
   `EXT/Secrets/CopySecretNameButton.tsx:37` (custom copy button). See also E2.
 
-- [ ] **X10.11** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` uses `formatDate(detail.createdAt)`. `ReusableBoundaryInspector.tsx` displays `selectedInspection.lastCommittedAt` and `bookmark.createdAt` directly. Use the shared timestamp for all three.
+- [x] **X10.11** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` uses `formatDate(detail.createdAt)`. `ReusableBoundaryInspector.tsx` displays `selectedInspection.lastCommittedAt` and `bookmark.createdAt` directly. Use the shared timestamp for all three.
 
 ### X11. Raw buttons instead of `StudioButton`
 
@@ -778,9 +778,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
 - [ ] **A6 compensation reorder focus** [source] `WF/graph-authoring/CompensationScopeDesigner.tsx:297` keys step rows by index and moves a step without moving focus. A second keyboard activation can move the different step that now occupies the old row. Keep focus with the moved step, including when a boundary disables the original direction.
 
-- [ ] **W18** (#5266) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
-- [ ] **W19** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
-- [ ] **W20** (#5266) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
+- [x] **W18** (#5266, PR #5359) [verified] `WF/workflow-editor/WorkflowExecutableInspector.tsx` commits `setData({ detail, ... })` from overlapping loads. A late response can clear the currently selected reference or replace it with an unrelated error.
+- [x] **W19** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` calls `openControllerRef.current?.abort()` when navigating to a parent without clearing `openState.activityExecutionId`. Returning during an in-flight child read leaves every View steps action disabled.
+- [x] **W20** (#5266, PR #5359) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` renders only `positioned.map(node => ...)` when any historical node has pinned geometry. Keep the remaining activities visible and selectable without inventing their positions.
 
 ### Extensions
 
