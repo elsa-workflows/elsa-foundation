@@ -12,6 +12,29 @@ namespace Elsa.Etl.Tests;
 public sealed class EtlConnectorExecutableReaderTests
 {
     [Fact]
+    public void Compiler_and_runtime_share_the_exact_raw_unicode_artifact_envelope_limit()
+    {
+        var pipeline = EtlV2TestPipelines.Create() with
+        {
+            Filters = [new EtlFilter("name", EtlComparison.Equal, JsonDocument.Parse("\"Ren\\u00e9 & <text>\"").RootElement.Clone())]
+        };
+        var limit = JsonSerializer.SerializeToUtf8Bytes(Compile(pipeline), Elsa.Serialization.Core.JsonBaseline.Options).Length;
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            pipeline = pipeline with { Limits = pipeline.Limits with { MaxArtifactBytes = limit } };
+            limit = JsonSerializer.SerializeToUtf8Bytes(Compile(pipeline), Elsa.Serialization.Core.JsonBaseline.Options).Length;
+        }
+        pipeline = pipeline with { Limits = pipeline.Limits with { MaxArtifactBytes = limit } };
+        var exact = Compile(pipeline);
+        Assert.Equal(limit, JsonSerializer.SerializeToUtf8Bytes(exact, Elsa.Serialization.Core.JsonBaseline.Options).Length);
+        using var runtime = CreateRuntime();
+        Assert.Equal("\"Ren\\u00e9 & <text>\"", Assert.Single(runtime.Reader.Read(exact).Filters).Value.GetRawText());
+        var shortResult = new EtlArtifactCompiler().Compile("orders", 1, pipeline with { Limits = pipeline.Limits with { MaxArtifactBytes = limit - 1 } });
+        Assert.Null(shortResult.Artifact);
+        Assert.Contains(shortResult.Diagnostics, item => item.Code == "artifact.too-large");
+    }
+
+    [Fact]
     public void Runtime_feature_resolves_v2_reader_without_design_services_and_reads_compiled_artifact()
     {
         var services = new ServiceCollection();

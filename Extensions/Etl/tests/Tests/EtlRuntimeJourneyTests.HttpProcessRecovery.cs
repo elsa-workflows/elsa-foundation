@@ -506,7 +506,7 @@ public sealed partial class EtlRuntimeJourneyTests
             Assert.Contains(request.RawTarget, new[] { "/output", "/errors" });
             var route = request.RawTarget == "/output" ? output.Main! : output.Errors!;
             Assert.Equal(route.EffectId, request.Headers["Idempotency-Key"]);
-            Assert.Equal(route.Body.ContentHash, Convert.ToHexStringLower(SHA256.HashData(request.Body)));
+            Assert.Equal(route.Body.ContentHash, Elsa.Serialization.Core.JsonHashInput.HashUtf8(request.Body));
             Assert.Equal(route.Body.ByteLength, request.Body.LongLength);
         }
     }

@@ -8,6 +8,21 @@ namespace Elsa3.Mapping.Tests;
 public sealed class Elsa3VariableExpressionImportTests
 {
     [Fact]
+    public async Task A_date_variable_expression_keeps_its_scope_binding_and_reports_the_consuming_date_boundary()
+    {
+        var fixture = new Elsa3MemoryReferenceImportFixture(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "DateTime"));
+        var variable = new Elsa3Variable { Id = "at", Name = "at", TypeName = "DateTime", Value = "2026-11-23T09:00:00Z" };
+        var result = await fixture.ImportAsync(Workflow("date-variable", Consumer("read", "at", typeName: "DateTime"), variables: [variable]), "date-variable.json");
+        Assert.True(result.Succeeded, Diagnostics(result));
+        var value = ReadValue(FindInput(result.Value!, "read", "key:value"));
+        Assert.Equal("Variable", value.ExpressionType);
+        Assert.Equal("at", GetProperty(value.Value, "referenceKey").GetString());
+        Assert.Equal("workflow", GetProperty(value.Value, "declaringScopeId").GetString());
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.LiteralDateWallClock &&
+            item.Path == "$.root.Value.expression.value");
+    }
+
+    [Fact]
     public async Task A_variable_expression_reads_the_declared_workflow_variable_by_id()
     {
         var definition = Workflow("variable-expression", Consumer("read", "variable-id", "stale-name"),

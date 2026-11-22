@@ -2,6 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Etl.Core;
 using Elsa.Etl.Design;
+using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
 
@@ -213,12 +216,16 @@ public sealed class EtlArtifactCompilerTests
         AssertInvalid(tooFewFields, "limits.invalid");
     }
 
-    [Fact]
-    public void Compile_measures_the_complete_artifact_envelope_at_the_exact_configured_boundary()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Compile_measures_the_complete_artifact_envelope_at_the_exact_configured_boundary(bool rawUnicode)
     {
-        var pipeline = CreatePipeline();
+        var pipeline = rawUnicode
+            ? CreatePipeline(filters: [new EtlFilter("label", EtlComparison.Equal, JsonDocument.Parse("\"Ren\\u00e9 & <text>\"").RootElement.Clone())])
+            : CreatePipeline();
         var baseline = Assert.IsType<EtlArtifact>(Compile(pipeline).Artifact);
-        var limit = JsonSerializer.SerializeToUtf8Bytes(baseline).Length;
+        var limit = JsonSerializer.SerializeToUtf8Bytes(baseline, Elsa.Serialization.Core.JsonBaseline.Options).Length;
 
         for (var attempt = 0; attempt < 4; attempt++)
         {
@@ -231,13 +238,21 @@ public sealed class EtlArtifactCompilerTests
                 baseline.DefinitionId,
                 baseline.DefinitionVersion,
                 document);
-            limit = JsonSerializer.SerializeToUtf8Bytes(probe).Length;
+            limit = JsonSerializer.SerializeToUtf8Bytes(probe, Elsa.Serialization.Core.JsonBaseline.Options).Length;
         }
 
         var exact = Compile("orders", 4, pipeline with { Limits = new EtlLimits { MaxArtifactBytes = limit } });
         var oneByteShort = Compile("orders", 4, pipeline with { Limits = new EtlLimits { MaxArtifactBytes = limit - 1 } });
 
         Assert.NotNull(exact.Artifact);
+        Assert.Equal(limit, JsonSerializer.SerializeToUtf8Bytes(exact.Artifact, Elsa.Serialization.Core.JsonBaseline.Options).Length);
+        var services = new ServiceCollection();
+        new EtlRuntimeFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var read = scope.ServiceProvider.GetRequiredService<EtlExecutableReader>().Read(exact.Artifact);
+        Assert.Equal(exact.Artifact.Pipeline.GetRawText(), EtlArtifactJson.Write(read).GetRawText());
+        if (rawUnicode) Assert.Equal("\"Ren\\u00e9 & <text>\"", read.Filters[0].Value.GetRawText());
         Assert.Null(oneByteShort.Artifact);
         Assert.Contains(oneByteShort.Diagnostics, diagnostic => diagnostic.Code == "artifact.too-large");
     }

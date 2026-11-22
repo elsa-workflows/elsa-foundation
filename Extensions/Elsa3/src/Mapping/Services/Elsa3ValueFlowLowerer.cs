@@ -140,14 +140,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 continue;
             }
 
+            if (!RewriteLiteral(input, ref property, diagnostics, activityTypeKeyOf?.Invoke(property.Activity))) continue;
+
             if (isVariableExpression)
             {
                 LowerVariableExpression(input, property, variableDeclaration, variablesById, containerVariables,
                     outputs, properties, inventory, plan, hasScriptWrites, diagnostics);
                 continue;
             }
-
-            if (!RewriteLiteral(input, ref property, diagnostics, activityTypeKeyOf?.Invoke(property.Activity))) continue;
 
             if (property.Expression is not null)
             {

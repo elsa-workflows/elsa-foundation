@@ -93,7 +93,8 @@ public abstract partial class EtlRuntimeStoreContract
         var written = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(position);
         var empty = position with { Request = position.Request with { Continuation = "" }, Page = position.Page with { NextContinuation = "" } };
         var actualBytes = System.Text.Encoding.UTF8.GetByteCount(written);
-        Assert.Equal(System.Text.Encoding.UTF8.GetByteCount(first) + System.Text.Encoding.UTF8.GetByteCount(second),
+        static int RetainedLength(string text) => Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(text)).Length;
+        Assert.Equal(RetainedLength(first) + RetainedLength(second),
             actualBytes - System.Text.Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write<EtlConnectorPosition>(empty)));
         Assert.InRange(actualBytes, 1, 512 * 1024);
     }

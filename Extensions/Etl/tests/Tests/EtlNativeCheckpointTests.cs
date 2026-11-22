@@ -106,7 +106,7 @@ public sealed class EtlNativeCheckpointTests
         {
             Status = ActivityExecutionStatus.Cancelled,
             PrivateState = new(older.InvocationId, 1, ValueEnvelope.Inline(new(typeof(RunEtlState).FullName!, schemaVersion: 1),
-                JsonSerializer.SerializeToElement(changedState), ValueProtectionPolicy.InstanceInline), "attempt-2", Now)
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(changedState), ValueProtectionPolicy.InstanceInline), "attempt-2", Now)
         };
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await new EtlCheckpointEnricher(_activities).EnrichAsync(Commit(invalid, "SubtreeCancelled")));
@@ -141,7 +141,7 @@ public sealed class EtlNativeCheckpointTests
         var terminal = new EtlTerminalResult("result-1", EtlTerminalOutcome.Cancelled, 0, 0, 0, null, Now);
         var payload = retired
             ? ValueEnvelope.Absent(type, ValueProtectionPolicy.InstanceInline)
-            : ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(new RunEtlCompletion(1,
+            : ValueEnvelope.Inline(type, Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(new RunEtlCompletion(1,
                 EtlRuntimeJson.WriteElement(invocation), EtlRuntimeJson.WriteElement(terminal))), ValueProtectionPolicy.InstanceInline);
         var claimed = original with
         {
@@ -246,7 +246,7 @@ public sealed class EtlNativeCheckpointTests
             ActivityExecutionStatus.Suspended, "TriggerWaiting", 1, Now, Now, null, null, "parent-sequence", null, null,
             ActivitySchedulingProvenance.Empty, 1, [], [], 0, 0, Metadata,
             PrivateState: new("activity-1", 1, ValueEnvelope.Inline(new(typeof(RunEtlState).FullName!, schemaVersion: 1),
-                JsonSerializer.SerializeToElement(state), ValueProtectionPolicy.InstanceInline), "attempt-1", Now),
+                Elsa.Serialization.Core.JsonConversionContract.SerializeToElement(state), ValueProtectionPolicy.InstanceInline), "attempt-1", Now),
             TriggerRegistrations: [new("actual-durable-registration-not-an-attempt-formula", "activity-1", resumeTarget ?? "node-1:etl-completed",
                 new(typeof(RunEtlCompletion).FullName!, schemaVersion: 1), EtlNativeBoundary.StimulusType, runId, ActivityTriggerDeduplicationPolicy.Once)]);
     }
