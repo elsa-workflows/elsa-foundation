@@ -94,10 +94,15 @@ the same variable both ways; publish refuses that as ambiguous. (Exposing pinned
 root distinct from `args`, through a per-parameter surface flag, may make this refusal unnecessary; the implementing
 spec decides.)
 
-**8. An unset variable reads as `null`.** A name that resolves to a declared variable with no value binds JSON
-`null`, as Elsa 3's `getVariable` returned and as the workflow-instance binding treats an absent correlation ID. It
-never binds `undefined`, which the evaluator refuses as a result. A pinned variable parameter is therefore never an
-absent required parameter in spec 095's sense: it binds `null` when its variable has no value.
+**8. A declared variable starts from its declared default or its type's supported initial value.** Without a
+declared default, a Boolean starts at `false`, a number or enum at its zero value, and a type that accepts null at
+JSON `null`. A non-nullable type without a supported type default (dates, times, `TimeSpan` and `Guid`) must declare
+a default, or publication refuses the declaration. A declared default of `null` for a non-nullable variable is
+refused too; default-on-null does not reinterpret an authored default.
+
+A name that resolves to a declared variable reads that initialized value, never `undefined`. A pinned variable
+parameter is therefore never an absent required parameter in spec 095's sense. A computed name that resolves to
+no declaration still follows R3; it is distinct from a declared variable that has not been assigned.
 
 Input-binding expressions do not write variables. A change goes through an output capture, the `Set` intrinsic
 (ADR 0045 §4), or an activity's step session
@@ -211,6 +216,11 @@ beyond variable reads. This ADR covers **variable** reads. `input.X` and `workfl
   changes with it.
 
 ## Alternatives considered
+
+**JSON null for every unset declared variable.** Preserves the original unset-variable rule, but conflicts with a
+non-nullable variable's type contract. Supported value types instead start at their type default. Refusing their
+first read would defer a predictable initialization error to a potentially rare execution path. Dates, times,
+`TimeSpan` and `Guid` require a declared default because their CLR zero values look like intentional values.
 
 **Declared parameters only (`args.X`).** Exact and already canonical. Authors, or Studio on their behalf, must
 declare every read, which is more ceremony and unlike Elsa 3. Rejected as the authoring surface, kept as the
