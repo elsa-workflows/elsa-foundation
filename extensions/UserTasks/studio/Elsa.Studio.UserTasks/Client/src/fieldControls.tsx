@@ -1,5 +1,5 @@
 import React from "react";
-import { AdvancedSection, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { AlignLeft, CalendarDays, CheckSquare, List, Sigma, Type } from "lucide-react";
 import type { StudioContributionComposition, StudioContributionRegistry, StudioUserTaskFieldControlContribution, StudioUserTaskFieldControlEditorProps, StudioUserTaskFieldControlRenderProps } from "@elsa-workflows/studio-sdk";
 import type { TaskField } from "./taskApi";
@@ -22,19 +22,19 @@ function fieldOf(props: StudioUserTaskFieldControlRenderProps | StudioUserTaskFi
 
 function TextControl(props: StudioUserTaskFieldControlRenderProps) {
   const field = fieldOf(props);
-  return <input id={props.id} data-studio-field-control="" type="text" value={typeof props.value === "string" ? props.value : ""} maxLength={field.maxLength}
+  return <input id={props.id} type="text" value={typeof props.value === "string" ? props.value : ""} maxLength={field.maxLength}
     disabled={props.disabled} aria-invalid={Boolean(props.error)} onChange={event => props.onChange(event.target.value)} />;
 }
 
 function MultilineControl(props: StudioUserTaskFieldControlRenderProps) {
   const field = fieldOf(props);
-  return <textarea id={props.id} data-studio-field-control="" value={typeof props.value === "string" ? props.value : ""} maxLength={field.maxLength}
+  return <textarea id={props.id} value={typeof props.value === "string" ? props.value : ""} maxLength={field.maxLength}
     disabled={props.disabled} aria-invalid={Boolean(props.error)} onChange={event => props.onChange(event.target.value)} />;
 }
 
 function NumberControl(props: StudioUserTaskFieldControlRenderProps) {
   const field = fieldOf(props);
-  return <input id={props.id} data-studio-field-control="" type="number" value={typeof props.value === "number" ? props.value : ""} min={field.minimum} max={field.maximum}
+  return <input id={props.id} type="number" value={typeof props.value === "number" ? props.value : ""} min={field.minimum} max={field.maximum}
     disabled={props.disabled} aria-invalid={Boolean(props.error)} onChange={event => props.onChange(event.target.value === "" ? undefined : Number(event.target.value))} />;
 }
 
@@ -66,7 +66,7 @@ function BooleanControl(props: StudioUserTaskFieldControlRenderProps) {
 }
 
 function DateControl(props: StudioUserTaskFieldControlRenderProps) {
-  return <input id={props.id} data-studio-field-control="" type="date" value={typeof props.value === "string" ? props.value : ""} disabled={props.disabled}
+  return <input id={props.id} type="date" value={typeof props.value === "string" ? props.value : ""} disabled={props.disabled}
     aria-invalid={Boolean(props.error)} onChange={event => props.onChange(event.target.value || undefined)} />;
 }
 
@@ -112,36 +112,28 @@ function TextProperties(props: StudioUserTaskFieldControlEditorProps) {
 function BooleanProperties(props: StudioUserTaskFieldControlEditorProps) {
   const field = fieldOf(props);
   const display = field.presentation?.display ?? "dropdown";
-  const labelKeys = ["trueLabel", "falseLabel", "unansweredLabel"] as const;
-  const customLabelCount = labelKeys.filter(key => Boolean(field.presentation?.[key])).length;
-  const labels = ["Yes label", "No label", "Unanswered label"];
-  const placeholders = ["Yes", "No", "Choose…"];
-  const guidanceId = React.useId();
-  return <div className="user-task-designer__boolean-properties">
+  return <>
     <StudioField label="Display"><select value={display} disabled={props.disabled} onChange={event => updateField(props, { presentation: { ...field.presentation, display: event.target.value as "checkbox" | "dropdown" | "radio" } })}>
       <option value="checkbox">Checkbox</option><option value="radio">Radio buttons</option><option value="dropdown">Dropdown</option>
     </select></StudioField>
-    <AdvancedSection label="Validation" setCount={field.mustBeTrue ? 1 : 0} defaultOpen={Boolean(field.mustBeTrue)} allowCollapseWhenSet>
-      <div className="user-task-designer__advanced-content">
-        <label className="user-task-designer__checkbox"><input type="checkbox" checked={Boolean(field.mustBeTrue)} disabled={props.disabled} aria-describedby={guidanceId}
-          onChange={event => updateField(props, { mustBeTrue: event.target.checked || undefined })} />Must be checked</label>
-        <p id={guidanceId} className="user-task-designer__property-guidance">Requires Yes for actions that require form answers. Optional actions may leave it unanswered.</p>
-      </div>
-    </AdvancedSection>
-    {display !== "checkbox" ? <AdvancedSection label="Answer labels" setCount={customLabelCount} defaultOpen={customLabelCount > 0} allowCollapseWhenSet>
-      <div className="user-task-designer__advanced-content">
-        {labelKeys.map((key, index) => <StudioField key={key} label={labels[index]}><input value={field.presentation?.[key] ?? ""} placeholder={placeholders[index]} maxLength={256} disabled={props.disabled}
-          onChange={event => updateField(props, { presentation: { display, ...field.presentation, [key]: event.target.value || undefined } })} /></StudioField>)}
-      </div>
-    </AdvancedSection> : null}
-  </div>;
+    <label className="user-task-designer__checkbox"><input type="checkbox" checked={Boolean(field.mustBeTrue)} disabled={props.disabled}
+      onChange={event => updateField(props, { mustBeTrue: event.target.checked || undefined })} />Must be checked</label>
+    <p>Requires Yes for actions that require form answers. Optional actions may leave it unanswered.</p>
+    {display !== "checkbox" ? <fieldset className="user-task-designer__answer-labels"><legend>Answer labels</legend>
+      {(["trueLabel", "falseLabel", "unansweredLabel"] as const).map((key, index) => {
+        const labels = ["Yes label", "No label", "Unanswered label"];
+        const placeholders = ["Yes", "No", "Choose…"];
+        return <StudioField key={key} label={labels[index]}><input value={field.presentation?.[key] ?? ""} placeholder={placeholders[index]} maxLength={256} disabled={props.disabled}
+          onChange={event => updateField(props, { presentation: { display, ...field.presentation, [key]: event.target.value || undefined } })} /></StudioField>;
+      })}</fieldset> : null}
+  </>;
 }
 
 export const builtInTaskFieldControls: StudioUserTaskFieldControlContribution[] = [
   { id: "elsa.forms.text/1", legacyKind: "text", label: "Text input", valueKind: "string", icon: <Type size={16} aria-hidden="true" />, propertiesLabel: "Validation", createField: fields => createField("text", fields), component: TextControl, propertiesEditor: TextProperties },
   { id: "elsa.forms.multiline/1", legacyKind: "multiline", label: "Long text", valueKind: "string", icon: <AlignLeft size={16} aria-hidden="true" />, propertiesLabel: "Validation", createField: fields => createField("multiline", fields), component: MultilineControl, propertiesEditor: TextProperties },
   { id: "elsa.forms.number/1", legacyKind: "number", label: "Number", valueKind: "number", icon: <Sigma size={16} aria-hidden="true" />, propertiesLabel: "Validation", createField: fields => createField("number", fields), component: NumberControl, propertiesEditor: NumberProperties },
-  { id: "elsa.forms.boolean/1", legacyKind: "boolean", label: "Yes / no", valueKind: "boolean", icon: <CheckSquare size={16} aria-hidden="true" />, ownsFieldLabel: true, createField: fields => createField("boolean", fields), component: BooleanControl, propertiesEditor: BooleanProperties },
+  { id: "elsa.forms.boolean/1", legacyKind: "boolean", label: "Yes / no", valueKind: "boolean", icon: <CheckSquare size={16} aria-hidden="true" />, propertiesLabel: "Validation", ownsFieldLabel: true, createField: fields => createField("boolean", fields), component: BooleanControl, propertiesEditor: BooleanProperties },
   { id: "elsa.forms.date/1", legacyKind: "date", label: "Date", valueKind: "string", icon: <CalendarDays size={16} aria-hidden="true" />, createField: fields => createField("date", fields), component: DateControl },
   { id: "elsa.forms.choice/1", legacyKind: "choice", label: "Choice", valueKind: "string", icon: <List size={16} aria-hidden="true" />, propertiesLabel: "Choices", ownsFieldLabel: true, createField: fields => createField("choice", fields), component: ChoiceControl, propertiesEditor: ChoiceProperties }
 ];
@@ -194,14 +186,13 @@ function configurationDepth(value: unknown, depth = 0): number {
 }
 
 export function validateTaskFieldControlConfiguration(control: StudioUserTaskFieldControlContribution, configuration: unknown): string[] {
-  const normalizedConfiguration = configuration ?? undefined;
-  const shapeErrors = validateTaskFieldConfigurationShape(normalizedConfiguration);
+  const shapeErrors = validateTaskFieldConfigurationShape(configuration);
   if (shapeErrors.length) return shapeErrors;
-  return control.validateConfiguration?.(normalizedConfiguration) ?? [];
+  return control.validateConfiguration?.(configuration) ?? [];
 }
 
 export function validateTaskFieldConfigurationShape(configuration: unknown): string[] {
-  if (configuration == null) return [];
+  if (configuration === undefined) return [];
   if (!isRecord(configuration)) return ["Control configuration must be a JSON object."];
   let serialized: string;
   try { serialized = JSON.stringify(configuration); } catch { return ["Control configuration must be valid JSON."]; }

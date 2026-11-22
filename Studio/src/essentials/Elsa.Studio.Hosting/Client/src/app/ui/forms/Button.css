@@ -73,6 +73,22 @@
   color: var(--studio-accent);
 }
 
+.studio-button[data-variant="danger"],
+html[data-workspace-style] .studio-button[data-variant="danger"] {
+  background: var(--studio-danger);
+  border-color: var(--studio-danger);
+  color: var(--studio-danger-text);
+}
+
+.studio-button[data-variant="danger"]:hover:not(:disabled) {
+  filter: brightness(1.06);
+  color: var(--studio-danger-text);
+}
+
+.studio-button[data-variant="danger"]:active:not(:disabled) {
+  filter: brightness(.92);
+}
+
 .studio-button[data-size="sm"] {
   min-height: 26px;
   padding: 0 9px;

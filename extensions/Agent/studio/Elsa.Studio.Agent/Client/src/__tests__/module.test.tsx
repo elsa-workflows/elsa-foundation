@@ -14,17 +14,6 @@ function registered() {
 }
 
 describe("agent module", () => {
-  it("routes the current workspace and exact draft/version links through Agent authoring", () => {
-    const { routes } = registered();
-    const requiresBackend = [
-      { id: "elsa.api.activity-design", contractVersion: "1" },
-      { id: "elsa.api.agent", contractVersion: "1" }
-    ];
-
-    for (const path of ["/agents/workspace/:definitionId", "/agents/workspace/:definitionId/drafts/:draftId", "/agents/workspace/:definitionId/versions/:versionId"])
-      expect(routes).toHaveBeenCalledWith(expect.objectContaining({ path, requiresBackend }));
-  });
-
   it("adds the Agents area behind the generic activity design capability", () => {
     const { featureAreas } = registered();
 

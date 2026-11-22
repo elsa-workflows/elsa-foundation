@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath, StudioHttpError, useStudioWorkspaceTab } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDialogFooter, StudioPageHeader, StudioSearchInput, StudioTimestamp, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
-import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { studioRowInteraction, CopyableIdentifier, OverflowMenu, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioPageHeader, StudioSearchInput, StudioTimestamp, type OverflowMenuItem, StudioField } from "@elsa-workflows/studio-ui";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
@@ -11,7 +11,6 @@ import {
   getPublicationSlotLifecycleSupport,
   listPublicationSlots,
   restorePublicationSlot,
-  unpublishReviewedSlot,
   unpublishSlot,
   type PublicationSlot
 } from "../api/publishing";
@@ -43,7 +42,6 @@ import {
 } from "./editorHelpers";
 import { WorkflowListIdentifiers, type WorkflowListIdentifier } from "./WorkflowListIdentifiers";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
-import { useDialogFocus } from "./useDialogFocus";
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
@@ -65,8 +63,6 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   const [scope, setScope] = useState<WorkflowExecutableListScope>("published");
   const [includeRetired, setIncludeRetired] = useState(false);
   const [expandedArtifactIds, setExpandedArtifactIds] = useState<ReadonlySet<string>>(new Set());
-  const [reviewedUnpublishAvailable, setReviewedUnpublishAvailable] = useState(false);
-  const [unpublishDialogTarget, setUnpublishDialogTarget] = useState<{ artifactId: string; definitionIds: string[] } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultDefinitionPageSize);
   const normalizedDefinitionFilter = definitionFilter?.trim().toLowerCase() ?? "";
@@ -99,7 +95,6 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     onExported: (fileName, _executable, canNotify) => { setError(""); setLastRun(null); setStatus(""); if (canNotify()) getNotifications().notify({ level: "success", title: `Exported ${fileName}` }); },
     onFailed: message => { setStatus(""); setLastRun(null); setError(message); }
   });
-  const captureNotificationGuard = useNotificationGuard(context);
 
   const load = useCallback(async (background = false) => {
     const generation = ++loadGeneration.current;
@@ -108,13 +103,9 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     setDefinitionNamesLoading(false);
     setError("");
     try {
-      const [items, lifecycleSupport] = await Promise.all([
-        listExecutables(context, { scope, includeRetired }),
-        canManagePublications ? getPublicationSlotLifecycleSupport(context).catch(() => null) : Promise.resolve(null)
-      ]);
+      const items = await listExecutables(context, { scope, includeRetired });
       if (generation !== loadGeneration.current) return;
       setExecutables(items);
-      setReviewedUnpublishAvailable(lifecycleSupport?.unpublishReviewed ?? false);
       if (!background) setDefinitionNames(new Map());
       setState("ready");
       const definitionIds = items.flatMap(getExecutableDefinitionIds);
@@ -126,7 +117,6 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
-      setReviewedUnpublishAvailable(false);
       setDefinitionNamesLoading(false);
       setError(e instanceof Error ? e.message : String(e));
       const accessDenied = e instanceof StudioHttpError && (e.status === 401 || e.status === 403);
@@ -135,7 +125,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
     } finally {
       if (generation === loadGeneration.current) setRefreshing(false);
     }
-  }, [canManagePublications, context, includeRetired, scope]);
+  }, [context, includeRetired, scope]);
 
   useEffect(() => {
     void load();
@@ -175,24 +165,6 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
 
   return (
     <>
-      {unpublishDialogTarget ? (
-        <UnpublishExecutablePublicationDialog
-          context={context}
-          artifactId={unpublishDialogTarget.artifactId}
-          definitionIds={unpublishDialogTarget.definitionIds}
-          definitionNames={definitionNames}
-          onClose={() => setUnpublishDialogTarget(null)}
-          onUnpublished={async candidate => {
-            const canNotify = captureNotificationGuard();
-            setUnpublishDialogTarget(null);
-            setError("");
-            setLastRun(null);
-            setStatus("");
-            await load(true);
-            if (canNotify()) getNotifications().notify({ level: "success", title: `Unpublished ${definitionNames.get(candidate.definitionId) ?? candidate.definitionId} · ${candidate.slot.slotName}` });
-          }}
-        />
-      ) : null}
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
@@ -285,11 +257,6 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                     : `Manage publication · ${definitionNames.get(definitionId) ?? definitionId} (${definitionId})`,
                   onSelect: () => openExecutablePublicationManagement(definitionId)
                 })),
-                ...(reviewedUnpublishAvailable && publicationDefinitionIds.length ? [{
-                  id: "unpublish-publication",
-                  label: "Unpublish…",
-                  onSelect: () => setUnpublishDialogTarget({ artifactId: executable.artifactId, definitionIds: publicationDefinitionIds })
-                }] : []),
                 ...(artifactExport.supported ? [{
                   id: "export",
                   label: artifactExport.exportingArtifactId === executable.artifactId ? "Exporting…" : "Export",
@@ -400,150 +367,6 @@ function getPublishedWorkflowDefinitionIds(executable: WorkflowExecutableSummary
     definitionIds.add(definitionId);
   }
   return [...definitionIds];
-}
-
-interface ExecutablePublicationSlotMatch {
-  definitionId: string;
-  slot: PublicationSlot;
-}
-
-function executablePublicationSlotMatchKey(match: ExecutablePublicationSlotMatch) {
-  return JSON.stringify([match.definitionId, match.slot.slotName, match.slot.activeActivationId, match.slot.revision]);
-}
-
-function UnpublishExecutablePublicationDialog({ context, artifactId, definitionIds, definitionNames, onClose, onUnpublished }: {
-  context: StudioEndpointContext;
-  artifactId: string;
-  definitionIds: string[];
-  definitionNames: ReadonlyMap<string, string>;
-  onClose(): void;
-  onUnpublished(match: ExecutablePublicationSlotMatch): Promise<void>;
-}) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">("loading");
-  const [matches, setMatches] = useState<ExecutablePublicationSlotMatch[]>([]);
-  const [selectedMatchKey, setSelectedMatchKey] = useState<string | null>(null);
-  const [readError, setReadError] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [reload, setReload] = useState(0);
-  useDialogFocus(dialogRef, busy ? null : onClose);
-
-  useEffect(() => {
-    let active = true;
-    setLoadState("loading");
-    setMatches([]);
-    setSelectedMatchKey(null);
-    setReadError("");
-    setError("");
-    void Promise.all(definitionIds.map(async definitionId => {
-      const view = await listPublicationSlots(context, definitionId);
-      if (!view.available) throw new Error(view.reason);
-      return view.slots
-        .filter(slot => Boolean(slot.activeActivationId) && slot.publication?.artifactId === artifactId)
-        .map(slot => ({ definitionId, slot }));
-    })).then(results => {
-      if (!active) return;
-      const candidates = results.flat().sort((left, right) =>
-        left.definitionId.localeCompare(right.definitionId)
-        || left.slot.slotName.localeCompare(right.slot.slotName));
-      setMatches(candidates);
-      setSelectedMatchKey(!notice && candidates.length === 1 ? executablePublicationSlotMatchKey(candidates[0]) : null);
-      setLoadState("ready");
-    }).catch(caught => {
-      if (!active) return;
-      setReadError(caught instanceof Error ? caught.message : String(caught));
-      setLoadState("failed");
-    });
-    return () => { active = false; };
-  }, [artifactId, context, definitionIds, notice, reload]);
-
-  const selectedMatch = matches.find(match => executablePublicationSlotMatchKey(match) === selectedMatchKey) ?? null;
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedMatch || loadState !== "ready" || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      await unpublishReviewedSlot(context, selectedMatch.definitionId, selectedMatch.slot.slotName, selectedMatch.slot.revision);
-      await onUnpublished(selectedMatch);
-    } catch (caught) {
-      if (caught instanceof StudioHttpError && caught.status === 409) {
-        setNotice("This slot changed after you reviewed it. The current live slots have been reloaded; review and confirm again.");
-        setSelectedMatchKey(null);
-        setLoadState("loading");
-        setReload(current => current + 1);
-      } else {
-        setError(caught instanceof Error ? caught.message : String(caught));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="wf-dialog-backdrop" role="presentation">
-      <section ref={dialogRef} className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <form onSubmit={event => { void submit(event); }}>
-          <div className="wf-dialog-heading">
-            <div>
-              <h3 id={titleId}>Unpublish publication slot</h3>
-              <p>Choose the live publication slot that currently serves this artifact.</p>
-            </div>
-          </div>
-          <div className="wf-run-input-list">
-            <p>Unpublishing a slot stops new runs from starting through that slot. Existing runs and other publication slots are unaffected.</p>
-            {notice ? <p role="status">{notice}</p> : null}
-            {loadState === "loading" ? <p role="status">Checking live publication slots…</p> : null}
-            {loadState === "failed" ? (
-              <div role="alert">
-                <p>Couldn't verify which live slots serve this artifact. {readError}</p>
-                <StudioButton type="button" disabled={busy} onClick={() => { setNotice(""); setReload(current => current + 1); }}>Reload slots</StudioButton>
-              </div>
-            ) : null}
-            {loadState === "ready" && matches.length === 0 ? <p role="status">No live publication slots currently serve this artifact.</p> : null}
-            {loadState === "ready" && matches.length > 0 ? (
-              <fieldset disabled={busy}>
-                <legend>{matches.length === 1 ? "Publication slot" : "Select a publication slot"}</legend>
-                {matches.map(match => {
-                  const key = executablePublicationSlotMatchKey(match);
-                  const definitionName = definitionNames.get(match.definitionId) ?? match.definitionId;
-                  return (
-                    <label key={key}>
-                      <input
-                        type="radio"
-                        name="executable-publication-slot"
-                        value={key}
-                        checked={selectedMatchKey === key}
-                        onChange={() => setSelectedMatchKey(key)}
-                      />
-                      {definitionName} ({match.definitionId}) · Slot {match.slot.slotName}
-                    </label>
-                  );
-                })}
-              </fieldset>
-            ) : null}
-            {selectedMatch ? (
-              <p role="note">
-                Confirming will stop new runs through {definitionNames.get(selectedMatch.definitionId) ?? selectedMatch.definitionId} · slot {selectedMatch.slot.slotName}. Existing runs and other slots will continue unaffected.
-              </p>
-            ) : null}
-            {error ? <p role="alert">Couldn't unpublish this slot. {error}</p> : null}
-          </div>
-          <StudioDialogFooter
-            className="wf-dialog-actions"
-            onCancel={onClose}
-            cancelDisabled={busy}
-            confirmLabel={busy ? "Unpublishing…" : "Unpublish"}
-            confirmDisabled={busy || loadState !== "ready" || !selectedMatch}
-          />
-        </form>
-      </section>
-    </div>
-  );
 }
 
 function openExecutablePublicationManagement(definitionId: string) {

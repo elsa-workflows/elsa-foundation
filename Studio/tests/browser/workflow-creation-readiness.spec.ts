@@ -51,7 +51,17 @@ for (const theme of ["light", "dark"] as const) {
     await cancel.scrollIntoViewIfNeeded();
     await expect(cancel).toBeInViewport();
     await cancel.click();
-    await expect(page.getByRole("button", { name: "Open create workflow" })).toBeFocused();
+    const opener = page.getByRole("button", { name: "Open create workflow" });
+    await expect(opener).toBeFocused();
+
+    await opener.click();
+    await expect(startingPoint).toBeFocused();
+    const dismiss = dialog.getByRole("button", { name: "Close dialog", exact: true });
+    await startingPoint.press("Shift+Tab");
+    await expect(dismiss).toBeFocused();
+    await dismiss.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
   });
  }
 }

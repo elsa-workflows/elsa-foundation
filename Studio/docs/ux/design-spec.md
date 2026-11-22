@@ -81,7 +81,8 @@ The [module UI guide](../module-ui.md) owns public imports and composition examp
 Collections share a flat page, a 20px page title, 13px description/body, 12px
 sentence-case table headers, search before filters, 32px default controls, and a
 48px minimum row height. Longer content may grow a row. Use the shared footer for
-counts and pagination. The host's horizontal gutter scales with the viewport
+counts, page-size selection and cursor-based Load more actions. Keep those labels in sentence
+case and show “Loading…” while loading more. The host's horizontal gutter scales with the viewport
 from 16px to 36px, preserving room for desktop tables beside folder navigation.
 A module does not add a
 second whole-page border or another page inset. Small row actions may use the
@@ -197,10 +198,11 @@ and token contract while keeping each resource's domain columns and operations:
 
 | Component | Status | Rule |
 |---|---|---|
-| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
+| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`, `danger`; sizes `sm` / `md`. Use `danger` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
+| Icon-only button | `exists` | `StudioIconButton`: 28px control with a 16px lucide icon, a required `aria-label` and a tooltip that defaults to that label. Use `variant="danger"` for destructive hover treatment. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
-| Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
+| Button (new variant) | `target, phase 4` | `outline` variant. Until it exists, use `default` / `ghost` and do not name `outline` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
 | DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics; with `onSelect`, its rows activate on click and Enter/Space. Without `onSelect`, rows have no activation handlers or tab stop. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their target guards; Workflow Definitions guards descendant clicks and uses the name link for keyboard entry. See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
@@ -209,6 +211,7 @@ and token contract while keeping each resource's domain columns and operations:
 | Incident details | `exists` | A compact **Next step** block sits before technical evidence and stays attached to the selected incident and current run. Keep active blocking, active non-blocking and historical states distinct; expose automatic retry timing only when the exact journal supplies it. Preserve copy, exact activity/input navigation, dialog Escape and trigger-focus return. |
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
+| Dialog | `exists` | Use `StudioDialog` for modal forms: title with no eyebrow, optional description, named close button and trapped focus. Put Cancel first and one primary confirm second in `StudioDialogFooter`, both at the default control size. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
 | Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. Activity catalog tiers are lowercase `essential`, `optional` and `setting`; tier controls presentation independently of `isRequired` and runtime validation. Only an exact optional tier that is not required goes under one “More options” section. Missing, null, unfamiliar and setting tiers, plus required optional inputs, stay directly visible. Configured HTTP values start open and may be collapsed with a set-count badge through `allowCollapseWhenSet`; Runs opts in only because applied criteria stay visible as chips outside the disclosure. Other callers retain the existing default. Host-reported errors, option-source failures and editors without complete local-error reporting keep the section open; explicit force-open remains authoritative, and a forced reveal does not overwrite the saved collapsed preference. Only reported blocking errors receive an Error badge. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Settings and other surfaces do not use the kit yet. |
 

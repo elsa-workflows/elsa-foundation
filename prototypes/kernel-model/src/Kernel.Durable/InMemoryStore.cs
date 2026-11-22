@@ -227,6 +227,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
                     foreach (var id in turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []))
                         if (!Has(Flaw.DeleteWithoutCount) && Messages.GetValueOrDefault(id) is not { Done: false }) Diverged($"consumed message {id} is not there");
+                    foreach (var id in turn.FoundationReleasedHolds ?? [])
+                        if (turn.Row is not { } releasing || Messages.GetValueOrDefault(id) is not { Done: false, Held: true } released ||
+                            released.Message.Target.Id != releasing.Id || released.Message.TargetCreation != releasing.Creation)
+                            Diverged($"released message {id} is not there for {turn.Instance}");
                     foreach (var message in turn.Sent)
                     {
                         if (Messages.ContainsKey(message.InboxKey)) Diverged($"sent message {message.Id} exists already");
@@ -291,6 +295,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     }
                 }
                 foreach (var id in turn.Consumed) Messages.Remove(id);
+                foreach (var id in turn.FoundationReleasedHolds ?? []) Messages[id].Held = false;
                 foreach (var id in turn.Done)
                 {
                     // An outside command stays as a marker until its window has passed, so a late retry meets a duplicate key.
@@ -425,8 +430,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
             var epochs = owned.ToDictionary(f => f.Partition, f => f.Epoch);
             var rows = Messages.Values
                 .Where(m => epochs.TryGetValue(m.Message.Target.Partition, out var epoch) && m.Seen < epoch && !m.Done && (m.Message.Due ?? 0) <= until)
-                .OrderBy(m => m.Seq).Take(limit)
-                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)).ToList();
+                .OrderBy(m => m.Message.DeliveryOrder(m.Seq)).Take(limit)
+                .Select(m => new Stored(m.Message, m.Seq, m.Seen, m.Attempts, m.Trial)
+                {
+                    PersistedHold = m.Held && m.Trial == 0 && m.Message.TargetCreation is > 0 &&
+                        Instances.GetValueOrDefault(m.Message.Target.Id) is { Status: InstanceStatus.Running, Retired: false } row &&
+                        row.Creation == m.Message.TargetCreation && _referenceBirths.ContainsKey(new(row.Id, row.Creation))
+                }).ToList();
             return new(new Polled(rows, now));
         }
     }

@@ -16,11 +16,11 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
       expect(Math.abs(model.y - instructions.y)).toBeLessThan(20);
     }
     await editor.getByRole("textbox", { name: /^Instructions/ }).fill("Proofread the text and return concise suggestions.");
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await advanced.locator("summary").press("Enter");
     const calls = advanced.getByRole("textbox", { name: /^Maximum model calls/ });
     await calls.fill("2");
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await page.reload();
     await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toHaveValue("Proofread the text and return concise suggestions.");
     await advanced.locator("summary").click();
@@ -29,14 +29,11 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("agent-designer.png"), fullPage: true });
     await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
-    const outcome = page.getByRole("region", { name: "Outcomes editor", exact: true });
-    const requiredOutcome = outcome.locator("[data-contract-kind='outcome'][data-contract-reference-key='done']").filter({ visible: true });
-    await expect(outcome.getByRole("columnheader", { name: "Emitted", exact: true })).toBeVisible();
-    await expect(requiredOutcome).toHaveCount(1);
-    await expect(requiredOutcome.getByRole("checkbox")).toBeChecked();
-    await expect(requiredOutcome.getByRole("checkbox")).toBeDisabled();
-    await expect(requiredOutcome.getByRole("button", { name: "Remove outcome" })).toHaveCount(0);
-    await expect(requiredOutcome.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
+    const outcome = page.getByRole("region", { name: "Done", exact: true });
+    await expect(outcome.getByText("Emitted", { exact: true })).toBeVisible();
+    await expect(outcome.getByRole("checkbox")).toHaveCount(0);
+    await expect(outcome.getByRole("button", { name: "Remove outcome" })).toHaveCount(0);
+    await expect(outcome.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
     const contract = page.locator(".ad-contract-editor");
     const tabs = page.locator(".ad-authoring-view-tabs");
     expect(Math.abs((await contract.boundingBox())!.x - (await tabs.boundingBox())!.x)).toBeLessThanOrEqual(2);
@@ -67,7 +64,7 @@ for (const width of [390, 1440]) {
 
     await warning.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(model).toHaveValue("azure-openai|openai");
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await expect(alerts).toHaveCount(1);
   });
 }
@@ -114,7 +111,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?mode=activity-authoring&provider=agent&publication-blocked&theme=${theme}`);
     const editor = page.getByTestId("agent-editor");
-    const trigger = page.locator(".wf-publish-primary");
+    const trigger = page.locator(".ad-publication-toolbar-trigger");
     await trigger.click();
     const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
     const blockers = dialog.locator(".ad-publication-blockers");
@@ -129,7 +126,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     await expect(dialog).toBeHidden();
     await expect(instructions).toBeFocused();
     await instructions.fill("Proofread the supplied text.");
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
     await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
     await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
@@ -138,7 +135,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
     const model = editor.getByRole("combobox", { name: /^Model connection/ });
     await expect(model).toBeFocused();
     await model.selectOption("azure-openai|proofreader");
-    await expect(page.locator(".wf-editor-save-status")).toHaveText("Saved");
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await trigger.click();
     await expect(dialog.getByRole("alert")).toContainText("The draft changed after review");
     await dialog.getByRole("button", { name: "Prepare publication", exact: true }).click();
@@ -154,7 +151,7 @@ for (const width of [360, 1440]) for (const theme of ["light", "dark"]) {
   test(`rejected publication does not reuse earlier readiness at ${width}px ${theme}`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?mode=activity-authoring&provider=agent&theme=${theme}`);
-    await page.locator(".wf-publish-primary").click();
+    await page.locator(".ad-publication-toolbar-trigger").click();
     const dialog = page.getByRole("dialog", { name: "Review & publish", exact: true });
     await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeEnabled();
     await dialog.getByRole("button", { name: "Publish 1.0.0", exact: true }).click();

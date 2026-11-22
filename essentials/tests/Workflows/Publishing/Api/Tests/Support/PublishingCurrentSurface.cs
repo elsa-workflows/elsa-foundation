@@ -28,13 +28,6 @@ public static class PublishingCurrentSurface
             "read",
             200,
             "GetPublicationRecord"),
-        new PublishingRoute(
-            "PublicationSlots.UnpublishReviewed",
-            new EndpointIdentity("/publishing/workflows/{definitionId}/slots/{slotName}/unpublish/{expectedRevision}", "POST"),
-            "/publishing/workflows/definition-route/slots/default/unpublish/17",
-            "manage",
-            200,
-            "none"),
         new("TestRuns.Options", new EndpointIdentity("/publishing/workflows/drafts/test-run-options", "POST"),
             "/publishing/workflows/drafts/test-run-options", "manage", 200, "DraftTestRunOptionsRequest"),
         new("TestRuns.Get", new EndpointIdentity("/publishing/workflow-test-runs/{testRunId}", "GET"),
@@ -59,7 +52,6 @@ public static class PublishingCurrentSurface
         {
             "WorkflowExecutable.Export" => "WorkflowArtifactClosure",
             "Publications.Get" => "PublicationView",
-            "PublicationSlots.UnpublishReviewed" => "PublicationSlotView",
             "TestRuns.Options" => "DraftTestRunOptionsView",
             "TestRuns.Get" or "TestRuns.Stop" => "WorkflowTestRunView",
             "TestRuns.Waits" => "TestRunWaitsView",

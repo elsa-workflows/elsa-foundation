@@ -1,14 +1,13 @@
 import React from "react";
 import { ClipboardList, FileText } from "lucide-react";
 import { useStudioRouteLocation } from "@elsa-workflows/studio-sdk";
-import type { ElsaStudioModuleApi, StudioActivityPropertyEditorGroupProps } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { TasksPage } from "./TasksPage";
 import { TaskDetailPage } from "./TaskDetailPage";
 import { FormsPage } from "./FormsPage";
 import { ContributedTaskForm } from "./TaskForm";
 import { builtInTaskFieldControls } from "./fieldControls";
-import { ActionsEditor, AssignmentEditor, AssignmentGroupEditor, FormEditor } from "./PropertyEditors";
-import { FormPicker } from "./FormPicker";
+import { ActionsEditor, AssignmentEditor, FormEditor } from "./PropertyEditors";
 import { basicProvider, taskCapability } from "./taskApi";
 import "./styles.css";
 function DetailRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
@@ -31,21 +30,7 @@ export function register(api: ElsaStudioModuleApi) {
       { id: "user-tasks", path: "/user-tasks", label: "User Tasks", requiresBackend: taskCapability, component: ({ navigate }) => <TasksPage api={api} navigate={navigate} /> }
     ] });
   api.propertyEditors.add({ id: "user-tasks.actions", requiresBackend: taskCapability, order: 50, supportsValidationReporting: true, supports: (descriptor, context) => descriptor.uiHint === "user-task-actions" && context.scope === "collection", component: ActionsEditor });
-  const assignmentPropertyGroup = {
-    id: "assignment",
-    label: "Assignment",
-    description: "Assign this task to one person or one group. Choose an assignee or a group—not both.",
-    inputKeys: ["AssigneeId", "GroupId"],
-    component: (props: StudioActivityPropertyEditorGroupProps) => <AssignmentGroupEditor {...props} api={api} />
-  };
-  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskCapability, presentsField: true, propertyGroup: assignmentPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true,
+  for (const group of [false, true]) api.propertyEditors.add({ id: `user-tasks.${group ? "group" : "user"}`, requiresBackend: taskCapability, presentsField: true, propertyGroup: { id: "assignment", label: "Assignment", description: "Assign this task to one person or one group. Choose an assignee or a group—not both." }, order: 50, supportsValidationReporting: true, readsActivityContext: true,
     supports: descriptor => descriptor.uiHint === (group ? "user-task-group" : "user-task-user"), component: props => <AssignmentEditor {...props} api={api} group={group} /> });
-  const taskFormPropertyGroup = {
-    id: "task-form",
-    label: "Task form",
-    inputKeys: ["FormId", "FormVersion"],
-    preserveSiblingOnExpression: true,
-    component: (props: StudioActivityPropertyEditorGroupProps) => <FormPicker {...props} api={api} />
-  };
-  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskCapability, presentsField: true, propertyGroup: taskFormPropertyGroup, order: 50, supportsValidationReporting: true, readsActivityContext: true, supports: (descriptor, context) => ["user-task-form", "user-task-form-version"].includes(descriptor.uiHint ?? "") || (descriptor.name === "FormVersion" && Object.hasOwn(context.inputValues ?? {}, "OptionalFormActions") && Object.hasOwn(context.inputValues ?? {}, "FormId")), component: props => <FormEditor {...props} api={api} /> });
+  api.propertyEditors.add({ id: "user-tasks.form", requiresBackend: taskCapability, presentsField: true, order: 50, supportsValidationReporting: true, readsActivityContext: true, supports: (descriptor, context) => ["user-task-form", "user-task-form-version"].includes(descriptor.uiHint ?? "") || (descriptor.name === "FormVersion" && Object.hasOwn(context.inputValues ?? {}, "OptionalFormActions") && Object.hasOwn(context.inputValues ?? {}, "FormId")), component: props => <FormEditor {...props} api={api} /> });
 }

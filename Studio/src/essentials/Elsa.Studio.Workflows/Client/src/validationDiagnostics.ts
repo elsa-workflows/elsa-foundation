@@ -29,29 +29,6 @@ export function errorType(error: ValidationError): string {
   return String(error.type ?? error.code ?? "");
 }
 
-/** Suggestions are keyed to stable diagnostic codes and never change the authored binding. */
-export function validationHint(error: ValidationError): string | null {
-  const type = errorType(error);
-  switch (type) {
-    case "InputOutput/MissingRequired":
-      return "Set a value for this required input.";
-    case "Expressions/UnresolvedVariable":
-      return "Choose a variable that is visible from this activity’s scope.";
-    case "Structure/DisconnectedNode":
-      return "Connect this activity to the workflow or remove it if it is not needed.";
-    case "Structure/NoStartConnection":
-      return "Connect this activity to the workflow start, or make it the start activity.";
-    case "Structure/StartTriggerNotStart":
-      return "Make this start-trigger activity the workflow’s start activity.";
-    case "VF-ACT-003":
-      return "Review this input’s binding and ensure it has exactly one value.";
-    default:
-      return type.startsWith("ValueConversion/")
-        ? "Review the Conversion setting against the source and target types. Auto is suitable for compatible values; use JSON conversion only when the source is declared as JSON content."
-        : null;
-  }
-}
-
 export function isUnresolvedVariableError(error: ValidationError): boolean {
   return errorType(error) === UNRESOLVED_VARIABLE_TYPE;
 }

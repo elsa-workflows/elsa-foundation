@@ -54,7 +54,6 @@ import type {
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
 import { flowchartStructureKind } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode";
-import { canonicalizeStateForWire, expandStateFromWire } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityInputWire";
 import { getDraft, updateDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/workflowDesign";
 import { createActivityNode, getActivityDisplay, sequenceStructureKind, type ChildSlot } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { decorateReusableCatalog, projectRecommendedPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowEditorData";
@@ -418,7 +417,7 @@ function ActivityDefinitionGraphAuthoringFixture() {
 
 function browserGraphAuthoringDraft(): ActivityDefinitionDraftView {
   const withInputBinding = searchParams.get("bindings") === "true";
-  const withEmptyInputBinding = searchParams.get("bindings") === "empty" || searchParams.get("bindings") === "empty-javascript";
+  const withEmptyInputBinding = searchParams.get("bindings") === "empty";
   const isSequence = searchParams.get("graph") === "sequence";
   const hasInputBindingInput = withInputBinding || withEmptyInputBinding;
   return {
@@ -796,7 +795,6 @@ function Fixture() {
       }
     } : {})
   });
-  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   const activeDescriptor = scalarInputsFixture
     ? scalarInputDescriptor
@@ -818,35 +816,21 @@ function Fixture() {
       <aside className={`wf-inspector browser-inspector${scalarInputsFixture || referenceFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
         <h2>{activeDescriptor.displayName}</h2>
         {scalarInputsFixture ? null : <div className="browser-inspector-spacer" aria-hidden="true" />}
-        {secretReferenceFixture ? (
-          <button type="button" onClick={() => setInspectorOpen(open => !open)}>
-            {inspectorOpen ? "Close inspector" : "Open inspector"}
-          </button>
-        ) : null}
-        {inspectorOpen ? (
-          <ActivityPropertiesPanel
-            activity={activity}
-            descriptor={activeDescriptor}
-            editors={scalarInputsFixture || referenceFixture ? builtInPropertyEditors : []}
-            expressionEditors={connectionReferenceFixture ? [connectionPickerExpressionEditor]
-              : secretReferenceFixture ? [secretPickerExpressionEditor] : []}
-            expressionDescriptors={connectionReferenceFixture
-              ? [{ type: "Connection", displayName: "Connection", editingMode: "reference" }, ...expressionDescriptors]
-              : expressionDescriptors}
-            expressionDescriptorStatus="ready"
-            descriptorStatus="ready"
-            visibleVariables={[]}
-            scopeStatus="ready"
-            onChange={nextActivity => {
-              if (!secretReferenceFixture) {
-                setActivity(nextActivity);
-                return;
-              }
-              const wireState = JSON.parse(JSON.stringify(canonicalizeStateForWire({ rootActivity: nextActivity })));
-              setActivity(expandStateFromWire(wireState).rootActivity!);
-            }}
-          />
-        ) : null}
+        <ActivityPropertiesPanel
+          activity={activity}
+          descriptor={activeDescriptor}
+          editors={scalarInputsFixture || referenceFixture ? builtInPropertyEditors : []}
+          expressionEditors={connectionReferenceFixture ? [connectionPickerExpressionEditor]
+            : secretReferenceFixture ? [secretPickerExpressionEditor] : []}
+          expressionDescriptors={connectionReferenceFixture
+            ? [{ type: "Connection", displayName: "Connection", editingMode: "reference" }, ...expressionDescriptors]
+            : expressionDescriptors}
+          expressionDescriptorStatus="ready"
+          descriptorStatus="ready"
+          visibleVariables={[]}
+          scopeStatus="ready"
+          onChange={setActivity}
+        />
         {scrollingFixture ? <div className="browser-inspector-tail" aria-hidden="true" /> : null}
       </aside>
     </main>
@@ -1520,16 +1504,6 @@ function VersionChangeFixture() {
   const [reviewing, setReviewing] = useState(false);
   const [message, setMessage] = useState("");
   const occurrence = findActivityOccurrence(draft.state.rootActivity, "invoice-one")!;
-  const current = browserVersion("version-1", "1.0.0", ["Amount", "Legacy"], ["Done", "Rejected"]);
-  const recommendation = {
-    definitionId: "activity-def-browser",
-    activityTypeKey: "Contoso.Invoice",
-    category: "Browser tests",
-    displayName: "Invoice",
-    versionId: "version-2",
-    version: "2.0.0",
-    isAvailable: true
-  };
 
   useEffect(() => {
     if (!reviewing || searchParams.get("stale") !== "true") return;
@@ -1545,40 +1519,10 @@ function VersionChangeFixture() {
         <div><span className="wf-kicker">Workflow authoring</span><h1>Exact version change</h1></div>
       </header>
       {message ? <p role="status">{message}</p> : null}
-      <aside className="wf-inspector" aria-label="Activity inspector">
-        <InspectorPanel
-          context={endpointContext}
-          selectedNode={occurrence}
-          selectedNodeLabel="Invoice"
-          selectedActivityType="Contoso.Invoice"
-          selectedDescriptor={null}
-          selectedNodeAvailability={null}
-          selectedReusableDefinitionId="activity-def-browser"
-          selectedReusableSemanticVersion="1.0.0"
-          selectedReusableVersion={current}
-          selectedReusableVersionStatus="ready"
-          selectedRecommendedVersion={recommendation}
-          selectedSlots={[]}
-          catalog={[]}
-          selectedSupportsScopedVariables={false}
-          propertyEditors={[]}
-          expressionEditors={[]}
-          expressionDescriptors={[]}
-          expressionDescriptorStatus="ready"
-          descriptorStatus="ready"
-          onRetryExpressionDescriptors={() => undefined}
-          scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "unavailable" }}
-          activeTabId="version"
-          onActiveTabChange={() => undefined}
-          onSelectedActivityChange={() => undefined}
-          onChangeReusableVersion={() => {
-            setMessage("");
-            setReviewing(true);
-          }}
-          onEnterSlot={() => undefined}
-          onReplaceSlotActivity={() => undefined}
-        />
-      </aside>
+      <button type="button" onClick={() => {
+        setMessage("");
+        setReviewing(true);
+      }}>Change exact version</button>
       <section aria-label="Workflow draft occurrences">
         {["invoice-one", "invoice-two", "other"].map(nodeId => {
           const node = findActivityOccurrence(draft.state.rootActivity, nodeId)!;
@@ -1590,8 +1534,16 @@ function VersionChangeFixture() {
           context={endpointContext}
           draft={draft}
           occurrence={occurrence}
-          current={current}
-          recommendation={recommendation}
+          current={browserVersion("version-1", "1.0.0", ["Amount", "Legacy"], ["Done", "Rejected"])}
+          recommendation={{
+            definitionId: "activity-def-browser",
+            activityTypeKey: "Contoso.Invoice",
+            category: "Browser tests",
+            displayName: "Invoice",
+            versionId: "version-2",
+            version: "2.0.0",
+            isAvailable: true
+          }}
           onCancel={() => setReviewing(false)}
           onApply={async request => {
             const stale = validateActivityVersionChangePrecondition(draft, request.precondition);

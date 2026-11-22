@@ -86,8 +86,6 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Back to forms", exact: true }).press("Enter");
   await expect(formLink).toBeFocused();
 
-  await post("/runtime/user-task-forms", { id: formId, version: "2", name: title, provider: "elsa.basic-forms/1", fields: [{ key: "Note", label: "Note", kind: "text", required: true, readOnly: false }] });
-
   await page.setViewportSize({ width: 1600, height: 1100 });
   await page.goto("/workflows/definitions");
   await page.getByRole("button", { name: /^(Create|Create workflow)$/ }).first().click();
@@ -104,43 +102,32 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   const taskNode = page.locator(".react-flow__node").filter({ hasText: "Create User Task" });
   const taskNodeId = await taskNode.getAttribute("data-id");
   await page.getByRole("textbox", { name: "Title", exact: true }).fill(title);
-  const assignTo = page.getByLabel("Assign to", { exact: true });
+  const assignee = page.getByLabel("Task assignee", { exact: true });
+  const taskGroup = page.getByLabel("Task group", { exact: true });
   const assignment = page.getByRole("group", { name: "Assignment", exact: true });
   await expect(assignment).toBeVisible();
+  await expect(assignment.locator(".wf-property-row")).toHaveCount(2);
   await expect(assignment).toContainText("Assign this task to one person or one group.");
   await expect(assignment).toContainText("Choose an assignee or a group—not both.");
-  await expect(assignTo).toBeVisible();
-  await assignTo.selectOption(`person:${who.userId}`);
-  await expect(assignTo).toHaveValue(`person:${who.userId}`);
+  await assignee.selectOption(who.userId);
   const availableTargets = await get("/runtime/user-task-targets?skip=0&take=100");
   const availableGroup = availableTargets.groups?.[0];
   if (availableGroup) {
-    await assignTo.selectOption(`group:${availableGroup.id}`);
-    await expect(assignTo).toHaveValue(`group:${availableGroup.id}`);
-    await assignTo.selectOption(`person:${who.userId}`);
-    await expect(assignTo).toHaveValue(`person:${who.userId}`);
+    await taskGroup.selectOption(availableGroup.id);
+    await expect(assignee).toHaveValue("");
+    await assignee.selectOption(who.userId);
+    await expect(taskGroup).toHaveValue("");
   }
-  await page.getByRole("button", { name: "Use an expression", exact: true }).click();
-  await expect(page.getByLabel("Expression returns", { exact: true })).toHaveValue("AssigneeId");
-  await page.getByRole("button", { name: "Cancel expression setup", exact: true }).click();
-  await expect(assignTo).toHaveValue(`person:${who.userId}`);
-  await captureInspector("task-assignment", assignTo);
-  const formPicker = page.locator(".user-task-form-picker__disclosure > summary");
-  const formPickerContent = page.locator(".user-task-form-picker");
-  await formPicker.press("Enter");
-  await expect(formPickerContent.getByRole("button", { name: `Select ${title} version 2`, exact: true })).toBeVisible();
-  await formPickerContent.getByRole("button", { name: `Select ${title} version 2`, exact: true }).click();
-  await expect(formPicker).toHaveAttribute("aria-label", `Task form: ${title} · Version 2`);
-  await formPicker.press("Enter");
-  await formPickerContent.getByRole("button", { name: "Other versions", exact: true }).click();
-  await expect(formPickerContent.getByRole("button", { name: `Select ${title} version 1`, exact: true })).toBeVisible();
-  await formPicker.press("Escape");
-  await expect(formPicker).toBeFocused();
-  await expect(formPicker).toHaveAttribute("aria-label", `Task form: ${title} · Version 2`);
+  await captureInspector("task-assignment", assignee);
+  await page.getByLabel("Task form", { exact: true }).selectOption(formId);
+  await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
+  for (const label of ["Task form", "Task form version"]) {
+    await expect.poll(() => page.getByLabel(label, { exact: true }).evaluate(element => getComputedStyle(element).backgroundSize)).toBe("5px 5px, 5px 5px");
+  }
   await expect(page.getByRole("button", { name: "Remove action 1", exact: true })).toHaveText("");
   await page.getByLabel("Action 1", { exact: true }).scrollIntoViewIfNeeded();
   await captureInspector("task-authoring", page.getByLabel("Action 1", { exact: true }));
-  await formPicker.scrollIntoViewIfNeeded(); await captureInspector("form-selection", formPicker);
+  await page.getByLabel("Task form", { exact: true }).scrollIntoViewIfNeeded(); await captureInspector("form-selection", page.getByLabel("Task form", { exact: true }));
 
   await palette.fill("Set Output"); await page.getByRole("treeitem", { name: /^Set Output,/ }).click();
   const outputNode = page.locator(".react-flow__node").filter({ hasText: "Set Output" });
@@ -205,7 +192,7 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   await page.getByRole("button", { name: "Auto-layout", exact: true }).click();
   await save(); await page.reload();
   const savedTask = page.locator(`.react-flow__node[data-id="${taskNodeId}"]`);
-  await savedTask.click(); await expect(page.locator(".user-task-form-picker__disclosure > summary")).toHaveAttribute("aria-label", `Task form: ${title} · Version 2`);
+  await savedTask.click(); await expect(page.getByLabel("Task form version", { exact: true })).toHaveValue("1");
   const publication = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/publish"));
   await page.getByRole("button", { name: "Review & publish", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Publish workflow", exact: true });
@@ -217,8 +204,8 @@ export async function userTaskAuthoringJourney(page: Page, info: TestInfo, captu
   let taskId = "";
   await expect.poll(async () => { taskId = (await get("/runtime/user-tasks?view=mine&limit=100")).items.find((item: { workflowExecutionId: string }) => item.workflowExecutionId === runId)?.id ?? ""; return taskId; }, { timeout: 30_000 }).not.toBe("");
   // Publishing a later form leaves this open task's original snapshot intact.
-  await post("/runtime/user-task-forms", { id: formId, version: "3", name: `${title} revised`, provider: "elsa.basic-forms/1", fields: [{ key: "Changed", label: "Changed", kind: "text", required: true, readOnly: false }] });
-  const frozen = await get(`/runtime/user-tasks/${taskId}`); expect(frozen.form.version).toBe("2"); expect(frozen.form.fields[0].key).toBe("Note");
+  await post("/runtime/user-task-forms", { id: formId, version: "2", name: `${title} revised`, provider: "elsa.basic-forms/1", fields: [{ key: "Changed", label: "Changed", kind: "text", required: true, readOnly: false }] });
+  const frozen = await get(`/runtime/user-tasks/${taskId}`); expect(frozen.form.version).toBe("1"); expect(frozen.form.fields[0].key).toBe("Note");
   await page.setViewportSize(projectViewport); await page.goto(`/user-tasks/${taskId}`);
   await page.getByLabel(/^Note/).fill("Approved with case preserved"); await capture(page, info, "frozen-task-form");
   await page.getByRole("button", { name: "Approve", exact: true }).click();
