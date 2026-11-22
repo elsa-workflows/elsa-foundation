@@ -58,19 +58,23 @@ Line numbers are from that initiative head.
   BPMN declares no workflow inputs, so nothing changes for it.
 - **Decision**: S-2 extends that step and adds no new one (no `WorkflowRequestAdmission`, no change to
   `WorkflowStartSchedulerWorkHandler`):
-  1. the validator's complete-bag normalization also completes an omitted optional input without a declared default:
+  1. check requiredness first in complete-bag mode, then fill declared defaults, preserving the distinction between
+     no default and an explicit-null default. The validator's complete-bag normalization also completes an omitted optional input without a declared default:
      JSON `null` when the input is nullable (R-4), otherwise the type default from `NullPolicyDefaults` (R-6). A member
      with none of these was refused at publication (FR-006, T007). Known-inputs mode (Design-time `DispatchWorkflow`
      and `DispatchPinSource`) fills declared defaults as today but adds no `null` or type-default completion, and
-     applies steps 2 and 3 to the members it is given;
+     applies steps 2 and 3 to supplied values and the declared defaults it materializes;
   2. the validator refuses an explicit `null` for a non-nullable input with a new reason code,
      `runtime.input.null-not-allowed` (R-4). An explicit
      `null` for a nullable input is accepted without the L119 conversion, which a `null` for a nullable value type
      would otherwise fail. The conversion itself is unchanged (S-9 moves it);
-  3. under default-on-null, `ApplyInputContract` replaces an explicit `null` for a non-nullable input that has a type
-     default before it calls the validator, from the executable's pinned `ValuePolicies` (R-6). The early checks in
-     the test-run handler and `DispatchWorkflow`, and Design's `DispatchPinSource`, apply the same substitution
-     through one shared helper before validating, so all four give the same answer.
+  3. after default completion and before the null/type checks in step 2, the validator replaces null for a
+     non-nullable input that has a supported type default when pinned `DefaultOnNull` is on (R-6). This includes null
+     introduced by a declared workflow-input default. `ApplyInputContract`, the early checks in the test-run handler
+     and `DispatchWorkflow`, and Design's `DispatchPinSource` pass the executable's `WorkflowValuePolicies` to new
+     policy-aware validator overloads, so both modes use one normalization. The old two-argument overloads remain
+     policies-off; the new required interface overloads are tracked as a Major API shape change, not an untracked
+     signature replacement. A variable's authored-null-default refusal remains distinct (T010d).
   The seed already writes every member of the normalized bag; T014 checks that a completed `null` is stored as an
   explicit null.
 - **Rationale**: #3731 put the contract on every start path. Completion and the null refusal belong in the same
@@ -105,7 +109,8 @@ Line numbers are from that initiative head.
 
 ## R-6 Default-on-null in the runtime
 
-- **Decision**: one helper, `NullPolicyDefaults`, in `Elsa.Workflows.Runtime.Core`, looked up by alias for authored
+- **Decision**: one public shared domain helper, `NullPolicyDefaults`, in `Elsa.Workflows.Runtime.Core`, tracked in
+  `PublicAPI.Unshipped.txt` because Runtime, Publishing and Elsa3 consume the same rule, looked up by alias for authored
   members and by CLR type for .NET activity inputs (the registry has no enums and only four number types), returning
   the type default for `Boolean` (`false`), the number types (`0`) and enums (zero value) and nothing for other types
   (dates, times, `TimeSpan`, `Guid`, `String`, `Any` and the JSON aliases, Q10). It is applied in the places listed under *Every write path*, each only
@@ -115,7 +120,7 @@ Line numbers are from that initiative head.
   `SetOutput` expression that evaluates to `null` becomes `ExplicitNull` without passing the materializer, and
   `ValidateAssignmentPayload` skips anything not `Present`, so today `null` into an `Int32` variable is written; S-2
   refuses it with `VF-ACT-004` or substitutes under the policy), and admission
-  (`WorkflowStartDispatcher.ApplyInputContract`, R-3). The hydrator's CLR guard stays as a
+  (the input validator normalization called by `WorkflowStartDispatcher.ApplyInputContract`, R-3). The hydrator's CLR guard stays as a
   backstop; it never sees a null for such an input once the materializer substituted.
 - **Every write path.** The same check (refuse with `VF-ACT-004`, or substitute and record `VF-NULL-001` under
   `DefaultOnNull`) runs wherever a value is written to a declared member: admission (T013), activity inputs (T019,

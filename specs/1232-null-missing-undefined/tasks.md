@@ -37,12 +37,13 @@ red without the change. xUnit only.
   `GraphActivity`'s ambient variable read), `null` for a
   type that accepts it; publication refuses a date, time, `TimeSpan` or `Guid` variable without a declared default
   (`VF-ACT-003`). Update S-4's test for spec 1222 US1 scenario 6 for a value-type variable
-- [ ] T005 [P] Add `NullPolicyDefaults` in `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
+- [ ] T005 [P] Add public `NullPolicyDefaults` in `Essentials/src/Workflows/Runtime/Core/Services/NullPolicyDefaults.cs`
   (FR-001b) with two lookups: `TryGetTypeDefault(alias)` for authored members (registry aliases) and
   `TryGetTypeDefault(Type)` for .NET activity inputs (`bool`, every numeric primitive including `float`, `short`,
   `byte` and `uint`, and any enum). A default for `Boolean`, the number types and enums only; unit tests including `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`,
   `Guid`, `String`, `Any` and a collection of `Int32` having none, a collection accepting `null` (FR-001a), and a
-  .NET enum and `float` having one
+  .NET enum and `float` having one. This is the shared domain API consumed by Runtime, Publishing and Elsa3;
+  track its public shape in `PublicAPI.Unshipped.txt`, with no cross-domain InternalsVisibleTo grant
 - [ ] T006 Add `NullHandling` (`DefaultOnNull`, `UndefinedAsNull`) to
   `Essentials/src/Workflows/Design/Core/Models/WorkflowStrategyOptions.cs`, `ValuePolicies` to
   `Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`, and compile one into the other in
@@ -116,18 +117,19 @@ red without the change. xUnit only.
 
 **Independent test**: `composition-bulk-dispatch-sub-workflow` starts with no input and completes.
 
-- [ ] T013 [US2] Extend #3731's admission (R-3). In `WorkflowExecutableInputValidator`'s complete-bag normalization:
-  complete an omitted optional input without a declared default with JSON `null` when nullable, otherwise its type
-  default (`NullPolicyDefaults`); refuse an explicit `null` for a non-nullable input with
-  `runtime.input.null-not-allowed`; accept an explicit `null` for a nullable input without running the type
-  conversion, and leave that conversion as it is (S-9 owns it). In `WorkflowStartDispatcher.ApplyInputContract`, and
-  in the early checks of `StartWorkflowTestRunRequestHandler` and `DispatchWorkflow` and in Design's
-  `DispatchPinSource` (which validates a child workflow's pinned inputs at publication), substitute the type default
-  for such a `null` before validating when the pinned `DefaultOnNull` is on (no separate record, FR-013). One shared
-  helper does the substitution, so all four give the same answer; the early checks exist because they refuse before
-  their own side effects (#3731). Known-inputs mode (`ValidateKnownInputs`) applies the same `null` refusal and
-  substitution to the members it is given; it fills declared defaults as today but adds no `null` or type-default
-  completion
+- [ ] T013 [US2] Extend #3731's admission (R-3). Add policy-aware `Validate` / `ValidateKnownInputs` overloads to
+  `IWorkflowExecutableInputValidator`, receiving `WorkflowValuePolicies`; retain the existing two-argument overloads
+  as policies-off entry points. Implement both modes through one normalization: check requiredness first in
+  complete-bag mode; fill declared defaults (including explicit-null defaults); complete any remaining omitted
+  optional member with JSON `null` when nullable, otherwise its type default, in complete-bag mode only; then apply
+  pinned `DefaultOnNull` to every normalized null for a non-nullable input with a supported type default. Finally
+  refuse a remaining non-nullable null with `runtime.input.null-not-allowed`, or accept nullable null without type
+  conversion; other type conversion stays unchanged (S-9). `WorkflowStartDispatcher.ApplyInputContract`, the early
+  checks in `StartWorkflowTestRunRequestHandler` / `DispatchWorkflow`, and Design's `DispatchPinSource` all pass the
+  executable's pinned policies to that shared validator. There is no separate admission substitution record (FR-013).
+  Known-inputs mode allows unresolved required inputs and adds no null/type-default completion, but applies the same
+  substitution to supplied values and materialized declared defaults. Track the required interface overloads and
+  implementation shape in PublicAPI.Unshipped (Major API shape under framework §4.2)
 - [ ] T013a [US2] Q9 (FR-034): publication refuses a member declared both required and with a default with
   `VF-ACT-014` (activity inputs, authored activity definition inputs, workflow inputs); remove the validator's
   `!DefaultValue.HasValue` exemption, which can then never apply. Audit built-in activity descriptors for inputs
@@ -139,6 +141,8 @@ red without the change. xUnit only.
   there already. Include a refused start that schedules nothing, and one test per validator mode proving known-inputs
   mode fills declared defaults but adds no `null` or type-default completion. Include supplied explicit null for
   both required and optional nullable inputs: presence satisfies requiredness and the declared default is not used
+  Include an omitted optional Int32 input with an explicit-null declared default: under DefaultOnNull it becomes 0
+  in both validator modes, and without the policy its non-nullable null is refused; nullable defaults remain null
 - [ ] T016 [US2] Behavioural test: a JavaScript condition reads an omitted optional input as `null`
   (`Essentials/tests/Activities/Behavioral/Tests`)
 
@@ -265,7 +269,7 @@ Built by S-4 (spec 1222 FR-011, FR-012; `VF-READ-001`).
   state, for the option and each policy, what it changes at run time with a before/after example, that converted
   workflows record it and native workflows keep it off; glossary rows for *default-on-null* and
   *undefined-as-null*, Elsa 3 Mapping README and migration readiness guide (spec 262 and 267 sections), and the
-  `IWorkflowExecutableInputValidator` and `IWorkflowStartDispatcher` *Usage* lines in the Runtime `EXTENSION_POINTS.md`
+  `IWorkflowExecutableInputValidator` signature and both contracts' *Usage* lines in the Runtime `EXTENSION_POINTS.md`
   (completion, `null` refusal, default-on-null at admission)
 - [ ] T038 [P] Q5 audit (R-12): list built-in activity inputs that cannot hold `null` and whose Elsa 3 counterparts
   accepted it; declare each nullable where the Elsa 4 activity handles `null`, with a test, and record the rest in the

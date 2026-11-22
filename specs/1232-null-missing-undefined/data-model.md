@@ -50,12 +50,16 @@ workflow-level value is already in the hash, and a second copy would only have t
 *S-2* are what this spec adds; the rest is on `main` already.
 
 ```text
-request ──default-on-null (S-2)──▶ null for a non-nullable input with a type default → type default
-        ──validate──▶ refused (blank, unknown, duplicate or mistyped name/value, missing required;
-                                null for non-nullable without policy: S-2)
-        └─complete──▶ every declared member: supplied | declared default | ExplicitNull (nullable, S-2) | type default (S-2)
+request ──validate names / required presence──▶ refused when invalid or required input absent
+        └─complete──▶ supplied | declared default | ExplicitNull (nullable, S-2) | type default (S-2)
+                    ──default-on-null (S-2)──▶ normalized non-nullable null → supported type default
+                    ──validate null / type──▶ refused if still incompatible
                     ──enqueue──▶ start command ──▶ start checkpoint (seed)
 ```
+
+The policy-aware validator overload receives the executable's `WorkflowValuePolicies`. Substitution sees declared
+defaults as well as supplied values. Known-inputs mode permits unresolved required inputs and omits null/type-default
+completion, while keeping declared-default completion and the same policy/null/type checks.
 
 ## `Elsa3MappingOptions` (new)
 
