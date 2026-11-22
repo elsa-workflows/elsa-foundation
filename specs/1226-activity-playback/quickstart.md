@@ -63,7 +63,7 @@ python3 tools/ux-acceptance/run.py --output /tmp/studio-activity-playback-<uniqu
   --journey 'production history occurrence and approval qualification'
 ```
 
-Retain exact head/source/dirty metadata, identities/coverage/request manifest, named PNG/ARIA states and traces. Include normal, pending, failure/retry, gap/denied/unavailable and context-loss captures; all intended project/journeys must run. Download the current CI artifact and have an independent reviewer open the affected states and traces. A green machine report, a local absolute path or an illustrative concept is not final UX approval. Preserve failed/not-run states and rerun the affected full journey after fixes.
+Retain exact head/source/dirty metadata, identities/coverage/request manifest, named PNG/ARIA states and traces. Include normal, pending, failure/retry, gap/denied/unavailable and context-loss captures; all intended project/journeys must run. Download the immutable API zipball linked in [delivery evidence](evidence.md), verify its pinned manifest and actual container hash, and have an independent reviewer open the affected states and traces. A green machine report, a local absolute path or an illustrative concept is not final UX approval. Preserve failed/not-run states and rerun the affected full journey after fixes.
 
 
 ## Historical prerequisite qualification
