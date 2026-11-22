@@ -148,10 +148,10 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 - [x] **K8. Eyebrow.** (#5000) [verified] No new primitive is needed: `StudioPageHeader` has `eyebrow` and
   `icon`. Document D3 in the design spec: no kickers in dialogs or sections, sentence-case labels, and
   the page-header `eyebrow` only under its existing rule. `needs: D3` (PR #5279)
-- [ ] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
+- [x] **K15. Shell breadcrumb trail (D5).** (#5001) **[check]** Find where the shell prints "Studio / X"
   (start in `H/App.tsx`) and whether a page can already supply a multi-level, clickable trail to it;
   the audit did not identify such a mechanism. Design it before any X2 item starts, and say what
-  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5`
+  happens to the `StudioPageHeader breadcrumbs` prop and to `StudioBreadcrumbs`. `needs: D5` (PR #5293)
 
 Candidates reported by source readers. Confirm the need before building any of them.
 
@@ -275,7 +275,7 @@ Workflows:
 - [ ] **X3.9** (#5045) [source] `WorkflowTagsDialog.tsx:47` and `:111`.
 - [x] **X3.10** (#5046) [source] `WorkflowViewsPage.tsx:152` (Edit view; uses `aria-label` where siblings use
   `aria-labelledby`; "Update view" is not primary [seen] and becomes "Save" under D2). (PR #5290)
-- [ ] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`.
+- [x] **X3.11** (#5047) [source] `WorkflowLibraryControls.tsx:241`. (PR #5296)
 - [ ] **X3.12** (#5048) [source] `WorkflowFolderDeletionDialog.tsx:68–74`. Inline error is a
   `<p class="wf-dialog-error">` with an embedded raw "Reload preview" button → `StudioAlert` with action.
 - [ ] **X3.13** (#5049) [source] `WorkflowFolderMutationDialogs.tsx` (9 raw buttons, no `StudioButton`).
@@ -628,8 +628,8 @@ Raw font sizes, weights, radii and colours:
   Many raw radii are `999px` pills; check each one before changing it.
 - [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
-- [ ] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
-  [source] it uses a private `--cs-*` namespace.
+- [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
+  [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
 - [ ] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`.
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.

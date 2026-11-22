@@ -1,7 +1,8 @@
-import React, { Activity, useMemo } from "react";
+import React, { Activity, useContext, useMemo } from "react";
 // The provider must come from the shared SDK runtime that modules import, not the host's own copy of
 // `../../sdk`, or module hooks would read a different React context.
 import { StudioWorkspaceTabProvider, type StudioWorkspaceTabHandle, type StudioWorkspaceTabTitle } from "@elsa-workflows/studio-sdk";
+import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
 import type { WorkspaceTab } from "./model";
 import { workspacePanelDomId, workspaceTabDomId } from "./WorkspaceTabStrip";
 
@@ -45,6 +46,7 @@ export function WorkspaceTabPanels({ baseId, tabs, activeId, renderScreen, title
 }
 
 function WorkspaceTabPanel({ baseId, tab, active, title, renderScreen, setTitle, isActive, markPendingWork, onCloseTab }: { baseId: string; tab: WorkspaceTab; active: boolean; title: string; renderScreen(location: string): React.ReactNode; setTitle(id: string, title: StudioWorkspaceTabTitle | null): void; isActive(id: string): boolean; markPendingWork(id: string): void; onCloseTab(id: string): void }) {
+  const breadcrumbTarget = useContext(StudioShellBreadcrumbTarget);
   const handle = useMemo<StudioWorkspaceTabHandle>(() => ({ id: tab.id, active, location: tab.location, isActive: () => isActive(tab.id), markPendingWork: () => markPendingWork(tab.id), setTitle: value => setTitle(tab.id, value) }), [active, isActive, markPendingWork, setTitle, tab.id, tab.location]);
   // Background tabs re-render only for their own state; a new shell render does not reach them.
   const screen = useMemo(() => renderScreen(tab.location), [renderScreen, tab.location]);
@@ -58,9 +60,11 @@ function WorkspaceTabPanel({ baseId, tab, active, title, renderScreen, setTitle,
     >
       <Activity mode={active ? "visible" : "hidden"}>
         <StudioWorkspaceTabProvider value={handle}>
-          <WorkspaceTabBoundary resetKey={tab.location} title={title} onClose={() => onCloseTab(tab.id)}>
-            {screen}
-          </WorkspaceTabBoundary>
+          <StudioShellBreadcrumbTarget.Provider value={active ? breadcrumbTarget : null}>
+            <WorkspaceTabBoundary resetKey={tab.location} title={title} onClose={() => onCloseTab(tab.id)}>
+              {screen}
+            </WorkspaceTabBoundary>
+          </StudioShellBreadcrumbTarget.Provider>
         </StudioWorkspaceTabProvider>
       </Activity>
     </div>

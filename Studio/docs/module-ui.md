@@ -1,5 +1,12 @@
 # Building a module UI
 
+For route navigation, render `StudioShellBreadcrumbs` with the ancestor items and current label.
+The active workspace tab supplies its trail to the shell header. Routes without a trail retain the
+shell's section label. In a standalone host the same component renders inline. Use
+`StudioPageHeader.breadcrumbs` for embedded layouts that own their navigation and
+`StudioBreadcrumbs` for local navigation such as moving between graph scopes.
+
+
 Use `@elsa-workflows/studio-ui` for page composition and controls. The package has
 no router, query client, SDK provider or host-service requirement. Keep your data,
 permissions, navigation and mutations in your module. The visual rules are in the
