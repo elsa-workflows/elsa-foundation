@@ -74,8 +74,11 @@ internal sealed class Elsa3ActivityNormalizer(
         var variables = plan.Definition.Variables;
         for (var index = 0; index < variables.Count; index++)
         {
-            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out _, out var refusal))
+            if (Elsa3VariableMapper.TryMap(wellKnownTypeRegistry, objectConverter, variables[index], out var mapped, out var refusal))
+            {
+                plan.WorkflowVariableTypes[variables[index]] = mapped.Type;
                 continue;
+            }
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,

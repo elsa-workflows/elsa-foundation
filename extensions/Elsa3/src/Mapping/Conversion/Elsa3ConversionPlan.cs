@@ -37,6 +37,9 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// <summary>A reusable workflow's declared outputs and the synthesized graph variables that hold them.</summary>
     public List<Elsa3GraphOutputMapping> OutputMappings { get; } = [];
 
+    /// <summary>The resolved authored workflow-variable types, retained from validation for reference lowering.</summary>
+    public Dictionary<Elsa3Variable, Elsa.Primitives.Models.TypeReference> WorkflowVariableTypes { get; } = new(ReferenceEqualityComparer.Instance);
+
     public bool HasErrors => Diagnostics.Any(diagnostic => diagnostic.IsError);
 
     public Elsa3NodePlan? Find(Elsa3Activity node) => Nodes.GetValueOrDefault(node);
