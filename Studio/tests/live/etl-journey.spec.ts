@@ -33,7 +33,7 @@ test("authors and runs an immutable ETL pipeline through a Sequence workflow", a
   // Duplicate a schema name to demonstrate a compiler diagnostic without relying on file inspection.
   const sourceName = page.getByRole("textbox", { name: "Source CSV schema field 2 name" });
   await sourceName.fill("id");
-  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status").filter({ hasText: `Saved ${definitionId}` })).toBeVisible();
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByRole("heading", { name: "Validation feedback" })).toBeVisible();
@@ -41,7 +41,7 @@ test("authors and runs an immutable ETL pipeline through a Sequence workflow", a
 
   // Correct the draft, save it, and validate that exact saved revision before explicit publication.
   await sourceName.fill("name");
-  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status").filter({ hasText: `Saved ${definitionId}` })).toBeVisible();
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByRole("status").filter({ hasText: /is valid as immutable version/ })).toBeVisible();
@@ -226,7 +226,7 @@ async function authorAndPublishConnector(page: Page, definitionId: string, sourc
   await selectBinding(page, "Rejected records binding", "errors");
   await expect(page.getByText("No lookup is configured", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status").filter({ hasText: `Saved ${definitionId}` })).toBeVisible();
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await expect(page.getByRole("status").filter({ hasText: /is valid as immutable version/ })).toBeVisible({ timeout: 60_000 });
@@ -253,7 +253,7 @@ async function createAndRunSequence(page: Page, {
   const create = page.getByRole("button", { name: "Create", exact: true });
   await expect(create).toBeVisible({ timeout: 60_000 });
   await create.click();
-  const workflowDialog = page.getByRole("dialog", { name: "Create Workflow" });
+  const workflowDialog = page.getByRole("dialog", { name: "New workflow" });
   await workflowDialog.getByLabel("Display name").fill(workflowName);
   const sequenceRoot = workflowDialog.getByRole("radio", { name: "Sequence" });
   await expect(sequenceRoot).toBeEnabled();

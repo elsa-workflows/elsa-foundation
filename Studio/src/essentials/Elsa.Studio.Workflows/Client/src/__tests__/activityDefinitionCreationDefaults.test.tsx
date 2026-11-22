@@ -45,7 +45,7 @@ it.each([false, true])("selects and submits Sequence when Flowchart is missing o
   flushSync(() => { setValue.call(name, "Reusable sequence"); name!.dispatchEvent(new Event("input", { bubbles: true })); });
   expect(container.querySelector<HTMLInputElement>('[aria-label="Sequence"]')?.checked).toBe(true);
   expect(container.querySelector<HTMLInputElement>('[aria-label="Flowchart"]')?.disabled).toBe(true);
-  const create = [...container.querySelectorAll("button")].find(button => button.textContent === "Create definition")!;
+  const create = [...container.querySelectorAll("button")].find(button => button.textContent === "Create")!;
   await vi.waitFor(() => expect(create.disabled).toBe(false));
   flushSync(() => create.click());
   await vi.waitFor(() => expect(api.create).toHaveBeenCalledOnce());

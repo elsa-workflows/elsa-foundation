@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("a module-owned field control is authored, previewed, saved, reopened, and published through the shared Slot", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html?custom-control");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
   await page.getByRole("textbox", { name: "Form ID" }).fill("ratings");
   await page.getByRole("textbox", { name: "Name" }).fill("Rating form");
   await page.getByRole("button", { name: "Rating", exact: true }).click();
@@ -19,7 +19,7 @@ test("a module-owned field control is authored, previewed, saved, reopened, and 
   await expect(preview.locator('input[type="number"]')).toHaveAttribute("max", "7");
   await page.screenshot({ path: testInfo.outputPath("field-control-preview-desktop.png"), animations: "disabled" });
 
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "ratings" });

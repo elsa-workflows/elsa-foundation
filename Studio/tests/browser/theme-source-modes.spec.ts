@@ -42,7 +42,7 @@ test("empty DirectoryOnly explains unavailable appearance selection without losi
   await expect(appearance.getByRole("radiogroup", { name: "Navigation" })).toBeVisible();
 });
 
-test("Theme Builder keeps a real inventory selection after deleting a managed theme with an empty default", async ({ page }) => {
+test("Theme builder keeps a real inventory selection after deleting a managed theme with an empty default", async ({ page }) => {
   let present = true;
   const response = () => ({ themesMode: "DirectoryOnly", themes: present ? [managed] : [], directoryThemeIds: [], defaultThemeId: "", assets: [], disabledBuiltInThemeIds: [] });
   await page.route("**/_elsa/theme-store", route => route.fulfill({ json: response() }));

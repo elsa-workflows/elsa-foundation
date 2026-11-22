@@ -137,7 +137,7 @@ export function register(api: ElsaStudioModuleApi) {
       ]
     },
     routes: [
-      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "Create workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
+      ...([ ["list", "/workflows/tags", "Workflow tags"], ["create", "/workflows/tags/new", "New workflow tag"], ["edit", "/workflows/tags/:tagId", "Edit workflow tag"] ] as const).map(([view, path, label]) => ({
         id: `workflows-tags-${view}`,
         requiresBackend: [{ id: "elsa.api.workflow-design", contractVersion: "1", relations: ["workflow-tags", "workflow-tag"] }],
         path, label,

@@ -6,7 +6,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
   const original = page.viewportSize()!;
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/workflows/activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity", exact: true }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition", exact: true }).click();
   const activityName = `Phone authoring ${info.project.name} ${Date.now()}`;
   await page.getByRole("textbox", { name: "Display name", exact: true }).fill(activityName);
   const provider = page.getByRole("combobox", { name: "Implementation type", exact: true });
@@ -15,7 +15,7 @@ export async function phoneContentJourney(page: Page, info: TestInfo, capture: (
     await provider.selectOption((await graph.first().getAttribute("value"))!);
   }
   await page.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Sequence", exact: true }) }).click();
-  await page.getByRole("button", { name: "Create definition", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("region", { name: "Provider implementation editor", exact: true })).toBeVisible();
   await expect(page.locator("#activity-draft-title")).toHaveText(activityName);
   const editorUrl = page.url();

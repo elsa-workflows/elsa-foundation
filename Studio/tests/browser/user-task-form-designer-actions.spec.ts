@@ -6,7 +6,7 @@ for (const appearance of ["light", "dark"] as const) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.addInitScript(mode => localStorage.setItem("elsa-studio-theme-mode", mode), appearance);
       await page.goto("/form-designer.html");
-      await page.getByRole("button", { name: "Create form", exact: true }).click();
+      await page.getByRole("button", { name: "New form", exact: true }).click();
       if (viewport.name === "narrow") await page.getByRole("button", { name: "Expand controls panel", exact: true }).click();
       await page.getByRole("button", { name: "Text input", exact: true }).click();
       await page.getByRole("button", { name: "Number", exact: true }).click();

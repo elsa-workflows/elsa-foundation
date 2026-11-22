@@ -120,7 +120,7 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
 
   await page.goto("/settings/theme-builder");
   const theme = page.locator(".theme-builder-page:visible");
-  const views = theme.getByRole("tablist", { name: "Theme Builder views", exact: true });
+  const views = theme.getByRole("tablist", { name: "Theme builder views", exact: true });
   await expect(views).toBeVisible();
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-overview");

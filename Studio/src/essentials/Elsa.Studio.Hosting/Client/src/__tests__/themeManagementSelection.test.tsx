@@ -44,7 +44,7 @@ describe("theme management with an empty selectable default", () => {
     const edited = `${name().value} edited`;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     await update(() => { setValue.call(name(), edited); name().dispatchEvent(new Event("input", { bubbles: true })); });
-    const view = () => container.querySelector<HTMLButtonElement>("[aria-label='Theme Builder views'] [aria-selected='true']")!;
+    const view = () => container.querySelector<HTMLButtonElement>("[aria-label='Theme builder views'] [aria-selected='true']")!;
     view().focus();
     await update(() => view().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
     expect(document.activeElement).toBe(view());
@@ -57,11 +57,11 @@ describe("theme management with an empty selectable default", () => {
       expect(document.activeElement).toBe(container.querySelector("[aria-label='Theme mode'] [aria-selected='true']"));
       assertLinkedPanels(container);
     }
-    for (const tab of container.querySelectorAll<HTMLButtonElement>("[aria-label='Theme Builder views'] [role='tab']")) {
+    for (const tab of container.querySelectorAll<HTMLButtonElement>("[aria-label='Theme builder views'] [role='tab']")) {
       await update(() => tab.click());
       assertLinkedPanels(container);
     }
-    await update(() => container.querySelector<HTMLButtonElement>("[aria-label='Theme Builder views'] [data-tab-id='overview']")!.click());
+    await update(() => container.querySelector<HTMLButtonElement>("[aria-label='Theme builder views'] [data-tab-id='overview']")!.click());
     expect(name().value).toBe(edited);
   });
 

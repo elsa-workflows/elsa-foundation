@@ -101,7 +101,7 @@ describe("Home workflow task group", () => {
     await waitUntil(() => view.container.textContent?.includes("No workflows have a current draft to continue.") === true);
 
     const actionableCreateControls = [...view.container.querySelectorAll("a[href], button:not(:disabled), [role='button']:not([aria-disabled='true'])")]
-      .filter(element => /create workflow/i.test(element.textContent ?? ""));
+      .filter(element => /new workflow/i.test(element.textContent ?? ""));
     expect(actionableCreateControls).toHaveLength(0);
     expect(view.container.textContent).toContain("Creating a workflow requires workflow design access.");
     expect(view.container.querySelector("[role='dialog'] a[href^='/workflows/definitions']")?.textContent).toContain("Browse workflows");
