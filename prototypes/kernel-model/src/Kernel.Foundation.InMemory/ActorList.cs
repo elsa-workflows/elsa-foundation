@@ -133,7 +133,7 @@ internal sealed class ActorList : IActorReads
     {
         var message = row.Message;
         var handle = _store.DeliveryHandle(actor.Id, row.Seq, message.InboxKey);
-        var id = message.Start is null && message.EventMatch is { } match ? Durable.EventMatch.Decode(match).Event :
+        var id = message.Start is null && Durable.Events.MatchFor(message) is { } match ? match.Event :
             (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
         return new(handle, id, message.Start is null ? message.Kind : Kinds.Start,
             row.Sender is { } sender ? new ActorRef(sender) : null, message.Due,
