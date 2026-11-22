@@ -9,11 +9,12 @@ internal static class RetirementCascadeChecks
     {
         await CheckTree(check, total: 1);
         await CheckTree(check, total: 1, refuseOpen: true);
+        await CheckTree(check, total: 1, timedJob: true);
         await CheckTree(check, total: CascadeProtocol.PageLimit + 1);
         await CheckRetirementShape(check);
     }
 
-    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false)
+    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false, bool timedJob = false)
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
@@ -50,6 +51,19 @@ internal static class RetirementCascadeChecks
             await Step(child);
         }
         var obligation = ChildRegistry.Read(Row(child).Children);
+        (InboxKey Ticket, InboxKey Deadline, CancellationToken Driver)? timed = null;
+        if (timedJob)
+        {
+            await Send(child, "arm-job", "arm-job");
+            await Step(child);
+            await owner.WokenAsync(null);
+            await owner.RunAsync();
+            var running = Row(child);
+            var job = JobRegistry.Read(running.Jobs).Single();
+            timed = (InboxKey.Ticket(running.Id, job.Key, running.Creation, job.Generation),
+                InboxKey.Issued(DurableTurn.FoundationJobDeadlineId(running.Id, running.Creation, job.Generation)),
+                await probe.JobEntered.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+        }
 
         await Send(child, "end-child", "finish");
         await Step(child);
@@ -72,6 +86,13 @@ internal static class RetirementCascadeChecks
         await Step(child);
         check(store.Instances[finished.Id] == marker && Row(descendant).Status == InstanceStatus.Running && cascades.Count == 0,
             "an ordinary operator terminate at the marker leaves its obligation held");
+        if (timed is { } retiredJob)
+        {
+            for (var pass = 0; pass < 4; pass++) await Step(child);
+            check(retiredJob.Driver.IsCancellationRequested && marker.HeldCascade?.Jobs.Length == 1 &&
+                !store.Messages.ContainsKey(retiredJob.Ticket) && store.Messages.ContainsKey(retiredJob.Deadline),
+                "job cleanup can throw during Delete and the Worker still consumes the obsolete job ticket");
+        }
 
         await Send(parent, "end-parent", "cancel");
         await Step(parent);
@@ -105,6 +126,9 @@ internal static class RetirementCascadeChecks
             Completed() &&
             sent.SequenceEqual(obligation),
             "takeover opens the held cascade once and clears it while every live descendant cancels");
+        if (timed is { } completedJob)
+            check(!store.Messages.ContainsKey(completedJob.Deadline),
+                "the recorded parent's cascade removes the exact generation deadline after the job ticket is gone");
 
         bool Completed() => store.Instances[finished.Id].Cascade is null && store.Instances[finished.Id].HeldCascade is null &&
             obligation.All(address => store.Instances.GetValueOrDefault(address.Id)?.Status == InstanceStatus.Cancelled) &&
@@ -182,12 +206,14 @@ internal static class RetirementCascadeChecks
     private sealed class Probe : Contract.IActorType
     {
         public string Type => "retirement-cascade";
+        public TaskCompletionSource<CancellationToken> JobEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
         {
             foreach (var message in turn.Inbox)
                 switch (message.Kind)
                 {
+                    case "arm-job": turn.StartJob("timed", timeout: TimeSpan.FromMinutes(1)); break;
                     case "spawn": turn.State = turn.Start(new(Type, "child")).Id; break;
                     case "spawn-many":
                         for (var child = 0; child < int.Parse(message.Payload!, System.Globalization.CultureInfo.InvariantCulture); child++)
@@ -201,7 +227,13 @@ internal static class RetirementCascadeChecks
             return default;
         }
 
-        public ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public async ValueTask<object?> ExecuteJobAsync(Contract.IJob job, CancellationToken cancellationToken)
+        {
+            using var cleanup = cancellationToken.Register(static () => throw new InvalidOperationException("Test job cleanup failed."));
+            JobEntered.TrySetResult(cancellationToken);
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return null;
+        }
         public long TerminalGrowth(Contract.ActorHeader header, string state) => 0;
         public bool Withholds(Contract.ActorHeader header) => false;
         public bool ProtectsDeletion(Contract.ActorHeader header, string state, long now) => false;

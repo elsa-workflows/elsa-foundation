@@ -176,11 +176,13 @@ public sealed partial class InMemoryStore
             var ticket = Include(key, Kinds.Job, job.Generation);
             if (next.Creation > 0)
                 Include(InboxKey.JobResult(next.Id, job.Key, next.Creation, job.Generation), Kinds.JobFinished, job.Generation);
-            if (ticket?.JobTiming is { Timer: { } timer, At: { } due })
+            var timer = ticket?.JobTiming.Timer ?? (next.Creation > 0
+                ? DurableTurn.FoundationJobDeadlineId(next.Id, next.Creation, job.Generation) : null);
+            if (timer is not null)
             {
                 var timeout = InboxKey.Issued(timer);
                 if (Messages.GetValueOrDefault(timeout) is { Message: { Due: { } at }, JobTiming.JobKey: { } jobKey } &&
-                    at == due && jobKey == job.Key)
+                    (ticket?.JobTiming.At is not { } due || at == due) && jobKey == job.Key)
                     Include(timeout, Kinds.JobDeadline, 0);
             }
         }
