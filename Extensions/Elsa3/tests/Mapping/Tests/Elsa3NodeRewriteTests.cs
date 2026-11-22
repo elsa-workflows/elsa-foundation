@@ -515,6 +515,49 @@ public sealed class Elsa3NodeRewriteTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    [Theory]
+    [InlineData("", false, false)]
+    [InlineData(" \t\n", false, false)]
+    [InlineData("", true, false)]
+    [InlineData(" \t\n", true, false)]
+    [InlineData("", false, true)]
+    [InlineData(" \t\n", true, true)]
+    public async Task Blank_literal_scripts_have_a_proven_safe_boundary(string script, bool parallel, bool fallback)
+    {
+        var body = Activity("body", "Elsa.RunJavaScript", ("script", Literal(script)),
+            ("possibleOutcomes", Literal("[\"Break\"]", "List<String>")));
+        if (parallel)
+        {
+            var container = Activity("parallel", "Elsa.Parallel");
+            container.AdditionalProperties["activities"] = JsonSerializer.SerializeToElement(new[] { Port(body) });
+            body = container;
+        }
+        var owner = MatchAnyCase(fallback ? Activity("leaf", "Elsa.WriteLine", ("text", Literal("case"))) : body);
+        if (fallback) owner.AdditionalProperties["default"] = Port(body);
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", owner)));
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("Literal", "false", true)]
+    [InlineData("Literal", "true", false)]
+    [InlineData("JavaScript", "Math.random() > 0.5", false)]
+    public async Task Nested_outcome_only_Break_is_safe_only_when_proven_unreachable(string language, string condition, bool safe)
+    {
+        var nested = Activity("nested", "Elsa.Switch", ("mode", Literal("MatchAny")));
+        nested.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new[]
+        {
+            new { label = "Break", condition = new { expression = new { type = language, value = condition } } },
+            new { label = "Ordinary", condition = new { expression = new { type = "Literal", value = "true" } } }
+        });
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(),
+            ConversionServices.Definition(Sequence("root", MatchAnyCase(nested))));
+        Assert.Equal(safe, result.Succeeded);
+        if (safe) Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        else Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
+    }
+
     [Fact]
     public async Task Match_any_control_label_diagnostic_keeps_source_property_casing()
     {

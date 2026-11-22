@@ -60,7 +60,7 @@ internal static class Elsa3SwitchSafety
             return names is null || !namedBreakConsumed && names.Contains("Break", StringComparer.Ordinal) ? node : null;
         }
 
-        if (!namedBreakConsumed && type == Switch && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Label == "Break"))
+        if (!namedBreakConsumed && type == Switch && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Label == "Break" && !IsProvenFalse(node, slot)))
             return node;
 
         var loop = type is "Elsa.Activities.For.Activities.For" or "Elsa.Activities.ForEach.Activities.ForEach"
@@ -99,13 +99,15 @@ internal static class Elsa3SwitchSafety
         return null;
     }
 
+    private static bool IsProvenFalse(Elsa3NodePlan node, Elsa3SlotChild slot) =>
+        slot.ConditionProperty is { } key && node.Node.AdditionalProperties.TryGetValue(key, out var value)
+        && Elsa3TypedValues.TryGetLiteral(value, out var literal) && literal == "false";
+
     private static bool HasInvalidDoneSelection(Elsa3NodePlan node)
     {
         if (node.EffectiveScriptInvalidDoneSelection) return true;
         if (node.Resolved?.ActivityTypeKey != Switch || node.StructureFields.GetValueOrDefault("mode") is not "MatchAny") return false;
-        var possible = node.Slots.Where(slot => slot.SlotName == CaseSlot && !(slot.ConditionProperty is { } key
-            && node.Node.AdditionalProperties.TryGetValue(key, out var value)
-            && Elsa3TypedValues.TryGetLiteral(value, out var literal) && literal == "false")).ToArray();
+        var possible = node.Slots.Where(slot => slot.SlotName == CaseSlot && !IsProvenFalse(node, slot)).ToArray();
         return possible.Any(slot => slot.Label == "Done") && possible.Any(slot => slot.Label != "Done");
     }
 }

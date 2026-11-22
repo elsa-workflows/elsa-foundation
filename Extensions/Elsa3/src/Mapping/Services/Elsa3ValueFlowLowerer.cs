@@ -794,6 +794,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var expression = property.Expression!;
         if (!expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(expression.Value))
         {
+            // A literal blank program completes normally in both engines. It has no effective control selection;
+            // only a dynamically supplied body remains unproven for the new Switch boundary.
+            if (expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase))
+                accessors.ObserveScriptOutcomes?.Invoke(property.Activity, [], false, false);
             LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
             return;
         }
