@@ -141,7 +141,7 @@ export function ConnectionsPage({ context, dialogs, notifications }: { context: 
   return <StudioPage className="connections-shell" aria-label="Connections management">
     <StudioPageHeader title="Connections" headingLevel={2} description="Connect your services once, then reuse them in your workflows."
       refresh={{ id: "connections", label: "Refresh connections", refreshing: loading, autoRefresh: true, onRefresh: () => load(searchRef.current) }}
-      actions={<StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />Create connection</StudioButton>} />
+      actions={<StudioButton variant="primary" size="md" onClick={() => { setNotice(null); setCreating(true); }} disabled={!visibleDescriptors}><Plus size={14} aria-hidden="true" />New connection</StudioButton>} />
     <StudioCollectionToolbar>
       <form ref={searchFormRef} className="connections-search" role="search" aria-label="Connections" onSubmit={event => event.preventDefault()}>
         <StudioSearchInput className="connections-search-control" aria-label="Search connections" placeholder="Search connections" value={search} onChange={event => { setSearch(event.target.value); void load(event.target.value, visibleDescriptors); }} />

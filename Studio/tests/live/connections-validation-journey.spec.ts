@@ -10,16 +10,16 @@ test("connection validation explains client and real API rejections, then preser
   const secretValue = "private-validation-journey-sentinel";
   await signIn(page);
   await page.goto("/security/secrets");
-  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
-  const secret = page.getByRole("dialog", { name: "Create secret", exact: true });
+  await page.getByRole("button", { name: "New secret", exact: true }).first().click();
+  const secret = page.getByRole("dialog", { name: "New secret", exact: true });
   await secret.getByLabel("Technical name", { exact: true }).fill(secretName);
   await secret.getByLabel("Value", { exact: true }).fill(secretValue);
   await secret.getByRole("button", { name: "Create", exact: true }).click();
   await expect(secret).toHaveCount(0);
 
   await page.goto("/security/connections");
-  await page.getByRole("button", { name: "Create connection", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  await page.getByRole("button", { name: "New connection", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
   const nameInput = dialog.getByLabel("Name", { exact: true });
   const create = dialog.getByRole("button", { name: "Create", exact: true });
   await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");

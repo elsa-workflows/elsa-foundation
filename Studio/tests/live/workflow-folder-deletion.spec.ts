@@ -17,7 +17,7 @@ for (const deleteWorkflows of [false, true]) {
     page.setDefaultTimeout(30_000);
     await signIn(page);
     await page.goto("/workflows/definitions");
-    await expect(page.getByRole("button", { name: "Create workflow", exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "New workflow", exact: true }).first()).toBeVisible();
     await expect.poll(() => !!bearer).toBe(true);
     const api = async (path: string, method = "GET", data?: unknown) => {
       const response = await page.request.fetch(`${apiBase}/design/workflows/${path}`, {
@@ -31,8 +31,8 @@ for (const deleteWorkflows of [false, true]) {
     const child = await api("folders", "POST", { name: `${name} child`, parentId: folder.id });
     const grandchild = await api("folders", "POST", { name: "Grandchild", parentId: child.id });
     await page.goto(`/workflows/definitions?folderId=${folder.id}`);
-    await page.getByRole("button", { name: "Create workflow", exact: true }).first().click();
-    const create = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+    await page.getByRole("button", { name: "New workflow", exact: true }).first().click();
+    const create = page.getByRole("dialog", { name: "New workflow", exact: true });
     await create.getByLabel("Display name").fill(`${name} primary`);
     const sequence = create.getByRole("radio", { name: "Sequence", exact: true });
     await sequence.focus();

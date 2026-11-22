@@ -32,7 +32,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(`/?mode=workflow-creation-readiness&scenario=http-missing&theme=${theme}`);
     await page.getByRole("button", { name: "Open create workflow" }).click();
 
-    const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+    const dialog = page.getByRole("dialog", { name: "New workflow" });
     const startingPoint = dialog.getByRole("combobox", { name: "Starting point" });
     await expect(dialog).toBeVisible();
     await expect(startingPoint).toHaveValue("blank");
@@ -70,7 +70,7 @@ test("associates a concrete catalog availability reason with a disabled root cho
   await page.goto("/?mode=workflow-creation-readiness&scenario=root-unavailable");
   await page.getByRole("button", { name: "Open create workflow" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+  const dialog = page.getByRole("dialog", { name: "New workflow" });
   const flowchart = dialog.getByRole("radio", { name: "Flowchart" });
   const flowchartReason = dialog.locator("#wf-root-availability-flowchart");
   await expect(flowchartReason).toHaveText("The selected engine does not expose Flowchart right now.");
@@ -103,7 +103,7 @@ test("recovers a failed activity catalog and creates with the explicitly selecte
   await page.goto("/?mode=workflow-creation-readiness&scenario=catalog-failed");
   await page.getByRole("button", { name: "Open create workflow" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+  const dialog = page.getByRole("dialog", { name: "New workflow" });
   await expect(dialog.getByRole("alert")).toContainText("The activity catalog could not be loaded.");
   await expect(dialog.getByRole("combobox", { name: "Starting point" })).toHaveAccessibleDescription("The activity catalog could not be loaded. Retry");
   await dialog.getByRole("button", { name: "Retry" }).click();
@@ -122,7 +122,7 @@ test("recovers a failed activity catalog and creates with the explicitly selecte
 test("explains pending catalog readiness on keyboard activation without reporting unavailable choices", async ({ page }) => {
   await page.goto("/?mode=workflow-creation-readiness&scenario=catalog-loading");
   await page.getByRole("button", { name: "Open create workflow" }).click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+  const dialog = page.getByRole("dialog", { name: "New workflow" });
   await dialog.getByRole("textbox", { name: "Display name" }).fill("Pending catalog");
   const create = dialog.getByRole("button", { name: "Create" });
   await create.focus();
@@ -143,7 +143,7 @@ for (const width of [1280, 360]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/?mode=workflow-creation-readiness&scenario=create-failed");
     await page.getByRole("button", { name: "Open create workflow" }).click();
-    const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+    const dialog = page.getByRole("dialog", { name: "New workflow" });
     await dialog.getByRole("textbox", { name: "Display name" }).fill("Retry this workflow");
     await dialog.getByText("Sequence", { exact: true }).click();
     await dialog.getByRole("button", { name: "Create", exact: true }).click();

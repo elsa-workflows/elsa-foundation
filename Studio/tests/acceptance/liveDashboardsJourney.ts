@@ -70,7 +70,7 @@ async function idle(page: Page) {
 
 async function createEditor(page: Page, name: string, dataset: string) {
   await page.goto("/questions");
-  await keyboardUi.click(page.getByRole("button", { name: "Create question", exact: true }).first());
+  await keyboardUi.click(page.getByRole("button", { name: "New question", exact: true }).first());
   await keyboardUi.fill(page.getByLabel("Name", { exact: true }), name);
   const datasets = page.getByRole("combobox", { name: "Dataset", exact: true });
   await expect(datasets.locator(`option[value="${dataset}"]`)).toHaveCount(1);
@@ -351,7 +351,7 @@ async function inspectTrendDrill(page: Page, info: TestInfo, capture: Capture, n
   await capture(page, info, name); await keyboardUi.press(dialog, "Escape");
 }
 async function arrangeTrendDashboard(page: Page, info: TestInfo, capture: Capture, backend: Backend, question: Resource) {
-  await page.goto("/dashboards"); await keyboardUi.click(page.getByRole("button", { name: "Create dashboard", exact: true }).first());
+  await page.goto("/dashboards"); await keyboardUi.click(page.getByRole("button", { name: "New dashboard", exact: true }).first());
   await keyboardUi.fill(page.getByLabel("Name", { exact: true }), `Live arranged weekly rates ${Date.now()}`);
   for (let index = 0; index < 2; index++) {
     await keyboardUi.click(page.getByRole("button", { name: "Add saved question", exact: true }));

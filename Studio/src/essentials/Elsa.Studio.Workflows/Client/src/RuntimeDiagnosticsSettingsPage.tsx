@@ -81,7 +81,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
       <StudioPageHeader headingLevel={2} title={<><DatabaseZap size={18} /> Runtime evidence settings</>} description={<>Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</>} actions={<><div className="studio-page-actions">
           <StudioButton variant="primary" type="button" onClick={save} disabled={loading || saving || !canManage || !hasUnsavedChanges}>
             <Save size={15} />
-            {saving ? "Saving..." : "Save changes"}
+            {saving ? "Saving..." : "Save"}
           </StudioButton>
         </div></>} />
 

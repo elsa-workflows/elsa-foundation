@@ -138,7 +138,7 @@ describe("settings shell and appearance", () => {
     expect(visited).toEqual(["/settings/modules"]);
   });
 
-  it("offers System, Light and Dark, resets every appearance key, and links to Theme Builder", async () => {
+  it("offers System, Light and Dark, resets every appearance key, and links to Theme builder", async () => {
     localStorage.setItem("elsa-studio-theme", "drift");
     localStorage.setItem("elsa-studio-theme-mode", "dark");
     localStorage.setItem("elsa-studio-nav-mode", "top");

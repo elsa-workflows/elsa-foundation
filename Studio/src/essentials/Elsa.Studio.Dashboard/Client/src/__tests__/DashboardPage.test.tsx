@@ -24,7 +24,7 @@ describe("HomePage", () => {
     const taskGroup = view.container.querySelector(".home-task-group");
     expect(taskGroup).not.toBeNull();
     expect(view.container.querySelector(".dashboard-grid")).toBeNull();
-    expect(taskGroup?.textContent).toContain("Create workflow");
+    expect(taskGroup?.textContent).toContain("New workflow");
     expect(taskGroup?.textContent).toContain("Continue editing");
     expect(taskGroup?.querySelector("a[href='/workflows/instances?incidentHealth=active']")).not.toBeNull();
 

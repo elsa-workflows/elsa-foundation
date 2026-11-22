@@ -24,9 +24,9 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
     expect([204, 404], `Cleanup for owned secret ${owned}`).toContain(removed.status());
   });
   await page.goto("/security/secrets");
-  const create = page.getByRole("button", { name: "Create secret", exact: true }).first();
+  const create = page.getByRole("button", { name: "New secret", exact: true }).first();
   await expect(create).toBeEnabled(); await create.press("Enter");
-  const editor = page.getByRole("region", { name: "Create secret", exact: true });
+  const editor = page.getByRole("region", { name: "New secret", exact: true });
   const technicalName = editor.getByLabel("Technical name", { exact: true });
   await expect(technicalName).toBeFocused();
   await expect(page.getByRole("table", { name: "Secrets", exact: true })).toHaveCount(0);
@@ -87,7 +87,7 @@ export async function tabbedSecretsJourney(page: Page, info: TestInfo, capture: 
   await section(edit, "Details");
   await edit.getByLabel("Display name", { exact: true }).fill(`${displayName} updated`);
   await edit.getByLabel("Description", { exact: true }).fill("");
-  await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect(row.getByRole("button", { name: `Edit ${name}`, exact: true })).toBeFocused();
   await page.reload(); await row.getByRole("button", { name: `Edit ${name}`, exact: true }).click();

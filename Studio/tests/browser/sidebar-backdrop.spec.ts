@@ -126,7 +126,7 @@ test("Top navigation and the narrow strip do not receive the sidebar backdrop", 
   await expect.poll(() => sidebar.evaluate(element => getComputedStyle(element).backgroundImage)).toBe("none");
 });
 
-test("Theme Builder edits and previews a bounded sidebar backdrop", async ({ page }) => {
+test("Theme builder edits and previews a bounded sidebar backdrop", async ({ page }) => {
   await page.route("**/_elsa/theme-store", route => route.fulfill({ json: {
     themesMode: "AddToBuiltIns",
     themes: [customTheme],
