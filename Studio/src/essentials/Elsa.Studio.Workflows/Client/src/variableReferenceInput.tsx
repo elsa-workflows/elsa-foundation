@@ -238,9 +238,9 @@ export function readScriptWriteNames(scriptWrites: ScriptBodyWriteSet): string[]
 }
 
 /**
- * The node's may-write set, or the marker for an activity that may write any visible variable. For a script activity
- * the server's analysis of its body (`scriptWrites`) decides: the variables it writes or lets escape, or any visible
- * variable when it writes by a computed name. The type-level marker it also carries says only that it may.
+ * The node's may-write set, or the marker for an activity that may write any visible variable. An explicit C# marker
+ * takes precedence. Otherwise, a script activity's body analysis (`scriptWrites`) narrows its implicit engine marker:
+ * the variables it writes or lets escape, or any visible variable when it writes by a computed name.
  */
 export function VariableWritesSummary({
   activity,

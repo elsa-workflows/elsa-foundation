@@ -470,8 +470,10 @@ and run the converted scripts.
   states retain their component evidence until a production consumer provides a composed journey.
 - **Phase 5 (second PR).** A Run JavaScript node shows the may-write set of its own script, from the scoped-variable
   analysis (`scriptWrites`): "May write: total, order", "May write any visible variable (its script writes by a computed
-  name)", or nothing for a script that writes nothing; the type-level marker shows only for an activity without an analyzed
-  script. Covered in `variableReferenceInputUi.test.tsx` (the four states and two variables of one name). The composed-host
+  name)", or nothing for a script that writes nothing. An explicitly declared C# marker still shows "May write any visible
+  variable" even when its script analysis is empty or precise; only the implicit engine-script marker yields to that
+  analysis (FR-019). Covered in `variableReferenceInputUi.test.tsx` (the four states, explicit-marker precedence and two
+  variables of one name). The composed-host
   journey `script variable may-write analysis survives editing and reopening` uses Workbench's scripting feature and real
   server analysis: literal targets, computed writes, a read-only script, saved/reopened edits, and a container variable
   shadowing a workflow variable. Captures cover desktop/narrow and light/dark. Execution and independent visual review
