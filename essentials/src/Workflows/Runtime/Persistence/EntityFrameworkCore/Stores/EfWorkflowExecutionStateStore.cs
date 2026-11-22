@@ -64,7 +64,7 @@ public sealed class EfWorkflowExecutionStateStore(
                 : null;
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
-            var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var row = await context.WorkflowExecutionStates.AsTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
             if (state.StimulusDeliveryOrigin is not null || state.IngressOrigin is not null || state.ModelWorkOrigin?.IngressOrigin is not null)
             {
                 if (row is null) throw new NotSupportedException("Ingress workflows require initial admission through the conditional runtime checkpoint.");
@@ -77,10 +77,22 @@ public sealed class EfWorkflowExecutionStateStore(
                 !ReadChecked(row, scope, state.WorkflowExecutionId).Status.IsTerminal())
                 throw new NotSupportedException("Native model work requires its terminal result in the same checkpoint transaction.");
             if (row is null)
+            {
+                await EfTimerHistoryOwner.CoordinateFirstNativeAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
+                var ownerId = EfTimerHistoryOwner.Id(scope, state.WorkflowExecutionId);
+                // A current write observes a pin even when a caller established an older consistent snapshot.
+                // Initial source admission belongs to the atomic checkpoint, never this independent state save.
+                if (await context.ExecutionLivenessStates.Where(owner => owner.Id == ownerId && owner.TimerHistoryOwnerJson != null)
+                    .ExecuteUpdateAsync(update => update.SetProperty(owner => owner.Revision, owner => owner.Revision + 1), cancellationToken) != 0)
+                    throw new NotSupportedException("A pre-native timer owner requires first admission through its atomic runtime checkpoint.");
                 context.WorkflowExecutionStates.Add(ToEntityForWriteVersion(state, scope, id, NewRevision(), writeVersion));
+            }
             else
             {
-                _ = ReadChecked(row, scope, state.WorkflowExecutionId);
+                var original = ReadChecked(row, scope, state.WorkflowExecutionId);
+                if (original.HistoryCaptureEnabledAtAdmission != state.HistoryCaptureEnabledAtAdmission ||
+                    !(original.HistoryCapturePolicy?.IsEquivalentTo(state.HistoryCapturePolicy) ?? state.HistoryCapturePolicy is null))
+                    throw new InvalidOperationException("A native execution's original history capture admission cannot change implicitly.");
                 CopyToEntityForWriteVersion(row, state, scope, id, checked(row.Revision + 1), writeVersion);
             }
 

@@ -802,7 +802,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             var refusal = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => store.CommitAsync(commit, Decision()).AsTask());
             Assert.Equal(RuntimeFencingRejectionReason.NoActiveLease, refusal.Reason);
             Assert.Empty(manager.LeaseIds);
-            Assert.Equal((1, 0), OwnershipCommands(capture, 0));
+            // The attempted first-native pass checks timer responsibility; the post-rollback read separately rejects the stale execution fence.
+            Assert.Equal((2, 0), OwnershipCommands(capture, 0));
             await using var read = database.Open(CursorScope);
             Assert.Empty(await read.WorkflowExecutionStates.ToArrayAsync());
         }

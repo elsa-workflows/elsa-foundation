@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Security.Cryptography;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -17,16 +18,29 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// the row revision as an optimistic compare-and-swap token, so an expired or superseded claim cannot mutate a
 /// successor timer incarnation.
 /// </remarks>
-public sealed class EfDurableTimerStore(
+public sealed partial class EfDurableTimerStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IDurableTimerStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider = null) : IDurableTimerHistoryStore
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string CursorPurpose = "ef-runtime-durable-timers-v1";
     private const int MaxDeadlineCandidates = 16;
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public bool SupportsClaimTransitions => true;
+    public bool SupportsHistoryResponsibility
+    {
+        get
+        {
+            try { _ = accessContextAccessor.Current.RequireScope(); return context.Database.IsRelational() && RuntimeHistoryEfModule.HasProjectionModel(context) && EfTimerHistoryOwner.HasModel(context) && RuntimeSchemaWriteVersion.SupportsTimerHistory(context); }
+            catch (InvalidOperationException) { return false; }
+        }
+    }
+
+    public EfDurableTimerStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor,
+        IRuntimeRecoveryContinuationCodec continuationCodec) : this(context, accessContextAccessor, continuationCodec, TimeProvider.System) { }
 
     public async ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken cancellationToken = default)
     {
@@ -35,7 +49,7 @@ public sealed class EfDurableTimerStore(
         var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var source = context.DurableTimers.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey);
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && !x.HistoryRetired);
         DateTimeOffset? earliest = null;
         string? after = null;
         for (var visited = 0; visited < MaxDeadlineCandidates; visited++)
@@ -64,7 +78,7 @@ public sealed class EfDurableTimerStore(
         return null;
     }
 
-    public async ValueTask<DurableTimer> SaveAsync(
+    private async ValueTask<DurableTimer> SaveCoreAsync(
         DurableTimer timer,
         CancellationToken cancellationToken = default)
     {
@@ -115,7 +129,7 @@ public sealed class EfDurableTimerStore(
         var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var rows = await context.DurableTimers.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.DueTimeUtcTicks <= asOf.UtcTicks)
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && !x.HistoryRetired && x.DueTimeUtcTicks <= asOf.UtcTicks)
             .OrderBy(x => x.DueTimeUtcTicks)
             .ThenBy(x => x.TimerIdOrderKey)
             .ThenBy(x => x.WorkflowExecutionIdOrderKey)
@@ -134,7 +148,7 @@ public sealed class EfDurableTimerStore(
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, timerId);
         var row = await context.DurableTimers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return row is null ? null : ReadChecked(row, scope, workflowExecutionId, timerId);
+        return row is null || row.HistoryRetired ? null : ReadChecked(row, scope, workflowExecutionId, timerId);
     }
 
     public async ValueTask<RuntimeStorePage<DurableTimer>> ListPageAsync(
@@ -151,7 +165,7 @@ public sealed class EfDurableTimerStore(
         var workflowHash = EfRuntimeOperationalStoreSupport.Hash(query.WorkflowExecutionId);
         var source = context.DurableTimers.AsNoTracking().Where(x =>
             x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey &&
-            x.WorkflowExecutionIdHash == workflowHash && x.WorkflowExecutionId == workflow);
+            x.WorkflowExecutionIdHash == workflowHash && x.WorkflowExecutionId == workflow && !x.HistoryRetired);
         if (query.ContinuationToken is not null)
         {
             var cursor = EfRuntimeOperationalStoreSupport.DecodeCursor(continuationCodec, CursorPurpose, query.ContinuationToken);
@@ -173,22 +187,36 @@ public sealed class EfDurableTimerStore(
         return new RuntimeStorePage<DurableTimer>(query, items, next);
     }
 
-    public async ValueTask DeleteAsync(
-        string workflowExecutionId,
-        string timerId,
-        CancellationToken cancellationToken = default)
+    public async ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default) =>
+        _ = await HistoryBoundary<object?>(workflowExecutionId, "delete-timer", async () =>
+        { await DeleteCoreAsync(workflowExecutionId, timerId, cancellationToken); return null; }, cancellationToken, schedulerFailure: true);
+
+    private async ValueTask DeleteCoreAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken)
     {
         ValidateIdentity(workflowExecutionId, timerId);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        if (!EfTimerHistoryOwner.HasReadableTimerModel(context))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.history.capture-unavailable",
+                "Timer deletion requires the actual unfiltered timer mapping before absence can be established.");
+        var captured = accessContextAccessor.Current;
+        var scope = captured.RequireScope().Value;
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, timerId);
         await Transitions.RunAsync(context, async () =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            CheckHistoryAccess(captured, cancellationToken);
             var row = await context.DurableTimers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            CheckHistoryAccess(captured, cancellationToken);
             if (row is null)
                 return;
-            _ = ReadChecked(row, scope, workflowExecutionId, timerId);
+            var timer = ReadChecked(row, scope, workflowExecutionId, timerId);
+            if (timer.HistoryResponsibility is not null)
+            {
+                if (timer.HistoryResponsibility.Retired) return;
+                // Captured deletion is retirement on the same guarded owner transaction as explicit retirement.
+                await RetireWithHistoryAsync(workflowExecutionId, timerId,
+                    DurableTimerHistoryFacts.CreateCancelled(timer, _timeProvider.GetUtcNow())!, cancellationToken);
+                return;
+            }
             AttachForDelete(row);
             try
             {
@@ -213,7 +241,7 @@ public sealed class EfDurableTimerStore(
         var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var rows = await context.DurableTimers.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey &&
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && !x.HistoryRetired &&
                         x.DueTimeUtcTicks <= request.Now.UtcTicks &&
                         (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= request.Now.UtcTicks))
             .OrderBy(x => x.VisibleAfterUtcTicks ?? x.DueTimeUtcTicks)
@@ -308,8 +336,12 @@ public sealed class EfDurableTimerStore(
         var current = await LoadClaimAsync(claim, scope, cancellationToken);
         if (current is null)
             return RuntimeDurableTimerClaimTransitionResult.AlreadyApplied;
+        if (current.HistoryRetired) return RuntimeDurableTimerClaimTransitionResult.AlreadyApplied;
         if (!Matches(current, claim))
             return RuntimeDurableTimerClaimTransitionResult.Stale;
+        var timer = ReadChecked(current, scope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId);
+        if (timer.HistoryResponsibility is not null)
+            throw new NotSupportedException("Captured timer completion requires its actual terminal history observation.");
         AttachForDelete(current);
         try
         {
@@ -423,7 +455,7 @@ public sealed class EfDurableTimerStore(
     }
 
     private static bool Matches(DurableTimerEntity row, RuntimeDurableTimerClaim claim) =>
-        row.Revision == claim.Revision &&
+        !row.HistoryRetired && row.Revision == claim.Revision &&
         row.ClaimToken == claim.FencingToken &&
         StringComparer.Ordinal.Equals(row.ClaimOwnerId, EfRuntimeOperationalStoreSupport.Encode(claim.OwnerId));
 
@@ -453,6 +485,9 @@ public sealed class EfDurableTimerStore(
             row.TimerIdOrderKey != EfRuntimeOperationalStoreSupport.Order(timer.TimerId) ||
             row.StimulusType != EfRuntimeOperationalStoreSupport.Encode(timer.StimulusType) ||
             row.StimulusHash != EfRuntimeOperationalStoreSupport.Encode(timer.StimulusHash) ||
+            row.HistoryRevision < 0 || timer.HistoryResponsibility is not null && row.HistoryRevision == 0 ||
+            row.HistoryPending != (timer.HistoryResponsibility?.PendingEvents.Count > 0) ||
+            row.HistoryRetired != (timer.HistoryResponsibility?.Retired == true) ||
             row.DueTimeUtcTicks != timer.DueTime.UtcTicks ||
             row.DueTimeOffsetMinutes != EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.DueTime) ||
             row.CreatedAtUtcTicks != timer.CreatedAt.UtcTicks ||
@@ -496,8 +531,11 @@ public sealed class EfDurableTimerStore(
             CreatedAtUtcTicks = timer.CreatedAt.UtcTicks,
             CreatedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.CreatedAt),
             ClaimOrderKey = ClaimOrderKey(timer.DueTime, timer),
+            HistoryRevision = timer.HistoryResponsibility is null ? 0 : 1,
+            HistoryPending = timer.HistoryResponsibility?.PendingEvents.Count > 0,
+            HistoryRetired = timer.HistoryResponsibility?.Retired == true,
             ContentJson = RuntimeArtifactJson.Serialize(timer),
-            SchemaVersion = RuntimeSchemaWriteVersion.Operational(context),
+            SchemaVersion = timer.HistoryResponsibility is null ? RuntimeSchemaWriteVersion.Operational(context) : RuntimeSchemaWriteVersion.TimerHistory(context),
             Revision = revision
         };
         return entity;
@@ -555,6 +593,13 @@ public sealed class EfDurableTimerStore(
         ValidateIdentity(timer.TimerId, nameof(timer.TimerId));
         ValidateBounded(timer.StimulusType, RuntimeOperationalStateEfModule.DurableTimerStimulusTypeMaximumLength, nameof(timer.StimulusType));
         ValidateBounded(timer.StimulusHash, RuntimeOperationalStateEfModule.DurableTimerStimulusHashMaximumLength, nameof(timer.StimulusHash));
+        if (timer.HistoryResponsibility is { } responsibility)
+        {
+            _ = new DurableTimerHistoryResponsibility(responsibility.Policy, responsibility.PendingEvents, responsibility.Retired);
+            if (responsibility.PendingEvents.Any(e => e.WorkflowExecutionId != timer.WorkflowExecutionId ||
+                e.ActivityExecutionId != timer.ActivityExecutionId || !e.Metadata.TryGetValue("history.timerId", out var timerId) || timerId != timer.TimerId))
+                throw new InvalidDataException("Timer history responsibility belongs to another timer or execution.");
+        }
         if (timer.ActivityExecutionId is not null)
             ValidateIdentity(timer.ActivityExecutionId, nameof(timer.ActivityExecutionId));
         if (timer.ExecutionScopeId is not null)

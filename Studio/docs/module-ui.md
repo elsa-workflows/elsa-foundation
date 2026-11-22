@@ -205,7 +205,8 @@ the embedding surface already supplies an h1; use `headingLevel={3}` on its
 they should add information rather than repeat navigation.
 
 `StudioCollectionToolbar` wraps controls and retains native Tab order. Put search
-first, followed by domain filters. Label every control. For an exclusive filter, use
+first, followed by domain filters. Collection search updates results as the user types,
+without a Search submit button. Label every control. For an exclusive filter, use
 `studio-filter-group` on a named `role="group"` container with native buttons and
 `aria-pressed` for the current choice. A native table plus
 `StudioTableContainer` and `studio-table` is the smallest collection recipe. Give
@@ -215,8 +216,8 @@ visual recipe while retaining their column geometry and interaction code.
 
 Use `studioRowInteraction` on rows that open or select a resource. It provides
 whole-row hover, keyboard focus and activation with Enter or Space. Keep native
-links and buttons for their own actions. Use `studio-row-link` for a text-only
-name link or button in the row. Tables used for display and rows with no default
+links and buttons for distinct actions. Once the whole row opens with a pointer and
+with Enter or Space, remove name and Details buttons that duplicate that action. Tables used for display and rows with no default
 destination can keep their existing controls.
 
 ## States and behavior
@@ -234,6 +235,11 @@ destination can keep their existing controls.
 - Use `StudioButton`, `StudioField`, `CopyableIdentifier`, status chips and the
   disclosure kit. Use the injected `api.dialogs` for host confirmation and focus management.
   A shared visual primitive does not grant permissions or implement a mutation.
+- Label creation entry points and dialog titles “New …”, for example “New workflow”.
+  Use “Create” for the confirm button and the verb “Create” for version actions.
+- Label a save action “Save”, including when publication is a separate step.
+- Label the action that repeats a failed request “Retry”.
+- Add “(required)” to each required field label. Leave optional field labels unmarked.
 - Use `StudioButton` with `variant="danger"` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent.
 - Use `StudioDialog` for module-owned modal forms. Give it a title, optional description and a `StudioDialogFooter` with Cancel first and one primary confirm at the default button size. Pass `onSubmit` to make the body and footer part of the same form.
 - Use `StudioIconButton` for an icon-only action. Pass one decorative 16px lucide icon and a sentence-case `aria-label`; the label also supplies the default tooltip. Use `variant="danger"` for a destructive icon action.
@@ -297,8 +303,8 @@ embedded controls, portal content, modified clicks and text selection. Pass no a
 when the row is unavailable, stale or disabled. `StudioDataGrid` uses this behavior
 automatically when `onSelect` is provided.
 
-Use `studio-row-link` for a compact name link or button: transparent at rest, accent
-and underline on hover. Keep real anchors and their native modified-click behavior
+Use `studio-row-link` for a compact link to a distinct destination. It is transparent
+at rest and gains an accent and underline on hover. Keep real anchors and their native modified-click behavior
 when a URL exists. A separate destination (such as an executable's source definition)
 remains its own named link. Tables with multiple commands and no clear default action
 keep explicit controls rather than making the entire row run a command.

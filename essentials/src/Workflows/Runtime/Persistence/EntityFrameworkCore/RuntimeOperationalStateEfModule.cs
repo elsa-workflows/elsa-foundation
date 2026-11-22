@@ -18,6 +18,7 @@ public static class RuntimeOperationalStateEfModule
     public const string RecurringScheduleProjectionStateTableName = "elsa_runtime_recurring_schedule_projection_state";
     public const string SchemaVersion = "1.0.0";
     public const string StandaloneScheduleSchemaVersion = "1.1.0";
+    public const string TimerHistorySchemaVersion = "1.2.0";
     public const string SchemaFamily = "RuntimeOperationalState";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
     /// upcasts through.</summary>

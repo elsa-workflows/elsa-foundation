@@ -119,6 +119,8 @@ public sealed record OwnedEpoch(int Partition, long Epoch);
 /// </summary>
 public sealed record NodeBeat(IReadOnlyList<OwnedEpoch> Owned, long Now, Cluster Cluster);
 
+internal enum ParkKeepReason { Consumed, Arrived }
+
 /// <summary>
 /// One instance's part of a commit. <c>Expected</c> is the revision the row must have; null means the row is new.
 /// <c>Consumed</c> messages are deleted; <c>Done</c> ones (outside commands, which carry keep_until) are marked done.
@@ -139,6 +141,7 @@ public sealed record TurnCommit(
     internal HashSet<InboxKey>? FoundationHeldPromotions { get; init; }
     internal IReadOnlyList<InboxKey>? FoundationReleasedHolds { get; init; }
     internal bool OpensPark { get; init; }
+    internal IReadOnlyDictionary<InboxKey, ParkKeepReason>? FoundationKept { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);

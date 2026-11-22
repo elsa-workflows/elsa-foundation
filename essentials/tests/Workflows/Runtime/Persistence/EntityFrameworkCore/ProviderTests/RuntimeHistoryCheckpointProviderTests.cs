@@ -18,6 +18,17 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 public sealed class RuntimeHistoryCheckpointPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     [SkippableTheory]
+    [InlineData("timer-due-pages")]
+    [InlineData("timer-captured-roundtrip")]
+    [InlineData("timer-native-pending")]
+    [InlineData("timer-native-first-owner-race")]
+    [InlineData("timer-delete-schema")]
+    [InlineData("timer-native-unfenced-race")]
+    [InlineData("authored-durable")] [InlineData("authored-balanced")]
+    [InlineData("owner-replay-purge")] [InlineData("owner-observation-rollback")] [InlineData("owner-purge-rollback")]
+    [InlineData("owner-lost-ack")] [InlineData("owner-delete")] [InlineData("owner-delete-terminal")]
+    [InlineData("owner-delete-rollback")] [InlineData("owner-delete-terminal-rollback")]
+    [InlineData("observation-contention")]
     [InlineData("replay")] [InlineData("required-missing")] [InlineData("uncaptured")]
     [InlineData("marker-rollback")] [InlineData("derived-rollback")] [InlineData("lost-ack")]
     [InlineData("stale-fence")] [InlineData("marker-fence")] [InlineData("first-head-heartbeat")] [InlineData("first-head-takeover")]
@@ -30,6 +41,14 @@ public sealed class RuntimeHistoryCheckpointPostgreSqlTests(RuntimeBookmarksPost
 public sealed class RuntimeHistoryCheckpointSqlServerTests(RuntimeBookmarksSqlServerFixture fixture)
 {
     [SkippableTheory]
+    [InlineData("timer-due-pages")]
+    [InlineData("timer-captured-roundtrip")]
+    [InlineData("timer-native-pending")]
+    [InlineData("authored-durable")] [InlineData("authored-balanced")]
+    [InlineData("owner-replay-purge")] [InlineData("owner-observation-rollback")] [InlineData("owner-purge-rollback")]
+    [InlineData("owner-lost-ack")] [InlineData("owner-delete")] [InlineData("owner-delete-terminal")]
+    [InlineData("owner-delete-rollback")] [InlineData("owner-delete-terminal-rollback")]
+    [InlineData("observation-contention")]
     [InlineData("replay")] [InlineData("required-missing")] [InlineData("uncaptured")]
     [InlineData("marker-rollback")] [InlineData("derived-rollback")] [InlineData("lost-ack")]
     [InlineData("stale-fence")] [InlineData("marker-fence")] [InlineData("first-head-heartbeat")] [InlineData("first-head-takeover")]
@@ -42,6 +61,17 @@ public sealed class RuntimeHistoryCheckpointSqlServerTests(RuntimeBookmarksSqlSe
 public sealed class RuntimeHistoryCheckpointMySqlTests(RuntimeBookmarksMySqlFixture fixture)
 {
     [SkippableTheory]
+    [InlineData("timer-due-pages")]
+    [InlineData("timer-captured-roundtrip")]
+    [InlineData("timer-native-pending")]
+    [InlineData("timer-deleted-caller-snapshot")]
+    [InlineData("timer-caller-snapshot")] [InlineData("timer-probe-snapshot")] [InlineData("timer-native-snapshot")]
+    [InlineData("timer-native-affected-empty")] [InlineData("timer-native-affected-existing")]
+    [InlineData("authored-durable")] [InlineData("authored-balanced")]
+    [InlineData("owner-replay-purge")] [InlineData("owner-observation-rollback")] [InlineData("owner-purge-rollback")]
+    [InlineData("owner-lost-ack")] [InlineData("owner-delete")] [InlineData("owner-delete-terminal")]
+    [InlineData("owner-delete-rollback")] [InlineData("owner-delete-terminal-rollback")]
+    [InlineData("observation-contention")]
     [InlineData("replay")] [InlineData("required-missing")] [InlineData("uncaptured")]
     [InlineData("marker-rollback")] [InlineData("derived-rollback")] [InlineData("lost-ack")]
     [InlineData("stale-fence")] [InlineData("marker-fence")] [InlineData("first-head-heartbeat")] [InlineData("first-head-takeover")]
@@ -52,13 +82,13 @@ public sealed class RuntimeHistoryCheckpointMySqlTests(RuntimeBookmarksMySqlFixt
 
 // Controlled admitted native headers and contributions exercise the actual migrated provider,
 // native writer and SQL transactions. They do not qualify authored capture, DI or composed UX.
-internal static class RuntimeHistoryCheckpointProviderContract
+internal static partial class RuntimeHistoryCheckpointProviderContract
 {
     private const string Scope = "Case|tenant";
     private const string ForeignScope = "case|tenant";
     private const string RunId = "captured-run";
     private static readonly DateTimeOffset At = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
-    private static readonly RuntimeHistoryCapturePolicy Policy = new("native-provider-history", 1, true, ["ActivityStarted", "BookmarkCreated"]);
+    private static readonly RuntimeHistoryCapturePolicy Policy = new("native-provider-history", 1, true, ["ActivityStarted", "BookmarkCreated", "DeliveryReceived"]);
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
 
     internal static async Task Run(RuntimeBookmarksProviderFixture provider, string engine, string scenario,
@@ -69,12 +99,58 @@ internal static class RuntimeHistoryCheckpointProviderContract
         foreach (var key in connection.Keys.Cast<string>().Where(key => key.Equals("Database", StringComparison.OrdinalIgnoreCase) ||
                      key.Equals("Initial Catalog", StringComparison.OrdinalIgnoreCase)).ToArray()) connection.Remove(key);
         connection["Database"] = "history_checkpoint_" + Guid.NewGuid().ToString("N");
+        if (scenario.StartsWith("timer-native-affected-", StringComparison.Ordinal)) connection["UseAffectedRows"] = true;
         var database = new Database(connection.ConnectionString, open);
         try
         {
+            if (scenario.StartsWith("authored-", StringComparison.Ordinal))
+            {
+                await AuthoredRuntime(database, engine, scenario == "authored-balanced" ? PersistenceMode.Balanced : PersistenceMode.Durable);
+                return;
+            }
             await database.Create(scenario != "uncaptured");
             switch (scenario)
             {
+                case "timer-due-pages":
+                    await TimerDuePages(database);
+                    break;
+                case "timer-captured-roundtrip":
+                    await TimerCapturedRoundtrip(database);
+                    break;
+                case var owner when owner.StartsWith("owner-", StringComparison.Ordinal):
+                    await PublicOwner(database, engine, owner);
+                    break;
+                case "timer-delete-schema":
+                    await TimerAlternateSchema(database);
+                    break;
+                case "timer-native-pending":
+                    await TimerPendingParticipants(database);
+                    break;
+                case "timer-native-affected-empty":
+                case "timer-native-affected-existing":
+                    await TimerNativeAffectedRows(database, scenario.EndsWith("existing", StringComparison.Ordinal));
+                    break;
+                case "timer-native-unfenced-race":
+                    await TimerFirstOwnerRace(database, checkpoint: true);
+                    break;
+                case "timer-native-first-owner-race":
+                    await TimerFirstOwnerRace(database);
+                    break;
+                case "timer-native-snapshot":
+                    await TimerCallerSnapshot(database, native: true);
+                    break;
+                case "timer-probe-snapshot":
+                    await TimerCallerSnapshot(database, probe: true);
+                    break;
+                case "timer-deleted-caller-snapshot":
+                    await TimerDeletedCallerSnapshot(database);
+                    break;
+                case "timer-caller-snapshot":
+                    await TimerCallerSnapshot(database);
+                    break;
+                case "observation-contention":
+                    await ConcurrentObservation(database, engine);
+                    break;
                 case "replay":
                     await using (var context = database.Open())
                     {
@@ -207,6 +283,7 @@ internal static class RuntimeHistoryCheckpointProviderContract
 
     private sealed class Database(string connection, Func<string, IInterceptor[], RuntimeDbContext> open)
     {
+        internal string Connection => connection;
         internal FakeTimeProvider Clock { get; } = new(At.AddMinutes(1));
         private readonly Access access = new();
         private string foreignContent = "";
@@ -218,7 +295,7 @@ internal static class RuntimeHistoryCheckpointProviderContract
         internal async Task Create(bool captured)
         {
             await using var context = Open(); Assert.False(context.Database.HasPendingModelChanges()); await context.Database.MigrateAsync();
-            Assert.Equal(7, (await context.Database.GetAppliedMigrationsAsync()).Count()); Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+            Assert.Equal(8, (await context.Database.GetAppliedMigrationsAsync()).Count()); Assert.Empty(await context.Database.GetPendingMigrationsAsync());
             var native = EfWorkflowExecutionStateStore.ToEntity(Workflow(Scope, captured), Scope, EfWorkflowExecutionStateStore.CreateId(Scope, RunId), 1);
             var foreign = EfWorkflowExecutionStateStore.ToEntity(Workflow(ForeignScope, true), ForeignScope, EfWorkflowExecutionStateStore.CreateId(ForeignScope, RunId), 1);
             foreignContent = foreign.ContentJson; context.WorkflowExecutionStates.AddRange(native, foreign); await context.SaveChangesAsync();

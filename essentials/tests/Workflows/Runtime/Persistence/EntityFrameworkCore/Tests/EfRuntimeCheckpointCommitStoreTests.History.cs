@@ -252,7 +252,7 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
     public async Task First_captured_head_keeps_native_fence_renewal_retry_and_stale_owner_precedence(bool leaseLost)
     {
         await using var database = await TestDatabase.CreateAsync(); var clock = new FixedTimeProvider(OccurredAt);
-        var heartbeat = new FenceRowChangeBeforeSave(delete: leaseLost);
+        var heartbeat = new FenceRowChangeBeforeSave(delete: leaseLost) { Armed = false };
         await using (var context = database.Open("tenant-a", heartbeat))
         {
             var access = new FixedAccessor("tenant-a");
@@ -261,6 +261,8 @@ public sealed partial class EfRuntimeCheckpointCommitStoreTests
             row.ContentJson = RuntimeArtifactJson.Serialize(EfWorkflowExecutionStateStore.ReadChecked(row, "tenant-a", "workflow-a") with
             { HistoryCapturePolicy = NativeHistoryPolicy, HistoryCaptureEnabledAtAdmission = true });
             row.Revision++; await context.SaveChangesAsync();
+            // Initial native coordination now gives lease acquisition a row to update. Inject the race only in the checkpoint under test.
+            heartbeat.Armed = true;
             var commit = NativeHistoryCommit("first-captured-renewal") with { ExpectedFence = lease.ToFence() };
             var store = new EfRuntimeCheckpointCommitStore(context, access, clock);
             if (leaseLost) await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => store.CommitAsync(commit, Decision()).AsTask());
