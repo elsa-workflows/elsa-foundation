@@ -3,7 +3,7 @@ import type { StudioExpressionEditorEdit } from "@elsa-workflows/studio-sdk";
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
-import { AdvancedSection, AnchoredPopover, StudioField, StudioFieldAdornmentProvider } from "@elsa-workflows/studio-ui";
+import { StudioButton, AdvancedSection, AnchoredPopover, StudioField, StudioFieldAdornmentProvider } from "@elsa-workflows/studio-ui";
 import {
   authSessionEndedEvent,
   authSessionStartedEvent,
@@ -383,7 +383,7 @@ function ExpressionDescriptorStatus({
       <span>{hasSnapshot
         ? "Expression types could not be refreshed. Using the last loaded metadata."
         : "Expression types could not be loaded."}</span>
-      {onRetry ? <button type="button" className="wf-expression-descriptors-retry" onClick={onRetry}>Retry</button> : null}
+      {onRetry ? <StudioButton type="button" className="wf-expression-descriptors-retry" onClick={onRetry}>Retry</StudioButton> : null}
     </div>
   );
 }
@@ -1211,15 +1211,15 @@ function PropertyRow({
     variant="inline"
     onChange={setSyntax}
   />;
-  const inlineExpandAction = canExpandEditor ? <button
+  const inlineExpandAction = canExpandEditor ? <StudioButton
     type="button"
     className="wf-expression-expand-button"
     aria-label={`Open expanded ${input.displayName || input.name} editor`}
     title="Open expanded editor"
     onClick={() => setExpandRequested(true)}
-  ><Maximize2 size={13} /></button> : null;
+  ><Maximize2 size={13} /></StudioButton> : null;
   const canRevealConversion = !!wrapped && !secretOnly;
-  const conversionToggle = canRevealConversion ? <button
+  const conversionToggle = canRevealConversion ? <StudioButton
     ref={conversionToggleRef}
     type="button"
     className={conversionAuthored ? "wf-conversion-toggle authored" : "wf-conversion-toggle"}
@@ -1230,7 +1230,7 @@ function PropertyRow({
     onClick={() => (conversionOpen ? closeConversion() : setConversionOpen(true))}
   >
     <SlidersHorizontal size={13} />
-  </button> : null;
+  </StudioButton> : null;
   const inputBindingsToggle = canRevealInputBindings ? <WorkflowInputArgumentBindingsToggle
     inputBindingTarget={isActivityDefinitionGraph ? "referenceKey" : "name"}
     buttonRef={inputBindingsToggleRef}
@@ -1364,14 +1364,14 @@ function PropertyRow({
               />
             </div>
           ) : (
-            <button
+            <StudioButton
               type="button"
               className="wf-conversion-chip"
               aria-label={`Edit ${input.displayName || input.name} conversion: ${conversionModeDisplayName} (${conversionCaption})`}
               onClick={() => setConversionOpen(true)}
             >
               {conversionModeDisplayName} · {conversionCaption}
-            </button>
+            </StudioButton>
           )}
         </div>
       ) : null}
@@ -1395,7 +1395,7 @@ function PropertyRow({
               : `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.`}
           </p>
           <div>
-            <button
+            <StudioButton
               type="button"
               onClick={() => applyTransition(pendingTransition.descriptor, pendingTransition.nextValue)}
             >
@@ -1404,26 +1404,26 @@ function PropertyRow({
                   ? `Replace value and remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
                   : `Remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
                 : "Replace value"}
-            </button>
-            <button
+            </StudioButton>
+            <StudioButton
               ref={cancelTransitionRef}
               type="button"
               onClick={cancelTransition}
             >
               Cancel
-            </button>
+            </StudioButton>
           </div>
         </div>
       ) : null}
       {canExpandEditor && !useInlineSyntaxPicker && !dictionaryType ? (
-        <button
+        <StudioButton
           type="button"
           className="wf-property-expand-row"
           aria-label={`Open expanded ${input.displayName || input.name} editor`}
           onClick={() => setExpandRequested(true)}
         >
           <Maximize2 size={13} /> Open expanded editor
-        </button>
+        </StudioButton>
       ) : null}
       {provider && dynamicOptions.status === "loading" ? (
         <p className="wf-property-options-status" role="status">Loading options...</p>
@@ -1431,7 +1431,7 @@ function PropertyRow({
       {provider && dynamicOptions.status === "error" ? (
         <div className="wf-property-options-error" role="alert">
           <span>Options are unavailable.</span>
-          <button type="button" onClick={dynamicOptions.retry}>Retry</button>
+          <StudioButton type="button" onClick={dynamicOptions.retry}>Retry</StudioButton>
         </div>
       ) : null}
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
@@ -1697,9 +1697,9 @@ function ExpandedPropertyEditor({
             <span>Property editor</span>
             <h3 id={titleId}>{displayName}</h3>
           </div>
-          <button type="button" aria-label={`Close ${displayName} editor`} onClick={onClose}>
+          <StudioButton type="button" aria-label={`Close ${displayName} editor`} onClick={onClose}>
             <X size={16} />
-          </button>
+          </StudioButton>
         </header>
         <div className="wf-property-editor-body">
           <div className="wf-property-editor-toolbar">
@@ -1774,7 +1774,7 @@ function ExpandedPropertyEditor({
         </div>
         <footer>
           <span>Changes update the draft immediately.</span>
-          <button type="button" onClick={onClose}>Close</button>
+          <StudioButton type="button" onClick={onClose}>Close</StudioButton>
         </footer>
       </section>
     </div>
@@ -2095,7 +2095,7 @@ export function SyntaxPicker({
 
   return (
     <div className={["wf-syntax-picker", iconOnly ? variant : ""].filter(Boolean).join(" ")}>
-      <button
+      <StudioButton
         ref={triggerRef}
         type="button"
         className={className}
@@ -2111,7 +2111,7 @@ export function SyntaxPicker({
         {iconOnly
           ? <SyntaxIcon className="wf-syntax-picker-icon" size={14} strokeWidth={2} aria-hidden="true" />
           : <span>{selectedName}</span>}
-      </button>
+      </StudioButton>
       <AnchoredPopover
         anchorRef={triggerRef}
         // Opening is an interaction after the trigger mounts; keep its menu in the modal layer.
@@ -2128,7 +2128,7 @@ export function SyntaxPicker({
             const selectedOption = descriptor.type === value;
             const unavailableReason = unavailableReasons[index];
             return (
-              <button
+              <StudioButton
                 ref={element => { optionRefs.current[index] = element; }}
                 type="button"
                 role="option"
@@ -2145,7 +2145,7 @@ export function SyntaxPicker({
               >
                 <span>{optionLabel}</span>
                 {unavailableReason ? <small>{unavailableReason}</small> : null}
-              </button>
+              </StudioButton>
             );
           })}
         </div>

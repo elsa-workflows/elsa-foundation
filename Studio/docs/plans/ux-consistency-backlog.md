@@ -79,6 +79,23 @@ The table records the source paths inspected for A1. PR #5326 carries the screen
 
 PR #5339 covers the host portions of A2 and A6. The Diagnostics index derives destinations from authorized navigation, guards against cyclic parent registrations, and isolates contributed widgets. Widget loading and subscriptions clean up when the screen unmounts. The built-in property editors distinguish collection and element scope, retain unavailable choices, validate number and duration input, and keep stored password values out of the input. The host test suite exercises those editors.
 
+### Form and decision authoring audit
+
+The A6 review covered every line of `EXT/UserTasks/FormDesigner.tsx`, `EXT/UserTasks/PropertyEditors.tsx`, and `EXT/Decisions/TableEditor.tsx`. The form designer supports keyboard reordering, preserves unpublished source edits across view changes and reuses the side-panel layout. The assignment editor atomically clears the opposite selection where supported, and the task form picker follows pagination and retains unavailable selections. The decision grid supports rectangular clipboard operations, selected-cell diagnostics, undo/redo and column settings. The additional findings appear in X9, X12 and the extension list below.
+
+### Narrow viewport review
+
+The audit reviewed the following composed Studio states at 360–390px widths. The Executable Inspector maximize defect reproduced during the initial run was repaired and retested in #5305.
+
+| Area | Reviewed evidence |
+|---|---|
+| Theme, notifications, Weaver and user menus | [Host overlays](https://github.com/elsa-workflows/elsa-foundation/pull/5339#issuecomment-7072890665), [Weaver](https://github.com/elsa-workflows/elsa-foundation/pull/5310#issuecomment-7072317218) |
+| Bottom dock | [Dock and dock actions](https://github.com/elsa-workflows/elsa-foundation/pull/5292#issuecomment-7071892351) |
+| Activity draft and publication | [Activity authoring dialogs](https://github.com/elsa-workflows/elsa-foundation/pull/5306#issuecomment-7072249665), [publication disclosures](https://github.com/elsa-workflows/elsa-foundation/pull/5316#issuecomment-7072420893) |
+| Run detail and Executable Inspector | [Run data and detail](https://github.com/elsa-workflows/elsa-foundation/pull/5300#issuecomment-7072119611), [activity and executable views](https://github.com/elsa-workflows/elsa-foundation/pull/5334#issuecomment-7072894933), [maximized inspector retest](https://github.com/elsa-workflows/elsa-foundation/issues/5264#issuecomment-7072194268) |
+| Decisions Tests and Settings | [Saved decision at both widths](https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/3d6c772650353cea14f07f8800303da448dfd68a/Studio/qa-evidence/5340-273b42af20-visual.zip) |
+| Dark dialogs | [Form and Decision creation](https://github.com/elsa-workflows/elsa-foundation/pull/5331#issuecomment-7072854830), [dashboard discard confirmation](https://github.com/elsa-workflows/elsa-foundation/pull/5319) |
+
 ## Path shorthand
 
 | Short | Path from the repository root |
@@ -174,7 +191,7 @@ Most inconsistencies exist because a shared primitive is missing or unused. Do t
 
 Candidates reported by source readers. Confirm the need before building any of them.
 
-- [ ] **K9.** (#5002) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
+- [x] **K9.** (#5002, PR #5342) [source] Stepper for multi-step flows (`WF/Elsa3ReusableImportPage.tsx:495–633`,
   `WF/ActivityUpgradeWorkbenchPage.tsx:390–463`).
 - [x] **K10.** (#5003) [source] Key-fact definition list (`ad-publication-summary`, `ad-impact-facts`, (PR #5309)
   `ad-contract-workbench-facts`).
@@ -427,7 +444,7 @@ in scope.
   menu). (PR #5325)
 - [ ] **X6.8** (#5104) [seen] `WF/ActivityDefinitionWorkbench.tsx:267–268` (outlined button with icon).
 - [ ] **X6.9** (#5105) [seen] Remaining lists with a plain "Refresh" button in header actions. Find them by
-  searching for a `StudioButton` labelled "Refresh" outside `KIT`.
+  searching for a `StudioButton` labelled "Refresh" outside `KIT`. Weather, External sign-in, User access and the ETL lists use the header contribution in PR #5348.
 
 ### X7. Status badges
 
@@ -472,7 +489,7 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `StudioTabs` has a dense mode before migrating.
 - [x] **X8.8** (#5123) [seen] Dashboards and Questions "Mine / Shared with me": square 30px buttons with
   radius 0 → `PeerViewSwitch` or `StudioTabs`. (PR #5311)
-- [ ] **X8.9** (#5124) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
+- [x] **X8.9** (#5124, PR #5336) [source] `EXT/Attention/AttentionWidget.tsx` (around line 20) `aria-pressed` filter
   buttons → `PeerViewSwitch`.
 - [x] **X8.10** (#5125) [source] Selects used as view switches: `EXT/UserTasks/TasksPage.tsx:51–53` (field
   labelled "Inbox"), `EXT/Decisions/DecisionsPage.tsx:223` ("Decision version"). (PR #5325)
@@ -509,8 +526,10 @@ Replace each with `StatusChip` or `StatusPill` and sentence-case text.
   `WF/workflow-editor/AttachedRunActivityInspector.tsx:26`, `AttachedTestRunControls.tsx:25`.
 - [x] **X9.8** (#5136) [source] `EXT/Decisions/DecisionsPage.tsx:179–180` shows success in a `StudioAlert`; (PR #5320)
   action results belong in `api.notifications.notify`.
-- [ ] **X9.9** (#5137) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
+- [x] **X9.9** (#5137, PR #5336) [source] Empty states as bare paragraphs: `EXT/Attention/AttentionWidget.tsx:23`,
   `EXT/Workflows.Dashboard/WorkflowRunHealthWidget.tsx:66`, `WorkflowDashboardUnavailable.tsx:5`.
+
+- [ ] **X9.10** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` uses bare `role="alert"` elements for invalid actions, assignment choices, unavailable versions and form loading errors. The Decisions table parser uses the same pattern in `EXT/Decisions/TableEditor.tsx`. Use the shared alert while retaining the recovery action.
 
 ### X10. Timestamps and identifiers
 
@@ -538,12 +557,12 @@ Replace local date formatting with `StudioTimestamp`.
 Counts are raw `<button` occurrences. Canvas and context-toolbar buttons may be legitimately custom;
 the designer header is a documented exception.
 
-- [ ] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20).
+- [x] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20). (PR #5337)
 - [x] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19). (PR #5334)
-- [ ] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12).
+- [x] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12). (PR #5337)
 - [x] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and (PR #5332)
   20px `.ad-primary-action` buttons.
-- [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
+- [x] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12). (PR #5337)
 - [x] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11). (PR #5334)
 - [x] **X11.7** (#5156) [verified] `WF/ActivityDefinitionPublicationReview.tsx` (10). (PR #5316)
 - [ ] **X11.8** (#5157) [verified] `WF/workflow-editor/WorkflowFolderMutationDialogs.tsx` (9).
@@ -559,7 +578,7 @@ the designer header is a documented exception.
 - [x] **X11.13** (#5162) [source] `WF/workflow-editor/`: `WorkflowExecutables.tsx` (9), (PR #5334)
   `ActivityExecutionBrowser.tsx` (9), `WorkflowFolderNavigation.tsx` (8),
   `WorkflowLibraryControls.tsx` (7), `InspectorPanel.tsx` (6).
-- [ ] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9),
+- [x] **X11.14** (#5163) [source] `WF/graph-authoring/SequenceDesigner.tsx` (9), (PR #5337)
   `BpmnInterchangeCommands.tsx` (6).
 - [x] **X11.15** (#5164) [source] Weaver: `H/weaver/WeaverSurface.tsx`, `WeaverMessageList.tsx`,
   `WeaverProposalReview.tsx`, `WeaverComposer.tsx`, `WeaverPromptStarters.tsx`, `WeaverLauncher.tsx`. (PR #5310)
@@ -598,6 +617,8 @@ the designer header is a documented exception.
 - [x] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`. (PR #5321)
 
+- [ ] **X12.13** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` renders a native `user-task-designer__advanced` disclosure for a contributed field’s optional settings. Use the shared advanced section and preserve access to those controls.
+
 ### X13. CSS texture
 
 Work file by file and run `pnpm lint:css` after each. Counts are grep counts on the audit date.
@@ -620,7 +641,7 @@ Uppercase labels (`needs: D3`):
 - [x] **X13.8** (#5191) [verified] `EXT/Diagnostics.StructuredLogs/styles.css:168` ([seen] table headers TIME /
   LEVEL / SOURCE). (PR #5298)
 - [ ] **X13.9** (#5192) [verified] `EXT/Connections/styles.css:31`.
-- [ ] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`,
+- [x] **X13.10** (#5193) [source] `WF/workflow-editor/activityInspection.css:181`, (PR #5337)
   `WF/workflow-editor/graphCanvas.css:453`, `WF/graph-authoring/compensationScopeDesigner.css:292`.
 - [x] **X13.11** (#5194) [verified] `EXT/ExtensionBuilder/styles.css` (2 uppercase rules). (PR #5326)
 
@@ -646,7 +667,7 @@ Raw font sizes, weights, radii and colours:
 - [ ] **X13.12** (#5195) One task per row of the table above: replace raw values with `--studio-*` tokens.
   Many raw radii are `999px` pills; check each one before changing it.
   Console stream, OpenTelemetry and Structured logs completed in PR #5298 (Console chrome colors in PR #5294). Extension Builder completed in PR #5326.
-- [ ] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`,
+- [x] **X13.13** (#5196) [source] `WF/styles.css:12–36` maps `--wf-*` onto non-Studio variables (`--card`, (PR #5337)
   `--muted`, `--border`) with hex fallbacks. Remap to `--studio-*` and drop the fallbacks.
 - [x] **X13.14** (#5197) [verified] `EXT/ConsoleStream/styles.css` carries about 57 hex/rgba values;
   [source] it uses a private `--cs-*` namespace. (PR #5294; fixed ANSI SGR colors retain the documented exemption.)
@@ -692,7 +713,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 ### Workflows module
 
 - [x] **W1** (#5213) [seen] Runs: search input text is weight 700; every other list is 400. (PR #5322)
-- [ ] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless
+- [x] **W2** (#5214) [seen] Workflow designer and activity designer headers differ. "Test Run" is borderless (PR #5337)
   in one and outlined in the other; the ⋯ button is borderless in one and boxed in the other.
   **[check]** palette category headings appear to differ in size.
 - [x] **W3** (#5215) [seen] Saved views row actions are four equal default buttons, one with an emoji pencil (PR #5322)
@@ -716,12 +737,12 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   components; use the kit components directly.
 - [x] **W12** (#5224) [source] `WF/ActivityDefinitionDraftEditor.tsx:638` finds a tab by querying (PR #5328)
   `.wf-inspector [role="tab"]` and clicking the one whose text is "Inputs". Replace with state.
-- [ ] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456,
+- [x] **W13** (#5225) [source] Selects with only an `aria-label`: `WF/ActivityDefinitionContractEditor.tsx:456, (PR #5337)
   473, 488`, `WF/WorkflowPropertiesView.tsx:192, 222`. Wrap in `StudioField`.
 - [x] **W14** (#5226) [source] `WF/workflow-editor/WorkflowInstances.tsx`: 7 raw `<select|input|textarea>`. (PR #5334)
 - [ ] **W15** (#5227) [source] `WF/module.tsx:126–136`: one module spread over four nav placements with
   inconsistent parenting; Upgrades and Elsa 3 import have no nav entry.
-- [ ] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a
+- [x] **W16** (#5228) [source] `WF/ActivityDefinitionCreateDialog.tsx:127`: label "Description " with a (PR #5337)
   trailing space, a duplicate `aria-label` and a `<small>Optional</small>`. Under D13 the optional
   marker goes. `needs: D13`
 - [x] **W17** (#5229) [source] Local feedback as bare `<p role="status">` in (PR #5334)
@@ -762,7 +783,7 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
   `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
-- [ ] **E16** (#5246) [source] Attention widget shows severity only as a border colour
+- [x] **E16** (#5246, PR #5336) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
 - [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
   `requiresBackend` (`EXT/Secrets/module.tsx:40–44`). **[check]** whether the legacy route is still
@@ -779,6 +800,10 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `AgentEditor.tsx:248`). `EXT/Connections/ConnectionCreateDialog.tsx:312` already uses the
   "(required)" suffix. **[check]** whether `StudioField` should render the suffix itself.
   `needs: D13`
+
+- [ ] **E21** (#5266) [verified] `EXT/Decisions/TableEditor.tsx` calls `event.preventDefault()` even when `moveTab` reaches the first or last cell. Allow Tab and Shift+Tab to leave the grid at its boundaries, including while editing a cell.
+- [ ] **E22** (#5266) [verified] `EXT/UserTasks/FormDesigner.tsx` resolves source rows with `rowsByKey.get(field.key) ?? rows[index]`. Inserting a new field before an unchanged field can give both rows the same selection and drag identity.
+- [ ] **E23** (#5266) [verified] `EXT/UserTasks/PropertyEditors.tsx` rejects the reserved action name `"Unmatched"`, while the validation message only describes spaces and uniqueness. Explain the reserved name when it prevents saving.
 
 ### Host
 
@@ -821,7 +846,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
 - [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
   [Coverage gaps](#coverage-gaps).
 - [ ] **A3** (#5263) Review dark mode, including dialogs.
-- [ ] **A4** (#5264) Review narrow viewports.
+- [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
 - [ ] **A6** (#5266) Finish reading the files listed as partially read under [Coverage gaps](#coverage-gaps).

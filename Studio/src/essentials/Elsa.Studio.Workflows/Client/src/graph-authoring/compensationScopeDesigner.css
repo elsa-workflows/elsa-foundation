@@ -289,7 +289,6 @@ button.wf-compensation-state {
   color: var(--studio-text-muted);
   font-size: .6875rem;
   letter-spacing: .04em;
-  text-transform: uppercase;
 }
 
 .wf-compensation-received-row {

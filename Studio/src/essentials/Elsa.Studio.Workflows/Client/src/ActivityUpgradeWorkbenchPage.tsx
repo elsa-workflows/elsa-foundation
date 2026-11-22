@@ -1,3 +1,4 @@
+import { StudioStepper } from "@elsa-workflows/studio-ui";
 import { qualifyStudioBackendPath, useStudioWorkspaceWhenActive } from "@elsa-workflows/studio-sdk";
 import { StudioShellBreadcrumbs, StudioPageHeader, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -295,6 +296,10 @@ export function ActivityUpgradeWorkbenchPage({
     <StudioShellBreadcrumbs items={[{ href: "/workflows/activity-definitions", label: "Activity definitions" }]}
       current="Activity definition upgrades" renderLink={item => <StudioLink href={item.href} navigateToStudioPath={navigateToStudioPath}>{item.label}</StudioLink>} />
     <StudioPageHeader headingLevel={2} title={<>Activity definition upgrades</>} titleId="activity-upgrade-title" description={<>Select the activities or workflows to upgrade, review their dependencies, then apply one stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
+    <StudioStepper label="Upgrade progress" steps={[
+      { id: "selection", label: "Select replacements" }, { id: "review", label: "Review and apply stages" },
+      { id: "result", label: "Review results" }
+    ]} current={complete || awaitingResult ? "result" : plan ? "review" : "selection"} />
 
     <div className="au-scope-note" role="note">
       <strong>Choose what to upgrade</strong>

@@ -435,9 +435,9 @@ function EtlRunsWorkbench({ context, dialogs, backendSession }: EtlRunsPageProps
   }
 
   return <section className="studio-page etl-shell etl-runs-page" aria-label="ETL runs">
-    <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description="Monitor pipeline runs and inspect their progress, outputs and failures." actions={<><StudioButton type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
-        {runsLoading && visibleRuns.length > 0 ? "Refreshing…" : "Refresh"}
-      </StudioButton></>} />
+    <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description="Monitor pipeline runs and inspect their progress, outputs and failures."
+      refresh={{ id: "etl-runs", label: "Refresh ETL runs", onRefresh: refresh, refreshing: runsLoading, disabled: !contextIsLoaded,
+        autoRefresh: !cancelling && !completing }} />
     {returnTo && sessionActive() ? <p><a href={returnTo} onClick={event => { if (!sessionActive()) event.preventDefault(); }}>Back to native run</a></p> : null}
     {locationError ? <p role="status">{locationError}</p> : null}
 

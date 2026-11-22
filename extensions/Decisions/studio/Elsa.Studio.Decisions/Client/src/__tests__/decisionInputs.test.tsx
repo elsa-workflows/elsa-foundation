@@ -621,7 +621,7 @@ describe("Evaluate Decision draft validation collection", () => {
     window.dispatchEvent(new Event("focus"));
     await vi.waitFor(() => expect(release).toEqual(expect.any(Function)));
     expect(host.textContent).toContain("InvalidValue");
-    expect(host.textContent).not.toContain("Loading input fields");
+    expect(host.querySelector('[role="status"][aria-label="Loading input fields"]')).toBeNull();
     expect(host.querySelector("fieldset")?.disabled).toBe(false);
     expect(document.activeElement).toBe(amount);
     release!();
