@@ -1,6 +1,6 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { type AnchorHTMLAttributes, type MouseEvent } from "react";
-import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, reviewStudioNavigation, settleStudioNavigationReview } from "@elsa-workflows/studio-sdk";
+import { isStudioWorkspaceTabClick, openStudioWorkspaceTab, requestStudioNavigation } from "@elsa-workflows/studio-sdk";
 import { pathBeforeStudioSegment } from "./studioHostPath";
 
 export function defaultStudioPathNavigation(path: string) {
@@ -106,10 +106,8 @@ export function StudioLink({
     }
     if (!shouldInterceptStudioLinkClick(event, targetHref)) return;
     event.preventDefault();
-    const origin = window.location.href;
-    settleStudioNavigationReview(reviewStudioNavigation(window.location.pathname, targetHref), allowed => {
-      if (allowed && window.location.href === origin) navigateToStudioPath(targetHref);
-    });
+    if (!requestStudioNavigation(window.location.pathname, targetHref)) return;
+    navigateToStudioPath(targetHref);
   };
   return <a {...rest} href={targetHref} onClick={handleClick}>{children}</a>;
 }

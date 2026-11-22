@@ -151,6 +151,20 @@ describe("native editor host navigation guards", () => {
     confirm.mockResolvedValue(true); expect(await navigation(intent)).toBe(true); expect(confirm).toHaveBeenCalledTimes(2);
   });
 
+  it.each(["edit", "hide"] as const)("rejects a stale discard decision after a new %s", async change => {
+    const { api, controller } = fixture();
+    let decide!: (allowed: boolean) => void;
+    vi.spyOn(api.dialogs, "confirm").mockImplementation(() => new Promise(resolve => { decide = resolve; }));
+    const editor = mount(api, controller);
+    await waitUntil(() => controller.snapshots.size === 1);
+    edit(value(editor.container, "Name"), "First edit");
+    const result = navigation();
+    if (change === "hide") editor.hide();
+    else edit(value(editor.container, "Name"), "Newer edit");
+    decide(true);
+    expect(await result).toBe(false);
+  });
+
   it("uses the host guard once for the native Back action instead of asking two discard questions", async () => {
     const { api, controller } = fixture(); const confirm = vi.spyOn(api.dialogs, "confirm").mockResolvedValue(false);
     const moved: string[] = [];
