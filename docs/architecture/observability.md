@@ -1931,6 +1931,9 @@ calls one new model hook.
       is a duplicate and it adds no coverage entry. Its successors take new keys under the chain's one `CatchUpId`
       ("One catch-up id across a meet chain" above, sixth review R6-M1). The owner of that partition pages the catch-up on the meet path,
       so the sweep's coverage check holds the start's events until its catch-up passes them. Case SB-8.
+      The in-memory registrar and Worker now exercise the atomic registration, paged creator and delivery writes,
+      takeover, removal before matching and exhausted steps. The exhausted registrar retains its exact subscription
+      identity and entitlement in the dead letter while releasing coverage. Operator replay is assigned to K11.
     - **Against invariant 13 and the owner's card.** Invariant 13
       ([DESIGN.md](../../prototypes/kernel-model/DESIGN.md), "Invariants") says that for waits that ask for kept
       events, an event and a wait both committed within the window are delivered once, and for the others an event

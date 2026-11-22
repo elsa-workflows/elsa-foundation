@@ -25,6 +25,7 @@ internal static class FoundationEventSendChecks
         await Pump(activation);
         now++;
         await ingress.SetStartAsync(scope, quiet.CorrelationKey, "future", start);
+        await Pump(activation);
         check(ephemeral.Outcome == Contract.AdmissionOutcome.Accepted && store.Messages.Values.All(row => row.Done),
             "a one-way send without waiters is admitted and stays unavailable to future waits unless kept");
 
@@ -32,8 +33,9 @@ internal static class FoundationEventSendChecks
         var kept = await ingress.SendAsync(scope, retained, "kept", "caught-up", keep);
         var duplicate = await ingress.SendAsync(scope, retained, "kept", "changed", keep);
         await ingress.SetStartAsync(scope, retained.CorrelationKey, "late-start", start);
+        await Pump(activation);
         check(kept.Outcome == Contract.AdmissionOutcome.Accepted && duplicate.Outcome == Contract.AdmissionOutcome.Duplicate &&
-            store.Messages.Values.Count(row => row.Message.Kind is Kinds.Start or Kinds.Event) == 2,
+            store.ReadFoundationActors(scope.Tenant).Actors.Count(item => item.Header.TypeData == "one-way") == 1,
             "a kept event without waiters catches up one later start, with its original payload");
 
         var live = InstanceRef.In(0, "event-live-root");
@@ -137,6 +139,165 @@ internal static class FoundationEventSendChecks
         await CheckPage(check, byteCut: false, loseAfter: true);
         await CheckDeadLetter(check);
         await CheckAlreadyDeliveredPage(check);
+    }
+
+    internal static async Task StartRegistrationCatchUp(Action<bool, string> check)
+    {
+        foreach (var outcome in new[] { "takeover", "remove", "exhausted" })
+            await Run(outcome);
+        await CheckRegistrarPage(check);
+        await CheckRegistrarDuplicates(check);
+
+        async Task Run(string outcome)
+        {
+            const long initial = 1_701_511_000_000;
+            var now = initial;
+            var store = new InMemoryStore(1, () => now)
+            {
+                IngressDeduplicationWindow = TimeSpan.FromMilliseconds(10)
+            };
+            var scope = new Contract.BoundScope("start-catch-up");
+            var actor = new Probe();
+            var wire = new CountingStore(store, () => { }, (batch, landed) =>
+            {
+                if (!landed && outcome == "exhausted" && batch.Turns is
+                    [{ FoundationCatchUpStep: { } key }] && store.Messages[key].Message.ParkCatchUp is { Starts: true })
+                    throw new StoreException(Failure.Definite, "fixture refuses the registrar's catch-up page");
+            });
+            Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, actor),
+                new WorkerOptions { Monotonic = () => 0, MaxAttempts = 2 });
+            var worker = Owner("first-registrar");
+            await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
+            var edge = new InMemoryIngress(store, new Requests(worker.Node), worker.Node);
+            var start = new Contract.StartSpec(actor.Type, "registered");
+            const string key = "late";
+            await edge.SendAsync(scope, new Contract.Target.Event(key), "owed", "ignored", "owed",
+                new(KeepFor: TimeSpan.FromMilliseconds(100)));
+            await Pump(first);
+            now += 10;
+            await edge.SetStartAsync(scope, key, "starter", start);
+            await edge.SetStartAsync(scope, key, "starter", start);
+            var registration = store.Subscriptions.SingleOrDefault();
+            var ticket = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null)?.Message;
+            var captured = registration is { FoundationKeepsEvents: true, FoundationRegisteredAt: initial + 10, FoundationIncarnation: { } incarnation } &&
+                ticket is { HasIssuedTicket: true, ParkCatchUp: { Starts: true, Entitlement: initial + 10 } } &&
+                ticket.Id == FoundationEventIdentity.StartCatchUpId(registration, incarnation) && Actors().Count == 0 &&
+                store.Messages.Values.All(row => row.Message.Kind is not (Kinds.Event or Kinds.Start));
+            check(captured, $"{outcome}: start acceptance writes one ticket and registration before any subscriber work");
+            if (!captured) return;
+
+            now = initial + 110;
+            if (outcome == "remove") await edge.SetStartAsync(scope, key, "starter", null);
+            await store.SweepAsync();
+            check(store.FoundationEvents.Count == (outcome == "remove" ? 0 : 1),
+                $"{outcome}: sweep only protects the expired event while its registrar coverage is live");
+            await first.DisposeAsync();
+            var successor = Owner("successor-registrar");
+            await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+            await Pump(next);
+            if (outcome == "takeover")
+            {
+                check(Actors().ToArray() is [var started] && Json.Read<List<string>>(started.Row.State).SequenceEqual(["owed"]) &&
+                    store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+                    "after takeover the start consumes one canonical creator and applies its expired event once");
+                return;
+            }
+            if (outcome == "remove")
+            {
+                check(store.Subscriptions.Count == 0 && Actors().Count == 0 && store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+                    "the cancelled registrar reaches an empty page and creates no actor");
+                return;
+            }
+
+            await store.SweepAsync();
+            await edge.SetStartAsync(scope, key, "starter", start);
+            check(store.FoundationEvents.Count == 0 && Actors().Count == 0 && store.Subscriptions.Single() == registration &&
+                store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null) is
+                    { Done: true, ParkDeadLetter: true, Attempts: 2 } dead && dead.Message.InboxKey == ticket!.InboxKey,
+                "failed registrar steps release sweep coverage and leave one dead letter across an equivalent registration");
+
+            IReadOnlyList<InMemoryStore.ActorCheckpoint> Actors() => store.ReadFoundationActors(scope.Tenant).Actors;
+        }
+    }
+
+    private static async Task CheckRegistrarDuplicates(Action<bool, string> check)
+    {
+        const long now = 1_701_511_020_000;
+        const int count = 12;
+        const int megabyte = 1_024 * 1_024;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("registrar-duplicates");
+        var edge = new EventIngress(store, new Requests("registrar"), "caller");
+        var actor = new Probe();
+        var payload = new string('x', megabyte);
+        for (var index = 0; index < count; index++)
+            await edge.SendAsync(scope, new("signal"), $"event-{index:D2}", payload, new(KeepFor: TimeSpan.FromMinutes(1)));
+        await edge.SetStartAsync(scope, "signal", "starter", new(actor.Type, "duplicates"));
+        var before = 0L;
+        var allocated = -1L;
+        var thread = 0;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (batch.Turns is not [{ FoundationCatchUpStep: not null, FoundationPublicationSequence: null }]) return;
+            if (!landed)
+            {
+                thread = Environment.CurrentManagedThreadId;
+                before = GC.GetAllocatedBytesForCurrentThread();
+            }
+            else if (thread == Environment.CurrentManagedThreadId)
+                allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        });
+        var worker = new Worker("registrar-duplicates", 0, wire, new ActorAdapter(store, actor),
+            new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        for (var index = 0; index < count; index++) await Step(worker);
+        var beforeRegistrar = Creators();
+        await Step(worker);
+        check(beforeRegistrar == count && Creators() == count && allocated is >= 0 and < megabyte &&
+            store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "the registrar settles twelve previously delivered megabyte events in one page without framing their payloads again");
+
+        int Creators() => store.Messages.Values.Count(row => row.Message.InboxScope == InboxKey.EventCreatorScope);
+    }
+
+    private static async Task CheckRegistrarPage(Action<bool, string> check)
+    {
+        const long now = 1_701_511_010_000;
+        var store = new InMemoryStore(1, () => now);
+        var scope = new Contract.BoundScope("registrar-page");
+        var edge = new EventIngress(store, new Requests("registrar-page"), "caller");
+        var actor = new Probe();
+        const int count = InMemoryStore.ParkPageLimit + 1;
+        for (var index = 0; index < count; index++)
+            await Events.PublishAsync(store, new EventRow(scope.Tenant + "_late", $"event-{index:D3}", "owed", now + 100)
+                { FoundationTenant = scope.Tenant });
+        await edge.SetStartAsync(scope, "late", "starter", new(actor.Type, "paged"));
+
+        CommitBatch? oldPage = null;
+        var wire = new CountingStore(store, () => { }, (batch, landed) =>
+        {
+            if (landed && batch.Turns is [{ FoundationCatchUpStep: not null }]) oldPage ??= batch;
+        });
+        Worker Owner(string node) => new(node, 0, wire, new ActorAdapter(store, actor), new WorkerOptions { Monotonic = () => 0 });
+        var worker = Owner("registrar-first");
+        await using var first = (await new DurableHost([worker]).ActivateAsync(0))!;
+        await Step(worker);
+        var prefix = store.Messages.Values.SingleOrDefault(row => row.Message.ParkCatchUp is not null);
+        check(oldPage is not null && prefix?.Message.ParkCatchUp is { Page: 1, After.Event: "event-169" } &&
+            Births() == InMemoryStore.ParkPageLimit,
+            "the registrar commits 170 creator and delivery pairs with its exact successor cursor");
+        if (oldPage is null) return;
+
+        await first.DisposeAsync();
+        var successor = Owner("registrar-later");
+        await using var next = (await new DurableHost([successor]).ActivateAsync(0))!;
+        var late = await store.CommitAsync(oldPage);
+        await Step(successor);
+        check(!late.Landed && Births() == count && store.Messages.Values.Count(row => row.Message.Kind == Kinds.Event) == count &&
+            store.Messages.Values.All(row => row.Message.ParkCatchUp is null),
+            "takeover fences the old page and emits only the one previously uncommitted creator and delivery");
+
+        int Births() => store.Messages.Values.Count(row => row.Message.InboxScope == InboxKey.EventCreatorScope);
     }
 
     internal static async Task KeepingSubscription(Action<bool, string> check)
@@ -427,6 +588,7 @@ internal static class FoundationEventSendChecks
         var typeData = largeStart ? new string('z', FoundationMetadataLimits.TypeDataBytes) : "subscriber";
         for (var i = count - 1; i >= 0; i--)
             await edge.SetStartAsync(scope, "Signal", $"wait-{i:D3}", new("event-send", typeData));
+        await DrainEmptyRegistrations(store, count);
         var payload = byteCut ? new string('x', ParkRecoveryCredit.LimitBytes) : largeStart ? new string('x', 16 * 1_024) : "intact";
         var accepted = await edge.SendAsync(scope, new("signal"), "Event", payload, new(KeepFor: TimeSpan.Zero));
         var duplicate = await edge.SendAsync(scope, new("SIGNAL"), "event", "replacement", null);
@@ -529,6 +691,7 @@ internal static class FoundationEventSendChecks
         var scope = new Contract.BoundScope("broadcast-dead-letter");
         var edge = new EventIngress(store, new Requests("publisher"), "publisher");
         await edge.SetStartAsync(scope, "live", "wait", new("event-send", "receiver"));
+        await DrainEmptyRegistrations(store, 1);
         var published = await edge.SendAsync(scope, new("live"), "stalled", "skip", null);
         var failedKey = store.FoundationEvents.Values.Single().FoundationPublishTicket!.Value;
         await edge.SendAsync(scope, new("live"), "healthy", "deliver", null);
@@ -571,6 +734,9 @@ internal static class FoundationEventSendChecks
         await edge.SendAsync(scope, new("live"), "kept", new string('x', 1_024 * 1_024), new(KeepFor: TimeSpan.FromMinutes(1)));
         for (var i = 0; i < count; i++)
             await edge.SetStartAsync(scope, "live", $"late-{i:D2}", new("event-send", "receiver"));
+        var retained = store.FoundationEvents.Values.Single();
+        foreach (var wait in store.Subscriptions)
+            await store.AddEventAsync(new EventRoute(retained, wait).Delivery());
 
         var published = store.FoundationEvents.Values.Single().FoundationPublishTicket!.Value;
         var allocatedAt = 0L;
@@ -599,6 +765,16 @@ internal static class FoundationEventSendChecks
     {
         await worker.PollAsync();
         await worker.MeetAsync();
+    }
+
+    private static async Task DrainEmptyRegistrations(InMemoryStore store, int count)
+    {
+        var worker = new Worker("empty-registrations", 0, store, new ActorAdapter(store, new Probe()),
+            new WorkerOptions { Monotonic = () => 0 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        for (var step = 0; step < count; step++) await Step(worker);
+        if (store.Messages.Values.Any(row => row.Message.ParkCatchUp is { Starts: true }))
+            throw new InvalidOperationException("Expected the empty registration catch-ups to complete before publishing.");
     }
 
     private static async Task Pump(IScopeActivation activation)
