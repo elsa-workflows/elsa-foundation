@@ -276,7 +276,10 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                 HashSet<string>? childReferences = null;
                 long? expiryFrom = null, expiryUntil = null;
                 var revoked = CatchUpRevocations(batch);
-                var trackSubscriptionRemovals = batch.Turns.Count > 1 &&
+                var hasSubscriptionWrites = batch.Turns.Any(turn => turn.Subscribed.Count != 0);
+                var trackSubscriptionRemovals = batch.Turns.Count > 1 && hasSubscriptionWrites;
+                var mixedSubscriptionWrites = hasSubscriptionWrites &&
+                    batch.Turns.Any(turn => turn.Subscribed.Any(wait => wait.FoundationTenant is null)) &&
                     batch.Turns.Any(turn => turn.Subscribed.Any(wait => wait.FoundationTenant is not null));
                 var removedWaits = trackSubscriptionRemovals ? new HashSet<SubscriptionRow>(ReferenceEqualityComparer.Instance) : null;
                 var clearedWaits = trackSubscriptionRemovals ? new HashSet<string>(StringComparer.Ordinal) : null;
@@ -331,7 +334,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                     var inlineRoot = turn.Row is { FoundationInlineBirth: not null } local ? BindInlineRoot(local) : null;
                     if (inlineRoot is not null && !(inlineRoots ??= new(StringComparer.Ordinal)).TryAdd(turn.Instance, inlineRoot))
                         Diverged($"two inline births for {turn.Instance}");
-                    foreach (var subscription in turn.Subscribed) RequireSameSubscriptionScope(subscription, inlineRoot);
+                    foreach (var subscription in turn.Subscribed)
+                        RequireSameSubscriptionScope(subscription, inlineRoot, removedWaits, clearedWaits);
                     var subscriptions = PrepareFoundationSubscriptionInsert(turn, epochs, now, removedWaits, clearedWaits);
                     if (subscriptions is not null)
                     {
@@ -339,7 +343,7 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
                             Diverged($"two subscription writes for {turn.Instance}");
                         (subscriptionInserts ??= new(ReferenceEqualityComparer.Instance)).Add(turn, subscriptions);
                     }
-                    if (trackSubscriptionRemovals)
+                    if (mixedSubscriptionWrites)
                     {
                         foreach (var addition in (subscriptions?.Rows ?? []).Concat(turn.Subscribed.Where(wait => wait.FoundationTenant is null)))
                         {
@@ -904,7 +908,8 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         return default;
     }
 
-    private void RequireSameSubscriptionScope(SubscriptionRow subscription, ReferenceBinding? inlineRoot = null)
+    private void RequireSameSubscriptionScope(SubscriptionRow subscription, ReferenceBinding? inlineRoot = null,
+        IReadOnlySet<SubscriptionRow>? removed = null, IReadOnlySet<string>? cleared = null)
     {
         var target = new CreationAddress(subscription.Instance, subscription.Creation);
         var targetTenant = inlineRoot?.Address == target ? inlineRoot.Tenant
@@ -912,9 +917,13 @@ public sealed partial class InMemoryStore(int partitions, Func<long> clock, Flaw
         if (subscription.Start is null && targetTenant != subscription.FoundationTenant)
             throw new StoreException(Failure.Definite, "The subscription's scope does not own the target creation.");
         if (_subscriptions.TryGetValue(subscription, out var previous) && previous.FoundationTenant != subscription.FoundationTenant &&
-            RegisteredSubscription(subscription) is null)
+            !SubscriptionWasRemoved(previous, removed, cleared) && RegisteredSubscription(subscription) is null)
             throw ConflictingSubscriptionScope();
     }
+
+    private static bool SubscriptionWasRemoved(SubscriptionRow subscription, IReadOnlySet<SubscriptionRow>? removed,
+        IReadOnlySet<string>? cleared) =>
+        removed?.Contains(subscription) == true || cleared?.Contains(subscription.Instance) == true;
 
     private static StoreException ConflictingSubscriptionScope() =>
         new(Failure.Definite, "The subscription key is already registered in another scope.");

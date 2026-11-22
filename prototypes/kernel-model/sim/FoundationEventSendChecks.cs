@@ -288,6 +288,10 @@ internal static class FoundationEventSendChecks
         var addTyped = Add(typed);
         await RefusesWithoutWrites([addRaw, addTyped], "the batch refuses an exact raw key that precedes the typed keeping wait");
         await RefusesWithoutWrites([addTyped, addRaw], "the batch refuses an exact raw key that follows the typed keeping wait");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [raw, typed] }],
+            "a single checkpoint refuses raw then typed registration at one exact slot");
+        await RefusesWithoutWrites([addTyped with { Subscribed = [typed, raw] }],
+            "a single checkpoint refuses typed then raw registration at one exact slot");
 
         var alias = typed with { Key = scope.Tenant + "_MIXED" };
         var combined = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false, [addRaw, Add(alias)], [], []));
@@ -295,6 +299,18 @@ internal static class FoundationEventSendChecks
             "different physical spellings keep the raw and scoped registrations separate");
         var removeAlias = rowless with { Unsubscribed = [alias] };
         await RefusesWithoutWrites([removeAlias, Add(typed)], "an earlier alias removal cannot expose a raw slot to a scoped insert");
+
+        var transferRaw = raw with { Key = scope.Tenant + "_transfer" };
+        var transferTyped = typed with { Key = transferRaw.Key };
+        await store.SubscribeAsync(transferRaw);
+        var enter = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferRaw] }, Add(transferTyped)], [], []));
+        check(enter.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) is
+            { FoundationTenant: not null, FoundationIncarnation: not null }, "a preceding raw removal frees the exact slot for the scoped wait");
+        var leave = await store.CommitAsync(new(0, fence.Epoch, partition.Position, Defaults.Lease, false,
+            [rowless with { Unsubscribed = [transferTyped] }, rowless with { Subscribed = [transferRaw] }], [], []));
+        check(leave.Landed && store.Subscriptions.Single(wait => wait.Key == transferRaw.Key) == transferRaw,
+            "a preceding scoped removal frees the exact slot for a raw wait");
 
         TurnCommit Add(SubscriptionRow subscription)
         {

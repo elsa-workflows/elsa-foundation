@@ -53,10 +53,10 @@ public sealed partial class InMemoryStore
         foreach (var subscription in requested)
         {
             var existing = RegisteredSubscription(subscription);
-            if (Reserve(subscription) && (existing is null || WasRemoved(existing)))
+            if (Reserve(subscription) && (existing is null || SubscriptionWasRemoved(existing, removed, cleared)))
             {
                 if (_subscriptions.TryGetValue(subscription, out var exact) &&
-                    exact.FoundationTenant != subscription.FoundationTenant && !WasRemoved(exact))
+                    exact.FoundationTenant != subscription.FoundationTenant && !SubscriptionWasRemoved(exact, removed, cleared))
                     throw ConflictingSubscriptionScope();
                 rows.Add(subscription with { FoundationIncarnation = Guid.NewGuid(), FoundationRegisteredAt = now });
             }
@@ -87,9 +87,6 @@ public sealed partial class InMemoryStore
                 names.Add(subscription.Key, waits = new(_foundationEventEquality));
             return waits.Add(subscription.Wait);
         }
-
-        bool WasRemoved(SubscriptionRow subscription) =>
-            removed?.Contains(subscription) == true || cleared?.Contains(subscription.Instance) == true;
     }
 
     private void InsertFoundationSubscriptions(FoundationSubscriptionInsert insert)
