@@ -20,6 +20,7 @@ describe("authored conversion requests", () => {
     expect(readConversionMode({})).toBe("auto");
     expect(readConversionMode({ mode: "json" })).toBe("json");
     expect(readConversionMode({ mode: "Json" })).toBe("json");
+    expect(readConversionMode({ mode: "JsonString" })).toBe("jsonString");
     expect(readConversionMode({ mode: "XML" })).toBe("xml");
     expect(readConversionMode({ mode: "someday-mode" })).toBe("auto");
   });
@@ -56,6 +57,7 @@ describe("authored conversion requests", () => {
     expect(withProfile).toEqual({ mode: "profile", profile: { id: "partner.customer-json", version: "3" } });
 
     expect(withConversionMode(withProfile, "none")).toEqual({ mode: "none" });
+    expect(withConversionMode(withProfile, readConversionMode({ mode: "JsonString" }))).toEqual({ mode: "jsonString" });
   });
 
   it("reads profile references tolerantly", () => {
@@ -67,6 +69,7 @@ describe("authored conversion requests", () => {
   it("ships the foundation built-in profiles as the offline fallback", () => {
     expect(builtInConversionProfiles).toEqual([
       { id: "elsa.json", version: "1" },
+      { id: "elsa.json-string", version: "1" },
       { id: "elsa.xml", version: "1" }
     ]);
   });
@@ -75,6 +78,7 @@ describe("authored conversion requests", () => {
     expect(describeInferredSource("Literal", "plain text", "auto")).toBe("Text");
     expect(describeInferredSource("Literal", { name: "Grace" }, "auto")).toBe("Structured value");
     expect(describeInferredSource("Literal", '{"name":"Grace"}', "json")).toBe("JSON content");
+    expect(describeInferredSource("ActivityResult", { producerNodeId: "user" }, readConversionMode({ mode: "jsonString" }))).toBe("JSON value");
     expect(describeInferredSource("Variable", { referenceKey: "v1" }, "auto")).toBe("Variable value");
     expect(describeInferredSource("JavaScript", "user.name", "auto")).toBe("Expression result");
   });

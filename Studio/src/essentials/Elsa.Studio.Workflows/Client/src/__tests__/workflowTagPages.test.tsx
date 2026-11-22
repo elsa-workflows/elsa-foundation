@@ -31,26 +31,34 @@ describe("workflow tag pages", () => {
     const { fetcher, reads } = fixture();
     const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities(), { followNavigation: true });
     await waitForText(container, "Region");
+    const collectionBreadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    expect(Array.from(collectionBreadcrumbs.querySelectorAll("a")).map(link => link.textContent)).toEqual(["Definitions"]);
+    expect(collectionBreadcrumbs.querySelector('[aria-current="page"]')?.textContent).toBe("Workflow tags");
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     await click(container.querySelector('a[href="/workflows/tags/region"]'));
     await waitForText(container, "Edit workflow tag");
     expect(window.location.pathname).toBe("/workflows/tags/region");
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("Region");
+    const editBreadcrumbs = container.querySelector<HTMLElement>('nav[aria-label="Breadcrumb"]')!;
+    expect(Array.from(editBreadcrumbs.querySelectorAll("a")).map(link => link.textContent)).toEqual(["Definitions", "Workflow tags"]);
+    expect(editBreadcrumbs.querySelector('[aria-current="page"]')?.textContent).toBe("Region");
     expect(container.querySelector('[aria-label="Tag to manage"]')).toBeNull();
     expect(reads).toContain("/tags/region");
-    await click(button(container, "Back to tags"));
+    await click(editBreadcrumbs.querySelector('a[href="/workflows/tags"]'));
     await waitForText(container, "Region");
     expect(window.location.pathname).toBe("/workflows/tags");
-    await click(button(container, "Create tag"));
-    await waitForText(container, "Create workflow tag");
+    await click(button(container, "New tag"));
+    await waitForText(container, "New workflow tag");
     expect(window.location.pathname).toBe("/workflows/tags/new");
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");
+    expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe("New tag");
+    expect(button(container, "Cancel")).not.toBeNull();
   });
 
   it("loads continuation pages including retired tags and searches on the server", async () => {
     const { fetcher, reads } = fixture();
     const { container } = await renderWorkflowRoute("/workflows/tags", fetcher, capabilities());
-    await waitForText(container, "1 tags loaded");
+    await waitForText(container, "1 tag loaded");
     await click(button(container, "Load more tags"));
     await waitForText(container, "2 tags loaded");
     expect(container.textContent).toContain("Retired");
@@ -94,7 +102,7 @@ describe("workflow tag pages", () => {
     await vi.waitFor(() => expect(reads).toContain("/tags/region"));
     window.history.pushState({}, "", "/workflows/tags/new");
     window.dispatchEvent(new PopStateEvent("popstate"));
-    await waitForText(container, "Create workflow tag");
+    await waitForText(container, "New workflow tag");
     resolve(response(tag));
     await new Promise(done => setTimeout(done, 20));
     expect(container.querySelector<HTMLInputElement>('[aria-label="Tag name"]')?.value).toBe("");

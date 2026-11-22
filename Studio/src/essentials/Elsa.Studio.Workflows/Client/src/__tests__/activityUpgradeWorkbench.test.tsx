@@ -53,7 +53,7 @@ describe("Activity upgrade workbench", () => {
     await waitForText(rendered.container, "ActivityVersion");
     expect(rendered.container.textContent).toContain("Immutable root · the plan must clone a draft");
     setInput(inputByLabel(rendered.container, "Replacement target version"), "dependency-v2");
-    click(buttonByText(rendered.container, "Review authoritative plan"));
+    click(buttonByText(rendered.container, "Review upgrade plan"));
 
     await waitForText(rendered.container, "Selected dependency closure");
     expect(rendered.container.textContent).toContain("Bottom-up stage 1");
@@ -62,7 +62,7 @@ describe("Activity upgrade workbench", () => {
     expect(rendered.container.textContent).toContain("Expected revision 7");
     click(buttonByText(rendered.container, "Apply stage 1 atomically"));
 
-    await waitForText(rendered.container, "Durable apply receipt");
+    await waitForText(rendered.container, "Upgrade result");
     expect(rendered.container.querySelector(".au-receipts")?.getAttribute("role")).toBe("status");
     expect(rendered.container.querySelector(".au-receipts")?.getAttribute("aria-live")).toBe("polite");
     expect(rendered.container.querySelector(".au-handoff")?.getAttribute("role")).toBeNull();
@@ -166,14 +166,14 @@ describe("Activity upgrade workbench", () => {
     const rendered = renderWorkbench(context);
 
     setInput(inputByLabel(rendered.container, "Replacement target version"), "dependency-v2");
-    click(buttonByText(rendered.container, "Review authoritative plan"));
+    click(buttonByText(rendered.container, "Review upgrade plan"));
     await waitForText(rendered.container, "Selected dependency closure");
     click(buttonByText(rendered.container, "Apply stage 1 atomically"));
 
     await waitForText(rendered.container, "Upgrade complete");
     expect(applyCalls).toBe(1);
     expect(receiptReads).toBe(1);
-    expect(rendered.container.textContent).toContain("Durable apply receipt");
+    expect(rendered.container.textContent).toContain("Upgrade result");
     await rendered.unmount();
   });
 
@@ -205,11 +205,11 @@ describe("Activity upgrade workbench", () => {
     const rendered = renderWorkbench(context);
 
     setInput(inputByLabel(rendered.container, "Replacement target version"), "dependency-v2");
-    click(buttonByText(rendered.container, "Review authoritative plan"));
+    click(buttonByText(rendered.container, "Review upgrade plan"));
     await waitForText(rendered.container, "Selected dependency closure");
     click(buttonByText(rendered.container, "Apply stage 1 atomically"));
-    await waitForText(rendered.container, "no receipt is visible");
-    click(buttonByText(rendered.container, "Retry same idempotent stage"));
+    await waitForText(rendered.container, "No result is available yet");
+    click(buttonByText(rendered.container, "Retry this stage"));
 
     await waitForText(rendered.container, "Reviewed evidence is stale");
     expect(rendered.container.textContent).toContain("No partial stage mutation was committed");
@@ -257,7 +257,7 @@ describe("Activity upgrade workbench", () => {
     const rendered = renderWorkbench(context);
 
     setInput(inputByLabel(rendered.container, "Replacement target version"), "dependency-v2");
-    click(buttonByText(rendered.container, "Review authoritative plan"));
+    click(buttonByText(rendered.container, "Review upgrade plan"));
     await waitForText(rendered.container, "Selected dependency closure");
     click(buttonByText(rendered.container, "Apply stage 1 atomically"));
 
@@ -265,7 +265,7 @@ describe("Activity upgrade workbench", () => {
     expect(rendered.container.textContent).toContain("Selected dependency closure");
     expect(rendered.container.textContent).not.toContain("activity-secret");
     expect(rendered.container.textContent).not.toContain("hidden owner");
-    expect(rendered.container.textContent).not.toContain("Durable apply receipt");
+    expect(rendered.container.textContent).not.toContain("Upgrade result");
     await rendered.unmount();
   });
 
@@ -283,7 +283,7 @@ describe("Activity upgrade workbench", () => {
     const rendered = renderWorkbench(context);
 
     setInput(inputByLabel(rendered.container, "Replacement target version"), "dependency-v2");
-    click(buttonByText(rendered.container, "Review authoritative plan"));
+    click(buttonByText(rendered.container, "Review upgrade plan"));
 
     await waitForText(rendered.container, "does not advertise staged Activity Definition upgrades");
     expect(rendered.container.textContent).toContain("No fallback or unconfirmed plan is used");

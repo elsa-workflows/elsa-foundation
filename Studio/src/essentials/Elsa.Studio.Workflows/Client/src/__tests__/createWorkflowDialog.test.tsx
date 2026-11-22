@@ -16,8 +16,6 @@ let opener: HTMLButtonElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(0); return 1; });
-  vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
   opener = document.createElement("button");
   container = document.createElement("div");
   document.body.append(opener, container);
@@ -51,11 +49,15 @@ function tabFrom(element: HTMLElement, shiftKey = false) {
   element.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }));
 }
 
+function modal() {
+  return document.querySelector<HTMLFormElement>('form[role="dialog"]')!;
+}
+
 describe("Create Workflow keyboard behavior", () => {
   it("uses StudioDialogFooter so Create is the filled primary and Cancel stays default", () => {
     renderDialog();
-    const cancel = [...container.querySelectorAll("button")].find(button => button.textContent === "Cancel")!;
-    const submit = container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const [cancel, submit] = modal().querySelectorAll<HTMLButtonElement>("footer button");
+    expect(cancel.textContent).toBe("Cancel");
     expect(cancel.classList.contains("studio-button")).toBe(true);
     expect(cancel.getAttribute("data-variant")).toBe("default");
     expect(submit.classList.contains("studio-button")).toBe(true);
@@ -63,25 +65,30 @@ describe("Create Workflow keyboard behavior", () => {
     expect(submit.textContent).toBe("Create");
   });
 
-  it("contains forward and backward keyboard focus, closes on Escape and restores the opener", () => {
+  it("contains forward and backward keyboard focus, closes on Escape and restores the opener", async () => {
     const close = renderDialog();
-    const startingPoint = container.querySelector<HTMLSelectElement>('[aria-label="Starting point"]')!;
-    const submit = container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const startingPoint = modal().querySelector<HTMLSelectElement>('[aria-label="Starting point"]')!;
+    const submit = modal().querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const dismiss = modal().querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')!;
     expect(document.activeElement).toBe(startingPoint);
     tabFrom(submit);
-    expect(document.activeElement).toBe(startingPoint);
-    tabFrom(startingPoint, true);
+    expect(document.activeElement).toBe(dismiss);
+    tabFrom(dismiss, true);
     expect(document.activeElement).toBe(submit);
     submit.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(close).toHaveBeenCalledOnce();
     flushSync(() => root.render(null));
-    expect(document.activeElement).toBe(opener);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
-  it("keeps an in-flight creation open on Escape", () => {
+  it("keeps an in-flight creation open on Escape or close and announces the busy action", () => {
     const close = renderDialog(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    const dismiss = modal().querySelector<HTMLButtonElement>('button[aria-label="Close dialog"]')!;
+    modal().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(dismiss.disabled).toBe(true);
+    dismiss.click();
     expect(close).not.toHaveBeenCalled();
+    expect(modal().querySelector('button[type="submit"]')?.textContent).toBe("Creating…");
   });
 });
 
@@ -108,10 +115,10 @@ async function editableDialog(initial: CreateWorkflowDraft = { name: "", descrip
       onChange={setDraft} onClose={vi.fn()} onSubmit={() => onSubmit(draft)} />;
   }
   flushSync(() => root.render(<Harness />));
-  await vi.waitFor(() => expect(container.querySelector('option[value="one"]')).not.toBeNull());
-  const field = (name: string) => container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${name}"]`)!;
+  await vi.waitFor(() => expect(modal().querySelector('option[value="one"]')).not.toBeNull());
+  const field = (name: string) => modal().querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${name}"]`)!;
   const select = (id: string) => flushSync(() => {
-    const input = container.querySelector<HTMLSelectElement>('[aria-label="Starting point"]')!;
+    const input = modal().querySelector<HTMLSelectElement>('[aria-label="Starting point"]')!;
     input.value = id;
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
@@ -127,7 +134,7 @@ async function editableDialog(initial: CreateWorkflowDraft = { name: "", descrip
 describe("template metadata defaults", () => {
   it("places Starting point before metadata and refreshes untouched defaults, including missing descriptions and Blank", async () => {
     const dialog = await editableDialog();
-    expect([...container.querySelectorAll("select, input, textarea")].slice(0, 3).map(input => input.getAttribute("aria-label")))
+    expect([...modal().querySelectorAll("select, input, textarea")].slice(0, 3).map(input => input.getAttribute("aria-label")))
       .toEqual(["Starting point", "Display name", "Description"]);
     dialog.select("one");
     expect(dialog.current()).toMatchObject({ name: "Hello World", description: "Sends a greeting.", templateId: "one" });
@@ -160,12 +167,12 @@ describe("template metadata defaults", () => {
     dialog.select("two");
     expect(dialog.field("Display name").value).toBe("Hello World");
     expect(dialog.field("Description").value).toBe("");
-    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    flushSync(() => modal().dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(dialog.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ name: "Hello World", description: "", templateId: "two" }));
     dialog.fill("Display name", "");
     dialog.select("one");
     expect(dialog.field("Display name").value).toBe("");
-    expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    expect(modal().querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
   });
 
   it("uses HTTP workflow defaults and clears inherited metadata when returning to Blank", async () => {
@@ -198,7 +205,7 @@ describe("template metadata defaults", () => {
     const dialog = await editableDialog();
     dialog.select("one");
     const dispatch = vi.spyOn(dialog.ai, "dispatchPrompt");
-    const click = (text: string) => flushSync(() => [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === text)!.click());
+    const click = (text: string) => flushSync(() => [...modal().querySelectorAll("button")].find(button => button.textContent?.trim() === text)!.click());
     click("Suggest");
     click("Generate");
     flushSync(() => dialog.ai.publishPromptResult({ requestId: dispatch.mock.calls[0][0].requestId!, status: "completed", autoApply,

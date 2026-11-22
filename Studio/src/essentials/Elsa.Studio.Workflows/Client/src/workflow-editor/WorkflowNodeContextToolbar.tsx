@@ -1,6 +1,6 @@
 import { NodeToolbar, Position } from "@xyflow/react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
-import { Copy, Plus, Power, Trash2 } from "lucide-react";
+import { Copy, Flag, Plus, Power, Trash2 } from "lucide-react";
 import React from "react";
 import type { KeyboardEvent } from "react";
 import type { WorkflowNodeData, WorkflowPortDescriptor } from "../workflowAdapter";
@@ -25,8 +25,10 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = 
   const menuId = React.useId();
   const outcomes = actions?.canAddAfter ? data.sourcePorts.filter(port => !port.missing) : [];
   const canToggleStart = Boolean(actions?.setWorkflowStart && data.workflowStartEnabled !== undefined);
+  const canSetAsStartNode = Boolean(actions?.setAsStartNode);
   const toggleIndex = outcomes.length > 0 ? 1 : 0;
-  const duplicateIndex = toggleIndex + (canToggleStart ? 1 : 0);
+  const startNodeIndex = toggleIndex + (canToggleStart ? 1 : 0);
+  const duplicateIndex = startNodeIndex + (canSetAsStartNode ? 1 : 0);
   const toolbarActionCount = duplicateIndex + 2;
   const activeActionIndex = Math.min(focusedActionIndex, toolbarActionCount - 1);
 
@@ -173,6 +175,19 @@ export function WorkflowNodeContextToolbar({ nodeId, data, selected, position = 
             actions.setWorkflowStart?.(nodeId, !data.workflowStartEnabled);
           }}
         ><Power size={14} aria-hidden="true" /></button> : null}
+        {canSetAsStartNode ? <button
+          type="button"
+          className="wf-node-context-action"
+          tabIndex={activeActionIndex === startNodeIndex ? 0 : -1}
+          aria-label={`Set ${data.label} as start node`}
+          title="Set as start node"
+          onFocus={() => setFocusedActionIndex(startNodeIndex)}
+          onMouseDown={event => event.stopPropagation()}
+          onClick={event => {
+            event.stopPropagation();
+            actions.setAsStartNode?.(nodeId);
+          }}
+        ><Flag size={14} aria-hidden="true" /></button> : null}
         <button
           type="button"
           className="wf-node-context-action"

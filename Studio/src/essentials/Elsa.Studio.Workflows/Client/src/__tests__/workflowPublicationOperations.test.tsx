@@ -14,9 +14,9 @@ import { collectContributionDraftValidation, contributionDraftValidationCollecto
 import {
   collectEvaluateDecisionValidation,
   evaluateDecisionActivityType
-} from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionDraftValidation";
-import { asset, stubApi } from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/__tests__/helpers";
-import { editTable, parseTable } from "../../../../../../../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml";
+} from "../../../../../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionDraftValidation";
+import { asset, stubApi } from "../../../../../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/__tests__/helpers";
+import { editTable, parseTable } from "../../../../../../../extensions/Decisions/studio/Elsa.Studio.Decisions/Client/src/decisionXml";
 import { activationSlot, foreignSlotOwner, importedActivationSlot, publicationPreflight, publicationRecord } from "./fixtures/publicationSlots";
 
 type Operations = ReturnType<typeof useWorkflowOperations>;

@@ -1,9 +1,10 @@
-import { StudioPageHeader, StudioButton } from "../ui";
-import React, { useEffect, useRef, useState } from "react";
-import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
-import { defaultStudioHostId, useDialogFocus } from "../../sdk";
+import { StudioDialog, StudioDialogFooter, StudioButton, StudioPageHeader, StudioField } from "../ui";
+import { StudioIconButton } from "@elsa-workflows/studio-ui";
+import React, { useEffect, useRef, useState, useId } from "react";
+import { PackagePlus, Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { defaultStudioHostId } from "../../sdk";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioTabPanel, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
   defaultRetentionPolicy,
@@ -32,6 +33,7 @@ interface FeedDraft {
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
+  const hostTabsBaseId = useId();
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>(defaultStudioHostId);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
@@ -39,7 +41,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its
   // explicit bridge state (#246) instead.
   const { registry, unavailable } = readActiveRegistry(activeQuery.data);
-  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error);
+  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error, [], title => api.notifications?.notify({ level: "success", title }));
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
   // Deleting a feed is destructive and irreversible from the UI, so confirm before firing.
@@ -60,16 +62,20 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
     <section className="modules-page package-feeds-page">
       <StudioPageHeader headingLevel={2} title={<>Package feeds</>} description={<>Manage Nuplane feeds, reconciliation, and retention separately for Studio and Server.</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <StudioButton type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
-              <RefreshCcw size={15} />
-            </StudioButton>
+            <StudioIconButton aria-label="Refresh package feeds" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
+              <RefreshCcw size={16} aria-hidden="true" />
+            </StudioIconButton>
           </StudioToolbarGroup>
         </StudioToolbar></>} />
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} baseId={hostTabsBaseId} ariaLabel="Hosts" />
+      {hostTabs.map((item, index) => item.id !== activeHostId ? (
+        <StudioTabPanel key={item.id} baseId={hostTabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ) : null)}
+      <StudioTabPanel baseId={hostTabsBaseId} index={hostTabs.findIndex(item => item.id === activeHostId)} className="modules-tab-panel">
 
       {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
-      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="info">{activeStatus}</StudioAlert> : null}
 
       {registry ? (
         <>
@@ -86,7 +92,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
             onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
             onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
             onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
-            onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
+            onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`, "toast")}
             onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
           />
         </>
@@ -95,6 +101,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       ) : (
         <SkeletonRows rows={6} label={`Loading ${activeHost.label} package feeds`} />
       )}
+      </StudioTabPanel>
     </section>
   );
 }
@@ -163,21 +170,21 @@ function PackageFeedsWorkbench({
                   <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
                 </span>
                 <div className="package-feed-row-actions">
-                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
-                    <Pencil size={14} />
-                  </button>
-                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
-                    <Trash2 size={14} />
-                  </button>
+                  <StudioIconButton disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
+                    <Pencil size={16} aria-hidden="true" />
+                  </StudioIconButton>
+                  <StudioIconButton variant="danger" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
+                    <Trash2 size={16} aria-hidden="true" />
+                  </StudioIconButton>
                 </div>
               </div>
             ))}
           </div>
 
-          <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
+          <StudioButton type="button" className="package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
             <PackagePlus size={15} />
-            Add feed
-          </button>
+            New feed
+          </StudioButton>
 
           {addFeedDialogOpen ? (
             <FeedDialog
@@ -212,10 +219,10 @@ function PackageFeedsWorkbench({
             </div>
 
             <div className="modules-operation-grid">
-              <button type="button" className="studio-button" disabled={busy || !canMutate || !registry.capabilities.canReconcile} onClick={onReconcile}>
+              <StudioButton type="button" disabled={busy || !canMutate || !registry.capabilities.canReconcile} onClick={onReconcile}>
                 <RefreshCcw size={15} />
                 Reconcile
-              </button>
+              </StudioButton>
             </div>
             <PackageMaintenance
               key={`${host.id}:${effectiveRetentionPolicy.status}:${effectiveRetentionPolicy.keepNewestInactiveVersionsPerPackage}`}
@@ -238,18 +245,15 @@ function PackageFeedsWorkbench({
             ) : null}
             <p>Manual cleanup only. Leave the count blank to retain every install. Active and protected versions remain retained.</p>
             <div className="modules-form">
-              <label>
-                <span>Inactive versions to keep per package</span>
-                <input
+              <StudioField label="Inactive versions to keep per package"><input
                   type="number" min="0" step="1"
                   disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy}
                   value={retentionDraft.keepNewestInactiveVersionsPerPackage ?? ""}
                   onChange={event => setRetentionDraft({ ...retentionDraft, keepNewestInactiveVersionsPerPackage: numberOrNull(event.target.value) })}
-                />
-              </label>
-              <button type="button" className="studio-button"
+                /></StudioField>
+              <StudioButton type="button"
                 disabled={busy || !canMutate || !registry.capabilities.canManageRetentionPolicy || !retentionDirty || !validRetention(retentionDraft)}
-                onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
+                onClick={() => onSaveRetention(retentionDraft)}>Save retention</StudioButton>
             </div>
           </section>
         </aside>
@@ -284,7 +288,7 @@ function ChangeLedger({
           <span>Affects: {host.label}</span>
         </div>
         {retentionDirty ? (
-          <button type="button" className="studio-button" onClick={onDiscardRetention}>Discard local changes</button>
+          <StudioButton type="button" onClick={onDiscardRetention}>Discard local changes</StudioButton>
         ) : null}
       </div>
       <div className="package-change-ledger-row">
@@ -321,10 +325,9 @@ function FeedDialog({
   onSubmit(feedDraft: FeedDraft): void;
 }) {
   const [feedDraft, setFeedDraft] = useState<FeedDraft>(() => createFeedDraft(feed));
-  const dialogRef = useRef<HTMLElement>(null);
-  const title = mode === "edit" ? "Edit Feed" : "Add Feed";
-  const submitLabel = mode === "edit" ? "Save feed" : "Add feed";
-  useDialogFocus(dialogRef, busy ? null : onClose);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const title = mode === "edit" ? "Edit feed" : "New feed";
+  const submitLabel = mode === "edit" ? "Save" : "Create";
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -332,35 +335,23 @@ function FeedDialog({
   }
 
   return (
-    <div className="modules-dialog-backdrop" role="presentation">
-      <section ref={dialogRef} className="modules-upload-dialog" role="dialog" aria-modal="true" aria-labelledby="package-feed-dialog-title" tabIndex={-1}>
-        <div className="modules-upload-dialog-heading">
-          <div>
-            <h3 id="package-feed-dialog-title">{title}</h3>
-            {feedChangesRequireRestart ? <p>Feed registration changes require a host restart before Nuplane can use them.</p> : null}
-          </div>
-          <button type="button" className="studio-icon-button" aria-label={`Close ${mode} feed`} onClick={onClose} disabled={busy}>
-            <X size={14} />
-          </button>
-        </div>
-
-        <form id="package-feed-form" className="modules-form" onSubmit={submit}>
-          <label>
-            <span>Name</span>
-            <input data-dialog-initial-focus aria-label="Feed name" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} />
-          </label>
-          <label>
-            <span>Service index</span>
-            <input aria-label="Service index" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} />
-          </label>
-          <label>
-            <span>Directory path</span>
-            <input aria-label="Directory path" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} />
-          </label>
-          <label>
-            <span>Include patterns</span>
-            <textarea aria-label="Include patterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} />
-          </label>
+    <StudioDialog
+      open
+      title={title}
+      description={feedChangesRequireRestart ? `Restart the ${host.label} host after changing a feed to use its new settings.` : undefined}
+      closeLabel={`Close ${mode} feed`}
+      initialFocusRef={nameInput}
+      dismissDisabled={busy}
+      dismissOnOutsideClick={false}
+      onClose={onClose}
+      onSubmit={submit}
+      footer={<StudioDialogFooter onCancel={onClose} cancelDisabled={busy} confirmLabel={submitLabel} confirmDisabled={busy || !feedDraft.name.trim()} />}
+    >
+      <div className="modules-form">
+          <StudioField label="Feed name"><input ref={nameInput} name="feedName" placeholder="internal-packages" value={feedDraft.name} readOnly={mode === "edit"} onChange={event => setFeedDraft({ ...feedDraft, name: event.target.value })} /></StudioField>
+          <StudioField label="Service index"><input name="serviceIndex" placeholder="NuGet V3 service index" value={feedDraft.serviceIndex} onChange={event => setFeedDraft({ ...feedDraft, serviceIndex: event.target.value })} /></StudioField>
+          <StudioField label="Directory path"><input name="directoryPath" placeholder="/feeds/internal" value={feedDraft.directoryPath} onChange={event => setFeedDraft({ ...feedDraft, directoryPath: event.target.value })} /></StudioField>
+          <StudioField label="Include patterns"><textarea name="includePatterns" placeholder="**\\*.nupkg" value={feedDraft.includePatterns} disabled={feedDraft.includeAllPackages} onChange={event => setFeedDraft({ ...feedDraft, includePatterns: event.target.value })} /></StudioField>
           <label className="modules-checkbox">
             <input
               type="checkbox"
@@ -370,17 +361,8 @@ function FeedDialog({
             />
             Include all packages
           </label>
-        </form>
-
-        <div className="modules-dialog-actions">
-          <button type="button" className="studio-button" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" form="package-feed-form" className="studio-button" disabled={busy || !feedDraft.name.trim()}>
-            <PackagePlus size={15} />
-            {submitLabel}
-          </button>
-        </div>
-      </section>
-    </div>
+      </div>
+    </StudioDialog>
   );
 }
 

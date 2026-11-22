@@ -1,0 +1,5 @@
+#nullable enable
+Elsa.Workflows.Publishing.Releases.Runtime.Source.WorkflowReleaseRuntimeSourceClosureFeature
+Elsa.Workflows.Publishing.Releases.Runtime.Source.WorkflowReleaseRuntimeSourceClosureFeature.WorkflowReleaseRuntimeSourceClosureFeature() -> void
+virtual Elsa.Workflows.Publishing.Releases.Runtime.Source.WorkflowReleaseRuntimeSourceClosureFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Workflows.Publishing.Releases.Runtime.Source.WorkflowReleaseRuntimeSourceClosureFeature.PostConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -15,7 +15,7 @@ $contentRoot = New-ElsaContentRoot -Prefix 'elsa-retained-set-3331'
 $baseUrl = Resolve-ElsaServerBaseUrl
 $success = $false
 try {
-    $fixture = Join-Path $PSScriptRoot '../../Essentials/tests/Workflows/Fixtures/legacy-set-v1.json'
+    $fixture = Join-Path $PSScriptRoot '../../essentials/tests/Workflows/Fixtures/legacy-set-v1.json'
     $legacy = Get-Content -LiteralPath $fixture -Raw | ConvertFrom-Json -AsHashtable
     $closure = @{
         formatVersion = 1

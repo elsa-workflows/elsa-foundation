@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { qualifyStudioBackendPath, type StudioBackendSession } from "@elsa-workflows/studio-sdk";
 import { capabilityIds, hasCapabilityLink } from "../api/capabilities";
@@ -121,18 +122,16 @@ function ServiceBindingForm({ session, element, readOnly = false, onChange }: Pr
         <RunWorkflowPicker context={session.context} definitionId={definitionId} onChange={chooseDefinition} />
         {loading ? <p role="status">Loading published versions…</p> : null}
         {definitionId && !loading && slots.length === 0 ? <p>No active publication is available. Publish this service workflow, then select it again.</p> : null}
-        <label className="wf-form-field"><span>Publication</span><select aria-label="Service publication" value={slotId} disabled={loading || slots.length === 0}
+        <StudioField className="wf-form-field" label={<><span>Publication</span></>}><select aria-label="Service publication" value={slotId} disabled={loading || slots.length === 0}
           onChange={event => setSlotId(event.target.value)}><option value="">Choose a publication</option>
           {slots.map(slot => <option key={slot.slotId} value={slot.slotId}>{slot.slotName}</option>)}
-        </select></label>
-        <label className="wf-form-field"><span>Technical failure</span><select aria-label="Service technical failure" value={disposition}
+        </select></StudioField>
+        <StudioField className="wf-form-field" label={<><span>Technical failure</span></>}><select aria-label="Service technical failure" value={disposition}
           onChange={event => setDisposition(event.target.value as typeof disposition)}>
           <option value="HoldForRetry">Pause for an explicit retry</option><option value="FinalFault">Fail the process</option>
-        </select></label>
-        {disposition === "HoldForRetry" ? <label className="wf-form-field"><span>Maximum attempts, including the first</span>
-          <input aria-label="Service maximum attempts" type="number" min={1} max={32} value={attempts} onChange={event => setAttempts(Number(event.target.value))} />
-        </label> : null}
-        <label className="wf-form-field"><span>Business error code</span><input aria-label="Service business error code" value={businessErrorCode} onChange={event => setBusinessErrorCode(event.target.value)} /></label>
+        </select></StudioField>
+        {disposition === "HoldForRetry" ? <StudioField className="wf-form-field" label={<><span>Maximum attempts, including the first</span></>}><input aria-label="Service maximum attempts" type="number" min={1} max={32} value={attempts} onChange={event => setAttempts(Number(event.target.value))} /></StudioField> : null}
+        <StudioField className="wf-form-field" label={<><span>Business error code</span></>}><input aria-label="Service business error code" value={businessErrorCode} onChange={event => setBusinessErrorCode(event.target.value)} /></StudioField>
         <p className="wf-muted">The workflow must supply its own inputs. Publication validates its closed input contract. Retrying may repeat external effects.</p>
         <button type="button" disabled={!slotId || busy || !businessErrorCode.trim() || !Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 32} onClick={() => void applyPublication()}>
           {busy ? "Reading publication…" : "Use this service publication"}

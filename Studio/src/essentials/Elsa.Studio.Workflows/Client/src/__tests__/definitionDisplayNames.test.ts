@@ -5,6 +5,7 @@ import type { WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../wo
 import {
   definitionNameLookupConcurrency,
   formatNamedIdentityTitle,
+  formatRunPageTitle,
   loadDefinitionDisplayNames,
   resolveNamedIdentity,
   uniqueDefinitionIds
@@ -38,6 +39,13 @@ describe("definition display names", () => {
       secondaryIds: ["version-1"]
     });
     expect(uniqueDefinitionIds(["def-1", "def-1", " ", null, "def-2"])).toEqual(["def-1", "def-2"]);
+  });
+
+  it("formats the run detail page title from the workflow display name", () => {
+    expect(formatRunPageTitle(undefined)).toBe("Run");
+    expect(formatRunPageTitle("  ")).toBe("Run");
+    expect(formatRunPageTitle("definition-1", "definition-1")).toBe("Run");
+    expect(formatRunPageTitle("Invoice settlement", "definition-1")).toBe("Run · Invoice settlement");
   });
 
   it("loads names from the definition list and fills gaps with per-id reads", async () => {

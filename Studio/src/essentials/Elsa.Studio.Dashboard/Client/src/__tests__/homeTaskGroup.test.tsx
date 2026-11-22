@@ -71,9 +71,9 @@ describe("Home workflow task group", () => {
     expect(view.container.textContent).toContain("definition-1");
     expect(view.container.textContent).toContain("definition-8");
     expect(view.container.textContent).not.toContain("definition-9");
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(view.container.querySelector("[role='dialog']")).toBeNull();
-    expect(continueButton).toBe(document.activeElement);
+    await waitUntil(() => continueButton === document.activeElement);
     view.unmount();
   });
 
@@ -101,7 +101,7 @@ describe("Home workflow task group", () => {
     await waitUntil(() => view.container.textContent?.includes("No workflows have a current draft to continue.") === true);
 
     const actionableCreateControls = [...view.container.querySelectorAll("a[href], button:not(:disabled), [role='button']:not([aria-disabled='true'])")]
-      .filter(element => /create workflow/i.test(element.textContent ?? ""));
+      .filter(element => /new workflow/i.test(element.textContent ?? ""));
     expect(actionableCreateControls).toHaveLength(0);
     expect(view.container.textContent).toContain("Creating a workflow requires workflow design access.");
     expect(view.container.querySelector("[role='dialog'] a[href^='/workflows/definitions']")?.textContent).toContain("Browse workflows");
@@ -245,7 +245,7 @@ describe("Home workflow task group", () => {
               const outside = view.container.querySelector<HTMLButtonElement>("[data-testid='outside-home-dialog']")!;
               outside.focus();
               const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-              window.dispatchEvent(tab);
+              document.activeElement?.dispatchEvent(tab);
               authoritySnapshots.push({
                 dialogVisible: view.container.querySelector("[role='dialog']") !== null,
                 candidateText: [...view.container.querySelectorAll("[aria-label='Current workflow drafts'] li")].map(item => item.textContent ?? ""),
@@ -345,9 +345,9 @@ describe("Home workflow task group", () => {
     await waitUntil(() => view.container.querySelector("[role='dialog']")?.contains(document.activeElement) === true);
     const outsideButton = view.container.querySelector<HTMLButtonElement>("[data-testid='outside-home-dialog']")!;
     flushSync(() => outsideButton.focus());
-    expect(document.activeElement).toBe(outsideButton);
-
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(view.container.querySelector("[role=dialog]")?.contains(document.activeElement)).toBe(true);
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    outsideButton.focus();
     await waitUntil(() => view.container.querySelector("[role='dialog']") === null);
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
@@ -377,7 +377,7 @@ describe("Home workflow task group", () => {
     const outside = view.container.querySelector<HTMLButtonElement>("button")!;
     outside.focus();
     const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-    window.dispatchEvent(tab);
+    document.activeElement?.dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(false);
 
     const restoredApi = { ...api, runtime: { ...api.runtime } };
@@ -424,7 +424,7 @@ function mount(node: React.ReactElement) {
   render(node);
   let mounted = true;
   const view = {
-    container,
+    container: document.body,
     rerender(next: React.ReactElement) {
       render(next);
     },

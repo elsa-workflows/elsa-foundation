@@ -33,7 +33,7 @@ import uuid
 
 from artifacts import TOOL, check, sha
 from authorization_journeys import select_command
-from journey_runtime import browser_inputs, same
+from journey_runtime import browser_inputs, safe_browser_failure, same
 from owner_resources import seed_batch_workflow
 from runtime import RUNTIME_ENVIRONMENT, private_json
 from truth_seam_journeys import READER, same_target
@@ -416,8 +416,17 @@ def _browser(runtime, name, seed):
     offset = transport.trace_file.stat().st_size if transport.trace_file.exists() else 0
     node = shutil.which("node")
     check(node, "The actual browser driver needs Node")
-    runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
-                    env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    try:
+        runtime.run.run(name, [node, str(TOOL / "browser.mjs"), str(root / "config-private.json")], TOOL,
+                        env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
+    except RuntimeError:
+        try:
+            runtime.run.report["browserFailureDiagnostic"] = safe_browser_failure({
+                "failureDiagnostic": json.loads((output / "failure-diagnostic.json").read_text())})
+            runtime.run.save()
+        except (OSError, ValueError, TypeError, RuntimeError):
+            pass  # Diagnostics must preserve the original failed browser process.
+        raise
     observation = output / "observation.json"
     observed = json.loads(observation.read_text())
     trace = transport.protocol_trace(offset)

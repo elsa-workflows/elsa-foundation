@@ -51,7 +51,7 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
     if (request.url().includes("/publishing/")) publicationRequests.push(request.url());
     if (new URL(request.url()).pathname.endsWith("/design/workflows/templates")) templateRequests.push(request.url());
   });
-  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=legacy`);
+  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&backend=default`);
   const actions = page.getByRole("button", { name: "More workflow actions", exact: true });
   await expect(page.locator('.wf-sequence-step[data-id="message"]')).toBeVisible();
   await actions.click();
@@ -59,6 +59,8 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
   if (await autosave.getAttribute("aria-checked") === "true") await autosave.click();
   await page.keyboard.press("Escape");
   await page.locator('.wf-sequence-step[data-id="message"]').press("Enter");
+  const expandInspector = page.getByRole("button", { name: "Expand inspector panel", exact: true });
+  if (info.project.name.startsWith("narrow") && await expandInspector.isVisible()) await expandInspector.press("Enter");
   const text = page.getByRole("textbox", { name: "Text", exact: true });
   await expect(text).toBeVisible(); await text.fill("Unsaved template text"); await text.press("Tab");
   await actions.click(); await page.getByRole("menuitem", { name: "Save as template", exact: true }).click();
@@ -97,7 +99,7 @@ export async function templateToastJourney(page: Page, info: TestInfo, capture: 
   expect(JSON.stringify(source.state)).not.toContain("Unsaved template text");
   await capture(page, info, "saved-toast");
   await toast.getByRole("button", { name: "View templates", exact: true }).press("Enter");
-  await expect(page).toHaveURL(/\/workflows\/templates\?backend=legacy/);
+  await expect(page).toHaveURL(/\/workflows\/templates\?backend=default/);
   await expect(page.getByRole("heading", { name: "Workflow templates", exact: true })).toBeVisible();
   const savedTemplate = page.getByRole("button", { name, exact: true });
   await expect(savedTemplate).toBeVisible();

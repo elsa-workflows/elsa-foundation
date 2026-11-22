@@ -62,7 +62,7 @@ describe("useGraphViewport", () => {
       flushAnimationFrames();
 
       expect(instance.fitView).toHaveBeenCalledTimes(1);
-      expect(instance.fitView).toHaveBeenCalledWith({ padding: 0.2, maxZoom: 1 });
+      expect(instance.fitView).toHaveBeenCalledWith({ padding: 0.2, maxZoom: 1, alignCenter: true });
     }
   );
 

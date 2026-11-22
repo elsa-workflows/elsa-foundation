@@ -1,3 +1,4 @@
+import { resolveCapabilityLink, capabilityIds } from "../api/capabilities";
 import { getWorkflowTemplate, saveWorkflowTemplate, templateContent, type WorkflowTemplate } from "../workflowTemplates";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
@@ -21,6 +22,16 @@ export function createTemplateDocumentAdapter(): WorkflowEditorDocumentAdapter {
       if (pendingMetadata === pending) pendingMetadata = null;
       return details(current).draft!;
     }),
+    validateCandidate: async (context, draft) => {
+      if (!current || current.id !== draft.id) return { state: "unavailable", messages: [] };
+      const revision = current.revision;
+      const templateId = current.id;
+      const path = await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-template-candidate-validation", { templateId: current.id });
+      const result = await context.http.postJson<{ state: string; errors: { message: string }[] }>(path, { expectedRevision: revision, candidate: templateContent(draft) });
+      if (current.id !== templateId || current.revision !== revision) return { state: "stale", messages: [] };
+      if (!result || typeof result.state !== "string" || !Array.isArray(result.errors)) throw new Error("Invalid template candidate validation response.");
+      return { state: result.state, messages: result.errors.map(item => item.message) };
+    },
     metadata: (context, id, patch) => {
       pendingMetadata = patch;
       return serialize(async () => {

@@ -1,7 +1,7 @@
 import React from "react";
 import "./Button.css";
 
-export type StudioButtonVariant = "primary" | "default" | "ghost";
+export type StudioButtonVariant = "primary" | "default" | "ghost" | "danger";
 export type StudioButtonSize = "sm" | "md";
 
 /**
@@ -32,3 +32,41 @@ export function StudioButton({
     />
   );
 }
+
+/** A controlled toggle with a stable accessible name in both states. */
+export function StudioToggleButton({
+  pressed,
+  ...props
+}: Omit<React.ComponentPropsWithRef<"button">, "aria-pressed"> & { pressed: boolean; size?: StudioButtonSize }) {
+  return <StudioButton {...props} data-studio-toggle="" aria-pressed={pressed} />;
+}
+
+type StudioIconButtonProps = Omit<React.ComponentPropsWithoutRef<"button">, "aria-label" | "children"> & {
+  "aria-label": string;
+  children: React.ReactElement;
+  variant?: Extract<StudioButtonVariant, "default" | "danger">;
+};
+
+export const StudioIconButton = React.forwardRef<HTMLButtonElement, StudioIconButtonProps>(function StudioIconButton({
+  "aria-label": label,
+  children,
+  variant = "default",
+  className,
+  type = "button",
+  title = label,
+  ...rest
+}, ref) {
+  return (
+    <button
+      {...rest}
+      ref={ref}
+      type={type}
+      className={className ? `studio-icon-button ${className}` : "studio-icon-button"}
+      data-variant={variant}
+      aria-label={label}
+      title={title}
+    >
+      {children}
+    </button>
+  );
+});

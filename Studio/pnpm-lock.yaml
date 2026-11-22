@@ -73,7 +73,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Agent/studio/Elsa.Studio.Agent/Client:
+  ../extensions/Agent/studio/Elsa.Studio.Agent/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -107,7 +107,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Attention/studio/Elsa.Studio.Attention/Client:
+  ../extensions/Attention/studio/Elsa.Studio.Attention/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -138,7 +138,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Connections/studio/Elsa.Studio.Connections/Client:
+  ../extensions/Connections/studio/Elsa.Studio.Connections/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -172,7 +172,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client:
+  ../extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -206,7 +206,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Decisions/studio/Elsa.Studio.Decisions/Client:
+  ../extensions/Decisions/studio/Elsa.Studio.Decisions/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -240,7 +240,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client:
+  ../extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -271,7 +271,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client:
+  ../extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -302,7 +302,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Etl/studio/Elsa.Studio.Etl/Client:
+  ../extensions/Etl/studio/Elsa.Studio.Etl/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -339,8 +339,39 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client:
+  ../extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client:
     dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@lezer/javascript':
+        specifier: 1.5.4
+        version: 1.5.4
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client:
+    dependencies:
+      '@codemirror/lang-liquid':
+        specifier: 6.3.2
+        version: 6.3.2
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
@@ -364,32 +395,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client:
-    dependencies:
-      '@elsa-workflows/studio-code-editor':
-        specifier: workspace:*
-        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
-      '@elsa-workflows/studio-sdk':
-        specifier: workspace:*
-        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      jsdom:
-        specifier: ^25.0.1
-        version: 25.0.1
-      vite:
-        specifier: ^7.1.0
-        version: 7.3.5
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(jsdom@25.0.1)
-
-  ../Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Client:
+  ../extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Client:
     dependencies:
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
@@ -426,7 +432,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client:
+  ../extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -460,32 +466,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client:
-    dependencies:
-      '@elsa-workflows/studio-sdk':
-        specifier: workspace:*
-        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
-      '@elsa-workflows/studio-ui':
-        specifier: workspace:*
-        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      jsdom:
-        specifier: ^25.0.1
-        version: 25.0.1
-      vite:
-        specifier: ^7.1.0
-        version: 7.3.5
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(jsdom@25.0.1)
-
-  ../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client:
+  ../extensions/Identity/studio/Elsa.Studio.Identity.ExternalAuthentication/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -519,7 +500,32 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client:
+  ../extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../extensions/Secrets/studio/Elsa.Studio.Secrets/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -553,7 +559,53 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client:
+  ../extensions/UserTasks/studio/Elsa.Studio.UserTasks/Client:
+    dependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@dnd-kit/sortable':
+        specifier: ^10.0.0
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+      '@dnd-kit/utilities':
+        specifier: ^3.2.2
+        version: 3.2.2(react@19.2.7)
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -578,7 +630,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  ../Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client:
+  ../extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
@@ -842,6 +894,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../StudioUi
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -1128,6 +1183,28 @@ packages:
     engines: {node: '>=20.19.0'}
     peerDependencies:
       postcss-selector-parser: ^7.1.1
+
+  '@dnd-kit/accessibility@3.1.1':
+    resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
+    peerDependencies:
+      react: '>=16.8.0'
+
+  '@dnd-kit/core@6.3.1':
+    resolution: {integrity: sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  '@dnd-kit/sortable@10.0.0':
+    resolution: {integrity: sha512-+xqhmIIzvAYMGfBYYnbKuNicfSsk4RksY2XdmJhT+HAC01nix6fHCztU68jooFiMUB01Ky3F0FyOvhG/BZrWkg==}
+    peerDependencies:
+      '@dnd-kit/core': ^6.3.0
+      react: '>=16.8.0'
+
+  '@dnd-kit/utilities@3.2.2':
+    resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
+    peerDependencies:
+      react: '>=16.8.0'
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -4925,6 +5002,31 @@ snapshots:
   '@csstools/selector-specificity@6.0.0(postcss-selector-parser@7.1.4)':
     dependencies:
       postcss-selector-parser: 7.1.4
+
+  '@dnd-kit/accessibility@3.1.1(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+      tslib: 2.8.1
+
+  '@dnd-kit/core@6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      '@dnd-kit/accessibility': 3.1.1(react@19.2.7)
+      '@dnd-kit/utilities': 3.2.2(react@19.2.7)
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+      tslib: 2.8.1
+
+  '@dnd-kit/sortable@10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      '@dnd-kit/core': 6.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@dnd-kit/utilities': 3.2.2(react@19.2.7)
+      react: 19.2.7
+      tslib: 2.8.1
+
+  '@dnd-kit/utilities@3.2.2(react@19.2.7)':
+    dependencies:
+      react: 19.2.7
+      tslib: 2.8.1
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true

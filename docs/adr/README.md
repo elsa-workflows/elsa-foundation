@@ -86,6 +86,7 @@ An ADR proposed from an [initiative](../contributing/initiatives.md) follows its
 | 0092 | [Variable Reads And Writes Share One Versioned Lifecycle](0092-variable-reads-and-writes-share-one-versioned-lifecycle.md) | Accepted (decision 8 amended 2026-11-16; decisions 6 and 9 amended 2026-11-18, #4791) |
 | 0093 | [Background Execution Eligibility Is One Set Of Criteria](0093-background-execution-eligibility-is-one-set-of-criteria.md) | Accepted |
 | 0094 | [Agent-owned content uses shared revisions and provider-derived activities](0094-agent-definitions-own-authored-content-and-providers-publish-activities.md) | Accepted |
+| 0099 | [Clean-slate execution kernel: actor runtime, durable actors, execution models](0099-clean-slate-execution-kernel.md) | Accepted with conditions |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |

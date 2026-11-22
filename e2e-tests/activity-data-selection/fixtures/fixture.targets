@@ -1,0 +1,6 @@
+<Project>
+  <!-- Opt-in test import only; no library or default Workbench build includes these types. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Elsa.Workbench'">
+    <Compile Include="$(MSBuildThisFileDirectory)CustomerFixture.cs" Link="ActivityDataSelectionProof/CustomerFixture.cs" />
+  </ItemGroup>
+</Project>

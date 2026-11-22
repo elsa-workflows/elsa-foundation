@@ -28,6 +28,12 @@
   --studio-nav-muted: var(--sidebar-foreground);
   --studio-nav-active: var(--sidebar-active);
   --studio-nav-active-text: var(--sidebar-active-foreground);
+  /* Navigation glyphs use theme chart hues blended toward the sidebar text for contrast. */
+  --studio-nav-icon-blue: color-mix(in srgb, var(--chart-1) 65%, var(--studio-nav-text));
+  --studio-nav-icon-violet: color-mix(in srgb, var(--chart-2) 65%, var(--studio-nav-text));
+  --studio-nav-icon-teal: color-mix(in srgb, var(--chart-3) 65%, var(--studio-nav-text));
+  --studio-nav-icon-amber: color-mix(in srgb, var(--chart-4) 65%, var(--studio-nav-text));
+  --studio-nav-icon-pink: color-mix(in srgb, var(--chart-5) 65%, var(--studio-nav-text));
   --studio-bg: var(--background);
   --studio-surface: var(--card);
   --studio-surface-muted: var(--muted);
@@ -41,6 +47,7 @@
   --studio-panel: var(--studio-surface);
   /* Background-only recipes: neutral for independently hosted modules. */
   --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-frame-bg: var(--studio-bg);
   --studio-workspace-panel-background: var(--studio-panel);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);
@@ -72,7 +79,11 @@
   --studio-radius: var(--radius);
   --studio-radius-md: var(--radius-md);
   --studio-radius-lg: var(--radius-lg);
+  --studio-radius-pill: 999px;
   --studio-shadow-sm: var(--shadow-sm);
+  --studio-shadow-md: var(--shadow-md, var(--studio-shadow-sm));
+  --studio-shadow-lg: var(--shadow-lg, var(--studio-shadow-md));
+  --studio-shadow-xl: var(--shadow-xl, var(--studio-shadow-lg));
 
   --studio-page-title-size: 20px;
   --studio-section-title-size: 16px;
@@ -88,7 +99,7 @@
   --studio-control-height: 32px;
   --studio-row-height: 48px;
   --studio-table-header-height: var(--studio-row-height);
-  --studio-page-gap: var(--studio-space-4);
+  --studio-page-gap: var(--studio-space-6);
   --studio-row-boundary-style: solid;
   --studio-section-boundary-style: solid;
   --studio-row-hover: var(--studio-accent-soft);
@@ -99,6 +110,8 @@
   --studio-field-border-width: 1px;
   --studio-field-padding: 10px 11px;
   --studio-field-surface: var(--studio-surface);
+  --studio-outlined-field-width: 1px;
+  --studio-outlined-field-gap: 3px;
 
   /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
   --studio-disclosure-duration: 150ms;

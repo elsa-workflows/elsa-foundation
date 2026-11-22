@@ -1,7 +1,13 @@
 """Integrity checks for the workflow-batch driver; synthetic records are not native evidence."""
 import copy
+import json
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
+from batch_journeys import _browser as run_batch_browser
 from batch_journeys import (BATCH_TOOL, BROWSER_COMMANDS, BROWSER_JOURNEY, BROWSER_OBSERVATIONS, CONTROLS, CREDENTIAL, EXPECTED_REFUSALS,
                             NOTHING_CHANGED, OUTCOME_ROWS, POSITIVE_RISKS, PROPOSAL_FRAMES, REFUSED_FRAMES, UNOFFERED_ERROR, UNOFFERED_FRAMES,
                             UNOFFERED_MESSAGE, batch_manifest_gaps, batch_snapshot, control_operations, positive_operations,
@@ -271,6 +277,62 @@ class SectionTests(unittest.TestCase):
             with self.subTest(case=name):
                 self.assertTrue(batch_manifest_gaps(section, "s"))
         self.assertTrue(batch_manifest_gaps(None))
+
+
+
+
+
+class BatchBrowserFailureDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.case = Path(directory.name) / "anthropic-workflow-batch-browser"
+        self.output = self.case / "observation"
+        self.output.mkdir(parents=True)
+        self.original = RuntimeError("original failed browser process")
+        self.report = {"status": "failed", "stage": "anthropic-workflow-batch-browser"}
+        self.runtime = SimpleNamespace(
+            sign_in=Mock(return_value=(None, {"storageState": str(self.case / "storage-private.json")})),
+            output=Mock(return_value=self.case), provider="anthropic", studio_origin="http://127.0.0.1:41000",
+            backend_origin="http://127.0.0.1:41001", command_file=self.case / "command-private.json",
+            transport=Mock(return_value=SimpleNamespace(trace_file=self.case / "trace.jsonl")),
+            run=SimpleNamespace(run=Mock(side_effect=self.original), report=self.report, save=Mock()))
+        self.seed = {**copy.deepcopy(SEED), "definitionPath": "/design/workflows/definitions/wf-1",
+                     "draftPath": "/design/workflows/drafts/draft-1", "validationPath": "/design/workflows/drafts/draft-1/validate"}
+
+    def invoke(self):
+        with patch("batch_journeys.shutil.which", return_value="node"), self.assertRaises(RuntimeError) as caught:
+            run_batch_browser(self.runtime, "anthropic-workflow-batch-browser", self.seed)
+        self.assertIs(self.original, caught.exception)
+        self.assertEqual("failed", self.report["status"])
+
+    def test_failure_retains_only_safe_location_and_preserves_original_exception(self):
+        diagnostic = self.output / "failure-diagnostic.json"
+        diagnostic.write_text(json.dumps({"kind": "AssertionError", "message": "Bearer private-canary",
+            "frames": [{"file": "browser.mjs", "line": 1670, "column": 2},
+                       {"file": "/private/secret", "line": 1, "column": 2}]}))
+        original = diagnostic.read_bytes()
+        self.invoke()
+        self.assertEqual({"kind": "AssertionError", "frames": [{"file": "browser.mjs", "line": 1670, "column": 2}]},
+                         self.report.get("browserFailureDiagnostic"))
+        self.runtime.run.save.assert_called_once()
+        self.assertEqual(original, diagnostic.read_bytes())
+        self.assertNotIn("private-canary", json.dumps(self.report))
+        self.assertNotIn("/private/secret", json.dumps(self.report))
+
+    def test_missing_malformed_or_unsavable_diagnostic_cannot_mask_failure(self):
+        diagnostic = self.output / "failure-diagnostic.json"
+        for data in (None, "{", "[]"):
+            with self.subTest(data=data):
+                self.report.pop("browserFailureDiagnostic", None)
+                if data is None:
+                    diagnostic.unlink(missing_ok=True)
+                else:
+                    diagnostic.write_text(data)
+                self.invoke()
+        diagnostic.write_text('{"kind":"Error","frames":[]}')
+        self.runtime.run.save.side_effect = RuntimeError("diagnostic persistence failed")
+        self.invoke()
 
 
 if __name__ == "__main__":

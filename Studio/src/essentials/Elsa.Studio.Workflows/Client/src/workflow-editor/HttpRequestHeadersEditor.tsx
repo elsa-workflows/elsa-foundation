@@ -1,3 +1,4 @@
+import { StudioField } from "@elsa-workflows/studio-ui";
 import { Plus, Trash2 } from "lucide-react";
 import type { HttpTestRequestHeader } from "./httpTestRequestHeaders";
 
@@ -15,18 +16,12 @@ export function HttpRequestHeadersEditor({ rows, disabled, onChange }: {
       <div className="wf-http-test-header-fields">
         {rows.map((row, index) => (
           <div className="wf-http-test-header-row" key={row.id}>
-            <label className="wf-form-field">
-              <span>Name</span>
-              <input aria-label={`Header ${index + 1} name`} value={row.name} disabled={disabled}
+            <StudioField className="wf-form-field" label={<><span>Name</span></>}><input aria-label={`Header ${index + 1} name`} value={row.name} disabled={disabled}
                 placeholder="X-Correlation-ID" autoComplete="off" spellCheck={false}
-                onChange={event => update(row.id, { name: event.target.value })} />
-            </label>
-            <label className="wf-form-field">
-              <span>Value</span>
-              <input aria-label={`Header ${index + 1} value`} value={row.value} disabled={disabled}
+                onChange={event => update(row.id, { name: event.target.value })} /></StudioField>
+            <StudioField className="wf-form-field" label={<><span>Value</span></>}><input aria-label={`Header ${index + 1} value`} value={row.value} disabled={disabled}
                 placeholder="demo-request" autoComplete="off" spellCheck={false}
-                onChange={event => update(row.id, { value: event.target.value })} />
-            </label>
+                onChange={event => update(row.id, { value: event.target.value })} /></StudioField>
             <button type="button" className="wf-icon-button" disabled={disabled}
               aria-label={`Remove header ${index + 1}`} onClick={() => onChange(rows.filter(item => item.id !== row.id))}>
               <Trash2 size={15} aria-hidden="true" />

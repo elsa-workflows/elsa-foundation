@@ -13,7 +13,7 @@ name: Docker Images
 # manual dispatch for a commit on main (#2751). Pull requests build no image; until #2751 a PR that
 # changed a Dockerfile or another image input built both images without pushing. The cost is known:
 # a change that breaks an image build (a Dockerfile, Directory.Build.props, Directory.Packages.props,
-# the analyzers under Essentials/build/Analyzers) is caught only by the post-merge build. #2087 is the
+# the analyzers under essentials/build/Analyzers) is caught only by the post-merge build. #2087 is the
 # precedent: it added a root props file the Dockerfiles did not copy, and main stayed red for three
 # merges before anyone saw it.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
@@ -186,7 +186,7 @@ jobs:
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # Essentials/apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -197,7 +197,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: Essentials/apps/Elsa.Workbench/Dockerfile
+      file: apps/Elsa.Workbench/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
@@ -224,7 +224,7 @@ jobs:
     needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # Essentials/apps/Elsa.Foundation.Host/Dockerfile.
+    # apps/Elsa.Foundation.Host/Dockerfile.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
@@ -233,7 +233,7 @@ jobs:
       output: image
       push: true
       context: .
-      file: Essentials/apps/Elsa.Foundation.Host/Dockerfile
+      file: apps/Elsa.Foundation.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}

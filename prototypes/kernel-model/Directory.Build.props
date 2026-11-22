@@ -1,0 +1,13 @@
+<Project>
+  <!-- Standalone prototype: this file stops MSBuild from importing the repository's Directory.Build.props. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Every project restores against a committed packages.lock.json; CI restores with locked mode (#2122). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

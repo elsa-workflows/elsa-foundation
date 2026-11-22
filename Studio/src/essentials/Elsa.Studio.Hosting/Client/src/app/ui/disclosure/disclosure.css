@@ -209,8 +209,13 @@
 }
 
 .studio-add-option-choice:hover,
-.studio-overflow-menu-item:hover {
+.studio-overflow-menu-item:hover:not(:disabled) {
   background: var(--studio-accent-soft);
+}
+
+.studio-overflow-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .studio-add-option-empty {
@@ -325,8 +330,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 24px;
+  gap: 4px;
+  min-height: 20px;
 }
 
 .studio-expression-field-label {
@@ -337,8 +342,8 @@
 .studio-peer-view-switch {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 1px;
+  padding: 1px;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
@@ -356,9 +361,9 @@
 
 .studio-expression-toggle button,
 .studio-peer-view-switch button {
-  min-height: 24px;
+  min-height: 22px;
   margin: 0;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   border-radius: var(--studio-radius-sm);
   background: transparent;
@@ -469,4 +474,55 @@
   .studio-expression-toggle {
     transition: none;
   }
+}
+
+.studio-overflow-menu-list [role="group"] + [role="group"] {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--studio-border);
+}
+
+.studio-menu-heading {
+  display: block;
+  padding: 4px 8px;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
+}
+
+.studio-overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+}
+
+.studio-overflow-menu-item:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+  background: var(--studio-accent-soft);
+}
+
+.studio-menu-detail {
+  margin-left: auto;
+  color: var(--studio-text-muted);
+}
+
+.studio-split-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.studio-split-button > .studio-split-button-primary {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  white-space: nowrap;
+}
+
+.studio-split-button > .studio-split-button-trigger {
+  min-width: 28px;
+  padding-inline: 5px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-inline-start: 1px solid var(--studio-border);
 }

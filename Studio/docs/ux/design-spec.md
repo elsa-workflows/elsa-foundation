@@ -49,14 +49,17 @@ code.
    and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
    four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
-   Table headers use sentence case and the shared label size. Eyebrows are optional context; technical identifiers may use mono.
+   Keep the capitals in “Test Run” and “Executable Inspector”. Other UI labels use sentence case,
+   including “User tasks”. Table headers use sentence case and the shared label size. Technical identifiers may use mono.
+   Omit kickers (small labels above the title) in dialogs and sections. Use the optional
+   `StudioPageHeader` eyebrow “only when it adds information beyond the title/navigation”.
 
 ## Layout
 
 | Region | Status | Rule |
 |---|---|---|
 | Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions, the theme control (`ThemeSwitcher`) and, when sign-in is on, the user menu. |
-| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
+| Navigation placement | `exists` | Home is direct; initially open Build, Operate and Integrations groups hold purpose-specific destinations. Settings stays separate. Module placement, inherited child views, permissions and disclosure behavior follow [module UI guidance](../module-ui.md#navigation). Library owns activity/template views; Workflows owns definition/executable views; Diagnostics owns its routed diagnostic views. Existing URLs remain valid. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
 | User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is collapsed on desktop and narrow screens. Default chrome values stay represented by absent keys; explicit nondefault choices persist. |
@@ -81,7 +84,10 @@ The [module UI guide](../module-ui.md) owns public imports and composition examp
 Collections share a flat page, a 20px page title, 13px description/body, 12px
 sentence-case table headers, search before filters, 32px default controls, and a
 48px minimum row height. Longer content may grow a row. Use the shared footer for
-counts and pagination. The host owns the outer gutter; a module does not add a
+counts, page-size selection and cursor-based Load more actions. Keep those labels in sentence
+case and show “Loading…” while loading more. The host's horizontal gutter scales with the viewport
+from 16px to 36px, preserving room for desktop tables beside folder navigation.
+A module does not add a
 second whole-page border or another page inset. Small row actions may use the
 shared small button size.
 
@@ -94,7 +100,7 @@ Module authors must not copy a snapshot of host component CSS.
 
 Purposeful differences remain: template catalogs and dashboard widgets may use
 cards; authoring canvases, staged review workflows and diagnostic streams retain
-their task layout. Embedded headers can use the compact variant. These exceptions
+their task layout. Detail pages use the compact StudioPageHeader with a 16px, weight-600 title, a status chip when a resource has a status, and contextual actions. The active shell shows the clickable ancestor trail. Designer and inspection toolbars retain their domain actions and use the same title size and weight. Embedded headers can also use the compact variant. These exceptions
 still use the shared theme tokens, control recipes, typography and feedback.
 
 ## Live workflow execution (#3392)
@@ -139,7 +145,7 @@ explains the user journey.
 **Status: `exists`** (accepted in [#3070](https://github.com/elsa-workflows/elsa-foundation/issues/3070)). The issue record carries the acceptance and delivery evidence.
 
 The Activity Definitions and Workflow Definitions collections use the same scan hierarchy:
-page inset, eyebrow/title/description, one filled primary action, secondary page actions, search
+page inset, title and description with an optional eyebrow, one filled primary action, secondary page actions, search
 and filters, results, and pagination. Keep meaningful table headings and row labels. Shared
 hierarchy is a presentation rule, not a shared data-grid or filtering framework.
 
@@ -195,10 +201,11 @@ and token contract while keeping each resource's domain columns and operations:
 
 | Component | Status | Rule |
 |---|---|---|
-| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`; sizes `sm` / `md`. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
+| Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`, `danger`; sizes `sm` / `md`. Use `danger` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
+| Icon-only button | `exists` | `StudioIconButton`: 28px control with a 16px lucide icon, a required `aria-label` and a tooltip that defaults to that label. Use `variant="danger"` for destructive hover treatment. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
-| Button (new variants) | `target, phase 4` | `outline` and `destructive` variants. Until they exist, use `default` / `ghost` and do not name `outline` or `destructive` in new call sites. |
+| Button (new variant) | `target, phase 4` | `outline` variant. Until it exists, use `default` / `ghost` and do not name `outline` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
 | DataGrid | `exists` | `ui/data-grid/DataGrid` (`StudioDataGrid`) supplies table semantics; with `onSelect`, its rows activate on click and Enter/Space. Without `onSelect`, rows have no activation handlers or tab stop. It does not isolate nested controls: callers must stop click and Enter/Space propagation for inner controls or use a guarded caller wrapper. Custom rows own their target guards; Workflow Definitions guards descendant clicks and uses the name link for keyboard entry. See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Secrets inventory | `exists` (#3069) | Search by secret name or display name is server-backed and requests up to 100 records. Counts identify rows shown and loaded alongside the result total; a submitted search appears in the count so draft text cannot change its meaning. More matches than loaded means the result is partial; a full 100-row page with a total of 100 is complete. Type, store, scope and status facets apply only to loaded rows, and scope choices describe loaded results. |
@@ -207,6 +214,7 @@ and token contract while keeping each resource's domain columns and operations:
 | Incident details | `exists` | A compact **Next step** block sits before technical evidence and stays attached to the selected incident and current run. Keep active blocking, active non-blocking and historical states distinct; expose automatic retry timing only when the exact journal supplies it. Preserve copy, exact activity/input navigation, dialog Escape and trigger-focus return. |
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
+| Dialog | `exists` | Use `StudioDialog` for modal forms: title with no eyebrow, optional description, named close button and trapped focus. Put Cancel first and one primary confirm second in `StudioDialogFooter`, both at the default control size. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
 | Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. Activity catalog tiers are lowercase `essential`, `optional` and `setting`; tier controls presentation independently of `isRequired` and runtime validation. Only an exact optional tier that is not required goes under one “More options” section. Missing, null, unfamiliar and setting tiers, plus required optional inputs, stay directly visible. Configured HTTP values start open and may be collapsed with a set-count badge through `allowCollapseWhenSet`; Runs opts in only because applied criteria stay visible as chips outside the disclosure. Other callers retain the existing default. Host-reported errors, option-source failures and editors without complete local-error reporting keep the section open; explicit force-open remains authoritative, and a forced reveal does not overwrite the saved collapsed preference. Only reported blocking errors receive an Error badge. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Settings and other surfaces do not use the kit yet. |
 

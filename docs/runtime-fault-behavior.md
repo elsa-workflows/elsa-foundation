@@ -1,5 +1,7 @@
 # What happens when something fails at runtime
 
+> **Current core.** This page describes the current Elsa core, which stays the default until the switch to the clean-slate kernel (milestone K13). The kernel is in development, tracked in [#4229](https://github.com/elsa-workflows/elsa-foundation/issues/4229); its design is in the [kernel architecture pages](architecture/README.md). This page will be rewritten for the new core as part of that switch.
+
 **Who this is for:** contributors working on, or reading, the Elsa 4 runtime.
 
 There are two kinds of failure, and they take **different paths with different outcomes**:

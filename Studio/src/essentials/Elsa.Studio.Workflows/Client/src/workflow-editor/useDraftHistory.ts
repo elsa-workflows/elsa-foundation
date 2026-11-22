@@ -1,14 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { GraphAuthoringView } from "../graph-authoring/GraphAuthoringView";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import { canRedo, canUndo, createHistory, pushSnapshot, redo as redoHistory, undo as undoHistory, type HistoryState } from "../workflowHistory";
 import { historyCaptureDelayMs } from "./constants";
 import { cloneWorkflowDraftForUndo, getDraftSignature } from "./editorHelpers";
 
+import type { OrdinaryWorkflowEditTransition } from "./workflowDocument";
+
 interface DraftHistoryParams {
+  transitions?: readonly OrdinaryWorkflowEditTransition[];
+  onTransitionsCaptured?(ids: readonly number[]): void;
   draft: WorkflowDraft | null;
   // Restores a whole-draft snapshot. The host preserves the nearest surviving scope; this hook only
   // decides which snapshot to restore.
-  restoreDraft(snapshot: WorkflowDraft): void;
+  restoreDraft(snapshot: WorkflowDraft, view?: GraphAuthoringView): void;
+  captureView?(): GraphAuthoringView;
 }
 
 /**
@@ -18,9 +24,10 @@ interface DraftHistoryParams {
  * the 50-entry cap drops the oldest entries.
  */
 interface HistoryEntry {
-  draft: WorkflowDraft;
+  view?: GraphAuthoringView;  draft: WorkflowDraft;
   lineage: ReadonlySet<string>;
   origin: string | null;
+  bookmark?: { restore(): void };
 }
 
 /** Whether the review card's whole-change Undo may act now, and why not when it may not. */
@@ -61,7 +68,10 @@ export interface WorkflowLineageHold {
 // User-facing undo/redo. Snapshots are whole drafts; nodes/edges rebuild from them. Signature-driven
 // capture records every committed mutation (palette add, drag, property edit, auto-layout, code apply)
 // without touching each handler. A Weaver batch is recorded explicitly as its own entry.
-export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
+export function useDraftHistory({ draft, restoreDraft, captureView, transitions, onTransitionsCaptured }: DraftHistoryParams) {
+  const nextEditViewRef = useRef<GraphAuthoringView | undefined>(undefined);
+  const captureViewRef = useRef(captureView);
+  captureViewRef.current = captureView;
   const historyRef = useRef<HistoryState<HistoryEntry>>(createHistory());
   const lastCapturedDraftRef = useRef<WorkflowDraft | null>(null);
   const lastCapturedSignatureRef = useRef("");
@@ -73,6 +83,8 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
   latestDraftRef.current = draft;
   const lineageRef = useRef<ReadonlySet<string>>(new Set());
   const originRef = useRef<string | null>(null);
+  const bookmarkRef = useRef<{ restore(): void } | undefined>(undefined);
+  const capturedTransitionId = useRef(0);
   const savedBatchesRef = useRef(new Set<string>());
   const knownBatchesRef = useRef(new Set<string>());
   const listenersRef = useRef(new Set<() => void>());
@@ -89,12 +101,15 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
   // Re-seeds history when a new draft loads (or after a promote). Returns nothing; callers invoke it in
   // their load() flow so a fresh definition starts with an empty, consistent undo stack.
   const resetHistory = useCallback((nextDraft: WorkflowDraft | null) => {
+    nextEditViewRef.current = undefined;
     historyRef.current = createHistory();
     lastCapturedDraftRef.current = nextDraft ? cloneWorkflowDraftForUndo(nextDraft) : null;
     lastCapturedSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
     restoringRef.current = false;
     lineageRef.current = new Set();
     originRef.current = null;
+    bookmarkRef.current = undefined;
+
     savedBatchesRef.current = new Set();
     knownBatchesRef.current = new Set();
     setHistoryVersion(0);
@@ -104,14 +119,33 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
 
   // Pushes the captured position as an entry and makes `next` the captured position: an ordinary edit, so the new
   // position keeps the line it inherited and has no batch origin.
-  const capture = useCallback((next: WorkflowDraft) => {
+  const capture = useCallback((next: WorkflowDraft, bookmark?: { restore(): void }) => {
     const previous = lastCapturedDraftRef.current;
-    if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current });
+    if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current, view: nextEditViewRef.current ?? captureViewRef.current?.(), bookmark: bookmarkRef.current });
     lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(next);
     lastCapturedSignatureRef.current = getDraftSignature(next);
+    nextEditViewRef.current = undefined;
     originRef.current = null;
+    bookmarkRef.current = bookmark;
     changed();
   }, [changed]);
+
+  // Capture only adopted reducer receipts, never inside a recipe. Before/after snapshots preserve
+  // rapid batched edits; the id fence makes effect replay in StrictMode harmless.
+  useLayoutEffect(() => {
+    const pending = (transitions ?? []).filter(event => event.id > capturedTransitionId.current);
+    if (pending.length === 0) return;
+    if (pendingCaptureRef.current !== null) window.clearTimeout(pendingCaptureRef.current);
+    pendingCaptureRef.current = null;
+    for (const event of pending) {
+      capturedTransitionId.current = event.id;
+      if (!draft || event.after.id !== draft.id || event.after.definitionId !== draft.definitionId) continue;
+      if (getDraftSignature(event.before) !== lastCapturedSignatureRef.current) capture(event.before, event.history.before);
+      else bookmarkRef.current = event.history.before;
+      if (getDraftSignature(event.after) !== lastCapturedSignatureRef.current) capture(event.after, event.history.after);
+    }
+    onTransitionsCaptured?.(pending.map(event => event.id));
+  }, [capture, draft, onTransitionsCaptured, transitions]);
 
   useEffect(() => {
     if (!draft) return;
@@ -159,19 +193,39 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     capture(latest);
   }, [capture]);
 
+  /** Reserve the ordinary edit's base view before dispatch; no Weaver lineage or save hold. */
+  const prepareEdit = useCallback(() => {
+    flushPendingHistory();
+    nextEditViewRef.current = captureViewRef.current?.();
+  }, [flushPendingHistory]);
+  const cancelPreparedEdit = useCallback(() => { nextEditViewRef.current = undefined; }, []);
+  /** Observe the reducer receipt before recording. A normal capture that already ran is not duplicated. */
+  const recordEdit = useCallback((applied: WorkflowDraft) => {
+    // Another ordinary edit can follow the transaction in the same React commit. Keep that live
+    // position (and its capture timer); the proposal remains its own preceding history entry.
+    if (latestDraftRef.current && getDraftSignature(latestDraftRef.current) === getDraftSignature(applied)) {
+      if (pendingCaptureRef.current !== null) window.clearTimeout(pendingCaptureRef.current);
+      pendingCaptureRef.current = null;
+    }
+    if (getDraftSignature(applied) !== lastCapturedSignatureRef.current) capture(applied);
+    nextEditViewRef.current = undefined;
+  }, [capture]);
+
   const restoreDraftSnapshot = useCallback((entry: HistoryEntry) => {
     restoringRef.current = true;
     lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(entry.draft);
     lastCapturedSignatureRef.current = getDraftSignature(entry.draft);
     lineageRef.current = entry.lineage;
     originRef.current = entry.origin;
-    restoreDraft(entry.draft);
+    bookmarkRef.current = entry.bookmark;
+    restoreDraft(entry.draft, entry.view);
+    entry.bookmark?.restore();
     changed();
   }, [changed, restoreDraft]);
 
   const currentPosition = useCallback((): HistoryEntry | null => {
     const latest = latestDraftRef.current;
-    return latest ? { draft: latest, lineage: lineageRef.current, origin: originRef.current } : null;
+    return latest ? { draft: latest, lineage: lineageRef.current, origin: originRef.current, view: captureViewRef.current?.(), bookmark: bookmarkRef.current } : null;
   }, []);
 
   const undo = useCallback(() => {
@@ -221,11 +275,12 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
       recordBatch(batchId, applied) {
         // The captured position is the batch's base: the caller flushed pending capture before dispatching it.
         const previous = lastCapturedDraftRef.current;
-        if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current });
+        if (previous) historyRef.current = pushSnapshot(historyRef.current, { draft: previous, lineage: lineageRef.current, origin: originRef.current, view: captureViewRef.current?.(), bookmark: bookmarkRef.current });
         lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(applied);
         lastCapturedSignatureRef.current = getDraftSignature(applied);
         lineageRef.current = new Set([...lineageRef.current, batchId]);
         originRef.current = batchId;
+        bookmarkRef.current = undefined;
         knownBatchesRef.current.add(batchId);
         changed();
       },
@@ -255,5 +310,5 @@ export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
     }
   }), [changed, isLineageHeld, lineageHeld]);
 
-  return { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold };
+  return { prepareEdit, cancelPreparedEdit, recordEdit, resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory, acceptSavedDraft, batchHistory, lineageHold };
 }

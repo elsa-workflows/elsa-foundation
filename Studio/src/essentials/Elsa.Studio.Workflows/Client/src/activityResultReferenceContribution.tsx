@@ -40,3 +40,17 @@ export function registerActivityResultReferenceContribution(
 ) {
   registry.add(activityResultReferenceContribution);
 }
+
+
+/** Member/request surfaces reuse the chooser's provided editor without pulling it into the module entry. */
+export const activityDataMemberReferenceContribution: StudioExpressionEditorContribution = {
+  id: "studio.workflows.activity-data-member-reference",
+  order: 121,
+  supports: context => ["ActivityResultMember", "VariableMember", "WorkflowRequestMember", "InputMember", "WorkflowRequest"].includes(context.syntax),
+  surfaces: { inline: ActivityResultReferenceSurface },
+  createDefaultValue: () => null
+};
+
+export function registerActivityDataMemberReferenceContribution(registry: StudioContributionRegistry<StudioExpressionEditorContribution>) {
+  registry.add(activityDataMemberReferenceContribution);
+}

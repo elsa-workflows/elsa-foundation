@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
-import { OverflowMenu, selectSettingEditor } from "@elsa-workflows/studio-ui";
-import { normalizeHomeWidgetSize, useDialogFocus, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
+import { SkeletonRows, StudioAlert, StudioButton, OverflowMenu, selectSettingEditor, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
 const sizeLabels: Record<StudioDashboardWidgetSize, string> = {
@@ -59,14 +59,14 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
       </div>
       {editing ? (
         <div className="dashboard-widget-actions" aria-label={`${widget.title} controls`}>
-          <button type="button" onClick={() => onMove(-1)} aria-label={`Move ${widget.title} earlier`}><ChevronLeft size={15} /></button>
-          <button type="button" onClick={() => onMove(1)} aria-label={`Move ${widget.title} later`}><ChevronRight size={15} /></button>
-          <select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(normalizeHomeWidgetSize(event.target.value))}>
+          <StudioButton type="button" variant="ghost" size="sm" onClick={() => onMove(-1)} aria-label={`Move ${widget.title} earlier`}><ChevronLeft size={15} /></StudioButton>
+          <StudioButton type="button" variant="ghost" size="sm" onClick={() => onMove(1)} aria-label={`Move ${widget.title} later`}><ChevronRight size={15} /></StudioButton>
+          <StudioField label={`Size of ${widget.title}`}><select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(normalizeHomeWidgetSize(event.target.value))}>
             {widget.supportedSizes.map(option => <option key={option} value={option}>{sizeLabels[option] ?? option}</option>)}
-          </select>
-          {widget.settings ? <button type="button" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></button> : null}
-          {widget.load ? <button type="button" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></button> : null}
-          {!pinned ? <button type="button" onClick={onHide} aria-label={widget.id === "home.get-started" ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></button> : null}
+          </select></StudioField>
+          {widget.settings ? <StudioButton type="button" variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></StudioButton> : null}
+          {widget.load ? <StudioButton type="button" variant="ghost" size="sm" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></StudioButton> : null}
+          {!pinned ? <StudioButton type="button" variant="ghost" size="sm" onClick={onHide} aria-label={widget.id === "home.get-started" ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></StudioButton> : null}
         </div>
       ) : (
         <OverflowMenu
@@ -85,11 +85,11 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
       )}
     </header>
     <div className="dashboard-widget-body">
-      {runtime.state.status === "loading" ? <div role="status">Loading…</div> : null}
-      {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <div role="alert">{runtime.state.error} <button type="button" onClick={() => void runtime.refresh()}>Retry</button></div> : null}
+      {runtime.state.status === "loading" ? <SkeletonRows rows={3} label={`Loading ${widget.title}`} /> : null}
+      {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <StudioAlert tone="danger">{runtime.state.error} <StudioButton onClick={() => void runtime.refresh()}>Retry</StudioButton></StudioAlert> : null}
       {bodyVisible ? (
         <WidgetBodyBoundary title={widget.title} resetKey={bodyResetKey} onRetry={retryBody}>
-          <React.Suspense fallback={<div role="status">Loading…</div>}>
+          <React.Suspense fallback={<SkeletonRows rows={3} label={`Loading ${widget.title}`} />}>
             <DashboardWidgetBody widget={widget} snapshot={snapshot} settings={settings} size={size} />
           </React.Suspense>
         </WidgetBodyBoundary>
@@ -144,9 +144,9 @@ class WidgetBodyBoundary extends React.Component<{
   render() {
     if (this.state.failed) {
       return (
-        <div role="alert">
-          {this.props.title} could not be rendered. <button type="button" onClick={this.props.onRetry}>Retry</button>
-        </div>
+        <StudioAlert tone="danger">
+          {this.props.title} could not be rendered. <StudioButton onClick={this.props.onRetry}>Retry</StudioButton>
+        </StudioAlert>
       );
     }
 
@@ -160,10 +160,8 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
   const definition = widget.settings!;
   const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...(value as Record<string, unknown>) }));
   const [validationError, setValidationError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const titleId = useId();
   const errorId = useId();
-  useDialogFocus(dialogRef, onClose);
+  const firstField = useRef<HTMLElement | null>(null);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -175,20 +173,19 @@ function WidgetSettings({ api, widget, value, onSave, onClose }: { api: ElsaStud
     onSave(valid);
   }
 
-  return <div className="dashboard-settings-backdrop" role="presentation"><section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={validationError ? errorId : undefined} className="dashboard-settings-dialog dashboard-widget-settings-dialog" tabIndex={-1}>
-    <h4 id={titleId}>{widget.title} settings</h4>
-    <form className="dashboard-widget-settings-form" onSubmit={submit}>
-      <div className="dashboard-widget-settings-fields">
+  return <StudioDialog open title={`${widget.title} settings`} className="dashboard-widget-settings-dialog" onClose={onClose} dismissOnOutsideClick={false}
+    initialFocusRef={firstField} onSubmit={submit} footer={<StudioDialogFooter onCancel={onClose} confirmLabel="Save" />}>
+      <div className="dashboard-widget-settings-fields" ref={element => {
+        firstField.current = element?.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)") ?? null;
+      }}>
         {definition.descriptors.map(descriptor => {
-          const Editor = selectSettingEditor(api, descriptor).component;
-          return <label key={descriptor.name}><span>{descriptor.displayName}</span><Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => { setDraft(current => ({ ...current, [descriptor.name]: next })); setValidationError(null); }} /></label>;
+          const editor = selectSettingEditor(api, descriptor);
+          const Editor = editor.component;
+          const control = <Editor setting={descriptor} value={draft[descriptor.name]} onChange={next => { setDraft(current => ({ ...current, [descriptor.name]: next })); setValidationError(null); }} />;
+          return editor.presentsField ? <div key={descriptor.name}>{control}</div>
+            : <label key={descriptor.name}><span>{descriptor.displayName}</span>{control}</label>;
         })}
         {validationError ? <p id={errorId} className="dashboard-widget-settings-error" role="alert">{validationError}</p> : null}
       </div>
-      <footer className="dashboard-widget-settings-actions">
-        <button type="button" className="studio-button" data-variant="ghost" onClick={onClose}>Cancel</button>
-        <button type="submit" className="studio-button" data-variant="primary">Save</button>
-      </footer>
-    </form>
-  </section></div>;
+  </StudioDialog>;
 }

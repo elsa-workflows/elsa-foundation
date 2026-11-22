@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type SetStateAction } from "react";
+import { getNotifications, notifySuccess, useNotificationGuard } from "./notifications";
 import { qualifyStudioBackendPath, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ValidationError, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
@@ -46,10 +47,10 @@ import {
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
-import { getNotifications } from "./notifications";
 
 interface WorkflowOperationsParams {
   context: StudioEndpointContext;
+  notificationScope?: object;
   draft: WorkflowDraft | null;
   details: WorkflowDefinitionDetails | null;
   catalog: ActivityCatalogItem[];
@@ -67,8 +68,8 @@ interface WorkflowOperationsParams {
   startTestRun(testRun: WorkflowTestRunState): void;
   updateTestRunResult?(testRun: WorkflowTestRunState): void;
   setPublishedArtifact(id: string | null): void;
-  setOperation(operation: WorkflowEditorOperation): void;
-  setStatus(value: string): void;
+  setOperation(operation: SetStateAction<WorkflowEditorOperation>): void;
+  setStatus(value: SetStateAction<string>): void;
   setError(value: WorkflowErrorInput): void;
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
@@ -80,6 +81,7 @@ interface WorkflowOperationsParams {
 // run. Each guards on `busy`, drives the shared `operation` flag, and reports progress via status/error.
 export function useWorkflowOperations({
   context,
+  notificationScope = context,
   draft,
   details,
   catalog,
@@ -100,6 +102,9 @@ export function useWorkflowOperations({
   setAutosavePaused,
   collectLocalValidation
 }: WorkflowOperationsParams) {
+  const captureExportFeedback = useNotificationGuard(notificationScope);
+  const exportOwnerRef = useRef({ scope: notificationScope, request: 0 });
+  if (exportOwnerRef.current.scope !== notificationScope) exportOwnerRef.current = { scope: notificationScope, request: 0 };
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const latestDraftRef = useRef(draft);
   latestDraftRef.current = draft;
@@ -118,9 +123,10 @@ export function useWorkflowOperations({
   const exportJson = useCallback(() => {
     if (!draft) return;
     const name = details?.definition.name;
+    const canNotify = captureExportFeedback();
     downloadWorkflowJson(buildExportPayload(draft, name), name);
-    setStatus("Exported workflow as JSON.");
-  }, [draft, details, setStatus]);
+    if (canNotify()) notifySuccess("Exported workflow as JSON.");
+  }, [captureExportFeedback, draft, details]);
 
   // Distinct from `exportJson` above: that serializes the design draft, this downloads the *compiled*
   // artifact closure the server produced for the published version (foundation #1304). The payload is
@@ -131,6 +137,10 @@ export function useWorkflowOperations({
       setError({ message: publishFirstMessage });
       return;
     }
+    const canNotify = captureExportFeedback();
+    const owner = exportOwnerRef.current;
+    const request = ++owner.request;
+    const ownsExport = () => exportOwnerRef.current === owner && owner.request === request;
     setOperation("exportingArtifact");
     setStatus("Exporting executable artifact...");
     setError("");
@@ -138,16 +148,20 @@ export function useWorkflowOperations({
       const fileName = await downloadExecutableArtifact(context, publishedExecutable);
       // Both name segments come from the root artifact's identity; the double fallback means it carried
       // none, which is worth saying rather than shipping an anonymous file as if it were normal.
-      setStatus(fileName === anonymousArtifactFileName
-        ? `Exported ${fileName} — the artifact carried no definition id or version.`
-        : `Exported executable artifact as ${fileName}.`);
+      if (ownsExport()) {
+        if (fileName === anonymousArtifactFileName) setStatus(`Exported ${fileName} — the artifact carried no definition id or version.`);
+        if (canNotify()) notifySuccess(`Exported executable artifact as ${fileName}.`);
+      }
     } catch (e) {
-      setStatus("");
-      setError(describeExecutableArtifactExportFailure(e));
+      if (ownsExport()) setError(describeExecutableArtifactExportFailure(e));
     } finally {
-      setOperation("idle");
+      // A retained tab still needs its operation cleared after its notification visit retires.
+      if (ownsExport()) {
+        setOperation(current => current === "exportingArtifact" ? "idle" : current);
+        setStatus(current => current === "Exporting executable artifact..." ? "" : current);
+      }
     }
-  }, [busy, context, publishedExecutable, setError, setOperation, setStatus]);
+  }, [busy, captureExportFeedback, context, publishedExecutable, setError, setOperation, setStatus]);
 
   /** Saves this render's draft; a caller that captured the history line when the author acted passes it. */
   const save = useCallback(async (options?: { lineage?: Iterable<string> }) => {
@@ -531,6 +545,7 @@ export function useWorkflowOperations({
     onStarted?: (view: WorkflowTestRunView) => Promise<void>,
     acknowledgeUnavailableExpressionValidation = false
   ): Promise<WorkflowTestRunView | null> => {
+    const canNotify = captureExportFeedback();
     draftSnapshot = structuredClone(draftSnapshot);
     const draftSignature = getDraftSignature(draftSnapshot);
     setStatus("Preparing test run...");
@@ -559,32 +574,29 @@ export function useWorkflowOperations({
       startTestRun({ draftSignature, startedHere: true, snapshot: draftSnapshot, endpointContext: context, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
-      setStatus("");
       const rejected = isRejectedTestRun(nextTestRun);
       const runtimeIssue = nextTestRun.commandDispatchStatus === "AcceptedButFaulted" || (nextTestRun.incidentCount ?? 0) > 0;
       const prepared = nextTestRun.status === "Prepared" && !nextTestRun.workflowExecutionId;
       const deferred = nextTestRun.status === "DispatchDeferred";
       const duplicate = nextTestRun.status === "DispatchDuplicate";
-      getNotifications().notify({
-        level: rejected || runtimeIssue ? "error" : deferred || duplicate ? "info" : "success",
-        title: rejected ? "Test run rejected" : runtimeIssue ? "Test run needs attention" : prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
-        message: rejected ? nextTestRun.reason ?? "Review the Runtime panel for details."
-          : runtimeIssue ? "Review the Runtime panel for incident details."
-          : prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
+      setStatus(rejected ? "Test run rejected" : "");
+      // Runtime and the attached-run status retain progress and problems after this confirmation fades.
+      if (canNotify() && !rejected && !runtimeIssue) getNotifications().notify({
+        level: deferred || duplicate ? "info" : "success",
+        title: prepared ? "Test trigger prepared" : deferred ? "Test run dispatch deferred" : duplicate ? "Test run already dispatched" : "Test run started",
+        message: prepared ? "Waiting for a test event. Follow progress in the Runtime panel." : undefined,
         ...(nextTestRun.workflowExecutionId ? { link: { label: "Open run", path: qualifyStudioBackendPath(`/workflows/instances/${encodeURIComponent(nextTestRun.workflowExecutionId)}`) } } : {})
       });
       if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
       return nextTestRun;
     } catch (e) {
       setStatus("");
-      const error = describeWorkflowError(e, "The test run could not be dispatched.");
-      setError(error);
-      getNotifications().notify({ level: "error", title: "Test run could not start", message: error.message });
+      setError(describeWorkflowError(e, "The test run could not be dispatched."));
       return null;
     } finally {
       setOperation("idle");
     }
-  }, [context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
+  }, [captureExportFeedback, context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
   const run = useCallback(() => {
     if (!draft?.state.rootActivity || busy) return;

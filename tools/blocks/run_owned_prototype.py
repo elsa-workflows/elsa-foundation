@@ -39,7 +39,7 @@ reader = (
 )
 assemblies = {
     "workbench": REPO
-    / "Essentials/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll",
+    / "apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll",
     "studio": REPO
     / "Studio/src/apps/Elsa.Studio.Web/bin/Debug/net10.0/Elsa.Studio.Web.dll",
 }
@@ -64,7 +64,7 @@ if any(p["sourceCommit"] != source for p in products.values()):
 assets = {
     str(p.relative_to(REPO)): h.digest(p)
     for root in list((REPO / "Studio/src/essentials").glob("*/wwwroot"))
-    + list((REPO / "Extensions").glob("*/studio/*/wwwroot"))
+    + list((REPO / "extensions").glob("*/studio/*/wwwroot"))
     for p in root.rglob("*")
     if p.is_file()
 }

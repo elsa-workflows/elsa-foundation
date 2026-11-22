@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { StudioAlert } from "../ui";
+import { StudioAlert, StudioButton, StudioField } from "../ui";
 import { getErrorMessage, type HostModel, type ModuleManagementRegistryResponse } from "./moduleManagementApi";
 
 interface MaintenanceDiagnostic { code: string; message: string }
@@ -93,13 +93,10 @@ export function PackageMaintenance({ api, host, registry, disabled }: {
   }
 
   return <div className="modules-form" aria-label={`${host.label} package maintenance`}>
-    <label>
-      <span>Package-store label</span>
-      <input value={rootLabel} disabled={!available || pending} onChange={event => { setRootLabel(event.target.value); setResult(null); setError(null); }} />
-    </label>
-    <button type="button" className="studio-button" disabled={!available || pending || !rootLabel.trim()} onClick={() => void request(false)}>
+    <StudioField label="Package-store label"><input value={rootLabel} disabled={!available || pending} onChange={event => { setRootLabel(event.target.value); setResult(null); setError(null); }} /></StudioField>
+    <StudioButton type="button" disabled={!available || pending || !rootLabel.trim()} onClick={() => void request(false)}>
       Preview cleanup
-    </button>
+    </StudioButton>
     {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
     {result ? <div aria-live="polite" aria-label="Package maintenance report">
       <StudioAlert tone={result.status === "Completed" ? "success" : result.status === "Preview" ? "info" : "warning"}>
@@ -116,9 +113,9 @@ export function PackageMaintenance({ api, host, registry, disabled }: {
           {candidate.reasons.length ? `${candidate.reasons.join(", ")}. ` : ""}{candidate.journalPhase ? `Journal: ${candidate.journalPhase}.` : ""} {candidate.diagnostic?.message}
         </li>)}
       </ul>
-      {result.mode === "Preview" ? <button type="button" className="studio-button" disabled={!canConfirm || pending} onClick={() => void request(true)}>
+      {result.mode === "Preview" ? <StudioButton type="button" disabled={!canConfirm || pending} onClick={() => void request(true)}>
         Execute cleanup
-      </button> : null}
+      </StudioButton> : null}
     </div> : null}
   </div>;
 }

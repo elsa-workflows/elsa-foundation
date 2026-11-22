@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../Essentials/src/Events/Core/Elsa.Events.Core.csproj" />
+    <ProjectReference Include="../../../../essentials/src/Events/Core/Elsa.Events.Core.csproj" />
   </ItemGroup>
 </Project>
 

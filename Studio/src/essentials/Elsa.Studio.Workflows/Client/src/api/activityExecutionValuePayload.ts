@@ -40,16 +40,16 @@ export async function getActivityExecutionValuePayload(
     throwIfAborted(signal);
 
     if (!response || typeof response !== "object" || Array.isArray(response)) {
-      throw new Error("Runtime returned an invalid value evidence payload response.");
+      throw new Error("The response for the captured value was invalid.");
     }
     if (response.evidenceId !== evidenceId) {
-      throw new Error("Runtime returned value evidence for a different evidence ID.");
+      throw new Error("The returned value belongs to a different capture.");
     }
     if (normalizeCaptureMode(response.captureMode) !== normalizeCaptureMode(expectedCaptureMode)) {
-      throw new Error("Runtime returned value evidence with a different capture mode.");
+      throw new Error("The returned value uses a different capture mode.");
     }
     if (!Object.hasOwn(response, "payload")) {
-      throw new Error("Runtime value evidence response did not include a payload.");
+      throw new Error("The captured value response did not contain a payload.");
     }
 
     return response;

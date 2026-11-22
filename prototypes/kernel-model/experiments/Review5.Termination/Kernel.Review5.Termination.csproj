@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Gate 2, fifth review: executable evidence for R5-B1 (RT-2), R5-B2 (RT-3), R5-M5 (RT-4) and R5-m3 (generation-carrying
+       jobs), committed through the real InMemoryStore.CommitAsync. Project references only, so the harness rebuilds from
+       the prototype source at any revision. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Kernel.Review5</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Kernel.Workflows brings Kernel.Durable and Kernel.Runtime. -->
+    <ProjectReference Include="../../src/Kernel.Workflows/Kernel.Workflows.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Kernel.Runtime" />
+    <Using Include="Kernel.Durable" />
+    <Using Include="Kernel.Workflows" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
+  </ItemGroup>
+</Project>

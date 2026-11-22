@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { StudioBackendConnection as PreparedBackend } from "@elsa-workflows/studio-sdk";
 import { subscribeWeaverSessionStream } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/weaverStream";
-import { register as registerConsole, ConsoleStreamPanel } from "../../../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/src/module";
-import { register as registerLogs, StructuredLogsPanel } from "../../../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
+import { register as registerConsole, ConsoleStreamPanel } from "../../../extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client/src/module";
+import { register as registerLogs, StructuredLogsPanel } from "../../../extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 

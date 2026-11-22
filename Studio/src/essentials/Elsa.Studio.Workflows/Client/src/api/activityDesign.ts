@@ -260,14 +260,19 @@ export async function getActivityDefinition(context: StudioEndpointContext, defi
   return context.http.getJson<ActivityDefinitionManagementView>(path, { signal });
 }
 
+export async function archiveActivityDefinition(context: StudioEndpointContext, definitionId: string) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definition", { definitionId });
+  await context.http.deleteJson<unknown>(path);
+}
+
 export async function getActivityAuthoringCapabilities(context: StudioEndpointContext, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-authoring-capabilities");
   return context.http.getJson<ActivityAuthoringCapabilities>(path, { signal });
 }
 
-export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest) {
+export async function createActivityDefinition(context: StudioEndpointContext, request: CreateActivityDefinitionRequest, signal?: AbortSignal) {
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-definitions");
-  return context.http.postJson<CreateActivityDefinitionResponse>(path, request);
+  return signal ? context.http.postJson<CreateActivityDefinitionResponse>(path, request, { signal }) : context.http.postJson<CreateActivityDefinitionResponse>(path, request);
 }
 
 export async function createActivityDefinitionDraft(
@@ -603,4 +608,13 @@ export async function listActivityAvailabilityDiagnostics(context: StudioEndpoin
   const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-availability-diagnostics");
   const response = await context.http.getJson<ActivityAvailabilityDiagnostics>(path);
   return normalizeActivityAvailabilityDiagnostics(response);
+}
+
+export async function validateActivityDefinitionCandidate(
+  context: StudioEndpointContext,
+  draftId: string,
+  request: ReplaceActivityDefinitionDraftRequest
+) {
+  const path = await resolveCapabilityLink(context, capabilityIds.activityDesign, "activity-draft-candidate-validation", { draftId });
+  return context.http.postJson<{ state: string; validation?: ActivityDraftValidationView | null }>(path, request);
 }

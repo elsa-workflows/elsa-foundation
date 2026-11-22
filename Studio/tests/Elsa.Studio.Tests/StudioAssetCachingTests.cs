@@ -56,6 +56,85 @@ public sealed class StudioAssetCachingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotModified, second.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/workflows/triggers/deliveries/dv1.example")]
+    [InlineData("/acme/resources/identifier.with.dots")]
+    public async Task HtmlNavigationToAnOpaqueDottedIdentityLoadsTheRevalidatingSpa(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd("text/html");
+        using var response = await _client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("<!doctype html>", await response.Content.ReadAsStringAsync());
+        Assert.True(response.Headers.CacheControl?.NoCache);
+        Assert.NotNull(response.Content.Headers.LastModified);
+    }
+
+    [Fact]
+    public Task HtmlNavigationAcceptsOpaqueIdentitiesLongerThanAFileName() =>
+        HtmlNavigationToAnOpaqueDottedIdentityLoadsTheRevalidatingSpa("/workflows/triggers/deliveries/dv1." + new string('a', 1024));
+
+    [Theory]
+    [InlineData("application/json")]
+    [InlineData("text/javascript")]
+    [InlineData("*/*")]
+    [InlineData("text/html;q=0,application/json")]
+    [InlineData("not a media type")]
+    public async Task MissingFileLikeResourcesDoNotBecomeSpaDocumentsForOtherRequests(string accept)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/acme/resources/identifier.with.dots");
+        request.Headers.TryAddWithoutValidation("Accept", accept);
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/_elsa/unknown-api/dv1.example", "text/html")]
+    [InlineData("/_elsa/unknown-api", "text/html")]
+    [InlineData("/_content/Acme.Studio.Host/studio/modules/acme/missing.js", "*/*")]
+    public async Task UnknownApiAndMissingModuleAssetsRetainTheirNotFoundResponse(string path, string accept)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd(accept);
+        using var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(HostModuleUrl)]
+    [InlineData(HostContentModuleUrl)]
+    public async Task BrowserNavigationToAnExistingModuleStillServesItsScript(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd("text/html");
+        using var response = await _client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(ModuleSource, await response.Content.ReadAsStringAsync());
+        Assert.True(response.Headers.CacheControl?.NoCache);
+    }
+
+    [Fact]
+    public async Task DottedIdentityNavigationRetainsConditionalAndHeadResponses()
+    {
+        const string path = "/workflows/triggers/deliveries/dv1.example";
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Accept.ParseAdd("text/html");
+        using var first = await _client.SendAsync(request);
+        first.EnsureSuccessStatusCode();
+        using var conditional = new HttpRequestMessage(HttpMethod.Get, path);
+        conditional.Headers.Accept.ParseAdd("text/html");
+        conditional.Headers.IfModifiedSince = first.Content.Headers.LastModified;
+        using var revalidated = await _client.SendAsync(conditional);
+        Assert.Equal(HttpStatusCode.NotModified, revalidated.StatusCode);
+        using var head = new HttpRequestMessage(HttpMethod.Head, path);
+        head.Headers.Accept.ParseAdd("text/html");
+        using var metadata = await _client.SendAsync(head);
+        Assert.Equal(HttpStatusCode.OK, metadata.StatusCode);
+        Assert.True(metadata.Headers.CacheControl?.NoCache);
+        Assert.NotNull(metadata.Content.Headers.LastModified);
+        Assert.Equal("", await metadata.Content.ReadAsStringAsync());
+    }
+
     public async Task InitializeAsync()
     {
         WriteFile(Path.Join(WebRoot, ModuleEntry), ModuleSource);

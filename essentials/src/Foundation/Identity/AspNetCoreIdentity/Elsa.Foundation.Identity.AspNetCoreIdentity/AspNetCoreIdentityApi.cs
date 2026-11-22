@@ -1,0 +1,225 @@
+using Elsa.Api.AspNetCore;
+using MinimalEndpoints;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
+using System.Text.Json;
+
+namespace Elsa.Foundation.Identity.AspNetCoreIdentity;
+
+/// <summary>Maps the ASP.NET Core Identity login protocol using ordinary ASP.NET Core endpoints.</summary>
+public static class AspNetCoreIdentityApi
+{
+    private const string PublicCategory = "identity-protocol";
+    private const string PublicReason = "First-party password sign-in protocol entry point.";
+
+    public static void MapAspNetCoreIdentityApi(IEndpointRouteBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        var owner = typeof(AspNetCoreIdentityFeature).Assembly.GetName().Name
+            ?? throw new InvalidOperationException("The ASP.NET Core Identity assembly has no name.");
+
+        // The published operation ids predate the naming scheme, the tag is the literal "Identity",
+        // and the sign-in flow owns an HTML page, dual JSON/form binding, antiforgery, and
+        // content-negotiated redirects — so both operations stay on the group's raw seam.
+        var api = endpoints.MapEndpointGroup(owner, AspNetCoreIdentityJsonContext.Default, tag: "Identity");
+
+        api.MapUnboundOperation("GET", "/" + AspNetCoreIdentityDefaults.LoginRoute, "LoginPage",
+                typeof(string), StatusCodes.Status200OK, null, HandleLoginPageAsync,
+                name: "AspNetCoreIdentityLoginPage", documentAuthResponses: false, successContentType: "text/html", containFailures: false)
+            .AllowPublic(PublicCategory, PublicReason);
+
+        api.MapUnboundOperation("GET", "/_elsa/identity/login-assets/{name}", "LoginArtwork",
+                typeof(byte[]), StatusCodes.Status200OK, null, HandleLoginArtworkAsync,
+                name: "AspNetCoreIdentityLoginArtwork", documentAuthResponses: false, successContentType: "image/jpeg", containFailures: false)
+            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(byte[]), ["image/jpeg", "image/png"]))
+            .AllowPublic(PublicCategory, "Public decorative login artwork; contains no identity data.");
+
+        api.MapUnboundOperation("POST", "/" + AspNetCoreIdentityDefaults.LoginRoute, "Login",
+                typeof(AuthSession), StatusCodes.Status200OK, null, HandleLoginAsync,
+                name: "AspNetCoreIdentityLogin", documentAuthResponses: false, containFailures: false)
+            .WithMetadata(
+                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
+                new AcceptsMetadata(["application/json", "application/x-www-form-urlencoded"], typeof(LoginRequest), false))
+            .AllowPublic(PublicCategory, PublicReason);
+    }
+
+    private static async Task HandleLoginArtworkAsync(HttpContext context)
+    {
+        var name = context.Request.RouteValues["name"]?.ToString();
+        if (name is not ("elsa-logo.png" or "field-guide-logo.png") && !LoginArtwork.IsBundledFile(name))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        using var stream = typeof(LoginPage).Assembly.GetManifestResourceStream($"Elsa.LoginArtwork.{name}")
+            ?? throw new InvalidOperationException("Bundled login artwork is missing.");
+        context.Response.ContentType = name!.EndsWith(".png", StringComparison.Ordinal) ? "image/png" : "image/jpeg";
+        context.Response.Headers.CacheControl = "public,max-age=86400";
+        await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
+    }
+
+    private static async Task HandleLoginPageAsync(HttpContext context)
+    {
+        var options = context.RequestServices.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value;
+        var returnUrl = LocalUrl.Sanitize(context.Request.Query["returnUrl"].FirstOrDefault(), options.AllowedReturnUrlOrigins);
+        var error = context.Request.Query["error"].FirstOrDefault();
+        var tokens = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context);
+        LoginMethods methods;
+        try
+        {
+            var choices = await context.RequestServices.GetRequiredService<IAuthenticationProviderResolver>().ListAsync(context.RequestAborted);
+            methods = new(choices.Where(provider => provider.Id != options.ProviderId && provider.Challenge is not null).ToArray(), options.Enabled);
+        }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            // The local recovery form remains available if an optional managed catalog is unavailable.
+            methods = new([], options.Enabled, true);
+        }
+
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        await context.Response.WriteAsync(LoginPage.RenderInShell(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value, LoginPathBase(context), methods), context.RequestAborted);
+    }
+
+    private static async Task HandleLoginAsync(HttpContext context)
+    {
+        var request = await ReadLoginRequestAsync(context);
+        if (request is null)
+            return;
+
+        var isFormFlow = !string.IsNullOrEmpty(request.ReturnUrl);
+        if (RequiresAntiforgery(context) && !await IsAntiforgeryValidAsync(context))
+        {
+            if (isFormFlow)
+            {
+                await RedirectToLoginWithErrorAsync(context, request.ReturnUrl);
+                return;
+            }
+
+            await Results.Unauthorized().ExecuteAsync(context);
+            return;
+        }
+
+        var options = context.RequestServices.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value;
+        var outcome = await context.RequestServices.GetRequiredService<IIdentitySignInService>()
+            .PasswordSignInAsync(request.Username, request.Password, request.TenantId, context.RequestAborted);
+        if (!outcome.Succeeded)
+        {
+            if (isFormFlow)
+            {
+                await RedirectToLoginWithErrorAsync(context, request.ReturnUrl);
+                return;
+            }
+
+            await Results.Unauthorized().ExecuteAsync(context);
+            return;
+        }
+
+        if (isFormFlow)
+        {
+            await Results.Redirect(LocalUrl.Sanitize(request.ReturnUrl, options.AllowedReturnUrlOrigins), permanent: false)
+                .ExecuteAsync(context);
+            return;
+        }
+
+        await Results.Json(outcome.Session!, AspNetCoreIdentityJsonContext.Default.AuthSession).ExecuteAsync(context);
+    }
+
+    private static async Task<LoginRequest?> ReadLoginRequestAsync(HttpContext context)
+    {
+        try
+        {
+            if (context.Request.HasFormContentType)
+            {
+                var form = await context.Request.ReadFormAsync(context.RequestAborted);
+                return new LoginRequest
+                {
+                    Username = form["username"].FirstOrDefault() ?? string.Empty,
+                    Password = form["password"].FirstOrDefault() ?? string.Empty,
+                    TenantId = form["tenantId"].FirstOrDefault(),
+                    ReturnUrl = form["returnUrl"].FirstOrDefault()
+                };
+            }
+
+            var request = await context.Request.ReadFromJsonAsync(AspNetCoreIdentityJsonContext.Default.LoginRequest, context.RequestAborted);
+            return request is null
+                ? null
+                : request with
+                {
+                    Username = request.Username ?? string.Empty,
+                    Password = request.Password ?? string.Empty
+                };
+        }
+        catch (JsonException)
+        {
+            await Results.BadRequest().ExecuteAsync(context);
+            return null;
+        }
+        catch (InvalidDataException)
+        {
+            await Results.BadRequest().ExecuteAsync(context);
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            await Results.BadRequest().ExecuteAsync(context);
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            await Results.BadRequest().ExecuteAsync(context);
+            return null;
+        }
+    }
+
+    private static bool RequiresAntiforgery(HttpContext context)
+    {
+        var contentType = context.Request.ContentType;
+        if (string.IsNullOrEmpty(contentType))
+            return true;
+
+        return !MediaTypeHeaderValue.TryParse(contentType, out var parsed)
+            || !parsed.MediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<bool> IsAntiforgeryValidAsync(HttpContext context)
+    {
+        try
+        {
+            await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context);
+            return true;
+        }
+        catch (AntiforgeryValidationException)
+        {
+            return false;
+        }
+    }
+
+    private static string LoginPathBase(HttpContext context)
+    {
+        var suffix = "/" + AspNetCoreIdentityDefaults.LoginRoute;
+        var path = context.Request.Path.Value ?? "";
+        // CShells prefixes endpoint routes without rewriting Request.PathBase. Also retain a reverse proxy PathBase.
+        var shellPrefix = path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? path[..^suffix.Length] : "";
+        return context.Request.PathBase.Add(new PathString(shellPrefix)).Value ?? "";
+    }
+
+    private static async Task RedirectToLoginWithErrorAsync(HttpContext context, string? returnUrl)
+    {
+        var options = context.RequestServices.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value;
+        var back = $"{LoginPathBase(context)}/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(returnUrl, options.AllowedReturnUrlOrigins))}";
+        await Results.Redirect(back, permanent: false).ExecuteAsync(context);
+    }
+
+}

@@ -1,5 +1,12 @@
 # Building a module UI
 
+For route navigation, render `StudioShellBreadcrumbs` with the ancestor items and current label.
+The active workspace tab supplies its trail to the shell header. Routes without a trail retain the
+shell's section label. In a standalone host the same component renders inline. Use
+`StudioPageHeader.breadcrumbs` for embedded layouts that own their navigation and
+`StudioBreadcrumbs` for local navigation such as moving between graph scopes.
+
+
 Use `@elsa-workflows/studio-ui` for page composition and controls. The package has
 no router, query client, SDK provider or host-service requirement. Keep your data,
 permissions, navigation and mutations in your module. The visual rules are in the
@@ -33,6 +40,87 @@ tables should consume the [collection and action roles](design-tokens.md#collect
 instead of overriding row borders, selection fills or primary actions with literal recipes.
 Keep owner-specific graph geometry, runtime state and permissions in the module; a presentation
 change must preserve those behaviors. Do not select behavior using palette IDs.
+
+## Outlined form fields
+
+Scalar form editors use `StudioField`. Its caption stays on the top border in every theme;
+help and validation stay below the control and out of its accessible name. Keep native value,
+change, blur, ref, required and disabled properties on the control:
+
+```tsx
+<StudioField label="Endpoint" description="Use an absolute URL" error={error}>
+  <input value={endpoint} onChange={event => setEndpoint(event.target.value)} disabled={saving} />
+</StudioField>
+```
+
+A single native child is associated automatically, including one inside a native wrapper.
+Caller IDs and existing descriptions are preserved. Checkboxes/radios, search controls, table
+cells, file pickers and rich editors retain their own semantic presentation. Multiple individually
+labelled controls form a real group; do not wrap several controls in a single HTML label.
+
+Use `StudioFormField` for an explicit native-control contract or adornments:
+
+```tsx
+<StudioFormField label="Credential" trailing={<button type="button" onClick={retry}>Retry</button>}>
+  {attributes => <input {...attributes} value={credential} onChange={updateCredential} />}
+</StudioFormField>
+```
+
+Inline errors are described by the focused control. Use `errorRole="alert"` when the editor owns the error announcement; omit it when a form summary already announces the same error.
+
+The shell does not disable adjacent actions. Set their disabled state explicitly. For opaque
+contributed editors, pass `controlId` to `StudioField` and forward that ID plus
+`data-studio-field-control=""` to the actual native control. The shared component does not clone
+inside arbitrary React components. Setting, property and expression editor contributions may opt into
+`presentsField: true` when they own the shared field and descriptor caption; omitted values retain
+legacy host captions. Opt in only when every inline state retains that field and caption. Keep
+editor metadata, validation reporting and domain behaviour intact.
+
+When a host supplies actions around an opaque scalar editor that owns one shared field,
+`StudioFieldAdornmentProvider trailing={actions}` places those actions in the field's existing
+adornment area. This keeps them beside the value when captions wrap or validation appears.
+Editor-owned trailing actions are retained; the supplied actions do not propagate into nested
+fields or popovers. Collection editors and contributors without field ownership retain their
+existing host action placement.
+Registered host editors also import their field from `@elsa-workflows/studio-ui`, externalized
+through the host import map, so host and module editors share the same action context at runtime.
+
+Do not override field borders with module card styles. The Outlined width and gap roles are
+`--studio-outlined-field-width` and `--studio-outlined-field-gap`; colour, radius and typography
+continue to use semantic theme tokens. A real legend gap supports transparent surfaces without
+painting an opaque patch behind the label.
+
+## Contextual refresh
+
+The shared `StudioPageHeader` owns the `studio.page-header.refresh` Slot. Supply a
+`StudioRefreshContribution` through its `refresh` prop; omit it on views that cannot
+refresh. Do not add a separate refresh button or reload the workspace.
+
+```tsx
+<StudioPageHeader title="Orders" refresh={{
+  id: `orders:${context.baseUrl}`,
+  label: "Refresh orders",
+  onRefresh: refreshOrders,
+  refreshing: loading,
+  autoRefresh: true,
+  active: workspaceTab?.active ?? true,
+  disabled: saving
+}} />
+```
+
+The Contribution's `id` identifies the view/backend: changing it resets the control
+to Manual. `label` names the refresh target accessibly. Return the complete request
+promise from `onRefresh`, or report its lifetime through `refreshing` for effect-driven
+requests. Preserve local filters, paging, selection and edits in that callback, and
+retain existing results during refresh where safe. Authorization failures must still
+remove protected data. `buttonRef` optionally preserves focus-return targets.
+
+`autoRefresh: true` opts into the split-button interval menu; it is never assumed.
+The initial mode is Manual, with 15-second, 30-second, 1-minute and 5-minute options.
+The shared control prevents repeated clicks/overlapping refreshes and pauses polling
+while the document is hidden, `active` is false, or the Contribution is disabled or
+refreshing. Pass workspace-tab activity explicitly; this UI package does not require
+an SDK provider. Intervals are view-local and not persisted.
 
 ## Module stylesheet loading
 
@@ -124,13 +212,20 @@ the embedding surface already supplies an h1; use `headingLevel={3}` on its
 they should add information rather than repeat navigation.
 
 `StudioCollectionToolbar` wraps controls and retains native Tab order. Put search
-first, followed by domain filters. Label every control. For an exclusive filter, use
+first, followed by domain filters. Collection search updates results as the user types,
+without a Search submit button. Label every control. For an exclusive filter, use
 `studio-filter-group` on a named `role="group"` container with native buttons and
 `aria-pressed` for the current choice. A native table plus
 `StudioTableContainer` and `studio-table` is the smallest collection recipe. Give
 scrolling regions an accessible name and keyboard focus. `StudioDataGrid` provides
 selectable rows; existing ARIA tables can use `studio-collection-table` for the same
 visual recipe while retaining their column geometry and interaction code.
+
+Use `studioRowInteraction` on rows that open or select a resource. It provides
+whole-row hover, keyboard focus and activation with Enter or Space. Keep native
+links and buttons for distinct actions. Once the whole row opens with a pointer and
+with Enter or Space, remove name and Details buttons that duplicate that action. Tables used for display and rows with no default
+destination can keep their existing controls.
 
 ## States and behavior
 
@@ -140,10 +235,21 @@ visual recipe while retaining their column geometry and interaction code.
 - Keep denied access, unsupported capability, empty data and failed requests distinct.
   Clear identities and counts when access is lost. Never render a secret value in a list.
 - Use `StudioCollectionFooter` for counts and pagination. Say loaded/shown/total
-  accurately; preserve opaque cursor semantics and disable unavailable navigation.
+  accurately in `summary` or in existing children. Use `pageSize={{ label, value, sizes, onChange }}`
+  for a labelled numeric selector and `loadMore={{ hasMore, busy, onLoadMore }}` for cursor-based
+  append actions. The button is disabled while busy or when `hasMore` is false. Keep cursor and
+  request state in the module; put custom navigation, such as Previous and Next, in children.
 - Use `StudioButton`, `StudioField`, `CopyableIdentifier`, status chips and the
   disclosure kit. Use the injected `api.dialogs` for host confirmation and focus management.
   A shared visual primitive does not grant permissions or implement a mutation.
+- Label creation entry points and dialog titles “New …”, for example “New workflow”.
+  Use “Create” for the confirm button and the verb “Create” for version actions.
+- Label a save action “Save”, including when publication is a separate step.
+- Label the action that repeats a failed request “Retry”.
+- Add “(required)” to each required field label. Leave optional field labels unmarked.
+- Use `StudioButton` with `variant="danger"` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent.
+- Use `StudioDialog` for module-owned modal forms. Give it a title, optional description and a `StudioDialogFooter` with Cancel first and one primary confirm at the default button size. Pass `onSubmit` to make the body and footer part of the same form.
+- Use `StudioIconButton` for an icon-only action. Pass one decorative 16px lucide icon and a sentence-case `aria-label`; the label also supplies the default tooltip. Use `variant="danger"` for a destructive icon action.
 - Keep embedded editors, diagnostic streams, dashboards and graph workspaces shaped
   for their task. Use the same typography, controls, semantic colors and feedback.
   A compact page header is available through `studio-page-header--compact` for docked panels.
@@ -172,13 +278,14 @@ Decide per feedback surface whether it becomes a notification:
 | Existing feedback | Becomes |
 |---|---|
 | Result of a user action (moved, deleted, restored, saved, favorited) | `notify({ level: "success" })` |
-| Failed action the user cannot correct on the page | `notify({ level: "error" })` |
-| Long-running operation (export, publish, import, test run) | `track()` |
+| Failed action, validation or field error | stays inline with retry/recovery context |
+| Operation progress or a detailed execution/import/publication receipt | stays near the operation; toast a brief completion only when useful |
 | Reversible action with existing reversal logic | toast with an `action` |
-| Load failure, stale data, validation and field errors | stays inline |
+| Load failure, stale data, required restart or other ongoing condition | stays inline until resolved |
+| Autosave or local editing state | quiet inline indicator |
 | Loading placeholders (`Suspense` fallbacks) | stays inline |
 
-Publish action results through the injected `api.notifications`; never render a local status bar for them.
+Publish transient confirmations through the injected `api.notifications` at action completion, not from a render or an effect that can replay on navigation. Do not duplicate them in local success banners. Preserve inline errors, ongoing conditions, detailed receipts and quiet editor indicators.
 
 ## Verify a new module
 
@@ -193,6 +300,21 @@ module stylesheet, and the standalone React example uses published package impor
 ## Delivery acceptance
 
 For visible or interaction changes, use the repository's [Studio UX acceptance](../../docs/contributing/studio-ux-acceptance.md) workflow. Choose an existing reference and observable states before implementation; verify the actual composed host and independently inspect its screenshots. Reuse shared controls and fix recurring defects in their owning primitive. A component fixture or successful build alone does not establish product acceptance.
+
+## Clickable table rows
+
+For a resource row with one default open or inspect action, spread
+`studioRowInteraction<HTMLElement>(open)` onto the row and keep its table semantics.
+It supplies whole-row hover/focus feedback and Enter/Space activation while preserving
+embedded controls, portal content, modified clicks and text selection. Pass no action
+when the row is unavailable, stale or disabled. `StudioDataGrid` uses this behavior
+automatically when `onSelect` is provided.
+
+Use `studio-row-link` for a compact link to a distinct destination. It is transparent
+at rest and gains an accent and underline on hover. Keep real anchors and their native modified-click behavior
+when a URL exists. A separate destination (such as an executable's source definition)
+remains its own named link. Tables with multiple commands and no clear default action
+keep explicit controls rather than making the entire row run a command.
 
 ## Navigation and focused editors
 
@@ -213,3 +335,28 @@ mappings; retain mounted default editors so tab changes never discard unapplied
 text. Diagnostic links select the matching collection before focusing the exact
 member or field. Provider boundary editors can use the optional `contractSection`
 prop to show the corresponding output or outcome mappings.
+
+## Navigation
+
+Declare a purposeful `placement` for every top-level destination: `build`, `operate` or `integrations`. `main` is reserved for direct shell destinations such as Home. There is no default catch-all: an undeclared top-level workspace contribution is route-only. Children may omit placement to inherit their parent; explicit placement in a different group lifts the child into that group. Feature-area navigation forwards `parentId`, `childDisplay` and `viewLabel`.
+
+Migrating from earlier Studio builds: the `more` placement and `defaultStudioNavigationPlacement` are removed. A contribution that still declares `placement: "more"`, or none, is route-only and no longer appears in navigation; give it `build`, `operate` or `integrations`.
+
+Use `parentId` to join an existing resource surface. A parent with `childDisplay: "views"` presents its children as local route links instead of nested sidebar entries. Its optional `viewLabel` includes the parent's own route, such as Diagnostics' Overview. A parent without `viewLabel` links to its first accessible child and disappears when it has none. Modules still own their routes, components and backend requirements; navigation is discoverability, not an authorization boundary.
+
+The built-in homes are:
+
+- Build: Workflows (Definitions, Executables and available BPMN authoring), Agents, Decisions, Library (Activity definitions, Templates), and installed authoring modules such as ETL.
+- Operate: Runs, User tasks, Diagnostics (Overview, Console, Structured logs, OpenTelemetry), and installed operational modules such as saved Dashboards and Questions when their Dashboard API is available.
+- Integrations: Connections and Secrets.
+- Settings: `settings` for Studio preferences, `authoring` for Workflow authoring, `runtime` for Runtime, and `admin` for Administration. Only `admin` adds the host-control read gate; preserve each module's existing permission/backend gates.
+
+Sidebar groups start open and remember explicit choices in `elsa-studio.ui.nav.groups`; Appearance Reset clears them. Active destinations and search results reveal their group. Search can expose local view links without permanently duplicating them in the sidebar. Icon rail and top navigation use the same authorized contributions; top menus close on Escape, focus leaving, outside clicks and navigation. Keep links backend-qualified and preserve native/workspace new-tab intent.
+
+Use the shared page spacing tokens and restrained navigation surfaces in every theme. The default page gap is 24px; collection row density and domain workbench canvases retain their existing layout contracts. Do not introduce competing palette literals or module-local chrome scales.
+
+## Expression preservation contributions
+
+`StudioExpressionEditorContribution.variableAdditionPreservation` proves only the existing variable-addition operation. Promotion into a reusable graph asks the language owner separately through optional `reusableBoundaryPreservation` (`language`, `revision`, `allows`). Its verdict must prove that the unchanged source observes only explicit parameters and survives a closed value boundary. Workflows rewrites owned parameter identities, never language source. Missing, duplicate, faulting or unproved contributions refuse promotion; the revision and contribution identities participate in preview freshness.
+
+The JavaScript module currently admits the same finite direct `args.<declared parameter>`/numeric-operand grammar used by its existing preservation implementation. The separate contribution names the stronger closed-dependency guarantee explicitly. It does not authorize arbitrary scripts or replace ordinary backend validation/publication. T006 composes this contribution in both resource editors.

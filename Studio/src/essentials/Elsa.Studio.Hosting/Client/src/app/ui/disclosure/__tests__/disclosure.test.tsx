@@ -603,9 +603,10 @@ describe("ExpressionToggle", () => {
     expect(tabs[1].getAttribute("aria-selected")).toBe("true");
     expect(host.querySelector(".studio-expression-toggle")?.getAttribute("data-visible")).toBe("true");
     const input = host.querySelector("input")!;
-    const labelId = host.querySelector(".studio-expression-field-label")?.id;
+    const labelId = input.labels?.[0]?.id;
     expect(labelId).toBeTruthy();
-    expect(input.getAttribute("aria-labelledby")).toBe(labelId);
+    expect(input.labels?.[0]?.textContent).toBe("URL");
+    expect(input.labels?.[0]?.htmlFor).toBe(input.id);
   });
 });
 

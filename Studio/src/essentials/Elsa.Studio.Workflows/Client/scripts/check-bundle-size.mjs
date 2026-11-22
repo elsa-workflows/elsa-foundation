@@ -86,14 +86,17 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // actual supported-host landing below the existing 402,000-byte limit. Controls stay
 // immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
 // computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
-// All budget limits and the 16 deferred-entry guards remain unchanged.
-// Explicit outcomes (spec 1208, #4314): the shared graph adapter now flags connections on ports that are gone and
-// reads the Done rule from the outcomes facet; CI measured the definitions path at 402.64 kB, so its budget gains
-// 1 kB. No deferred surface moved eager.
+// Other budget limits and the 16 deferred-entry guards remain unchanged.
+// Backend serialization helpers and workflow input tests (#4851) added shared serialization
+// utilities that pulled ~2 kB into the eager definitions landing path. Raise the budget from
+// 402 kB to 405 kB to retain the usual margin.
+// Restoring the Recycle bin destination and its global lifecycle navigation brings the combined
+// Definitions landing closure to 409.47 kB; rebaseline this path only with the usual ~2 kB margin.
+// The Saved views breadcrumb adds 0.09 kB to its authenticated closure; retain the usual ~2 kB margin.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 403_000,
+  definitionsLandingTotal: 415_100,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };
@@ -326,14 +329,14 @@ assertBudget("Authenticated Definitions landing path", definitionsLandingTotalSi
 assertBudget("Activity Definition upgrades landing path", upgradeLandingTotalSize.bytes, budgets.upgradeLandingTotal);
 assertBudget(`Largest JavaScript chunk (${largestChunk.file})`, largestChunk.bytes, budgets.individualChunk);
 
-console.log("Workflows bundle budget");
-console.log(`  Primary JavaScript entry:          ${formatBytes(entrySize.bytes)} raw / ${formatBytes(entrySize.gzipBytes)} gzip (budget ${formatBytes(budgets.entryJavaScript)})`);
-console.log(`  Workflows stylesheet:              ${formatBytes(stylesheetSize.bytes)} raw / ${formatBytes(stylesheetSize.gzipBytes)} gzip (budget ${formatBytes(budgets.stylesheet)})`);
-console.log(`  Definitions JavaScript closure:    ${formatBytes(definitionsLandingSize.bytes)} raw / ${formatBytes(definitionsLandingSize.gzipBytes)} gzip`);
-console.log(`  Authenticated Definitions total:   ${formatBytes(definitionsLandingTotalSize.bytes)} raw / ${formatBytes(definitionsLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.definitionsLandingTotal)})`);
-console.log(`  Activity upgrades total:           ${formatBytes(upgradeLandingTotalSize.bytes)} raw / ${formatBytes(upgradeLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.upgradeLandingTotal)})`);
-console.log(`  Largest JavaScript chunk:          ${formatBytes(largestChunk.bytes)} (${largestChunk.file}; limit ${formatBytes(budgets.individualChunk)})`);
-console.log(`  Deferred heavy surfaces:           ${deferredHeavySurfaces.length}`);
+globalThis.console.log("Workflows bundle budget");
+globalThis.console.log(`  Primary JavaScript entry:          ${formatBytes(entrySize.bytes)} raw / ${formatBytes(entrySize.gzipBytes)} gzip (budget ${formatBytes(budgets.entryJavaScript)})`);
+globalThis.console.log(`  Workflows stylesheet:              ${formatBytes(stylesheetSize.bytes)} raw / ${formatBytes(stylesheetSize.gzipBytes)} gzip (budget ${formatBytes(budgets.stylesheet)})`);
+globalThis.console.log(`  Definitions JavaScript closure:    ${formatBytes(definitionsLandingSize.bytes)} raw / ${formatBytes(definitionsLandingSize.gzipBytes)} gzip`);
+globalThis.console.log(`  Authenticated Definitions total:   ${formatBytes(definitionsLandingTotalSize.bytes)} raw / ${formatBytes(definitionsLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.definitionsLandingTotal)})`);
+globalThis.console.log(`  Activity upgrades total:           ${formatBytes(upgradeLandingTotalSize.bytes)} raw / ${formatBytes(upgradeLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.upgradeLandingTotal)})`);
+globalThis.console.log(`  Largest JavaScript chunk:          ${formatBytes(largestChunk.bytes)} (${largestChunk.file}; limit ${formatBytes(budgets.individualChunk)})`);
+globalThis.console.log(`  Deferred heavy surfaces:           ${deferredHeavySurfaces.length}`);
 
 if (overages.length > 0) throw new Error(`Workflows bundle budget exceeded:\n  ${overages.join("\n  ")}`);
 

@@ -115,11 +115,13 @@ describe("conversion disclosure on property rows", () => {
 
     expect(container.querySelector(".wf-conversion-control")).toBeNull();
     expect(container.querySelector(".wf-conversion-chip")).toBeNull();
+    expect(container.querySelector(".wf-property-row-header-meta > span")).toBeNull();
     const button = toggle(container);
     expect(button).not.toBeNull();
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(button.title).toBe("Conversion: Auto (Text → String)");
     expect(button.classList.contains("authored")).toBe(false);
+    expect(button.closest(".studio-form-legend")?.textContent).toContain("Method");
   });
 
   it("renders no affordance at all for non-wrapped inputs", () => {
@@ -129,6 +131,15 @@ describe("conversion disclosure on property rows", () => {
 
     expect(container.querySelector(".wf-conversion-toggle")).toBeNull();
     expect(container.querySelector(".wf-conversion-control")).toBeNull();
+    expect(container.querySelector(".wf-property-row-header-meta > span")?.textContent).toBe("String");
+  });
+
+  it("keeps expected type available for credential inputs without offering conversion", () => {
+    const container = renderPanel([methodInput({ isCredential: true })]);
+
+    expect(container.querySelector(".wf-conversion-toggle")).toBeNull();
+    expect(container.querySelector(".wf-conversion-control")).toBeNull();
+    expect(container.querySelector(".wf-property-row-header-meta > span")?.textContent).toBe("String");
   });
 
   it("reveals the full control on toggle and moves focus to its mode picker", async () => {
@@ -140,6 +151,7 @@ describe("conversion disclosure on property rows", () => {
     expect(toggle(container).getAttribute("aria-expanded")).toBe("true");
     const control = container.querySelector(".wf-conversion-control")!;
     expect(control).not.toBeNull();
+    expect(container.querySelector(".wf-conversion-expected-type")?.textContent).toBe("Expected type: String");
     expect(document.activeElement).toBe(control.querySelector(".wf-syntax-picker-trigger"));
   });
 
@@ -215,6 +227,7 @@ describe("conversion disclosure on property rows", () => {
 
     const trigger = container.querySelector<HTMLButtonElement>(".wf-conversion-control .wf-syntax-picker-trigger")!;
     expect(trigger.disabled).toBe(true);
+    expect(container.querySelector(".wf-conversion-expected-type")?.textContent).toBe("Expected type: String");
   });
 
   it("exposes the full conversion control in the expanded property editor", async () => {

@@ -1,0 +1,91 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Workflows.Runtime.Core.Extensions;
+
+public static class RuntimePostCommitIntentHandlerServiceCollectionExtensions
+{
+    /// <summary>Contributes the scoped handler for one stable runtime post-commit intent kind.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(
+        this IServiceCollection services,
+        string intentKind)
+        where THandler : class, IRuntimePostCommitIntentHandler =>
+        services.AddRuntimePostCommitIntentHandler<THandler>(intentKind, RuntimePostCommitRetryPolicy.None);
+
+    /// <summary>Contributes the scoped handler and durable retry policy for one stable intent kind.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(
+        this IServiceCollection services,
+        string intentKind,
+        RuntimePostCommitRetryPolicy retryPolicy)
+        where THandler : class, IRuntimePostCommitIntentHandler =>
+        services.AddRuntimePostCommitIntentHandler<THandler>(intentKind, retryPolicy, requiresDurableSource: false);
+
+    /// <summary>Contributes a handler with an explicit durable-source requirement; ordinary defaults are unchanged.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource)
+        where THandler : class, IRuntimePostCommitIntentHandler =>
+        services.AddRuntimePostCommitIntentHandler<THandler>(intentKind, retryPolicy, requiresDurableSource, null);
+
+    /// <summary>Declares a durable producer's recipient protocol; ordinary and scope-only registrations remain unchanged.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion)
+        where THandler : class, IRuntimePostCommitIntentHandler
+        => Register(services, new(intentKind, typeof(THandler), retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion));
+
+    /// <summary>Declares both ordinary and independently managed recipient protocols on one real workflow source.</summary>
+    public static IServiceCollection AddRuntimePostCommitIntentHandler<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion,
+        int? subscriptionDeliveryProtocolVersion) where THandler : class, IRuntimePostCommitIntentHandler =>
+        Register(services, new(intentKind, typeof(THandler), retryPolicy, requiresDurableSource, stimulusDeliveryProtocolVersion,
+            RuntimeDeliverySourceKind.WorkflowCheckpoint, subscriptionDeliveryProtocolVersion));
+
+    /// <summary>Uses the same exact-kind registry for a true standalone source; no workflow publisher is fabricated.</summary>
+    public static IServiceCollection AddRuntimeDeliverySourceExecutor<THandler>(this IServiceCollection services,
+        string intentKind, RuntimePostCommitRetryPolicy retryPolicy)
+        where THandler : class, IRuntimeDeliverySourceExecutor =>
+        Register(services, new(intentKind, typeof(THandler), retryPolicy, true, null,
+            RuntimeDeliverySourceKind.StandaloneIngress, RuntimeSubscriptionDelivery.CurrentVersion));
+
+    private static IServiceCollection Register(IServiceCollection services, RuntimePostCommitIntentHandlerContribution proposed)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        var intentKind = proposed.IntentKind;
+        var handlerType = proposed.HandlerType;
+        var matchingKind = services
+            .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimePostCommitIntentHandlerContribution>()
+            .Where(contribution => StringComparer.Ordinal.Equals(contribution.IntentKind, intentKind))
+            .ToArray();
+
+        if (matchingKind.Any(contribution =>
+                contribution.HandlerType != handlerType ||
+                !contribution.RetryPolicy.IsEquivalentTo(proposed.RetryPolicy) || contribution.RequiresDurableSource != proposed.RequiresDurableSource ||
+                contribution.StimulusDeliveryProtocolVersion != proposed.StimulusDeliveryProtocolVersion || contribution.SourceKind != proposed.SourceKind ||
+                contribution.SubscriptionDeliveryProtocolVersion != proposed.SubscriptionDeliveryProtocolVersion))
+        {
+            var contributionIdentities = matchingKind
+                .Select(ContributionIdentity)
+                .Append(ContributionIdentity(proposed))
+                .Distinct()
+                .Order(StringComparer.Ordinal);
+            throw new InvalidOperationException(
+                $"Runtime post-commit intent kind '{intentKind}' has conflicting handler or retry-policy contributions: {string.Join(", ", contributionIdentities)}.");
+        }
+
+        services.TryAddScoped(handlerType);
+        if (matchingKind.Length == 0)
+            services.AddSingleton(proposed);
+
+        return services;
+    }
+
+    private static string HandlerIdentity(Type handlerType) => handlerType.FullName ?? handlerType.Name;
+
+    private static string ContributionIdentity(RuntimePostCommitIntentHandlerContribution contribution) =>
+        $"{HandlerIdentity(contribution.HandlerType)} " +
+        $"[maxAttempts={contribution.RetryPolicy.MaxAttempts}, delay={contribution.RetryPolicy.Delay}, " +
+        $"retryUntilAcknowledged={contribution.RetryPolicy.RetryUntilAcknowledged}, requiresDurableSource={contribution.RequiresDurableSource}, stimulusDeliveryProtocolVersion={contribution.StimulusDeliveryProtocolVersion}, sourceKind={contribution.SourceKind}, subscriptionDeliveryProtocolVersion={contribution.SubscriptionDeliveryProtocolVersion}]";
+}

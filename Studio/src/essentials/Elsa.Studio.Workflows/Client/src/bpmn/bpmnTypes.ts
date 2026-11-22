@@ -2,7 +2,7 @@
 // in elsa-foundation, spec 108). Gateways and events are engine-interpreted structure elements; only
 // tasks, subprocesses and decision gateways bind an Elsa child through `childNodeId`.
 
-export const bpmnStructureKind = "elsa.bpmn.structure";
+export { bpmnStructureKind } from "./bpmnStructure";
 
 export interface BpmnEventDefinition {
   type: string;

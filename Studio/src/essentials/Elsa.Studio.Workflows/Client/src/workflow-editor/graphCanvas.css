@@ -373,6 +373,17 @@ button.wf-node-slot-badge:focus-visible {
   outline-offset: 1px;
 }
 
+.react-flow__edge-textbg {
+  fill: var(--wf-canvas, var(--studio-bg));
+  stroke: none;
+  rx: var(--studio-radius-sm);
+  ry: var(--studio-radius-sm);
+}
+
+.react-flow__edge-text {
+  fill: var(--studio-text-muted);
+}
+
 .react-flow__edge:focus-visible .react-flow__edge-path {
   stroke: var(--studio-focus);
   stroke-width: 2.5;
@@ -452,7 +463,6 @@ button.wf-node-slot-badge:focus-visible {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
   z-index: 2;
 }

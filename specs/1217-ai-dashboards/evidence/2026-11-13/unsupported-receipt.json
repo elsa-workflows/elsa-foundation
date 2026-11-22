@@ -1,0 +1,63 @@
+{
+  "sourceSha": "18d68ec3078ef6777b05713dc7f8c5cdeae2cbfe",
+  "sourceDirty": false,
+  "mode": "unsupported",
+  "status": "passed",
+  "stage": "complete",
+  "liveQualified": false,
+  "unsupportedQualified": true,
+  "requestedModel": "gpt-5.6-sol",
+  "executed": 1,
+  "hostLifetimes": [
+    {
+      "phase": "authoring",
+      "backendPid": 86157,
+      "studioPid": 86657,
+      "backendExit": 0,
+      "studioExit": 0
+    }
+  ],
+  "startedAt": "2026-11-13T19:27:12Z",
+  "finishedAt": "2026-11-13T19:29:20Z",
+  "proof": {
+    "originalRequestPreserved": true,
+    "limitationTextObserved": true,
+    "savedResourcesUnchanged": true,
+    "selectedDatasetStillEmpty": true,
+    "structuredMetricSubstitution": false,
+    "proposedQuestions": 0,
+    "nativeQueryExecutions": 0,
+    "resourceWrites": 0,
+    "explanation": "I\u2019ll verify the authorized Acme schema before determining whether the requested financial calculation can be represented.Net profit cannot be calculated: the dataset exposes customerCategory, but no revenue, cost, or profit fields/metrics. I did not substitute processing metrics, invent values, or alter the draft; the financial request remains preserved and unsaved.\n\nAccepted under Auto-apply low-risk",
+    "proseSemanticAcceptance": "requires independent review"
+  },
+  "independentSemanticAcceptance": "Passed: unavailable financial meaning explained truthfully, no invented financial values or substituted query; visible native dataset selector offers the next step.",
+  "sdk": {
+    "before": {
+      "client.create": 3,
+      "client.start": 3,
+      "diagnostics.models": 1,
+      "diagnostics.ping": 1
+    },
+    "after": {
+      "client.create": 7,
+      "client.start": 7,
+      "diagnostics.models": 4,
+      "diagnostics.ping": 4,
+      "event.Completed": 1,
+      "event.MessageDelta": 68,
+      "event.ToolExecutionCompleted": 1,
+      "event.ToolExecutionStarted": 1,
+      "session.create": 2,
+      "session.resume": 1,
+      "session.send": 1,
+      "tool.invoke.dashboard_discover_datasets": 1,
+      "tool.return.dashboard_discover_datasets": 1
+    },
+    "privacyFailures": 0
+  },
+  "independentVisualAcceptance": {
+    "status": "passed",
+    "originalPngsInspected": 4
+  }
+}

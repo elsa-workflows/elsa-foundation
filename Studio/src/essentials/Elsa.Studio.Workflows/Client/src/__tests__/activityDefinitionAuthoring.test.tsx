@@ -5,19 +5,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   StudioHttpError,
+  authSessionStartedEvent,
+  StudioWorkspaceTabProvider,
   requestStudioNavigation,
   type StudioActivityDefinitionImplementationEditorProps,
   type StudioActivityDefinitionImplementationEditorContribution,
   type StudioActivityDiagnosticFocusResult,
   type StudioEndpointContext,
-  type StudioRuntimeSettings
+  type StudioRuntimeSettings,
+  type StudioWorkspaceTabHandle
 } from "@elsa-workflows/studio-sdk";
 import { ActivityDefinitionsPage } from "../ActivityDefinitionsPage";
+import { ActivityDefinitionDraftEditor } from "../ActivityDefinitionDraftEditor";
+import { ActivityDefinitionAuthoringTabsHostContext } from "../activityDefinitionAuthoringTabsHost";
+import { useNativeBlockAuthority } from "../graph-authoring/nativeBlockAuthority";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { activityDesignKeys } from "../api/activityDesign";
 import { clearActivityDefinitionRecoveryForIdentity, createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 import { activityDefinitionsObservationEvent, type ActivityDefinitionsObservation } from "../activityDefinitionObservability";
-import type { ActivityDefinitionDraftView, ActivityDefinitionManagementView } from "../activityDefinitionTypes";
+import type { ActivityDefinitionDraftView, ActivityDefinitionManagementView, ActivityDefinitionVersionView } from "../activityDefinitionTypes";
 import { isExactVersionAtLeast, safeChangeValue } from "../ActivityDefinitionPublicationReview";
 
 const mountedAuthoringRoots = new Set<() => Promise<void>>();
@@ -31,6 +37,358 @@ afterEach(async () => {
 });
 
 describe("Activity Definition authoring", () => {
+  it.each(["success", "failure"])("retains a clone %s while the workspace Activity is hidden and settles on reactivation", async outcome => {
+    let active = true;
+    const workspace: StudioWorkspaceTabHandle = { id: "activity-editor", get active() { return active; }, location: "/workflows/activity-definitions", isActive: () => active, markPendingWork: vi.fn(), setTitle: vi.fn() };
+    let resolveClone!: (draft: ActivityDefinitionDraftView) => void;
+    let rejectClone!: (error: unknown) => void;
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1", activityPresentation: publishedVersion().activityPresentation };
+    const postJson = vi.fn().mockImplementationOnce(() => new Promise<ActivityDefinitionDraftView>((resolve, reject) => { resolveClone = resolve; rejectClone = reject; })).mockResolvedValue(clone);
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const cleanup = vi.fn();
+    const contribution = editingContribution();
+    const Editor = contribution.component;
+    contribution.component = function ActivityEditor(props) { React.useEffect(() => () => { cleanup(); }, []); return <Editor {...props} />; };
+    const onDraftStarted = vi.fn((draft: ActivityDefinitionDraftView) => rendered.rerender({ draftId: draft.draftId, versionId: undefined, allowStartEditing: false }));
+    const rendered = renderPage({ workspace, editor: { versionId: "activity-version-1", allowStartEditing: true, onDraftStarted }, contributions: [contribution], postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    active = false;
+    rendered.rerender();
+    await waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1));
+    if (outcome === "success") resolveClone(clone);
+    else rejectClone(new StudioHttpError(503, "Unavailable"));
+    await waitFor(() => expect(workspace.markPendingWork).toHaveBeenCalled());
+    expect(onDraftStarted).not.toHaveBeenCalled();
+    expect(putJson).not.toHaveBeenCalled();
+    active = true;
+    rendered.rerender();
+    if (outcome === "failure") {
+      await waitForText(rendered.container, "Your changes are still here");
+      expect(buttonByText(rendered.container, "Edit implementation 1")).toBeTruthy();
+      click(buttonByText(rendered.container, "Retry saving changes"));
+    }
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(postJson).toHaveBeenCalledTimes(outcome === "success" ? 1 : 2);
+    expect(onDraftStarted).toHaveBeenCalledTimes(1);
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ provider: expect.objectContaining({ payload: { edit: 1 } }) }));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+  });
+
+  it("reloads fresh server content when returning to a clone after opening another draft", async () => {
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1" };
+    let server = clone;
+    const postJson = vi.fn(async () => clone);
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const get = publishedEditorGet();
+    const onDraftStarted = vi.fn((draft: ActivityDefinitionDraftView) => rendered.rerender({ draftId: draft.draftId, versionId: undefined, allowStartEditing: false }));
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true, onDraftStarted }, contributions: [editingContribution()], postJson, putJson, getJson: url => {
+      if (url === "/design/activities/drafts/activity-draft-1") return Promise.resolve(server);
+      if (url === "/design/activities/drafts/activity-draft-2") return Promise.resolve(fullDraft({ draftId: "activity-draft-2", payload: { edit: 4 }, revision: 4 }));
+      return get(url);
+    } });
+    await waitForText(rendered.container, "Edit implementation 0");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    await waitForText(rendered.container, "Saved revision 2");
+    server = { ...clone, revision: 7, provider: { ...clone.provider, payload: { edit: 7 } } };
+    rendered.rerender({ draftId: "activity-draft-2" });
+    await waitForText(rendered.container, "Saved revision 4");
+    rendered.rerender({ draftId: "activity-draft-1" });
+    await waitForText(rendered.container, "Saved revision 7");
+    expect(buttonByText(rendered.container, "Edit implementation 7")).toBeTruthy();
+    expect(postJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts an eligible published draft explicitly for block commands without a content change", async () => {
+    let resolveClone!: (draft: ActivityDefinitionDraftView) => void;
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1", activityPresentation: publishedVersion().activityPresentation, layout: [{ nodeId: "root", data: { x: 120, y: 80 } }] };
+    const postJson = vi.fn(() => new Promise<ActivityDefinitionDraftView>(resolve => { resolveClone = resolve; }));
+    const putJson = vi.fn();
+    const capture: { current: ReturnType<typeof useNativeBlockAuthority> } = { current: null };
+    const contribution = { ...graphContribution(), component: function AuthorityEditor() {
+      capture.current = useNativeBlockAuthority();
+      return <div>Graph implementation editor</div>;
+    } };
+    const onDraftStarted = vi.fn((draft: ActivityDefinitionDraftView) => rendered.rerender({ draftId: draft.draftId, versionId: undefined, allowStartEditing: false }));
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true, onDraftStarted }, contributions: [contribution], postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Graph implementation editor");
+    expect(postJson).not.toHaveBeenCalled();
+    expect(capture.current?.canEdit).toBe(false);
+    expect(capture.current?.startEditing).toBeTypeOf("function");
+    flushSync(() => { capture.current!.startEditing!(); capture.current!.startEditing!(); });
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    expect(capture.current?.startingEditing).toBe(true);
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    resolveClone(clone);
+    await waitFor(() => expect(onDraftStarted).toHaveBeenCalledWith(clone));
+    await waitFor(() => expect(capture.current?.canEdit).toBe(true));
+    expect(capture.current?.startEditing).toBeUndefined();
+    expect(putJson).not.toHaveBeenCalled();
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+  });
+
+  it("opens a full published document without writes or source-draft reads and enables editing when permission arrives", async () => {
+    const postJson = vi.fn();
+    const putJson = vi.fn();
+    const capture = { current: null as StudioActivityDefinitionImplementationEditorProps["onChange"] | null };
+    const mounted = vi.fn();
+    const contribution = editingContribution(capture);
+    const Editor = contribution.component;
+    contribution.component = function TrackedEditor(props) { React.useEffect(() => { mounted(); }, []); return <Editor {...props} />; };
+    const version = publishedVersion();
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/versions/activity-version-1") return version;
+      if (url === "/design/activities/definitions/activity-def-1") return editableDefinition();
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/expressions/descriptors") return { items: [] };
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage({ editor: { versionId: version.versionId, onManage: vi.fn() }, contributions: [contribution], getJson, postJson, putJson });
+    await waitForText(rendered.container, "Edit implementation 0");
+    const toolbar = rendered.container.querySelector<HTMLElement>(".wf-editor-toolbar");
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector("nav[aria-label='Breadcrumb']")?.textContent).toContain("Activity Definitions");
+    expect(toolbar?.querySelector(".wf-editor-title")?.textContent).toContain("Published");
+    expect(toolbar?.querySelector(".ad-authoring-toolbar-actions")?.textContent).toContain("Test Run");
+    expect(toolbar?.querySelector(".ad-authoring-history")).not.toBeNull();
+    expect(toolbar?.querySelector(".ad-authoring-advanced")).not.toBeNull();
+    expect(rendered.container.querySelectorAll(".ad-authoring-view-tabs")).toHaveLength(1);
+    expect(buttonByText(rendered.container, "Edit implementation 0").disabled).toBe(true);
+    expect(rendered.container.querySelector(".ad-draft-context")?.textContent).toContain("Version 1.0.0");
+    flushSync(() => capture.current!({ payload: { edit: 1 }, layout: [] }));
+    expect(postJson).not.toHaveBeenCalled();
+    rendered.rerender({ allowStartEditing: true });
+    expect(buttonByText(rendered.container, "Edit implementation 0").disabled).toBe(false);
+    click(rendered.container.querySelector("[data-tab-id=outcomes]")!);
+    expect(rendered.container.querySelector(".ad-public-interface-view")?.textContent).toContain("Done");
+    click(rendered.container.querySelector("[data-tab-id=designer]")!);
+    expect(mounted).toHaveBeenCalledTimes(1);
+    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced:not(.ad-authoring-history)")?.open).toBe(false);
+    expect(rendered.container.querySelector(".ad-draft-context")?.textContent).not.toContain("Published draft");
+    expect(getJson.mock.calls.some(([url]) => url.includes("/drafts/"))).toBe(false);
+    expect(postJson).not.toHaveBeenCalled();
+    expect(putJson).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("clones once on a real edit, retains edits across the route replacement and preserves undisclosed source layout", async () => {
+    let resolveClone!: (draft: ActivityDefinitionDraftView) => void;
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1", layout: [{ nodeId: "root", data: { x: 120, y: 80 } }] };
+    const postJson = vi.fn(() => new Promise<ActivityDefinitionDraftView>(resolve => { resolveClone = resolve; }));
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const capture = { current: null as StudioActivityDefinitionImplementationEditorProps["onChange"] | null };
+    const mounted = vi.fn();
+    const contribution = editingContribution(capture);
+    const Editor = contribution.component;
+    contribution.component = function TrackedEditor(props) { React.useEffect(() => { mounted(); }, []); return <Editor {...props} />; };
+    const onDraftStarted = vi.fn((draft: ActivityDefinitionDraftView) => {
+      expect(rendered.queryClient.getQueryData(activityDesignKeys.fullDefinitionDraft(draft.draftId))).toEqual(draft);
+      rendered.rerender({ draftId: draft.draftId, versionId: undefined, allowStartEditing: false });
+    });
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true, onManage: vi.fn(), onDraftStarted }, contributions: [contribution], postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    flushSync(() => capture.current!({ payload: { edit: 0 }, layout: [], activityPresentation: publishedVersion().activityPresentation }));
+    expect(postJson).not.toHaveBeenCalled();
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    click(buttonByText(rendered.container, "Edit implementation 1"));
+    resolveClone(clone);
+    await waitFor(() => expect(putJson).toHaveBeenCalledTimes(1));
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/activity-def-1/drafts", { sourceVersionId: "activity-version-1", presentationLabel: null });
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ expectedRevision: 1, provider: expect.objectContaining({ payload: { edit: 2 } }), layout: clone.layout, activityPresentation: publishedVersion().activityPresentation }));
+    expect(buttonByText(rendered.container, "Edit implementation 2")).toBeTruthy();
+    expect(mounted).toHaveBeenCalledTimes(1);
+    expect(onDraftStarted).toHaveBeenCalledTimes(1);
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+  });
+
+  it("keeps a failed first edit guarded and retries cloning with the latest local content", async () => {
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1" };
+    const postJson = vi.fn().mockRejectedValueOnce(new StudioHttpError(503, "Unavailable")).mockResolvedValue(clone);
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true }, contributions: [editingContribution()], postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    await waitForText(rendered.container, "Your changes are still here");
+    expect(buttonByText(rendered.container, "Edit implementation 1")).toBeTruthy();
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    expect(putJson).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+    click(buttonByText(rendered.container, "Retry saving changes"));
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(postJson).toHaveBeenCalledTimes(2);
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ provider: expect.objectContaining({ payload: { edit: 1 } }) }));
+  });
+
+  it("keeps an active draft read-only when edit permission is denied, including callback and action gates", async () => {
+    const postJson = vi.fn();
+    const putJson = vi.fn();
+    const capture = { current: null as StudioActivityDefinitionImplementationEditorProps["onChange"] | null };
+    const rendered = renderPage({ editor: { draftId: "activity-draft-1", readOnly: true, onManage: vi.fn() }, contributions: [editingContribution(capture)], postJson, putJson, getJson: publishedEditorGet(fullDraft({ payload: { edit: 0 } })) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    expect(buttonByText(rendered.container, "Edit implementation 0").disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Test Run").disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Migrate provider").disabled).toBe(true);
+    flushSync(() => capture.current!({ payload: { edit: 1 }, layout: [] }));
+    click(rendered.container.querySelector("[data-tab-id=outcomes]")!);
+    expect([...rendered.container.querySelectorAll<HTMLInputElement>(".ad-public-interface-view input")].every(input => input.disabled)).toBe(true);
+    expect(postJson).not.toHaveBeenCalled();
+    expect(putJson).not.toHaveBeenCalled();
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+  });
+
+  it("preserves an actual first layout edit and retries failed autosave against the same real draft", async () => {
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1", layout: [{ nodeId: "root", data: { x: 120, y: 80 } }] };
+    const postJson = vi.fn(async () => clone);
+    const putJson = vi.fn().mockRejectedValueOnce(new StudioHttpError(503, "Unavailable")).mockImplementation(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const capture = { current: null as StudioActivityDefinitionImplementationEditorProps["onChange"] | null };
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true }, contributions: [editingContribution(capture)], postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    const layout = [{ nodeId: "root", data: { x: 300, y: 400 } }];
+    flushSync(() => capture.current!({ payload: { edit: 0 }, layout }));
+    await waitForText(rendered.container, "Save failed");
+    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
+    click(buttonByText(rendered.container, "Save now"));
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(postJson).toHaveBeenCalledTimes(1);
+    expect(putJson).toHaveBeenCalledTimes(2);
+    expect(putJson).toHaveBeenLastCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ expectedRevision: 1, layout }));
+  });
+
+  it("starts from the first contract change and retains the selected contract view and member", async () => {
+    const clone = { ...fullDraft({ payload: { edit: 0 } }), sourceVersionId: "activity-version-1", layout: [{ nodeId: "root", data: { x: 120, y: 80 } }] };
+    const postJson = vi.fn(async () => clone);
+    const putJson = vi.fn(async (_url: string, body: unknown) => ({ ...clone, ...body as object, revision: 2 }));
+    const onDraftStarted = vi.fn((draft: ActivityDefinitionDraftView) => rendered.rerender({ draftId: draft.draftId, versionId: undefined, allowStartEditing: false }));
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true, onDraftStarted }, postJson, putJson, getJson: publishedEditorGet(clone) });
+    await waitForText(rendered.container, "Graph implementation editor");
+    click(rendered.container.querySelector("[data-tab-id=inputs]")!);
+    click(buttonByText(rendered.container, "Add input"));
+    await waitFor(() => expect(rendered.container.querySelector(".ad-contract-create-form input")).not.toBeNull());
+    change(rendered.container.querySelector<HTMLInputElement>(".ad-contract-create-form input")!, "Customer");
+    click(buttonByText(rendered.container.querySelector<HTMLElement>(".ad-contract-create-form")!, "Add input"));
+    await waitForText(rendered.container, "Saved revision 2");
+    expect(rendered.container.querySelector("[data-tab-id=inputs]")?.getAttribute("aria-selected")).toBe("true");
+    expect(putJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1", expect.objectContaining({ contract: expect.objectContaining({ inputs: [expect.objectContaining({ name: "Customer" })] }), layout: clone.layout }));
+    expect(postJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies first-edit callbacks for source-owned content even if the caller enables cloning", async () => {
+    const postJson = vi.fn();
+    const putJson = vi.fn();
+    const capture = { current: null as StudioActivityDefinitionImplementationEditorProps["onChange"] | null };
+    const get = publishedEditorGet();
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true }, contributions: [editingContribution(capture)], postJson, putJson, getJson: async url => url === "/design/activities/definitions/activity-def-1" ? { ...editableDefinition(), definition: { ...definitionIdentity(), contentAuthority: { kind: "ProviderSource", authorityKey: "source" } } } : get(url) });
+    await waitForText(rendered.container, "Edit implementation 0");
+    expect(buttonByText(rendered.container, "Edit implementation 0").disabled).toBe(true);
+    flushSync(() => capture.current!({ payload: { edit: 1 }, layout: [] }));
+    expect(postJson).not.toHaveBeenCalled();
+    expect(putJson).not.toHaveBeenCalled();
+  });
+
+  it("withholds both shared and scoped cached version payloads until the current mount is authorized", async () => {
+    let rejectRead!: (error: unknown) => void;
+    const get = publishedEditorGet();
+    const rendered = renderPage({
+      editor: { versionId: "activity-version-1", allowStartEditing: true },
+      seedVersion: { ...publishedVersion(), definition: { ...definitionIdentity(), displayName: "Private cached name" } },
+      getJson: url => url === "/design/activities/versions/activity-version-1" ? new Promise((_resolve, reject) => { rejectRead = reject; }) : get(url)
+    });
+    await waitFor(() => expect(rejectRead).toBeTypeOf("function"));
+    expect(rendered.container.textContent).not.toContain("Private cached name");
+    expect(rendered.container.textContent).not.toContain("Graph implementation editor");
+    rejectRead(new StudioHttpError(403, "Forbidden"));
+    await waitForText(rendered.container, "Activity version unavailable");
+    expect(rendered.container.textContent).not.toContain("Private cached name");
+  });
+
+  it("reverifies a mounted published preview on an auth-session change before revealing its content", async () => {
+    let rejectRead!: (error: unknown) => void;
+    let reads = 0;
+    const get = publishedEditorGet();
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", allowStartEditing: true }, getJson: url => {
+      if (url === "/design/activities/versions/activity-version-1" && ++reads > 1) return new Promise((_resolve, reject) => { rejectRead = reject; });
+      return get(url);
+    } });
+    await waitForText(rendered.container, "Graph implementation editor");
+    flushSync(() => window.dispatchEvent(new Event(authSessionStartedEvent)));
+    await waitFor(() => expect(rejectRead).toBeTypeOf("function"));
+    expect(rendered.container.textContent).not.toContain("Graph implementation editor");
+    rejectRead(new StudioHttpError(403, "Forbidden"));
+    await waitForText(rendered.container, "Activity version unavailable");
+  });
+
+  it("closes History with Escape or a selection, returns focus and routes management progressively", async () => {
+    const onManage = vi.fn();
+    const rendered = renderPage({ editor: { versionId: "activity-version-1", onManage }, getJson: publishedEditorGet() });
+    await waitForText(rendered.container, "Graph implementation editor");
+    const history = rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-history")!;
+    const summary = history.querySelector("summary")!;
+    openDetails(history);
+    buttonByText(history, "Drafts").focus();
+    pressKey(buttonByText(history, "Drafts"), "Escape");
+    expect(history.open).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    for (const [label, section] of [["Drafts", "drafts"], ["Versions", "versions"], ["Used by", "relationships"], ["Details", "overview"]]) {
+      openDetails(history);
+      click(buttonByText(history, label));
+      expect(onManage).toHaveBeenLastCalledWith(section);
+      expect(history.open).toBe(false);
+      expect(document.activeElement).toBe(summary);
+    }
+    expect(activityDefinitionBackLink(rendered.container).textContent).toBe("Activity Definitions");
+  });
+
+  it("marks local invalid JSON diagnostics as needing attention and reveals them from the header", async () => {
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        if (url === "/expressions/descriptors") return { items: [] };
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    openDetails(rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!);
+    click(buttonByText(rendered.container, "Edit code"));
+    await waitFor(() => expect(rendered.container.querySelector(".studio-code-editor textarea")).not.toBeNull());
+    change(rendered.container.querySelector<HTMLTextAreaElement>(".studio-code-editor textarea")!, "{ invalid");
+    await waitForText(rendered.container, "The JSON buffer is invalid and remains local");
+    expect(rendered.container.querySelector(".ad-draft-diagnostics-link")?.classList.contains("needs-attention")).toBe(true);
+    const panel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    panel.scrollIntoView = vi.fn();
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(document.activeElement).toBe(panel);
+    expect(panel.textContent).toContain("The JSON buffer is invalid and remains local");
+    await rendered.unmount();
+  });
+
+  it("retains the create form and entered name when its host rerenders after first collection history initialization", async () => {
+    const rendered = renderPage({
+      getJson: async url => {
+        if (url === "/capabilities") return capabilities();
+        if (url.startsWith("/design/activities/definitions?")) return page([]);
+        if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+    click(buttonByText(rendered.container, "New activity definition"));
+    await waitForText(rendered.container, "Graph composition");
+    change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Retain my activity");
+
+    rendered.rerender();
+
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")?.value).toBe("Retain my activity");
+    expect(buttonByText(rendered.container, "Create")).toBeTruthy();
+    await rendered.unmount();
+  });
+
   it("autosaves a presentation-only provider edit with the exact revision and retained implementation", async () => {
     const capture: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null } = { current: null };
     const initial = { ...fullDraft({ revision: 3, payload: { edit: 0 } }), activityPresentation: [{ nodeId: "root", displayName: "Original" }] };
@@ -83,7 +441,7 @@ describe("Activity Definition authoring", () => {
     expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(false);
     resolveSave(fullDraft({ revision: 4, payload: { edit: 1 } }));
     await waitForText(rendered.container, "Saved revision 4");
-    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await waitFor(() => expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true));
     await rendered.unmount();
   });
   it("creates with the sole authorable provider and enters the exact initial draft", async () => {
@@ -104,14 +462,14 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     expect(rendered.container.querySelector("select[name='provider']")).toBeNull();
-    expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true);
+    await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
 
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='category']")!, "Finance");
-    click(buttonByText(rendered.container, "Create definition"));
+    click(buttonByText(rendered.container, "Create"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     expect(postJson).toHaveBeenCalledWith("/design/activities/definitions", {
@@ -157,9 +515,21 @@ describe("Activity Definition authoring", () => {
     expect(advanced.open).toBe(false);
     expect(rendered.container.querySelector(".ad-publication-toolbar-trigger")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
-    click(rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!);
-    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
+    expect(rendered.container.querySelectorAll(".ad-authoring-view-tabs")).toHaveLength(1);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    const inputsTab = rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=inputs]")!;
+    inputsTab.focus();
+    click(inputsTab);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    expect(document.activeElement?.getAttribute("data-tab-id")).toBe("inputs");
+    expect(rendered.container.querySelector<HTMLElement>(".ad-public-interface-view")?.hidden).toBe(false);
+    expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(true);
     expect(advanced.open).toBe(false);
+    const designerTab = rendered.container.querySelector<HTMLButtonElement>("[data-tab-id=designer]")!;
+    designerTab.focus();
+    click(designerTab);
+    expect(rendered.container.querySelector(".ad-graph-canvas .ad-authoring-view-tabs")).not.toBeNull();
+    expect(document.activeElement?.getAttribute("data-tab-id")).toBe("designer");
     await rendered.unmount();
   }, 10_000);
 
@@ -174,7 +544,7 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
 
     const displayName = rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!;
@@ -184,11 +554,11 @@ describe("Activity Definition authoring", () => {
     expect(displayName.getAttribute("placeholder")).toBeTruthy();
     expect(category.getAttribute("aria-label")).toBe("Category");
     expect(category.getAttribute("placeholder")).toBeTruthy();
-    expect(description.getAttribute("aria-label")).toBe("Description");
+    expect(description.labels?.[0]?.textContent?.trim()).toBe("Description");
     expect(description.getAttribute("placeholder")).toBeTruthy();
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    expect(advanced.open).toBe(false);
-    expect(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")?.closest("details")?.open).toBe(false);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")?.closest("[hidden]")).toBeTruthy();
     await rendered.unmount();
   });
 
@@ -214,22 +584,25 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
-    await waitForText(rendered.container, "Script");
+    click(buttonByText(rendered.container, "New activity definition"));
+    await waitFor(() => expect(rendered.container.querySelector('[role="dialog"] h2')?.textContent).toBe("New activity definition"));
+    await waitFor(() => expect(rendered.container.querySelector("select[name='provider']")).not.toBeNull());
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
     expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
     change(provider, "elsa.activity-graph|2");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    expect(advanced.open).toBe(false);
-    openDetails(advanced);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    expect(advanced.getAttribute("aria-expanded")).toBe("false");
+    click(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
-    click(buttonByText(rendered.container, "Create definition"));
+    const createDefinition = buttonByText(rendered.container, "Create") as HTMLButtonElement;
+    await waitFor(() => expect(createDefinition.disabled).toBe(false));
+    click(createDefinition);
 
     await waitFor(() => expect(postJson).toHaveBeenCalledWith("/design/activities/definitions", expect.objectContaining({ activityTypeKey: "elsa.user.finance.invoice-evaluator" })));
     await rendered.unmount();
-  });
+  }, 15_000);
 
   it("preselects the sole usable non-graph provider without showing an implementation selector", async () => {
     const response = authoringCapabilities();
@@ -251,12 +624,12 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Display name");
     expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")).toBeNull();
-    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(true);
+    expect(buttonByText(rendered.container, "Create").hasAttribute("disabled")).toBe(true);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Run a script");
-    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(false);
+    expect(buttonByText(rendered.container, "Create").hasAttribute("disabled")).toBe(false);
     await rendered.unmount();
   });
 
@@ -274,18 +647,15 @@ describe("Activity Definition authoring", () => {
     });
 
     await waitForText(rendered.container, "No designed activities yet");
-    click(buttonByText(rendered.container, "Create activity"));
+    click(buttonByText(rendered.container, "New activity definition"));
     await waitForText(rendered.container, "Graph composition");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Generated identity");
-    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
-    openDetails(advanced);
+    const advanced = buttonByText(rendered.container, "Advanced");
+    click(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.hidden.override");
-    flushSync(() => {
-      advanced.open = false;
-      advanced.dispatchEvent(new Event("toggle", { bubbles: true }));
-    });
-    click(buttonByText(rendered.container, "Create definition"));
+    click(advanced);
+    click(buttonByText(rendered.container, "Create"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
     expect(postJson.mock.calls[0]?.[1]).not.toHaveProperty("activityTypeKey");
@@ -330,9 +700,35 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("Saved revision 3");
     expect(rendered.container.textContent).not.toContain("provider render detail");
     expect(buttonByText(rendered.container, "Validate saved revision")).toBeTruthy();
+    expect(rendered.container.querySelector(".ad-designer-view [role='alert'] button")).toBeNull();
     expect(observations).toContainEqual(expect.objectContaining({ event: "provider-editor", outcome: "unavailable", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" }));
     await rendered.unmount();
     window.removeEventListener(activityDefinitionsObservationEvent, observe);
+    consoleError.mockRestore();
+  });
+
+  it("offers a draft reload for provider asset failures without trapping other authoring views", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [{ ...graphContribution(), component: () => { throw new Error("Failed to fetch dynamically imported module: /assets/ActivityGraphImplementationEditor.js"); } }],
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3 });
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Implementation editor unavailable");
+    const alert = rendered.container.querySelector(".ad-designer-view [role='alert']");
+    expect(alert?.textContent).toContain("Studio assets");
+    expect(buttonByText(alert as HTMLElement, "Reload draft")).toBeTruthy();
+    click(rendered.container.querySelector(".ad-authoring-view-tabs [data-tab-id='inputs']")!);
+    expect(rendered.container.querySelector("[data-tab-id='inputs']")?.getAttribute("aria-selected")).toBe("true");
+    expect(rendered.container.querySelector(".ad-designer-view [role='alert']")).toBeTruthy();
+    expect(rendered.container.textContent).toContain("Saved revision 3");
+
+    await rendered.unmount();
     consoleError.mockRestore();
   });
 
@@ -425,7 +821,7 @@ describe("Activity Definition authoring", () => {
     expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
     expect(doneOutcome.querySelector('input[data-contract-field="isEmitted"]')).toBeNull();
     const customerNote = selectContractMember(rendered.container, "input", "customer-note");
-    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
+    expect(controlByLabel<HTMLSelectElement>(rendered.container, "Storage provider").value).toBe("elsa.json");
     const required = controlByLabel<HTMLInputElement>(rendered.container, "Required");
     const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allow null");
     expect(required.checked).toBe(false);
@@ -615,7 +1011,9 @@ describe("Activity Definition authoring", () => {
     await waitFor(() => expect(contractListButton(rendered.container, "output", "result").getAttribute("aria-pressed")).toBe("true"));
     const resultPane = contractMemberPane(rendered.container, "output", "result");
     expect(resultPane.dataset.contractSelected).toBe("true");
-    expect(resultPane.querySelector<HTMLButtonElement>("[role='tab'][data-tab-id='General']")?.getAttribute("aria-selected")).toBe("true");
+    expect(resultPane.querySelector(".ad-member-tabs")).toBeNull();
+    expect([...resultPane.querySelectorAll("button[aria-expanded]")].map(summary => summary.textContent)).toEqual(["Presentation", "Advanced"]);
+    expect([...resultPane.querySelectorAll<HTMLElement>(".studio-disclosure-fold")].every(details => details.dataset.open === "false")).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(controlByLabel<HTMLInputElement>(resultPane, "Name")));
 
     addContractMember(rendered.container, "outcome", "Rejected");
@@ -687,7 +1085,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Immutable public contract");
+    await waitForText(rendered.container, "Published inputs, outputs and outcomes");
     expect(rendered.container.textContent).toContain("Removed.Alias");
     expect(rendered.container.textContent).toContain("Stored aliases remain visible");
     expect(rendered.container.textContent).not.toContain("Replace type");
@@ -928,7 +1326,7 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Published baseline unavailable.");
+    await waitForText(rendered.container, "Could not load the published version.");
     showContractView(rendered.container);
     click(buttonByText(rendered.container, "Remove input"));
     await waitForText(rendered.container, "Remove published-baseline input");
@@ -1027,8 +1425,9 @@ describe("Activity Definition authoring", () => {
     showContractView(rendered.container);
     const pane = selectContractMember(rendered.container, "input", "message");
     change(controlByLabel<HTMLInputElement>(pane, "Value"), "candidate");
-    click(buttonByText(pane, "Advanced"));
-    change(controlByLabel<HTMLInputElement>(pane, "Stable reference key"), "message-v2");
+    const key = controlByLabel<HTMLInputElement>(pane, "Stable reference key");
+    expect(key.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
+    change(key, "message-v2");
     click(buttonByText(pane, "Apply key"));
     await waitForText(rendered.container, "Change a published reference key");
     expect(putJson).not.toHaveBeenCalled();
@@ -1201,7 +1600,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Published revision 3 is read-only.");
     await waitFor(() => expect(window.localStorage.length).toBe(0));
     expect(rendered.container.textContent).not.toContain("Unsaved local recovery available");
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBeNull();
     expect((buttonByText(rendered.container, "Edit implementation 0") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Migrate provider") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
@@ -1517,6 +1916,17 @@ describe("Activity Definition authoring", () => {
     expect(rendered.container.textContent).toContain("1 warning");
     expect(rendered.container.textContent).toContain("1 info");
     expect(rendered.container.textContent).toContain("Provide a stable reference key.");
+    const diagnosticsPanel = rendered.container.querySelector<HTMLElement>(".ad-diagnostics-panel")!;
+    const diagnosticsDetails = diagnosticsPanel.querySelector("details")!;
+    diagnosticsDetails.open = false;
+    const scrollToDiagnostics = vi.fn();
+    const firstDiagnostic = diagnosticsPanel.querySelector<HTMLElement>(".ad-diagnostic-item[tabindex]")!;
+    firstDiagnostic.scrollIntoView = scrollToDiagnostics;
+    expect(rendered.container.querySelectorAll(".ad-draft-diagnostics-link")).toHaveLength(1);
+    click(rendered.container.querySelector(".ad-draft-diagnostics-link")!);
+    expect(diagnosticsDetails.open).toBe(true);
+    expect(document.activeElement).toBe(firstDiagnostic);
+    expect(scrollToDiagnostics).toHaveBeenCalledWith({ block: "center" });
     const codes = [...rendered.container.querySelectorAll(".ad-diagnostic-code")].map(item => item.textContent);
     expect(codes).toEqual([
       "activity.contract.input-invalid",
@@ -1528,7 +1938,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Focused the exact provider-neutral contract location");
     expect((document.activeElement as HTMLElement)?.hasAttribute("data-contract-reference-key-control")).toBe(true);
     expect(document.activeElement?.closest<HTMLElement>("[role='tabpanel']")?.hidden).toBe(false);
-    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("Advanced");
+    expect(rendered.container.querySelector(".ad-member-tabs [aria-selected='true']")?.textContent).toBe("General");
     click(buttonByText(rendered.container, "Return to diagnostic"));
     expect(document.activeElement).toBe(contractDiagnostic);
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.future-location']")!);
@@ -1964,7 +2374,7 @@ describe("Activity Definition authoring", () => {
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Edit implementation 0"));
     await waitForText(rendered.container, "Save failed");
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(true);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBe("true");
     window.history.pushState({}, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
@@ -2021,12 +2431,10 @@ describe("Activity Definition authoring", () => {
     expect(window.history.state.elsaActivityDefinitions.collection).toEqual(displayedCollection);
     pushState.mockRestore();
 
-    click(buttonByText(rendered.container, "Discard local changes and return"));
-    await waitForText(rendered.container, "Build your activity");
-    expect(new URLSearchParams(window.location.search).get("section")).toBeNull();
     const historyGo = vi.spyOn(window.history, "go");
-    click(buttonByText(rendered.container, "Activity Definitions"));
+    click(buttonByText(rendered.container, "Discard local changes and return"));
     await waitFor(() => expect(rendered.container.querySelector(".ad-collection")).not.toBeNull());
+    expect(new URLSearchParams(window.location.search).get("section")).toBeNull();
     expect(historyGo).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe("/workflows/activity-definitions");
     expect(window.history.state.elsaActivityDefinitions.collection).toMatchObject({
@@ -2142,10 +2550,12 @@ describe("Activity Definition publication", () => {
       "/design/activities/drafts/activity-draft-1/publication-preflight",
       { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: "version-head" }
     ));
-    await waitForText(rendered.container, "Compared with published head");
+    await waitForText(rendered.container, "Compared with latest published version");
     expect((controlByLabel<HTMLInputElement>(rendered.container, "Publication version")).value).toBe("2.0.0");
     change(controlByLabel<HTMLInputElement>(rendered.container, "Publication version"), "3.2.1");
     click(buttonByText(rendered.container, "Publish 3.2.1"));
+    await waitForText(rendered.container, "Version 3.2.1");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 3.2.1");
     await waitForText(rendered.container, "Published revision 4 is read-only.");
     expect(rendered.container.textContent).toContain("recommendation stayed unchanged");
@@ -2156,7 +2566,7 @@ describe("Activity Definition publication", () => {
       version: "3.2.1",
       reviewToken: "sha256:review"
     }));
-    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect(activityDefinitionBackLink(rendered.container).getAttribute("aria-disabled")).toBeNull();
     expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
@@ -2192,16 +2602,18 @@ describe("Activity Definition publication", () => {
 
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Review & publish"));
-    await waitForText(rendered.container, "No published head");
+    await waitForText(rendered.container, "No latest published version");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
 
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
-    const summary = [...rendered.container.querySelectorAll<HTMLElement>(".ad-publication-summary")].find(element => element.textContent?.includes("version-published"))!;
+    const summary = [...rendered.container.querySelectorAll<HTMLElement>(".studio-fact-list")].find(element => element.textContent?.includes("version-published"))!;
     expect(summary.textContent).toContain("version-published");
-    expect(summary.textContent).not.toContain("No published head");
+    expect(summary.textContent).not.toContain("No latest published version");
     // The action affordance no longer invites a repeat publish of the same version.
-    expect(buttonByText(rendered.container, "Published 1.0.0")).toBeTruthy();
+    expect(buttonByText(rendered.container, "View publication")).toBeTruthy();
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Publish 1.0.0")).toBe(false);
     // The definition management view is re-fetched so downstream panels reflect the new version.
     await waitFor(() => expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1));
@@ -2287,6 +2699,8 @@ describe("Activity Definition publication", () => {
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Publication version").disabled).toBe(true);
     click(buttonByText(rendered.container, "Reconcile authoritative status"));
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     expect(receiptCalls).toBe(1);
     expect(putJson).toHaveBeenCalledTimes(1);
@@ -2423,6 +2837,8 @@ describe("Activity Definition publication", () => {
     click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "Version 1.0.0");
+    click(buttonByText(rendered.container, "View publication"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     expect(publishCalls).toBe(1);
     expect(receiptCalls).toBe(1);
@@ -2552,6 +2968,9 @@ function renderPage(options: {
   seedDraft?: ReturnType<typeof fullDraft>;
   baseUrl?: string;
   historyEntries?: { url: string; state: unknown }[];
+  editor?: Partial<React.ComponentProps<typeof ActivityDefinitionDraftEditor>>;
+  seedVersion?: ActivityDefinitionVersionView;
+  workspace?: StudioWorkspaceTabHandle;
 }) {
   const baseUrl = options.baseUrl ?? `test://activity-definition-authoring-${Math.random()}`;
   if (options.historyEntries?.length) {
@@ -2574,12 +2993,22 @@ function renderPage(options: {
   } as unknown as StudioEndpointContext;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (options.seedDraft) queryClient.setQueryData(activityDesignKeys.fullDefinitionDraft(options.seedDraft.draftId), options.seedDraft);
+  if (options.seedVersion) {
+    queryClient.setQueryData(activityDesignKeys.fullDefinitionVersion(options.seedVersion.versionId), options.seedVersion);
+    queryClient.setQueryData([...activityDesignKeys.fullDefinitionVersion(options.seedVersion.versionId), JSON.stringify([baseUrl, undefined, undefined, 0])], options.seedVersion);
+  }
   const contributions = options.contributions ?? [graphContribution()];
-  flushSync(() => root.render(
+  let editor = options.editor;
+  const rerender = (next?: Partial<React.ComponentProps<typeof ActivityDefinitionDraftEditor>>) => {
+    if (editor && next) editor = { ...editor, ...next };
+    const screen = editor ? <ActivityDefinitionDraftEditor context={context} definitionId="activity-def-1" activityEditors={contributions} onNavigationGuardChange={() => {}} onBack={() => {}} onOpenDraft={() => {}} onOpenVersion={() => {}} onOpenStudioPath={() => {}} {...editor} /> : <ActivityDefinitionsPage context={context} activityEditors={() => contributions} runtime={options.runtime} />;
+    flushSync(() => root.render(
     <QueryClientProvider client={queryClient}>
-      <ActivityDefinitionsPage context={context} activityEditors={() => contributions} runtime={options.runtime} />
+      {options.workspace ? <React.Activity mode={options.workspace.active ? "visible" : "hidden"}><StudioWorkspaceTabProvider value={options.workspace}>{screen}</StudioWorkspaceTabProvider></React.Activity> : screen}
     </QueryClientProvider>
-  ));
+    ));
+  };
+  rerender();
   const unmount = async () => {
     if (!mountedAuthoringRoots.delete(unmount)) return;
     flushSync(() => root.unmount());
@@ -2588,8 +3017,10 @@ function renderPage(options: {
   };
   mountedAuthoringRoots.add(unmount);
   return {
-    container,
-    unmount
+    container: document.body,
+    unmount,
+    rerender,
+    queryClient
   };
 }
 
@@ -2606,7 +3037,16 @@ function graphContribution(providerSchemaVersion = "1"): StudioActivityDefinitio
       },
       layout: []
     }),
-    component: () => <div>Graph implementation editor</div>
+    component: function GraphImplementationFixture() {
+      const authoringTabsHostRef = React.useContext(ActivityDefinitionAuthoringTabsHostContext);
+      return <main className="wf-canvas-shell ad-graph-canvas">
+        <div ref={authoringTabsHostRef?.setTablistHost} className="wf-canvas-tabs ad-authoring-canvas-tabs" />
+        <div className="ad-graph-center-content">
+          <section id={authoringTabsHostRef?.designerPanelId} className="ad-graph-designer-panel" role="tabpanel" aria-label="Designer" aria-labelledby={authoringTabsHostRef?.designerTabId} hidden={authoringTabsHostRef?.activeView !== "designer"}>Graph implementation editor</section>
+          <div ref={authoringTabsHostRef?.setCenterViewHost} className="ad-graph-authoring-view-host" />
+        </div>
+      </main>;
+    }
   };
 }
 
@@ -2627,6 +3067,7 @@ function capabilities() {
     { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
     { rel: "activity-catalog", href: "design/activities/catalog" },
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+    { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
     { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
@@ -2764,6 +3205,36 @@ function page<T>(items: T[]) {
   return { items, count: items.length, totalCount: items.length, hasMore: false, continuation: null, snapshot: { snapshotId: "snapshot-1", asOf: "2026-07-17T10:00:00Z" } };
 }
 
+function publishedVersion(): ActivityDefinitionVersionView {
+  return {
+    definition: definitionIdentity(),
+    versionId: "activity-version-1",
+    version: "1.0.0",
+    sourceDraftId: "not-authorized-to-read",
+    provider: fullDraft({ payload: { edit: 0 } }).provider,
+    contract: fullDraft().contract,
+    activityPresentation: [{ nodeId: "root", displayName: "Published root" }],
+    lifecycle: "Active",
+    publishedAt: "2026-07-17T10:00:00Z"
+  };
+}
+
+function editableDefinition() {
+  return { ...managementDefinition(), actions: [{ action: "create-draft", allowed: true }] };
+}
+
+function publishedEditorGet(draft = fullDraft()) {
+  return async (url: string) => {
+    if (url === "/capabilities") return capabilities();
+    if (url === "/design/activities/versions/activity-version-1") return publishedVersion();
+    if (url === "/design/activities/definitions/activity-def-1") return editableDefinition();
+    if (url === "/design/activities/drafts/activity-draft-1") return draft;
+    if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+    if (url === "/expressions/descriptors") return { items: [] };
+    throw new Error(`Unexpected GET ${url}`);
+  };
+}
+
 function definitionIdentity() {
   return {
     definitionId: "activity-def-1",
@@ -2856,6 +3327,13 @@ function buttonByText(container: HTMLElement, text: string) {
   return button;
 }
 
+function activityDefinitionBackLink(container: HTMLElement) {
+  const link = [...container.querySelectorAll<HTMLAnchorElement>("nav[aria-label='Breadcrumb'] a")]
+    .find(candidate => candidate.textContent?.trim().startsWith("Activity Definition"));
+  if (!link) throw new Error("Activity Definition breadcrumb link not found.");
+  return link;
+}
+
 function click(element: Element) {
   flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
@@ -2877,7 +3355,7 @@ function controlByLabel<T extends HTMLInputElement | HTMLSelectElement | HTMLTex
   const label = [...container.querySelectorAll("label")].find(candidate =>
     [...candidate.querySelectorAll(":scope > span")].some(span => span.textContent?.trim() === text)
   );
-  const control = label?.querySelector("input, select, textarea");
+  const control = label?.control;
   if (!control) throw new Error(`Control labelled '${text}' not found.`);
   return control as T;
 }

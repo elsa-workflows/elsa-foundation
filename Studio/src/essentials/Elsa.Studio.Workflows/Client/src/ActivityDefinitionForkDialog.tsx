@@ -1,3 +1,5 @@
+import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -22,7 +24,6 @@ import {
   migrationProviderChoices
 } from "./activityDefinitionDraftManagementShared";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 export function ActivityDefinitionForkDialog({
   context,
@@ -58,9 +59,7 @@ export function ActivityDefinitionForkDialog({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewAttempt = useRef<{ material: string; idempotencyKey: string } | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
   const submitting = previewing || applying;
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!choices.some(choice => choiceValue(choice) === target)) {
@@ -154,13 +153,11 @@ export function ActivityDefinitionForkDialog({
   };
   const canApply = Boolean(
     preview?.contractComparison.isCompatible &&
-    !preview.providerMigration.diagnostics.some(diagnostic => diagnostic.severity === "Error")
+    !preview.providerMigration.diagnostics.some(diagnostic => activityDiagnosticSeverity(diagnostic.severity) === "Error")
   );
 
   return <ActivityDefinitionManagementDialogShell
-    dialogRef={dialogRef}
     title={preview ? "Review activity fork" : "Fork recommended activity version"}
-    kicker="Source-owned to Design-owned"
     submitting={submitting}
     onClose={onClose}
   >
@@ -171,16 +168,18 @@ export function ActivityDefinitionForkDialog({
         <div><dt>Source provider</dt><dd><code>{recommendation.providerKey}</code> · schema {recommendation.providerSchemaVersion}</dd></div>
       </dl>
       <p className="ad-dialog-note">Forking always starts from the one recommended active version. Studio does not offer an explicit version override.</p>
-      <label className="ad-dialog-field"><span>Category</span><input value={category} maxLength={200} onChange={event => setCategory(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Display name</span><input value={displayName} maxLength={200} onChange={event => setDisplayName(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Description <small>Optional</small></span><textarea value={description} maxLength={2000} onChange={event => setDescription(event.target.value)} /></label>
-      <label className="ad-dialog-field"><span>Design-owned provider</span><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a supported provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></label>
+      <StudioField className="ad-dialog-field" label={<><span>Category</span></>}><input value={category} maxLength={200} onChange={event => setCategory(event.target.value)} /></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Display name</span></>}><input value={displayName} maxLength={200} onChange={event => setDisplayName(event.target.value)} /></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Description </span></>}><textarea value={description} maxLength={2000} onChange={event => setDescription(event.target.value)} /><small>Optional</small></StudioField>
+      <StudioField className="ad-dialog-field" label={<><span>Design-owned provider</span></>}><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a supported provider</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></StudioField>
       {capabilitiesQuery.isPending ? <div className="ad-inline-status" role="status">Loading supported provider conversions…</div> : null}
       {capabilitiesQuery.isError || choices.length === 0 ? <div className="ad-inline-error" role="alert">No authorable provider conversion is advertised for the recommended source schema. Nothing can be forked.</div> : null}
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this target provider schema is unavailable. Forking is disabled.</div> : null}
     </> : <ForkReview preview={preview} />}
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    {preview ? <footer><button type="button" onClick={editRequest} disabled={submitting}>Edit request</button><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={submitting || !canApply}>{applying ? "Applying atomically…" : "Apply reviewed fork"}</button></footer>
+    {preview ? <StudioDialogFooter confirmType="button" leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
+      onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying changes…" : "Apply reviewed fork"}
+      confirmDisabled={submitting || !canApply} onConfirm={() => void apply()} />
       : <ActivityDefinitionManagementDialogActions submitting={submitting} submitLabel="Create fork preview" canSubmit={canPreview} onClose={onClose} onSubmit={requestPreview} />}
   </ActivityDefinitionManagementDialogShell>;
 }
@@ -189,7 +188,7 @@ function ForkReview({ preview }: { preview: ActivityDefinitionForkPreview }) {
   return <>
     <dl className="ad-review-facts">
       <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code>{preview.source.versionId}</code></dd></div>
-      <div><dt>New Activity Type Key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
+      <div><dt>New activity type key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
       <div><dt>New definition</dt><dd><code>{preview.target.definitionId}</code></dd></div>
       <div><dt>Initial draft</dt><dd><code>{preview.target.draftId}</code></dd></div>
       <div><dt>Provider conversion</dt><dd><code>{preview.providerMigration.sourceProviderKey}</code> schema {preview.providerMigration.sourceProviderSchemaVersion} → <code>{preview.providerMigration.targetProviderKey}</code> schema {preview.providerMigration.targetProviderSchemaVersion}</dd></div>

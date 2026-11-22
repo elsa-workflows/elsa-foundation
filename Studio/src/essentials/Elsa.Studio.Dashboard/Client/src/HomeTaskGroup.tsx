@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, type MouseEve
 import { ArrowRight, CircleAlert, LoaderCircle, Plus, Workflow } from "lucide-react";
 import { evaluateBackendRequirements, useAuthSession, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { isHomeWidgetFeatureEnabled } from "./homeLayout";
-import { useHomeDialogFocus } from "./useHomeDialogFocus";
+import { StudioButton, StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { loadRecentWorkflows, navigateStudioPath, type HomeWorkflowSummary } from "./widgets/homeData";
 
 const designRead = "workflows/design:read";
@@ -41,10 +41,15 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
   const generationRef = useRef(0);
   const controllerRef = useRef<AbortController | null>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLElement>(null);
+  const firstDraftRef = useRef<HTMLAnchorElement>(null);
   const homeFallbackRef = useRef<HTMLElement>(null);
   const [dialogState, setDialogState] = useState<ActiveDialog | null>(null);
   const activeDialog = workflowsEnabled && dialogState?.authorityKey === authorityKey ? dialogState : null;
+
+  useEffect(() => {
+    const link = firstDraftRef.current;
+    if (link && document.activeElement?.matches(".home-continue-dialog .studio-dialog-close")) link.focus();
+  }, [activeDialog?.discovery.kind]);
 
   const closeDialog = useCallback(() => {
     controllerRef.current?.abort();
@@ -57,7 +62,6 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
       ? { ...current, discovery }
       : current);
   }, []);
-  useHomeDialogFocus(dialogRef, activeDialog ? closeDialog : null, homeFallbackRef);
 
   useEffect(() => () => {
     controllerRef.current?.abort();
@@ -128,13 +132,13 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {canManage ? (
           <a className="home-task-card home-task-card--primary" href={createHref} onClick={event => handleLinkClick(event, createHref)}>
             <span className="home-task-card-icon"><Plus size={19} aria-hidden="true" /></span>
-            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Choose a starting point for your workflow.</span></span>
+            <span className="home-task-card-copy"><strong>New workflow</strong><span>Choose a starting point for your workflow.</span></span>
             <ArrowRight size={16} aria-hidden="true" />
           </a>
         ) : (
           <div className="home-task-card home-task-card--disabled" aria-disabled="true">
             <span className="home-task-card-icon"><Plus size={19} aria-hidden="true" /></span>
-            <span className="home-task-card-copy"><strong>Create workflow</strong><span>Requires workflow design access.</span></span>
+            <span className="home-task-card-copy"><strong>New workflow</strong><span>Requires workflow design access.</span></span>
           </div>
         )}
         <button ref={continueButtonRef} className="home-task-card" type="button" onClick={startDiscovery} disabled={!canRead} aria-describedby={authenticated && !canRead ? "home-task-access" : undefined}>
@@ -162,20 +166,24 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
         {accessLimited ? <span id="home-task-access" role="note">Create requires workflow design access. Continue and Browse require access to read workflow definitions.</span> : null}
       </div>
       {activeDialog ? (
-        <div className="dashboard-settings-backdrop">
-          <section ref={dialogRef} className="dashboard-settings-dialog home-continue-dialog" role="dialog" aria-modal="true" aria-labelledby="home-continue-title" tabIndex={-1}>
-            <h4 id="home-continue-title">Continue editing</h4>
+        <StudioDialog open title="Continue editing" onClose={closeDialog} className="home-continue-dialog" initialFocusRef={firstDraftRef} dismissOnOutsideClick={false}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            const opener = continueButtonRef.current;
+            if (document.activeElement === document.body) (opener?.isConnected && !opener.disabled ? opener : homeFallbackRef.current)?.focus();
+          }}
+          footer={<StudioDialogFooter onCancel={closeDialog} />}>
             {activeDialog.discovery.kind === "loading" ? <p role="status"><LoaderCircle size={16} aria-hidden="true" /> Checking current workflow drafts…</p> : null}
             {activeDialog.discovery.kind === "empty" ? <div>
               <p>No workflows have a current draft to continue.</p>
               {canManage
-                ? <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>Create workflow</a>
+                ? <a href={createHref} onClick={event => handleLinkClick(event, createHref, closeDialog)}>New workflow</a>
                 : <p role="note">Creating a workflow requires workflow design access.</p>}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}
             {activeDialog.discovery.kind === "failed" ? <div>
               <p role={activeDialog.discovery.denied ? "alert" : "status"}>{activeDialog.discovery.message}</p>
-              {!activeDialog.discovery.denied ? <button type="button" onClick={startDiscovery}>Retry</button> : null}
+              {!activeDialog.discovery.denied ? <StudioButton onClick={startDiscovery}>Retry</StudioButton> : null}
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse workflows</a>
             </div> : null}
             {activeDialog.discovery.kind === "ready" ? <div>
@@ -183,10 +191,10 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
                 ? `Showing the 8 most recently changed of ${activeDialog.discovery.total} current drafts.`
                 : `${activeDialog.discovery.total} current ${activeDialog.discovery.total === 1 ? "draft" : "drafts"}.`}</p>
               <ul aria-label="Current workflow drafts">
-                {activeDialog.discovery.candidates.map(workflow => {
+                {activeDialog.discovery.candidates.map((workflow, index) => {
                   const href = workflowDefinitionHref(workflow.id);
                   return <li key={workflow.id}>
-                    <a href={href} onClick={event => handleLinkClick(event, href, closeDialog)}>
+                    <a ref={index === 0 ? firstDraftRef : undefined} href={href} onClick={event => handleLinkClick(event, href, closeDialog)}>
                       <strong>{workflow.name}</strong><code>{workflow.id}</code>
                     </a>
                   </li>;
@@ -194,9 +202,7 @@ export function HomeTaskGroup({ api }: { api: ElsaStudioModuleApi }) {
               </ul>
               <a href={browseHref} onClick={event => handleLinkClick(event, browseHref, closeDialog)}>Browse all workflows</a>
             </div> : null}
-            <div className="home-continue-dialog-actions"><button type="button" onClick={closeDialog}>Cancel</button></div>
-          </section>
-        </div>
+        </StudioDialog>
       ) : null}
     </section>
   );

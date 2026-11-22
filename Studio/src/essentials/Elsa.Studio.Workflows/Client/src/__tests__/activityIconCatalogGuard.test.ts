@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const activityRoot = new URL("../../../../../../../Essentials/src/Activities/", import.meta.url);
+const activityRoot = new URL("../../../../../../../essentials/src/Activities/", import.meta.url);
 
 describe("built-in activity icon declarations", () => {
   it("remain available in the pinned lucide dynamic imports", async () => {

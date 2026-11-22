@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("dictionary entries support responsive inline and expanded editing", async ({ page }) => {
+test("dictionary entries support responsive inline and expanded editing", async ({ page }, info) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.setViewportSize({ width: 1100, height: 760 });
   await page.goto("/?theme=light&mode=dictionary");
@@ -34,13 +34,18 @@ test("dictionary entries support responsive inline and expanded editing", async 
   const json = dialog.getByRole("textbox", { name: "Headers dictionary JSON" });
   const jsonValue = await json.inputValue();
   expect(jsonValue).toContain("X-Correlation-Id");
-  await json.fill(jsonValue.replace("no-cache", "max-age=0"));
+  const copiedJson = jsonValue.replace("no-cache", "max-age=0");
+  await json.fill(copiedJson);
   await dialog.getByRole("button", { name: /Copy JSON/ }).click();
-  await expect(dialog.getByText("JSON copied")).toBeVisible();
+  const confirmation = page.locator(".studio-toast").getByText("JSON copied", { exact: true });
+  await expect(confirmation).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(copiedJson);
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(expand).toBeFocused();
+  await expect(confirmation).toBeVisible();
+  await page.screenshot({ path: info.outputPath("dictionary-json-copied.png"), fullPage: true });
 });
 
 test("dictionary rows stack in a narrow inspector", async ({ page }) => {

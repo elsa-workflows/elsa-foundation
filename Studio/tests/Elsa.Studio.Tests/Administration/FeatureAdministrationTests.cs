@@ -1,7 +1,10 @@
 using CShells.DependencyInjection;
 using CShells.Features;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using CShells.Lifecycle.Blueprints;
+using Elsa.Studio.Hosting.Nuplane;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
 using CShells.Lifecycle.Providers;
@@ -146,6 +149,29 @@ public sealed class FeatureAdministrationTests
         finally { foreach (var response in responses) response.Dispose(); }
     }
 
+    [Fact]
+    public async Task A_stale_edit_whose_load_meets_a_configuration_reload_is_a_conflict()
+    {
+        // #4092: the losing edit of two concurrent applies loads the catalog while the winner's save reloads configuration.
+        // The tripwire reproduces that interleaving deterministically: it fires one reload from inside the store's compose.
+        var tripwire = new CompositionTripwire();
+        await using var host = await AdministrationHost.StartAsync(managedFeatures: true, afterStudio: builder => ((IConfigurationBuilder)builder.Configuration).Add(tripwire));
+        var catalog = await Catalog(host);
+        var winner = Request(catalog);
+        var loser = Request(catalog);
+        Configuration(winner)["Credential"] = "first-edit";
+        Configuration(loser)["Credential"] = "second-edit";
+        using var won = await host.Client.PostAsJsonAsync("/modularity/features/apply", winner);
+        Assert.Equal(HttpStatusCode.OK, won.StatusCode);
+
+        tripwire.Arm();
+        using var lost = await host.Client.PostAsJsonAsync("/modularity/features/apply", loser);
+
+        Assert.Equal(1, tripwire.Fired);
+        Assert.Equal(HttpStatusCode.Conflict, lost.StatusCode);
+        Assert.Equal("first-edit", host.App.Configuration["CShells:Shells:Authoring:Features:Configured:Credential"]);
+    }
+
     [Theory]
     [InlineData("incomplete", HttpStatusCode.BadRequest)]
     [InlineData("duplicate", HttpStatusCode.BadRequest)]
@@ -244,6 +270,36 @@ public sealed class FeatureAdministrationTests
     };
 
     private static JsonObject Configuration(JsonObject request) => request["features"]!.AsArray().Single(feature => (string?)feature!["id"] == "Configured")!["configuration"]!.AsObject();
+    /// <summary>
+    /// A configuration source with no keys that, once armed, raises one reload from inside the Studio feature store's
+    /// blueprint compose — after CShells captured its reload token and before it checks it.
+    /// </summary>
+    private sealed class CompositionTripwire : ConfigurationProvider, IConfigurationSource
+    {
+        private int _armed;
+        private int _fired;
+        public int Fired => Volatile.Read(ref _fired);
+        public void Arm() => Volatile.Write(ref _armed, 1);
+        public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+        public override IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
+        {
+            if (parentPath?.StartsWith("CShells:Shells:Authoring", StringComparison.OrdinalIgnoreCase) == true
+                && Volatile.Read(ref _armed) == 1
+                && OnStack(typeof(ConfigurationShellBlueprint)) && OnStack(typeof(ShellFeatureStore))
+                && Interlocked.Exchange(ref _armed, 0) == 1)
+            {
+                Interlocked.Increment(ref _fired);
+                OnReload();
+            }
+            return base.GetChildKeys(earlierKeys, parentPath);
+        }
+
+        // Async state machines are nested types, so match the declaring type or its parent.
+        private static bool OnStack(Type type) => new StackTrace().GetFrames().Any(frame =>
+            frame.GetMethod()?.DeclaringType is { } declaring && (declaring == type || declaring.DeclaringType == type));
+    }
+
     private sealed class ConfigurationGuard(bool refuseLimit99 = false) : IFeatureActivationGuard
     {
         public JsonElement Configuration { get; private set; }

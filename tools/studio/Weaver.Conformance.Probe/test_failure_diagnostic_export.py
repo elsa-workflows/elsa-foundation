@@ -82,17 +82,18 @@ class FailureDiagnosticExportTests(unittest.TestCase):
         self.assertEqual("failed", exported["status"])
         self.assertNotIn(self.canary, (destination / "report.json").read_text())
 
-    def test_preserves_only_the_two_exact_manifest_run_browser_stages(self):
+    def test_preserves_only_exact_manifest_run_and_batch_browser_stages(self):
         for provider in ("copilot", "anthropic"):
-            with self.subTest(provider=provider):
-                self.report["stage"] = provider + "-workflow-run-browser"
-                self.write_report()
-                destination = self.root / provider
-                export_failure_diagnostic(self.source, destination)
-                selected = json.loads((destination / "report.json").read_text())
-                self.assertEqual(self.report["stage"], selected["stage"])
-                self.assertFalse(selected["independentPackageWitness"])
-        for i, stage in enumerate(("other-workflow-run-browser", "copilot-workflow-run-browser-private", self.jwt)):
+            for journey in ("workflow-run", "workflow-batch"):
+                with self.subTest(provider=provider, journey=journey):
+                    self.report["stage"] = provider + "-" + journey + "-browser"
+                    self.write_report()
+                    destination = self.root / (provider + "-" + journey)
+                    export_failure_diagnostic(self.source, destination)
+                    selected = json.loads((destination / "report.json").read_text())
+                    self.assertEqual(self.report["stage"], selected["stage"])
+                    self.assertFalse(selected["independentPackageWitness"])
+        for i, stage in enumerate(("other-workflow-run-browser", "copilot-workflow-run-browser-private", "other-workflow-batch-browser", "anthropic-workflow-batch-browser-private", self.jwt)):
             with self.subTest(stage=stage):
                 self.report["stage"] = stage
                 self.write_report()

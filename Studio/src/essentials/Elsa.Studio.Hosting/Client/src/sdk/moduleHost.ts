@@ -29,6 +29,8 @@ export interface StudioConnectionController {
 export interface StudioModuleHostContext {
   readonly host: StudioEndpointContext;
   readonly identity: AuthSession;
+  /** Available during backend recovery, before a module registry is ready. */
+  readonly dialogs: ElsaStudioModuleApi["dialogs"];
   readonly authManager: AuthProviderManager | null;
   readonly configuration: Readonly<Record<string, unknown>>;
   readonly signal: AbortSignal;

@@ -2,6 +2,7 @@ import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { setDialogs } from "../workflow-editor/dialogs";
+import { renderRegisteredRoute } from "./routeRenderingHelpers";
 import {
   button,
   click,
@@ -17,13 +18,17 @@ import {
   workflowEditorResponse
 } from "./workflowDefinitionTestHelpers";
 
+function definitionsBreadcrumb(container: ParentNode) {
+  return container.querySelector('nav[aria-label="Breadcrumb"] a[href="/workflows/definitions"]');
+}
+
 async function openSecondPageEditor(fetchMock: typeof fetch) {
   const rendered = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
   await waitForText(rendered.container, "First page workflow");
   await click(button(rendered.container, "Next"));
   await waitForText(rendered.container, "Second page workflow");
   await click(row(rendered.container, "Second page workflow"));
-  await waitForCondition(() => expect(button(rendered.container, "Definitions")).not.toBeNull());
+  await waitForCondition(() => expect(definitionsBreadcrumb(rendered.container)?.textContent).toBe("Definitions"));
   return rendered;
 }
 
@@ -47,8 +52,8 @@ describe("workflow definition route browse session", () => {
     const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions?search=original&view=previous-view", fetchMock, capabilities);
     await waitForCondition(() => expect(button(container, "Save view")).not.toBeNull());
     await click(button(container, "Save view"));
-    await waitForCondition(() => expect(button(container, "Delete saved view")).not.toBeNull());
-    await click(button(container, "Delete saved view"));
+    await waitForCondition(() => expect(button(document.body, "Delete saved view")).not.toBeNull());
+    await click(button(document.body, "Delete saved view"));
     await waitForCondition(() => expect(finishDelete).toBeTypeOf("function"));
     updateEndpoint("https://current.example/");
     await click(button(container, "Refresh"));
@@ -60,6 +65,36 @@ describe("workflow definition route browse session", () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(new URLSearchParams(window.location.search).get("search")).toBe("current search");
   }, 20_000);
+
+  it.each(["hidden", "returned"] as const)("honors an empty-folder confirmation while its owning visit is %s", async visit => {
+    let finish!: (value: boolean) => void;
+    const confirmation = new Promise<boolean>(resolve => { finish = resolve; });
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("folders/same-folder") && init?.method === "DELETE") { deleted = true; return new Response(null, { status: 204 }); }
+      if (url.pathname.endsWith("folders/same-folder")) return response({ folder: { id: "same-folder", name: "Selected folder", parentId: null, revision: "r1" }, ancestors: [] });
+      if (url.pathname.endsWith("definition-pages")) return response({ items: [definition()] });
+      return response({ items: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true });
+    const view = await renderRegisteredRoute("/workflows/definitions?folderId=same-folder", undefined, false, capabilities, {}, true);
+    const confirm = vi.fn(() => confirmation);
+    setDialogs({ confirm, prompt: async () => null, alert: async () => undefined });
+    await waitForCondition(() => expect(button(view.container, "Delete")).not.toBeNull());
+    await click(button(view.container, "Delete"));
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+    view.setVisible(false);
+    if (visit === "returned") view.setVisible(true);
+    finish(true);
+    await vi.waitFor(() => expect(deleted).toBe(true));
+    view.setVisible(true);
+    await vi.waitFor(() => expect(new URLSearchParams(window.location.search).get("folderId")).toBeNull());
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+    expect(view.api.notifications!.notify).not.toHaveBeenCalled();
+  });
 
   it("keeps the current folder scope after a retired folder deletion completes", async () => {
     let finishDelete: ((value: Response) => void) | undefined;
@@ -101,11 +136,12 @@ describe("workflow definition route browse session", () => {
     });
     const { container, updateEndpoint } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
     await waitForText(container, "Previous backend workflow");
-    await click(button(container, "Create workflow"));
-    await waitForCondition(() => expect(container.querySelector<HTMLInputElement>('input[aria-label="Flowchart"]')?.disabled).toBe(false));
-    await fill(container.querySelector<HTMLInputElement>('input[aria-label="Display name"]'), "Created on previous backend");
-    await click(container.querySelector('input[aria-label="Flowchart"]'));
-    await click(button(container, "Create"));
+    await click(button(container, "New workflow"));
+    const createDialog = () => document.querySelector<HTMLElement>('form[role="dialog"]')!;
+    await waitForCondition(() => expect(createDialog()?.querySelector<HTMLInputElement>('input[aria-label="Flowchart"]')?.disabled).toBe(false));
+    await fill(createDialog().querySelector<HTMLInputElement>('input[aria-label="Display name"]'), "Created on previous backend");
+    await click(createDialog().querySelector('input[aria-label="Flowchart"]'));
+    await click(button(createDialog(), "Create"));
     await waitForCondition(() => expect(finishCreate).toBeTypeOf("function"));
     updateEndpoint("https://current.example/");
     await click(button(container, "Refresh"));
@@ -133,19 +169,19 @@ describe("workflow definition route browse session", () => {
     await waitForText(container, "Previous backend workflow");
     await click(row(container, "Previous backend workflow")!.querySelector("input[type='checkbox']"));
     await click(button(container, "Move to folder"));
-    await waitForCondition(() => expect(button(container, "Move")).not.toBeNull());
-    await click(button(container, "Move"));
+    await waitForCondition(() => expect(button(document.body, "Move")).not.toBeNull());
+    await click(button(document.body, "Move"));
     await waitForCondition(() => expect(finishMove).toBeTypeOf("function"));
     updateEndpoint("https://current.example/");
     await click(button(container, "Refresh"));
     await waitForText(container, "Current backend workflow");
     await click(row(container, "Current backend workflow")!.querySelector("input[type='checkbox']"));
     await click(button(container, "Move to folder"));
-    await waitForCondition(() => expect(button(container, "Move")).not.toBeNull());
+    await waitForCondition(() => expect(button(document.body, "Move")).not.toBeNull());
     finishMove?.(new Response(null, { status: 204 }));
     await new Promise(resolve => setTimeout(resolve, 0));
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(container.textContent).toContain("1 selected");
     expect(api.notifications!.notify).not.toHaveBeenCalled();
   }, 20_000);
@@ -218,7 +254,9 @@ describe("workflow definition route browse session", () => {
     );
 
     await waitForText(container, "First page workflow");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    const rows = container.querySelector<HTMLSelectElement>(".studio-collection-page-size select");
+    expect(rows?.labels?.[0]?.textContent).toBe("Rows");
+    await select(rows, "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
     await waitForText(container, "Resized first page workflow");
     await click(button(container, "Next"));
@@ -227,10 +265,10 @@ describe("workflow definition route browse session", () => {
 
     const requestsBeforeEditor = pageRequests.length;
     await click(row(container, "Second page workflow"));
-    await waitForCondition(() => expect(button(container, "Definitions")).not.toBeNull());
+    await waitForCondition(() => expect(definitionsBreadcrumb(container)?.textContent).toBe("Definitions"));
     expect(requestsBeforeEditor).toBe(3);
     expect(pageRequests).toHaveLength(requestsBeforeEditor);
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
 
     await waitForCondition(() => expect(folderListRequests).toBe(2));
     resolveReturnedFolders?.(response({ items: [folder], nextContinuationToken: null }));
@@ -267,7 +305,7 @@ describe("workflow definition route browse session", () => {
     await waitForText(container, "active page two");
     expect(new URL(pageRequests.at(-1)!).searchParams.get("continuationToken")).toBe("opaque-page-two");
 
-    await click(button(container, "Deleted"));
+    await click(button(container, "Recycle bin"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("state")).toBe("deleted"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
     await waitForText(container, "deleted page one");
@@ -283,7 +321,7 @@ describe("workflow definition route browse session", () => {
     await click(button(container, "Next"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(true));
     await waitForText(container, "new search page two");
-    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await select(container.querySelector<HTMLSelectElement>(".studio-collection-page-size select"), "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
     await waitForText(container, "new search page one");
@@ -305,7 +343,7 @@ describe("workflow definition route browse session", () => {
     const { container, updateEndpoint } = await openSecondPageEditor(fetchMock);
 
     updateEndpoint("https://new-server.example/");
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
 
     await waitForCondition(() => expect(requests.some(url => url.startsWith("https://new-server.example/") && url.includes("definition-pages"))).toBe(true));
     const newEndpointRequests = requests
@@ -369,7 +407,7 @@ describe("workflow definition route browse session", () => {
     const { container } = await openSecondPageEditor(fetchMock);
 
     window.dispatchEvent(new Event(eventName));
-    await click(button(container, "Definitions"));
+    await click(definitionsBreadcrumb(container));
     await waitForCondition(() => expect(requests).toHaveLength(3));
     const returnedRequest = new URL(requests.at(-1)!);
     expect(returnedRequest.searchParams.has("continuationToken")).toBe(false);

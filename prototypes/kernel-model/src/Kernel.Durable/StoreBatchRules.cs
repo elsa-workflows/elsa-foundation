@@ -1,0 +1,170 @@
+using System.Text.Json;
+using Kernel.Runtime;
+
+namespace Kernel.Durable;
+
+/// <summary>Reject malformed row mutations before any effect; one row mutation per actor per batch.</summary>
+public static class StoreBatchRules
+{
+    public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false)
+    {
+        if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
+            batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
+            throw new StoreException(Failure.Definite, "A job trial clear requires supported, distinct keys in a separate fenced batch.");
+        if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
+        var changed = new HashSet<string>(StringComparer.Ordinal);
+        var rows = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<InboxKey>? consumedControls = null;
+        var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
+            ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
+        ValidateParkPages(batch);
+        if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
+        {
+            var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
+            if (batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])).Concat(batch.Trial)
+                .Where(kept.Contains).GroupBy(key => key).Any(group => group.Skip(1).Any()))
+                throw new StoreException(Failure.Definite, "A Park's kept delivery may be mutated only once in a batch.");
+        }
+        foreach (var turn in batch.Turns)
+        {
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null ||
+                turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
+                throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
+            if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
+                (turn.Row is null || releases.Distinct().Count() != releases.Count || releases.Any(removed!.Contains) ||
+                    releases.Intersect(turn.Held ?? []).Any()))
+                throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
+            if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
+                throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
+            if ((batch.Seen.Count != 0 || batch.Trial.Count != 0) && turn.Sent.Any(message => ParkDrainEnvelope.IsInDomain(message) &&
+                    (batch.Seen.Contains(message.InboxKey) || batch.Trial.Contains(message.InboxKey))))
+                throw new StoreException(Failure.Definite, "A new Park control cannot also carry a poll or trial mark.");
+            if (turn.Consumed.Concat(turn.Done).Any(key => key.Scope == ParkDrainEnvelope.Scope &&
+                    !(consumedControls ??= []).Add(key)) ||
+                (turn.Held ?? []).Any(key => key.Scope == ParkDrainEnvelope.Scope))
+                throw new StoreException(Failure.Definite, "Each protected control may be consumed only once and may not be held.");
+            if (turn.Delete)
+            {
+                if (turn.Expected is not { } expected)
+                    throw new StoreException(Failure.Definite,"Delete requires the existing row's exact revision.");
+                if (turn.Row is { } marker && (turn.Journal is null || !marker.Retired || marker.Creation < 0 ||
+                    marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
+                    marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
+                    marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,
+                        History:History.Minimal,Creation:marker.Creation,Retired:true)))
+                    throw new StoreException(Failure.Definite,"A row-bearing Delete must be a canonical retirement marker.");
+            }
+            if (turn.Row is { } value) ValidateIdentity(value);
+            if (turn.Row is { } row && !StringComparer.Ordinal.Equals(turn.Instance,row.Id) &&
+                !(turn.Expected is null?deferInsertAliases:deferUpdateAliases))
+                throw new StoreException(Failure.Definite,"Turn and row must name the same physical actor.");
+            if (turn.Row is { } mutation && !rows.Add(mutation.Id))
+                throw new StoreException(Failure.Definite,"A batch cannot mutate the same row twice.");
+            if ((turn.Row is not null || turn.Delete) && !changed.Add(turn.Instance))
+                throw new StoreException(Failure.Definite,"A batch cannot mutate the same actor row twice.");
+        }
+    }
+
+    private static void ValidateParkPages(CommitBatch batch)
+    {
+        HashSet<InboxKey>? changed = null;
+        foreach (var turn in batch.Turns)
+        {
+            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Rows;
+            if (rows is null) continue;
+            changed ??= [];
+            if ((turn.FoundationParkClear is not null && turn.FoundationRecoveryPage is not null) ||
+                turn.OpensPark || turn.Delete || rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
+                rows.Any(row => !changed.Add(row.Cursor.Key)))
+                throw new StoreException(Failure.Definite, "A Park page must write a bounded set of distinct keys.");
+        }
+        if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
+                turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])))
+            .Any(changed.Contains))
+            throw new StoreException(Failure.Definite, "A Park page input cannot be changed elsewhere in the batch.");
+    }
+
+    /// <summary>
+    /// An owned-set batch, one fence or several, fences each partition once, names its lowest one positionally, and
+    /// each turn's address embeds one of the fenced partitions. Over several partitions it needs a store that fences k rows.
+    /// </summary>
+    private static void ValidateFences(CommitBatch batch,IReadOnlyList<PartitionFence> fences,bool ownedSets)
+    {
+        var lowest=fences.MinBy(f=>f.Partition);
+        if (lowest is null || fences.Select(f=>f.Partition).Distinct().Count()!=fences.Count ||
+            lowest!=new PartitionFence(batch.Partition,batch.Epoch,batch.Position))
+            throw new StoreException(Failure.Definite,"An owned batch fences each of its partitions once and names the lowest.");
+        var fenced=fences.Select(f=>f.Partition).ToHashSet();
+        foreach (var turn in batch.Turns.Where(t => !TicketsOnly(t)))
+            if (AddressPartition(turn.Instance) is not { } partition || !fenced.Contains(partition))
+                throw new StoreException(Failure.Definite,$"Turn {turn.Instance} is outside the batch's fenced partitions.");
+        if (fences.Count>1 && !ownedSets) throw new StoreException(Failure.Definite,"This store fences one partition per commit.");
+    }
+
+    /// <summary>An owned set names each partition once: a set poll or renew with a repeated partition is refused (a repeated partition in a release is harmless).</summary>
+    public static void RequireDistinct(IReadOnlyCollection<PartitionFence> owned)
+    {
+        if (owned.Select(f=>f.Partition).Distinct().Count()!=owned.Count)
+            throw new StoreException(Failure.Definite,"An owned set names each of its partitions once.");
+    }
+
+    /// <summary>The owner's turn of no actor that only consumes tickets (meet and publish): the store checks each ticket's partition.</summary>
+    public static bool TicketsOnly(TurnCommit turn) => turn.Instance.Length == 0 && turn.Row is null && turn.Expected is null && !turn.Delete && turn.Journal is null
+        && turn.Sent.Count == 0 && turn.Subscribed.Count == 0 && turn.Unsubscribed.Count == 0 && !turn.Unsubscribe && turn.Held is not { Count: > 0 };
+
+    /// <summary>The partition an actor address embeds, or null when it embeds none.</summary>
+    public static int? AddressPartition(string id)
+    {
+        try { return new InstanceRef(id).Partition; }
+        catch (Exception e) when (e is FormatException or OverflowException or ArgumentOutOfRangeException) { return null; }
+    }
+
+    internal static void ValidateActorSends(TurnCommit turn, InstanceRow? previous)
+    {
+        List<CreationAddress>? children = null;
+        foreach (var message in turn.Sent)
+        {
+            if (!message.ActorControl) continue;
+            if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
+            {
+                children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
+                if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
+            }
+
+            throw new StoreException(Failure.Definite, "Actor turns may send only Terminate to a registered child creation.");
+        }
+    }
+
+    private static bool RequestsOperatorDelete(string? payload)
+    {
+        if (payload is null) return false;
+        try
+        {
+            using var body = JsonDocument.Parse(payload);
+            return body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.EnumerateObject().Any(property =>
+                    string.Equals(property.Name, "ThenDelete", StringComparison.OrdinalIgnoreCase) &&
+                    property.Value.ValueKind == JsonValueKind.True);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    public static void ValidateIdentity(InstanceRow row)
+    {
+        if (row.IdentityMetadataRequired && !row.IdentityOnly)
+            throw new StoreException(Failure.Definite,"A terminal metadata protocol requires an identity-only row.");
+        if (row is { IdentityOnly:true } identity && (identity.Retired || identity.Status==InstanceStatus.Running || identity.Creation!=0 || identity.Parent is not null ||
+            identity.State!="null" || !CreationProtocol.IsPhysicalAddress(identity.Id) || !identity.Id.Contains("/key/",StringComparison.Ordinal)))
+            throw new StoreException(Failure.Definite,"Identity-only rows must be state-free ended keyed runs.");
+    }
+
+    public static void RequirePhysicalCapability(CommitBatch batch,bool available)
+    {
+        if (!available && batch.Turns.Any(t=>t.Row is { Retired:true,Creation:0 }))
+            throw new StoreException(Failure.Definite,"Store has no physical retirement capability.");
+    }
+}
