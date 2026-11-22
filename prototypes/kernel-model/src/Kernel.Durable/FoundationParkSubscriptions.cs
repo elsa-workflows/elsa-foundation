@@ -14,7 +14,7 @@ public sealed partial class InMemoryStore
         foreach (var recipe in recipes)
         {
             if (recipe.Keep || recipe.Key is null || recipe.Wait is null ||
-                !FoundationMetadataLimits.FitsName(recipe.Key) || !FoundationMetadataLimits.FitsName(recipe.Wait, preservesCodeUnits: true))
+                !FoundationMetadataLimits.FitsName(recipe.Key) || !FoundationMetadataLimits.FitsName(recipe.Wait))
                 return null;
             bytes += SubscriptionRestoreAllowance;
             if (bytes > MaxRestoreBytes) return null;

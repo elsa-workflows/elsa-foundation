@@ -458,6 +458,9 @@ internal static class ContractNativeChecks
             store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, maximum, bytes: 0) is null &&
             store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, maximum[..^1], bytes: 6145) is null,
             "the plan charges all restored subscriptions against the byte allowance shared with timers and jobs");
+        var invalidWait = new string((char)0xD800, 1);
+        check(store.PlanFoundationSubscriptions(resumed.Row, scope.Tenant, [new("approval", invalidWait, false)], bytes: 0) is null,
+            "restore refuses a wait that ordinary subscription admission cannot round-trip");
         var folded = new InMemoryStore(1, () => now, Flaw.None, StringComparer.OrdinalIgnoreCase);
         check(folded.PlanFoundationSubscriptions(resumed.Row, scope.Tenant,
                 [new("topic", "wait", false), new("Topic", "WAIT", false)], bytes: 0) is null,
