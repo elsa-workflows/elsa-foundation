@@ -1007,7 +1007,12 @@
 }
 
 @media (max-width: 640px) {
+  .extension-builder-page-workspace {
+    height: auto;
+  }
+
   .extension-builder-shell {
+    grid-template-rows: auto auto auto;
     grid-template-columns: minmax(0, 1fr);
     overflow-y: auto;
   }
@@ -1020,7 +1025,7 @@
 
   .extension-builder-ide {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(8rem, 1fr) minmax(12rem, 2fr);
+    grid-template-rows: clamp(8rem, 22dvh, 12rem) clamp(12rem, 32dvh, 21rem);
     overflow: auto;
   }
 
