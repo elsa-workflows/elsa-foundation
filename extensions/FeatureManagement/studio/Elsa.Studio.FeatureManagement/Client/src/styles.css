@@ -6,13 +6,13 @@
    * (violet/advanced) are color-mix derivations over those same tokens, keeping the badge
    * hues distinct without depending on anything outside the --studio-* contract.
    */
-  --fm-tone-info: var(--studio-accent, var(--primary, #2563eb));
-  --fm-tone-violet: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 50%, var(--studio-danger, var(--danger, #dc2626)));
-  --fm-tone-enabled: var(--studio-success, var(--success, #16a34a));
-  --fm-tone-advanced: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 55%, var(--studio-success, var(--success, #16a34a)));
-  --fm-tone-experimental: var(--studio-warning, var(--warning, #d97706));
-  --fm-tone-danger: var(--studio-danger, var(--danger, #dc2626));
-  --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
+  --fm-tone-info: var(--studio-accent);
+  --fm-tone-violet: color-mix(in srgb, var(--studio-accent) 50%, var(--studio-danger));
+  --fm-tone-enabled: var(--studio-success);
+  --fm-tone-advanced: color-mix(in srgb, var(--studio-accent) 55%, var(--studio-success));
+  --fm-tone-experimental: var(--studio-warning);
+  --fm-tone-danger: var(--studio-danger);
+  --fm-overlay-strong: color-mix(in srgb, var(--studio-text) 38%, transparent);
 }
 
 .feature-management-page {
@@ -28,10 +28,10 @@
 }
 
 .feature-management-warning {
-  border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 55%, var(--border));
-  background: color-mix(in srgb, var(--danger, #dc2626) 8%, var(--studio-surface, var(--card)));
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 55%, var(--border));
+  background: color-mix(in srgb, var(--studio-danger) 8%, var(--studio-surface, var(--card)));
   color: var(--studio-text, var(--foreground));
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   padding: 9px 12px;
 }
 
@@ -46,7 +46,7 @@
 .feature-management-list-column,
 .feature-management-inspector {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: var(--studio-surface, var(--card));
 }
 
@@ -101,10 +101,10 @@
   min-width: 0;
   min-height: 32px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--input, var(--studio-surface, var(--card)));
   color: var(--studio-text, var(--foreground));
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   padding: 6px 9px;
 }
 
@@ -131,11 +131,11 @@
   max-width: 240px;
   min-height: 32px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--studio-surface, var(--card));
   color: var(--studio-text, var(--foreground));
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 650;
   padding: 6px 9px;
 }
@@ -173,7 +173,7 @@
   gap: 6px;
   width: min(280px, calc(100vw - 48px));
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: var(--studio-surface, var(--card));
   box-shadow: 0 14px 40px var(--fm-overlay-strong);
   padding: 8px;
@@ -183,10 +183,10 @@
   width: 100%;
   min-height: 30px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--input, var(--studio-surface, var(--card)));
   color: var(--studio-text, var(--foreground));
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   padding: 5px 8px;
 }
 
@@ -211,13 +211,13 @@
   gap: 8px;
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: transparent;
   color: var(--studio-text, var(--foreground));
   cursor: pointer;
   min-height: 30px;
   padding: 6px 9px;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   text-align: left;
 }
 
@@ -257,7 +257,7 @@
 
 .feature-management-list-heading span {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-bulk-actions {
@@ -291,7 +291,7 @@
 
 .feature-management-bulk-actions span {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   white-space: nowrap;
 }
 
@@ -388,14 +388,14 @@
 .feature-management-inspector code,
 .feature-management-setting code {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-switch {
   appearance: none;
   width: 28px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   border: 1px solid var(--border);
   background: var(--studio-text-muted, var(--muted-foreground));
   position: relative;
@@ -411,8 +411,8 @@
   left: 2px;
   width: 10px;
   height: 10px;
-  border-radius: 999px;
-  background: white;
+  border-radius: var(--studio-radius-pill);
+  background: var(--studio-accent-text);
 }
 
 .feature-management-switch:checked {
@@ -447,9 +447,9 @@
   align-items: center;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
   font-style: normal;
   line-height: 1.55;
@@ -514,9 +514,9 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   padding: 1px 7px;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
   font-style: normal;
   white-space: nowrap;
@@ -529,7 +529,7 @@
 }
 
 .feature-management-card-title .feature-management-badge {
-  font-size: 10px;
+  font-size: var(--studio-label-size);
   padding: 0 7px;
 }
 
@@ -551,7 +551,7 @@
 
 .feature-management-card-count {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   text-align: right;
 }
 
@@ -578,7 +578,7 @@
 
 .feature-management-inspector-heading h3 {
   margin: 2px 0;
-  font-size: 17px;
+  font-size: var(--studio-section-title-size);
   line-height: 1.22;
 }
 
@@ -586,7 +586,7 @@
   display: grid;
   gap: 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: color-mix(in srgb, var(--studio-surface, var(--card)) 94%, var(--muted));
   padding: 11px;
 }
@@ -607,7 +607,7 @@
 .feature-management-metadata h4 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 720;
 }
 
@@ -629,14 +629,14 @@
 .feature-management-setting-summary-group h5 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 720;
 }
 
 .feature-management-setting-summary-list {
   display: grid;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   overflow: hidden;
 }
 
@@ -669,9 +669,9 @@
 
 .feature-management-setting-summary-meta em {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-style: normal;
   padding: 1px 6px;
 }
@@ -683,7 +683,7 @@
 .feature-management-setting-summary-value {
   justify-self: stretch;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--background);
   color: var(--studio-text, var(--foreground));
   min-height: 30px;
@@ -699,7 +699,7 @@
   gap: 8px 12px;
   margin: 0;
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-detail-list div {
@@ -709,7 +709,7 @@
 
 .feature-management-detail-list dt {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-weight: 700;
+  font-weight: var(--studio-title-weight, 700);
 }
 
 .feature-management-detail-list dd {
@@ -735,7 +735,7 @@
 .feature-management-setting-group h5 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 720;
 }
 
@@ -752,7 +752,7 @@
   min-width: 0;
   background: color-mix(in srgb, var(--studio-surface, var(--card)) 96%, var(--muted));
   border: 1px solid var(--studio-border, var(--border));
-  border-radius: var(--studio-radius, 6px);
+  border-radius: var(--studio-radius);
   padding: 12px;
 }
 
@@ -781,9 +781,9 @@
 
 .feature-management-setting em {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-style: normal;
   padding: 1px 6px;
 }
@@ -811,7 +811,7 @@
 .feature-management-setting:not(.outlined) textarea {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--background);
   color: var(--studio-text, var(--foreground));
   padding: 7px 9px;
@@ -832,7 +832,7 @@
   width: 34px;
   height: 20px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   background: var(--studio-text-muted, var(--muted-foreground));
   cursor: pointer;
   margin: 0;
@@ -846,8 +846,8 @@
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 999px;
-  background: white;
+  border-radius: var(--studio-radius-pill);
+  background: var(--studio-accent-text);
   transition: transform 120ms ease;
 }
 
@@ -871,7 +871,7 @@
 }
 
 .feature-management-setting-error {
-  color: var(--danger, #dc2626);
+  color: var(--studio-danger);
 }
 
 .studio-dialog.feature-management-settings-dialog,
@@ -912,7 +912,7 @@
   display: grid;
   gap: 10px;
   border: 1px solid var(--studio-border);
-  border-radius: 6px;
+  border-radius: var(--studio-radius);
   background: color-mix(in srgb, var(--studio-surface) 96%, var(--studio-surface-muted));
   padding: 12px;
 }
@@ -940,7 +940,7 @@
 .feature-management-impact-heading h4 {
   margin: 0 0 3px;
   color: var(--studio-text);
-  font-size: 14px;
+  font-size: var(--studio-body-size);
 }
 
 .feature-management-impact-heading code,
@@ -948,7 +948,7 @@
 .feature-management-impact-state,
 .feature-management-impact-reload {
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-impact-kinds {
@@ -972,8 +972,8 @@
 .feature-management-impact-section h5 {
   margin: 0;
   color: var(--studio-text);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--studio-label-size);
+  font-weight: var(--studio-title-weight, 700);
 }
 
 .feature-management-impact-section dl,
@@ -982,7 +982,7 @@
   gap: 0;
   margin: 0;
   border: 1px solid var(--studio-border);
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   overflow: hidden;
 }
 
@@ -1013,7 +1013,7 @@
 
 .feature-management-impact-section dt {
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
 }
 
@@ -1021,7 +1021,7 @@
   min-width: 0;
   margin: 0;
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
 }
 
@@ -1091,7 +1091,7 @@
   min-width: 0;
   min-height: 164px;
   border: 1px solid var(--studio-border, var(--border));
-  border-radius: 8px;
+  border-radius: var(--studio-radius);
   background: var(--studio-surface, var(--card));
   color: var(--studio-text, var(--foreground));
   cursor: pointer;
@@ -1112,14 +1112,14 @@
 }
 
 .feature-management-capability-card-heading strong {
-  font-size: 15px;
+  font-size: var(--studio-section-title-size);
 }
 
 .feature-management-capability-card-heading > span,
 .feature-management-capability-description,
 .feature-management-capability-alerts {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-capability-description {
@@ -1127,8 +1127,8 @@
 }
 
 .feature-management-capability-summary {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--studio-body-size);
+  font-weight: var(--studio-title-weight, 700);
 }
 
 .feature-management-capability-alerts {
@@ -1139,8 +1139,8 @@
   align-self: end;
   margin-top: 2px;
   color: var(--studio-accent, var(--primary));
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--studio-label-size);
+  font-weight: var(--studio-title-weight, 700);
 }
 
 .feature-management-list-filters {
@@ -1158,13 +1158,13 @@
   gap: 7px;
   min-width: 0;
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-list-filters select {
   min-height: 30px;
   border: 1px solid var(--studio-border, var(--border));
-  border-radius: 5px;
+  border-radius: var(--studio-radius-sm);
   background: var(--studio-surface, var(--card));
   color: var(--studio-text, var(--foreground));
   padding: 4px 8px;
@@ -1188,12 +1188,12 @@
 .feature-management-relationship-group h5 {
   margin: 0;
   color: var(--studio-text, var(--foreground));
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .feature-management-relationship-label {
   color: var(--studio-text-muted, var(--muted-foreground));
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
 }
 
@@ -1209,7 +1209,7 @@
 .feature-management-metadata summary {
   color: var(--studio-text-muted, var(--muted-foreground));
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
 }
 
@@ -1231,7 +1231,7 @@
   background: transparent;
   color: var(--studio-accent, var(--primary));
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
   padding: 2px 0;
   text-align: left;

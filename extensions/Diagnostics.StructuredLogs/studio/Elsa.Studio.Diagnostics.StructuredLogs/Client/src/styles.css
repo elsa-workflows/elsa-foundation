@@ -67,7 +67,7 @@
 .structured-logs-status {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   background: var(--sl-text-muted);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--sl-text-muted) 14%, transparent);
 }

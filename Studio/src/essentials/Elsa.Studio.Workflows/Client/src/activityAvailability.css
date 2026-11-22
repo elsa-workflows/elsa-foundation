@@ -44,10 +44,10 @@
   border: 1px solid var(--wf-accent);
   border-radius: var(--studio-radius);
   background: var(--wf-accent);
-  color: var(--primary-foreground, #ffffff);
+  color: var(--studio-accent-text);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   font-weight: 600;
   padding: 0 12px;
   white-space: nowrap;
@@ -75,7 +75,7 @@
 .availability-banner {
   padding: 8px 12px;
   border-radius: var(--studio-radius);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   border: 1px solid transparent;
 }
 
@@ -106,7 +106,7 @@
 }
 
 .availability-banner-message strong {
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .availability-banner-message span {
@@ -169,12 +169,12 @@
 }
 
 .availability-mode button strong {
-  font-size: 13px;
+  font-size: var(--studio-body-size);
 }
 
 .availability-mode button em {
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   color: var(--wf-muted-text);
 }
 
@@ -198,7 +198,7 @@
   flex-wrap: wrap;
   gap: 14px;
   color: var(--wf-muted-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .availability-counts span {
@@ -253,7 +253,7 @@
   color: var(--wf-muted-text);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   white-space: nowrap;
 }
 
@@ -288,16 +288,16 @@
   background: var(--wf-row);
   background-size: var(--wf-row-bg-size);
   color: var(--wf-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   cursor: pointer;
 }
 
 .availability-set-option code {
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   color: var(--wf-muted-text);
   background: var(--wf-panel-muted);
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
 }
 
 /* List + optional details inspector, side by side. */
@@ -347,7 +347,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
   color: var(--wf-muted-text);
   text-transform: var(--wf-label-transform, uppercase);
@@ -355,11 +355,11 @@
 }
 
 .availability-group-title small {
-  font-size: 10px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
   color: var(--wf-muted-text);
   background: var(--wf-panel-muted);
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   padding: 1px 6px;
 }
 
@@ -425,17 +425,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
 }
 
 .availability-activity-title-line code {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   color: color-mix(in srgb, var(--wf-muted-text) 82%, transparent);
   background: color-mix(in srgb, var(--wf-panel-muted-tone) 52%, transparent);
   border: 1px solid color-mix(in srgb, var(--wf-border) 58%, transparent);
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   overflow: hidden;
   padding: 1px 6px;
   text-overflow: ellipsis;
@@ -444,7 +444,7 @@
 
 .availability-activity-description {
   color: var(--wf-muted-text);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -477,7 +477,7 @@
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -499,7 +499,7 @@
   gap: 10px;
   padding: 12px;
   overflow-y: auto;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .availability-details-status {
@@ -526,7 +526,7 @@
 
 .availability-details-meta dt {
   color: var(--wf-muted-text);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   line-height: 1.6;
 }
 
@@ -539,7 +539,7 @@
 .availability-details-arguments code {
   display: inline-block;
   max-width: 100%;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   color: var(--wf-text);
   background: var(--wf-panel-muted);
   border: 1px solid color-mix(in srgb, var(--wf-border) 58%, transparent);
@@ -550,7 +550,7 @@
 
 .availability-details-arguments h5 {
   margin: 0 0 5px;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
   color: var(--wf-muted-text);
   text-transform: var(--wf-label-transform, uppercase);
@@ -575,13 +575,13 @@
 }
 
 .availability-details-arguments strong {
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   font-weight: 500;
 }
 
 .availability-details-note {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
 }
 
 .availability-details-raw {
@@ -589,7 +589,7 @@
   padding: 8px;
   max-height: 240px;
   overflow: auto;
-  font-size: 10.5px;
+  font-size: var(--studio-label-size);
   line-height: 1.45;
   background: var(--wf-panel-muted);
   border: 1px solid var(--wf-border);
@@ -613,10 +613,10 @@
 
 .availability-state {
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   white-space: nowrap;
 }
 
@@ -657,7 +657,7 @@
     var(--wf-panel);
   border-radius: var(--studio-radius);
   color: var(--wf-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .availability-unresolved-list em {

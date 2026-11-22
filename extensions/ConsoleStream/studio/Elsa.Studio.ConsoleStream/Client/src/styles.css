@@ -61,7 +61,7 @@
 .console-stream-status {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--studio-radius-pill);
   background: var(--studio-text-muted);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-text-muted) 14%, transparent);
 }
