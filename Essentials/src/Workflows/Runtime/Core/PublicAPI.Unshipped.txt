@@ -10862,3 +10862,6 @@ Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.
 Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableStartRejectedException.InputPath.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidationFinding.JsonPath.get -> string?
 Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputValidationFinding.JsonPath.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.Warnings.get -> Elsa.Expressions.Core.Contracts.IExecutionWarningSink?
+Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Warnings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning!>!
+Elsa.Workflows.Runtime.Core.Models.BackgroundActivityWorkTerminalResult.Warnings.init -> void

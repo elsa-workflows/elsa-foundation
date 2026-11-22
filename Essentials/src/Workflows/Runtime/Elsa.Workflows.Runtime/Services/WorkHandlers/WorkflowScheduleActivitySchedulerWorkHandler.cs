@@ -151,7 +151,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             return null;
         }
 
-        var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
+        var state = NewActivityExecutionState(workItem, schedulePayload, executableNode).WithWarnings(schedulePayload.InputWarnings ?? []);
         if (_checkpointCommitter is null || _inspectionAccumulator is null)
         {
             await _activityExecutionStateStore.SaveAsync(state, cancellationToken);

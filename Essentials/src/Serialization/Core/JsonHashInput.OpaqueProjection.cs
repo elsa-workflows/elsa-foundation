@@ -15,7 +15,7 @@ public static partial class JsonHashInput
         ArgumentNullException.ThrowIfNull(ownerProjection);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { MaxDepth = 1000 }))
-            new OpaqueProjector(ownerProjection).Write(writer, value, typeof(T), 0, tagObject: false);
+            new OpaqueProjector(ownerProjection).Write(writer, value, typeof(T), 0);
         using var document = JsonDocument.Parse(stream.ToArray(), new JsonDocumentOptions { MaxDepth = 1000 });
         return document.RootElement.Clone();
     }
@@ -31,6 +31,7 @@ public static partial class JsonHashInput
 
     private sealed class OpaqueProjector(Func<object, object?> ownerProjection)
     {
+        private readonly JsonSerializerOptions options = OperationOptions();
         private readonly HashSet<object> active = new(ReferenceEqualityComparer.Instance);
 
         internal void Write(Utf8JsonWriter writer, object? value, Type declaredType, int depth, bool tagObject = true)
@@ -49,12 +50,12 @@ public static partial class JsonHashInput
                 return;
             }
             if (value is JsonElement json) { writer.WriteRawValue(json.GetRawText(), skipInputValidation: true); return; }
-            if (value is System.Text.Json.Nodes.JsonNode node) { JsonSerializer.Serialize(writer, node, Options); return; }
+            if (value is System.Text.Json.Nodes.JsonNode node) { JsonSerializer.Serialize(writer, node, options); return; }
             if (value is string text) { writer.WriteStringValue(OpaqueString(text)); return; }
             var runtimeType = value.GetType();
             var type = Nullable.GetUnderlyingType(declaredType) ?? declaredType;
             if (type == typeof(object)) type = runtimeType;
-            if (IsScalar(runtimeType)) { JsonSerializer.Serialize(writer, value, runtimeType, Options); return; }
+            if (IsScalar(runtimeType)) { JsonSerializer.Serialize(writer, value, runtimeType, options); return; }
             var tracked = !runtimeType.IsValueType;
             if (tracked && !active.Add(value)) throw new JsonException("Opaque hash projection contains a reference cycle.");
             try
@@ -65,13 +66,13 @@ public static partial class JsonHashInput
                     Write(writer, projection, projection.GetType(), depth + 1, tagObject: false);
                     return;
                 }
-                var info = Options.GetTypeInfo(type);
+                var info = options.GetTypeInfo(type);
                 JsonDerivedType? derived = null;
                 if (type != runtimeType && info.PolymorphismOptions is { } polymorphism)
                 {
                     derived = polymorphism.DerivedTypes.FirstOrDefault(candidate => candidate.DerivedType == runtimeType);
                     if (derived.Value.DerivedType is null) throw new JsonException($"Opaque hash projection has no declared derived contract for {runtimeType}.");
-                    info = Options.GetTypeInfo(runtimeType);
+                    info = options.GetTypeInfo(runtimeType);
                 }
                 if (info.Kind == JsonTypeInfoKind.Dictionary)
                 {
@@ -104,20 +105,20 @@ public static partial class JsonHashInput
                 writer.WriteStartObject();
                 if (derived?.TypeDiscriminator is { } discriminator)
                 {
-                    var property = Options.GetTypeInfo(type).PolymorphismOptions!.TypeDiscriminatorPropertyName;
+                    var property = options.GetTypeInfo(type).PolymorphismOptions!.TypeDiscriminatorPropertyName;
                     if (discriminator is string name) writer.WriteString(property, name);
                     else writer.WriteNumber(property, (int)discriminator);
                 }
                 foreach (var property in info.Properties)
                 {
                     if (property.Get is null) continue;
-                    if (property.IsExtensionData || property.CustomConverter is not null)
-                        throw new JsonException($"Hash member {type}.{property.Name} needs an explicit owner projection for its converter or extension data.");
                     var memberValue = property.Get(value);
                     var ignore = property.AttributeProvider?.GetCustomAttributes(typeof(JsonIgnoreAttribute), inherit: true).OfType<JsonIgnoreAttribute>().SingleOrDefault()?.Condition;
                     if (ignore == JsonIgnoreCondition.Always || ignore == JsonIgnoreCondition.WhenWritingNull && memberValue is null ||
                         ignore == JsonIgnoreCondition.WhenWritingDefault && IsDefault(memberValue, property.PropertyType) ||
                         property.ShouldSerialize?.Invoke(value, memberValue) == false) continue;
+                    if (property.IsExtensionData || property.CustomConverter is not null)
+                        throw new JsonException($"Hash member {type}.{property.Name} needs an explicit owner projection for its converter or extension data.");
                     writer.WritePropertyName(property.Name);
                     Write(writer, memberValue, property.PropertyType, depth + 1);
                 }

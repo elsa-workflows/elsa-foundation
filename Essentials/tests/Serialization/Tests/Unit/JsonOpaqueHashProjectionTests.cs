@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using Elsa.Serialization.Core;
 using Xunit;
@@ -36,6 +39,7 @@ public sealed class JsonOpaqueHashProjectionTests
     [Fact]
     public void CLR_object_slots_cannot_alias_raw_JSON_that_looks_like_the_encoding()
     {
+        Assert.NotEqual(JsonHashInput.ProjectOpaqueClr<object>("secret", NoAdapter).GetRawText(), JsonHashInput.ProjectOpaqueClr<object>(Element(JsonSerializer.Serialize(JsonHashInput.OpaqueString("secret"), JsonBaseline.Options)), NoAdapter).GetRawText());
         Assert.NotEqual(Hash(new Holder { Value = "secret" }), Hash(new Holder { Value = Element(JsonSerializer.Serialize(JsonHashInput.OpaqueString("secret"), JsonBaseline.Options)) }));
     }
 
@@ -63,6 +67,46 @@ public sealed class JsonOpaqueHashProjectionTests
         Assert.Equal(JsonValueKind.Null, projected.GetProperty("explicitNull").ValueKind);
         var cycle = new Holder(); cycle.Value = cycle;
         Assert.ThrowsAny<JsonException>(() => Hash(cycle));
+    }
+
+    [Fact]
+    public void Omitted_custom_converter_members_do_not_require_an_adapter()
+    {
+        var projected = JsonHashInput.ProjectOpaqueClr(new OmittedConverter(), NoAdapter);
+        Assert.False(projected.TryGetProperty("omitted", out _));
+    }
+
+    [Fact]
+    public void Hash_metadata_does_not_retain_a_collectible_type_nested_in_a_BCL_generic()
+    {
+        var type = ExerciseCollectibleContract();
+        for (var round = 0; round < 12 && type.IsAlive; round++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
+        Assert.False(type.IsAlive);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference ExerciseCollectibleContract()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("S9CollectibleHashContract"), AssemblyBuilderAccess.RunAndCollect);
+        var builder = assembly.DefineDynamicModule("contract").DefineType("CollectibleOrder", TypeAttributes.Public | TypeAttributes.Class);
+        builder.DefineDefaultConstructor(MethodAttributes.Public);
+        var property = builder.DefineProperty("Name", PropertyAttributes.None, typeof(string), null);
+        var getter = builder.DefineMethod("get_Name", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, typeof(string), Type.EmptyTypes);
+        var body = getter.GetILGenerator(); body.Emit(OpCodes.Ldstr, "Ada"); body.Emit(OpCodes.Ret); property.SetGetMethod(getter);
+        var type = builder.CreateType()!;
+        var listType = typeof(List<>).MakeGenericType(type);
+        Assert.True(listType.IsCollectible); Assert.False(listType.Assembly.IsCollectible);
+        var list = (System.Collections.IList)Activator.CreateInstance(listType)!; list.Add(Activator.CreateInstance(type));
+        _ = JsonHashInput.Hash<object>(list);
+        _ = JsonHashInput.SerializeToElement(list, listType);
+        _ = JsonHashInput.ProjectOpaqueClr<object>(list, NoAdapter);
+        return new WeakReference(type);
+    }
+
+    private sealed class OmittedConverter
+    {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull), JsonConverter(typeof(CustomConverter))]
+        public Custom? Omitted { get; init; }
     }
 
     private sealed class Holder { public object? Value { get; set; } }

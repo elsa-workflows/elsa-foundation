@@ -91,7 +91,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
         var commandMetadata = CreateWorkflowStartCommandMetadata(workItem.CommandMetadata, now);
-        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata);
+        var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, dispatchId, now, commandMetadata, startPayload.InputWarnings);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
@@ -249,7 +249,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         string rootActivityId,
         string? dispatchId,
         DateTimeOffset now,
-        IReadOnlyDictionary<string, string> commandMetadata)
+        IReadOnlyDictionary<string, string> commandMetadata,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning>? inputWarnings)
     {
         var activityExecutionId = dispatchId is null
             ? _idGenerator.NewActivityExecutionId()
@@ -270,7 +271,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             rootActivityId,
             activityExecutionId,
             RuntimeScheduleActivityCommandPayload.WorkflowStartReason,
-            schedulingProvenance: provenance);
+            schedulingProvenance: provenance) { InputWarnings = inputWarnings };
 
         return new RuntimeSchedulerWorkItem(
             workItemId: RuntimeChainId.Derive(startWorkItem.WorkItemId, $"schedule:{rootActivityId}"),

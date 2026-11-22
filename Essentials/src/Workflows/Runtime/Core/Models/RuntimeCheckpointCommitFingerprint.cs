@@ -73,116 +73,43 @@ public static class RuntimeCheckpointCommitFingerprint
     {
         ArgumentNullException.ThrowIfNull(commit);
 
-        // Preserve the owner-defined conditional field projection. S-9 moves its encoding once before
+        // Preserve every owner-defined logical field, including cleanup-only state changes. S-9 moves its encoding once before
         // the first stable release; no old-hash verification path remains.
-        object stateChanges = !commit.StateChanges.BackgroundActivityWork.IsEmpty
-            ? new
+        var stateChanges = new
+        {
+            commit.StateChanges.WorkflowExecution,
+            commit.StateChanges.Scheduler,
+            ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
+            ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
+            Bookmarks = Order(commit.StateChanges.Bookmarks),
+            DurableValues = Order(commit.StateChanges.DurableValues),
+            Incidents = Order(commit.StateChanges.Incidents),
+            Operational = Order(commit.StateChanges.Operational),
+            WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
+            WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
+                .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
+                .ToArray(),
+            ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
+                .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
+                .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
+                .ToArray(),
+            ConsumedSchedulerWorkItems = commit.StateChanges.ConsumedSchedulerWorkItems
+                .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
+                .ToArray(),
+            commit.StateChanges.AlterationJobTerminalChange,
+            BackgroundActivityWork = new
             {
-                commit.StateChanges.WorkflowExecution,
-                commit.StateChanges.Scheduler,
-                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
-                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
-                Bookmarks = Order(commit.StateChanges.Bookmarks),
-                DurableValues = Order(commit.StateChanges.DurableValues),
-                Incidents = Order(commit.StateChanges.Incidents),
-                Operational = Order(commit.StateChanges.Operational),
-                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
-                WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
-                    .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
-                    .ToArray(),
-                ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
+                Admissions = commit.StateChanges.BackgroundActivityWork.Admissions
+                    .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
+                Acceptances = commit.StateChanges.BackgroundActivityWork.Acceptances
+                    .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
+                Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
                     .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
-                    .ToArray(),
-                ConsumedSchedulerWorkItems = commit.StateChanges.ConsumedSchedulerWorkItems
-                    .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
-                    .ToArray(),
-                commit.StateChanges.AlterationJobTerminalChange,
-                BackgroundActivityWork = new
-                {
-                    Admissions = commit.StateChanges.BackgroundActivityWork.Admissions
-                        .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
-                    Acceptances = commit.StateChanges.BackgroundActivityWork.Acceptances
-                        .OrderBy(request => request.WorkId, StringComparer.Ordinal).ToArray(),
-                    Cancellations = commit.StateChanges.BackgroundActivityWork.Cancellations
-                        .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                        .ThenBy(request => System.Text.Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(request.ActivityExecutionIds, RuntimeJsonHashProjection.For))), StringComparer.Ordinal)
-                        .ToArray()
-                },
-                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            }
-            : commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 || commit.StateChanges.AlterationJobTerminalChange is not null
-            ? new
-            {
-                commit.StateChanges.WorkflowExecution,
-                commit.StateChanges.Scheduler,
-                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
-                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
-                Bookmarks = Order(commit.StateChanges.Bookmarks),
-                DurableValues = Order(commit.StateChanges.DurableValues),
-                Incidents = Order(commit.StateChanges.Incidents),
-                Operational = Order(commit.StateChanges.Operational),
-                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
-                WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
-                    .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
-                    .ToArray(),
-                ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
-                    .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
-                    .ToArray(),
-                ConsumedSchedulerWorkItems = commit.StateChanges.ConsumedSchedulerWorkItems
-                    .OrderBy(item => item.WorkItemId, StringComparer.Ordinal)
-                    .ToArray(),
-                commit.StateChanges.AlterationJobTerminalChange,
-                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            }
-            : commit.StateChanges.WorkflowDispatchCancellations.Count > 0
-            ? new
-            {
-                commit.StateChanges.WorkflowExecution,
-                commit.StateChanges.Scheduler,
-                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
-                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
-                Bookmarks = Order(commit.StateChanges.Bookmarks),
-                DurableValues = Order(commit.StateChanges.DurableValues),
-                Incidents = Order(commit.StateChanges.Incidents),
-                Operational = Order(commit.StateChanges.Operational),
-                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
-                WorkflowDispatchCancellations = commit.StateChanges.WorkflowDispatchCancellations
-                    .OrderBy(request => request.DispatchId, StringComparer.Ordinal)
-                    .ToArray(),
-                ActivityScopeCleanups = commit.StateChanges.ActivityScopeCleanups
-                    .OrderBy(request => request.WorkflowExecutionId, StringComparer.Ordinal)
-                    .ThenBy(request => request.ExecutionScopeId, StringComparer.Ordinal)
-                    .ToArray(),
-                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            }
-            : commit.StateChanges.WorkflowDispatches.Count == 0
-            ? new
-            {
-                commit.StateChanges.WorkflowExecution,
-                commit.StateChanges.Scheduler,
-                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
-                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
-                Bookmarks = Order(commit.StateChanges.Bookmarks),
-                DurableValues = Order(commit.StateChanges.DurableValues),
-                Incidents = Order(commit.StateChanges.Incidents),
-                Operational = Order(commit.StateChanges.Operational),
-                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            }
-            : new
-            {
-                commit.StateChanges.WorkflowExecution,
-                commit.StateChanges.Scheduler,
-                ActivityExecutions = Order(commit.StateChanges.ActivityExecutions),
-                ActivityExecutionInspections = Order(commit.StateChanges.ActivityExecutionInspections),
-                Bookmarks = Order(commit.StateChanges.Bookmarks),
-                DurableValues = Order(commit.StateChanges.DurableValues),
-                Incidents = Order(commit.StateChanges.Incidents),
-                Operational = Order(commit.StateChanges.Operational),
-                WorkflowDispatches = Order(commit.StateChanges.WorkflowDispatches),
-                PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
-            };
+                    .ThenBy(request => System.Text.Encoding.UTF8.GetString(Elsa.Serialization.Core.JsonHashInput.CanonicalBytes(Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr(request.ActivityExecutionIds, RuntimeJsonHashProjection.For))), StringComparer.Ordinal)
+                    .ToArray()
+            },
+            PostCommitOutbox = Order(commit.StateChanges.PostCommitOutbox)
+        };
 
         var payload = new
         {

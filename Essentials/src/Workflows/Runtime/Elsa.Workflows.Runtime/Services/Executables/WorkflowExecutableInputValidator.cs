@@ -98,6 +98,7 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
                 .Where(declaration => !suppliedNames.Contains(declaration.Name) && declaration.DefaultValue.HasValue)
                 .Select(declaration => new KeyValuePair<string, JsonElement>(declaration.Name, declaration.DefaultValue!.Value)));
 
+        var warnings = new List<Elsa.Expressions.Core.Models.ExecutionWarning>();
         foreach (var declaration in contract.Inputs)
         {
             if (wellKnownTypeRegistry is null || !wellKnownTypeRegistry.TryGetTypeOrDefault(declaration.Type.Alias, out var elementType))
@@ -116,7 +117,8 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             {
                 try
                 {
-                    _ = JsonConversionContract.For(targetType).Read(input.Value, targetType);
+                    _ = JsonConversionContract.For(targetType).Read(input.Value, targetType, diagnostic => warnings.Add(
+                        Elsa.Expressions.Core.Models.ExecutionWarning.FromJsonConversion(diagnostic.Code, diagnostic.Path, diagnostic.TargetType, diagnostic.Converter, $"inputs.{declaration.Name}")));
                 }
                 catch (JsonException exception)
                 {
@@ -131,6 +133,6 @@ public sealed class WorkflowExecutableInputValidator(IWellKnownTypeRegistry? wel
             }
         }
 
-        return WorkflowExecutableInputValidation.Success(normalized);
+        return WorkflowExecutableInputValidation.Success(normalized, warnings);
     }
 }

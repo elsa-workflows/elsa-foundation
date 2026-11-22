@@ -17,7 +17,7 @@ public sealed class WorkflowOutputWireTests
             ["URL"] = Output("first"), ["url"] = Output("second"), ["ReviewData"] = Output("third")
         }, "Balanced", "Workflow");
         var type = RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext")!;
-        var context = (JsonSerializerContext)type.GetProperty("Default")!.GetValue(null)!;
+        var context = (JsonSerializerContext)type.GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
         var contract = context.GetTypeInfo(typeof(WorkflowInstanceDetailsView))!;
         var json = JsonSerializer.SerializeToElement(view, contract);
         var outputs = json.GetProperty("outputs");
@@ -58,7 +58,7 @@ public sealed class WorkflowOutputWireTests
     private static System.Text.Json.Serialization.Metadata.JsonTypeInfo DetailsContract()
     {
         var type = RuntimeApiEndpointTestFactory.FindType("Elsa.Workflows.Runtime.Api.WorkflowsRuntimeJsonContext")!;
-        var context = (JsonSerializerContext)type.GetProperty("Default")!.GetValue(null)!;
+        var context = (JsonSerializerContext)type.GetProperty("WireContext", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
         return context.GetTypeInfo(typeof(WorkflowInstanceDetailsView))!;
     }
 

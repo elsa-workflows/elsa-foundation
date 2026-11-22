@@ -29,7 +29,7 @@ internal static class WorkflowsPublishingJsonOptions
     }
 
     /// <summary>The owner context bound to the effective wire options, shared by the mapper and the problem writer.</summary>
-    internal static WorkflowsPublishingJsonContext WireContext { get; } = new(Create());
+    internal static WorkflowsPublishingJsonContext WireContext => WorkflowsPublishingJsonContext.WireContext;
 
     public static void Configure(JsonSerializerOptions options)
     {
@@ -186,12 +186,6 @@ internal sealed class JsonTypeInfoResolver : IJsonTypeInfoResolver
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        ArgumentNullException.ThrowIfNull(type);
-        ArgumentNullException.ThrowIfNull(options);
-
-        // API Explorer modifies metadata using the host options. A fresh generated context supplies
-        // factories without becoming a process-global metadata cache that could retain host state.
-        return ((IJsonTypeInfoResolver)new WorkflowsPublishingJsonContext(WorkflowsPublishingJsonOptions.Create()))
-            .GetTypeInfo(type, options);
+        return Elsa.Serialization.Core.JsonModuleMetadata.Resolve(new WorkflowsPublishingJsonContext(WorkflowsPublishingJsonOptions.Create()), type, options, "Elsa.Workflows.Publishing");
     }
 }

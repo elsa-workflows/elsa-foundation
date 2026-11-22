@@ -14,6 +14,12 @@ internal static class RuntimeJsonHashProjection
         RuntimeChildControlInbox item => RuntimeChildControlInboxJsonConverter.HashProjection(item),
         WorkflowExecutableStimulusDeliveryAuthority item => WorkflowExecutableStimulusDeliveryAuthorityJsonConverter.HashProjection(item),
         WorkflowDeclaredInput input => new { input.Name, input.Type, input.IsRequired, HasDefault = input.DefaultValue.HasValue, input.DefaultValue },
+        RuntimePostCommitIntent intent => new
+        {
+            intent.IntentId, intent.WorkflowExecutionId, intent.Kind, intent.RecordedAt,
+            intent.ActivityExecutionId, intent.IdempotencyKey, HasPayload = intent.Payload.HasValue,
+            intent.Payload, intent.Metadata, intent.NotBefore, intent.DependsOnWaitRegistrationId, intent.WaitFailurePolicy
+        },
         _ => null
     };
 }

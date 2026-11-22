@@ -194,15 +194,16 @@ public sealed class PublishingSerializationContractTests
     public void Feature_registers_owner_resolver_and_fastendpoints_compatible_options()
     {
         var services = new ServiceCollection();
+        services.ConfigureHttpJsonOptions(json => { Elsa.Serialization.Core.JsonBaseline.Configure(json.SerializerOptions); Elsa.Serialization.Core.StrictDateTimeConverters.Configure(json.SerializerOptions, apiMode: true); });
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
 
         Assert.IsType(ResolverType, options.TypeInfoResolverChain[0]);
-        Assert.Contains(options.Converters, converter => converter.GetType() == EnumConverterType);
-        Assert.True(options.PropertyNameCaseInsensitive);
+        Assert.DoesNotContain(options.Converters, converter => converter.GetType() == EnumConverterType);
+        Assert.False(options.PropertyNameCaseInsensitive);
         Assert.Same(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
-        Assert.Same(JsonNamingPolicy.CamelCase, options.DictionaryKeyPolicy);
+        Assert.Null(options.DictionaryKeyPolicy);
     }
 
     [Fact]
@@ -210,9 +211,9 @@ public sealed class PublishingSerializationContractTests
     {
         var options = Context.Options;
 
-        Assert.True(options.PropertyNameCaseInsensitive);
+        Assert.False(options.PropertyNameCaseInsensitive);
         Assert.Same(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
-        Assert.Same(JsonNamingPolicy.CamelCase, options.DictionaryKeyPolicy);
+        Assert.Null(options.DictionaryKeyPolicy);
 
         var testRun = new WorkflowTestRunView(
             "run-1",
@@ -227,13 +228,13 @@ public sealed class PublishingSerializationContractTests
             new Dictionary<string, string> { ["SomeMetadata"] = "value" });
         var json = Serialize(testRun);
 
-        Assert.Contains("\"someMetadata\":\"value\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"SomeMetadata\":\"value\"", json, StringComparison.Ordinal);
         Assert.Contains("\"artifactId\":null", json, StringComparison.Ordinal);
         Assert.Contains("\"expiresAt\":null", json, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Input_is_case_insensitive_and_dictionary_keys_are_camel_case()
+    public void Input_is_exact_and_dictionary_keys_are_verbatim()
     {
         var input = """
             {
@@ -244,15 +245,15 @@ public sealed class PublishingSerializationContractTests
             """;
         var request = Deserialize<PublishWorkflowRequest>(input);
 
-        Assert.Equal("version-1", request.VersionId);
+        Assert.Null(request.VersionId);
         Assert.Equal(PublicationActionView.SideBySide, request.Action);
 
         var testRun = new StartWorkflowTestRun(
             "version-1",
             new Dictionary<string, JsonElement> { ["SomeInput"] = JsonDocument.Parse("42").RootElement.Clone() });
         var testRunJson = Serialize(testRun);
-        Assert.Contains("\"someInput\":42", testRunJson, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"SomeInput\"", testRunJson, StringComparison.Ordinal);
+        Assert.Contains("\"SomeInput\":42", testRunJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"someInput\"", testRunJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -309,21 +310,8 @@ public sealed class PublishingSerializationContractTests
         Assert.Equal(owner, Deserialize<PublicationSnapshotPreflightView>(Serialize(snapshot)).TargetSlotOwner);
     }
 
-    private static JsonSerializerContext Context
-    {
-        get
-        {
-            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DictionaryKeyPolicy = JsonNamingPolicy.CamelCase
-            };
-            options.Converters.Add((JsonConverter)Activator.CreateInstance(EnumConverterType)!);
-            return (JsonSerializerContext)(Activator.CreateInstance(ContextType, options)
-                ?? throw new InvalidOperationException("WorkflowsPublishingJsonContext could not be constructed."));
-        }
-    }
+    private static JsonSerializerContext Context => (JsonSerializerContext)ContextType
+        .GetProperty("WireContext", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
 
     private static string Serialize<T>(T value) =>
         JsonSerializer.Serialize(value, Context.GetTypeInfo(typeof(T))

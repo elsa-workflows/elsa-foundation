@@ -141,3 +141,6 @@ Elsa.Serialization.Core.JsonConversionException.JsonConversionException(string! 
 Elsa.Serialization.Core.JsonConversionException.Code.get -> string!
 static Elsa.Serialization.Core.JsonHashInput.ProjectOpaqueClr<T>(T value, System.Func<object!, object?>! ownerProjection) -> System.Text.Json.JsonElement
 static Elsa.Serialization.Core.JsonHashInput.OpaqueString(string! value) -> string!
+Elsa.Serialization.Core.JsonModuleMetadata
+static Elsa.Serialization.Core.JsonModuleMetadata.Owns(System.Type! type, string! moduleNamespace) -> bool
+static Elsa.Serialization.Core.JsonModuleMetadata.Resolve(System.Text.Json.Serialization.JsonSerializerContext! context, System.Type! type, System.Text.Json.JsonSerializerOptions! hostOptions, string! moduleNamespace) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?

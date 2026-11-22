@@ -15,10 +15,10 @@ public static partial class JsonHashInput
     public static string Hash(JsonElement value) => Convert.ToHexStringLower(SHA256.HashData(JsonCanonicalForm.GetBytes(value)));
 
     /// <summary>Serializes an owned contract with explicitly fixed hash settings, then hashes its canonical value.</summary>
-    public static string Hash<T>(T value) => Hash(JsonSerializer.SerializeToElement(value, Options));
+    public static string Hash<T>(T value) => Hash(JsonSerializer.SerializeToElement(value, OperationOptions()));
 
     /// <summary>Serializes with the declared contract type, then hashes the canonical value.</summary>
-    public static string Hash(object? value, Type type) => Hash(JsonSerializer.SerializeToElement(value, type, Options));
+    public static string Hash(object? value, Type type) => Hash(JsonSerializer.SerializeToElement(value, type, OperationOptions()));
 
     /// <summary>Parses a JSON document and hashes its canonical value, never its whitespace or escape spelling.</summary>
     public static string HashJson(string json)
@@ -35,9 +35,9 @@ public static partial class JsonHashInput
     }
 
     /// <summary>Serializes a component of an explicit hash projection with the fixed hash settings.</summary>
-    public static JsonElement SerializeToElement<T>(T value) => JsonSerializer.SerializeToElement(value, Options);
+    public static JsonElement SerializeToElement<T>(T value) => JsonSerializer.SerializeToElement(value, OperationOptions());
     /// <summary>Serializes a component using an explicitly selected CLR contract and the fixed hash settings.</summary>
-    public static JsonElement SerializeToElement(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, Options);
+    public static JsonElement SerializeToElement(object? value, Type type) => JsonSerializer.SerializeToElement(value, type, OperationOptions());
 
     /// <summary>Gets canonical UTF-8 bytes for a JSON component of an existing framed or keyed hash protocol.</summary>
     public static byte[] CanonicalBytes(JsonElement value) => JsonCanonicalForm.GetBytes(value);
@@ -47,6 +47,15 @@ public static partial class JsonHashInput
 
     /// <summary>Preserves a secret-bearing revision's keyed integrity while canonicalizing its JSON input.</summary>
     public static byte[] HashKeyed(JsonElement value, ReadOnlySpan<byte> key) => HMACSHA256.HashData(key, JsonCanonicalForm.GetBytes(value));
+
+    // The settings contract is singular and frozen. Metadata belongs to this operation, so an arbitrary
+    // collectible contract (also nested in a BCL generic/object slot) cannot be pinned by Core's static options.
+    private static JsonSerializerOptions OperationOptions()
+    {
+        var options = new JsonSerializerOptions(Options) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        options.MakeReadOnly();
+        return options;
+    }
 
     private static JsonSerializerOptions CreateOptions()
     {

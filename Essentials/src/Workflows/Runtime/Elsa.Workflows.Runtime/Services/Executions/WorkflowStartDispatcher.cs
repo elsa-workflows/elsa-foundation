@@ -209,12 +209,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             }
         }
 
-        var inputs = ApplyInputContract(executable, request.Inputs);
+        var validatedInputs = ApplyInputContract(executable, request.Inputs);
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
         if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
-            inputs,
+            validatedInputs.NormalizedInputs,
             resolved.Identity,
             resolved.Source,
             resolved.Dispatch,
@@ -223,7 +223,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             requiredScope,
             _persistenceModeResolver?.Resolve(executable),
             dispatchOptions,
-            cancellationToken);
+            cancellationToken,
+            validatedInputs.Warnings);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
@@ -462,11 +463,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     // Every start applies its executable's input contract before the command is enqueued (#3728): declared defaults fill
     // omitted inputs, and a blank, unknown, duplicate or mistyped input or a missing required one refuses the start. A
     // legacy artifact without a contract, or a dispatcher composed without a validator, keeps the supplied inputs.
-    private IReadOnlyDictionary<string, JsonElement> ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
+    private WorkflowExecutableInputValidation ApplyInputContract(WorkflowExecutable executable, IReadOnlyDictionary<string, object?> inputs)
     {
         var supplied = WorkflowExecutionStartCommandPayload.ToJsonValues(inputs);
         if (executable.InputContract is not { } contract || _inputValidator is null)
-            return supplied;
+            return WorkflowExecutableInputValidation.Success(supplied);
 
         var validation = _inputValidator.Validate(contract, supplied);
         if (!validation.IsValid)
@@ -477,7 +478,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
                 string.Join(" ", validation.Findings.Select(finding => finding.Message))) { InputPath = validation.Findings.First().JsonPath };
         }
 
-        return validation.NormalizedInputs;
+        return validation;
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
@@ -491,7 +492,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableReferenceScope requiredScope,
         PersistenceMode? persistenceMode,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Elsa.Expressions.Core.Models.ExecutionWarning> inputWarnings)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var requestedAt = _timeProvider.GetUtcNow();
@@ -514,7 +516,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             startAuthority: request.StartAuthority,
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
-            triggerMetadata: request.TriggerMetadata));
+            triggerMetadata: request.TriggerMetadata) { InputWarnings = inputWarnings.Count == 0 ? null : inputWarnings });
         if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
             ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 

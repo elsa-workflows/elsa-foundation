@@ -26,7 +26,7 @@ internal static class ActivitiesDesignJsonOptions
     }
 
     /// <summary>The owner context bound to the effective wire options, shared by the mapper and the failure writers.</summary>
-    internal static ActivitiesDesignJsonContext WireContext { get; } = new(Create());
+    internal static ActivitiesDesignJsonContext WireContext => ActivitiesDesignJsonContext.WireContext;
 
     public static void Configure(JsonSerializerOptions options)
     {
@@ -220,12 +220,6 @@ internal sealed class ActivitiesDesignJsonTypeInfoResolver : IJsonTypeInfoResolv
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
-        ArgumentNullException.ThrowIfNull(type);
-        ArgumentNullException.ThrowIfNull(options);
-
-        // The generated context's resolver implementation uses the caller's options for the
-        // returned metadata. Its own options are only used to supply the generated factories.
-        return ((IJsonTypeInfoResolver)new ActivitiesDesignJsonContext(ActivitiesDesignJsonOptions.Create()))
-            .GetTypeInfo(type, options);
+        return Elsa.Serialization.Core.JsonModuleMetadata.Resolve(new ActivitiesDesignJsonContext(ActivitiesDesignJsonOptions.Create()), type, options, "Elsa.Activities.Design");
     }
 }
