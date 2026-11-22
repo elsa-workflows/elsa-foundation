@@ -161,6 +161,51 @@ public sealed class Elsa3VariableExpressionImportTests
 
     private static Elsa3MemoryReferenceImportFixture Fixture() => new(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"]));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_selected_declarations_type_must_fit_the_consumer(bool container)
+    {
+        var variable = new Elsa3Variable { Id = "count", Name = "count", TypeName = "Int32", Value = "42" };
+        var consumer = Consumer("read", "count");
+        var definition = container
+            ? Workflow("container-type-mismatch", Container("scope", [variable], consumer))
+            : Workflow("workflow-type-mismatch", consumer, variables: [variable]);
+
+        var result = await Fixture().ImportAsync(definition, "type-mismatch.json");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Value);
+        var diagnostic = Assert.Single(result.Diagnostics, item => item.Code == "VF-IMP-008");
+        Assert.Contains("Int32", diagnostic.Message);
+        Assert.Contains("String", diagnostic.Message);
+        Assert.EndsWith(".Value.expression.value.id", diagnostic.Path, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Two_loops_capturing_the_same_variable_are_refused_instead_of_reading_the_wrong_loop()
+    {
+        var inner = Activity("inner", "Elsa.For", new Dictionary<string, JsonElement>
+        {
+            ["Start"] = Argument("Literal", "0"), ["End"] = Argument("Literal", "1"),
+            ["CurrentValue"] = MemoryReference("captured"),
+            ["Body"] = JsonSerializer.SerializeToElement(Consumer("read", "captured"), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        });
+        var outer = Activity("outer", "Elsa.For", new Dictionary<string, JsonElement>
+        {
+            ["Start"] = Argument("Literal", "10"), ["End"] = Argument("Literal", "11"),
+            ["CurrentValue"] = MemoryReference("captured"),
+            ["Body"] = JsonSerializer.SerializeToElement(inner, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        });
+        var fixture = new Elsa3MemoryReferenceImportFixture(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "Object"));
+
+        var result = await fixture.ImportAsync(Workflow("nested-loop-capture", outer, variables: [Variable("captured", "captured")]), "nested-loop-capture.json");
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Value);
+        Assert.Contains(result.Diagnostics, item => item.Code == "VF-IMP-002" && item.Path.EndsWith(".Value.expression.value.id", StringComparison.Ordinal));
+    }
+
     private static Elsa3Variable Variable(string id, string name) => new() { Id = id, Name = name, TypeName = "String", Value = "hello" };
 
     private static Elsa3Activity Consumer(string nodeId, string variableId, string name = "local") => Activity(nodeId, "Elsa.Consumer",

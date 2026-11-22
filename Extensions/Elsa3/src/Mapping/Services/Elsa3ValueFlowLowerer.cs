@@ -375,6 +375,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             }
             if (matches.Length == 1)
             {
+                if (!CheckVariableType(matches[0].Type))
+                    return;
                 Bind(Elsa3ConversionDiagnostics.NodeId(parent), id);
                 return;
             }
@@ -392,6 +394,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         {
             var producers = outputs.Where(output => StringComparer.Ordinal.Equals(output.MemoryReferenceId, id)).ToArray();
             var loop = producers.FirstOrDefault(IsLoopVariable);
+            if (loop is not null && producers.Length > 1)
+            {
+                Refuse(Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                    $"Variable expression '{id}' reads a loop capture also written by another activity; no single loop value represents it faithfully.",
+                    "Give each loop its own captured variable and copy the intended value into a separate variable before reading it.", id);
+                return;
+            }
             if (property.InputContract is not null && (loop is null || IsCarriedValue(loop, property)) &&
                 CapturedResultRefusal(properties, inventory, workflowMatches[0], producers, property) is { } captured)
             {
@@ -401,7 +410,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (loop is not null)
                 LowerLoopVariableRead(input, property with { MemoryReferenceId = id }, loop, diagnostics, path);
             else
+            {
+                if (plan?.WorkflowVariableTypes.GetValueOrDefault(workflowMatches[0]) is { } variableType && !CheckVariableType(variableType))
+                    return;
                 Bind(VariableReference.WorkflowScopeId, id);
+            }
             return;
         }
 
@@ -416,6 +429,16 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
         void Refuse(string code, string message, string guidance, string? id = null) =>
             diagnostics.Add(CreateDiagnostic(input, property, code, message, guidance, path, id));
+
+        bool CheckVariableType(TypeReference variableType)
+        {
+            if (property.InputContract?.Type is not { } target || TypesMatch(variableType, target))
+                return true;
+            Refuse(Elsa3ImportDiagnosticCodes.IncompatibleValue,
+                $"Variable expression '{id}' reads a declaration of type '{variableType.Alias}', but input '{property.PropertyName}' requires '{target.Alias}'.",
+                "Use a variable whose declared type matches this input, or convert its value explicitly in a JavaScript expression before import.", id);
+            return false;
+        }
     }
 
     private static bool TryReadVariableExpression(JsonElement value, out JsonElement declaration)
