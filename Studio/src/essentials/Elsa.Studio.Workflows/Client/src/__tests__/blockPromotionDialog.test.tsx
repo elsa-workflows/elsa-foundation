@@ -63,8 +63,8 @@ function publishedView(change: Partial<ActivityDefinitionVersionView> = {}, name
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "x", payload: structuredClone(plan.candidate.provider.payload) }, ...change };
 }
 function button(label: string) {
-  const item = [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === label);
-  if (!item) throw new Error(`${label} in ${container.textContent}`);
+  const item = [...globalThis.document.body.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === label);
+  if (!item) throw new Error(`${label} in ${globalThis.document.body.textContent}`);
   return item;
 }
 const click = (label: string) => flushSync(() => button(label).click());
@@ -76,15 +76,15 @@ async function createAndPublish() {
 
 it("reviews the proposed interface and changes nothing until an exact published version replaces the block", async () => {
   const before = JSON.stringify(nativeContext.document);
-  expect(container.textContent).toContain("1 input, 0 outputs and 1 outcome");
-  expect(container.textContent).toContain("Greeting");
+  expect(globalThis.document.body.textContent).toContain("1 input, 0 outputs and 1 outcome");
+  expect(globalThis.document.body.textContent).toContain("Greeting");
   await createAndPublish();
   expect(api.createActivityDefinition).toHaveBeenCalledTimes(1);
   expect(api.createActivityDefinition.mock.calls[0][1]).toMatchObject({ displayName: "Prepare shipment", category: "Reusable activities", provider: { providerKey: "elsa.activity-graph" } });
   expect(host.apply).not.toHaveBeenCalled();
   expect(JSON.stringify(nativeContext.document)).toBe(before);
 
-  expect(container.textContent).toContain("Published version 1.0.0");
+  expect(globalThis.document.body.textContent).toContain("Published version 1.0.0");
   click("Replace block with this version"); await settle(6);
 
   expect(host.refreshCatalog).toHaveBeenCalledTimes(1);
@@ -101,7 +101,7 @@ it("reviews the proposed interface and changes nothing until an exact published 
 it("keeps the document when the server refuses to create the reusable activity", async () => {
   api.createActivityDefinition.mockRejectedValueOnce(new StudioHttpError(500, "Internal Server Error", null));
   click("Create reusable activity draft"); await settle();
-  expect(container.textContent).toContain("The reusable activity was not created. Your document has not changed.");
+  expect(globalThis.document.body.textContent).toContain("The reusable activity was not created. Your document has not changed.");
   expect(button("Create reusable activity draft").disabled).toBe(false);
   expect(host.apply).not.toHaveBeenCalled();
 });
@@ -109,7 +109,7 @@ it("keeps the document when the server refuses to create the reusable activity",
 it("does not create again when the create outcome is unknown", async () => {
   api.createActivityDefinition.mockRejectedValueOnce(new TypeError("Failed to fetch"));
   click("Create reusable activity draft"); await settle();
-  expect(container.textContent).toContain("could not confirm whether the reusable activity was created");
+  expect(globalThis.document.body.textContent).toContain("could not confirm whether the reusable activity was created");
   expect(button("Create reusable activity draft").disabled).toBe(true);
   expect(api.createActivityDefinition).toHaveBeenCalledTimes(1);
 });
@@ -121,8 +121,8 @@ it.each([
   api.getActivityDefinitionVersion.mockImplementation(async () => view());
   await createAndPublish();
   click("Replace block with this version"); await settle(6);
-  expect(container.textContent).toContain("The block was not replaced.");
-  expect(container.textContent).toContain(reason);
+  expect(globalThis.document.body.textContent).toContain("The block was not replaced.");
+  expect(globalThis.document.body.textContent).toContain(reason);
   expect(host.validate).not.toHaveBeenCalled();
   expect(host.apply).not.toHaveBeenCalled();
 });
@@ -131,9 +131,9 @@ it("refuses when the block changed after review", async () => {
   await createAndPublish();
   nativeContext = { ...nativeContext, document: { ...nativeContext.document, activityPresentation: [...nativeContext.document.activityPresentation, { nodeId: "inside", displayName: "Edited" }] } };
   render();
-  expect(container.textContent).toContain("The block changed after you created the reusable activity.");
+  expect(globalThis.document.body.textContent).toContain("The block changed after you created the reusable activity.");
   click("Replace block with this version"); await settle(6);
-  expect(container.textContent).toContain("Review the updated proposal before replacing it.");
+  expect(globalThis.document.body.textContent).toContain("Review the updated proposal before replacing it.");
   expect(host.apply).not.toHaveBeenCalled();
 });
 
@@ -141,15 +141,15 @@ it("refuses when the owning resource does not accept the replacement", async () 
   vi.mocked(host.validate).mockResolvedValueOnce({ state: "denied", messages: ["You no longer have permission to edit this workflow."] });
   await createAndPublish();
   click("Replace block with this version"); await settle(6);
-  expect(container.textContent).toContain("You no longer have permission to edit this workflow.");
+  expect(globalThis.document.body.textContent).toContain("You no longer have permission to edit this workflow.");
   expect(host.apply).not.toHaveBeenCalled();
 });
 
 it("resumes with an exact published version chosen later", async () => {
   nativeContext = { ...nativeContext, catalog: [...nativeContext.catalog, { ...descriptor("published-version", "Reusable.Reviewed"), displayName: "Prepare shipment", activityDefinitionVersionId: "published-version" }] };
   render();
-  flushSync(() => (container.querySelectorAll<HTMLInputElement>("input[type=radio]")[1]).click());
-  const select = container.querySelector("select")!;
+  flushSync(() => (globalThis.document.body.querySelectorAll<HTMLInputElement>("input[type=radio]")[1]).click());
+  const select = globalThis.document.body.querySelector("select")!;
   flushSync(() => { select.value = "published-version"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   click("Replace block with this version"); await settle(6);
   expect(api.createActivityDefinition).not.toHaveBeenCalled();
@@ -171,20 +171,20 @@ it("keeps the dialog open while a create is in flight, so a late success is not 
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await settle(1);
   expect(onClose).not.toHaveBeenCalled();
   finish({ definition: { definitionId: "definition-1", displayName: "Prepare shipment" }, draft: { draftId: "draft-1", definitionId: "definition-1", revision: 1 } }); await settle();
-  expect(container.textContent).toContain("Draft created");
+  expect(globalThis.document.body.textContent).toContain("Draft created");
   expect(button("Close").disabled).toBe(false);
 });
 
 it("shows where each input's value comes from and how many steps the block has", () => {
-  expect(container.textContent).toContain("1 step; 1 input");
-  expect(container.textContent).toContain("Greeting · String · from workflow input Greeting");
+  expect(globalThis.document.body.textContent).toContain("1 step; 1 input");
+  expect(globalThis.document.body.textContent).toContain("Greeting · String · from workflow input Greeting");
 });
 
 it("bounds the create request and treats a timeout as an unknown outcome that unlocks the dialog", async () => {
   api.createActivityDefinition.mockRejectedValueOnce(new DOMException("The operation timed out.", "TimeoutError"));
   click("Create reusable activity draft"); await settle();
   expect(api.createActivityDefinition.mock.calls[0][2]).toBeInstanceOf(AbortSignal);
-  expect(container.textContent).toContain("could not confirm whether the reusable activity was created");
+  expect(globalThis.document.body.textContent).toContain("could not confirm whether the reusable activity was created");
   expect(button("Create reusable activity draft").disabled).toBe(true);
   expect(button("Cancel").disabled).toBe(false);
 });
@@ -193,11 +193,11 @@ it("lets an unnamed block be named when replacing it with a published version", 
   nativeContext = { ...nativeContext, document: { ...nativeContext.document, activityPresentation: nativeContext.document.activityPresentation.filter(item => item.nodeId !== "block") },
     catalog: [...nativeContext.catalog, { ...descriptor("published-version", "Reusable.Reviewed"), displayName: "Prepare shipment", activityDefinitionVersionId: "published-version" }] };
   flushSync(() => root.unmount()); root = createRoot(container); render();
-  flushSync(() => (container.querySelectorAll<HTMLInputElement>("input[type=radio]")[1]).click());
-  expect(container.textContent).toContain("Give the reusable activity a name");
-  const input = container.querySelector<HTMLInputElement>("input:not([type=radio])")!;
+  flushSync(() => (globalThis.document.body.querySelectorAll<HTMLInputElement>("input[type=radio]")[1]).click());
+  expect(globalThis.document.body.textContent).toContain("Give the reusable activity a name");
+  const input = globalThis.document.body.querySelector<HTMLInputElement>("input:not([type=radio])")!;
   flushSync(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Prepare shipment"); input.dispatchEvent(new Event("input", { bubbles: true })); });
-  const select = container.querySelector("select")!;
+  const select = globalThis.document.body.querySelector("select")!;
   flushSync(() => { select.value = "published-version"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   api.getActivityDefinitionVersion.mockImplementation(async () => publishedView({}, "Prepare shipment"));
   click("Replace block with this version"); await settle(6);
@@ -208,7 +208,7 @@ it("refuses to replace after edit permission was lost following publication", as
   await createAndPublish();
   nativeContext = { ...nativeContext, canEdit: false }; render();
   click("Replace block with this version"); await settle(6);
-  expect(container.textContent).toContain("Open an editable draft before promoting a block.");
+  expect(globalThis.document.body.textContent).toContain("Open an editable draft before promoting a block.");
   expect(host.validate).not.toHaveBeenCalled();
   expect(host.apply).not.toHaveBeenCalled();
 });
