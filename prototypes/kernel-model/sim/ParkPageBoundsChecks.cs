@@ -13,6 +13,8 @@ internal static class ParkPageBoundsChecks
     {
         foreach (var resolution in Enum.GetValues<Resolution>())
             await Run(resolution, check);
+        foreach (var resolution in new[] { Resolution.Resume, Resolution.Discard, Resolution.Delete })
+            await Run(resolution, check, payloadBounds: true);
         await Run(Resolution.Resume, check, aboveHighWater: true);
         foreach (var arrival in Enum.GetValues<LateArrival>())
             await Run(Resolution.Resume, check, arrival: arrival);
@@ -21,13 +23,19 @@ internal static class ParkPageBoundsChecks
     }
 
     private static async Task Run(Resolution resolution, Action<bool, string> check, bool aboveHighWater = false,
-        LateArrival? arrival = null, bool? cutAfterPage = null)
+        LateArrival? arrival = null, bool? cutAfterPage = null, bool payloadBounds = false)
     {
         const long start = 1_701_679_300_000;
         var now = start;
         var store = new InMemoryStore(1, () => now) { ParkedRetentionWindow = TimeSpan.FromSeconds(1) };
         var scope = new Contract.BoundScope(new string('t', 64));
         var kind = new string('界', 85) + "k";
+        const int pageByteLimit = 4 * 1024 * 1024;
+        var largeBodies = payloadBounds
+            ? new[] { new string('a', 5 * 1024 * 1024), new string('b', pageByteLimit - 1),
+                new string('c', pageByteLimit), new string('d', pageByteLimit + 1) }
+            : [];
+        var caseId = payloadBounds ? "S-1" : "S-5";
         var probe = new Probe(kind, () => store.Instances.Values.Any(row => row.ParkRecovery is not null));
         var ingress = new InMemoryIngress(store, new Requests("page-bounds"), "page-bounds", (_, _) => true);
         var pages = new List<IReadOnlyList<ParkPageRow>>();
@@ -76,18 +84,21 @@ internal static class ParkPageBoundsChecks
         var checkpoint = Read();
         var selection = (await new ActorList(store, 10).GetAsync(scope, actor))!.Selection!;
         var firstBoundary = InMemoryStore.ParkPageLimit;
-        for (var i = 1; i <= firstBoundary; i++)
+        var smallArrivals = payloadBounds ? firstBoundary - 1 : firstBoundary;
+        for (var i = 1; i <= smallArrivals; i++)
             await ingress.SendAsync(scope, target, WideId(i), kind, "value");
+        for (var i = 0; i < largeBodies.Length; i++)
+            await ingress.SendAsync(scope, target, WideId(smallArrivals + i + 1), kind, largeBodies[i]);
         await Pump(initial, 5);
         var kept = store.Messages.Values.Where(row => row.KeptBy is not null && row.Message.Target.Id == checkpoint.Row.Id).ToArray();
-        var staged = checkpoint.Park is not null && kept.Length == firstBoundary + 1 &&
+        var staged = checkpoint.Park is not null && kept.Length == smallArrivals + largeBodies.Length + 1 &&
             kept.All(row => Encoding.UTF8.GetByteCount(row.Message.Id) == FoundationMetadataLimits.NameBytes &&
                 Encoding.UTF8.GetByteCount(row.Message.Kind) == FoundationMetadataLimits.KindBytes);
-        check(staged, $"S-5 {resolution}: every retained row has the largest admitted outside id and kind");
+        check(staged, $"{caseId} {resolution}: every retained row has the largest admitted outside id and kind");
         if (!staged) return;
         var restorable = kept.Where(item => item.Message.Payload == "value").Select(item => item.Message.Id).ToArray();
 
-        if (resolution == Resolution.Discard)
+        if (resolution == Resolution.Discard && !payloadBounds)
         {
             var inserted = false;
             try
@@ -133,7 +144,7 @@ internal static class ParkPageBoundsChecks
         }
         else
         {
-            check(firstLanded, $"S-5 {resolution}: page one includes the largest first input and stops at the row boundary");
+            check(firstLanded, $"{caseId} {resolution}: page one commits the expected metadata prefix");
             if (!firstLanded) return;
         }
         if (arrival is LateArrival.AfterPage or LateArrival.Tied or LateArrival.BeforeTake)
@@ -141,10 +152,12 @@ internal static class ParkPageBoundsChecks
         if (aboveHighWater)
             for (var i = 0; i < 6; i++)
                 await ingress.SendAsync(scope, target, $"unreleased-{i}", "late", "outside the recovery cohort");
+        var firstEpoch = payloadBounds ? first.Fences.Single().Epoch : 0;
         var keepOwner = arrival is LateArrival.BeforePage or LateArrival.AfterPage;
         if (!keepOwner) await initial.DisposeAsync();
         now += cutAfterPage is null ? 1 : (long)Defaults.Lease.TotalMilliseconds + 1;
-        await using var replacement = keepOwner ? null : await Owner(Worker("page-second"));
+        var successor = keepOwner ? null : Worker("page-second");
+        await using var replacement = successor is null ? null : await Owner(successor);
         if (arrival == LateArrival.AfterTake) await AdmitEarlier(pages[0][^1].Cursor);
         for (var i = 0; i < 16; i++)
         {
@@ -154,14 +167,31 @@ internal static class ParkPageBoundsChecks
         var row = store.Instances[checkpoint.Row.Id];
         var actual = pages.SelectMany(page => page).Select(item => item.Cursor.Key).ToArray();
         var expected = kept.OrderBy(item => item.Seq).Select(item => item.Message.InboxKey);
-        var complete = pages is [{ Count: InMemoryStore.ParkPageLimit }, { Count: 1 }] && actual.SequenceEqual(expected) &&
+        int[] expectedPageSizes = (payloadBounds, resolution) switch
+        {
+            (true, Resolution.Resume) => [InMemoryStore.ParkPageLimit, 1, 1, 1, 1],
+            (true, _) => [InMemoryStore.ParkPageLimit, largeBodies.Length],
+            _ => [InMemoryStore.ParkPageLimit, 1]
+        };
+        var complete = pages.Select(page => page.Count).SequenceEqual(expectedPageSizes) && actual.SequenceEqual(expected) &&
               pages.All(page => Encoding.UTF8.GetByteCount(Json.Write(page)) <= ParkRecoveryCredit.LimitBytes) &&
               store.Messages.Values.All(message => message.KeptBy is null && message.Message.Kind != Kinds.Drain) &&
               row.ParkDiscard is null && row.ParkRecovery is null &&
               (resolution == Resolution.Delete ? row.Retired : Read().Park is null) &&
-              (resolution != Resolution.Resume || probe.Restored == firstBoundary);
+              (resolution != Resolution.Resume || probe.Restored == smallArrivals + largeBodies.Length);
         check(complete,
-            $"S-5 {resolution}: the cold owner finishes the one-row suffix within the projection budget (pages {string.Join(",", pages.Select(p => p.Count))}; restored {probe.Restored}; rows match {actual.SequenceEqual(expected)}; faults {row.Fault}; pending {store.Messages.Values.Count(m => !m.Done)}; kept {store.Messages.Values.Count(m => m.KeptBy is not null)}; recovery {row.ParkRecovery?.Cursor}, {row.ParkRecovery?.Control})");
+            $"{caseId} {resolution}: recovery finishes the suffix within the projection budget (pages {string.Join(",", pages.Select(p => p.Count))}; restored {probe.Restored}; rows match {actual.SequenceEqual(expected)}; faults {row.Fault}; pending {store.Messages.Values.Count(m => !m.Done)}; kept {store.Messages.Values.Count(m => m.KeptBy is not null)}; recovery {row.ParkRecovery?.Cursor}, {row.ParkRecovery?.Control})");
+
+        if (payloadBounds)
+        {
+            var suffix = pages.Skip(1).SelectMany(page => page);
+            check(complete && successor!.Fences.Single().Epoch > firstEpoch &&
+                suffix.Select(item => item.PayloadBytes).SequenceEqual(largeBodies.Select(body => body.Length)),
+                $"S-1 {resolution}: a real takeover precedes the suffix with the 5 MiB row first and each body size intact");
+            string[] delivered = resolution == Resolution.Resume ? largeBodies : [];
+            check(probe.LargeBodies.SequenceEqual(delivered),
+                $"S-1 {resolution}: the actor observes exactly the expected large payloads at delivery");
+        }
 
         if (aboveHighWater)
             check(observedPressure && probe.LateOffers == 6 && !probe.OfferedLateDuringRecovery,
@@ -224,6 +254,7 @@ internal static class ParkPageBoundsChecks
         public string Type => "park-page-limits";
         public int Restored { get; private set; }
         public HashSet<string> RestoredIds { get; } = [];
+        public List<string> LargeBodies { get; } = [];
         public int? EndAfterRestored { get; private set; }
         public bool EndDuringRecovery { get; private set; }
         public int LateOffers { get; private set; }
@@ -236,6 +267,7 @@ internal static class ParkPageBoundsChecks
                 if (input.Payload == "poison") throw new InvalidOperationException("retain the first maximal input");
                 Restored++;
                 RestoredIds.Add(input.Id);
+                if (input.Payload is { Length: > 1_048_576 } body) LargeBodies.Add(body);
             }
             var late = turn.Inbox.Count(input => input.Kind == "late");
             LateOffers += late;
