@@ -106,7 +106,7 @@ describe("native form designer", () => {
 
   it("round-trips form JSON while keeping identity and system-owned fields immutable", () => {
     const form: TaskForm = {
-      id: "contact", version: "4", name: "Contact", provider: "elsa.basic-forms/1",
+      id: "contact", version: "4", name: "Contact", description: "For new suppliers.", provider: "elsa.basic-forms/1",
       fields: [
         { key: "email", label: "Email", kind: "text", required: true, readOnly: false, help: "Work address", maxLength: 80 },
         { key: "accepted", label: "Accept terms", kind: "boolean", required: true, readOnly: false, mustBeTrue: true, presentation: { display: "radio", trueLabel: "I agree", falseLabel: "I do not agree", unansweredLabel: "No answer" } }
@@ -115,7 +115,7 @@ describe("native form designer", () => {
     const source = serializeTaskFormSource(form);
     expect(parseTaskFormSource(source, form)).toEqual(form);
 
-    const changed = { ...form, name: "Contact updated", fields: [{ ...form.fields[0], label: "Email address" }] };
+    const changed = { ...form, name: "Contact updated", description: "For returning suppliers.", fields: [{ ...form.fields[0], label: "Email address" }] };
     expect(parseTaskFormSource(JSON.stringify(changed), form)).toEqual(changed);
     expect(() => parseTaskFormSource(JSON.stringify({ ...form, id: "other" }), form)).toThrow("identifier cannot be changed");
     expect(() => parseTaskFormSource(JSON.stringify({ ...form, version: "5" }), form)).toThrow("system-managed");

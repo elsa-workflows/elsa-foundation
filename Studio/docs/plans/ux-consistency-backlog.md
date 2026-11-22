@@ -328,16 +328,16 @@ Extensions:
   (`EXT/Connections/styles.css:31` [verified]). **[check]** the footer was not read.
 - [x] **X3.28** (#5064, PR #5327) [source] `EXT/Secrets/SecretDialogs.tsx:30` (create) and `:183` (rotate); no X close.
 - [x] **X3.29** (#5065, PR #5327) [source] `EXT/Secrets/SecretDetail.tsx:32` header with a text "Close" button.
-- [ ] **X3.30** (#5066) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
+- [x] **X3.30** (#5066, PR #5333) [seen] Feature management: two custom dialogs with differing eyebrows, text "Close"
   and a raw `primary` class. Locate them in `EXT/FeatureManagement/module.tsx`.
-- [ ] **X3.31** (#5067) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
+- [x] **X3.31** (#5067, PR #5333) [check] `EXT/UserTasks/TaskDetailPage.tsx` history (`user-task-history-dialog`) and
   reassign dialogs were not read.
-- [ ] **X3.32** (#5068) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
+- [x] **X3.32** (#5068, PR #5333) [source] `EXT/Decisions/TableEditor.tsx:243–245` hand-rolled `role="dialog"` column
   popover → `AnchoredPopover`.
 
 Browser dialogs and busy labels (no kit prerequisite):
 
-- [ ] **X3.33** (#5069) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
+- [x] **X3.33** (#5069, PR #5333) [verified] `WF/workflow-editor/CollectionSlotEditor.tsx:42` `window.confirm` →
   `api.dialogs.confirm`.
 - [x] **X3.34** (#5070, PR #5319) [verified] `DASH/native/NamedDashboards.tsx:275` `window.confirm` → `api.dialogs.confirm`.
 - [x] **X3.35** (#5071) [verified] `BACK/BackendsPage.tsx:121` and `:145` `window.confirm` →
@@ -362,8 +362,8 @@ Decided (D6): a name-and-description dialog, then the editor opens.
   also exists in `SecretDialogs.tsx:24`; keep one flow, which D6 makes the dialog. **[check]** that the
   secret form (it has tabs) fits a dialog; if not, ask. `needs: D6`
 - [x] **X4.3** (#5079) [seen] New question: "Preview" is the filled primary rather than "Save question". (PR #5311)
-- [ ] **X4.4** (#5080) [seen] Decision and form: creation opens the editor directly. Add the dialog step.
-  `needs: D6`
+- [x] **X4.4** (#5080) [seen] Decision and form: creation opens the editor directly. Add the dialog step.
+  `needs: D6` (PR #5331)
 - [x] **X4.5** (#5081) [check] Dashboard and question: creation is a page with a query builder, which is more
   than a name and description. Start both with the D6 dialog, then open the editor. (PR #5311)
 
@@ -732,8 +732,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   copy button → `CopyableIdentifier`.
 - [x] **E3** (#5233) [seen] Decisions: "Add rule" is a second filled primary beside header Save and is (PR #5320)
   pill-shaped (`TableEditor.tsx:166` [source]). [source] `CasePanel.tsx:101, 115` add more primaries.
-- [ ] **E4** (#5234) [seen] Forms: the editor is wrapped in a page card; "Publish" and "Cancel" sit inside the
-  card while "Back to forms" sits above it; the page title is 12px.
+- [x] **E4** (#5234) [seen] Forms: the editor is wrapped in a page card; "Publish" and "Cancel" sit inside the
+  card while "Back to forms" sits above it; the page title is 12px. (PR #5331)
 - [x] **E5** (#5235) [seen] Dashboards and Questions: labels sit above fields here but use the floating-legend
   style elsewhere; Questions has an inline "Delete" per row instead of an overflow menu; the footer
   reads "1 loaded questions". (PR #5313)
@@ -747,8 +747,8 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 - [x] **E10** (#5240) [source] Decisions: recycle-bin rows use inline buttons (`DecisionsPage.tsx:208`) while (PR #5320)
   active rows use `OverflowMenu`; "Unpublish" and "Move to recycle bin" are default buttons
   (`:257–258`). `needs: K2`
-- [ ] **E11** (#5241) [check] Forms list and editor share one route with no URL per form
-  (`FormsPage.tsx:161`).
+- [x] **E11** (#5241) [check] Forms list and editor share one route with no URL per form
+  (`FormsPage.tsx:161`). (PR #5331)
 - [x] **E12** (#5242) [source] Collection footers word counts differently: "N shown" (PR #5299)
   (`ConnectionsPage.tsx:157`) against "N agents".
 - [x] **E13** (#5243) [source] Raw label + select without `StudioField` in the Dashboard query builder:

@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { getReloadImplication, normalizeType, type FeatureImpactEntry } from "./featureModel";
 import { FeatureBadge } from "./FeatureBadges";
 
@@ -23,9 +22,7 @@ export function FeatureImpactReviewDialog({
   onClose(): void;
   onApply(): void;
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
   const errorRef = useRef<HTMLDivElement | null>(null);
-  useDialogFocus(dialogRef, applying ? null : onClose);
 
   useLayoutEffect(() => {
     if (error) {
@@ -34,24 +31,9 @@ export function FeatureImpactReviewDialog({
   }, [error]);
 
   return (
-    <div className="feature-management-dialog-backdrop" role="presentation">
-      <section
-        ref={dialogRef}
-        className="feature-management-settings-dialog feature-management-impact-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Feature impact review"
-        aria-labelledby="feature-management-impact-title"
-        tabIndex={-1}
-      >
-        <div className="feature-management-dialog-heading">
-          <div>
-            <span>{hostLabel} feature configuration</span>
-            <h3 id="feature-management-impact-title">Review changes</h3>
-          </div>
-          <StudioButton onClick={onClose} disabled={applying} data-dialog-initial-focus>Close</StudioButton>
-        </div>
-
+    <StudioDialog open title="Review changes" onClose={onClose} dismissDisabled={applying} dismissOnOutsideClick={false}
+      className="feature-management-impact-dialog" footer={<StudioDialogFooter onCancel={onClose} cancelDisabled={applying}
+        confirmType="button" onConfirm={onApply} confirmLabel={applying ? "Applying…" : "Apply"} confirmDisabled={!dirty || applying || readOnly} />}>
         <div className="feature-management-dialog-body">
           {error ? (
             <div ref={errorRef} tabIndex={-1}>
@@ -71,17 +53,8 @@ export function FeatureImpactReviewDialog({
           )}
         </div>
 
-        <div className="feature-management-dialog-actions">
-          <span>Reviewing {entries.length} changed feature{entries.length === 1 ? "" : "s"}.</span>
-          <div>
-            <StudioButton onClick={onClose} disabled={applying}>Cancel</StudioButton>
-            <StudioButton variant="primary" onClick={onApply} disabled={!dirty || applying || readOnly}>
-              {applying ? "Applying" : "Apply"}
-            </StudioButton>
-          </div>
-        </div>
-      </section>
-    </div>
+        <p className="feature-management-dialog-note">Reviewing {entries.length} changed feature{entries.length === 1 ? "" : "s"}.</p>
+    </StudioDialog>
   );
 }
 

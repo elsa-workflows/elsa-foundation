@@ -240,9 +240,9 @@ function ColumnHeader({ item, index, output, readOnly, count, onChange }: { item
   return <th scope="col" id={`clause-${item.id}`} className="decision-grid-column">
     <div className="decision-column-header"><span className="decision-column-summary"><span>{item.name || `${group} ${index + 1}`}</span><small>{item.type || "Unspecified"}</small></span>
     {!readOnly ? <>
-      <button ref={triggerRef} type="button" className="decision-column-settings" aria-label={`Settings for ${group.toLowerCase()} ${index + 1}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined} onClick={() => setOpen(value => !value)}>⋯</button>
-      <AnchoredPopover id={popoverId} anchorRef={triggerRef} open={open} className="decision-column-popover" minWidth={220} onDismiss={() => close(false)} onPositioned={() => nameInputRef.current?.focus()}>
-        <div role="dialog" aria-label={`${group} ${index + 1} settings`} onKeyDown={event => {
+      <button ref={triggerRef} type="button" className="decision-column-settings" aria-label={`Settings for ${group.toLowerCase()} ${index + 1}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined} onClick={() => { setName(item.name); setType(item.type); setOpen(value => !value); }}>⋯</button>
+      <AnchoredPopover id={popoverId} anchorRef={triggerRef} open={open} className="decision-column-popover" minWidth={220} onDismiss={() => close(false)} onPositioned={() => nameInputRef.current?.focus()}
+        role="dialog" aria-label={`${group} ${index + 1} settings`} onKeyDown={event => {
           if (event.key === "Escape") { event.preventDefault(); close(true); }
         }}>
           <label>{group} {index + 1} name<input ref={nameInputRef} aria-label={`${group} ${index + 1} name`} value={name} onChange={event => setName(event.target.value)} /></label>
@@ -252,7 +252,6 @@ function ColumnHeader({ item, index, output, readOnly, count, onChange }: { item
           </select></label>
           <StudioButton size="sm" onClick={() => { onChange({ kind: "clause", id: item.id, output, name, type }); close(true); }}>Save column</StudioButton>
           <StudioButton size="sm" variant="ghost" disabled={count <= 1} onClick={() => { onChange({ kind: "delete-clause", id: item.id, output }); close(false); }}>Remove {group.toLowerCase()}</StudioButton>
-        </div>
       </AnchoredPopover>
     </> : null}
     </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioSettingDescriptor } from "@elsa-workflows/studio-sdk";
-import { StudioButton, selectSettingEditor } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog, StudioDialogFooter, selectSettingEditor } from "@elsa-workflows/studio-ui";
 import {
   formatSettingPreview,
   getFeatureSettingValues,
@@ -90,21 +90,10 @@ export function FeatureSettingsDialog({
   }
 
   return (
-    <div className="feature-management-dialog-backdrop" role="presentation">
-      <section
-        className="feature-management-settings-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="feature-management-settings-dialog-title"
-      >
-        <div className="feature-management-dialog-heading">
-          <div>
-            <span>Settings</span>
-            <h3 id="feature-management-settings-dialog-title">{feature.displayName || feature.id}</h3>
-          </div>
-          <StudioButton onClick={onClose}>Close</StudioButton>
-        </div>
-
+    <StudioDialog open title={feature.displayName || feature.id} onClose={onClose} dismissOnOutsideClick={false}
+      className="feature-management-settings-dialog" footer={<StudioDialogFooter onCancel={onClose}
+        extra={<StudioButton onClick={resetDialogChanges} disabled={disabled}>Reset changes</StudioButton>}
+        confirmType="button" onConfirm={saveDraft} confirmLabel="Save" confirmDisabled={disabled} />}>
         <div className="feature-management-dialog-body">
           <div className="feature-management-settings">
             {settingGroups.map(group => (
@@ -132,16 +121,8 @@ export function FeatureSettingsDialog({
           </div>
         </div>
 
-        <div className="feature-management-dialog-actions">
-          <span>Save keeps changes local until you review changes and apply the reviewed draft.</span>
-          <div>
-            <StudioButton onClick={onClose}>Cancel</StudioButton>
-            <StudioButton onClick={resetDialogChanges} disabled={disabled}>Reset changes</StudioButton>
-            <StudioButton variant="primary" onClick={saveDraft} disabled={disabled}>Save</StudioButton>
-          </div>
-        </div>
-      </section>
-    </div>
+        <p className="feature-management-dialog-note">Save keeps changes local until you review changes and apply the reviewed draft.</p>
+    </StudioDialog>
   );
 }
 

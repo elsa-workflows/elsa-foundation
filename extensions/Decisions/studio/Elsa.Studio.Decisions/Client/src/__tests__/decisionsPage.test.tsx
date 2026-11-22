@@ -8,7 +8,7 @@ import { EvaluationPanel } from "../EvaluationPanel";
 import { createNotificationController, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { decisionFailure, failureMessage } from "../decisionsApi";
-import { asset, button, click, render, select, stubApi, type } from "./helpers";
+import { beginDecision, asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
@@ -45,6 +45,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       const inputs = Array.from(host.querySelectorAll<HTMLInputElement>(".decision-metadata input"));
@@ -67,6 +68,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const { host } = mount(<DecisionsPage api={stubApi()} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("New decision");
       await vi.waitFor(() => expect(frames).toHaveLength(1));
@@ -148,6 +150,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host, update } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("Loading decision");
@@ -165,6 +168,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(); api.backend.http.postJson.mockResolvedValue(asset as never);
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
     click(button(host, "Save decision"));
@@ -304,6 +308,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("creates a decision through the authenticated API and navigates after the write settles", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     api.backend.http.postJson.mockResolvedValue(asset as never);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
@@ -314,9 +319,11 @@ describe("Decisions Studio journeys", () => {
     expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" });
     expect(host.textContent).not.toContain("Decision saved");
   });
-  it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
+  it.each(["description", "sensitivity"])("guards a new decision's %s edit after its name is cleared", async field => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    type(host.querySelector<HTMLInputElement>('.decision-metadata input')!, "");
     if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Only unsaved metadata");
     else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
@@ -624,6 +631,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("blocks dirty navigation probes without showing a dialog and confirms an actual leave", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe);
@@ -690,6 +698,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("keeps a dirty workspace tab open on close intent without navigating to another screen", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     const close = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "close" } }); window.dispatchEvent(close);

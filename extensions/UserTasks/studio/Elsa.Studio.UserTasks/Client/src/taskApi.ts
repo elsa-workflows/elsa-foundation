@@ -3,7 +3,7 @@ import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 export type TaskFieldDisplay = "checkbox" | "dropdown" | "radio";
 export interface TaskFieldPresentation { display: TaskFieldDisplay; trueLabel?: string; falseLabel?: string; unansweredLabel?: string }
 export interface TaskField { key: string; label: string; kind: string; required: boolean; readOnly: boolean; help?: string; minimum?: number; maximum?: number; maxLength?: number; choices?: string[]; presentation?: TaskFieldPresentation; mustBeTrue?: boolean; controlId?: string; configuration?: Record<string, unknown> }
-export interface TaskForm { id: string; version: string; name: string; provider: string; fields: TaskField[] }
+export interface TaskForm { id: string; version: string; name: string; description?: string; provider: string; fields: TaskField[] }
 export interface FormVersion { tenantId: string; form: TaskForm; createdAt: string; createdBy: string }
 export interface FormDraft { tenantId: string; id: string; form: TaskForm | null; revision: number; updatedAt: string; updatedBy: string }
 export interface FormDefinition { tenantId: string; id: string; latestPublished: FormVersion | null; draft: FormDraft | null; revision: number; deleted?: boolean }
