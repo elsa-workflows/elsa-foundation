@@ -191,19 +191,25 @@ export async function timelineDiagnosticsJourney(page: Page, info: TestInfo, cap
   await expect(lifecycle.locator('[data-status="Consumed"]')).toHaveCount(1); await capture(page, info, "diagnostics-single-consumption");
   await page.goto(`/workflows/instances/${duplicate.id}?view=timeline`); await waitCapturedPlaybackReady(page);
   const timeline = page.getByRole("region", { name: "Run timeline", exact: true });
-  const rows = timeline.locator("[data-history-event-id]");
+  await timeline.getByText("Filter events", { exact: true }).click();
+  await timeline.getByRole("combobox", { name: "History detail", exact: true }).selectOption("all");
+  await expect(timeline).toHaveAttribute("aria-busy", "false");
+  const rows = timeline.getByRole("list", { name: "Run history events", exact: true }).locator("[data-history-event-id]");
   await expect(rows.first()).toBeVisible();
   const rendererIds = () => rows.evaluateAll(elements => elements.map(element => element.getAttribute("data-history-event-id")));
-  const beforeStaleIds = await rendererIds();
-  expect(beforeStaleIds.length).toBeGreaterThan(1);
-  expect(beforeStaleIds.every(id => duplicateHistory.items.some(event => event.historyEventId === id))).toBe(true);
-  const selectedEventId = beforeStaleIds.at(-1)!;
+  const candidateIds = await rendererIds();
+  const selectedEventId = candidateIds.at(-1)!;
   const selectedRow = timeline.locator(`[data-history-event-id="${selectedEventId}"]`);
   await selectedRow.press("Enter");
   await expect(selectedRow).toHaveAttribute("aria-pressed", "true");
   const selectedDetails = page.getByRole("region", { name: "History event details", exact: true });
   await expect(selectedDetails).toBeVisible();
   const selectedHeading = await selectedDetails.getByRole("heading").first().textContent();
+  // Establish the failure baseline AFTER the deliberate selection/filter transition.
+  // The separate outside-filter selected-event affordance is not a loaded timeline row.
+  const beforeStaleIds = await rendererIds();
+  expect(beforeStaleIds.length).toBeGreaterThan(1);
+  expect(beforeStaleIds.every(id => duplicateHistory.items.some(event => event.historyEventId === id))).toBe(true);
   const failedRequests: string[] = [], recoveredRequests: string[] = [];
   let staleIds: (string | null)[] = [];
   const matcher = (url: URL) => url.pathname === `${path(duplicate.id)}/history`;
