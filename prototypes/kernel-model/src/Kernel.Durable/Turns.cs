@@ -362,13 +362,22 @@ public sealed class DurableTurn
     public string SendFromReceivedAddress(string? receivedAt, InstanceRef target, string kind, object? payload, SendOptions? options = null)
     {
         Kinds.RequireApplicationSend(kind);
-        return SendNext(target, kind, payload, options, receivedAt);
+        FoundationMetadataLimits.RequireKind(kind, nameof(kind));
+        if (!FoundationMetadataLimits.FitsTarget(target.Id))
+            throw new MetadataLimitExceeded(nameof(target), FoundationMetadataLimits.TargetBytes);
+        if (!FoundationMetadataLimits.FitsSender(receivedAt))
+            throw new MetadataLimitExceeded(nameof(receivedAt), FoundationMetadataLimits.SenderBytes);
+        var id = Send(IssuedAt(_ordinal), target, kind, payload, options, receivedAt, boundMessage: true);
+        _ordinal++;
+        return id;
     }
 
     private string SendNext(InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null)
     {
-        return Send(InboxKey.Issued($"{Origin}#{Revision}.{_ordinal++:D4}"), target, kind, payload, options, receivedAt);
+        return Send(IssuedAt(_ordinal++), target, kind, payload, options, receivedAt);
     }
+
+    private InboxKey IssuedAt(int ordinal) => InboxKey.Issued($"{Origin}#{Revision}.{ordinal:D4}");
 
     internal string SendFromActor(InstanceRef target, long targetCreation, string kind, string? payload = null, long? dueAt = null)
     {
@@ -386,16 +395,18 @@ public sealed class DurableTurn
     }
 
     private string Send(InboxKey id, InstanceRef target, string kind, object? payload, SendOptions? options = null, string? receivedAt = null,
-        bool actorAuthored = false)
+        bool actorAuthored = false, bool encodedPayload = false, bool boundMessage = false)
     {
         if (options is { Delay: not null, DueAt: not null })
             throw new ArgumentException("Supply either an absolute due time or a delay.", nameof(options));
         var due = options?.DueAt;
         if (options?.Delay is { } delay) due = Services.Now + (long)delay.TotalMilliseconds;
-        var body = actorAuthored ? (string?)payload : payload is null ? null : Json.Write(payload);
+        var body = actorAuthored || encodedPayload ? (string?)payload : payload is null ? null : Json.Write(payload);
         var message = (new Message(id.Id, target, kind, body, receivedAt ?? Id, options?.Start,
             due, TargetCreation: options?.TargetCreation ?? options?.Start?.Creation?.Generation ?? (target == Actor && _input.Creation > 0 ? _input.Creation : null), SenderCreation: _input.Creation)
             { ActorAuthored = actorAuthored }).WithInboxScope(id.Scope);
+        if (boundMessage && !FoundationMetadataLimits.FitsComposed(message))
+            throw new MetadataLimitExceeded(nameof(payload), FoundationMetadataLimits.MessageContentBytes);
         _sent.Add(kind is Kinds.Job or Kinds.JobDeadline or Kinds.Meet or Kinds.Publish ? message.AsKernelTicket() : message);
         return id.Id;
     }
@@ -474,17 +485,20 @@ public sealed class DurableTurn
     public void StartJob(string key, object? arguments = null) =>
         StartJobWithPayload(key, arguments is null ? null : Json.Write(arguments));
 
-    internal void StartJobWithPayload(string key, string? arguments, long? deadline = null)
+    internal void StartJobWithPayload(string key, string? arguments, long? deadline = null, bool boundMessage = false)
     {
         if (_jobs.Contains(key)) throw new InvalidOperationException($"Job '{key}' is in flight already.");
+        if (boundMessage) FoundationMetadataLimits.RequireContent(arguments, nameof(arguments));
+        var timer = deadline is null ? null : IssuedAt(_ordinal).Id;
+        var ticket = Json.Write(new JobTicket(_input.Model, key, arguments, deadline, timer));
+        if (boundMessage) FoundationMetadataLimits.RequireContent(ticket, nameof(arguments));
+
         _jobs.Add(key);
-        var timer = deadline is { } at
-            ? SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at))
-            : null;
+        if (deadline is { } at) SendNext(Actor, Kinds.JobDeadline, new JobDeadline(key), new SendOptions(DueAt: at));
         _started.Add(key, timer);
         // Finding F4: the intent is also a message to self, a ticket, so after a crash the inbox alone says what to do next.
         // Its id is derived from instance and key, so a later turn can delete it without holding it.
-        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, new JobTicket(_input.Model, key, arguments, deadline, timer));
+        Send(InboxKey.Ticket(Id, key, _input.Creation), Actor, Kinds.Job, ticket, encodedPayload: true);
         if (Services.Has(Flaw.VolatileJobTicket)) _volatile.Add(_sent[^1].InboxKey);
     }
 
@@ -536,7 +550,13 @@ public sealed class DurableTurn
     {
         var wire = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal:D4}");
         var id = store?.MessageHandle("event:" + wire) ?? wire;
-        SendNext(Actor, Kinds.Publish, new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant });
+        var publication = new EventRow(key, id, payload, checked(Services.Now + (long)keep.TotalMilliseconds)) { FoundationTenant = tenant };
+        if (tenant is null) SendNext(Actor, Kinds.Publish, publication);
+        else
+        {
+            FoundationMetadataLimits.RequireContent(payload, nameof(payload), FoundationMetadataLimits.EventContentBytes);
+            Send(IssuedAt(_ordinal++), Actor, Kinds.Publish, FoundationEventTicket.Encode(publication), encodedPayload: true);
+        }
         return id;
     }
 

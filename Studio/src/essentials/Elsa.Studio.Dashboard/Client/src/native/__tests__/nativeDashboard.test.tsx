@@ -268,7 +268,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => authoring.snapshots.size === 1);
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "View matching records");
-    await waitUntil(() => view.textContent?.includes("The current matching records are unavailable") === true);
+    await waitUntil(() => document.body.textContent?.includes("The current matching records are unavailable") === true);
     expect(post.mock.calls[1][0]).toBe("https://backend.example/_elsa/studio/questions/q1/drill");
     expect(post.mock.calls[1][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");
@@ -294,7 +294,8 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, mode === "preview" ? "Refresh results" : "View matching records"); await waitUntil(() => typeof complete === "function");
-    click(view, mode === "preview" ? "Cancel query" : "Close");
+    if (mode === "preview") click(view, "Cancel query");
+    else flushSync(() => document.querySelector<HTMLButtonElement>('[aria-label="Close Matching source records"]')!.click());
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     expect(view.textContent).toContain(mode === "preview" ? "Query cancelled" : "Investigation cancelled");
     expect(view.textContent).toContain("Previous result values are withheld"); expect(view.querySelector(".named-query-controls")).not.toBeNull();
@@ -318,7 +319,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "Refresh results"); await waitUntil(() => typeof complete === "function");
-    click(view, "View matching records"); await waitUntil(() => view.textContent?.includes("Current source disclosure could not be established") === true);
+    click(view, "View matching records"); await waitUntil(() => document.body.textContent?.includes("Current source disclosure could not be established") === true);
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     complete(result()); await new Promise(resolve => setTimeout(resolve, 0));
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");

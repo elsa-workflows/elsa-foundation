@@ -19,7 +19,7 @@ function render(children: React.ReactNode) {
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
   flushSync(() => root.render(children));
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
-  disposers.push(dispose); return { container, dispose };
+  disposers.push(dispose); return { container: document.body, dispose };
 }
 function button(container: HTMLElement, text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(target).toBeDefined(); flushSync(() => target!.click()); }
 function openDisclosure(container: HTMLElement, selector: string) { const details = container.querySelector<HTMLDetailsElement>(selector)!; if (!details.open) flushSync(() => details.querySelector("summary")!.click()); expect(details.open).toBe(true); }
@@ -104,7 +104,7 @@ describe("closed dialogs and bounded paging", () => {
     let finish!: (value: DashboardResource) => void;
     const share = vi.spyOn(api, "share").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const accepted = vi.fn(); const view = render(<ShareDialog api={api} resource={resource()} onClose={vi.fn()} onSaved={accepted} />);
-    await waitUntil(() => view.container.textContent?.includes("Save audience") === true);
+    await waitUntil(() => [...view.container.querySelectorAll("button")].some(item => item.textContent === "Save audience" && !item.disabled));
     button(view.container, "Save audience"); expect(share).toHaveBeenCalledOnce(); view.dispose(); finish(resource());
     await new Promise(resolve => setTimeout(resolve, 0)); expect(accepted).not.toHaveBeenCalled();
   });
@@ -133,11 +133,11 @@ describe("closed dialogs and bounded paging", () => {
   it("contains keyboard focus, closes with Escape and returns focus to its opener", async () => {
     const opener = document.createElement("button"); document.body.append(opener); opener.focus();
     const closed = vi.fn(); const view = render(<NativeDialog title="Keyboard witness" onClose={closed}><input aria-label="A field" /><button type="button">Last action</button></NativeDialog>);
-    await waitUntil(() => view.container.querySelector("button") === document.activeElement);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+    await waitUntil(() => view.container.querySelector("[role=dialog] button") === document.activeElement);
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
     expect(document.activeElement?.textContent).toBe("Last action");
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
-    view.dispose(); expect(document.activeElement).toBe(opener); opener.remove();
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); expect(closed).toHaveBeenCalledOnce();
+    view.dispose(); await waitUntil(() => document.activeElement === opener); opener.remove();
   });
 });
 

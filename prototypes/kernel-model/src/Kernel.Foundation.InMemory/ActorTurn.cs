@@ -67,6 +67,8 @@ internal sealed partial class ActorAdapter
 
         public string Send(Contract.ActorRef target, string kind, string? payload = null, long? dueAt = null)
         {
+            HeaderLimits.RequireKind(kind, nameof(kind));
+            HeaderLimits.RequireContent(payload, nameof(payload));
             var address = target == Header.Ref ? new Durable.CreationAddress(_row.Id, _row.Creation)
                 : _stagedChildren.GetValueOrDefault(target) ?? _store.FoundationTarget(Header.Tenant, target.Id) ??
                   throw new ArgumentException("The actor reference was not found.", nameof(target));
@@ -84,7 +86,7 @@ internal sealed partial class ActorAdapter
 
         public Contract.ActorRef Start(Contract.StartSpec spec, Contract.Placement placement = Contract.Placement.WithParent, bool detached = false)
         {
-            HeaderLimits.ValidateStart(spec.Type, spec.TypeData);
+            HeaderLimits.ValidateStart(spec.Type, spec.TypeData, spec.Input);
             var destination = placement == Contract.Placement.Spread
                 ? InstanceRef.Spread(FormattableString.Invariant($"{Header.Ref.Id}/{_turn.Revision}/{_turn.Ordinal}"), _input.Services.Partitions)
                 : _turn.Actor.Partition;
@@ -99,11 +101,14 @@ internal sealed partial class ActorAdapter
 
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
-            if (Encoding.UTF8.GetByteCount(key) > 1_024)
-                throw new ArgumentException("A job key may occupy at most 1,024 UTF-8 bytes.", nameof(key));
+            HeaderLimits.RequireName(key, nameof(key), preservesCodeUnits: true);
             ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
             long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;
-            _turn.StartJobWithPayload(key, arguments, deadline);
+            try { _turn.StartJobWithPayload(key, arguments, deadline, boundMessage: true); }
+            catch (Durable.MetadataLimitExceeded error)
+            {
+                throw new Contract.MetadataLimitExceeded(error.ParamName, error.LimitBytes);
+            }
         }
 
         public void CancelJob(string key)
@@ -114,9 +119,21 @@ internal sealed partial class ActorAdapter
             _turn.CancelJob(key, ticket?.Timer, _store.HasFoundationJobResult(_row.Id, _row.Creation, key));
         }
 
-        public void Subscribe(string key, string wait, bool keep = false) => _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
+        public void Subscribe(string key, string wait, bool keep = false)
+        {
+            HeaderLimits.RequireName(key, nameof(key));
+            HeaderLimits.RequireName(wait, nameof(wait));
+            _turn.Subscribe(Qualify(key), wait, keep, Header.Tenant);
+        }
+
         public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(Qualify(key), wait);
-        public string Publish(string key, string? payload, TimeSpan keepFor) => _turn.Publish(Qualify(key), payload, keepFor, _store, Header.Tenant);
+
+        public string Publish(string key, string? payload, TimeSpan keepFor)
+        {
+            HeaderLimits.RequireName(key, nameof(key));
+            HeaderLimits.RequireContent(payload, nameof(payload), Durable.FoundationMetadataLimits.EventContentBytes);
+            return _turn.Publish(Qualify(key), payload, keepFor, _store, Header.Tenant);
+        }
 
         public void Record(object entry)
         {
