@@ -184,7 +184,7 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
       fieldWidths.push(...positions.map(position => position.width));
     }
     expect(Math.max(...fieldWidths) - Math.min(...fieldWidths)).toBeLessThanOrEqual(1);
-    for (const label of ["Workflow run execution id", "Workflow run artifact", "Workflow run correlation", "Workflow run from", "Workflow run to"]) {
+    for (const label of ["Workflow run execution id", "Workflow run executable", "Workflow run correlation", "Workflow run from", "Workflow run to"]) {
       const control = advancedFilters.getByLabel(label);
       await expect(control).toBeVisible();
       expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

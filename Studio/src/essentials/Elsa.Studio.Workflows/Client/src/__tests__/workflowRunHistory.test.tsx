@@ -190,7 +190,7 @@ describe("workflow run history", () => {
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
     expect(input(container, "Workflow").value).toBe("definition-1");
     expect(button(container, "Copy Workflow definition ID")).toBeTruthy();
-    expect(input(container, "Workflow run artifact").value).toBe("artifact-1");
+    expect(input(container, "Workflow run executable").value).toBe("artifact-1");
     expect(container.textContent).toContain("Showing 1 of 42 matching runs");
     expect(container.querySelector(".wf-run-health-indicator .wf-visually-hidden")?.textContent).toBe("Current health unavailable");
     expect(getJson).toHaveBeenCalledWith(
@@ -242,13 +242,13 @@ describe("workflow run history", () => {
     await waitFor(() => expect(getJson).toHaveBeenCalledWith("/runtime/workflows/instances/health?incidentHealth=active&take=10"));
 
     openMoreFilters(container);
-    fill(input(container, "Workflow run artifact"), "draft-artifact");
+    fill(input(container, "Workflow run executable"), "draft-artifact");
     const running = buttonByTextOptional(container, "Running");
     expect(running).toBeTruthy();
     click(running!);
     await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(expect.stringMatching(/status=Running.*incidentHealth=active|incidentHealth=active.*status=Running/)));
     await waitFor(() => expect(getJson).toHaveBeenCalledWith(expect.stringMatching(/instances\/health\?.*status=Running.*incidentHealth=active|instances\/health\?.*incidentHealth=active.*status=Running/)));
-    expect(input(container, "Workflow run artifact").value).toBe("draft-artifact");
+    expect(input(container, "Workflow run executable").value).toBe("draft-artifact");
 
     click(buttonByText(container, "Apply filters"));
     await waitFor(() => expect(navigate).toHaveBeenLastCalledWith(expect.stringContaining("artifactId=draft-artifact")));
@@ -272,7 +272,7 @@ describe("workflow run history", () => {
 
     await waitFor(() => expect(navigate).toHaveBeenLastCalledWith("/workflows/instances?incidentHealth=active&pageSize=10"));
     await waitFor(() => expect(getJson).toHaveBeenCalledWith("/runtime/workflows/instances/health?incidentHealth=active&take=10"));
-    expect(input(container, "Workflow run artifact").value).toBe("");
+    expect(input(container, "Workflow run executable").value).toBe("");
   });
 
   it("adds the validated current Runs location when opening a real row", async () => {
