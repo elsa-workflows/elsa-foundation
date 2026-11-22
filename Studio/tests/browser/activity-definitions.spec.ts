@@ -278,7 +278,7 @@ for (const theme of ["light", "dark"]) {
       const geometry = await page.evaluate(() => {
         const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
         const header = bounds(".ad-workbench .studio-page-header"), heading = bounds("#activity-definition-title"),
-          actions = bounds(".ad-workbench .studio-page-actions"), tabs = bounds(".ad-tabs");
+          actions = bounds(".ad-workbench .studio-page-actions"), tabs = bounds('.ad-workbench [role="tablist"]');
         return { height: header.height, gap: tabs.top - header.bottom, titleCenter: heading.top + heading.height / 2,
           actionCenter: actions.top + actions.height / 2, actionsTop: actions.top, headingBottom: heading.bottom,
           overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
