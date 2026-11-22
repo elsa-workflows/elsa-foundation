@@ -77,7 +77,7 @@ Required controls cover direct and nested Break activity, literal/computed scrip
 
 ## R-8: Validation and boundaries
 
-**Decision:** Use affected project tests, targeted failure controls and a new composed Switch journey. Keep exact-head downloadable visual evidence and independent UX inspection. Runtime builds/tests begin only after spec agreement and merge, on a separate branch.
+**Decision:** Use affected project tests, targeted failure controls and a new composed Switch journey. Keep exact-head downloadable visual evidence and independent UX inspection. The coordinator approved the prepared spec and explicitly directed implementation in the same PR #5410, overriding the earlier separate-branch/proposal-merge sequence. Final review and initiative integration/merge gates remain.
 
 Existing solution projects provide the test seams; no project, package, provider, external service, expression engine or new generic runtime state is planned. CI is a separate delivery gate; the session's explicit dispatch defers waits and does not disable or claim CI. Windows policy failures must be recorded; use an established permitted Linux execution path where necessary.
 

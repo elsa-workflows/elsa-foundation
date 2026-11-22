@@ -162,6 +162,47 @@ public sealed class SwitchMatchAnyRunTests
         Assert.Contains("cases[0]", apply.Body.ToJsonString(), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("setOutcome('Break');", false)]
+    [InlineData("setOutcomes(['Done','Other']);", false)]
+    [InlineData("setOutcome('Ordinary');", true)]
+    public async Task No_match_Default_keeps_the_same_fidelity_guards_and_ordinary_successor(string script, bool safe)
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        var source = Source("MatchAny", false, true);
+        source["root"]!["activities"]![0]!["default"] = Activity("fallback", "Elsa.RunJavaScript", ("script", Literal(script)));
+        if (!safe)
+        {
+            var (_, apply) = await Import(host, source);
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, apply.StatusCode);
+            Assert.Contains(Elsa3ActivityDiagnosticCodes.UnsupportedMode, apply.Body.ToJsonString(), StringComparison.Ordinal);
+            Assert.Contains(".default", apply.Body.ToJsonString(), StringComparison.Ordinal);
+            return;
+        }
+        var run = await host.RunAsync(await ImportAndPublish(host, source));
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Workflow?.Status);
+        Assert.Empty(run.Incidents);
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "fallback");
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "after");
+        Assert.Equal(new[] { "Default" }, Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "route").Completion!.OutcomeNames);
+    }
+
+    [Fact]
+    public async Task A_converted_waiting_Default_holds_no_match_success_until_it_resumes()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync(withScheduling: true);
+        var source = Source("MatchAny", false, true);
+        source["root"]!["activities"]![0]!["default"] = Activity("fallback", "Elsa.Delay", ("timeSpan", Literal("00:00:05", "TimeSpan")));
+        var id = await host.ExecuteAsync(await ImportAndPublish(host, source));
+        var waiting = await host.WaitForAsync(id, state => state.Activities.Any(item => item.Execution.ExecutableNodeId == "fallback" && item.Status == ActivityExecutionStatus.Suspended));
+        Assert.DoesNotContain("after", waiting.ExecutedNodeIds);
+        Assert.DoesNotContain("a", waiting.ExecutedNodeIds);
+        Assert.NotEqual(ActivityExecutionStatus.Completed, Assert.Single(waiting.Activities, item => item.Execution.ExecutableNodeId == "route").Status);
+        var run = await host.WaitForSettledAsync(id);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Workflow?.Status);
+        Assert.Single(run.Activities, item => item.Execution.ExecutableNodeId == "after");
+    }
+
     private static async Task<PublishedWorkflow> ImportAndPublish(Elsa3ImportHost host, JsonObject source)
     {
         var (items, apply) = await Import(host, source);

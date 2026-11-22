@@ -36,14 +36,16 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   const cases = () => page.getByRole("region", { name: "Cases", exact: true });
   async function selectOwner() {
     await page.locator('.wf-sequence-step[data-id="switch"]').press("Enter");
+    await page.getByRole("complementary", { name: "Inspector panel", exact: true }).getByRole("tab", { name: "Inspector", exact: true }).press("Enter");
     await page.getByRole("tab", { name: "Slots", exact: true }).click();
     await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeVisible();
   }
   async function returnToOwner() {
-    await page.getByRole("tab", { name: "Designer", exact: true }).click();
+    const designer = page.getByRole("tab", { name: "Designer", exact: true });
+    if (await designer.getAttribute("aria-selected") !== "true") await designer.press("Enter");
     // A primitive is selected in the current canvas; a container creates a navigable scope crumb.
     const root = page.getByRole("button", { name: "Root", exact: true });
-    if (await root.count()) await root.click();
+    if (await root.count()) await root.press("Enter");
     await selectOwner();
   }
   async function open() {
@@ -155,11 +157,28 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
   await returnToOwner();
   const fallback = (await save()).structure!.payload.default!.nodeId;
   await capture(page, info, "default");
-  const published = await publishAndRun([fallback], ["Default"]);
-  await page.goto(`/workflows/definitions?definition=${submitted.definition.id}&version=${published.definitionVersionId}&backend=legacy`);
+  await publishAndRun([fallback], ["Default"]);
+  // Read-only authoring is the captured Test Run snapshot, rather than the ordinary editable draft route.
+  await page.getByRole("button", { name: "Test Run", exact: true }).click();
+  await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+  const inspector = page.getByRole("complementary", { name: "Inspector panel", exact: true });
+  await inspector.getByRole("tab", { name: "Runtime", exact: true }).click();
+  await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click();
+  await selectOwner();
+  await cases().getByRole("combobox", { name: "Match mode", exact: true }).selectOption("MatchFirst");
+  await save();
+  await inspector.getByRole("tab", { name: "Runtime", exact: true }).click();
+  await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
   await selectOwner();
   await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeDisabled();
+  await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toHaveValue("MatchAny");
   await expect(cases()).toContainText("All matching cases run");
   await expect(cases().getByRole("textbox", { name: "Case 1 label", exact: true })).toHaveAttribute("readonly", "");
   await capture(page, info, "read-only");
+  await inspector.getByRole("tab", { name: "Runtime", exact: true }).click();
+  await page.getByRole("group", { name: "Execution controls", exact: true }).getByRole("button", { name: "Return to editing", exact: true }).click();
+  await selectOwner();
+  await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toBeEnabled();
+  await expect(cases().getByRole("combobox", { name: "Match mode", exact: true })).toHaveValue("MatchFirst");
+  expect((await stored()).structure!.payload.mode).toBeUndefined();
 }

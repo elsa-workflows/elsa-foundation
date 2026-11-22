@@ -14,8 +14,8 @@ namespace Elsa3.Mapping.ActivityMap.Rewrites;
 /// expression returning the label of the first true case, keys each case by its label, and routes case and default
 /// activities into the <c>Switch.Case[{match}]</c> and <c>Switch.Default</c> slots. In MatchAny mode Elsa 3 takes every
 /// true case; the Elsa 4 Switch in <c>MatchAny</c> mode does the same from one Boolean condition per case (spec 1208
-/// FR-028), so each case keeps its own condition. A MatchAny case that holds an activity, or a mode set by an
-/// expression, is unconvertible.
+/// FR-028), so each case keeps its own condition and recursively converted body (S-12). Expression modes remain
+/// refused. The normalized/lowered new body-containing shape receives scoped control-outcome safety checks.
 /// </summary>
 internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
 {

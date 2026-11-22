@@ -317,14 +317,29 @@ public sealed class Elsa3NodeRewriteTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
-    private static Elsa3Activity MatchAnyCase(Elsa3Activity body, string label = "Case", string mode = "MatchAny")
+    private static Elsa3Activity MatchAnyCase(Elsa3Activity body, string label = "Case", string mode = "MatchAny", bool matches = true)
     {
         var node = Activity("switch-" + body.Id, "Elsa.Switch", ("mode", Literal(mode)));
         node.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(new object[]
         {
-            new { label, condition = new { expression = new { type = "Literal", value = "true" } }, activity = Port(body) }
+            new { label, condition = new { expression = new { type = "Literal", value = matches ? "true" : "false" } }, activity = Port(body) }
         });
         return node;
+    }
+
+    [Theory]
+    [InlineData("setOutcome('Break');", false)]
+    [InlineData("setOutcomes(['Done','Other']);", false)]
+    [InlineData("return 42;", true)]
+    [InlineData("setOutcome('Ordinary');", true)]
+    public async Task Newly_enabled_owner_checks_Default_outcome_fidelity_too(string script, bool safe)
+    {
+        var owner = MatchAnyCase(Activity("never", "Elsa.WriteLine", ("text", Literal("never"))), matches: false);
+        owner.AdditionalProperties["default"] = Port(Activity("fallback", "Elsa.RunJavaScript", ("script", Literal(script))));
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", owner)));
+        Assert.Equal(safe, result.Succeeded);
+        if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains(".default", StringComparison.Ordinal));
+        else Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Fact]
@@ -460,6 +475,29 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Equal(safe, result.Succeeded);
         if (!safe) Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode);
         else Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("expression")]
+    [InlineData("variable")]
+    [InlineData("memory")]
+    public async Task Parallel_cannot_make_an_unanalyzed_dynamic_script_body_proven_safe(string form)
+    {
+        const string source = "setOutcomes(['Done','Other']);";
+        var script = Activity("body", "Elsa.RunJavaScript", ("script", form switch
+        {
+            "expression" => Expression("JavaScript", JsonSerializer.Serialize(source)),
+            "variable" => Expression("Variable", "code"),
+            _ => Captured("code-memory", "String")
+        }));
+        var parallel = Activity("parallel", "Elsa.Parallel");
+        parallel.AdditionalProperties["activities"] = JsonSerializer.SerializeToElement(new[] { Port(script),
+            Port(Activity("sibling", "Elsa.WriteLine", ("text", Literal("sibling")))) });
+        var definition = ConversionServices.Definition(Sequence("root", MatchAnyCase(parallel)), variables:
+            [new Elsa3Variable { Id = "code-memory", Name = "code", TypeName = "String", Value = JsonSerializer.Serialize(source) }]);
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, item => item.Code == Elsa3ActivityDiagnosticCodes.UnsupportedMode && item.Path.Contains("cases[0].activity", StringComparison.Ordinal));
     }
 
     [Theory]

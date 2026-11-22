@@ -20,9 +20,10 @@ internal static class Elsa3SwitchSafety
                      && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Child is not null)))
         {
             var index = 0;
-            foreach (var slot in owner.Slots.Where(slot => slot.SlotName == CaseSlot))
+            foreach (var slot in owner.Slots.Where(slot => slot.SlotName is CaseSlot or "Switch.Default"))
             {
-                if (slot.Label is "Break" or "Done")
+                var branch = slot.SlotName == CaseSlot ? $"Case '{slot.Label}'" : "Default";
+                if (slot.SlotName == CaseSlot && slot.Label is "Break" or "Done")
                     plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, owner,
                         Elsa3ActivityDiagnosticCodes.UnsupportedMode,
                         $"MatchAny case label '{slot.Label}' has native control meaning and cannot faithfully name this imported case.",
@@ -32,10 +33,10 @@ internal static class Elsa3SwitchSafety
                     plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(plan, unsafeNode,
                         Elsa3ActivityDiagnosticCodes.UnsupportedMode,
                         HasInvalidDoneSelection(unsafeNode)
-                            ? $"Case '{slot.Label}' contains an invalid or unproven selection combining Done with another label in the native outcome contract."
-                            : $"Case '{slot.Label}' can expose an incompatible or unproven native Break outcome; Elsa 3 Switch would keep waiting for its other bodies.",
+                            ? $"{branch} contains an invalid or unproven selection combining Done with another label in the native outcome contract."
+                            : $"{branch} can expose an incompatible or unproven native Break outcome; Elsa 3 Switch ignores its child outcome names.",
                         "Restructure the case so no incompatible control outcome escapes or changes its behavior. Use a case-local supported loop for a genuine Break; rename control labels; avoid native completion aliases, dynamic compilation and unresolved prototype/callable access in imported case scripts."));
-                index++;
+                if (slot.SlotName == CaseSlot) index++;
             }
         }
     }
@@ -56,7 +57,7 @@ internal static class Elsa3SwitchSafety
         if (node.ScriptProperty is not null)
         {
             var names = node.EffectiveScriptOutcomes;
-            return !namedBreakConsumed && (names is null || names.Contains("Break", StringComparer.Ordinal)) ? node : null;
+            return names is null || !namedBreakConsumed && names.Contains("Break", StringComparer.Ordinal) ? node : null;
         }
 
         if (!namedBreakConsumed && type == Switch && node.Slots.Any(slot => slot.SlotName == CaseSlot && slot.Label == "Break"))

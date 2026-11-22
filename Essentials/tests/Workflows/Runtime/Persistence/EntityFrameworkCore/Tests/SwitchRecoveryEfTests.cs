@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Xunit;
 using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
@@ -43,6 +44,14 @@ public sealed partial class EfReplaySafeFusionCapRecoveryTests
         var bindings = new[] { "a", "b" }.ToDictionary(SwitchActivity.ConditionInputKey,
             id => new RuntimeInputBinding(SwitchActivity.ConditionInputKey(id), boolean, ValueProtectionPolicy.InstanceInline,
                 RuntimeInputBindingSource.Literal, literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline)));
+        var flag = new RuntimeVariableReference("selected", Elsa.Expressions.Core.Models.VariableReference.WorkflowScopeId);
+        bindings[SwitchActivity.ConditionInputKey("b")] = new(SwitchActivity.ConditionInputKey("b"), boolean,
+            ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead, variable: flag);
+        var first = new ExecutableNode(ChildA, ChildA, "elsa.intrinsic.set", "1.0.0", "intrinsic", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding> { [WorkflowIntrinsicInputKeys.Value] = new(WorkflowIntrinsicInputKeys.Value, boolean,
+                ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(false), ValueProtectionPolicy.InstanceInline)) },
+            new Dictionary<string, string>(), intrinsicKind: WorkflowIntrinsicKind.Set, intrinsicVariable: flag);
         var prototype = ClrActivityContractTestBuilder.BuildContract(typeof(SwitchActivity));
         var contract = new ActivityContract(prototype.ActivityTypeKey, "4.1.0", prototype.DescriptorKind, prototype.DescriptorPayload,
             bindings.Values.Select(binding => new ActivityInputContract(binding.InputKey, binding.InputKey, boolean,
@@ -51,7 +60,7 @@ public sealed partial class EfReplaySafeFusionCapRecoveryTests
         var node = new ExecutableNode("switch", "switch", typeof(SwitchActivity).FullName!, "4.1.0",
             prototype.DescriptorKind, prototype.DescriptorPayload, bindings, new Dictionary<string, string>(),
             childSlots: [
-                new(SwitchActivity.CaseSlotName("First"), [WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA)]),
+                new(SwitchActivity.CaseSlotName("First"), [first]),
                 new(SwitchActivity.CaseSlotName("Second"), [WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildB)])],
             structure: new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion, JsonSerializer.SerializeToElement(new
             {
@@ -61,6 +70,11 @@ public sealed partial class EfReplaySafeFusionCapRecoveryTests
                     new { match = "Second", activity = ChildB, conditionInputKey = SwitchActivity.ConditionInputKey("b") }
                 }
             })), activityContract: contract);
-        return NewSequenceExecutable(node, WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildC));
+        var initial = new RuntimeInputBinding("selected", boolean, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(boolean, JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline));
+        // First changes the condition's variable in the committed cut. A reconstruction that rematerializes
+        // selection would omit Second (or reject its callback), instead of using the pinned true predicate.
+        return WorkflowExecutionHarness.NewExecutable(NewSequenceExecutable(node, WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildC)).RootActivity,
+            new RuntimeVariableDeclaration("selected", "selected", boolean, ValueProtectionPolicy.InstanceInline, initial));
     }
 }
