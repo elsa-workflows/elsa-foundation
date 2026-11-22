@@ -68,6 +68,55 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  s2-nullable-bite-proof:
+    name: S-2 required nullable input bite proof
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'ci' && inputs.tier == 'pr' && github.ref_name == 'agent/codex/3052-main-sync-for-s2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore the affected project
+        run: dotnet restore essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --locked-mode --disable-parallel
+      - name: Prove old predicate red and restored predicate green
+        shell: python
+        run: |
+          import hashlib, json, os, pathlib, re, subprocess
+          source = pathlib.Path('essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableInputValidator.cs')
+          original = source.read_bytes()
+          needle = b'if (declaration.IsNullable)'
+          assert original.count(needle) == 1
+          output = pathlib.Path('s2-nullable-bite-proof')
+          output.mkdir()
+          command = ['dotnet', 'test', 'essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj', '-c', 'Release', '--no-restore', '--nologo', '-m:1', '--filter', 'FullyQualifiedName~Required_nullable_input_without_a_default_accepts_supplied_null']
+          def run(phase):
+              with (output / (phase + '.log')).open('w') as log:
+                  result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=900)
+              text = (output / (phase + '.log')).read_text()
+              print(phase, 'exit', result.returncode)
+              print('\n'.join(text.splitlines()[-25:]))
+              return result.returncode, text
+          try:
+              source.write_bytes(original.replace(needle, b'if (!declaration.IsRequired && declaration.IsNullable)'))
+              red_exit, red = run('red')
+          finally:
+              source.write_bytes(original)
+          assert source.read_bytes() == original
+          green_exit, green = run('green')
+          receipt = {'head': os.environ['GITHUB_SHA'], 'source': str(source), 'sourceSha256': hashlib.sha256(original).hexdigest(), 'restoredSourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'command': command, 'redExit': red_exit, 'greenExit': green_exit}
+          (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          assert red_exit != 0 and 'Assert.True' in red and re.search(r'Failed:\s+1,\s+Passed:\s+0', red), 'Negative control did not demonstrate the regression'
+          assert green_exit == 0 and re.search(r'Failed:\s+0,\s+Passed:\s+1', green), 'Restored regression did not pass'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s2-nullable-bite-proof-${{ github.sha }}
+          path: s2-nullable-bite-proof
+          retention-days: 14
   plan-scope:
     name: Select focused validation
     runs-on: ubuntu-latest
