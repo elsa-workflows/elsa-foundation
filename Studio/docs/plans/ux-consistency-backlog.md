@@ -576,15 +576,14 @@ the designer header is a documented exception.
   `TechnicalDetails`.
 - [x] **X12.11** (#5181) [source] `WF/ActivityAvailabilityPage.tsx:425` ("Raw metadata"), (PR #5316)
   `WF/Elsa3ReusableImportPage.tsx:716–743`, `WF/ActivityDefinitionPublicationReview.tsx:337–467`.
-- [ ] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
+- [x] **X12.12** (#5182) [source] `DASH/native/QueryControls.tsx:121–131`, `DASH/native/ResultView.tsx:84`,
   `DASH/native/ResourceDialogs.tsx:124`, `H/weaver/WeaverMessageList.tsx:24`.
 
 ### X13. CSS texture
 
 Work file by file and run `pnpm lint:css` after each. Counts are grep counts on the audit date.
 
-Uppercase labels (`needs: D3`):
-
+Uppercase labels (`needs: D3`): (PR #5321)
 - [x] **X13.1** (#5184) [verified] `WF/styles.css`: the token `--wf-label-transform: uppercase` at `:87` drives (PR #5309)
   12 `text-transform: var(--wf-label-transform, uppercase)` rules; two literal `uppercase` rules sit at
   `:6061` and near `:7547`.
@@ -740,9 +739,9 @@ X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
   `DASH/native/QueryControls.tsx:27–126`, `ResourceDialogs.tsx:49, 162–165`,
   `NamedDashboards.tsx:522–524`. (PR #5313)
 - [x] **E14** (#5244) [source] `DASH/HomePage.tsx:191` field labelled "Refresh" is a refresh interval. (PR #5313)
-- [ ] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
+- [x] **E15** (#5245) [source] Workflows dashboard widgets: custom metric
   (`EXT/Workflows.Dashboard/WorkflowDashboardMetric.tsx:24`) → `StatTile`; raw `<table>` at
-  `WorkflowRunHealthWidget.tsx:147`.
+  `WorkflowRunHealthWidget.tsx:147`. (PR #5321)
 - [ ] **E16** (#5246) [source] Attention widget shows severity only as a border colour
   (`EXT/Attention/styles.css:8–10`); add a `StatusChip`.
 - [ ] **E17** (#5247) [source] `/secrets` duplicates `/security/secrets`; the legacy route lacks
