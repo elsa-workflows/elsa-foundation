@@ -45,10 +45,10 @@ describe("Connections page", () => {
     expect(dialog!.querySelector("h2")?.id).toBe(titleId);
     expect(dialog!.querySelector("h2")?.textContent).toBe(connection.displayName);
 
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 
     expect(host.querySelector('[role="dialog"]')).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it("distinguishes an empty collection from an empty search and clears the search", async () => {
@@ -306,7 +306,7 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
     host.remove();
   });
   return {
-    host,
+    host: document.body,
     leave: () => flushSync(() => root.render(<p>Another page</p>)),
     changeContext: (next: StudioEndpointContext) => render(next),
     setVisible: (visible: boolean) => render(context, visible ? "visible" : "hidden")
@@ -345,8 +345,8 @@ function changeInput(input: HTMLInputElement, value: string) {
 
 async function createConnection(host: HTMLElement, name: string) {
   click(button(host, "New connection"));
-  await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']") !== null);
-  const input = host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']");
+  await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-shell input[autocomplete='off']") !== null);
+  const input = host.querySelector<HTMLInputElement>(".connections-create-shell input[autocomplete='off']");
   if (!input) throw new Error("New connection name input not found.");
   changeInput(input, name);
   click(button(host, "Create"));
