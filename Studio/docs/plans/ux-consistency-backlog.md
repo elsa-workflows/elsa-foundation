@@ -522,7 +522,7 @@ the designer header is a documented exception.
 - [ ] **X11.1** (#5150) [verified] `WF/graph-authoring/CompensationScopeDesigner.tsx` (20).
 - [ ] **X11.2** (#5151) [verified] `WF/workflow-editor/WorkflowInstances.tsx` (19).
 - [ ] **X11.3** (#5152) [verified] `WF/graph-authoring/NativeBlockCommands.tsx` (12).
-- [ ] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and
+- [x] **X11.4** (#5153) [verified] `WF/Elsa3ReusableImportPage.tsx` (12). [seen] It renders unstyled 38px and (PR #5332)
   20px `.ad-primary-action` buttons.
 - [ ] **X11.5** (#5154) [verified] `WF/ActivityPropertiesPanel.tsx` (12).
 - [ ] **X11.6** (#5155) [verified] `WF/workflow-editor/ReusableBoundaryInspector.tsx` (11).
@@ -634,7 +634,7 @@ Raw font sizes, weights, radii and colours:
 - [x] **X13.15** (#5198) [source] Hex `iconColor` literals in navigation registrations: `H/App.tsx:150–157`,
   `WF/module.tsx:121, 126–136`, `EXT/Connections/module.tsx:23`, `EXT/Secrets/module.tsx:24`. (PR #5318)
 - [ ] **X13.16** (#5199) [source] `EXT/Agent/styles.css:176` hex fallback `var(--studio-danger, #b42318)`.
-- [ ] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move
+- [x] **X13.17** (#5200) [source] `WF/Elsa3ReusableImportPage.tsx:806` uses an inline JS `styles` object; move (PR #5332)
   it to CSS with tokens.
 
 ### X14. Developer jargon in user-facing copy
@@ -642,19 +642,19 @@ Raw font sizes, weights, radii and colours:
 D9 decided the Executable, evidence and Provider wording. X14.7 also needs the glossary change G1, and
 X14.6 needs G2. For any other domain term, check `CONTEXT.md` first and ask.
 
-- [ ] **X14.1** (#5202) [seen] Activity definitions, Upgrades, Elsa 3 import: "Exact immutable version",
+- [x] **X14.1** (#5202) [seen] Activity definitions, Upgrades, Elsa 3 import: "Exact immutable version", (PR #5332)
   "Authoritative dependency closure", "Review authoritative plan", "Analyze immutable collection", "No
   Execute-Workflow fallback", "Immutable public contract", "Provider key" (becomes "Provider" under D9;
   see the **[check]** there).
-- [ ] **X14.2** (#5203) [source] `WF/ActivityDefinitionWorkbench.tsx`: "Design-owned mutable work", "Immutable
+- [x] **X14.2** (#5203) [source] `WF/ActivityDefinitionWorkbench.tsx`: "Design-owned mutable work", "Immutable (PR #5332)
   publication", "Unavailable contribution" (`:204`).
-- [ ] **X14.3** (#5204) [source] `WF/ActivityDefinitionContractEditor.tsx`: "Durable storage driver" (`:488`),
+- [x] **X14.3** (#5204) [source] `WF/ActivityDefinitionContractEditor.tsx`: "Durable storage driver" (`:488`), (PR #5332)
   "Published baseline unavailable." (`:317`); `ActivityDefinitionContractProposalReview.tsx:166–168`
   "Exact proposal binding", "Provider"; `ActivityDefinitionContractProposalChangeList.tsx:51` "The
   opaque provider payload is intentionally not rendered."
-- [ ] **X14.4** (#5205) [source] `WF/ActivityDefinitionPublicationReview.tsx:418, 433` "Published head";
+- [x] **X14.4** (#5205) [source] `WF/ActivityDefinitionPublicationReview.tsx:418, 433` "Published head"; (PR #5332)
   management dialog busy label "Applying atomically…".
-- [ ] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable
+- [x] **X14.5** (#5206) [source] `WF/ActivityUpgradeWorkbenchPage.tsx`: "idempotency key" (`:429`), "Durable (PR #5332)
   apply receipt", "Outcome unknown"; `WF/Elsa3ReusableImportPage.tsx`: "Side-effect-free analysis",
   "Dependency-closed selection", "Final atomic review", "Durable import receipt".
 - [x] **X14.6** (#5207) [source] Runs and designer: "evidence" throughout; "Attach the unchanged Test Run
