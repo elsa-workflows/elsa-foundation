@@ -10,6 +10,7 @@ internal static class RetentionDeleteChecks
         await PolicyAtDelivery(check);
         await DelayedAcrossReuse(check);
         await UnresolvedPark(check);
+        await RecoveryAfterSelection(check);
         await ExpiryStartsRetention(check);
     }
 
@@ -123,6 +124,65 @@ internal static class RetentionDeleteChecks
         check(fixture.Store.Instances[id].Retired, "RD8c the same selection lets an operator initiate Delete without an age rule");
     }
 
+    private static async Task RecoveryAfterSelection(Action<bool, string> check)
+    {
+        var fixture = new Fixture { Window = TimeSpan.FromSeconds(20) };
+        var worker = fixture.Owner();
+        await using var owner = await Activate(worker);
+        var actor = await fixture.Start(worker, "transition-start");
+        var id = fixture.Row(actor).Id;
+        await fixture.Send(actor, "park", "park");
+        await Step(worker, id);
+        var parked = fixture.Checkpoint(actor);
+        var selection = await fixture.Selection(actor);
+
+        // Keep the queued request outside the first owner's poll horizon. Its reply stays with the successor.
+        var due = fixture.Now + 11_000;
+        var (queued, request) = fixture.OperatorDeleteAt(actor, selection, due);
+        var resumed = await fixture.Send(actor, "recover", Contract.Kinds.Recover,
+            Json.Write(new Contract.OperatorCommand(selection, Contract.RecoverMode.Resume)));
+        for (var pass = 0; pass < 10 && fixture.Checkpoint(actor).Park is not null; pass++)
+        {
+            fixture.Now += 11;
+            await Step(worker, id);
+        }
+        await fixture.Send(actor, "end", "finish");
+        await Step(worker, id);
+        var ended = fixture.Checkpoint(actor);
+        var nextSelection = await fixture.Selection(actor);
+        var established = queued.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+            resumed.Outcome == Contract.AdmissionOutcome.Accepted && parked.Park is not null &&
+            ended is { Park: null, Row.Status: InstanceStatus.Finished, Terminal: { } newer } &&
+            newer.Revision > parked.Terminal?.Revision && newer.At == fixture.Now &&
+            ended.Row.Id == parked.Row.Id && ended.Row.Creation == parked.Row.Creation &&
+            fixture.Now < due && request.Answer is null && nextSelection != selection;
+        check(established, "RD4 the queued Park Delete predates the same creation's later Finished mark");
+        if (!established) return;
+
+        await owner.DisposeAsync();
+        fixture.Now = due;
+        var successor = fixture.Owner();
+        await using var replacement = await Activate(successor);
+        await Step(successor, id);
+        check(request.Answer is CreationResult { Result: "StaleSelection" } &&
+              fixture.Row(actor) == ended.Row && fixture.Checkpoint(actor).Terminal == ended.Terminal &&
+              fixture.Store.Messages.Values.Single(row => row.Message.Id == "rd4-deferred").Done,
+            $"RD4 the successor refuses the old transition's Delete and preserves the later terminal mark (reply {request.Answer})");
+
+        var early = fixture.Retention(actor, nextSelection);
+        await Step(successor, id);
+        check(early.Admission.Outcome == InMemoryStore.OperatorAdmission.Accepted &&
+              early.Request.Answer is CreationResult { Result: "NotEligible" } && fixture.Row(actor) == ended.Row,
+            "RD4 the newer Finished mark still has its own unexpired retention window");
+
+        fixture.Now = ended.Terminal!.At + (long)fixture.Window!.Value.TotalMilliseconds + 1;
+        var eligible = fixture.Retention(actor, nextSelection);
+        await Step(successor, id);
+        check(eligible.Admission.Outcome == InMemoryStore.OperatorAdmission.Accepted && fixture.Store.Instances[id].Retired &&
+              fixture.Store.Journal.Values.Where(row => row.Instance == id).ToArray() is [{ Revision: -1 }],
+            "RD4 retention retires the exact newer transition after its window closes");
+    }
+
     private static async Task ExpiryStartsRetention(Action<bool, string> check)
     {
         var fixture = new Fixture(TimeSpan.FromMilliseconds(1)) { Window = TimeSpan.FromMilliseconds(20) };
@@ -232,6 +292,14 @@ internal static class RetentionDeleteChecks
         {
             var request = requests.OpenBound("retention-selection", (due ?? Now) + 20_000, scope.Tenant, null);
             return (Store.AdmitRetentionDelete(scope.Tenant, actor.Id, selection, due, request.ReplyAddress(Node)), request);
+        }
+
+        internal ((InMemoryStore.OperatorAdmission Outcome, string? Reference) Admission, Request Request)
+            OperatorDeleteAt(Contract.ActorRef actor, string selection, long due)
+        {
+            var request = requests.OpenBound("rd4-deferred", due + 20_000, scope.Tenant, null);
+            return (Store.AdmitFoundationOperator(scope.Tenant, actor.Id, null, "rd4-deferred", Kinds.Delete,
+                null, due, null, selection, request.ReplyAddress(Node)), request);
         }
 
         public ValueTask TurnAsync(Contract.IActorTurn turn, CancellationToken cancellationToken)
