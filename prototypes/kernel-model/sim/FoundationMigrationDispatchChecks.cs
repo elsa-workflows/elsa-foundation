@@ -38,9 +38,13 @@ internal static class FoundationMigrationDispatchChecks
         var late = await edge.SendAsync(scope, new Contract.Target.Ref(original), "delayed", Contract.Kinds.Migrate, latePayload,
             new Contract.AddOptions(DueAt: initial + 20));
         var physical = store.FoundationTarget(scope.Tenant, original.Id)!;
-        check(late is { Outcome: Contract.AdmissionOutcome.Accepted } && late.Actor == original &&
-            store.Messages.Values.Any(row => row.Message is { Id: "delayed", TargetCreation: 1 } && row.Message.Target.Id == physical.Id),
-            "MP2 the delayed admission is pinned to creation one before the key is retired");
+        var delayed = store.Messages.Values.SingleOrDefault(row => row.Message.Id == "delayed");
+        var admitted = late is { Outcome: Contract.AdmissionOutcome.Accepted } && late.Actor == original &&
+            delayed is { Done: false, Message.TargetCreation: 1 } && delayed.Message.Target.Id == physical.Id;
+        check(admitted, "MP2 the delayed admission is pinned to creation one before the key is retired");
+        if (!admitted) return;
+        var delayedKey = delayed!.Message.InboxKey;
+        var delayedSeq = delayed.Seq;
 
         await edge.SendAsync(scope, new Contract.Target.Ref(original), "finish", "finish");
         await Pump(first);
@@ -67,13 +71,18 @@ internal static class FoundationMigrationDispatchChecks
         check(admissions[original] is { Outcome: Contract.AdmissionOutcome.Refused, Actor: null } &&
             admissions[peer] is { Outcome: Contract.AdmissionOutcome.Accepted, Actor: { } exact } && exact == peer,
             "MP1 MP2 the outside dispatcher uses each recorded ref and refuses the already retired life");
+        check(store.Messages.TryGetValue(delayedKey, out var beforeDue) &&
+            beforeDue is { Done: false, Message.TargetCreation: 1 } && beforeDue.Message.Due == initial + 20 &&
+            beforeDue.Seq == delayedSeq && beforeDue.Message.Target.Id == physical.Id,
+            "MP2 the exact admitted inbox row is still pending after recreation and takeover, before it is due");
         now = initial + 20;
         await Pump(successor);
 
         check(ReadPlan().Outcomes is [var migrated] && migrated == peer &&
             (await reads.GetAsync(scope, peer)) is { Header.TypeData: "target" } &&
             (await reads.GetAsync(scope, replacement)) is { Header.TypeData: "source" } &&
-            store.Messages.Values.All(row => row.Message.Id != "delayed" || row.Done),
+            store.Messages.TryGetValue(delayedKey, out var settled) &&
+            settled is { Done: true, Message.TargetCreation: 1 } && settled.Seq == delayedSeq,
             "MP1 MP2 only the selected peer migrates and records an outcome after takeover and delayed predecessor delivery");
 
         PlanState ReadPlan() => Json.Read<PlanState>(store.ReadFoundationActor(scope.Tenant, plan.Id).Actor!.Row.State);
