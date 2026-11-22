@@ -8,11 +8,12 @@ internal static class RetirementCascadeChecks
     internal static async Task Run(Action<bool, string> check)
     {
         await CheckTree(check, total: 1);
+        await CheckTree(check, total: 1, refuseOpen: true);
         await CheckTree(check, total: CascadeProtocol.PageLimit + 1);
         await CheckRetirementShape(check);
     }
 
-    private static async Task CheckTree(Action<bool, string> check, int total)
+    private static async Task CheckTree(Action<bool, string> check, int total, bool refuseOpen = false)
     {
         const long now = 1_702_310_000_000;
         var store = new InMemoryStore(1, () => now);
@@ -22,9 +23,16 @@ internal static class RetirementCascadeChecks
             (_, kind) => kind is Contract.Kinds.Delete or Contract.Kinds.Terminate);
         var reads = new ActorList(store, 10);
         var cascades = new List<Message>();
+        var refused = 0;
         var wire = new CountingStore(store, () => { }, (batch, landed) =>
         {
             if (landed) cascades.AddRange(batch.Turns.SelectMany(turn => turn.Sent).Where(message => message.CascadeOrigin));
+            else if (refuseOpen && refused < 2 && batch.Turns.Any(turn =>
+                turn.Row is { Retired: true } && turn.FoundationCascade is { Input: null }))
+            {
+                refused++;
+                throw new StoreException(Failure.Definite, "test refusal opening the held cascade");
+            }
         });
         Worker NewWorker() => new("retirement-cascade", 0, wire, new ActorAdapter(store, probe),
             new WorkerOptions { Monotonic = () => 0 });
@@ -69,6 +77,12 @@ internal static class RetirementCascadeChecks
         await Step(parent);
         check(cascades.Count == 1 && cascades[0].Target.Id == finished.Id && cascades[0].Sender == Row(parent).Id,
             "the parent's real ending commit stores an exact terminate for its retired child");
+        if (refuseOpen)
+        {
+            await Step(child);
+            check(refused == 2 && !worker.Owns && store.Instances[finished.Id] == marker && cascades.Count == 1,
+                "a refused marker page resets the owner and preserves the held obligation for retry");
+        }
         if (total > 1)
         {
             await Step(child);
