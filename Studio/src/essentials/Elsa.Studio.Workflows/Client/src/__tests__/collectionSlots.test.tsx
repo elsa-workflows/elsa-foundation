@@ -6,7 +6,8 @@ import { addCollectionItem, collectionSlotItems, getCollectionSlots, removeColle
 import { createActivityNode } from "../workflowAdapter";
 import { CollectionSlotEditor } from "../workflow-editor/CollectionSlotEditor";
 import { collectionActivity, sequenceNode, leafNode } from "./fixtures";
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
+import { buildDraftFromJson } from "../workflowSerialization";
 
 const catalog = collectionActivity("switch");
 const empty = () => createActivityNode(catalog, "switch");
@@ -73,6 +74,30 @@ describe("catalog collection slots", () => {
     expect(view.element.textContent).toContain("Choose a supported match mode");
     expect(view.current().structure!.payload.mode).toBe("\uFEFF");
   });
+
+  it.each([["MatchAny"], ["MatchFirst"], [], 42, false, { toString: "invalid" }].map(mode => ({ mode })))(
+    "keeps malformed Code-view mode $mode visibly unsupported until explicitly repaired", ({ mode }) => {
+      const node = empty();
+      node.structure!.payload.mode = mode;
+      const current: WorkflowDraft = {
+        id: "draft", definitionId: "definition", state: { rootActivity: node, inputs: [], outputs: [], variables: [] },
+        layout: [], validationErrors: []
+      };
+      const parsed = buildDraftFromJson(JSON.stringify({ state: current.state }), current);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) throw new Error(parsed.error);
+      const loaded = parsed.draft.state.rootActivity!;
+      const view = mount(loaded);
+      const select = view.element.querySelector("select")!;
+      expect(["MatchFirst", "MatchAny"]).not.toContain(select.value);
+      expect(view.element.textContent).toContain("Unknown mode");
+      expect(view.element.textContent).toContain("Choose a supported match mode");
+      expect(view.current().structure!.payload.mode).toEqual(mode);
+      flushSync(() => { select.value = "MatchFirst"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      expect(view.current().structure!.payload.mode).toBeUndefined();
+      expect(view.current().structure!.payload.cases).toBe(loaded.structure!.payload.cases);
+    }
+  );
 
   it("exposes mode and accurate help, respects read-only and retains unknown modes", () => {
     const node = empty();

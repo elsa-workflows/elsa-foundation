@@ -21,7 +21,8 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
   const rawMode = activity.structure?.payload.mode;
   // Match .NET IsNullOrWhiteSpace: trim() also removes BOM and omits NEXT LINE.
   const defaultMode = rawMode == null || (typeof rawMode === "string" && /^\p{White_Space}*$/u.test(rawMode));
-  const mode = defaultMode || rawMode === "MatchFirst" ? "MatchFirst" : String(rawMode);
+  const modeValue = typeof rawMode === "string" ? rawMode : "";
+  const mode = defaultMode ? "MatchFirst" : modeValue;
   return (
     <section className="wf-slot-collection-slots" aria-label={collection.displayName}>
       <div className="wf-slot-collection-heading">
@@ -36,7 +37,7 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
         }}>
           <option value="MatchFirst">Match first</option>
           <option value="MatchAny">Match any</option>
-          {mode !== "MatchFirst" && mode !== "MatchAny" ? <option value={mode}>Unknown mode: {mode}</option> : null}
+          {mode !== "MatchFirst" && mode !== "MatchAny" ? <option value={mode}>{typeof rawMode === "string" ? `Unknown mode: ${mode}` : "Unknown mode"}</option> : null}
         </select>
         <p className="wf-muted">{mode === "MatchAny"
           ? "All matching cases run. Their activities can wait independently; the Switch completes after all selected activities finish. Default runs only when no case matches."
