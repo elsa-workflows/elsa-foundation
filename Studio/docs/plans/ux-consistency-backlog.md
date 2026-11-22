@@ -851,7 +851,7 @@ G1 and G2 change domain language; follow `docs/agents/domain.md`.
   workflows, JavaScript and Liquid expression editors. (PR #5326)
 - [ ] **A2** (#5262) Capture and review the surfaces listed as not captured under
   [Coverage gaps](#coverage-gaps).
-- [ ] **A3** (#5263) Review dark mode, including dialogs.
+- [x] **A3** (#5263) Review dark mode, including dialogs. (PR #5350)
 - [x] **A4** (#5264) Review narrow viewports. (PR #5344)
 - [x] **A5** (#5265) Run ETL, Extension Builder, External sign-in, User access and the Weather sample in a
   host that enables them, and review them visually. (PR #5326)
