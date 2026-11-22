@@ -1,5 +1,6 @@
-import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
+import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Activity as ActivityIcon, ChevronRight, Info, Undo2 } from "lucide-react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioActivityInputDescriptor, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowRunRelatedLinks } from "./WorkflowRunRelatedLinks";
 import { getActivityExecutionInspection } from "../api/runtime";
@@ -16,6 +17,9 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import { InputRefreshHistory, LostUpdateBadge, VariableWriteDiagnosticsSection } from "./VariableLifecycleEvidence";
+import { ExecutionWarningBadge, ExecutionWarningsSection } from "./ExecutionWarnings";
+import { countLostUpdates, lostUpdateBadgeLabel } from "../variableLifecycle";
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 
@@ -63,9 +67,12 @@ export function WorkflowActivityExecutionDetails({
   onSelectEvidence,
   refreshKey = 0,
   compact = false,
-  prepared
+  prepared,
+  nodeLabelOf
 }: {
   prepared?: PreparedAttachedExecution;
+  /** The authored label of an executable node, so a lost-update warning names the other writer by name. */
+  nodeLabelOf?(executableNodeId: string): string | undefined;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -216,6 +223,8 @@ export function WorkflowActivityExecutionDetails({
             <span className="wf-activity-overview-eyebrow">Selected activity</span>
             <div className="wf-activity-copy-line">
               <h4>{activityLabel}</h4>
+              {currentInspectionState.status === "ready" ? <LostUpdateBadge count={countLostUpdates(currentInspectionState.inspection?.variableWrites)} label={lostUpdateBadgeLabel(currentInspectionState.inspection?.variableWrites)} /> : null}
+              {currentInspectionState.status === "ready" ? <ExecutionWarningBadge warnings={currentInspectionState.inspection?.warnings} /> : null}
               <CopyValueButton
                 value={activityLabel}
                 ariaLabel="Copy activity name"
@@ -271,6 +280,10 @@ export function WorkflowActivityExecutionDetails({
         </li>)}</ul> : <p>No incidents recorded for this execution.</p>}
       </section> : null}
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
+        {currentInspectionState.status === "ready" && currentInspectionState.inspection ? (
+          <VariableWriteDiagnosticsSection inspection={currentInspectionState.inspection} labelOf={nodeLabelOf} />
+        ) : null}
+        {currentInspectionState.status === "ready" ? <ExecutionWarningsSection warnings={currentInspectionState.inspection?.warnings} /> : null}
         <WorkflowActivityInputEvidence
           state={currentInspectionState}
           declarations={declaredInputs}
@@ -451,7 +464,7 @@ function WorkflowActivityInputEvidence({
           Inputs
           {rows.length > 0 ? <span className="wf-runtime-evidence-count" aria-label={`${rows.length} inputs`}>{rows.length}</span> : null}
         </h4>
-        <span className="wf-input-inspection-caption">Evaluated at runtime</span>
+        <span className="wf-input-inspection-caption">Runtime values</span>
       </header>
       {state.status === "loading" ? <p>Loading runtime input evidence...</p> : null}
       {state.status === "failed" ? (
@@ -475,6 +488,7 @@ function WorkflowActivityInputEvidence({
           ))}
         </div>
       ) : null}
+      {state.status === "ready" ? <InputRefreshHistory refreshes={state.inspection?.inputRefreshes} /> : null}
     </section>
   );
 }
@@ -493,7 +507,6 @@ function InputInspectionRowCard({
   inspectionStatus: ActivityExecutionInspectionState["status"];
 }) {
   const latest = row.latestEvaluation;
-  const sourceKind = row.authoredSource?.expressionType || row.compiledBinding?.source || "No source";
   // The input's declaration counts as much as the per-record flags: a masked input (a password hint, or declared
   // sensitive or secret-only) shows nothing of its authored source but the name of a Secret Reference it is bound
   // to, even when the backend did not flag the record. Any other source stays hidden, and so does a masked input's
@@ -504,18 +517,25 @@ function InputInspectionRowCard({
   const sourceProtected = isProtectedSourceAccess(sourceAccess) || isProtectedSourceAccess(row.authoredSource?.accessState ?? row.authoredSource?.access) || !!row.authoredSource?.isSensitive || !!row.compiledBinding?.isSensitive || !!latest?.isSensitive
     || (masked && !secretReference);
   const regionId = useId();
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  const summaryRef = useRef<HTMLElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const focusDetailsButton = () => rowRef.current?.querySelector<HTMLButtonElement>(".wf-input-inspection-info")?.focus();
+  const closeDetailsOnEscape = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape" || event.defaultPrevented || !detailsOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDetailsOpen(false);
+    focusDetailsButton();
+  };
 
   useEffect(() => {
     if (!focusInput) return;
-    const details = detailsRef.current;
-    const summary = summaryRef.current;
-    if (!details || !summary) return;
-    details.open = true;
+    setDetailsOpen(true);
     const frame = requestAnimationFrame(() => {
-      summary.focus();
-      summary.scrollIntoView?.({ block: "nearest" });
+      const button = rowRef.current?.querySelector<HTMLButtonElement>(".wf-input-inspection-info");
+      button?.focus();
+      button?.scrollIntoView?.({ block: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusInput, row.rowKey]);
@@ -523,11 +543,10 @@ function InputInspectionRowCard({
   const runtimeSnapshot = inputRuntimeSnapshot(row);
 
   return (
-    <div className="wf-runtime-input wf-input-inspection-row" role="listitem">
+    <div ref={rowRef} className="wf-runtime-input wf-input-inspection-row" role="listitem">
       <div className="wf-input-inspection-value-row">
         <div className="wf-input-inspection-identity">
           <strong className="wf-input-inspection-name">{row.name}</strong>
-          <small className="wf-input-inspection-type" title={row.declaredType}>{shortTypeName(row.declaredType) || "Unknown type"}</small>
         </div>
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
@@ -536,43 +555,57 @@ function InputInspectionRowCard({
             </p>
           )}
         </div>
+        <StudioButton
+          variant="ghost"
+          size="sm"
+          className="wf-input-inspection-info"
+          aria-label={`Technical details for ${row.name}`}
+          title={`Technical details for ${row.name}`}
+          aria-expanded={detailsOpen}
+          aria-controls={regionId}
+          onClick={() => setDetailsOpen(open => !open)}
+          onKeyDown={closeDetailsOnEscape}
+        >
+          <Info size={16} aria-hidden="true" />
+        </StudioButton>
       </div>
-      <details ref={detailsRef} className="wf-input-inspection-disclosure">
-        <summary ref={summaryRef} tabIndex={0} className="wf-input-inspection-summary" aria-controls={regionId}>
-          <ChevronRight size={14} aria-hidden="true" />
-          <span>Source &amp; diagnostics</span>
-          <small>{sourceProtected ? (isProtectedSourceAccess(sourceAccess) ? "Source hidden" : "Protected source") : sourceKind}</small>
-        </summary>
-        <div id={regionId} className="wf-input-inspection-content">
-          <section className="wf-input-inspection-detail wf-input-inspection-source" aria-label={`${row.name} authored source`}>
-            <h5>Authored source</h5>
-            <AuthoredInputSource
-              row={row}
-              source={shownSource}
-              compiledBindingShown={!masked}
-              sourceAccess={sourceAccess}
-              protectedSource={sourceProtected}
-              expressionEditors={expressionEditors}
-            />
-          </section>
-          <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
-            <h5>Capture details</h5>
-            {latest ? (
-              <dl className="wf-input-inspection-metadata">
-                {[
-                  ["Type", row.declaredType || "Unknown type"],
-                  ["Capture", formatCaptureMode(latest.captureMode)],
-                  ["Captured", formatDate(latest.capturedAt)],
-                  ...(evaluationPhase(latest) ? [["Phase", formatCaptureMode(evaluationPhase(latest)!)]] : []),
-                  ...(typeof evaluationSequence(latest) === "number" ? [["Sequence", String(evaluationSequence(latest))]] : [])
-                ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-              </dl>
-            ) : <p>No runtime evaluation was recorded.</p>}
-            {row.states.length > 0 ? <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p> : null}
-            {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
-          </section>
-        </div>
-      </details>
+      <div
+        id={regionId}
+        role="region"
+        aria-label={`${row.name} technical details`}
+        className="wf-input-inspection-content"
+        hidden={!detailsOpen}
+        onKeyDown={closeDetailsOnEscape}
+      >
+        <section className="wf-input-inspection-detail wf-input-inspection-source" aria-label={`${row.name} authored source`}>
+          <h5>Authored source</h5>
+          <AuthoredInputSource
+            row={row}
+            source={shownSource}
+            compiledBindingShown={!masked}
+            sourceAccess={sourceAccess}
+            protectedSource={sourceProtected}
+            expressionEditors={expressionEditors}
+          />
+        </section>
+        <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
+          <h5>Capture details</h5>
+          <dl className="wf-input-inspection-metadata">
+            {[
+              ["Type", row.declaredType || "Unknown type"],
+              ...(latest ? [
+                ["Capture", formatCaptureMode(latest.captureMode)],
+                ["Captured", formatDate(latest.capturedAt)],
+                ...(evaluationPhase(latest) ? [["Phase", formatCaptureMode(evaluationPhase(latest)!)]] : []),
+                ...(typeof evaluationSequence(latest) === "number" ? [["Sequence", String(evaluationSequence(latest))]] : [])
+              ] : [])
+            ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          </dl>
+          {!latest ? <p>No runtime evaluation was recorded.</p> : null}
+          {row.states.length > 0 ? <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p> : null}
+          {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
+        </section>
+      </div>
     </div>
   );
 }

@@ -1131,7 +1131,6 @@ public sealed class ResponseReplaySafetyProcessTests
         var candidateArtifact = candidateClosure.GetProperty("artifacts").EnumerateArray().Single(artifact =>
             artifact.GetProperty("identity").GetProperty("artifactId").GetString() == candidateArtifactId);
         var baselineProjection = AuthoredBehaviorProjection(baselineArtifact);
-        ApplyStructuredBodyContractChange(baselineProjection);
         var candidateProjection = AuthoredBehaviorProjection(candidateArtifact);
         Assert.True(JsonNode.DeepEquals(baselineProjection, candidateProjection),
             "Normal candidate publication changed authored variables, node order/types, or input bindings beyond the reviewed contract-profile/version metadata allowance.\n" +
@@ -1147,40 +1146,6 @@ public sealed class ResponseReplaySafetyProcessTests
         projected.Remove("createdAt");
         StripAllowedContractMetadata(projected);
         return projected;
-    }
-
-    /// <summary>
-    /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
-    /// Its <c>String</c> Body type is upgraded to the current contract. Spec 1169 (#3477) also corrects
-    /// the documented optional Body result projection. Issue #3476 corrects the optional ContentType result projection.
-    /// Historical closure bytes remain unchanged; every other difference still fails.
-    /// </summary>
-    private static void ApplyStructuredBodyContractChange(JsonObject artifact)
-    {
-        const string bodyType = "System.Text.Json.JsonElement?";
-        var writeResponse = ((artifact["rootActivity"]?["childSlots"] as JsonArray) ?? [])
-            .SelectMany(slot => (slot?["activities"] as JsonArray) ?? [])
-            .OfType<JsonObject>()
-            .Single(node => node["authoredActivityId"]?.GetValue<string>() == "write-response");
-
-        Upgrade(writeResponse["inputBindings"]?["Body"]?["targetType"], "alias");
-        Upgrade(writeResponse["inputBindings"]?["Body"]?["expression"]?["resultType"], "id");
-        Upgrade(writeResponse["activityContract"]?["inputs"]?["Body"]?["type"], "alias");
-        Upgrade(writeResponse["activityContract"]?["result"]?["projections"]?["Body"]?["type"], "alias");
-        if (writeResponse["activityContract"]?["result"]?["projections"]?["Body"] is JsonObject projection)
-        {
-            projection["isRequired"] = false;
-            if (projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
-                projection["sourceRepresentation"] = "TypedValue";
-        }
-        if (writeResponse["activityContract"]?["result"]?["projections"]?["ContentType"] is JsonObject contentTypeProjection)
-            contentTypeProjection["isRequired"] = false;
-
-        void Upgrade(JsonNode? holder, string property)
-        {
-            if (holder is JsonObject value && value[property]?.GetValue<string>() == "String")
-                value[property] = bodyType;
-        }
     }
 
     private static void StripAllowedContractMetadata(JsonObject artifact)

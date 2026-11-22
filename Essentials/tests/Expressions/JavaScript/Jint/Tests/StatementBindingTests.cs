@@ -1,9 +1,10 @@
 using System.Text.Json;
 using Acornima;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Expressions.JavaScript.Jint.Options;
+using Elsa.Expressions.JavaScript.Jint.Services;
 using Jint.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -52,16 +53,17 @@ public sealed class StatementBindingTests
     }
 
     [Fact]
-    public async Task Statement_body_cannot_mutate_its_read_only_args_snapshot()
+    public async Task Statement_body_changes_its_args_locally_and_never_the_request_snapshot()
     {
+        // Spec 1228: args are plain, changeable values; a change is local to the evaluation and is never a write.
         var values = new Dictionary<string, JsonElement>
         {
             ["order"] = JsonSerializer.SerializeToElement(new { total = 42 })
         };
 
-        await Assert.ThrowsAsync<JavaScriptException>(() =>
-            EvaluateAsync("args.order.total = 0; return args.order.total;", values));
+        var result = await EvaluateAsync("args.order.total = 0; return args.order.total;", values);
 
+        Assert.Equal(0, result.GetInt32());
         Assert.Equal(42, values["order"].GetProperty("total").GetInt32());
     }
 
@@ -132,38 +134,68 @@ public sealed class StatementBindingTests
     }
 
     [Fact]
-    public async Task Statement_body_honors_cancellation_during_evaluation()
+    public void Statement_body_honors_cancellation_during_evaluation()
     {
         using var cancellation = new CancellationTokenSource();
-
-        var evaluation = Task.Run(async () =>
+        var engine = IsolatedJintEngine.Create(new FeatureOptions
         {
-            cancellation.CancelAfter(TimeSpan.FromMilliseconds(50));
-            return await EvaluateAsync(
-                "while (true) { }",
-                cancellationToken: cancellation.Token,
-                configureFeature: feature =>
-                {
-                    feature.ExecutionTimeout = TimeSpan.FromSeconds(5);
-                    feature.MaxStatements = null;
-                    feature.MaxRecursionDepth = null;
-                    // A delayed cancellation callback must not race an unrelated allocation limit.
-                    feature.MaxMemoryBytes = null;
-                });
-        });
+            ExecutionTimeout = null,
+            MaxMemoryBytes = null,
+            // Bound a broken cancellation constraint by work, without racing a wall-clock deadline.
+            MaxStatements = 1_000
+        }, cancellation.Token);
 
-        // Jint reports cancellation observed during execution with its own cancellation exception.
-        var exception = await Assert.ThrowsAnyAsync<Exception>(() => evaluation.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.True(exception is ExecutionCanceledException or OperationCanceledException, exception.ToString());
+        // This callback belongs only to this test's engine. Its interpreted call cancels after execution starts,
+        // using the same engine factory and statement preparation as the production binding evaluator.
+        engine.SetValue("cancelEvaluation", new Action(() => cancellation.Cancel()));
+        var statement = PreparedJavaScript.Binding("cancelEvaluation(); while (true) { }");
+
+        Assert.False(cancellation.IsCancellationRequested);
+        Assert.Throws<ExecutionCanceledException>(() => engine.Evaluate(statement));
+        Assert.True(cancellation.IsCancellationRequested);
     }
 
     [Fact]
-    public async Task Statement_body_stripped_capability_error_keeps_the_binding_diagnostic()
+    public async Task Statement_body_evaluator_rejects_an_already_cancelled_request()
     {
-        var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(() =>
-            EvaluateAsync("return new Date();"));
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
 
-        Assert.Contains("ambient capability [Date]", exception.Message, StringComparison.Ordinal);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            EvaluateAsync("return 42;", cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public async Task Statement_body_evaluator_forwards_cancellation_after_request_validation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var services = new ServiceCollection();
+        new JintFeature
+        {
+            ExecutionTimeout = null,
+            MaxMemoryBytes = null,
+            MaxStatements = 1_000
+        }.ConfigureServices(services);
+
+        // Options resolve after the evaluator's entry cancellation check. Cancelling there proves the
+        // request token still reaches Jint, rather than only exercising that early return.
+        services.Configure<FeatureOptions>(_ => cancellation.Cancel());
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableJavaScriptEvaluator>();
+        var values = new Dictionary<string, JsonElement>();
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "while (true) { }",
+            new Elsa.Primitives.Models.TypeReference("Any"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
+
+        Assert.False(cancellation.IsCancellationRequested);
+        await Assert.ThrowsAsync<ExecutionCanceledException>(() =>
+            evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, cancellation.Token)).AsTask());
+        Assert.True(cancellation.IsCancellationRequested);
     }
 
     [Fact]
@@ -198,7 +230,7 @@ public sealed class StatementBindingTests
             new Elsa.Primitives.Models.TypeReference("Any"),
             bindings,
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(definition, values, cancellationToken));
     }
 }

@@ -140,7 +140,8 @@ public sealed class Elsa3VariableExpressionImportTests
         var root = insideLoop ? loop : Activity("root", "Elsa.Sequence", children: [loop, consumer]);
         var definition = Workflow("loop-variable-expression", root, variables: [Variable("captured", "captured")]);
 
-        var result = await Fixture().ImportAsync(definition, "loop-variable-expression.json");
+        var fixture = new Elsa3MemoryReferenceImportFixture(ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "Object"));
+        var result = await fixture.ImportAsync(definition, "loop-variable-expression.json");
 
         if (insideLoop)
         {

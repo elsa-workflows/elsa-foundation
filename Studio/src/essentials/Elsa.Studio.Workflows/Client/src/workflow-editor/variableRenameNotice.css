@@ -1,0 +1,47 @@
+/* Shown only when a rename leaves references to repair by hand, so it always asks for attention. */
+.wf-variable-rename-notice {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 46%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 9%, var(--studio-surface));
+  color: var(--studio-text);
+  font-size: 12px;
+}
+
+.wf-variable-rename-notice-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wf-variable-rename-notice-heading p {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.wf-variable-rename-notice ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.wf-variable-rename-notice li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 2px 0;
+}
+
+.wf-variable-rename-notice li span {
+  color: var(--studio-text-muted);
+  overflow-wrap: break-word;
+}
+
+.wf-variable-rename-notice-target {
+  justify-content: flex-start;
+  text-align: start;
+}

@@ -12,7 +12,7 @@ internal sealed record ModuleManagementRegistryResponse(
     IReadOnlyList<ModuleManagementModule> Modules,
     IReadOnlyList<ModuleManagementPackage> Packages,
     IReadOnlyList<ModuleManagementDropFolderPackage> DropFolderPackages,
-    IReadOnlyList<ModuleManagementFeed> Feeds,
+    IReadOnlyList<ModuleManagementRegistryFeed> Feeds,
     ModuleManagementRetentionPolicy RetentionPolicy,
     ModuleManagementCapabilities Capabilities,
     IReadOnlyList<ModuleManagementDiagnostic> Diagnostics);
@@ -67,6 +67,16 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
 
 internal sealed record ModuleManagementDropFolderPackage(string FileName, string Path, long Size, DateTimeOffset LastWriteTimeUtc);
 
+/// <summary>A feed as the registry reports it to the browser: never its credential (#3735).</summary>
+internal sealed record ModuleManagementRegistryFeed(
+    string Name,
+    string? ServiceIndex,
+    string? DirectoryPath,
+    bool IncludeAll,
+    IReadOnlyList<string> IncludePatterns,
+    ModuleManagementDirectoryFeedSettings Directory);
+
+/// <summary>A feed write request. The credential is accepted only here, on the way into the stored configuration.</summary>
 internal sealed record ModuleManagementFeed(
     string Name,
     string? ServiceIndex,

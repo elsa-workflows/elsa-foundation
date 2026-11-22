@@ -1,15 +1,32 @@
 using Acornima;
+using Acornima.Ast;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Metadata-only JavaScript authoring assistance; it parses source but never loads Jint or evaluates it.</summary>
-internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
+internal sealed partial class JavaScriptExpressionToolingProvider(
+    IJavaScriptDotNetUsageAnalyzer? dotNetUsage = null,
+    IEnumerable<JavaScriptHostFunctionDeclaration>? hostFunctions = null) : IExpressionToolingProvider
 {
+    /// <summary>What each built-in takes and returns, for completions and hover (spec 1223 FR-006, FR-007, FR-026).</summary>
+    private static readonly (string Name, string[] Parameters, string Documentation)[] BuiltInSignatures =
+    [
+        (JavaScriptBuiltInFunctions.NewGuid, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.NewGuidString, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.GetGuidString, [], "A new GUID, as its 36-character text."),
+        (JavaScriptBuiltInFunctions.NewShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
+        (JavaScriptBuiltInFunctions.GetShortGuid, [], "A new GUID in Elsa 3's short form: Base64 of its bytes without '/', '+' and '=' (at most 22 characters)."),
+        (JavaScriptBuiltInFunctions.ParseGuid, ["text"], "The 36-character text of the GUID that text denotes, in any form .NET's Guid.Parse accepts; other text fails."),
+        (JavaScriptBuiltInFunctions.StringToBase64, ["text"], "The standard Base64 of the text's UTF-8 bytes."),
+        (JavaScriptBuiltInFunctions.StringFromBase64, ["base64"], "The UTF-8 text of standard Base64; invalid Base64 fails."),
+    ];
+
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
         SupportsCompletions: true,
         SupportsHover: true,
@@ -91,7 +108,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         !string.IsNullOrWhiteSpace(context.ExpectedResultType) &&
         string.Equals(symbol.Detail, context.ExpectedResultType, StringComparison.Ordinal);
 
-    private static ExpressionAuthoringContext ProjectContext(ExpressionAuthoringContext context)
+    private ExpressionAuthoringContext ProjectContext(ExpressionAuthoringContext context)
     {
         var values = context.RootSymbols
             .Where(symbol => symbol.Kind is ExpressionSymbolKind.WorkflowInput or ExpressionSymbolKind.ActivityResult)
@@ -138,23 +155,38 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
                 [
                     new("getVariable(name)", ["name"], new("Any"))
                 ]));
-            projected.AddRange(variables
-                .Where(symbol => IsIdentifier(symbol.Name))
-                .Select(symbol => new ExpressionSymbol(
-                    $"javascript:getter:{symbol.SymbolId}",
-                    $"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}",
-                    ExpressionSymbolKind.Function,
-                    symbol.ValueShape,
-                    $"Reads the '{symbol.Name}' workflow variable.",
-                    [new($"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}()", ReturnShape: symbol.ValueShape)])));
+            // No generated get<Name>() accessors: the runtime does not provide them (spec 1222 FR-036, ADR 0089 decision 6).
         }
+
+        // The built-in functions and the registered function namespaces, on every JavaScript surface (spec 1223 FR-003).
+        foreach (var (name, parameters, documentation) in BuiltInSignatures)
+        {
+            projected.Add(new(
+                $"javascript:{name}",
+                name,
+                ExpressionSymbolKind.Function,
+                Documentation: documentation,
+                Signatures: [new($"{name}({string.Join(", ", parameters)})", parameters, new("String"))]));
+        }
+
+        foreach (var space in (hostFunctions ?? [])
+                     .Select(function => function.Name)
+                     .Where(name => name.Contains('.', StringComparison.Ordinal))
+                     .GroupBy(name => name[..name.IndexOf('.', StringComparison.Ordinal)], StringComparer.Ordinal)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            projected.Add(new(
+                $"javascript:{space.Key}",
+                space.Key,
+                ExpressionSymbolKind.Namespace,
+                new("Functions", ExpressionValueKind.Object, false, Members: space
+                    .Select(name => new ExpressionValueMember(name[(space.Key.Length + 1)..], new(), $"Host function {name}."))
+                    .ToArray()),
+                $"Functions the host registered under '{space.Key}'."));
+        }
+
         return context with { RootSymbols = projected };
     }
-
-    private static bool IsIdentifier(string value) =>
-        value.Length > 0 &&
-        (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
-        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
 
     private static (string Source, ExpressionToolingPosition Position) NormalizeEmptyAccessorCalls(
         string source,
@@ -173,13 +205,18 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
     [GeneratedRegex(@"(?<=[A-Za-z0-9_$])\(\)(?=\.)", RegexOptions.CultureInvariant)]
     private static partial Regex EmptyAccessorCallPattern();
 
-    private static IReadOnlyList<ExpressionDiagnostic> ParseDiagnostics(string source, string revision)
+    private IReadOnlyList<ExpressionDiagnostic> ParseDiagnostics(string source, string revision)
     {
         try
         {
             // Share grammar selection with runtime without evaluating authored code.
-            JavaScriptBindingSyntax.IsExpression(source);
-            return [];
+            Node parsed = JavaScriptBindingSyntax.IsExpression(source)
+                ? new Parser().ParseExpression(source, strict: true)
+                : new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            return ReservedNameDiagnostics(parsed, revision)
+                .Concat(ShadowedNameDiagnostics(parsed, revision))
+                .Concat(DotNetUsageDiagnostics(source, revision))
+                .ToArray();
         }
         catch (ParseErrorException exception)
         {
@@ -198,4 +235,54 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
             ];
         }
     }
+
+    /// <summary>
+    /// A declaration of <c>input</c>, <c>activities</c>, <c>workflow</c>, a built-in function name or a registered
+    /// namespace root hides that name in the expression (spec 1223 FR-027): a warning, as for scripts
+    /// (<c>Scripts/ShadowedFunction</c>).
+    /// </summary>
+    private IEnumerable<ExpressionDiagnostic> ShadowedNameDiagnostics(Node root, string revision)
+    {
+        var shadowable = new HashSet<string>(["input", "activities", "workflow"], StringComparer.Ordinal);
+        shadowable.UnionWith(JavaScriptBuiltInFunctions.Names);
+        shadowable.UnionWith((hostFunctions ?? [])
+            .Select(function => function.Name)
+            .Where(name => name.Contains('.', StringComparison.Ordinal))
+            .Select(name => name[..name.IndexOf('.', StringComparison.Ordinal)]));
+        return JavaScriptReservedNames.CollectDeclarations(root, shadowable.Contains)
+            .Select(identifier => new ExpressionDiagnostic(
+                "JavaScript/ShadowedFunction",
+                ExpressionDiagnosticSeverity.Warning,
+                $"'{identifier.Name}' is a name the platform reserves for a built-in function, a registered function namespace or a read root; the expression's own declaration hides it. Rename it unless that is intended.",
+                revision,
+                JavaScriptReservedNames.RangeOf(identifier)));
+    }
+
+    /// <summary>
+    /// Live .NET objects and types are not available under the default JSON-only strategy (spec 1223 FR-017 to FR-019):
+    /// a .NET type reference or a PascalCase invocation on a value the expression did not define is refused at design
+    /// time and publish.
+    /// </summary>
+    private IEnumerable<ExpressionDiagnostic> DotNetUsageDiagnostics(string source, string revision) =>
+        (dotNetUsage?.Analyze(source) ?? [])
+            .Select(usage => new ExpressionDiagnostic(
+                "JavaScript/DotNetMemberUsage",
+                ExpressionDiagnosticSeverity.Error,
+                usage.Message,
+                revision,
+                usage.Range));
+
+    /// <summary>
+    /// <c>complete</c> is a reserved built-in name in every JavaScript surface (spec 1208 FR-007a, ADR 0045 §5): a binding
+    /// that declares it, as a variable, function, class, parameter or catch binding, is refused at design time.
+    /// </summary>
+    private static IReadOnlyList<ExpressionDiagnostic> ReservedNameDiagnostics(Node root, string revision) =>
+        JavaScriptReservedNames.CollectCompleteDeclarations(root)
+            .Select(identifier => new ExpressionDiagnostic(
+                "JavaScript/ReservedName",
+                ExpressionDiagnosticSeverity.Error,
+                $"'{JavaScriptScriptBuiltIns.Complete}' is a reserved built-in name and cannot be declared in an expression. Rename it.",
+                revision,
+                JavaScriptReservedNames.RangeOf(identifier)))
+            .ToArray();
 }

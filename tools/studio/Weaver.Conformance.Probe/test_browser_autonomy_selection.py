@@ -35,7 +35,7 @@ const html=`<!doctype html><section role="region" aria-label="Weaver assistant">
 const scenario=${JSON.stringify(SCENARIO)};
 const wrapper=document.querySelector('.weaver-auto-apply'),button=wrapper.querySelector('button'),menu=wrapper.querySelector('[role=menu]');
 button.addEventListener('click',()=>{menu.hidden=!menu.hidden;});
-async function put(body){return fetch('/_elsa/agent/sessions/s1/autonomy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+async function put(body){return fetch('/_elsa/weaver/sessions/s1/autonomy',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
 menu.querySelector('button').addEventListener('click',async()=>{
  menu.hidden=true;
  if(scenario==='no-put')return;
@@ -52,10 +52,10 @@ menu.querySelector('button').addEventListener('click',async()=>{
 let held;
 const server=createServer((request,response)=>{
  if(request.method==='GET'&&request.url==='/resource'){response.setHeader('Content-Type','text/html');response.end(html);return;}
- if(request.method==='PUT'&&request.url==='/_elsa/agent/sessions/s1/autonomy'){
+ if(request.method==='PUT'&&request.url==='/_elsa/weaver/sessions/s1/autonomy'){
   if(SCENARIO==='lost'){held=response;return;}
   response.setHeader('Content-Type','application/json');
-  if(SCENARIO==='busy'){response.statusCode=409;response.end(JSON.stringify({data:null,error:{code:'agent.session.busy'}}));return;}
+  if(SCENARIO==='busy'){response.statusCode=409;response.end(JSON.stringify({data:null,error:{code:'weaver.session.busy'}}));return;}
   response.end(JSON.stringify({data:{...created,autonomyMode:'manual',revision:SCENARIO==='wrong-ack'?5:1},error:null}));return;
  }
  response.statusCode=404;response.end();
@@ -67,7 +67,7 @@ const context=await browser.newContext(),realPage=await context.newPage();
 const requests=[],retained=[],result={evidence:[]};
 realPage.on('request',request=>{
  const url=new URL(request.url());
- if(url.origin!==backend||!url.pathname.startsWith('/_elsa/agent/')||!['POST','PUT','PATCH','DELETE'].includes(request.method()))return;
+ if(url.origin!==backend||!url.pathname.startsWith('/_elsa/weaver/')||!['POST','PUT','PATCH','DELETE'].includes(request.method()))return;
  requests.push({url:request.url(),method:request.method(),body:request.postDataJSON()});
 });
 const page={waitForResponse:(predicate,options)=>realPage.waitForResponse(predicate,{...options,timeout:1500})};
@@ -102,7 +102,7 @@ console.log(JSON.stringify(observed));
         self.assertIsNone(observed["cause"])
         self.assertEqual({"autonomyMode": "manual", "maxAutonomyMode": "full-auto",
                           "allowedAutonomyModes": ["manual", "auto-read-only", "full-auto"], "revision": 1}, observed["acknowledgement"])
-        self.assertEqual([{"method": "PUT", "path": "/_elsa/agent/sessions/s1/autonomy",
+        self.assertEqual([{"method": "PUT", "path": "/_elsa/weaver/sessions/s1/autonomy",
                            "body": {"autonomyMode": "manual", "expectedRevision": 0}}], observed["requests"])
         self.assertEqual({"state": "acknowledged", "pendingMode": None, "ariaBusy": "false", "label": "Manual review",
                           "statusCount": 0, "mode": "manual"}, observed["selector"])

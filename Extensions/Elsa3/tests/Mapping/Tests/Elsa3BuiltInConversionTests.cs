@@ -43,7 +43,8 @@ public sealed class Elsa3BuiltInConversionTests
         Assert.Equal("00:00:05", Text(Input(Node(state, "delay"), "Duration")));
         Assert.Equal("[1,2]", Text(Input(Node(state, "loop"), "Collection")));
         Assert.Equal("body", Text(Input(Node(state, "respond"), "Body")));
-        Assert.Equal("{}", Text(Input(Node(state, "respond"), "Headers")));
+        // #3202: the empty header map Elsa 3 saves is no binding; Elsa 4 then sends no extra headers, as Elsa 3 did.
+        Assert.DoesNotContain(Node(state, "respond").Inputs, input => input.ReferenceKey == "Headers");
         Assert.Equal("{}", Text(Input(Node(state, "dispatch"), "Inputs")));
         // R2: Elsa 4 cancels the child by default; Elsa 3 did not.
         Assert.Equal("false", Text(Input(Node(state, "dispatch"), "CancelChildOnParentCancellation")));
@@ -63,7 +64,7 @@ public sealed class Elsa3BuiltInConversionTests
     [Fact]
     public async Task A_captured_script_result_is_read_from_the_elsa4_result_output()
     {
-        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("1")), ("result", Captured("script-result")));
+        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("'one'")), ("result", Captured("script-result")));
         var write = Activity("write", "Elsa.WriteLine", ("text", Captured("script-result")));
 
         var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", script, write));
@@ -80,11 +81,12 @@ public sealed class Elsa3BuiltInConversionTests
     public async Task A_captured_event_result_is_read_from_the_elsa4_payload_output()
     {
         var wait = Activity("wait", "Elsa.Event", ("eventName", Literal("order.approved")), ("result", Captured("approval")));
-        var write = Activity("write", "Elsa.WriteLine", ("text", Captured("approval")));
+        // A dynamic input: an event payload into a typed one is refused (#4898).
+        var write = Activity("write", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("approval")));
 
         var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", wait, write));
 
-        var text = Input(Node(state, "write"), "text");
+        var text = Input(Node(state, "write"), "Payload");
         Assert.Equal("ActivityResult", text.Value.ExpressionType);
         var reference = Assert.IsType<JsonElement>(text.Value.Value);
         Assert.Equal("wait", reference.GetProperty("producerNodeId").GetString());

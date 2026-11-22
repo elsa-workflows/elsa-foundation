@@ -5,6 +5,9 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Internal;
 using Elsa.Workflows.Design.Validations.Validators;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTestHelpers;
 
@@ -36,7 +39,9 @@ public sealed class ProjectedInputValidationTests
         var producer = new ActivityNode("producer", "test", [], []);
         var predicate = laterProducer ? Result("foreign", "producer") : Argument("foreign", true, "Literal");
         var structures = new ProjectedStructure([consumer, producer], predicate);
-        var errors = (await Validate(new ValueFlowValidator(structures), StateOf(consumer, producer))).ToArray();
+        using var provider = ActivityDataSelectionTestSupport.Provider(new StubActivityCatalog().Add("test"), structures);
+        var analyzer = provider.GetRequiredService<IActivityDataSelectionAnalyzer>();
+        var errors = (await Validate(new ValueFlowValidator(structures, analyzer), StateOf(consumer, producer))).ToArray();
         if (laterProducer) Assert.Contains(errors, error => error.Type == "ValueFlow/UnavailableProducer" && error.Path.EndsWith("Case:a:Condition", StringComparison.Ordinal));
         else Assert.Empty(errors);
         Assert.DoesNotContain(errors, error => error.Path.EndsWith("Value", StringComparison.Ordinal));

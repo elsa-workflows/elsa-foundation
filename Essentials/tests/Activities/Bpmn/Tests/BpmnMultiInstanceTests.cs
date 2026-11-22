@@ -332,7 +332,7 @@ public sealed class BpmnMultiInstanceTests
             NewInvokeWorkItem(),
             process,
             NewRunningProcessState(),
-            scopedVariableEnvelopes: new Dictionary<string, ValueEnvelope> { [CollectionVariable] = SecretBindingTestSupport.Withheld("Elsa.Any") });
+            scopedVariableEnvelopes: new Dictionary<string, ValueEnvelope> { [CollectionVariable] = SecretBindingTestSupport.Withheld("Any") });
 
         var continuation = await activity.ExecuteStructureAsync(context);
 

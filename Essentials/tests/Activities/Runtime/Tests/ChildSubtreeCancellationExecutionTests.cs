@@ -167,6 +167,54 @@ public sealed class ChildSubtreeCancellationExecutionTests
         Assert.Contains("not a child of", parent.Fault!.Message, StringComparison.Ordinal);
     }
 
+    // Spec 266: a parent that does not track its children's ids cancels every live child at once.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EveryLiveChild_CancelsEachWaitingSiblingOnce(bool alsoTargetById)
+    {
+        await using var harness = NewHarness(
+            new SubtreeCancellationDirective(TargetExecutionId) { EveryLiveChild = true, AlsoTargetById = alsoTargetById },
+            "actexec-parent", "actexec-b", "actexec-c", "actexec-a", "actexec-a-child");
+
+        var run = await harness.RunAsync(NewExecutable(
+            NewStructuralNode("node-parent", typeof(SubtreeCancellingParentActivity),
+                NewWaitingNode("node-b"),
+                NewWaitingNode("node-c"),
+                NewStructuralNode("node-a", typeof(PassthroughStructuralActivity), WorkflowExecutionHarness.NewProbeNode("node-a-child"))),
+            waitingNodeIds: ["node-b", "node-c"]));
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-parent");
+        run.AssertCompleted("node-a");
+        foreach (var nodeId in new[] { "node-b", "node-c" })
+        {
+            var cancelled = run.State(nodeId);
+            Assert.Equal(ActivityExecutionStatus.Cancelled, cancelled.Status);
+            Assert.Equal("ParentCancelled", cancelled.SubStatus);
+        }
+        Assert.Empty(await ListBookmarksAsync(harness));
+    }
+
+    [Fact]
+    public async Task EveryLiveChildRequestedTwice_FaultsTheEvaluation()
+    {
+        await using var harness = NewHarness(
+            new SubtreeCancellationDirective(TargetExecutionId) { EveryLiveChild = true, StageTwice = true },
+            "actexec-parent", "actexec-b", "actexec-a", "actexec-a-child");
+
+        var run = await harness.RunAsync(
+            NewExecutable(NewStructuralNode("node-parent", typeof(SubtreeCancellingParentActivity),
+                NewWaitingNode("node-b"),
+                NewStructuralNode("node-a", typeof(PassthroughStructuralActivity), WorkflowExecutionHarness.NewProbeNode("node-a-child"))),
+                waitingNodeIds: ["node-b"]),
+            allowPendingWorkOnTerminalCompletion: true);
+
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Contains("every live child is requested more than once", parent.Fault!.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DuplicateTarget_FaultsTheEvaluation()
     {
@@ -247,6 +295,8 @@ public sealed class ChildSubtreeCancellationExecutionTests
         public bool FaultInsteadOfComplete { get; init; }
         public bool DeferAndScheduleLateChild { get; init; }
         public bool StageTwice { get; init; }
+        public bool EveryLiveChild { get; init; }
+        public bool AlsoTargetById { get; init; }
     }
 
     /// <summary>
@@ -273,6 +323,16 @@ public sealed class ChildSubtreeCancellationExecutionTests
                 return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 
             var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
+            if (directive.EveryLiveChild)
+            {
+                runtimeContext.RequestLiveChildrenSubtreeCancellation(directive.Reason);
+                if (directive.StageTwice)
+                    runtimeContext.RequestLiveChildrenSubtreeCancellation(directive.Reason);
+                if (directive.AlsoTargetById)
+                    runtimeContext.RequestChildSubtreeCancellation(directive.TargetActivityExecutionId, directive.Reason);
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+            }
+
             runtimeContext.RequestChildSubtreeCancellation(directive.TargetActivityExecutionId, directive.Reason);
             if (directive.StageTwice)
                 runtimeContext.RequestChildSubtreeCancellation(directive.TargetActivityExecutionId, directive.Reason);

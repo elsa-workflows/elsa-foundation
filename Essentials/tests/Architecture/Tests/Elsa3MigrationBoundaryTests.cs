@@ -263,6 +263,8 @@ public sealed class Elsa3MigrationBoundaryTests
         services.AddSingleton<IWellKnownTypeRegistry>(new StubWellKnownTypeRegistry());
         services.AddSingleton<IActivityDefinitionLookup>(new ThrowingActivityDefinitionLookup());
         services.AddSingleton<IObjectConverter>(new ThrowingObjectConverter());
+        // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         new Elsa3.Mapping.Elsa3MappingFeature().ConfigureServices(services);
         var scope = services.BuildServiceProvider().CreateScope();
         var mapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(

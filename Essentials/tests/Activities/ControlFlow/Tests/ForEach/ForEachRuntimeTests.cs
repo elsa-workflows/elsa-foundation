@@ -179,7 +179,7 @@ public sealed class ForEachRuntimeTests
 
     private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string>? collection)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any", CollectionKind.List);
+        var type = new ValueTypeDescriptor("Any", CollectionKind.List);
         var policy = ValueProtectionPolicy.InstanceInline;
         var envelope = collection is null
             ? ValueEnvelope.Null(type, policy)

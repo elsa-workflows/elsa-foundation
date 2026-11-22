@@ -6,6 +6,8 @@
 
 **Status**: Implemented — merged as [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028) (`88e513b7e`), 2026-10-19
 
+**Superseded in part** by [spec 1223](../1223-expression-capabilities/spec.md) (S-1, initiative #3052): the GUID functions (`newGuid`, `newGuidString`, `newShortGuid`, `getGuidString`, `getShortGuid`), `parseGuid` and the Base64 pair now convert to Elsa 4 built-ins that return Elsa 3's text; `toJson` is rewritten to `JSON.stringify` with a behaviour warning; `Date` and `Math.random` convert natively (FR-014 there). FR-017 here and the refusals of research R-6 for these functions no longer apply; the inlined null/whitespace helpers stay.
+
 **Issue**: [#2717](https://github.com/elsa-workflows/elsa-foundation/issues/2717)
 
 **Depends on**:
@@ -189,7 +191,8 @@ that the migration story covers every refused construct.
    dates as inputs.
 3. **Given** a call to `setOutcome` or `setOutcomes` anywhere in a definition, **When** converted, **Then** the whole
    definition is refused with its own message, saying Elsa 4 scripts have no outcomes, with guidance to route with
-   a Decision or Switch activity whose conditions carry the script's logic.
+   a Decision or Switch activity whose conditions carry the script's logic. Superseded by spec 1208 (S-3), 2026-11:
+   in a RunJavaScript script these calls convert (spec 1208 FR-027); they stay refused in input expressions.
 4. **Given** any refused construct, **When** converted, **Then** the definition is not converted at all (no partial
    output), as for every other `VF-IMP` error.
 5. **Given** `getOutputFrom` with a computed name, lodash `_`, `moment`, a CLR global (`DateTime`, `Guid`,
@@ -287,8 +290,7 @@ reason and date. The plan records a decision about the code paths that exist onl
   names `getWorkflowInstanceId()` and workflow inputs as the Elsa 3 rewrites.
 - **FR-018**: Any use of `Date` MUST be refused with `VF-IMP-005` and guidance that names the Delay activity for
   wait loops and workflow inputs for "now" and date values.
-- **FR-019**: `setOutcome` and `setOutcomes` MUST be refused with their own message and guidance naming Decision and
-  Switch activities.
+- **FR-019**: Replaced by [spec 1208 FR-027](../1208-explicit-outcomes/spec.md) (S-3, 2026-11): `setOutcome` / `setOutcomes` convert to `complete(result, outcomes)`.
 - **FR-020**: All other spec 236 refusals MUST keep their codes and behavior.
 - **FR-021**: The converter documentation MUST carry an Elsa 3 JavaScript migration story: what converts, what is
   refused, and for each refused construct what the Elsa 3 author changes; and it MUST say that workflows which truly

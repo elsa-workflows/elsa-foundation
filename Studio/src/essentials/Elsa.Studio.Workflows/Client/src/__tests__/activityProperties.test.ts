@@ -48,7 +48,7 @@ describe("activity property values", () => {
         resultType: { alias: "String", collectionKind: "Single" },
         parameters: { Existing: { kind: "Literal", value: "preserve me" } },
         options: { mode: "strict" },
-        capabilityProfile: "binding-pure-v1"
+        capabilityProfile: "binding-readonly-v1"
       },
       "JavaScript",
       textDescriptor,
@@ -64,7 +64,7 @@ describe("activity property values", () => {
         OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
       },
       options: { mode: "strict" },
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     });
     expect(readWorkflowInputExpressionArguments(inputDefinition, "JavaScript")).toEqual([
       { argumentName: "OrderId", memberKey: "OrderId" }
@@ -126,7 +126,7 @@ describe("activity property values", () => {
       resultType: { alias: "String", collectionKind: "Single" },
       parameters: { OrderId: { kind: "Literal", value: "manual" } },
       options: {},
-      capabilityProfile: "binding-pure-v1"
+      capabilityProfile: "binding-readonly-v1"
     };
 
     expect(withWorkflowInputExpressionArgument(

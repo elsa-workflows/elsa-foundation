@@ -163,6 +163,46 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task ImplicitJoin_RecordsEveryArrivalAsSchedulingCause()
+    {
+        // Spec 1229 FR-007: a join names every arrival that satisfied it, so inspection orders the joined step after both.
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync([
+            "actexec-flowchart",
+            "actexec-a",
+            "actexec-b",
+            "actexec-c",
+            "actexec-d"
+        ]);
+        var executable = fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-a"),
+                fixture.NewProbeNode("node-b"),
+                fixture.NewProbeNode("node-c"),
+                fixture.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-a", "node-b"),
+                fixture.NewConnection("node-a", "node-c"),
+                fixture.NewConnection("node-b", "node-d"),
+                fixture.NewConnection("node-c", "node-d")
+            ],
+            startNodeId: "node-a");
+
+        await fixture.ExecuteAsync(executable);
+
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListAllSummariesAsync("wfexec-1");
+        var joined = projections.Single(projection => projection.ExecutableNodeId == "node-d");
+        var arrivals = projections.Where(projection => projection.ExecutableNodeId is "node-b" or "node-c").Select(projection => projection.ActivityExecutionId).ToArray();
+        Assert.Equal(2, arrivals.Length);
+        Assert.All(arrivals, arrival => Assert.Contains(arrival, joined.Provenance.CausedBy ?? []));
+        // A single arrival is caused by its producer alone: no extra causes recorded.
+        var continuation = projections.Single(projection => projection.ExecutableNodeId == "node-b");
+        Assert.DoesNotContain("actexec-flowchart", continuation.Provenance.CausedBy ?? []);
+    }
+
+    [Fact]
     public async Task Start_ProjectsChildSchedulingProvenanceForInspection()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);

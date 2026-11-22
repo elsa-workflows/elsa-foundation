@@ -48,3 +48,27 @@ Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.get -> in
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.set -> void
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.get -> int?
 Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.set -> void
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Enter(string! key, System.Text.Json.JsonElement value) -> Jint.Native.JsValue!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Collect(string! key, Jint.Native.JsValue! current, bool assigned) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Preview(string! key, Jint.Native.JsValue! current, bool assigned) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueChange!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.Write(Jint.Native.JsValue! value, string! path) -> Elsa.Expressions.JavaScript.Core.Models.ScriptValueWrite!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueBridge.Begin(Jint.Engine! engine) -> Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.TryFindLoss(double value, out Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber? number) -> bool
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.LossyNumbers.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!>!
+Elsa.Expressions.JavaScript.Jint.Contracts.IScriptValueEvaluation.WrittenExactly.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber!>!
+Elsa.Expressions.JavaScript.Jint.JintFeature.EvaluationThreadStackBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.EvaluationThreadStackBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.EvaluationStackBudgetBytes.get -> long
+Elsa.Expressions.JavaScript.Jint.JintFeature.EvaluationStackBudgetBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.EvaluationThreadStackBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.EvaluationThreadStackBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.EvaluationStackBudgetBytes.get -> long
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.EvaluationStackBudgetBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy
+Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.RefusingPrecisionPolicy() -> void
+const Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.MaxSafeInteger = "9007199254740991" -> string!
+Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Decide(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionContext! context) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDecision!
+static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Diagnose(Elsa.Expressions.JavaScript.Core.Models.JavaScriptPrecisionLoss! loss) -> Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptPrecisionDiagnostic!
+static Elsa.Expressions.JavaScript.Jint.Services.RefusingPrecisionPolicy.Reason(Elsa.Expressions.JavaScript.Core.Models.JavaScriptLossyNumber! number) -> string!

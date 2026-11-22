@@ -1,8 +1,11 @@
+import { RunObservationControls, RunObservationNotice } from "./RunObservationControls";
 import { loadExecutionScope, activityExecutionSummaryFromInspection, type IncidentActivityInspection } from "./executionScope";
 export { activityExecutionSummaryFromInspection } from "./executionScope";
 import { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 export { WorkflowActivityExecutionDetails } from "./WorkflowActivityExecutionDetails";
 import "./activityInspection.css";
+import "./activityExecutionBrowser.css";
+import { RuntimeCapturedValue } from "./RuntimeValueEvidence";
 import { latestActivityExecution } from "../runtimeActivityOrder";
 import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
@@ -11,8 +14,8 @@ import { runtimeValueContextId } from "./RuntimeValueEvidence";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, SlidersHorizontal, Sparkles, Variable, Workflow as WorkflowIcon } from "lucide-react";
+import type { StudioActivityInputDescriptor, StudioWeaverRegistry, StudioBackendSession, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowRunRelatedLinkContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
@@ -57,7 +60,7 @@ import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
 import { getDialogs } from "./dialogs";
 import { isTerminalExecution, readObservedExecution, useExecutionObservation, type ExecutionObservationStatus } from "./useExecutionObservation";
-import type { WorkflowAgentController } from "../workflowAgent";
+import type { WorkflowWeaverController } from "../workflowWeaver";
 import { useWorkflowInspectionContext } from "./useWorkflowInspectionContext";
 export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
@@ -70,7 +73,7 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { getReadOnlyFitViewOptions } from "./readOnlyMinimap";
 import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
@@ -79,6 +82,9 @@ import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
 import "./minimalRunInspection.css";
 import { RetainFlowViewport } from "../graph-authoring/RetainFlowViewport";
+import { VariableLifecyclePanel } from "../VariableLifecycleViews";
+import { supportsVariableLifecycleInspection, type VariableWriteFilter } from "../api/variableLifecycle";
+import { LostUpdateBadge } from "./VariableLifecycleEvidence";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -843,9 +849,9 @@ const incidentActivityLookupBatchSize = 8;
 
 export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressionEditors = [], backendSession, runRelatedLinks = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", initialReturnTo = null, navigate }: {
   context: StudioEndpointContext;
-  ai: StudioAgentRegistry;
-  /** The Workflows module's agent state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
-  weaver?: WorkflowAgentController;
+  ai: StudioWeaverRegistry;
+  /** The Workflows module's Weaver state: the run page contributes the exact Run it shows and the selected activity execution (spec 1193 FR-029). */
+  weaver?: WorkflowWeaverController;
   expressionEditors?: StudioExpressionEditorContribution[];
   backendSession?: StudioBackendSession;
   runRelatedLinks?: StudioWorkflowRunRelatedLinkContribution[];
@@ -936,7 +942,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
     setScopeNavigation(current => current.context === browserContext && current.loading
       ? { context: browserContext, loading: false, error: "Execution scope navigation was interrupted. Retry the scope." } : current);
     setActiveInspectorTab(initialInspectorTab);
-    if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
+    if (initialInspectorTab === "issues" || initialInspectorTab === "activity" || initialInspectorTab === "variables") openInspector();
   }, [browserContext, initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
   // The exact Run Weaver may read while it is shown: its Workflow Instance identity and the activity execution selected on
@@ -1330,6 +1336,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
   };
 
   const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    if (tab === activeInspectorTab) return;
     beginEvidenceNavigation();
     setActiveInspectorTab(tab);
   };
@@ -1580,7 +1587,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
       refreshKey={evidenceRevision}
       activityCatalog={data.activityCatalog} executableNodeFacts={findExecutableNodeFacts(data.executableGraph, execution)}
       expressionEditors={expressionEditors} focusInputKey={focusInputKey} onSelectEvidence={selectActivityExecution}
-      executionNavigation={navigation} childExecutions={children} prepared={prepared} />}
+      executionNavigation={navigation} childExecutions={children} prepared={prepared} nodeLabelOf={labelOfNode} />}
   /></Suspense> : undefined;
 
   useEffect(() => {
@@ -1611,31 +1618,30 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, weaver, expressi
 
   return (
     <>
-      <div className="wf-toolbar">
-        <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
-        <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
-        {selectedDefinitionCanBeReviewed && selectedDefinitionId ? (
-          <button type="button" onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} /> Review workflow definition</button>
-        ) : null}
-        <button type="button" onClick={refreshWorkspace}><RotateCcw size={14} /> Refresh</button>
-        <button type="button" aria-pressed={observation.following} onClick={() => observation.setFollowing(!observation.following)}
-          title="Follow recorded updates without changing the inspected occurrence. Pausing observation does not stop execution.">{observation.following ? "Pause following" : "Follow execution"}</button>
-        <span role="status">{observation.status === "connected" ? data ? "Execution on this canvas" : `Execution ${observation.value?.instance.status ?? "observed"}` : observation.status === "paused" ? "Observation paused · last confirmed state"
-          : observation.status === "disconnected" ? "Execution observation disconnected · last confirmed evidence" : observation.status === "loading" ? "Connecting to execution…" : "Execution observation unavailable"}</span>
-        {observation.error ? <span role="status">{observation.error}</span> : null}
-        {data && instanceAction ? (
-          // data-run-selection names the activity execution the page discloses with the Run, so a journey waits on that state.
-          <button type="button" data-run-selection={selectedActivity?.activityExecutionId ?? ""} onClick={() => dispatchAiAction(ai, instanceAction, {
-            // The page contributes the exact Run itself (workflows.run-inspector), so the prompt attaches none; without the
-            // Workflows agent state the prompt attaches the same identity.
-            workflowExecutionId: data.details.instance.workflowExecutionId,
-            activityExecutionId: selectedActivity?.activityExecutionId ?? null,
-            status: data.details.instance.status,
-            attached: Boolean(weaver?.inspection?.runs)
-          })}>
-            <Sparkles size={13} /> Explain
-          </button>
-        ) : null}
+      <div className="wf-toolbar wf-run-toolbar" role="group" aria-label="Run workspace actions">
+        <div className="wf-run-identity">
+          <button type="button" className="wf-run-tool" onClick={goBack}><ChevronLeft size={14} aria-hidden="true" /> Runs</button>
+          <ChevronRight size={13} aria-hidden="true" />
+          <strong>{data?.definitionName ?? data?.definitionVersion?.definition?.name ?? "Workflow run"}</strong>
+          {data ? <WorkflowStatusBadge status={data.details.instance.status} subStatus={data.details.instance.subStatus} /> : null}
+        </div>
+        <div className="wf-run-actions">
+          {selectedDefinitionCanBeReviewed && selectedDefinitionId ? <button type="button" className="wf-run-tool"
+            onClick={() => openDefinitionDesigner(selectedDefinitionId)}><WorkflowIcon size={14} aria-hidden="true" /> Open definition</button> : null}
+          <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
+          <RunObservationControls following={observation.following} onFollowingChange={observation.setFollowing}
+            onRefresh={refreshWorkspace} complete={observation.status === "connected" && isTerminalExecution(data?.details.instance.status)} />
+          {data && instanceAction ? <OverflowMenu ariaLabel="More run actions" items={[{
+            id: "explain-run", label: <><Sparkles size={13} aria-hidden="true" /> Explain</>,
+            onSelect: () => dispatchAiAction(ai, instanceAction, {
+              workflowExecutionId: data.details.instance.workflowExecutionId,
+              activityExecutionId: selectedActivity?.activityExecutionId ?? null,
+              status: data.details.instance.status,
+              attached: Boolean(weaver?.inspection?.runs)
+            })
+          }]} /> : null}
+        </div>
+        <RunObservationNotice status={observation.status} error={observation.error} />
         {operator.status}
       </div>
       {operator.dialog}
@@ -2156,7 +2162,8 @@ function ReadOnlyWorkflowFlow({
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
-      fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+      fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)}
+      minZoom={0.1}
       onInit={onInit}
       onNodesChange={onNodesChange}
       nodesDraggable={false}
@@ -2168,7 +2175,7 @@ function ReadOnlyWorkflowFlow({
       <Background />
       <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
-      <Controls />
+      <Controls fitViewOptions={getReadOnlyFitViewOptions(flowNodes.length)} />
       <RetainFlowViewport />
     </ReactFlow>
   );
@@ -2409,6 +2416,20 @@ function WorkflowInstanceInspector({
   onToggleMaximized?(): void;
 }) {
   const inspectorRef = useRef<HTMLElement>(null);
+  // Spec 1229 FR-017: the variable lifecycle reads, on hosts that advertise them.
+  // null while the host's capabilities are being read.
+  const [lifecycleSupported, setLifecycleSupported] = useState<boolean | null>(null);
+  const [lifecycleFilter, setLifecycleFilter] = useState<{ filter: VariableWriteFilter; version: number }>({ filter: {}, version: 0 });
+
+  // The badge's filter applies once: another run starts unfiltered.
+  const inspectedRun = summary?.workflowExecutionId;
+  useEffect(() => { setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 })); }, [inspectedRun]);
+
+  useEffect(() => {
+    let current = true;
+    supportsVariableLifecycleInspection(context).then(supported => { if (current) setLifecycleSupported(supported); }, () => { if (current) setLifecycleSupported(false); });
+    return () => { current = false; };
+  }, [context]);
 
   useEffect(() => {
     if (!responsiveOpen) return;
@@ -2433,8 +2454,17 @@ function WorkflowInstanceInspector({
     { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
     { id: "activity", title: "Activity", order: 1, icon: <ActivityIcon size={14} />, render: () => null },
     { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 2, icon: <AlertCircle size={14} />, render: () => null },
-    { id: "details", title: "Details", order: 3, icon: <SlidersHorizontal size={14} />, render: () => null }
+    ...(lifecycleSupported !== false ? [{ id: "variables", title: "Variables", order: 3, icon: <Variable size={14} />, render: () => null }] : []),
+    { id: "details", title: "Details", order: 4, icon: <SlidersHorizontal size={14} />, render: () => null }
   ];
+  const lostUpdateWarningCount = details?.lostUpdateWarningCount ?? 0;
+  // A host without the variable lifecycle reads has no Variables tab: a request for it shows the Timeline.
+  const shownTab: InstanceInspectorTab = activeTab === "variables" && lifecycleSupported === false ? "timeline" : activeTab;
+  // T026: the run's lost-update count opens the write history filtered to lost updates.
+  const openLostUpdates = () => {
+    setLifecycleFilter(current => ({ filter: { outcome: "lostUpdateWarning" }, version: current.version + 1 }));
+    onActiveTabChange("variables");
+  };
 
   return (
     <aside
@@ -2453,7 +2483,11 @@ function WorkflowInstanceInspector({
       }}
     >
       <div className="wf-panel-title wf-instance-panel-title">
-        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={shownTab} onSelect={tabId => {
+          // Opening Variables from its tab shows the whole history; only the badge opens it filtered.
+          if (tabId === "variables" && shownTab !== "variables") setLifecycleFilter(current => ({ filter: {}, version: current.version + 1 }));
+          onActiveTabChange(tabId as InstanceInspectorTab);
+        }} />
         <span className="wf-panel-actions">
           {layoutMode !== "desktop" ? (
             <button
@@ -2496,8 +2530,16 @@ function WorkflowInstanceInspector({
           {state === "failed" ? <WfErrorCard message={error} /> : null}
           {state === "ready" && details ? (
             <div className="wf-instance-tab-content">
-              {activeTab === "timeline" ? (
+              {shownTab === "timeline" ? (
                 <>
+                  {lostUpdateWarningCount > 0 ? (
+                    <div className="wf-instance-lost-updates">
+                      <LostUpdateBadge
+                        count={lostUpdateWarningCount}
+                        label={lostUpdateWarningCount === 1 ? "1 lost update in this run" : `${lostUpdateWarningCount} lost updates in this run`}
+                        onSelect={lifecycleSupported === true ? openLostUpdates : undefined} />
+                    </div>
+                  ) : null}
                   {details.activityNextContinuationToken ? <p className="wf-instance-note" role="note">Runtime returned another activity page. This timeline shows the current bounded page; exact incident links can load an associated activity separately.</p> : null}
                   <WorkflowExecutionTimeline
                     activities={details.activities}
@@ -2507,7 +2549,7 @@ function WorkflowInstanceInspector({
                     onSelectEvidence={openActivityEvidence}
                   />
                 </>
-              ) : activeTab === "activity" ? (activityContent ??
+              ) : shownTab === "activity" ? (activityContent ??
                 <WorkflowActivityExecutionDetails
                   context={context}
                   activity={selectedActivity}
@@ -2518,7 +2560,15 @@ function WorkflowInstanceInspector({
                   focusInputKey={focusInputKey}
                   onSelectEvidence={openActivityEvidence}
                 />
-              ) : activeTab === "issues" ? (
+              ) : shownTab === "variables" && lifecycleSupported === null ? (
+                <div className="wf-empty">Loading variables...</div>
+              ) : shownTab === "variables" ? (
+                <VariableLifecyclePanel
+                  key={`${summary.workflowExecutionId}:${lifecycleFilter.version}`}
+                  context={context}
+                  workflowExecutionId={summary.workflowExecutionId}
+                  initialFilter={lifecycleFilter.filter} />
+              ) : shownTab === "issues" ? (
                 <>
                   <WorkflowIncidentList
                     incidents={incidentEvidenceAvailable ? incidents : undefined}
@@ -2575,6 +2625,19 @@ function WorkflowInstanceInspector({
                     />
                   </dl>
                   <WorkflowInstanceInspectionNote inspectionGranularity={details.inspectionGranularity} />
+                  <section className="wf-instance-section" aria-label="Workflow outputs">
+                    <h3>Workflow outputs</h3>
+                    {!details.outputs ? <p>Workflow output inspection is unavailable on this host.</p> : !Object.keys(details.outputs).length ? <p>No workflow outputs have been captured.</p> : (
+                      <div className="wf-runtime-input-list" role="list">
+                        {Object.entries(details.outputs).map(([name, output]) => (
+                          <article className="wf-runtime-input wf-workflow-output" role="listitem" key={name}>
+                            <header><strong>{name}</strong><small>Captured {formatDate(output.capturedAt)}</small></header>
+                            {output.isRedacted ? <p>{output.redactionReason || "This output is redacted."}</p> : <RuntimeCapturedValue value={output.value} captureMode={output.captureMode} />}
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
                 </>
               )}
             </div>
@@ -2650,7 +2713,10 @@ function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
 
 export function getIncidentRootCause(incident: IncidentStateSummary) {
   const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
-  return rootCause || incident.message;
+  const message = rootCause || incident.message;
+  const child = message.match(/^Flowchart faulted because child node '([^']+)' faulted:/);
+  if (child) return `Activity '${child[1]}' failed. Review its incident to correct the cause.`;
+  return message;
 }
 
 function findSelectedActivityExecution(

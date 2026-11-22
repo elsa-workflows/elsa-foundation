@@ -25,13 +25,13 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await expect(source).toHaveAccessibleName(/Selected/);
 
     if (host === "editor") await page.getByRole("tab", { name: "Runtime", exact: true }).press("Enter");
-    await page.getByRole("button", { name: "Pause following", exact: true }).press("Enter");
-    const follow = page.getByRole("button", { name: "Follow execution", exact: true });
+    await page.getByRole("button", { name: "Pause live updates", exact: true }).press("Enter");
+    const follow = page.getByRole("button", { name: "Resume live updates", exact: true });
     await expect(follow).toBeFocused();
-    await expect(page.getByText(/^Observation paused/).first()).toBeVisible();
+    await expect(page.getByText(/^Live updates paused/)).toBeVisible();
     await expect(source).toHaveAccessibleName(/Selected/);
     await follow.press("Enter");
-    await expect(page.getByRole("button", { name: "Pause following", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Pause live updates", exact: true })).toBeFocused();
 
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).press("Enter");
     await expect(canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ })).toHaveAccessibleName(/Run state: Completed/);

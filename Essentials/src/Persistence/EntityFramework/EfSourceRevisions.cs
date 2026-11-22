@@ -24,7 +24,9 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximum) throw new ArgumentException("Invalid source revision identity.");
     }
-    private IQueryable<SourceWorkingCopy> Copies => db.Set<SourceWorkingCopy>().Where(x => x.ScopeKey == ScopeKey && x.Partition == scope.Partition && x.TenantId == scope.TenantId && x.Kind == scope.Kind && x.Authority == scope.Authority);
+    // SQL Server pads equality even under BIN2. Authority is ownership, not part of
+    // ScopeHash, so compare its exact text before a query counts or pages rows.
+    private IQueryable<SourceWorkingCopy> Copies => db.Set<SourceWorkingCopy>().Where(x => x.ScopeKey == ScopeKey && x.Partition == scope.Partition && x.TenantId == scope.TenantId && x.Kind == scope.Kind && x.Authority + "|" == scope.Authority + "|");
     public static void ValidateCopy(SourceWorkingCopy copy, SourceScope scope, string sourceId, string copyId)
     {
         if (copy.ScopeKey != ScopeHash(scope) || copy.Partition != scope.Partition || copy.TenantId != scope.TenantId ||
@@ -70,6 +72,57 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
         }
         catch (Exception e) when (ProviderFailure(e)) { throw new SourceRevisionException("storage-unavailable", e); }
     }
+    public async Task<SourceSnapshotRead?> FindSourceSnapshotAsync(string sourceId, string snapshotId, CancellationToken cancellationToken = default)
+    {
+        Identity(sourceId); Identity(snapshotId);
+        try
+        {
+            var row = await (from snapshot in db.Set<SourceSnapshot>().AsNoTracking()
+                             join copy in Copies.AsNoTracking() on snapshot.WorkingCopyKey equals copy.Key
+                             where copy.SourceId + "|" == sourceId + "|" && snapshot.Key == snapshotId
+                             select new { Copy = copy, Snapshot = snapshot, CopyStamp = EF.Property<string>(copy, EfSchemaVersion.ColumnName),
+                                 SnapshotStamp = EF.Property<string>(snapshot, EfSchemaVersion.ColumnName) }).SingleOrDefaultAsync(cancellationToken);
+            if (row is null || !StringComparer.Ordinal.Equals(row.Snapshot.Key, snapshotId)) return null;
+            VerifyReadSnapshot(sourceId, row.Copy, row.Snapshot, row.CopyStamp, row.SnapshotStamp);
+            return new(row.Copy.CopyId, row.Snapshot);
+        }
+        catch (Exception exception) when (ProviderFailure(exception)) { throw new SourceRevisionException("storage-unavailable", exception); }
+    }
+
+    public async Task<SourceSnapshotPage> HistorySourceAsync(string sourceId, int skip = 0, int take = 50, CancellationToken cancellationToken = default)
+    {
+        Identity(sourceId);
+        if (skip < 0 || take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));
+        try
+        {
+            var query = from snapshot in db.Set<SourceSnapshot>().AsNoTracking()
+                        join copy in Copies.AsNoTracking() on snapshot.WorkingCopyKey equals copy.Key
+                        where copy.SourceId + "|" == sourceId + "|"
+                        select new { Copy = copy, Snapshot = snapshot, CopyStamp = EF.Property<string>(copy, EfSchemaVersion.ColumnName),
+                            SnapshotStamp = EF.Property<string>(snapshot, EfSchemaVersion.ColumnName) };
+            var totals = query.GroupBy(x => 1).Select(group => new { Total = group.Count() });
+            var page = query.OrderBy(x => x.Snapshot.Key).Skip(skip).Take(take);
+            var rows = await (from total in totals from item in page.DefaultIfEmpty()
+                              select new { total.Total, item.Copy, item.Snapshot, item.CopyStamp, item.SnapshotStamp }).ToListAsync(cancellationToken);
+            var items = new List<SourceSnapshotRead>();
+            foreach (var row in rows.Where(x => x.Snapshot is not null))
+            {
+                VerifyReadSnapshot(sourceId, row.Copy, row.Snapshot, row.CopyStamp, row.SnapshotStamp);
+                items.Add(new(row.Copy.CopyId, row.Snapshot));
+            }
+            return new(rows.FirstOrDefault()?.Total ?? 0, items);
+        }
+        catch (Exception exception) when (ProviderFailure(exception)) { throw new SourceRevisionException("storage-unavailable", exception); }
+    }
+
+    private void VerifyReadSnapshot(string sourceId, SourceWorkingCopy copy, SourceSnapshot snapshot, string? copyStamp, string? snapshotStamp)
+    {
+        EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, copyStamp);
+        EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, snapshotStamp);
+        ValidateCopy(copy, scope, sourceId, copy.CopyId);
+        Verify(copy); VerifySnapshot(snapshot, copy.Key);
+    }
+
     public async Task<SourcePage> ListAsync(string? search, int skip, int take, CancellationToken cancellationToken = default)
     {
         if (skip < 0 || take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));
@@ -90,6 +143,36 @@ public sealed class EfSourceRevisions(DbContext db, SourceScope scope, bool sing
         }
         catch (Exception e) when (ProviderFailure(e)) { throw new SourceRevisionException("storage-unavailable", e); }
     }
+    public async Task<SourcePage> ListSourcesAsync(string? search, int skip, int take, CancellationToken cancellationToken = default)
+    {
+        if (skip < 0 || take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));
+        try
+        {
+            var query = Copies.AsNoTracking();
+            if (!string.IsNullOrEmpty(search))
+            {
+                Identity(search, 512);
+                var key = search.ToUpperInvariant();
+                var matchingSources = query.Where(x => x.NameSearchKey.Contains(key)).Select(x => x.SourceId + "|");
+                query = query.Where(x => matchingSources.Contains(x.SourceId + "|"));
+            }
+            // SQL Server pads string equality even with BIN2. A non-space terminator
+            // makes trailing spaces significant without changing persisted identities.
+            var totals = query.Select(x => x.SourceId + "|").Distinct().GroupBy(x => 1).Select(group => new { Total = group.Count() });
+            // A provider-translatable anti-join selects one copy without loading or
+            // grouping authored content in memory. Active copies precede discarded ones.
+            var sources = query.Where(copy => !query.Any(other => other.SourceId + "|" == copy.SourceId + "|" &&
+                (copy.Discarded && !other.Discarded || copy.Discarded == other.Discarded && string.Compare(other.Key, copy.Key) < 0)));
+            var page = sources.OrderBy(x => x.SourceId + "|").Skip(skip).Take(take);
+            var rows = await (from total in totals from item in page.DefaultIfEmpty()
+                              select new { total.Total, Item = item, Stamp = item == null ? null : EF.Property<string>(item, EfSchemaVersion.ColumnName) }).ToListAsync(cancellationToken);
+            var items = rows.Where(x => x.Item is not null).Select(x => x.Item).ToArray();
+            foreach (var row in rows.Where(x => x.Item is not null)) { EfSchemaVersion.EnsureCurrent(EfSourceModel.Chain, row.Stamp); Verify(row.Item); }
+            return new(rows.FirstOrDefault()?.Total ?? 0, items);
+        }
+        catch (Exception exception) when (ProviderFailure(exception)) { throw new SourceRevisionException("storage-unavailable", exception); }
+    }
+
     public async Task<IReadOnlyList<SourceSnapshot>> HistoryAsync(string sourceId, string copyId, int skip = 0, int take = 100, CancellationToken cancellationToken = default)
     {
         if (skip < 0 || take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));

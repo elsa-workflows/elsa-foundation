@@ -42,13 +42,29 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Feature_registers_the_script_variable_read_services()
+    {
+        // Spec 1222: the draft check, the resolver publish pins with, and the rename planner.
+        using var provider = BuildProvider(_ => { });
+        using var scope = provider.CreateScope();
+
+        Assert.Contains(typeof(ScriptVariableReadValidator), scope.ServiceProvider.GetServices<IDraftValidator>().Select(v => v.GetType()));
+        Assert.NotNull(scope.ServiceProvider.GetService<Elsa.Workflows.Design.Validations.Services.ScriptVariableReadResolver>());
+        Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>(
+            scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner>());
+        // Spec 1231 FR-036: the script body write analyzer Studio's may-write display reads.
+        Assert.IsType<Elsa.Workflows.Design.Validations.Services.ScriptBodyWriteAnalyzer>(
+            scope.ServiceProvider.GetService<Elsa.Workflows.Design.Core.Contracts.IScriptBodyWriteAnalyzer>());
+    }
+
     // Kept beside the composition test: uniqueness, exactly one DraftValidating handler.
     [Fact]
     public void Feature_registers_exactly_one_DraftValidating_handler()
     {
         using var provider = BuildProvider(_ => { });
 
-        var handler = Assert.Single(provider.GetServices<IEventHandler>());
+        var handler = Assert.Single(provider.GetServices<IEventHandler<DraftValidating>>());
         Assert.IsType<ExecuteValidations>(handler);
         Assert.IsAssignableFrom<IEventHandler<DraftValidating>>(handler);
     }
@@ -130,6 +146,177 @@ public sealed class ValidationsFeatureRegistrationTests
             await initializer.InitializeAsync();
     }
 
+    [Fact]
+    public void Source_analysis_has_one_scoped_authority()
+    {
+        using var provider = BuildProvider(_ => { });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var analyzer = Assert.Single(first.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>());
+        Assert.Same(analyzer, first.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+        Assert.NotSame(analyzer, second.ServiceProvider.GetRequiredService<IActivityDataSelectionAnalyzer>());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_second_source_authority_fails_activation_in_either_registration_order(bool registeredBefore)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+            services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        }, registeredBefore);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_pre_registered_scoped_source_authority_is_preserved_as_the_one_host_replacement()
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>(), hostRegistersFirst: true);
+        await InitializeShellAsync(provider);
+        using var scope = provider.CreateScope();
+        Assert.IsType<SecondAnalyzer>(Assert.Single(scope.ServiceProvider.GetServices<IActivityDataSelectionAnalyzer>()));
+    }
+
+    // Spec 266: the write-order analyzer is a single-implementation replacement contract.
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("missing")]
+    [InlineData("scoped")]
+    public async Task The_write_order_analyzer_must_be_one_singleton(string invalid)
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            if (invalid == "duplicate")
+                services.AddSingleton<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+            else
+                services.RemoveAll<IUnorderedVariableWriteAnalyzer>();
+            if (invalid == "scoped")
+                services.AddScoped<IUnorderedVariableWriteAnalyzer, SecondWriteOrderAnalyzer>();
+        });
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IUnorderedVariableWriteAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_feature_composes_one_singleton_write_order_analyzer()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+        Assert.Same(provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>(), provider.GetRequiredService<IUnorderedVariableWriteAnalyzer>());
+    }
+
+    private sealed class SecondWriteOrderAnalyzer : IUnorderedVariableWriteAnalyzer
+    {
+        public Elsa.Workflows.Design.Validations.Core.Models.UnorderedVariableWriteAnalysis Analyze(
+            Elsa.Workflows.Design.Core.Models.ActivityNode root, Elsa.Workflows.Design.Core.Contracts.IActivityStructureService structures, bool includeIntrinsics, CancellationToken cancellationToken = default) =>
+            new([], []);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_singleton_source_authority_fails_activation(bool replaceWithSingleton)
+    {
+        using var provider = BuildProvider(_ => { }, services => {
+            services.RemoveAll<IActivityDataSelectionAnalyzer>();
+            if (replaceWithSingleton) services.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        });
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    [InlineData("singleton")]
+    public async Task A_copied_child_shell_checks_its_own_source_authority_and_preserves_the_parent(string invalid)
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(parent);
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        if (invalid == "duplicate") child.AddScoped<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        if (invalid != "duplicate") child.RemoveAll<IActivityDataSelectionAnalyzer>();
+        if (invalid == "singleton") child.AddSingleton<IActivityDataSelectionAnalyzer, SecondAnalyzer>();
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(childProvider).InitializeAsync());
+        Assert.Contains(nameof(IActivityDataSelectionAnalyzer), failure.Message, StringComparison.Ordinal);
+        Assert.Single(parent, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+    }
+
+    [Fact]
+    public async Task A_copied_child_shell_can_keep_one_scoped_source_authority()
+    {
+        IServiceCollection parent = new ServiceCollection();
+        new Elsa.Events.EventsFeature().ConfigureServices(parent);
+        new WorkflowDesignValidationsFeature().ConfigureServices(parent);
+        IServiceCollection child = new ServiceCollection();
+        foreach (var descriptor in parent) child.Add(descriptor);
+        new WorkflowDesignValidationsFeature().ConfigureServices(child);
+        using var parentProvider = parent.BuildServiceProvider();
+        using var childProvider = child.BuildServiceProvider();
+
+        await SourceInitializer(parentProvider).InitializeAsync();
+        await SourceInitializer(childProvider).InitializeAsync();
+        Assert.Single(child, descriptor => descriptor.ServiceType == typeof(IActivityDataSelectionAnalyzer));
+    }
+
+    [Fact]
+    public async Task A_second_rename_planner_fails_the_shell_at_start()
+    {
+        // Spec 1222, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IScriptVariableRenamePlanner, Elsa.Workflows.Design.Validations.Services.ScriptVariableRenamePlanner>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IScriptVariableRenamePlanner", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_second_script_body_write_analyzer_fails_the_shell_at_start()
+    {
+        // Spec 1231 FR-036, framework 2.6.2: a replacement contract never wins silently.
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<Elsa.Workflows.Design.Core.Contracts.IScriptBodyWriteAnalyzer, Elsa.Workflows.Design.Validations.Services.ScriptBodyWriteAnalyzer>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("IScriptBodyWriteAnalyzer", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Two_read_analyzers_for_one_language_fail_the_shell_at_start()
+    {
+        using var provider = BuildProvider(_ => { }, services =>
+        {
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new LanguageAnalyzer("JavaScript"));
+            services.AddSingleton<Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer>(new OtherLanguageAnalyzer("JavaScript"));
+        });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => SourceInitializer(provider).InitializeAsync());
+
+        Assert.Contains("'JavaScript'", exception.Message, StringComparison.Ordinal);
+    }
+
+    private class LanguageAnalyzer(string language) : Elsa.Expressions.Core.Contracts.IScriptVariableReadAnalyzer
+    {
+        public string Language => language;
+        public Elsa.Expressions.Core.Contracts.ScriptVariableReadAnalysis? Analyze(string source, bool scriptBody = false) => null;
+    }
+
+    private sealed class OtherLanguageAnalyzer(string language) : LanguageAnalyzer(language);
+
+    private static IShellInitializer SourceInitializer(IServiceProvider provider) => Assert.Single(
+        provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == "DataSelectionAnalyzerCompositionCheck");
+
     private static ServiceProvider BuildProvider(
         Action<WorkflowDesignValidationsFeature> configureFeature,
         Action<IServiceCollection>? hostRegistrations = null,
@@ -143,6 +330,7 @@ public sealed class ValidationsFeatureRegistrationTests
         services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
         if (hostRegistersFirst)
             hostRegistrations?.Invoke(services);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         feature.ConfigureServices(services);
         if (!hostRegistersFirst)
             hostRegistrations?.Invoke(services);
@@ -154,5 +342,12 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
             ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
+    }
+
+    private sealed class SecondAnalyzer : IActivityDataSelectionAnalyzer
+    {
+        public ValueTask<ActivityDataSelectionAnalysis> AnalyzeAsync(ActivityDataSelectionDocument document,
+            ActivityDataSelectionTarget? target = null, ActivityDataSelectionQuery? query = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityDataSelectionAnalysis(document.ContractRevision, null, [], []));
     }
 }

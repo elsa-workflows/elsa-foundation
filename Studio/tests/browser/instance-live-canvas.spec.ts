@@ -18,10 +18,10 @@ for (const theme of ["light", "dark"]) {
     const transform = await viewport.getAttribute("style");
     const route = page.url();
     await page.getByRole("button", { name: "Disconnect fixture reads", exact: true }).click();
-    await expect(page.getByText("Execution observation disconnected · last confirmed evidence", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Live updates disconnected/, { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Reconnect fixture reads", exact: true }).click();
-    await page.locator(".wf-toolbar").getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(page.getByText("Execution on this canvas", { exact: true })).toBeVisible();
+    await page.locator(".wf-toolbar").getByRole("button", { name: "Refresh execution", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Pause live updates", exact: true })).toBeEnabled();
     await expect(node).toHaveAccessibleName(/Selected/);
     expect(await viewport.getAttribute("style")).toBe(transform);
     expect(page.url()).toBe(route);

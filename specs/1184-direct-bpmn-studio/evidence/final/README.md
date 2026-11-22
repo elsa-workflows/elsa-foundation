@@ -101,3 +101,21 @@ Main `6f77c0f2c` was then merged (`7ca434ab2`). Main's new `Elsa.Agent.Specialis
 The merge changed no BPMN, ETL or persisted-format product code, so the real journeys recorded above stand. Whole-suite coverage of the exact head is left to the required CI.
 
 **Not established here:** exact-head required CI, independent full-PR review, and resulting-main verification.
+
+## PR2 recheck of the resulting-main portion of T039, 7 November 2026
+
+This is a local recheck of the compatibility/final evidence on main `c1f35d2dc73201df0e3890e1f0c851d9ddd52a37` plus interrupted-publication GC tests `9812e60f54f1178498e82c3d092268b859d4a36b` (rebased from `60d284932` with no conflicts). It does **not** complete T039 (no merge, no hosted resulting-main CI, no independent full-PR review) and does not close FR-014, SC-005, #2907, #2908 or #2892.
+
+Counted local results that map onto this requirement table:
+
+| Item | This recheck | Notes |
+|---|---|---|
+| FR-015 runtime-only / admission-off | Passed (actual Workbench, 2/2) | `DirectBpmnStudioPublicationTests`, `RuntimeOnlyParallelBpmnTests`. |
+| FR-016 existing compatibility | Partial this session | 14/14 `Legacy*` hosting cases passed on current main. Frozen saved-Studio families **NOT RUN** (missing `studio/*` assets, no browser). October SC-004 captures remain the last actual Studio-family proof. |
+| FR-017 same semantics engine | Passed (hosting families) | Shared `Legacy*` native-parent, fork, controls and fault-settlement rows. |
+| SC-004 frozen saved-Studio families | **NOT RUN** this session | Mechanical hash check of 90 non-studio baseline assets passed; full verifier and visual journeys not rerun. |
+| SC-005 / FR-014 | Unchanged; still partial | Not claimed closed. |
+| SC-006 exact-head gates and resulting main | Still pending | Local architecture 617/0/0 and maps `--check` passed; hosted CI **NOT RUN**. |
+| ApiCompat vs last-published `Elsa.Activities.Bpmn.Core` 4.0.2-preview | **NOT RUN** | nupkg 404. Historical 4.0.2-preview comparison stays on the candidate qualification above. |
+
+Part B (interrupted BPMN publish vs EF GC) classified **(1) loss safely refused or retryable** on SQLite. Retention was not redesigned. See [compatibility](../compatibility/README.md#pr2-recheck-7-november-2026) and [migration and rollback](../../../../docs/reports/native-bpmn-migration-and-rollback.md).

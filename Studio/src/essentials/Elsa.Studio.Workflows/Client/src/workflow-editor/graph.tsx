@@ -31,9 +31,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const { icon, fallback, tone } = resolveNodeActivityVisual(nodeData);
   const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
-  const sourcePorts = showFlowPorts
-    ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
-    : [];
+  const sourcePorts = showFlowPorts ? nodeData.sourcePorts : [];
   const subtitle = formatNodeSubtitle(nodeData);
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
@@ -151,9 +149,10 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         const placement = ports.sources[index];
         return (
           <React.Fragment key={port.name}>
-            <span className="wf-node-port-label" data-side={placement.side} title={port.displayName}
+            <span className={port.missing ? "wf-node-port-label wf-node-port-missing" : "wf-node-port-label"} data-side={placement.side}
+              title={port.missing ? `${port.displayName}: no longer an outcome of this activity; reconnect or remove its connection` : port.displayName}
               style={{ ...portPlacementStyle(placement), maxWidth: placement.labelWidth }}>{port.displayName}</span>
-            <Handle type="source" position={placement.side} id={port.name} style={portPlacementStyle(placement)} />
+            <Handle type="source" position={placement.side} id={port.name} style={portPlacementStyle(placement)} isConnectableStart={!port.missing} />
           </React.Fragment>
         );
       })}
@@ -211,7 +210,7 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
           ...style,
           strokeWidth: isHighlighted ? 2.5 : style?.strokeWidth
         }}
-        label={label}
+        label={!actions && typeof label === "string" && label === props.sourceHandleId ? undefined : label}
         labelX={labelX}
         labelY={labelY}
         labelStyle={labelStyle}

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Secrets.Workflows.Tests.Support;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -150,7 +151,7 @@ public sealed class TenantAgreementTests : IAsyncLifetime
 
     /// <summary>
     /// Reschedules the suspended activity as an operator alteration does, then delivers the successor's continuation
-    /// through the scheduler work handlers: the successor's invoke activates it again.
+    /// through the scheduler work handlers: the successor's start materializes its inputs again and its invoke activates it again.
     /// </summary>
     private static async Task RescheduleAsync(SecretsWorkflowHost host, string workflowExecutionId)
     {
@@ -179,8 +180,20 @@ public sealed class TenantAgreementTests : IAsyncLifetime
 
         var handlers = services.GetServices<IWorkflowSchedulerWorkHandler>().OrderBy(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         var queue = services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
-        for (RuntimeSchedulerWorkItem? item = Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!; item is not null; item = await queue.DequeueAsync(workflowExecutionId))
+        var outbox = services.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        for (RuntimeSchedulerWorkItem? item = Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!; item is not null; item = await NextAsync())
             await handlers.First(handler => handler.CanHandle(item)).HandleAsync(item);
+
+        // As the drain loop does: deliver the commits' continuation intents into the queue before reading the next item.
+        // A reschedule re-executes (spec 1221), so the successor's schedule and start run before its invoke.
+        async Task<RuntimeSchedulerWorkItem?> NextAsync()
+        {
+            await outbox.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                limit: 64,
+                workflowExecutionId: workflowExecutionId,
+                intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+            return await queue.DequeueAsync(workflowExecutionId);
+        }
     }
 
     private sealed class Staging : IWorkflowAlterationStagingWorkspace

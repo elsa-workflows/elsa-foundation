@@ -227,6 +227,14 @@ dotnet_diagnostic.CA1515.severity = none
 [Essentials/src/Tasks/**.cs]
 elsa_naming.retired_terms = Pump|Pumps=Worker
 
+# Agents: Specialist was the earlier name for a user-defined agent and is retired (#4027, docs/reference/package-renames.md).
+[Extensions/Agent/src/**.cs]
+elsa_naming.retired_terms = Specialist|Specialists=Agent
+
+# Weaver: its own types and namespaces no longer say Agent, so Agent in code always means a user-defined agent (#4027).
+[Extensions/Weaver/src/**.cs]
+elsa_naming.retired_terms = Agent|Agents=Weaver
+
 #### Generated code ####
 
 [**/Migrations/*.cs]

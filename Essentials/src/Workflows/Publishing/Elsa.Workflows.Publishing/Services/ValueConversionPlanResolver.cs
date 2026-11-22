@@ -292,7 +292,10 @@ public enum ValueConversionRejectionReason
     UnknownResultProjection,
 
     /// <summary>An authored literal value could not be coerced to the input's pinned target contract.</summary>
-    LiteralCoercionFailed
+    LiteralCoercionFailed,
+
+    /// <summary>An explicit conversion was requested for a member read whose selected contract is not known.</summary>
+    SelectedMemberContractUnknown
 }
 
 /// <summary>Publication failure with the complete pinned-contract context needed to fix a binding.</summary>
@@ -392,5 +395,5 @@ public sealed class ValueConversionPublicationException : ArgumentException
 
     /// <summary>Formats a portable type contract as <c>alias/collectionKind/schema:version</c>.</summary>
     public static string DescribeContract(ValueTypeDescriptor type) =>
-        $"{type.Alias}/{type.CollectionKind}/schema:{type.SchemaVersion?.ToString() ?? "none"}";
+        $"{(type.Element is null ? type.Alias : type.ToDisplayString())}/{type.CollectionKind}/schema:{type.SchemaVersion?.ToString() ?? "none"}";
 }

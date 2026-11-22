@@ -148,7 +148,7 @@ public sealed class WriteHttpResponseExecutionTests
                     ValueType(typeof(string)),
                     JsonSerializer.SerializeToElement("from-prior-activity"),
                     ValueProtectionPolicy.InstanceInline),
-                "Done",
+                Elsa.Activities.Runtime.Core.Models.OutcomeSelection.Named("Done"),
                 completedAt,
                 "contract"),
             CompletedAt = completedAt
@@ -204,7 +204,7 @@ public sealed class WriteHttpResponseExecutionTests
                     WorkflowExecutionHarness.Timestamp)
                 .AsTask());
 
-        Assert.Contains("requires capability profile 'binding-pure-v1'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires capability profile 'binding-readonly-v1'", exception.Message, StringComparison.Ordinal);
     }
 
     private static WorkflowExecutionHarness NewHarness() =>

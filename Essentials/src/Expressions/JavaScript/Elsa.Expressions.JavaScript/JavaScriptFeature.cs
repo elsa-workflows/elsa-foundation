@@ -1,8 +1,11 @@
 ﻿using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CShells.Lifecycle;
 
 namespace Elsa.Expressions.JavaScript;
 
@@ -20,6 +23,14 @@ public class JavaScriptFeature : IShellFeature
         services
             .AddScoped<IPortableExpressionHandler, PortableJavaScriptExpressionHandler>()
             .AddScoped<IExpressionDescriptorProvider, JavaScriptExpressionDescriptorProvider>()
-            .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>();
+            .AddSingleton<IExpressionToolingProvider, JavaScriptExpressionToolingProvider>()
+            .AddSingleton<IJavaScriptScriptOutcomeAnalyzer, JavaScriptScriptOutcomeAnalyzer>()
+            .AddSingleton<IScriptVariableReadAnalyzer, JavaScriptVariableReadAnalyzer>();
+        // The default JSON-only strategy's .NET-usage analysis, shared by publish and the Elsa 3 converter (spec 1223
+        // FR-030); replaceable with the strategy, and only one may be composed. A singleton like its sibling analyzers:
+        // it holds no state and no scoped dependency (the registered function declarations are singletons) and only
+        // parses.
+        services.TryAddSingleton<IJavaScriptDotNetUsageAnalyzer, JavaScriptDotNetUsageAnalyzer>();
+        services.AddSingleton<IShellInitializer, JavaScriptDotNetUsageAnalyzerCheck>();
     }
 }

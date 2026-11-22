@@ -110,7 +110,10 @@ internal static class ReusableActivityImportFixtures
         services.AddSingleton<IWellKnownTypeRegistry>(TypeRegistry());
         services.AddSingleton(SerializationServices.ObjectConverter());
         services.AddSingleton(command);
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        // The converter checks converted scripts with the JavaScript strategy (the feature depends on JavaScriptExpressions).
+        new Elsa.Expressions.JavaScript.JavaScriptFeature().ConfigureServices(services);
         new Elsa3MappingFeature().ConfigureServices(services);
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
         // A host also composes the publish phase (spec 246); these tests stop at the commit port, so it publishes
@@ -160,7 +163,7 @@ internal static class ReusableActivityImportFixtures
     {
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
-        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(System.Text.Json.JsonElement), "Any");
         return registry;
     }
 

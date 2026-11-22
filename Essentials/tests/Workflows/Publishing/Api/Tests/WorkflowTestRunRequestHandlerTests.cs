@@ -41,7 +41,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
-public sealed class WorkflowTestRunRequestHandlerTests
+public sealed partial class WorkflowTestRunRequestHandlerTests
 {
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();

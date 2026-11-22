@@ -1,4 +1,5 @@
 #nullable enable
+const Elsa.Primitives.Models.TypeAliasConvention.AnyAlias = "Any" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.ActionForbidden = "activity.action.forbidden" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.AuthorizationDenied = "activity.authorization.denied" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.CursorExpired = "activity.cursor.expired" -> string!
@@ -119,9 +120,12 @@ Elsa.Primitives.Models.TypeReference.Alias.get -> string!
 Elsa.Primitives.Models.TypeReference.Alias.init -> void
 Elsa.Primitives.Models.TypeReference.CollectionKind.get -> Elsa.Primitives.Models.CollectionKind
 Elsa.Primitives.Models.TypeReference.CollectionKind.init -> void
-Elsa.Primitives.Models.TypeReference.Deconstruct(out string! Alias, out Elsa.Primitives.Models.CollectionKind CollectionKind) -> void
+Elsa.Primitives.Models.TypeReference.Deconstruct(out string! Alias, out Elsa.Primitives.Models.CollectionKind CollectionKind, out Elsa.Primitives.Models.TypeReference? Element) -> void
+Elsa.Primitives.Models.TypeReference.Element.get -> Elsa.Primitives.Models.TypeReference?
+Elsa.Primitives.Models.TypeReference.Element.init -> void
+Elsa.Primitives.Models.TypeReference.ToDisplayString() -> string!
 Elsa.Primitives.Models.TypeReference.Equals(Elsa.Primitives.Models.TypeReference? other) -> bool
-Elsa.Primitives.Models.TypeReference.TypeReference(string! Alias, Elsa.Primitives.Models.CollectionKind CollectionKind = Elsa.Primitives.Models.CollectionKind.Single) -> void
+Elsa.Primitives.Models.TypeReference.TypeReference(string! Alias, Elsa.Primitives.Models.CollectionKind CollectionKind = Elsa.Primitives.Models.CollectionKind.Single, Elsa.Primitives.Models.TypeReference? Element = null) -> void
 Elsa.Primitives.Models.TypeReferenceFactory
 Elsa.Primitives.Models.ValueRepresentation
 Elsa.Primitives.Models.ValueRepresentation.BinaryContent = 4 -> Elsa.Primitives.Models.ValueRepresentation
@@ -140,7 +144,9 @@ Elsa.Primitives.Models.ValueTypeDescriptor.Equals(Elsa.Primitives.Models.ValueTy
 Elsa.Primitives.Models.ValueTypeDescriptor.Schema.get -> System.Text.Json.JsonElement?
 Elsa.Primitives.Models.ValueTypeDescriptor.SchemaVersion.get -> int?
 Elsa.Primitives.Models.ValueTypeDescriptor.ToTypeReference() -> Elsa.Primitives.Models.TypeReference!
-Elsa.Primitives.Models.ValueTypeDescriptor.ValueTypeDescriptor(string! alias, Elsa.Primitives.Models.CollectionKind collectionKind = Elsa.Primitives.Models.CollectionKind.Single, System.Text.Json.JsonElement? schema = null, int? schemaVersion = null) -> void
+Elsa.Primitives.Models.ValueTypeDescriptor.ValueTypeDescriptor(string! alias, Elsa.Primitives.Models.CollectionKind collectionKind = Elsa.Primitives.Models.CollectionKind.Single, System.Text.Json.JsonElement? schema = null, int? schemaVersion = null, Elsa.Primitives.Models.TypeReference? element = null) -> void
+Elsa.Primitives.Models.ValueTypeDescriptor.Element.get -> Elsa.Primitives.Models.TypeReference?
+Elsa.Primitives.Models.ValueTypeDescriptor.ToDisplayString() -> string!
 Elsa.Primitives.Persistence.OrderDefinition<T, TProp>
 Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.Direction.get -> Elsa.Primitives.Persistence.OrderDirection
 Elsa.Primitives.Persistence.OrderDefinition<T, TProp>.Direction.set -> void
@@ -215,13 +221,19 @@ static Elsa.Primitives.Models.ClrActivityDescriptor.operator ==(Elsa.Primitives.
 static Elsa.Primitives.Models.Result.Failure<T>(System.Exception! exception) -> Elsa.Primitives.Models.Result<T>!
 static Elsa.Primitives.Models.Result.Success<T>(T value) -> Elsa.Primitives.Models.Result<T>!
 static Elsa.Primitives.Models.TypeAliasConvention.CanonicalAlias(System.Type! type) -> string!
+static Elsa.Primitives.Models.TypeAliasConvention.IsAny(string? alias) -> bool
+static Elsa.Primitives.Models.TypeAliasConvention.IsDynamicKind(string? alias) -> bool
+static Elsa.Primitives.Models.TypeAliasConvention.ReadAlias(string? alias) -> string?
+static Elsa.Primitives.Models.TypeAliasConvention.IsShapedJson(string? alias) -> bool
 static Elsa.Primitives.Models.TypeReference.operator !=(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool
 static Elsa.Primitives.Models.TypeReference.operator ==(Elsa.Primitives.Models.TypeReference? left, Elsa.Primitives.Models.TypeReference? right) -> bool
 static Elsa.Primitives.Models.TypeReferenceFactory.Close(System.Type! elementType, Elsa.Primitives.Models.CollectionKind kind) -> System.Type!
+static Elsa.Primitives.Models.TypeReferenceFactory.Close(System.Type! innermostElementType, Elsa.Primitives.Models.TypeReference! reference) -> System.Type!
 static Elsa.Primitives.Models.TypeReferenceFactory.Decompose(System.Type! type) -> (System.Type! ElementType, Elsa.Primitives.Models.CollectionKind Kind)
 static Elsa.Primitives.Models.TypeReferenceFactory.FromClrType(System.Type! type, System.Func<System.Type!, string!>! aliasResolver) -> Elsa.Primitives.Models.TypeReference!
 static Elsa.Primitives.Models.TypeReferenceFactory.Resolve(Elsa.Primitives.Models.TypeReference! reference, System.Func<string!, System.Type!>! aliasResolver) -> System.Type!
 static Elsa.Primitives.Models.ValueRepresentationDefaults.Infer(Elsa.Primitives.Models.ValueTypeDescriptor! type) -> Elsa.Primitives.Models.ValueRepresentation
+static Elsa.Primitives.Models.ValueTypeDescriptor.FromTypeReference(Elsa.Primitives.Models.TypeReference! type) -> Elsa.Primitives.Models.ValueTypeDescriptor!
 static Elsa.Primitives.Models.ValueTypeDescriptor.operator !=(Elsa.Primitives.Models.ValueTypeDescriptor? left, Elsa.Primitives.Models.ValueTypeDescriptor? right) -> bool
 static Elsa.Primitives.Models.ValueTypeDescriptor.operator ==(Elsa.Primitives.Models.ValueTypeDescriptor? left, Elsa.Primitives.Models.ValueTypeDescriptor? right) -> bool
 static Elsa.Primitives.Persistence.Page.Empty<T>() -> Elsa.Primitives.Persistence.Page<T>!
@@ -237,3 +249,6 @@ static Elsa.Primitives.Versioning.SemVer.operator >=(Elsa.Primitives.Versioning.
 static Elsa.Primitives.Versioning.SemVer.ToSortKey(string! version) -> string!
 static Elsa.Primitives.Versioning.SemVer.TryParse(string? value, out Elsa.Primitives.Versioning.SemVer result) -> bool
 static readonly Elsa.Primitives.Models.TypeAliasConvention.ReservedBareAliases -> System.Collections.Generic.IReadOnlySet<string!>!
+Elsa.Primitives.Models.LostUpdateMode
+Elsa.Primitives.Models.LostUpdateMode.Default = 0 -> Elsa.Primitives.Models.LostUpdateMode
+Elsa.Primitives.Models.LostUpdateMode.Fault = 1 -> Elsa.Primitives.Models.LostUpdateMode

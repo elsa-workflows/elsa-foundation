@@ -577,6 +577,8 @@ public sealed class WorkflowAlterationOrchestrationTests
             inner.CancelPendingJobsAsync(planId, skippedOutcomes, completedAt, maximumCount, cancellationToken);
         public ValueTask<WorkflowAlterationJobState?> FindJobAsync(string jobId, CancellationToken cancellationToken = default) =>
             inner.FindJobAsync(jobId, cancellationToken);
+        public ValueTask<IReadOnlyList<WorkflowAlterationJobState>> ListVariableWriteJobsAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.ListVariableWriteJobsAsync(workflowExecutionId, cancellationToken);
         public ValueTask<WorkflowAlterationJobCounts> GetJobCountsAsync(string planId, CancellationToken cancellationToken = default) =>
             inner.GetJobCountsAsync(planId, cancellationToken);
         public ValueTask<WorkflowAlterationJobState?> FindJobByCheckpointCommitIdAsync(string checkpointCommitId, CancellationToken cancellationToken = default) =>

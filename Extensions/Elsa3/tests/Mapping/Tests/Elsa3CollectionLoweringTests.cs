@@ -131,7 +131,7 @@ public sealed class Elsa3CollectionLoweringTests : IAsyncDisposable
         var call = Node(parentState, "call");
         var message = Input(call, "Message");
         Assert.Equal("JavaScript", message.Value.ExpressionType);
-        Assert.Contains("args.greeting", Source(message), StringComparison.Ordinal);
+        Assert.Contains("variables.greeting", Source(message), StringComparison.Ordinal);
     }
 
     public async ValueTask DisposeAsync() => await _services.DisposeAsync();
@@ -167,7 +167,8 @@ public sealed class Elsa3CollectionLoweringTests : IAsyncDisposable
     private static Elsa3Activity LoopRoot()
     {
         var loop = Activity("loop", "Elsa.ForEach", ("items", Literal("[1]", "Object")), ("currentValue", Captured("item-slot")));
-        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.WriteLine", ("text", Captured("item-slot"))));
+        // A dynamic input: a loop item into a typed one is refused (#4898).
+        loop.AdditionalProperties["body"] = Port(Activity("inside", "Elsa.PublishEvent", ("eventName", Literal("e")), ("payload", Captured("item-slot"))));
         return Sequence("root", loop);
     }
 }

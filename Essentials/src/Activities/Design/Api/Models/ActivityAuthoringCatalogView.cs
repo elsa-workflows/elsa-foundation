@@ -34,6 +34,19 @@ public sealed record ActivityAuthoringDescriptorView(
 
     /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
     public JsonElement? PaletteHints { get; init; }
+
+    /// <summary>
+    /// The runtime type a compiled node carries for this CLR activity when it declares <c>public const string ActivityType</c>
+    /// (for example <c>Elsa.HttpEndpoint</c>, whose <see cref="ActivityTypeKey"/> is the CLR full name). Null when the activity
+    /// declares none, so the node's stamped type equals <see cref="ActivityTypeKey"/>.
+    /// </summary>
+    public string? RuntimeActivityType { get; init; }
+
+    /// <summary>
+    /// Whether the activity type is marked <c>[AccessesUndeclaredVariables]</c> (spec 1231 FR-026, FR-036): it may read
+    /// and write any visible variable by free name, so Studio shows it as possibly writing every visible variable.
+    /// </summary>
+    public bool AccessesUndeclaredVariables { get; init; }
 }
 
 /// <summary>
@@ -95,7 +108,8 @@ public sealed record ActivityInputDescriptorView(
     bool IsSensitive,
     bool IsCredential,
     string? Tier = null,
-    string? ConnectionType = null);
+    string? ConnectionType = null,
+    string? VariableAccess = null);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,

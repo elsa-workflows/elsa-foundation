@@ -21,7 +21,7 @@ namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
 /// Regression gate for #921: a compiled executable whose activity input is bound to a JavaScript expression
-/// (language "JavaScript", capability profile binding-pure-v1 — exactly what the publishing compiler emits for a
+/// (language "JavaScript", capability profile binding-readonly-v1 — exactly what the publishing compiler emits for a
 /// Studio-authored JS value) must evaluate that expression at runtime and run to completion. Drives the real
 /// in-process agent + scheduler + drain + Jint evaluator through <see cref="WorkflowExecutionHarness"/> — no
 /// hand-built resolution context — so a regression that leaves the runtime unable to evaluate a JS-bound input

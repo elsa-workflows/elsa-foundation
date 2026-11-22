@@ -3,6 +3,7 @@ using Elsa.Connections.Expressions;
 using Elsa.Connections.Http;
 using Elsa.Connections.Options;
 using Elsa.Connections.Services;
+using Elsa.Secrets.Core.Options;
 using Elsa.Expressions.Core.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ public static class ConnectionsServiceCollectionExtensions
     public static IServiceCollection AddConnections(this IServiceCollection services, IConfiguration? configuration = null)
     {
         services.AddOptions<ConnectionsOptions>();
+        services.AddOptions<WritableSecretStoreOptions>();
         if (configuration is not null)
         {
             var section = configuration.GetSection(ConnectionsOptions.SectionName);

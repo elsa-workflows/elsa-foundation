@@ -204,14 +204,19 @@ build/test filters and the full-solution completion gate, see
 
 ## Pair with Studio
 
-Follow the [Studio source quickstart](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/docs/contributing/studio-source-quickstart.md)
-for the frontend prerequisites, startup, and browser walkthrough. Studio's configured default backend is
-HTTPS `https://localhost:7243`; when pairing with this guide's HTTP profile, use
-`Studio__BackendBaseUrl=http://localhost:5095` (or the alternate port you chose).
+Studio's source lives in `Studio/` in this repository. Follow the
+[Studio source quickstart](../../Studio/docs/contributing/studio-source-quickstart.md)
+for Node.js, Corepack/pnpm, the Studio install and build, and the browser pairing walkthrough. Do not
+clone `elsa-workflows/elsa-foundation-studio` for current `main`.
 
-The paired source/browser/edit walkthrough was accepted in
-[Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566#issuecomment-6040280827).
-That acceptance covers the recorded technical checks; the deferred human newcomer trials were not performed.
+Studio's configured default backend is HTTPS `https://localhost:7243`; when pairing with this guide's
+HTTP profile, start Studio with `Studio__BackendBaseUrl=http://localhost:5095` (or the alternate port
+you chose). Those ports and project paths match `tools/ux-qa/setup.sh`.
+
+A Linux/amd64 source pair at Foundation `6adeeaa0aa731b8b62893f23d1d9d8e9519cd2fa` is recorded in the
+Studio quickstart. Earlier separate-repository acceptance in
+[Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566#issuecomment-6040280827)
+is historical; the deferred human newcomer trials were not performed.
 
 ## Verified baseline
 

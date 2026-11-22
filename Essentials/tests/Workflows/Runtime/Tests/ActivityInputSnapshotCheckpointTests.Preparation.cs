@@ -120,7 +120,9 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
         Assert.Equal(state.InvocationId, Assert.Single(custom.Context.RuntimeView).InvocationId);
         Assert.Equal("request-42", custom.Context.WorkflowInputEnvelopes["request"].InlineValue!.Value.GetString());
         Assert.Equal("customer-42", custom.Context.VariableEnvelopes[new("workflow", "customer")].InlineValue!.Value.GetString());
-        Assert.Equal("customer-42", custom.Context.VisibleVariablesByName["Customer"].InlineValue!.Value.GetString());
+        var customer = Assert.Single(custom.Context.VisibleVariables, variable => variable.Name == "Customer");
+        Assert.Equal("customer-42", customer.Envelope.InlineValue!.Value.GetString());
+        Assert.Equal(("workflow", "customer"), (customer.ScopeId, customer.VariableKey));
         Assert.Equal("correlation-42", custom.Context.CorrelationId);
         Assert.True(activities.Reads > 0);
         Assert.True(values.Reads > 0);

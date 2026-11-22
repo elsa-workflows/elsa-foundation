@@ -298,11 +298,13 @@ function DictionaryEditorFallback({ variant }: { variant: "inline" | "expanded" 
   );
 }
 
+export const objectExpressionEditorId = "elsa.object-expression-editor";
+
 export function createObjectExpressionEditorContribution(
   getPropertyEditors: () => StudioActivityPropertyEditorContribution[]
 ): StudioExpressionEditorContribution {
   return {
-    id: "elsa.object-expression-editor",
+    id: objectExpressionEditorId,
     order: 90,
     supports: context => context.syntax === objectSyntax,
     surfaces: {

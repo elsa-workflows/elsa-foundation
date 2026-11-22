@@ -15,7 +15,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
-public sealed class WorkflowAlterationActorIntegrationTests
+public sealed partial class WorkflowAlterationActorIntegrationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 26, 12, 0, 0, TimeSpan.Zero);
     private static readonly WorkflowAlterationEphemeralKeyRing TestKeyRing = new();
@@ -299,14 +299,14 @@ public sealed class WorkflowAlterationActorIntegrationTests
         Authority = new WorkflowExecutionAuthoritySnapshot("runtime", "operator")
     };
 
-    private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowAlterationJobState job)
+    private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowAlterationJobState job, string? claimToken = null)
     {
         var command = new WorkflowExecutionCommand(
             "command-1",
             job.WorkflowExecutionId,
             WorkflowExecutionCommandKind.AlterWorkflow,
             Now,
-            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, job.Claim!.Token)),
+            JsonSerializer.SerializeToElement(new WorkflowAlterationActorCommand(job.JobId, claimToken ?? job.Claim!.Token)),
             new Dictionary<string, string>());
         return new WorkflowExecutionCommandEnvelope(
             "envelope-1",
@@ -318,16 +318,18 @@ public sealed class WorkflowAlterationActorIntegrationTests
             partition: new WorkflowExecutionPartition("tenant-a"));
     }
 
-    private sealed class CompletingHandler : IWorkflowAlterationPreflightHandler
+    private sealed class CompletingHandler(Func<CancellationToken, ValueTask>? beforeStaging = null) : IWorkflowAlterationPreflightHandler
     {
         public int CallCount { get; private set; }
 
-        public ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default)
+        public async ValueTask<WorkflowAlterationPreflightResult> PreflightAsync(WorkflowAlterationPreflightContext context, CancellationToken cancellationToken = default)
         {
             CallCount++;
+            if (beforeStaging is not null)
+                await beforeStaging(cancellationToken);
             var workflow = context.ProjectedState.GetRequired<WorkflowExecutionState>();
             context.Staging.Stage(new CompleteWorkflowStagedChange(workflow with { Status = WorkflowExecutionStatus.Completed, CompletedAt = Now, UpdatedAt = Now }));
-            return ValueTask.FromResult(WorkflowAlterationPreflightResult.Accepted());
+            return WorkflowAlterationPreflightResult.Accepted();
         }
     }
 

@@ -86,6 +86,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
+- `Elsa3.Activities.Design.Import.Reconciliation` — `Elsa3FolderImportTask` *(cross-domain; `[Order(4)]`, imports a folder of Elsa 3 exports through the collection import and publishes them; every node, no lock, because the commit is idempotent and a publication another node made first is recognised; spec 235)*
 - `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` — `RebuildActivityUsageStartupTask` *(cross-domain; order 6, refreshes derived usage after reconciliation; owns its per-shell maintenance lock and logs rebuild/lock failures without failing activation)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
@@ -125,11 +126,11 @@ The nine shipped workers live in other domains: `RuntimeResumptionPumpTask`, `Du
 `WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
 `Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
 `ExpiredImportCollectionSweepTask` in the Elsa 3 import extension and internal
-`SpecialistRetentionPumpTask` in `Elsa.Agent.Specialists`. The specialist worker uses
+`AgentRetentionPumpTask` in `Elsa.Agent`. The agent worker uses
 `IPersistenceScopeRunner` to visit fresh ordinary partitions, keeps independent finite keyset cursors
 for explicit tenant and legacy-null tenant keys, and delegates native/source eligibility plus
 conditional content purge to its scoped pruner. Its baseline interval is five minutes, with one-hour
-maximum failure backoff. See the [specialist runtime catalog](../../../../Extensions/Agent/src/Specialists/Elsa.Agent.Specialists/EXTENSION_POINTS.md).
+maximum failure backoff. See the [agent runtime catalog](../../../../Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md).
 
 ---
 

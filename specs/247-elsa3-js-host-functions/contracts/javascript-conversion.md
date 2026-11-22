@@ -40,7 +40,7 @@ what to change so the workflow converts.
 | `newGuid()`, `newGuidString()`, `newShortGuid()`, `getGuidString()`, `getShortGuid()` | VF-IMP-005 | For a value that is unique per run, use `getWorkflowInstanceId()`. Otherwise pass the value in as a workflow input. Elsa 4 has no random values in expressions |
 | `Date` in any form, including `Date.now()` | VF-IMP-005 | Replace a `wait(ms)` loop with a Delay activity. Pass "now" and date values in as workflow inputs. Elsa 4 has no clock in expressions |
 | `Math.random()`, `crypto.randomUUID()` | VF-IMP-005 | Pass the value in as a workflow input |
-| `setOutcome(…)`, `setOutcomes(…)` | VF-IMP-005 | Elsa 4 scripts have no outcomes. Route with a Decision or Switch activity whose conditions carry the script's logic |
+| `setOutcome(…)`, `setOutcomes(…)` in an input expression | VF-IMP-005 | Only a RunJavaScript script selects outcomes in Elsa 4. Move the call into a RunJavaScript, or route with a Decision or Switch activity. In a RunJavaScript script they convert since spec 1208 (S-3, FR-027): see the [Elsa 3 mapping README](../../../Extensions/Elsa3/src/Mapping/README.md) |
 | `toJson(x)` | VF-IMP-005 | Use `JSON.stringify(x)`; to copy, use `JSON.parse(JSON.stringify(x))`. Elsa 3's `toJson` escapes HTML characters and keeps .NET casing |
 | `parseGuid(s)` | VF-IMP-005 | Keep the GUID as a string, and validate its format in the script if needed |
 | `bytesToString`, `bytesFromString`, `bytesToBase64`, `bytesFromBase64`, `streamToBytes`, `streamToBase64` | VF-IMP-005 | Elsa 4 values are JSON and have no bytes or streams. Move the conversion into an activity |

@@ -1,14 +1,14 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, History, Plus, Shield, X } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
-import type { AgentClient } from "../agent/agentClient";
-import { AgentContextChips } from "../agent/AgentContextChips";
-import { AgentPromptStarters } from "../agent/AgentPromptStarters";
-import { AgentToolResults } from "../agent/AgentToolResults";
-import { AgentProposalReview } from "../agent/AgentProposalReview";
-import type { subscribeAgentSessionStream } from "../agent/agentStream";
-import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
-import type { AgentRecoveryMode, AgentSessionSummary } from "../agent/agentTypes";
+import type { ElsaStudioModuleApi, StudioWeaverPromptRequest, StudioWeaverSurface } from "../../sdk";
+import type { WeaverClient } from "./weaverClient";
+import { WeaverContextChips } from "./WeaverContextChips";
+import { WeaverPromptStarters } from "./WeaverPromptStarters";
+import { WeaverToolResults } from "./WeaverToolResults";
+import { WeaverProposalReview } from "./WeaverProposalReview";
+import type { subscribeWeaverSessionStream } from "./weaverStream";
+import type { WeaverSessionIndicatorSession } from "./WeaverSessionIndicator";
+import type { WeaverRecoveryMode, WeaverSessionSummary } from "./weaverTypes";
 import { WeaverComposer } from "./WeaverComposer";
 import { WeaverMessageList } from "./WeaverMessageList";
 import { WeaverTimeline } from "./WeaverTimeline";
@@ -35,18 +35,18 @@ export function WeaverSurface({
   onPromptConsumed
 }: {
   api: ElsaStudioModuleApi;
-  surface: StudioAgentSurface;
+  surface: StudioWeaverSurface;
   variant: "dock" | "full";
   onClose?(): void;
-  client?: AgentClient;
-  subscribeStream?: typeof subscribeAgentSessionStream;
-  onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
-  incomingPrompt?: (StudioAgentPromptRequest & { id: string }) | null;
+  client?: WeaverClient;
+  subscribeStream?: typeof subscribeWeaverSessionStream;
+  onSessionIndicatorChange?(sessions: WeaverSessionIndicatorSession[]): void;
+  incomingPrompt?: (StudioWeaverPromptRequest & { id: string }) | null;
   onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
-  const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
-  const resultControls = useMemo(() => api.agent.resultControls?.list() ?? [], [api]);
+  const resultRenderers = useMemo(() => api.weaver.resultRenderers.list(), [api]);
+  const resultControls = useMemo(() => api.weaver.resultControls?.list() ?? [], [api]);
   const providerStatus = useMemo(() => describeProviderStatus(session), [session]);
   const sendRef = useRef(session.send);
   sendRef.current = session.send;
@@ -124,9 +124,9 @@ export function WeaverSurface({
       <WeaverRecovery session={session} />
       {recoveryScope ? <p className="weaver-recovery-scope" role="note" data-recovery={session.bootstrap?.recovery}>{recoveryScope}</p> : null}
 
-      <AgentContextChips attachments={session.attachments} />
+      <WeaverContextChips attachments={session.attachments} />
       {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
-      <AgentPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
+      <WeaverPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
 
       <div className="weaver-scroll">
         <WeaverMessageList
@@ -139,8 +139,8 @@ export function WeaverSurface({
           onWithdraw={session.withdrawMessage}
         />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
-        <AgentToolResults results={session.toolResults} renderers={resultRenderers} controls={resultControls} />
-        <AgentProposalReview
+        <WeaverToolResults results={session.toolResults} renderers={resultRenderers} controls={resultControls} />
+        <WeaverProposalReview
           proposals={session.proposals}
           disabled={session.busy}
           pendingProposalIds={session.pendingProposalIds}
@@ -212,7 +212,7 @@ function WeaverRecovery({ session }: { session: UseWeaverSession }) {
 }
 
 /** Preview (#3441): a short note when this backend does not recover conversations across a server restart. */
-function describeRecoveryScope(recovery: AgentRecoveryMode | undefined): string | null {
+function describeRecoveryScope(recovery: WeaverRecoveryMode | undefined): string | null {
   switch (recovery) {
     case "processLifetime":
       return "Conversations survive a reload while this server runs; a server restart ends them.";
@@ -223,7 +223,7 @@ function describeRecoveryScope(recovery: AgentRecoveryMode | undefined): string 
   }
 }
 
-function describeSessionSummary(summary: AgentSessionSummary) {
+function describeSessionSummary(summary: WeaverSessionSummary) {
   const updated = Number.isFinite(Date.parse(summary.updatedAt)) ? new Date(summary.updatedAt).toLocaleString() : summary.updatedAt;
   const reviews = summary.pendingReviewCount > 0 ? ` · ${summary.pendingReviewCount} awaiting review` : "";
   const status = summary.status === "active" ? "" : ` · ${summary.status}`;
@@ -393,11 +393,11 @@ function describeProviderStatus(session: UseWeaverSession): { label: string; ton
   return { label: "Agentic — Weaver can read context, run tools, and propose changes.", tone: "neutral" };
 }
 
-function toIndicatorSessions(session: UseWeaverSession): AgentSessionIndicatorSession[] {
+function toIndicatorSessions(session: UseWeaverSession): WeaverSessionIndicatorSession[] {
   if (!session.sessionId) return [];
   const pendingProposals = session.proposals.filter(proposal => proposal.status === "awaiting-approval" || proposal.status === "approved").length;
   const pendingArtifacts = 0;
-  const status: AgentSessionIndicatorSession["status"] = session.error
+  const status: WeaverSessionIndicatorSession["status"] = session.error
     ? "failed"
     : pendingProposals > 0
       ? "waiting"

@@ -17,6 +17,35 @@ namespace Elsa3.Mapping.Tests;
 /// </summary>
 public sealed class Elsa3MappingFeatureRegistrationTests
 {
+    // Spec 1223 FR-034: a date interpretation the converter cannot apply fails composition, naming the fix.
+    [Theory]
+    [InlineData(Elsa3DateInterpretation.SourceTimeZone, null, "no source time zone")]
+    [InlineData(Elsa3DateInterpretation.SourceTimeZone, "Central European Standard Time", "not an IANA time zone ID")]
+    [InlineData(Elsa3DateInterpretation.SourceTimeZone, "Mars/Olympus", "not an IANA time zone ID")]
+    [InlineData(Elsa3DateInterpretation.AssumeUtc, "Europe/Amsterdam", "Set the date interpretation to SourceTimeZone")]
+    public void A_date_interpretation_that_cannot_be_applied_fails_composition(
+        Elsa3DateInterpretation interpretation, string? zone, string guidance)
+    {
+        var feature = new Elsa3MappingFeature { DateInterpretation = interpretation, SourceTimeZone = zone };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+
+        Assert.Contains(guidance, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_source_time_zone_is_composed_into_the_converter_options()
+    {
+        var services = new ServiceCollection();
+        new Elsa3MappingFeature { DateInterpretation = Elsa3DateInterpretation.SourceTimeZone, SourceTimeZone = "Europe/Amsterdam" }
+            .ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Elsa3ConversionOptions>>().Value;
+        Assert.Equal(Elsa3DateInterpretation.SourceTimeZone, options.DateInterpretation);
+        Assert.Equal("Europe/Amsterdam", options.SourceTimeZone);
+    }
+
     [Fact]
     public async Task A_host_converter_registered_first_wins_and_also_converts_nodes()
     {

@@ -54,7 +54,7 @@ public sealed class SwitchStructureHandlerTests : IDisposable
     [InlineData("Liquid", true)]
     public void Empty_editor_values_lower_to_false_without_reusing_a_previous_conversion(string syntax, bool portable)
     {
-        var value = portable ? JsonSerializer.SerializeToElement(new { language = syntax, source = "", resultType = new { alias = "Boolean" }, parameters = new { }, options = new { }, capabilityProfile = "binding-pure-v1" })
+        var value = portable ? JsonSerializer.SerializeToElement(new { language = syntax, source = "", resultType = new { alias = "Boolean" }, parameters = new { }, options = new { }, capabilityProfile = "binding-readonly-v1" })
             : JsonSerializer.SerializeToElement("");
         var condition = new ArgumentState("foreign", new(value, syntax), null, null, null, null,
             new(AuthoredValueConversionMode.Profile, new("unused-profile", "1")));

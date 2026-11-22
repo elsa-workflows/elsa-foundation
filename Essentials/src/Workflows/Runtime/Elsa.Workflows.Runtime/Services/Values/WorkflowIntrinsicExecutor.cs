@@ -23,8 +23,10 @@ public sealed class WorkflowIntrinsicExecutor(
     IExternalPayloadStore? externalPayloadStore = null,
     IPortableExpressionEvaluator? portableExpressionEvaluator = null,
     IRuntimeValueConversionExecutor? valueConversionExecutor = null,
-    IWorkflowExecutableInputValidator? inputValidator = null)
+    IWorkflowExecutableInputValidator? inputValidator = null,
+    IRuntimePayloadCapturePolicy? payloadCapturePolicy = null)
 {
+    private readonly IRuntimePayloadCapturePolicy _payloadCapturePolicy = payloadCapturePolicy ?? new Elsa.Workflows.Runtime.Services.ActivityExecutions.DefaultRuntimePayloadCapturePolicy();
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
@@ -124,7 +126,14 @@ public sealed class WorkflowIntrinsicExecutor(
             validateAssignmentPayload: true);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
-        var changedFrame = frameOwner.Frame.Set(target.VariableKey, value, frameOwner.Frame.Revision);
+        // Spec 1221: the intrinsic reads its value and commits the write in this one dispatch, so nothing can move the
+        // variable in between. Its write is committed as a blind write (D-8) and recorded in the write history.
+        var writer = new VariableWriter(VariableWriteSource.Intrinsic, node.ExecutableNodeId, intrinsicState.InvocationId);
+        var write = frameOwner.Frame.Commit(target.VariableKey, value, frameOwner.Frame.Revision, writeBase: null, Elsa.Primitives.Models.LostUpdateMode.Default, writer);
+        var changedFrame = write.Frame;
+        if (VariableWriteRecord.IsRecorded(write.Decision))
+            intrinsicState = intrinsicState.WithVariableWrites(
+                [VariableWriteRecord.From(frameOwner.Frame, write, target.VariableKey, writer, timeProvider.GetUtcNow())]);
         WorkflowExecutionState? changedWorkflow = null;
         ActivityExecutionState? changedActivityOwner = null;
         if (frameOwner.WorkflowOwned)
@@ -140,7 +149,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             completionResult: null,
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow,
             changedActivityOwner,
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -178,7 +187,7 @@ public sealed class WorkflowIntrinsicExecutor(
             runtimeView,
             cancellationToken);
 
-        string outcome;
+        OutcomeSelection selection;
         ValueEnvelope result;
         if (intrinsicKind == WorkflowIntrinsicKind.Control)
         {
@@ -190,7 +199,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 throw new InvalidOperationException($"Control intrinsic '{node.ExecutableNodeId}' requires a non-blank literal outcome key.");
             }
 
-            outcome = outcomeValue.GetString()!;
+            selection = OutcomeSelection.Named(outcomeValue.GetString()!);
             var unitType = new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit");
             result = ValueEnvelope.Inline(
                 unitType,
@@ -202,7 +211,7 @@ public sealed class WorkflowIntrinsicExecutor(
             // A withheld value (its policy requires encryption) stays the result as its marker, holding no value, as Set
             // keeps one in a variable. The runtime's activity-result readers, an input binding and an expression
             // parameter, refuse it with VF-ACT-010.
-            outcome = "Done";
+            selection = OutcomeSelection.Unspecified;
             result = materialized;
         }
 
@@ -214,7 +223,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             result,
-            [outcome],
+            selection,
             changedWorkflow: null,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -263,7 +272,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             intrinsicKind,
             UnitResult(),
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -306,7 +315,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             WorkflowIntrinsicKind.SetOutput,
             UnitResult(),
-            ["Done"],
+            OutcomeSelection.Unspecified,
             changedWorkflow: null,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -346,7 +355,7 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             WorkflowIntrinsicKind.Finish,
             UnitResult(),
-            [outcome],
+            OutcomeSelection.Named(outcome),
             changedWorkflow,
             changedActivityOwner: null,
             metadataAdditions: null,
@@ -363,7 +372,7 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState intrinsicState,
         WorkflowIntrinsicKind intrinsicKind,
         ValueEnvelope? completionResult,
-        IReadOnlyCollection<string> outcomeNames,
+        OutcomeSelection selection,
         WorkflowExecutionState? changedWorkflow,
         ActivityExecutionState? changedActivityOwner,
         IReadOnlyDictionary<string, string>? metadataAdditions,
@@ -372,6 +381,7 @@ public sealed class WorkflowIntrinsicExecutor(
         bool terminatesWorkflow = false)
     {
         var occurredAt = timeProvider.GetUtcNow();
+        var outcomeNames = selection.ResolveNames();
         var completedMetadata = intrinsicState.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         completedMetadata[RuntimeMetadataKeys.StartReason] = startPayload.Reason;
         completedMetadata[RuntimeMetadataKeys.StartSchedulerWorkItemId] = startWorkItem.WorkItemId;
@@ -381,7 +391,7 @@ public sealed class WorkflowIntrinsicExecutor(
                 intrinsicState.InvocationId,
                 $"intrinsic:{intrinsicState.InvocationId}",
                 completionResult,
-                outcomeNames.Single(),
+                selection,
                 occurredAt,
                 $"intrinsic:{intrinsicKind}:1.0.0");
         var completedState = RuntimeContainerScopeService.CloseOwnedFrames(intrinsicState with
@@ -410,11 +420,21 @@ public sealed class WorkflowIntrinsicExecutor(
         var metadata = RuntimeModelMetadata.Snapshot(metadataValues);
         var checkpointName = terminatesWorkflow ? RuntimeCheckpointNames.WorkflowCompleted : RuntimeCheckpointNames.IntrinsicCompleted;
         var checkpointId = $"checkpoint:{startWorkItem.WorkItemId}:{(terminatesWorkflow ? "workflow-completed" : "intrinsic")}:{intrinsicState.InvocationId}";
+        // FR-025: the value a Set/Merge/Reduce wrote joins the write history as an inspection value, under the capture policy.
+        var writtenFrames = new[] { changedWorkflow?.RootVariableFrame, changedActivityOwner?.VariableFrame }.OfType<VariableFrameState>().ToArray();
+        var writeSnapshots = (completedState.VariableWrites ?? [])
+            .Select(record => (Record: record, Frame: writtenFrames.FirstOrDefault(frame => StringComparer.Ordinal.Equals(frame.ScopeId, record.ScopeId))))
+            .Where(item => item.Frame is not null && item.Frame.Values.ContainsKey(item.Record.VariableKey))
+            .Select(item => Elsa.Workflows.Runtime.Services.ActivityExecutions.VariableWriteValueSnapshots.Build(
+                _payloadCapturePolicy, startWorkItem.WorkflowExecutionId, intrinsicState.InvocationId, node.ExecutableNodeId,
+                item.Record, item.Frame!.Values[item.Record.VariableKey], occurredAt))
+            .ToArray();
         var inspection = await inspectionAccumulator.BuildProjectionAsync(
             completedState,
             checkpointId,
             occurredAt,
             outcomeNames,
+            valueSnapshots: writeSnapshots.Length == 0 ? null : writeSnapshots,
             metadata: metadata,
             cancellationToken: cancellationToken);
         var completionWorkItem = terminatesWorkflow
@@ -619,8 +639,11 @@ public sealed class WorkflowIntrinsicExecutor(
             executable: executable,
             workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
+            visibleVariables: RuntimeContainerScopeService.ProjectReadableVariables(executable, visibleFrames, rootVariableNames),
             correlationId: projections.CorrelationId);
+        if (binding.Selection is not null)
+            return await MaterializeMemberAsync(binding, workflowState, intrinsicState, context, cancellationToken);
+
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -718,17 +741,71 @@ public sealed class WorkflowIntrinsicExecutor(
             source.ExternalReference?.StorageProfile);
     }
 
+    /// <summary>
+    /// A member read on an intrinsic input (#4078): the whole source is resolved as the whole-value read of its role
+    /// is, the member selected, and a present member always validated against the destination before it is written,
+    /// whether or not this input validates its whole-value payload. An intrinsic writes a value, so an absent member is
+    /// always refused; a null member is written as null, as a whole-value null is.
+    /// </summary>
+    private async ValueTask<ValueEnvelope> MaterializeMemberAsync(
+        RuntimeInputBinding binding,
+        WorkflowExecutionState workflowState,
+        ActivityExecutionState intrinsicState,
+        RuntimeInputBindingResolutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var nodeId = intrinsicState.Execution.ExecutableNodeId;
+        var (source, selected) = await RuntimeMemberRead.ReadAsync(binding, nodeId, inputBindingResolver, context, externalPayloadStore, cancellationToken);
+        var combinedPolicy = ValuePolicyCombiner.Combine(
+            binding.EffectivePolicy,
+            source.Policy,
+            $"Intrinsic input '{binding.InputName}' on node '{nodeId}'");
+        ValueEnvelope value;
+        switch (selected.Outcome)
+        {
+            case RuntimeReadSelectionOutcome.Absent:
+                throw RuntimeReadSelectionException.Absent(binding, nodeId, selected.SegmentIndex);
+            case RuntimeReadSelectionOutcome.NotAnObject:
+                throw RuntimeReadSelectionException.NotAnObject(binding, nodeId, selected.SegmentIndex, selected.StoppedAt);
+            case RuntimeReadSelectionOutcome.Null:
+                value = ValueEnvelope.Null(binding.TargetType, combinedPolicy);
+                break;
+            default:
+                if (inputValidator is null)
+                    throw new InvalidOperationException($"Intrinsic member input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
+                var member = ValueEnvelope.Inline(binding.ConversionPlan?.SourceType ?? binding.TargetType, selected.Value, combinedPolicy);
+                try
+                {
+                    value = binding.ConversionPlan is null ? member.Retype(binding.TargetType) : _valueConversionExecutor.Convert(member, binding.ConversionPlan);
+                    ValidateAssignmentPayload(binding, value, nodeId);
+                }
+                catch (Exception exception) when (RuntimeReadSelectionException.IsFitFailure(exception))
+                {
+                    throw RuntimeReadSelectionException.DoesNotFit(binding, nodeId, exception);
+                }
+                break;
+        }
+
+        return await ApplyStorageAsync(
+            workflowState.WorkflowExecutionId,
+            intrinsicState.InvocationId,
+            binding.InputName,
+            value,
+            source.Policy,
+            combinedPolicy,
+            cancellationToken,
+            source.ExternalReference?.StorageProfile);
+    }
+
     private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
     {
         if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
-            value.Type is { Alias: "Elsa.Any", CollectionKind: CollectionKind.Single })
+            value.Type is { CollectionKind: CollectionKind.Single } && TypeAliasConvention.IsAny(value.Type.Alias))
             return;
         var validator = inputValidator
             ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
-        // Elsa.Any is a portable runtime token; Object is its CLR element type in the registry.
-        var validationType = binding.TargetType.Alias == "Elsa.Any"
-            ? new TypeReference("Object", binding.TargetType.CollectionKind)
-            : binding.TargetType.ToTypeReference();
+        // A collection of Any still has a shape to fit; Any resolves to its CLR type in the registry.
+        var validationType = binding.TargetType.ToTypeReference();
         var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
             [new WorkflowDeclaredInput(binding.InputName, validationType, isRequired: true)]);
         var validation = validator.Validate(contract,
@@ -899,7 +976,7 @@ public sealed class WorkflowIntrinsicExecutor(
     {
         if (!frame.Values.TryGetValue(variableKey, out var current))
             throw new InvalidOperationException($"Set intrinsic '{nodeId}' targets undeclared variable '{variableKey}' in frame '{frame.FrameId}'.");
-        if ((!StringComparer.Ordinal.Equals(current.Type.Alias, "Elsa.Any") && !SameType(current.Type, binding.TargetType)) ||
+        if ((!TypeAliasConvention.IsAny(current.Type.Alias) && !SameType(current.Type, binding.TargetType)) ||
             !SameType(binding.TargetType, value.Type))
             throw new InvalidOperationException($"Set intrinsic '{nodeId}' value type '{value.Type.Alias}' does not match variable '{variableKey}' type '{current.Type.Alias}'.");
         if (!value.Policy.Satisfies(current.Policy))

@@ -290,7 +290,7 @@ public sealed class CompensationScopeNestingTests
 
         var finished = await CompletedAsync(compensating.State, release, "actexec-release-inventory");
         Assert.True(finished.Continuation.IsComplete);
-        Assert.Equal(CompensationScope.CompensatedOutcome, finished.Continuation.OutcomeName);
+        Assert.Equal(new[] { CompensationScope.CompensatedOutcome }, finished.Continuation.OutcomeNames);
     }
 
     [Fact]
@@ -388,7 +388,7 @@ public sealed class CompensationScopeNestingTests
         Assert.Equal("release-inventory", Assert.Single(recovering.Requests).ExecutableNodeId);
 
         var finished = await CompletedAsync(recovering.State, recovering.Requests[0], "actexec-release-inventory");
-        Assert.Equal(CompensationScope.CompensatedOutcome, finished.Continuation.OutcomeName);
+        Assert.Equal(new[] { CompensationScope.CompensatedOutcome }, finished.Continuation.OutcomeNames);
     }
 
     [Fact]

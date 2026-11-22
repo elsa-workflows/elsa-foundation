@@ -32,7 +32,7 @@ All routes are relative to the active shell route base.
 | Definitions | `GET/POST /design/workflows/definitions`, `POST /design/workflows/definitions/submit`, `GET/PATCH/DELETE /design/workflows/definitions/{definitionId}`, `POST .../{definitionId}/restore`, `DELETE .../{definitionId}/permanent` |
 | Drafts | `GET/PUT/DELETE /design/workflows/drafts/{draftId}`, `POST .../{draftId}/promote` |
 | Versions | `GET /design/workflows/definitions/{definitionId}/versions`, `GET /design/workflows/versions/{versionId}`, privileged `POST /design/workflows/versions/ingest` |
-| Authoring | `POST /design/workflows/scoped-variables/analyze`, `POST /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options` |
+| Authoring | `POST /design/workflows/scoped-variables/analyze`, `POST /design/workflows/scoped-variables/rename-plan` (the script edits a variable rename needs, spec 1222; advertised as `scoped-variable-rename-plan` when a planner is composed), `POST /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options` |
 | Authoring schema | `GET /design/workflows/definitions/submit/schema`, `GET /design/workflows/structures` |
 
 Definition list and detail views expose optional `publicationState` (`draft`, `published`, `retracted`, `retired`), `publishedVersionId` and `publishedVersion` when the host composes Publishing's `IWorkflowDefinitionPublicationStateLookup`. Design-only hosts leave publication facts unset; clients should display unavailable publication information rather than infer it from saved versions, which survive unpublish. For publication selection and journal capability rules, see the [lookup contract](EXTENSION_POINTS.md#iworkflowdefinitionpublicationstatelookup-contract--elsaworkflowsdesignpersistencecore). In particular, no-slot definitions remain unresolved on the EF ledger until its definition-keyed journal lookup is implemented in [#2801](https://github.com/elsa-workflows/elsa-foundation/issues/2801).
@@ -100,7 +100,7 @@ preflight that read decision before committing. Replacement details readers can 
 checks only organization metadata.
 `IWorkflowDefinitionAuthorizer` in Workflow Design Core exposes the same current per-definition
 read/manage decisions to other participating modules. Its HTTP implementation checks typed native
-resources and tenant-scoped existence; definition GET honors the selected replacement before
+resources and tenant-scoped existence; the definition GET and the version GET honor the selected replacement before
 returning details. See the [owner authorization contract](EXTENSION_POINTS.md#iworkflowdefinitionauthorizer-contract--elsaworkflowsdesigncore).
 See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
 

@@ -10,6 +10,11 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// Actor-only boundary for a claimed alteration job. The transport command carries only job/claim identifiers; this
 /// executor resolves protected plan envelopes and the target workflow state after the actor has serialized the target.
 /// </summary>
+/// <remarks>
+/// An executor built with this constructor takes no ownership lease on the run, so its checkpoint is not fenced: it
+/// is for a caller that serializes and fences the run itself. The executor the runtime registers runs each job under
+/// a borrowed execution lease (#2667).
+/// </remarks>
 public sealed class WorkflowAlterationActorCommandExecutor(
     IWorkflowAlterationStore alterationStore,
     IWorkflowAlterationPayloadProtector payloadProtector,
@@ -26,6 +31,28 @@ public sealed class WorkflowAlterationActorCommandExecutor(
     private readonly IWorkflowSchedulerWorkQueue? _schedulerWorkQueue = schedulerWorkQueue;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly WorkflowAlterationJobExecutor _jobExecutor = jobExecutor ?? throw new ArgumentNullException(nameof(jobExecutor));
+    private readonly AlterationLeaseRunner? _leaseRunner;
+
+    /// <summary>
+    /// The composition the runtime registers: the job reads the run and commits under the run's ownership lease.
+    /// The public constructor takes no lease, for a caller that already serializes and fences the run itself.
+    /// </summary>
+    internal WorkflowAlterationActorCommandExecutor(
+        IWorkflowAlterationStore alterationStore,
+        IWorkflowAlterationPayloadProtector payloadProtector,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        WorkflowAlterationJobExecutor jobExecutor,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue? schedulerWorkQueue,
+        TimeProvider? timeProvider,
+        AlterationLeaseRunner leaseRunner)
+        : this(alterationStore, payloadProtector, workflowExecutionStateStore, jobExecutor, activityExecutionStateStore, schedulerWorkQueue, timeProvider)
+    {
+        _leaseRunner = leaseRunner ?? throw new ArgumentNullException(nameof(leaseRunner));
+    }
+
+    /// <summary>Whether this executor runs its jobs under the target run's ownership lease.</summary>
+    internal bool RunsJobsUnderLease => _leaseRunner is not null;
 
     public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
@@ -62,18 +89,41 @@ public sealed class WorkflowAlterationActorCommandExecutor(
         if (!StringComparer.Ordinal.Equals(plan.AuthorityScope.TenantPartition, job.TenantPartition))
             throw new InvalidOperationException("The alteration plan tenant does not match its claimed target job.");
 
-        var workflow = await _workflowExecutionStateStore.FindAsync(job.WorkflowExecutionId, cancellationToken)
-            ?? throw new InvalidOperationException("The targeted workflow execution was not found.");
-        var workflowPartition = workflow.Partition?.Value ?? WorkflowExecutionPartition.DefaultValue;
-        if (!StringComparer.Ordinal.Equals(workflowPartition, job.TenantPartition))
-            throw new InvalidOperationException("The targeted workflow execution tenant does not match the alteration job.");
-
+        // Before the lease: a job whose plan cannot be read on this node will never run here, however often it is
+        // delivered, and must not take the run from its owner each time.
         var plaintext = _payloadProtector.Unprotect(
             plan.PlanId,
             plan.AuthorityScope.TenantPartition,
             plan.CanonicalRequestHash,
             plan.ProtectedPayload);
         var envelopes = ReadEnvelopes(plaintext);
+
+        if (_leaseRunner is null)
+        {
+            await ExecuteClaimedAsync(job, envelopes, cancellationToken);
+            return;
+        }
+
+        // Only now, so a duplicate of a finished job, a stale claim or an unreadable plan never touches the run's
+        // ownership.
+        await _leaseRunner.RunAsync(
+            envelope,
+            leasedCancellation => ExecuteClaimedAsync(job, envelopes, leasedCancellation),
+            cancellationToken);
+    }
+
+    // Reads the run and commits the job's checkpoint. Under a run lease both happen while the lease is held.
+    private async ValueTask ExecuteClaimedAsync(
+        WorkflowAlterationJobState job,
+        IReadOnlyList<WorkflowAlterationEnvelope> envelopes,
+        CancellationToken cancellationToken)
+    {
+        var workflow = await _workflowExecutionStateStore.FindAsync(job.WorkflowExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException("The targeted workflow execution was not found.");
+        var workflowPartition = workflow.Partition?.Value ?? WorkflowExecutionPartition.DefaultValue;
+        if (!StringComparer.Ordinal.Equals(workflowPartition, job.TenantPartition))
+            throw new InvalidOperationException("The targeted workflow execution tenant does not match the alteration job.");
+
         var activities = _activityExecutionStateStore is null
             ? []
             : await _activityExecutionStateStore.ListAllAsync(workflow.WorkflowExecutionId, cancellationToken);

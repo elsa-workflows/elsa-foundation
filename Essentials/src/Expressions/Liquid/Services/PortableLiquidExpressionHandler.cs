@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Liquid.Helpers;
+using Elsa.Primitives.Models;
 using Fluid;
 
 namespace Elsa.Expressions.Liquid.Services;
@@ -27,9 +28,9 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
         var definition = request.Definition;
         if (!StringComparer.OrdinalIgnoreCase.Equals(definition.Language, Language))
             throw new ArgumentException($"Expected a {Language} expression, but received '{definition.Language}'.", nameof(request));
-        if (!request.Capabilities.IsBindingPure ||
-            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
-            throw new InvalidOperationException($"Liquid binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
+        if (!request.Capabilities.IsBindingReadonly ||
+            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingReadonlyV1))
+            throw new InvalidOperationException($"Liquid binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingReadonlyV1}'.");
         if (!parser.TryParse(definition.Source, out var template, out var error))
             throw new InvalidOperationException($"Failed to parse Liquid binding expression: {error}");
 
@@ -45,14 +46,25 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
         foreach (var filter in new[] { "date", "format_date", "time_zone" })
         {
             options.Filters.AddFilter(filter, static (_, _, _) =>
-                throw new InvalidOperationException("Liquid time and time-zone filters are unavailable in the binding-pure-v1 capability profile."));
+                throw new InvalidOperationException("Liquid time and time-zone filters are unavailable in the binding-readonly-v1 capability profile."));
         }
         var context = new TemplateContext(options, StringComparer.Ordinal)
         {
             CultureInfo = CultureInfo.InvariantCulture
         };
-        foreach (var (name, value) in request.ParameterValues)
+        foreach (var (name, value) in request.ArgumentValues())
             context.SetValue(name, DynamicValueMaterializer.Materialize(value));
+
+        // Spec 1222 FR-005: pinned variable reads and the computed-read lookup sit under one `variables` root, the
+        // same surface JavaScript gets. A template that reads no variable gets none.
+        var pinnedVariables = request.PinnedVariableValues();
+        if (pinnedVariables.Count > 0 || request.VariableReader is not null)
+        {
+            // In Liquid the args parameters are roots too: one named `variables` cannot share the name.
+            if (request.ArgumentValues().ContainsKey("variables"))
+                throw new InvalidOperationException("A Liquid expression that reads workflow variables cannot also declare a parameter named 'variables'.");
+            context.SetValue("variables", new LiquidVariablesValue(pinnedVariables, request.VariableReader));
+        }
 
         var rendered = await template.RenderAsync(context);
         request.CancellationToken.ThrowIfCancellationRequested();
@@ -77,7 +89,7 @@ internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPor
             return number;
         }
 
-        if ((StringComparer.Ordinal.Equals(resultTypeAlias, "Object") || StringComparer.Ordinal.Equals(resultTypeAlias, "Any"))
+        if (TypeAliasConvention.IsAny(resultTypeAlias)
             && TryParseJson(rendered, out var structuredValue))
             return structuredValue;
 

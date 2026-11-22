@@ -1,24 +1,247 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Opt-in EF Core scheduler-poison store (R23).</summary>
 /// <remarks>
+/// <para>
 /// Poison identity is the scoped pair (workflow execution ID, work-item ID). The JSON envelope is authoritative;
 /// relational projections provide bounded lookup and deterministic failure-window ordering. Replacements use the
 /// row revision as an optimistic compare-and-swap token and never fall back to an unconditional update.
+/// </para>
+/// <para>
+/// It can record under the run's ownership fence (<see cref="ISchedulerPoisonFenceCapability"/>) only when the
+/// ownership row is in its own database: the registered <see cref="IExecutionLivenessStateStore"/> is the
+/// <see cref="EfExecutionLivenessStateStore"/> over the same context and access scope. Scheduler poison is
+/// registered separately from operational state, so a host can pair this store with ownership kept elsewhere; then
+/// <see cref="CanRecordFenced"/> is <see langword="false"/>.
+/// </para>
 /// </remarks>
 public sealed class EfWorkflowSchedulerPoisonStore(
     RuntimeDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowSchedulerPoisonStore, ISchedulerPoisonFenceCapability
 {
     private static readonly EfWriteRetry Records = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
+    private readonly Func<IExecutionLivenessStateStore?>? _ownershipStateStore;
+    private readonly TimeProvider _timeProvider = TimeProvider.System;
+
+    /// <summary>
+    /// Creates the store with a way to find the ownership store the runtime composition registers, so it can tell
+    /// whether the ownership row is in its own database. <paramref name="ownershipStateStore"/> is called each time
+    /// <see cref="CanRecordFenced"/> is read or a fenced record is asked for, and not when this store is built:
+    /// reading and unfenced recording do not need the ownership store, or what it depends on, to be resolvable.
+    /// </summary>
+    public EfWorkflowSchedulerPoisonStore(
+        RuntimeDbContext context,
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        Func<IExecutionLivenessStateStore?> ownershipStateStore,
+        TimeProvider? timeProvider = null)
+        : this(context, accessContextAccessor)
+    {
+        ArgumentNullException.ThrowIfNull(ownershipStateStore);
+        _ownershipStateStore = ownershipStateStore;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    /// <inheritdoc />
+    public bool CanRecordFenced =>
+        _ownershipStateStore?.Invoke() is EfExecutionLivenessStateStore ownership && ownership.UsesSameBackingStore(context, accessContextAccessor);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The fence check, the touch of the ownership row and the record are one transaction that this call opens
+    /// itself. When the save conflicts on the ownership row alone, which is what the owner's own lease heartbeat
+    /// causes, the transaction runs again, for <c>EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts</c>
+    /// attempts in all, and each attempt checks the fence again. Before any provider failure leaves, the ownership
+    /// row is read once more, so a takeover leaves as <see cref="RuntimeStaleFencingTokenException"/> and not as a
+    /// write failure, whatever shape the provider gave it. When that read fails too, the first failure leaves. The
+    /// drainer records without the fence when this call fails for a reason other than ownership. The save is
+    /// accepted by the change tracker only after the commit succeeded, so after a failed commit whatever else the
+    /// caller had pending on the context is still pending.
+    /// </remarks>
+    /// <exception cref="RuntimeStaleFencingTokenException">
+    /// The fence is not the run's current, unexpired lease. Nothing was written.
+    /// </exception>
+    /// <exception cref="EfPoisonStoreException">
+    /// A provider failure, with the provider's exception as its inner exception. That includes a bare
+    /// <see cref="IOException"/> or <see cref="TimeoutException"/>, and an
+    /// <see cref="OperationCanceledException"/> raised while <paramref name="cancellationToken"/> is not cancelled,
+    /// which is how some providers report a timeout. Nothing was written, unless the
+    /// failure came from the commit itself: a commit that reports a failure may still have been applied. The inner
+    /// exception is a <see cref="DbUpdateConcurrencyException"/> when the ownership row changed under every attempt
+    /// while the lease stayed this one, when it changed that way once while the context held other pending changes
+    /// (the call then does not run again), and when another writer replaced the poison row between the read and
+    /// the save. It is a plain <see cref="DbUpdateException"/> when another writer inserted the poison row first,
+    /// which is a unique-key violation. It is the <see cref="InvalidOperationException"/> EF Core raises when the
+    /// context already has a transaction, or an ambient or enlisted one.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// The context tracks a pending change to this run's ownership row. Nothing was written, and the pending change
+    /// is left as it was.
+    /// </exception>
+    /// <exception cref="InvalidDataException">
+    /// A stored row this call has to read fails its read check: the poison row already stored for the record, as in
+    /// <see cref="RecordAsync"/>, or the run's ownership row. Nothing was written. This is not a provider failure,
+    /// so the ownership row is not looked at again.
+    /// </exception>
+    /// <exception cref="NotSupportedException"><see cref="CanRecordFenced"/> is <see langword="false"/>.</exception>
+    public async ValueTask<RuntimeSchedulerPoisonRecord> RecordFencedAsync(
+        RuntimeSchedulerPoisonRecord record,
+        RuntimeExecutionFence fence,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateRecord(record);
+        ArgumentNullException.ThrowIfNull(fence);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!CanRecordFenced)
+            throw new NotSupportedException("This scheduler-poison store cannot check an execution fence: the registered execution-liveness store does not keep ownership in this store's database.");
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, record.WorkflowExecutionId, record.WorkItemId);
+        var fenceRowId = EfRuntimeOperationalStoreSupport.CompositeId(
+            scope, record.WorkflowExecutionId, RuntimeExecutionOwnershipStateId.For(record.WorkflowExecutionId));
+
+        // A pending change to this run's ownership row is someone else's unsaved work. Staging the fence on top of
+        // it would validate values that are not in the database and save that change with the record, so refuse it.
+        if (context.ChangeTracker.Entries<ExecutionLivenessStateEntity>()
+            .Any(entry => entry.Entity.Id == fenceRowId && entry.State != EntityState.Unchanged))
+            throw new InvalidOperationException(
+                $"Scheduler poison for workflow execution '{record.WorkflowExecutionId}' cannot be recorded under its execution fence while the context tracks a pending change to that execution's ownership row.");
+
+        // The owner's lease heartbeat bumps the fence row's revision without changing the lease, as it does under a
+        // checkpoint commit (EfRuntimeCheckpointCommitStore.CommitFencedAsync). Run again only after a conflict on
+        // that row alone, and only when the context holds nothing else to save. Each attempt reads the row and
+        // validates the fence again, so a real takeover still fails as stale.
+        var retryable = !context.ChangeTracker.HasChanges();
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await RecordUnderFenceAsync();
+                }
+                catch (DbUpdateConcurrencyException exception) when (retryable &&
+                    attempt < EfRuntimeCheckpointParticipantStaging.MaxFenceRenewalAttempts &&
+                    EfRuntimeCheckpointParticipantStaging.IsFenceRenewalConflict(exception))
+                {
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or TimeoutException ||
+            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+            EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
+        {
+            // A provider failure is about to leave. A bare IOException or TimeoutException is one, as in the sibling
+            // stores: a transaction that could not begin, a read or a commit can fail with either. So is an
+            // OperationCanceledException raised while this call's token is not cancelled: a provider timeout
+            // reported that way, not a cancellation of this call.
+            //
+            // The failure does not say whether the run was taken: a conflict on the ownership row that was not
+            // retried, a serialization failure under a stricter isolation level and a lock timeout on that row all
+            // look like any other write failure. A caller that takes a takeover for a failure that is not about
+            // ownership would record without the fence. So look once more: a lease that is no longer this one
+            // leaves as stale. If that look fails as well, the failure that got here leaves. If this call is
+            // cancelled during the look, the cancellation leaves.
+            try
+            {
+                await EnsureFenceIsCurrentAsync();
+            }
+            catch (Exception secondLookFailure) when (secondLookFailure is not RuntimeStaleFencingTokenException &&
+                !(secondLookFailure is OperationCanceledException && cancellationToken.IsCancellationRequested))
+            {
+            }
+
+            // Provider exception types do not cross this boundary. What this method throws on purpose is not a
+            // provider failure and is not caught here: the stale fence, this call's cancellation, and the refusals
+            // above.
+            const string operation = "recording under the execution fence";
+            var identity = $"{record.WorkflowExecutionId}/{record.WorkItemId}";
+            throw new EfPoisonStoreException(
+                operation,
+                identity,
+                $"The EF scheduler-poison store failed while {operation} '{identity}'.",
+                exception);
+        }
+
+        async ValueTask EnsureFenceIsCurrentAsync()
+        {
+            var operationalStateId = RuntimeExecutionOwnershipStateId.For(record.WorkflowExecutionId);
+            var row = await context.ExecutionLivenessStates.AsNoTracking()
+                .SingleOrDefaultAsync(candidate => candidate.Id == fenceRowId, cancellationToken);
+            var ownership = row is null
+                ? null
+                : EfExecutionLivenessStateStore.Read(row, scope, record.WorkflowExecutionId, operationalStateId);
+            RuntimeExecutionFenceValidator.EnsureCurrent(record.WorkflowExecutionId, fence, ownership, _timeProvider.GetUtcNow());
+        }
+
+        async ValueTask<RuntimeSchedulerPoisonRecord> RecordUnderFenceAsync()
+        {
+            WorkflowSchedulerPoisonEntity? staged = null;
+            // Always a transaction of this call's own, as the checkpoint commit store opens. EF Core refuses to
+            // begin one while the context has another, and that refusal leaves as this store's persistence failure.
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                // Read the fence row as it is now. A copy this context tracks from earlier work is a snapshot, and a
+                // tracked query would hand that snapshot back instead of the row.
+                DetachOwnershipRow(fenceRowId);
+                await EfRuntimeCheckpointParticipantStaging.StageExecutionFenceAsync(
+                    context, scope, record.WorkflowExecutionId, fence, _timeProvider, cancellationToken);
+
+                var row = await context.WorkflowSchedulerPoisonRecords.AsNoTracking()
+                    .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+                if (row is null)
+                {
+                    staged = ToEntity(record, scope, id, 1);
+                    context.WorkflowSchedulerPoisonRecords.Add(staged);
+                }
+                else
+                {
+                    _ = ReadChecked(row, scope, record.WorkflowExecutionId, record.WorkItemId);
+                    staged = ToEntity(record, scope, id, checked(row.Revision + 1));
+                    AttachForUpdate(staged, row.Revision);
+                }
+
+                // One save writes the fence touch and the record, so they commit together or not at all. The
+                // tracker accepts the save only once the commit has succeeded: a commit that fails rolls the save
+                // back, and whatever else the caller had pending on this context must then still be pending.
+                await context.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                context.ChangeTracker.AcceptAllChanges();
+                return record;
+            }
+            catch
+            {
+                try
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                }
+                catch
+                {
+                    // Keep the failure that got here. Disposing the transaction still rolls it back.
+                }
+
+                throw;
+            }
+            finally
+            {
+                // Leave nothing of this unit tracked, whether it committed, was refused or failed. A later save on
+                // the shared context must not write the record again, and must not reuse this fence row's revision.
+                if (staged is not null)
+                    Detach(staged);
+                DetachOwnershipRow(fenceRowId);
+            }
+        }
+    }
 
     public async ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(
         RuntimeSchedulerPoisonRecord record,
@@ -237,6 +460,14 @@ public sealed class EfWorkflowSchedulerPoisonStore(
     }
 
     private void Detach(WorkflowSchedulerPoisonEntity row) => context.Entry(row).State = EntityState.Detached;
+
+    private void DetachOwnershipRow(string id)
+    {
+        foreach (var entry in context.ChangeTracker.Entries<ExecutionLivenessStateEntity>()
+                     .Where(entry => entry.Entity.Id == id)
+                     .ToArray())
+            entry.State = EntityState.Detached;
+    }
 
     private static void ValidateRecord(RuntimeSchedulerPoisonRecord record)
     {

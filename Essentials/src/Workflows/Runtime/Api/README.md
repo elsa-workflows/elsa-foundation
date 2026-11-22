@@ -28,7 +28,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
-| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
+| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}`; variable lifecycle (spec 1229): `GET .../variables`, `GET .../variable-writes`, `GET .../variable-writes/{entryId}/payload`, `GET .../journal`, `GET .../compare/{otherWorkflowExecutionId}`; the instance details carry `lostUpdateWarningCount` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |
@@ -85,6 +85,20 @@ resolve value payloads can read it through the value-payload read.
   (`.../value-evidence/{evidenceId}/payload`) answers `unavailable` for it, whatever the record carries beside its
   marker. For any other record, `isSensitive` is the flag the runtime recorded: the invoke path flags an input when
   its value's effective policy or its pinned input contract marks it sensitive.
+- **Variable lifecycle on the activity-execution detail** (spec 1221, Studio #4735): the same read carries, when the
+  execution's durable state has them, `variableWrites[]` (each write-history record: `outcome` such as
+  `LostUpdateWarning` or `LostUpdateFault`, `writer` and `overwrittenWriter`, `baseVersion`, `currentVersion`,
+  `newVersion`, `commitOrder`, `commitSequence`, `frameId`, `occurredAt`), `recordedCompletion` (the completion a
+  `Fault` lost update refused: selection, outcome names, attempt and its variable writes; its presence is when
+  `AcceptRecordedCompletion/1` applies) and `inputRefreshes[]` (each superseded background input evaluation, the
+  evaluation that replaced it and the changed variables with the version read and the current one). Values are never
+  inline: each written, overwritten, refused, recorded or superseded value is a value state (`captured`, `omitted`,
+  `redacted`; `expired` is reserved for spec 1229's history read), so a captured `null` never reads as a missing value.
+  A value's `digest` (an unsalted hash of the value) is shown only to a caller who may both inspect sensitive values
+  and resolve their payloads, and never beside a `redacted` value. A written value links its `VariableWrite` value evidence by `evidenceId` for the
+  value-payload read above; the
+  overwritten and refused values are operational (`isOperational: true`) and become readable through spec 1229's
+  write-history payload read.
 - **Descendants** (`.../activity-executions/{activityExecutionId}/descendants`) carry no value evidence.
 
 Known limit: an unmatched authored input (no executable node matched by its node id holds a compiled binding or a

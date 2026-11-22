@@ -37,7 +37,7 @@ describe("ActivityDefinitionDiagnosticsPanel", () => {
   });
 
   it("does not repeat headings or invent errors for a rejected informational result", () => {
-    const rendered = renderPanel([diagnostic("specialist.manifest.invalid", "Info", "/instructions")]);
+    const rendered = renderPanel([diagnostic("agent.manifest.invalid", "Info", "/instructions")]);
     expect(rendered.querySelectorAll("h2")).toHaveLength(1);
     expect(rendered.querySelector('[aria-label="Diagnostic severity counts"]')?.textContent).toBe("1 info");
     expect(rendered.textContent).not.toContain("0 errors");

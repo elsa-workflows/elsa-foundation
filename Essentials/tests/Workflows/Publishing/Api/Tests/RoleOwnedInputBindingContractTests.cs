@@ -124,7 +124,7 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["subtotal"] = new WorkflowRequestExpressionParameterBinding("subtotal")
             },
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var reordered = ExpressionBinding(
             new Dictionary<string, ExpressionParameterBinding>
             {
@@ -132,11 +132,11 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["tax"] = new VariableExpressionParameterBinding("workflow", "tax")
             },
             JsonSerializer.SerializeToElement(new { strict = true }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var changedOptions = ExpressionBinding(
             first.Expression!.Parameters,
             JsonSerializer.SerializeToElement(new { strict = false }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var changedCapability = ExpressionBinding(
             first.Expression.Parameters,
             first.Expression.Options,
@@ -165,6 +165,34 @@ public sealed class RoleOwnedInputBindingContractTests
         var hasher = new WorkflowExecutableHasher();
 
         Assert.NotEqual(hasher.ComputeHash(first), hasher.ComputeHash(changedTarget));
+    }
+
+    /// <summary>
+    /// A result binding the server returned declares no scope and compiles to a reference without one. A scope an
+    /// existing document declares is kept, and one that is declared but unusable is still refused.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result"}""", null)]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":null}""", null)]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":"scope:root"}""", "scope:root")]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":" "}""", "refused")]
+    [InlineData("""{"producerNodeId":"node-fetch","projectionKey":"$result","producerScopeId":7}""", "refused")]
+    public void Compiler_ReadsTheActivityResultScopeAsOptional(string payload, string? expectedScope)
+    {
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var input = new InputDefinition("message", "Text", new TypeReference("String"), null, "Text", null, IsNullable: false);
+        using var json = JsonDocument.Parse(payload);
+        var value = new ArgumentValue(json.RootElement.Clone(), "ActivityResult");
+
+        if (expectedScope == "refused")
+        {
+            Assert.Contains("producerScopeId", Assert.Throws<ArgumentException>(() => compiler.Compile("node-write", input, value)).Message);
+            return;
+        }
+
+        var reference = compiler.Compile("node-write", input, value).ActivityResult!;
+        Assert.Equal("node-fetch", reference.ProducerExecutableNodeId);
+        Assert.Equal(expectedScope, reference.ProducerScopeId);
     }
 
     [Fact]
@@ -238,7 +266,7 @@ public sealed class RoleOwnedInputBindingContractTests
                 ["customerId"] = new WorkflowRequestExpressionParameterBinding("customer-id")
             },
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1,
+            ExpressionCapabilityProfiles.BindingReadonlyV1,
             new Dictionary<string, string> { ["origin"] = "elsa3-import" });
 
         var binding = compiler.Compile(
@@ -249,7 +277,7 @@ public sealed class RoleOwnedInputBindingContractTests
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         var expression = Assert.IsType<RuntimeExpressionBinding>(binding.Expression);
         Assert.Equal("args.customerId", expression.Expression);
-        Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+        Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         Assert.Equal("customer-id", Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerId"]).MemberKey);
         Assert.Equal("elsa3-import", expression.Metadata["origin"]);
     }
@@ -271,7 +299,7 @@ public sealed class RoleOwnedInputBindingContractTests
             new TypeReference("Int32"),
             new Dictionary<string, ExpressionParameterBinding>(),
             JsonSerializer.SerializeToElement(new { }),
-            ExpressionCapabilityProfiles.BindingPureV1);
+            ExpressionCapabilityProfiles.BindingReadonlyV1);
         var payload = SerializationServices.PayloadSerializer().SerializeToElement(definition);
 
         var binding = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create())

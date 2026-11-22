@@ -12,7 +12,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
     <PackageReference Include="CShells.AspNetCore.Abstractions" Version="__CSHELLS_VERSION__" />
-    <ProjectReference Include="__REPO_ROOT__/Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="__REPO_ROOT__/Extensions/Weaver/src/Core/Elsa.Weaver.Core.csproj" />
     <ProjectReference Include="__REPO_ROOT__/Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -109,8 +109,9 @@ public sealed class Elsa3MemoryReferenceImportTests
         return Case(definition, [Consumer()], [memoryId], version =>
         {
             var expression = ReadPortableExpression(ReadValue(FindInput(version, "variable-node", ValueInputKey)));
-            Assert.Equal("(args.total) ?? null", expression.Source);
-            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["total"]);
+            Assert.Equal("(variables.total) ?? null", expression.Source);
+            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.total"]);
+            Assert.Equal(ExpressionParameterSurfaces.Variables, parameter.Surface);
             Assert.Equal("workflow", parameter.DeclaringScopeNodeId);
             Assert.Equal("variable-total", parameter.VariableKey);
         });
@@ -155,7 +156,8 @@ public sealed class Elsa3MemoryReferenceImportTests
         });
         var definition = Workflow("loop", loop);
 
-        return Case(definition, [Consumer()], [memoryId], version =>
+        // A dynamic input: a loop item into a typed one is refused (#4898).
+        return Case(definition, [ActivityShape.Create("Elsa.Consumer", inputs: ["Value"], inputType: "Object")], [memoryId], version =>
         {
             var value = ReadValue(FindInput(version, "loop-body", ValueInputKey));
             Assert.Equal("Variable", value.ExpressionType);
@@ -177,7 +179,7 @@ public sealed class Elsa3MemoryReferenceImportTests
             Assert.Equal("JavaScript", expression.Language);
             Assert.Equal("(40 + 2) ?? null", expression.Source);
             Assert.Empty(expression.Parameters);
-            Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+            Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         });
     }
 
@@ -229,10 +231,10 @@ public sealed class Elsa3MemoryReferenceImportTests
         {
             var expression = ReadPortableExpression(ReadValue(FindInput(version, "liquid-node", ValueInputKey)));
             Assert.Equal("Liquid", expression.Language);
-            Assert.Equal("{{ customer.name }}", expression.Source);
-            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["customer"]);
+            Assert.Equal("{{ variables.customer.name }}", expression.Source);
+            var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["variables.customer"]);
             Assert.Equal("variable-customer", parameter.VariableKey);
-            Assert.Equal(ExpressionCapabilityProfiles.BindingPureV1, expression.CapabilityProfile);
+            Assert.Equal(ExpressionCapabilityProfiles.BindingReadonlyV1, expression.CapabilityProfile);
         });
     }
 

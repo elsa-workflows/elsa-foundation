@@ -36,14 +36,14 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 |---|---|---|
 | `FormPostNotParsed` | `ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED` | HttpEndpoint.ParsedContent |
 | `RequestSizeNoOutcome` | `ELS3-BEHAVIOUR-REQUEST-SIZE-NO-OUTCOME` | HttpEndpoint.RequestSizeLimit |
-| `HttpOutcomeSingle` | `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` | SendHttpRequest outcomes (Done no longer co-fires; non-2xx → Failed) |
+| `HttpOutcomeSingle` | `ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE` | SendHttpRequest outcomes (Done no longer co-fires; non-2xx → Failed). Narrowed by spec 1208 (S-3), 2026-11: only "without expected codes, a non-2xx response goes to Failed"; with codes, `Done` maps onto every code and the unmatched status code |
 | `AuthHeaderUnvalidated` | `ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED` | SendHttpRequest.DisableAuthorizationHeaderValidation absent or false |
 | `WhilePersistedCondition` | `ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION` | While.Condition |
 | `ForZeroStepFaults` | `ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS` | For.Step |
 | `BreakStopsAtParallel` | `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL` | Break inside Parallel/Fork branches |
 | `ForkWaitAnyCancellation` | `ELS3-BEHAVIOUR-FORK-WAIT-ANY-CANCELLATION` | Fork.JoinMode WaitAny |
 | `ExecuteWorkflowDurable` | `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` | ExecuteWorkflow |
-| `ScriptOutcomeRouting` | `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` | RunJavaScript.PossibleOutcomes |
+| `ScriptOutcomeRouting` | `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` | RunJavaScript.PossibleOutcomes. Removed by spec 1208 (S-3), 2026-11: RunJavaScript no longer routes by return value |
 | `OutcomeUndeclared` | `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED` | Complete in a reusable workflow names an outcome the definition's `Outcomes` does not declare; it is declared in the contract |
 | `OutcomeUnreached` | `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` | a reusable workflow's declared outcome (other than `Done`) that no Complete reaches; dropped from the contract, so callers get no port for it |
 

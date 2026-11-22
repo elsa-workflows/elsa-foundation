@@ -18,9 +18,10 @@ namespace Elsa.Activities.Primitives.Activities;
 /// materialized value in the invocation snapshot, and hydrates this transient activity exactly once.
 /// The result type is <see cref="object"/> so any expression-produced value flows through unchanged.
 /// </remarks>
-// ReplaySafe (#2581): the body only returns the value already materialized for Expression, and an
-// expression binding is evaluated under binding-pure-v1 (no time, randomness, services or I/O), so a re-run returns
-// the same value. Secret bindings are refused above, so no value can change between runs.
+// ReplaySafe (#2581): the body only returns the value already materialized for Expression. Under the D-2 execution
+// contract (ADR 0045 §3, ADR 0092 decisions 8 and 9) that value is recorded in the invocation's input snapshot and is
+// not re-evaluated when the invocation is retried or recovered, so a re-run returns the same value even though the
+// expression may read the clock or randomness (spec 1223 FR-020, FR-031). Secret bindings are refused above.
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
 [Activity(Icon = "Braces")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

@@ -288,7 +288,7 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
       available: true,
       availabilityReason: null,
       // Raw backend shape: inputs carry `type` (not `typeName`); authoringTemplate.inputs is a dictionary.
-      inputs: [{ referenceKey: "value", name: "Value", type: "Elsa.Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }],
+      inputs: [{ referenceKey: "value", name: "Value", type: "Any", displayName: "Value", order: 1, isBrowsable: true, isRequired: true, isNullable: true, uiHint: "single-line" }],
       outputs: [],
       ports: [{ name: "Done", displayName: "Done", type: null, isBrowsable: true }],
       containerStructure: null,

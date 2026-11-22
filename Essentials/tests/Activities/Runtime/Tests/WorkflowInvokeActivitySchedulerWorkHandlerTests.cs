@@ -62,7 +62,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.True(activator.Activity!.Disposed);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.Equal("hello", state!.InputSnapshot!.Values["text"].InlineValue!.Value.GetString());
-        Assert.Equal("Done", state.Completion?.OutcomeKey);
+        Assert.Equal(new[] { "Done" }, state.Completion?.OutcomeNames);
         Assert.Equal(5, state.Completion?.Result.InlineValue!.Value.GetProperty("length").GetInt32());
         Assert.NotNull(Assert.Single(state.Attempts!).EndedAt);
         var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");

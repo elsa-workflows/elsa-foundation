@@ -30,11 +30,11 @@ const {chromium,expect:baseExpect}=require("@playwright/test");
 const expect=baseExpect.configure({timeout:1500});
 const OUTCOME=OUTCOME_VALUE,REQUESTED=REQUESTED_VALUE;
 const card=OUTCOME==="review"
- ? `<article class="agent-proposal" data-status="awaiting-approval"><div data-testid="acme-home-size-result">Preview: medium</div>
+ ? `<article class="weaver-proposal" data-status="awaiting-approval"><div data-testid="acme-home-size-result">Preview: medium</div>
     <footer><button>Approve</button><button disabled>Apply</button></footer></article>`
- : `<article class="agent-proposal" data-status="executed"><div data-testid="acme-home-size-result">Acme independently confirmed the saved size</div></article>`;
+ : `<article class="weaver-proposal" data-status="executed"><div data-testid="acme-home-size-result">Acme independently confirmed the saved size</div></article>`;
 const html=`<!doctype html><section role="region" aria-label="Weaver assistant" aria-busy="false">${card}</section><script>
-const article=document.querySelector('.agent-proposal'),buttons=[...document.querySelectorAll('button')];
+const article=document.querySelector('.weaver-proposal'),buttons=[...document.querySelectorAll('button')];
 async function decide(path,status,text){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
  if(!response.ok)return;
@@ -42,8 +42,8 @@ async function decide(path,status,text){
  if(text)article.querySelector('[data-testid="acme-home-size-result"]').textContent=text;
  if(status==='approved'){buttons[0].disabled=true;buttons[1].disabled=false;}
 }
-buttons[0]?.addEventListener('click',()=>decide('/_elsa/agent/proposals/p1/approve','approved'));
-buttons[1]?.addEventListener('click',()=>decide('/_elsa/agent/proposals/p1/execute','executed','Acme independently confirmed the saved size'));
+buttons[0]?.addEventListener('click',()=>decide('/_elsa/weaver/proposals/p1/approve','approved'));
+buttons[1]?.addEventListener('click',()=>decide('/_elsa/weaver/proposals/p1/execute','executed','Acme independently confirmed the saved size'));
 </script>`;
 const posts=[];
 const server=createServer((request,response)=>{
@@ -74,14 +74,14 @@ try {
   const failure=await run(page,dock,expect,need,retain,result,backend,diagnosticUrl,owner,witness,before,layoutBefore,targetSize,initialMode,requestedMode).then(()=>null,error=>error);
   assert.equal(failure?.autonomyCause,'autonomy.mode_mismatch');
   assert.deepEqual(posts,[]);
-  observed={status:'failed',outcome:OUTCOME,cause:failure.autonomyCause,posts,finalStatus:await page.locator('.agent-proposal').getAttribute('data-status'),nativeStudioQualification:false};
+  observed={status:'failed',outcome:OUTCOME,cause:failure.autonomyCause,posts,finalStatus:await page.locator('.weaver-proposal').getAttribute('data-status'),nativeStudioQualification:false};
  } else {
   const decision=await run(page,dock,expect,need,retain,result,backend,diagnosticUrl,owner,witness,before,layoutBefore,targetSize,initialMode,requestedMode);
   assert.equal(decision.outcome,OUTCOME);
   assert.equal(decision.mismatch,false);
-  const status=await page.locator('.agent-proposal').getAttribute('data-status');
+  const status=await page.locator('.weaver-proposal').getAttribute('data-status');
   assert.equal(status,'executed');
-  assert.deepEqual(posts,OUTCOME==="review"?['/_elsa/agent/proposals/p1/approve','/_elsa/agent/proposals/p1/execute']:[]);
+  assert.deepEqual(posts,OUTCOME==="review"?['/_elsa/weaver/proposals/p1/approve','/_elsa/weaver/proposals/p1/execute']:[]);
   observed={status:'passed',outcome:decision.outcome,posts,finalStatus:status,nativeStudioQualification:false,browserVersion:browser.version()};
  }
 } finally {

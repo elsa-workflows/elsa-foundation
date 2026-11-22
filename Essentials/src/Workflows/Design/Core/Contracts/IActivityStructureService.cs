@@ -24,6 +24,32 @@ public interface IActivityStructureService
     /// </summary>
     IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
 
+    /// <summary>Returns the owning structure's facts for a producer/consumer pair of direct children.</summary>
+    /// <remarks>
+    /// The default preserves custom services' <see cref="ChildrenCompletedBefore"/> declarations without
+    /// inferring unavailability from an omitted child. Unknown facts can be refined by an owning structure.
+    /// </remarks>
+    ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(producerChildNodeId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(consumerChildNodeId);
+        return ActivityChildResultFacts.FromCompletedBefore(ChildrenCompletedBefore(activity, consumerChildNodeId), producerChildNodeId);
+    }
+
+    /// <summary>
+    /// The owning handler's <see cref="IActivityStructureHandler.RelateChildren"/>; <see cref="ActivityChildTimeRelation.Unspecified"/>
+    /// when the node has no handler. The default adapts <see cref="ChildrenCompletedBefore"/> for custom services.
+    /// </summary>
+    ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        ActivityChildTimeRelationDefaults.FromCompletedBefore(this.ChildrenCompletedBefore, activity, firstChildNodeId, secondChildNodeId);
+
+    /// <summary>
+    /// The owning handler's <see cref="IActivityStructureHandler.CompletesAfterItsChildren"/>; <see langword="null"/> when
+    /// the node has no handler.
+    /// </summary>
+    bool? CompletesAfterItsChildren(ActivityNode activity) => null;
+
     ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>
@@ -57,6 +83,12 @@ public interface IActivityStructureService
     /// empty collection when the node has no structure handler or declares no container variables.
     /// </summary>
     IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity);
+
+    /// <summary>
+    /// Projects the loop iteration values <paramref name="activity"/> gives its body (spec 1222 FR-004a). Returns an
+    /// empty collection when the node has no structure handler or is not a loop with iteration values.
+    /// </summary>
+    IReadOnlyCollection<VariableDefinition> ProjectIterationVariables(ActivityNode activity) => [];
 
     /// <summary>
     /// Whether <paramref name="activity"/> is a container scope that can own container-scoped

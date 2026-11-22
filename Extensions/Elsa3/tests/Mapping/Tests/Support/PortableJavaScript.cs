@@ -17,7 +17,8 @@ internal static class PortableJavaScript
 {
     public static async Task<JsonElement> EvaluateAsync(
         ExpressionDefinition definition,
-        IReadOnlyDictionary<string, JsonElement>? args = null)
+        IReadOnlyDictionary<string, JsonElement>? args = null,
+        IExpressionVariableReader? reader = null)
     {
         var services = new ServiceCollection();
         new ExpressionsFeature().ConfigureServices(services);
@@ -26,9 +27,19 @@ internal static class PortableJavaScript
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+        // A converted variable read is a variables-surface parameter keyed variables.<name> (spec 1222); a test names the
+        // value by the variable's name.
+        var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var (name, value) in args ?? new Dictionary<string, JsonElement>())
+        {
+            var variablesKey = ExpressionParameterSurfaces.VariablesKey(name);
+            values[!definition.Parameters.ContainsKey(name) && definition.Parameters.ContainsKey(variablesKey) ? variablesKey : name] = value;
+        }
+
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(
             definition,
-            args ?? new Dictionary<string, JsonElement>(),
+            values,
+            reader,
             CancellationToken.None));
     }
 
@@ -42,9 +53,9 @@ internal static class PortableJavaScript
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>();
-        return await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+        return (await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
             source,
             JsonSerializer.SerializeToElement(new { }),
-            CancellationToken.None));
+            CancellationToken.None))).Value;
     }
 }

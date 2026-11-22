@@ -15,7 +15,7 @@ public sealed class ActivityTransitionContractTests
         Assert.Equal(ActivityTransitionKind.Complete, transition.Kind);
         Assert.Equal("receipt-1", completion.Result.ReceiptId);
         Assert.Equal(typeof(Result), completion.ResultType);
-        Assert.Equal("Charged", completion.Outcome);
+        Assert.Equal(new[] { "Charged" }, completion.Selection.ResolveNames());
     }
 
     [Fact]

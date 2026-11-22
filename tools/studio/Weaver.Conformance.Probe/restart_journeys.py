@@ -1,6 +1,6 @@
 """#3441 restart inventory (T031): story 2 recovery across real restarts of the packaged consumer host.
 
-The backend consumer runs the packaged durable session store (`FoundationAgentEntityFrameworkCore` on SQLite, a
+The backend consumer runs the packaged durable session store (`WeaverEntityFrameworkCore` on SQLite, a
 per-run database under the owned output root) and the driver restarts its own host process between phases
 (runtime.RestartableServer). Every case runs once on each actual adapter, Copilot's delegated loop and Anthropic's
 host-driven loop, through the same deterministic protocol factories as the rest of the witness. Seven restarts per
@@ -17,7 +17,7 @@ adapter carry the ten boundaries:
 
 The abrupt and after-deadline cases leave their owner unchanged, so each of those phases shares one restart. A graceful
 stop releases the leases its sessions hold, so a recovered request after a graceful restart is never answered
-`agent.session.owned_elsewhere`; only an abrupt stop's leases have to lapse.
+`weaver.session.owned_elsewhere`; only an abrupt stop's leases have to lapse.
 
 A native negative control first restarts the same host on the in-memory default store, where the pending review must
 be lost. Each case asserts the recovered outcome, the execution count at the module's independent native owner
@@ -38,10 +38,10 @@ import time
 from urllib.parse import urlencode
 import uuid
 
-from agent_transport import AgentTransportError, _json as strict_json
+from weaver_transport import WeaverTransportError, _json as strict_json
 from artifacts import check
 from case_records import retained
-from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_agent_store
+from consumers import DURABLE_STORE_DEPENDENCY, DURABLE_STORE_FEATURE, enable_durable_weaver_store
 from journey_runtime import atomic_json, same
 from lifecycle_journeys import (LifecycleCaseFailure, _executed, _exchange, _json_file, _open, _path, _provider, _proposal_path,
                                 _session, _session_path, _settle, _size_owner, _sse, _stored_once, _trace, _verify_continuation,
@@ -84,20 +84,20 @@ EXPECTED_OUTCOMES = {
              "executions": 1, "settledBy": []},
     "pending-review-before-deadline": {"restart": GRACEFUL, "recovered": "awaitingApproval", "decision": "approved", "execute": "executed",
                                        "continuation": "completed", "executions": 1, "settledBy": []},
-    "pending-review-after-deadline": {"restart": AFTER_DEADLINE, "recovered": "expired", "execute": "agent.proposal.expired",
+    "pending-review-after-deadline": {"restart": AFTER_DEADLINE, "recovered": "expired", "execute": "weaver.proposal.expired",
                                       "executions": 0, "settledBy": ["recovery"]},
     "approved-before-dispatch-before-deadline": {"restart": GRACEFUL, "recovered": "approved", "recoveryExecuted": False, "execute": "executed",
                                                  "continuation": "completed", "executions": 1, "settledBy": []},
-    "approved-before-dispatch-after-deadline": {"restart": AFTER_DEADLINE, "recovered": "expired", "execute": "agent.proposal.expired",
+    "approved-before-dispatch-after-deadline": {"restart": AFTER_DEADLINE, "recovered": "expired", "execute": "weaver.proposal.expired",
                                                 "executions": 0, "settledBy": ["recovery"]},
     "dispatched-without-receipt": {"restart": ABRUPT, "dispatch": "held-at-owner", "recovered": "uncertain", "execute": "uncertain",
                                    "executions": 0, "settledBy": ["recovery"]},
     "receipt-recorded-paused": {"restart": GRACEFUL, "recovered": "executed", "continuation": "completed", "continuations": 1,
-                                "repeatDelivery": "agent.message.no_pending", "executions": 1, "settledBy": []},
+                                "repeatDelivery": "weaver.message.no_pending", "executions": 1, "settledBy": []},
     "provider-turn-in-progress": {"restart": ABRUPT, "recovered": "cancelled", "statusReason": "interrupted", "proposals": 0,
                                   "continuation": "completed", "executions": 0, "settledBy": []},
     "owner-resolution": {"restart": AFTER_DEADLINE, "dispatch": "awaiting-client", "recovered": "uncertain", "resolution": "notApplied",
-                         "repeatResolution": "retained", "conflictingResolution": "agent.invocation.resolution_conflict",
+                         "repeatResolution": "retained", "conflictingResolution": "weaver.invocation.resolution_conflict",
                          "resolvedAudits": 1, "execute": "uncertain", "executions": 0, "settledBy": ["recovery"]},
     "second-client": {"restart": GRACEFUL, "recovered": "awaitingApproval", "clients": 2, "foreign": "refused", "repeatDecision": "approved",
                       "concurrentExecute": "retained", "continuation": "completed", "executions": 1, "settledBy": []},
@@ -114,7 +114,7 @@ CORRELATION_KEYS.update({"idle": ("sessionId", "commandId", "continuationCommand
                          "provider-turn-in-progress": ("sessionId", "commandId", "gateEpoch", "continuationCommandId")})
 # The native negative control: the same restart on the in-memory default store must lose the pending review.
 CONTROL_ID = "restart-without-durable-store"
-EXPECTED_CONTROL = {"stage": "proposal-lookup", "diagnostic": "agent.proposal.not_found"}
+EXPECTED_CONTROL = {"stage": "proposal-lookup", "diagnostic": "weaver.proposal.not_found"}
 WORKFLOW_TOOL = "workflow_set_designer_position"
 WORKFLOW_CAPABILITY = "workflow.propose-change"
 WORKFLOW_MODULE = "Elsa.Studio.Workflows"
@@ -258,7 +258,7 @@ def require_restart_inventory(section, owned_root=None, *, source=None):
 # --- retained evidence readers -----------------------------------------------------------------
 
 def _audit_path(session):
-    return "/_elsa/agent/audit?" + urlencode({"take": 100, "sessionId": session})
+    return "/_elsa/weaver/audit?" + urlencode({"take": 100, "sessionId": session})
 
 
 def _restart(root, o, expected):
@@ -276,7 +276,7 @@ def _restart(root, o, expected):
          and record["stoppedAt"] <= record["startedAt"], "restart.process", "The stopped generation did not end as declared with empty runtime caches")
     if expected != ABRUPT:
         need(o.get("ownedElsewhereAttempts", 0) == 0 and not any(name.startswith("ownedElsewhere") for name in o["refs"]),
-             "restart.lease_not_released", "A graceful stop left its session lease held: the recovered request answered agent.session.owned_elsewhere")
+             "restart.lease_not_released", "A graceful stop left its session lease held: the recovered request answered weaver.session.owned_elsewhere")
     return record
 
 
@@ -521,7 +521,7 @@ def verify_second_client(root, o, witness, provider):
         record = strict_json(_path(root, refs[name]).read_text())
         body = strict_json(record.get("rawBody") or "null") if record.get("rawBody") else None
         need(record.get("status") in (403, 404) and isinstance(body, dict) and body.get("data") is None
-             and str((body.get("error") or {}).get("code", "")).startswith("agent."), "restart.foreign_access",
+             and str((body.get("error") or {}).get("code", "")).startswith("weaver."), "restart.foreign_access",
              "A foreign actor reached the recovered session, its proposals or its execution")
     need(_size_owner(root, refs["ownerAfterForeign"], witness) == before, "restart.foreign_access", "A foreign request changed the owner")
     seen = [_listed(root, refs[name], session, proposal)[0] for name in ("proposalsA", "proposalsB")]
@@ -603,7 +603,7 @@ def verify_in_progress(root, o, witness, provider):
 def verify_owner_resolution(root, o, witness, provider):
     refs, session = o["refs"], o["sessionId"]
     restart = _restart(root, o, AFTER_DEADLINE)
-    created, _ = _exchange(root, refs["create"], "POST", "/_elsa/agent/sessions", 200)
+    created, _ = _exchange(root, refs["create"], "POST", "/_elsa/weaver/sessions", 200)
     need((created.get("data") or {}).get("sessionId") == session, "restart.client_setup", "The workflow conversation identity changed")
     need(_json_file(root, refs["command"]) == {"commandId": o["commandId"], "toolName": WORKFLOW_TOOL, "arguments": o["arguments"]},
          "restart.client_setup", "The client operation command changed")
@@ -754,7 +754,7 @@ def _engage_dispatched(runtime, state):
     def execute():
         try:
             outcome["response"] = t.execute(proposal["id"], revision=proposal["baseRevision"])
-        except AgentTransportError as error:
+        except WeaverTransportError as error:
             outcome["error"] = error
 
     thread = threading.Thread(target=execute, name="restart-dispatch", daemon=True)
@@ -801,7 +801,7 @@ def _prepare_in_progress(runtime, name):
                 holder["turnId"] = (frame.value.get("payload") or {}).get("turnId")
                 started.set()
                 stream.until(lambda item: False)  # Ends only when the killed host drops the connection.
-        except (AgentTransportError, RuntimeError) as error:
+        except (WeaverTransportError, RuntimeError) as error:
             holder["error"] = type(error).__name__
         finally:
             started.set()
@@ -837,7 +837,7 @@ def _prepare_owner_resolution(runtime, name):
                                                 for item in draft.get("layout", []) if item.get("nodeId") == activity]}
     attachment = {"id": "workflow:" + seed["definitionId"], "moduleId": WORKFLOW_MODULE, "schemaVersion": "1", "target": target,
                   "source": "workflow", "sourceId": seed["definitionId"], "label": "Restart witness workflow", "contentType": "workflow.definition",
-                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "agentScopes": ["workflow-author"],
+                  "sensitivity": "internal", "scope": "selection", "origin": "clientSnapshot", "client": binding, "weaverScopes": ["workflow-author"],
                   "summary": "Restart witness workflow", "content": content,
                   "references": {"workflowDefinitionId": seed["definitionId"], "draftId": seed["draftId"], "revision": revision}}
     t = runtime.transport(name)
@@ -888,7 +888,7 @@ def _await_owner(t, session, *, tolerate):
         if response.status != 409:
             return response, observed_at, attempts
         code = ((response.json() or {}).get("error") or {}).get("code")
-        need(code == "agent.session.owned_elsewhere", "restart.ownership", "The recovered session answered " + str(code))
+        need(code == "weaver.session.owned_elsewhere", "restart.ownership", "The recovered session answered " + str(code))
         if not tolerate:
             return response, observed_at, attempts
         need(time.monotonic() < deadline, "restart.ownership", "The stopped generation's lease never lapsed")
@@ -907,7 +907,7 @@ def _begin(runtime, state, restart, name):
     if graceful and response.status == 409:
         o["refs"]["ownedElsewhere0"], o["ownedElsewhereAttempts"] = response.receipt, 1
         raise RestartCaseFailure("restart.lease_not_released: A graceful stop left its session lease held: the recovered request answered "
-                                 "agent.session.owned_elsewhere", "restart.lease_not_released")
+                                 "weaver.session.owned_elsewhere", "restart.lease_not_released")
     o["refs"]["recoveredSession"] = response.receipt
     o["refs"].update({"ownedElsewhere" + str(index): reference for index, reference in enumerate(attempts[:-1])})
     o["recoveredAt"], o["ownedElsewhereAttempts"] = observed_at, len(attempts) - 1
@@ -1070,7 +1070,7 @@ def _restart_host(runtime, host, reason, phase, *, while_stopped=None):
 def _failed(runtime, provider, key, error, observation=None):
     precise = isinstance(error, (RestartCaseFailure, LifecycleCaseFailure))
     return {"id": provider + "-" + key, "provider": provider, "adapter": provider, "caseKey": key, "restart": RESTART_CASES[key],
-            "status": "failed", "cause": error.cause if precise else ("restart.native_transport" if isinstance(error, AgentTransportError) else "verification"),
+            "status": "failed", "cause": error.cause if precise else ("restart.native_transport" if isinstance(error, WeaverTransportError) else "verification"),
             "message": str(error)[:1000], "observation": getattr(error, "observation", None) or observation,
             "nativeEvidenceVerified": False, "qualified": False, "source": runtime.run.source}
 
@@ -1171,18 +1171,18 @@ def _control(runtime, host):
 
 def _enable_store(runtime, host):
     run = runtime.run
-    directory = run.root / "durable-agent-store"
+    directory = run.root / "durable-weaver-store"
     directory.mkdir(mode=0o700)
-    database = directory / "agent-records.db"
+    database = directory / "weaver-records.db"
     key = secrets.token_urlsafe(48)
     selected = {}
     restart = _restart_host(runtime, host, "enable-durable-store", GRACEFUL,
-                            while_stopped=lambda: selected.update(enable_durable_agent_store(run, database, key)) or {"configured": DURABLE_STORE_FEATURE})
+                            while_stopped=lambda: selected.update(enable_durable_weaver_store(run, database, key)) or {"configured": DURABLE_STORE_FEATURE})
     catalog, record = runtime.native.json(runtime.backend, "durable-store-catalog", "/modularity/features")
     features = {item["id"]: item for item in catalog["features"]}
     check(all(features.get(name, {}).get("enabled") is True and features[name].get("runtimeAvailable") is True
               for name in (DURABLE_STORE_FEATURE, DURABLE_STORE_DEPENDENCY)), "The restarted host does not run the packaged durable store")
-    bootstrap = runtime.transport("durable-store-agent").bootstrap().require_status(200)
+    bootstrap = runtime.transport("durable-store-weaver").bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "The durable store composition left the actual provider unavailable")
     return {**selected, "restart": restart["ref"], "catalog": record["receipt"], "bootstrap": bootstrap.receipt, "databaseObserved": False}
 

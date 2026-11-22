@@ -1,0 +1,134 @@
+{
+  "id": "http-expected-codes-done-v1",
+  "definitionId": "http-expected-codes-done",
+  "name": "http-expected-codes-done",
+  "description": "Test-owned regular workflow (spec 1208 US2 scenario 4): a FlowSendHttpRequest with expected status codes 200 and 404, connected only on Done. The test replaces the stub URL.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "http-expected-codes-done-root",
+    "nodeId": "http-expected-codes-done-root",
+    "name": "http-expected-codes-done-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "call",
+        "nodeId": "call",
+        "name": "call",
+        "type": "Elsa.FlowSendHttpRequest",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "url": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "http://stub.invalid/status"
+          }
+        },
+        "method": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "GET"
+          }
+        },
+        "expectedStatusCodes": {
+          "typeName": "List<Int32>",
+          "expression": {
+            "type": "Literal",
+            "value": "[200,404]"
+          }
+        }
+      },
+      {
+        "id": "after",
+        "nodeId": "after",
+        "name": "after",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "call",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

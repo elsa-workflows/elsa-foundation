@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
@@ -14,6 +15,9 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Expressions.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,13 +31,27 @@ namespace Elsa.Activities.Graph.Design.Services;
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
     ActivityContractAuthoringValidator contractCapabilities,
-    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    IServiceScopeFactory? scopeFactory,
+    IUnorderedVariableWriteAnalyzer? writeOrderAnalyzer) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer, IActivityDataSelectionDocumentProjector
 {
+    /// <summary>
+    /// Preserves the earlier constructor shape. Without a write-order analyzer the provider reports no unordered-write
+    /// warning; the graph design feature composes the provider with the one the workflow design validations supply.
+    /// </summary>
+    public GraphActivityProvider(
+        IActivityStructureService activityStructureService,
+        ActivityContractAuthoringValidator contractCapabilities,
+        IServiceScopeFactory? scopeFactory = null)
+        : this(activityStructureService, contractCapabilities, scopeFactory, null) { }
+
     /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
+    private const string CompleteOutcomesInputKey = "outcomes";
     private const string ArgumentMalformedCode = "activity.graph.argument-malformed";
+    private const string UnorderedWriteCode = "activity.graph.unordered-variable-write";
+    private const string DuplicateCaptureTargetCode = "activity.graph.duplicate-capture-target";
     private static readonly JsonSerializerOptions NodeSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -70,6 +88,48 @@ public sealed class GraphActivityProvider(
                 })
         ],
         new([]));
+
+    public ValueTask<ActivityDataSelectionDocument?> TryProjectAsync(
+        ActivityProviderManifest manifest,
+        DesignActivityContract contract,
+        string resourceId,
+        string contractRevision,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(manifest);
+        if (!StringComparer.Ordinal.Equals(manifest.ProviderKey, Key))
+            return ValueTask.FromResult<ActivityDataSelectionDocument?>(null);
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contractRevision);
+
+        var subject = new ActivityDiagnosticSubject("ActivityDefinition", resourceId);
+        var diagnostics = ReadManifest(manifest, subject, out var graph).ToList();
+        if (!StringComparer.Ordinal.Equals(contract.ContractSchemaVersion, "1"))
+            throw new ActivityDataSelectionRejectedException([new("$activity", "ActivityDataSelection/ContractSchema", "The activity contract schema is unsupported.")]);
+        if (graph is not null)
+            ValidateGraphNodes(graph, subject, diagnostics);
+        if (graph is null || diagnostics.Any(x => x.Severity == ActivityDiagnosticSeverity.Error))
+            throw new ActivityDataSelectionRejectedException(diagnostics.Select(x => new ValidationError(
+                x.Location?.JsonPointer ?? "$activity", "ActivityDataSelection/" + x.Code, x.Message)));
+
+        // The provider's parser and structure-owned node projection are the same ones used for compilation.
+        // This request-only view creates neither a workflow draft nor a second graph/document owner.
+        TryReadRootNode(graph.RootActivity, out var root);
+        return ValueTask.FromResult<ActivityDataSelectionDocument?>(new(
+            "ActivityDefinition", resourceId, contractRevision, root,
+            contract.Inputs.Select(x => new InputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                DefaultValue: x.Default?.Value, DefaultSyntax: x.Default?.Syntax)).ToImmutableArray(),
+            graph.Variables.Select(x => new VariableDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.InitialValue is null ? null : new ArgumentValue(x.InitialValue.Value, x.InitialValue.Syntax))).ToImmutableArray(),
+            contract.Outputs.Select(x => new OutputDefinition(x.ReferenceKey, x.Name, x.Type, x.StorageDriverKey,
+                x.DisplayName ?? x.Name, x.Category, x.IsNullable, Description: x.Description, Order: x.Order,
+                UiHint: x.UiHint, UISpecifications: x.UiSpecifications, IsRequired: x.IsRequired,
+                SourceRepresentation: x.SourceRepresentation)).ToImmutableArray()));
+    }
 
     public ValueTask<ActivityContractProposal> ProposeContractAsync(
         ActivityProviderContractProposalRequest request,
@@ -113,6 +173,7 @@ public sealed class GraphActivityProvider(
             ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
             // A draft has no resolved dependencies yet, so producer results and capture types are checked at compile.
             ValidateBodyReferences(graph, contract, nodes, dependencyContracts: null, subject, diagnostics);
+            ValidateWriteOrder(nodes, subject, diagnostics);
         }
 
         return ActivityDiagnosticOrderer.Order(diagnostics);
@@ -149,6 +210,7 @@ public sealed class GraphActivityProvider(
                     .ToDictionary(x => x.Key, x => x.First().Contract, StringComparer.Ordinal),
                 subject,
                 diagnostics);
+            ValidateWriteOrder(nodes, subject, diagnostics);
         }
 
         var orderedDiagnostics = ActivityDiagnosticOrderer.Order(diagnostics);
@@ -365,12 +427,10 @@ public sealed class GraphActivityProvider(
         return ActivityDiagnosticOrderer.Order(diagnostics);
     }
 
-    private void ValidateGraph(
+    private (IReadOnlyList<NodeCandidate> Candidates, IReadOnlyList<GraphNode> Nodes) ValidateGraphNodes(
         ActivityGraphManifest graph,
-        DesignActivityContract contract,
         ActivityDiagnosticSubject subject,
-        ICollection<ActivityDiagnostic> diagnostics,
-        IReadOnlyList<GraphNode> completeNodes)
+        ICollection<ActivityDiagnostic> diagnostics)
     {
         var candidates = EnumerateNodeCandidates(graph.RootActivity);
         foreach (var candidate in candidates)
@@ -442,6 +502,18 @@ public sealed class GraphActivityProvider(
             }
         }
 
+        return (candidates, nodes);
+    }
+
+    private void ValidateGraph(
+        ActivityGraphManifest graph,
+        DesignActivityContract contract,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics,
+        IReadOnlyList<GraphNode> completeNodes)
+    {
+        var (candidates, nodes) = ValidateGraphNodes(graph, subject, diagnostics);
+
         ValidateForbiddenCapabilities(candidates, subject, diagnostics);
 
         foreach (var duplicate in graph.Variables.GroupBy(x => x.ReferenceKey, StringComparer.Ordinal).Where(x => x.Count() > 1))
@@ -467,6 +539,7 @@ public sealed class GraphActivityProvider(
                 diagnostics.Add(diagnostic);
         }
 
+        ValidateBoundaryInputReads(graph, contract, subject, diagnostics);
         var outputKeys = contract.Outputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
         foreach (var mappingGroup in graph.OutputMappings.GroupBy(x => x.OutputReferenceKey, StringComparer.Ordinal))
         {
@@ -536,8 +609,8 @@ public sealed class GraphActivityProvider(
         }
     }
 
-    // Every Complete node names exactly one emitted boundary outcome by reference key, as a literal. Returns the
-    // reference keys the valid nodes name, which count as reaching those outcomes.
+    // Every Complete node names one emitted boundary outcome by reference key, or several (spec 1208 FR-032), as
+    // literals. Returns the reference keys the valid nodes name, which count as reaching those outcomes.
     private static IReadOnlySet<string> ValidateCompleteNodes(
         IReadOnlyList<GraphNode> completeNodes,
         IReadOnlyCollection<ActivityOutcomeContract> emittedOutcomes,
@@ -548,33 +621,125 @@ public sealed class GraphActivityProvider(
         var reached = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in completeNodes)
         {
-            var referenceKey = ReadCompleteOutcome(node);
-            if (referenceKey is null)
+            if (IsCompleteInputSet(node, CompleteOutcomeInputKey) && IsCompleteInputSet(node, CompleteOutcomesInputKey))
             {
                 diagnostics.Add(Diagnostic(
-                    "activity.graph.complete.outcome-literal-required",
-                    $"Complete node '{node.NodeId}' must set '{CompleteOutcomeInputKey}' to one literal boundary outcome reference key.",
+                    "activity.graph.complete.outcome-conflict",
+                    $"Complete node '{node.NodeId}' sets both '{CompleteOutcomeInputKey}' and '{CompleteOutcomesInputKey}'. Set '{CompleteOutcomeInputKey}' for one boundary outcome, or '{CompleteOutcomesInputKey}' for several, not both.",
                     subject,
                     $"{node.JsonPointer}/inputs",
                     node.NodeId));
                 continue;
             }
 
-            if (!emittedReferenceKeys.Contains(referenceKey))
+            var referenceKeys = ReadCompleteOutcomes(node);
+            if (referenceKeys is null)
             {
                 diagnostics.Add(Diagnostic(
-                    "activity.graph.complete.outcome-unknown",
-                    $"Complete node '{node.NodeId}' names boundary outcome '{referenceKey}', which is not an emitted public outcome.",
+                    "activity.graph.complete.outcome-literal-required",
+                    $"Complete node '{node.NodeId}' must set '{CompleteOutcomeInputKey}' to one literal boundary outcome reference key, or '{CompleteOutcomesInputKey}' to a literal list of them.",
                     subject,
                     $"{node.JsonPointer}/inputs",
-                    referenceKey));
+                    node.NodeId));
                 continue;
             }
 
-            reached.Add(referenceKey);
+            foreach (var referenceKey in referenceKeys)
+            {
+                if (!emittedReferenceKeys.Contains(referenceKey))
+                {
+                    diagnostics.Add(Diagnostic(
+                        "activity.graph.complete.outcome-unknown",
+                        $"Complete node '{node.NodeId}' names boundary outcome '{referenceKey}', which is not an emitted public outcome.",
+                        subject,
+                        $"{node.JsonPointer}/inputs",
+                        referenceKey));
+                    continue;
+                }
+
+                reached.Add(referenceKey);
+            }
         }
 
         return reached;
+    }
+
+    /// <summary>
+    /// The literal reference keys a Complete node names: its <c>outcomes</c> list when set, else its one <c>outcome</c>;
+    /// null when neither is a literal. An outcome given by an expression stays refused. An empty <c>outcomes</c> list is
+    /// unset, as it is when the Complete activity runs, so <c>outcome</c> applies.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadCompleteOutcomes(GraphNode node)
+    {
+        var list = node.Activity.Inputs
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, CompleteOutcomesInputKey) && x.Value.Value is not null)
+            .ToArray();
+        if (list.Length == 1 && IsCompleteInputSet(node, CompleteOutcomesInputKey))
+        {
+            if (!string.Equals(list[0].Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(list[0].Value.ExpressionType, "Object", StringComparison.OrdinalIgnoreCase))
+                return null;
+            try
+            {
+                var element = list[0].Value.Value switch
+                {
+                    JsonElement { ValueKind: JsonValueKind.String } text => JsonDocument.Parse(text.GetString()!).RootElement,
+                    JsonElement json => json,
+                    string text => JsonDocument.Parse(text).RootElement,
+                    var other => JsonSerializer.SerializeToElement(other)
+                };
+                if (element.ValueKind != JsonValueKind.Array)
+                    return null;
+                var keys = element.EnumerateArray()
+                    .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null)
+                    .ToArray();
+                return keys.Length == 0 || keys.Any(string.IsNullOrWhiteSpace)
+                    ? null
+                    : keys.Select(key => key!).Distinct(StringComparer.Ordinal).ToArray();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        return ReadCompleteOutcome(node) is { } single ? [single] : null;
+    }
+
+    /// <summary>
+    /// Whether a Complete input is set the way the Complete activity reads it when it runs: a blank <c>outcome</c> and an
+    /// empty <c>outcomes</c> list are unset. A value given by an expression counts as set.
+    /// </summary>
+    private static bool IsCompleteInputSet(GraphNode node, string inputKey) =>
+        node.Activity.Inputs
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, inputKey))
+            .Any(x => !IsUnsetCompleteValue(x.Value.Value, isList: StringComparer.Ordinal.Equals(inputKey, CompleteOutcomesInputKey)));
+
+    private static bool IsUnsetCompleteValue(object? value, bool isList)
+    {
+        var text = value switch
+        {
+            null => null,
+            string s => s,
+            JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            JsonElement { ValueKind: JsonValueKind.Array } element => element.GetArrayLength() == 0 ? null : element.GetRawText(),
+            JsonElement element => element.GetRawText(),
+            _ => JsonSerializer.Serialize(value)
+        };
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+        if (!isList)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return document.RootElement is { ValueKind: JsonValueKind.Array } array && array.GetArrayLength() == 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string? ReadCompleteOutcome(GraphNode node)
@@ -853,6 +1018,29 @@ public sealed class GraphActivityProvider(
                         ["structureSchemaVersion"] = declared.SchemaVersion
                     }));
             }
+        }
+    }
+
+    private static void ValidateBoundaryInputReads(ActivityGraphManifest graph, DesignActivityContract contract,
+        ActivityDiagnosticSubject subject, ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var inputs = contract.Inputs.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
+        for (var index = 0; index < graph.Variables.Count; index++)
+            Check(graph.Variables[index].InitialValue, $"/variables/{index}/initialValue", graph.Variables[index].ReferenceKey);
+        for (var index = 0; index < graph.OutputMappings.Count; index++)
+            Check(graph.OutputMappings[index].Source, $"/outputMappings/{index}/source", graph.OutputMappings[index].OutputReferenceKey);
+
+        void Check(ActivityInputDefault? source, string pointer, string referenceKey)
+        {
+            if (source is null || !StringComparer.OrdinalIgnoreCase.Equals(source.Syntax, "Input"))
+                return;
+            if (source.Value.ValueKind != JsonValueKind.Object || !source.Value.TryGetProperty("referenceKey", out var key) ||
+                key.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(key.GetString()))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-malformed",
+                    "A graph Input expression must name a declared public input by its reference key.", subject, pointer, referenceKey));
+            else if (!inputs.Contains(key.GetString()!))
+                diagnostics.Add(Diagnostic("activity.graph.boundary-input-unknown",
+                    "The graph Input expression names an undeclared public input.", subject, pointer, referenceKey));
         }
     }
 
@@ -1269,8 +1457,7 @@ public sealed class GraphActivityProvider(
         if (completeNodes.Count != 0)
         {
             var completeOutcomes = completeNodes
-                .Select(ReadCompleteOutcome)
-                .OfType<string>()
+                .SelectMany(node => ReadCompleteOutcomes(node) ?? [])
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .Select(referenceKey => new
@@ -1321,7 +1508,7 @@ public sealed class GraphActivityProvider(
             descriptorPayload,
             inputs,
             new ActivityResultContract(
-                new ValueTypeDescriptor("Object"),
+                new ValueTypeDescriptor(TypeAliasConvention.AnyAlias),
                 isRequired: true,
                 resultPolicy,
                 projections,
@@ -1375,6 +1562,57 @@ public sealed class GraphActivityProvider(
         foreach (var finding in GraphBodyReferenceValidator.Validate(graph, contract, bodyNodes, dependencyContracts))
             diagnostics.Add(Diagnostic(finding.Code, finding.Message, subject, finding.JsonPointer, finding.ReferenceKey));
     }
+
+    // Spec 266: captures into the activity's own variables whose order the body does not fix are reported as warnings,
+    // alongside any errors; compilation still succeeds when there are no errors.
+    private void ValidateWriteOrder(IReadOnlyList<GraphNode> nodes, ActivityDiagnosticSubject subject, List<ActivityDiagnostic> diagnostics)
+    {
+        if (writeOrderAnalyzer is null ||
+            nodes.FirstOrDefault(x => x.ParentOccurrenceId is null)?.Activity is not { } root)
+            return;
+
+        var pointers = nodes.GroupBy(x => x.NodeId, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.First().JsonPointer, StringComparer.Ordinal);
+        var result = writeOrderAnalyzer.Analyze(root, activityStructureService, includeIntrinsics: false);
+        foreach (var finding in result.UnorderedWrites)
+        {
+            diagnostics.Add(Warning(
+                UnorderedWriteCode,
+                finding.Message,
+                subject,
+                pointers.GetValueOrDefault(finding.WriterNodeIds[0]),
+                "ValueFlow/ConcurrentWrite",
+                finding.ScopeId == "workflow" ? $"$workflow/variables/{finding.ReferenceKey}" : $"{finding.ScopeId}/variables/{finding.ReferenceKey}"));
+        }
+
+        foreach (var duplicate in result.DuplicateCaptureTargets)
+        {
+            diagnostics.Add(Warning(
+                DuplicateCaptureTargetCode,
+                duplicate.Message,
+                subject,
+                pointers.GetValueOrDefault(duplicate.NodeId),
+                "ValueFlow/DuplicateCaptureTarget",
+                $"{duplicate.NodeId}/outputs/{duplicate.OutputKeys[^1]}"));
+        }
+    }
+
+    private static ActivityDiagnostic Warning(
+        string code,
+        string message,
+        ActivityDiagnosticSubject subject,
+        string? jsonPointer,
+        string validationType,
+        string validationPath) => new(
+        code,
+        ActivityDiagnosticSeverity.Warning,
+        message,
+        subject,
+        new ActivityDiagnosticLocation(Key, jsonPointer),
+        Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["validationType"] = validationType,
+            ["validationPath"] = validationPath
+        });
 
     private static ActivityDiagnostic Diagnostic(
         string code,

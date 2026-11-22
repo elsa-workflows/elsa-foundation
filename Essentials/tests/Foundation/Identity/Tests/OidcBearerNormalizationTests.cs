@@ -333,7 +333,8 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role, "admin"),
             new Claim(IdentityClaimTypes.Permission, "worker:admin"),
-            new Claim(IdentityClaimTypes.UserId, "user-forged"));
+            new Claim(IdentityClaimTypes.UserId, "user-forged"),
+            new Claim(IdentityClaimTypes.SubjectProvider, "idp-forged"));
 
         using var response = await host.SendBearerAsync(token);
 
@@ -599,7 +600,9 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role.ToUpperInvariant(), "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker:admin")
+            new Claim(IdentityClaimTypes.Permission, "worker:admin"),
+            new Claim(IdentityClaimTypes.UserId, "user-forged"),
+            new Claim(IdentityClaimTypes.SubjectProvider.ToUpperInvariant(), "idp-forged")
         ], "validated-token"));
         var context = CreateTokenValidatedContext(unit.Options, original);
 
@@ -1191,8 +1194,10 @@ public sealed class OidcBearerNormalizationTests
             IdentityClaimTypes.Normalized,
             IdentityClaimTypes.TenantId,
             IdentityClaimTypes.Provider,
+            IdentityClaimTypes.SubjectProvider,
             IdentityClaimTypes.Role,
-            IdentityClaimTypes.Permission
+            IdentityClaimTypes.Permission,
+            IdentityClaimTypes.UserId
         }.Contains(claim.Type, StringComparer.OrdinalIgnoreCase);
 
     private static string Tamper(string token)

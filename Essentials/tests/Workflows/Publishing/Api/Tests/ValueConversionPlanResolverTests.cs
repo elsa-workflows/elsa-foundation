@@ -46,7 +46,7 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Equal(ValueConversionOperation.NumericWidening, resolver.Resolve(Type("System.UInt32"), ValueRepresentation.TypedValue, Type("System.Int64")).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.List), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
         Assert.Equal(ValueConversionOperation.RecursiveCollection, resolver.Resolve(Type("UInt16", CollectionKind.Array), ValueRepresentation.TypedValue, Type("Int32", CollectionKind.List)).Operation);
-        Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Elsa.Any")).Operation);
+        Assert.Equal(ValueConversionOperation.CanonicalAny, resolver.Resolve(Type("Customer"), ValueRepresentation.TypedValue, Type("Any")).Operation);
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public sealed class ValueConversionPlanResolverTests
                 Type("Customer"),
                 ValueConversionMode.Profile,
                 new ValueConversionProfileReference("partner.json", "8")));
-        var explicitJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Elsa.Any"), ValueConversionMode.Json);
+        var explicitJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("Any"), ValueConversionMode.Json);
         var autoJson = resolver.Resolve(Type("String"), ValueRepresentation.FormattedContent, Type("JsonObject"));
 
         Assert.Contains("not format-sniffed", rawText.Message, StringComparison.Ordinal);
@@ -122,6 +122,58 @@ public sealed class ValueConversionPlanResolverTests
         Assert.Contains("registered typed target alias", unregistered.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("System.Text.Json.JsonElement", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement?", "Boolean")]
+    [InlineData("System.Text.Json.JsonElement", "JsonObject")]
+    [InlineData("System.Text.Json.JsonElement?", "JsonObject")]
+    [InlineData("System.Text.Json.JsonElement", "String")]
+    public void A_json_element_source_binds_to_a_typed_or_json_object_input_through_the_json_profile(string sourceAlias, string target)
+    {
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
+        var source = Type(sourceAlias);
+
+        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type(target));
+
+        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal("elsa.json", plan.Profile!.Id);
+    }
+
+    [Theory]
+    [InlineData("Boolean")]
+    [InlineData("String")]
+    [InlineData("Int32")]
+    [InlineData("Int64")]
+    [InlineData("Double")]
+    [InlineData("Decimal")]
+    public void A_dynamic_result_binds_to_a_scalar_input_through_the_json_profile(string target)
+    {
+        // Spec 1228 FR-025, US6: an Elsa 4 dynamic value (a script result is Any) converts into a scalar input at run
+        // time when its JSON kind matches; publication plans it rather than refusing with VF-COER-001.
+        var typedResolver = new ValueConversionPlanResolver(wellKnownTypeRegistry: TestWellKnownTypeRegistry.Create());
+        var source = Type("Any");
+
+        var plan = typedResolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type(target));
+
+        Assert.Equal(ValueRepresentation.StructuredValue, plan.SourceRepresentation);
+        Assert.Equal(ValueConversionOperation.Profile, plan.Operation);
+        Assert.Equal("elsa.json", plan.Profile!.Id);
+    }
+
+    [Theory]
+    [InlineData("System.Text.Json.JsonElement")]
+    [InlineData("System.Text.Json.JsonElement?")]
+    public void A_json_element_source_needs_a_registered_typed_target(string sourceAlias)
+    {
+        var source = Type(sourceAlias);
+
+        var exception = Assert.Throws<ValueConversionPublicationException>(() =>
+            resolver.Resolve(source, ValueRepresentationDefaults.Infer(source), Type("Acme.Unknown")));
+
+        Assert.Equal(ValueConversionRejectionReason.JsonTypedTargetRequired, exception.ReasonCode);
+    }
+
     [Fact]
     public void Xml_profile_pins_registered_typed_aliases_and_rejects_any_projection()
     {
@@ -144,7 +196,7 @@ public sealed class ValueConversionPlanResolverTests
             typedResolver.Resolve(
                 Type("String"),
                 ValueRepresentation.FormattedContent,
-                Type("Elsa.Any"),
+                Type("Any"),
                 ValueConversionMode.Xml));
 
         Assert.Equal(ValueConversionOperation.Profile, explicitXml.Operation);
@@ -160,7 +212,7 @@ public sealed class ValueConversionPlanResolverTests
     public void Transient_values_cannot_be_pinned_across_a_durable_binding()
     {
         var exception = Assert.Throws<ValueConversionPublicationException>(() =>
-            resolver.Resolve(Type("Stream"), ValueRepresentation.TransientResource, Type("Elsa.Any")));
+            resolver.Resolve(Type("Stream"), ValueRepresentation.TransientResource, Type("Any")));
 
         Assert.Contains("transient resources", exception.Message, StringComparison.Ordinal);
     }
@@ -206,7 +258,7 @@ public sealed class ValueConversionPlanResolverTests
     {
         var input = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create(), resolver).Compile(
             "reader",
-            Input("Elsa.Any"),
+            Input("Any"),
             new ArgumentState(
                 "value",
                 new ArgumentValue("""{"name":"Grace"}""", "Literal"),

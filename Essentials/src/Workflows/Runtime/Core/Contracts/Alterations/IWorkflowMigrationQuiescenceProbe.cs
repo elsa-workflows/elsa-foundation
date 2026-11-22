@@ -9,6 +9,15 @@ namespace Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 /// </summary>
 public interface IWorkflowMigrationQuiescenceProbe
 {
+    /// <summary>Reports whether anything other than the caller could still execute, deliver to or resume the run.</summary>
+    /// <param name="workflowExecutionId">The run to prove quiescent.</param>
+    /// <param name="currentActorFence">
+    /// The fence of the ownership lease the caller holds on the run. The runtime's probe exempts that lease, unless
+    /// it stands in for an owner the caller took the run from. In the composition the runtime registers, an
+    /// alteration job holds a lease on its run (<c>IRuntimeExecutionOwnershipContextAccessor.Current</c>), so a
+    /// handler that passes null is told that its own lease is an active owner.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the probe.</param>
     ValueTask<WorkflowMigrationQuiescenceReport> ProbeAsync(
         string workflowExecutionId,
         RuntimeExecutionFence? currentActorFence,

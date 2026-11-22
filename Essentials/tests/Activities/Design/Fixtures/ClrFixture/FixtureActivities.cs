@@ -320,6 +320,30 @@ public sealed class SensitivityFixtureActivity : Activity<SecretFixtureResult>
         ValueTask.FromResult(ActivityTransition.Complete(new SecretFixtureResult(string.Empty)));
 }
 
+/// <summary>Spec 1231: a read-write and a read-only variable-reference input next to an ordinary one.</summary>
+public sealed class VariableReferenceFixtureActivity : FixtureActivity
+{
+    [ActivityInput]
+    public VariableReference<decimal> Balance { get; set; } = default!;
+
+    [ActivityInput]
+    public ReadOnlyVariableReference<string> Currency { get; set; } = default!;
+
+    [ActivityInput]
+    public string? Label { get; set; }
+}
+
+/// <summary>Spec 1231: an activity type opted in to free-name variable access.</summary>
+[AccessesUndeclaredVariables]
+public sealed class FreeNameFixtureActivity : FixtureActivity;
+
+/// <summary>Spec 1231: the marker on an abstract base (kept out of scans) is inherited by its subclass.</summary>
+[AccessesUndeclaredVariables]
+public abstract class FreeNameFixtureBase : FixtureActivity;
+
+/// <summary>Spec 1231: inherits the free-name marker from its base.</summary>
+public sealed class InheritedFreeNameFixtureActivity : FreeNameFixtureBase;
+
 // The four credential declarations below could never be bound to a secret reference, so the scanner refuses each. They
 // are abstract, which keeps them out of every scan of this assembly; a test builds each one's catalog model directly.
 
@@ -387,3 +411,32 @@ public class ImplementationOnlyFixtureActivity : FixtureActivity;
 
 /// <summary>Inherits the ordinary ActivityAttribute discovery policy.</summary>
 public sealed class ImplementationOnlyDerivedFixtureActivity : ImplementationOnlyFixtureActivity;
+
+/// <summary>
+/// JSON-typed inputs whose declared defaults are JSON text. The scanner must read each default as the JSON value
+/// it spells, not as a JSON string holding the text (issue #3195). <see cref="NotJson"/> keeps the string
+/// fallback for a default that is not valid JSON.
+/// </summary>
+public sealed class JsonDefaultFixtureActivity : FixtureActivity
+{
+    [ActivityInput(DefaultValue = "{}")]
+    public System.Text.Json.JsonElement Element { get; set; }
+
+    [ActivityInput(DefaultValue = "{\"a\":1}")]
+    public System.Text.Json.JsonElement? NullableElement { get; set; }
+
+    [ActivityInput(DefaultValue = "[1,2]")]
+    public System.Text.Json.Nodes.JsonNode? Node { get; set; }
+
+    [ActivityInput(DefaultValue = "{}")]
+    public System.Text.Json.Nodes.JsonObject? Object { get; set; }
+
+    [ActivityInput(DefaultValue = "[]")]
+    public System.Text.Json.Nodes.JsonArray? Array { get; set; }
+
+    [ActivityInput(DefaultValue = "not json")]
+    public System.Text.Json.JsonElement NotJson { get; set; }
+
+    [ActivityInput(DefaultValue = "{}")]
+    public string Text { get; set; } = null!;
+}

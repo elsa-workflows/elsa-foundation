@@ -81,8 +81,10 @@ public sealed class RuntimeWorkflowAlterationCheckpointWriter(
 
         // The provider-facing checkpoint owns the entire transaction, including the typed terminal job change.
         // An unrestricted alteration-store callback cannot prevent side effects before provider participation.
+        // The returned terminal change is the numbered one the store persists, so the caller sees the same write records.
+        commit = _checkpointCommitter.NumberCommit(commit);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
-        return new WorkflowAlterationCheckpointWriteResult(request.TerminalJobChange.CheckpointCommitId, request.TerminalJobChange);
+        return new WorkflowAlterationCheckpointWriteResult(request.TerminalJobChange.CheckpointCommitId, commit.StateChanges.AlterationJobTerminalChange ?? request.TerminalJobChange);
     }
 
     public async ValueTask<WorkflowAlterationCheckpointWriteResult?> FindCommittedAsync(

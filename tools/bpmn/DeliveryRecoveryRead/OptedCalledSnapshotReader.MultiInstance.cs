@@ -104,7 +104,7 @@ internal static partial class OptedCalledSnapshotReader
                         transport.Batch.AuthoredFailureCode is null && transport.Batch.ConsumerKey == ConsumerKey && transport.Batch.ConsumerVersion == 1 && transport.Batch.ChildWorkflowExecutionId == child.WorkflowExecutionId && transport.Batch.RootActivityExecutionId == childRoot.InvocationId &&
                         source.OutboxItemId == transport.SourceOutboxItemId && source.OutboxItemId == RuntimePostCommitOutboxIdentity.CreateLogicalValue(transport.SourceCommitId, transport.SourceIntentId) && source.Intent.IntentId == transport.SourceIntentId &&
                         call.ChildControlInbox is { NextOrdinal: 1, IsTerminalConsumed: true } inbox && inbox.Pending.Count == 0 && inbox.HasAccepted(transport) && inbox.Target.MatchesAddress(transport) &&
-                        call.Completion?.OutcomeKey == "Completed" && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "A delivered MI result lacks exact committed caller consumption.");
+                        call.Completion?.OutcomeNames is ["Completed"] && call.Fault is null && !string.IsNullOrEmpty(call.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId)), "A delivered MI result lacks exact committed caller consumption.");
                 }
                 else Require(call.ChildControl is null && call.ChildControlInbox is null && call.Completion is null && call.Fault is null &&
                     physical.Count(wait => wait.State.WorkflowExecutionId == parentId && wait.State.ActivityExecutionId == call.InvocationId) == 1 &&

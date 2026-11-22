@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { WorkflowAgentController } from "../workflowAgent";
-import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "../workflowAgentContext";
+import type { WorkflowWeaverController } from "../workflowWeaver";
+import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAttachment } from "../workflowWeaverContext";
 
 /**
  * Publishes one read-only page context (spec 1193 stories 8 and 9) for this page instance's lifetime: the exact Executable
@@ -10,7 +10,7 @@ import { workflowExecutableAttachment, workflowRunAttachment, workflowVersionAtt
  * removed when the page unmounts or has nothing loaded. Nothing here can change the resource.
  */
 export function useWorkflowInspectionContext({ controller, clientId, kind, identity }: {
-  controller?: WorkflowAgentController;
+  controller?: WorkflowWeaverController;
   clientId: string;
   kind: "executable" | "version" | "run";
   /** The loaded identity, or null while nothing is loaded. */

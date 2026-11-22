@@ -190,7 +190,7 @@ def node(identity: str, version: str, inputs=None, structure=None) -> dict:
 
 def event_node(identity: str, version: str, event: str) -> dict:
     correlation = {"referenceKey": "CorrelationId", "value": {"expressionType": "JavaScript", "value": {
-        "language": "JavaScript", "source": "args.instance", "capabilityProfile": "binding-pure-v1",
+        "language": "JavaScript", "source": "args.instance", "capabilityProfile": "binding-readonly-v1",
         "resultType": {"alias": "String", "collectionKind": "single"},
         "parameters": {"instance": {"kind": "WorkflowInstance", "member": "instanceId"}}, "options": {}}}}
     return node(identity, version, [literal("EventName", event), literal("CanStartWorkflow", False), correlation])

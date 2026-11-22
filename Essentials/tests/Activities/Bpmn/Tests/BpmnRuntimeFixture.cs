@@ -223,11 +223,11 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     /// <summary>
     /// A container-scoped variable declaration whose durable initial value is the given inline JSON,
     /// in the runtime <see cref="RuntimeVariableDeclaration"/> shape the frame projector reads (a collection
-    /// variable seeds a JSON array). Typed as the canonical dynamic <c>Elsa.Any</c>.
+    /// variable seeds a JSON array). Typed as the canonical dynamic <c>Any</c>.
     /// </summary>
     public static RuntimeVariableDeclaration InlineVariable(string name, JsonElement value)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any");
+        var type = new ValueTypeDescriptor("Any");
         var policy = ValueProtectionPolicy.InstanceInline;
         return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
             inputKey: name,
@@ -237,14 +237,14 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             literal: ValueEnvelope.Inline(type, value, policy)));
     }
 
-    /// <summary>An <c>Elsa.Any</c> variable declaration seeded with a JSON array of the given string items.</summary>
+    /// <summary>An <c>Any</c> variable declaration seeded with a JSON array of the given string items.</summary>
     public static RuntimeVariableDeclaration StringArrayVariable(string name, params string[] items) =>
         InlineVariable(name, JsonSerializer.SerializeToElement(items));
 
-    /// <summary>An <c>Elsa.Any</c> variable declaration whose durable initial value is an explicit null (empty-loop path).</summary>
+    /// <summary>An <c>Any</c> variable declaration whose durable initial value is an explicit null (empty-loop path).</summary>
     public static RuntimeVariableDeclaration NullVariable(string name)
     {
-        var type = new ValueTypeDescriptor("Elsa.Any");
+        var type = new ValueTypeDescriptor("Any");
         var policy = ValueProtectionPolicy.InstanceInline;
         return new RuntimeVariableDeclaration(name, name, type, policy, new RuntimeInputBinding(
             inputKey: name,

@@ -225,9 +225,10 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (continuationSchedulingPayload.OutcomeNames.Count == 0)
-            return DownstreamSchedulingResult.NotTerminal([]);
-
+        // A parentless root that completes ends the workflow whatever it selected: an explicitly empty selection is a
+        // successful completion like any other (spec 1208 FR-024). The selection only routes inside a routing parent.
+        // An empty selection once meant a skipped invocation (CanExecuteAsync false), which kept the workflow running;
+        // that path no longer exists.
         if (_workflowExecutableStore is null)
             return DownstreamSchedulingResult.Terminal();
 

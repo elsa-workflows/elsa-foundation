@@ -13,6 +13,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
+	  <ProjectReference Include="..\..\..\..\Essentials\src\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\Essentials\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\Essentials\src\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\Essentials\src\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />

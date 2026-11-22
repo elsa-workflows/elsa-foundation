@@ -34,6 +34,27 @@ internal sealed class ParallelStructureHandler : IActivityStructureHandler
             .ToList();
     }
 
+    // Branches run side by side, so availability stays unknown. Parallel schedules every branch itself, once per run,
+    // so a branch's run never leads to another branch's run, let alone an earlier run of the same branch.
+    public ActivityChildResultFacts AssessChildResult(ActivityNode activity, string producerChildNodeId, string consumerChildNodeId) =>
+        new(ActivityChildResultAvailability.Unknown) { EarlierProducerRunCanReachConsumer = false };
+
+    // Every branch is scheduled at fork time and the definition fixes no order between branches. Each branch runs
+    // once per run, so a branch never overlaps itself.
+    public ActivityChildTimeRelation RelateChildren(ActivityNode activity, string firstChildNodeId, string secondChildNodeId) =>
+        StringComparer.Ordinal.Equals(firstChildNodeId, secondChildNodeId)
+            ? ActivityChildTimeRelation.FirstBeforeSecond
+            : ActivityChildTimeRelation.Unordered;
+
+    // A threshold below the runnable branch count completes the join while the other branches keep running: Parallel
+    // does not cancel them, and their writes commit after its successor has started.
+    public bool? CompletesAfterItsChildren(ActivityNode activity)
+    {
+        var structure = ReadAuthoredStructure(activity);
+        var runnable = structure.Branches.Count(branch => branch.Activity is not null);
+        return structure.Threshold is not { } threshold || threshold < 1 || threshold >= runnable;
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = ReadAuthoredStructure(activity);
