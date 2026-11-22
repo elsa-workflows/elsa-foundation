@@ -48,7 +48,12 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
             if (item[collection.childProperty] || connected) {
               const accepted = await getDialogs().confirm({ title: `Remove ${collection.itemName}?`, message,
                 confirmLabel: `Remove ${collection.itemName}`, cancelLabel: "Cancel", tone: "danger" });
-              if (!accepted || currentActivity.current !== activity) return;
+              const latest = currentActivity.current;
+              if (!accepted || !latest || latest.nodeId !== activity.nodeId) return;
+              const latestItem = collectionSlotItems(latest, collection)?.[index];
+              if (JSON.stringify(latestItem) !== JSON.stringify(item)) return;
+              onChange(removeCollectionItem(latest, collection, index, item[collection.labelProperty] as string));
+              return;
             }
             onChange(removeCollectionItem(activity, collection, index, item[collection.labelProperty] as string));
           }}
