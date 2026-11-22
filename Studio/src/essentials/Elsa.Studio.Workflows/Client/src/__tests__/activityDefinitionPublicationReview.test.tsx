@@ -153,7 +153,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(issue.querySelector("strong")?.textContent).toBe(message);
     expect(issue.querySelector("code")?.textContent).toBe(code);
     expect(issue.querySelector(".studio-technical-details")?.getAttribute("data-open")).toBe("false");
-    expect(issue.querySelector("button")).toBeNull();
+    expect(issue.querySelector("button:not([aria-expanded])")).toBeNull();
   });
 
   it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {

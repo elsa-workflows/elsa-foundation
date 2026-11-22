@@ -69,8 +69,8 @@ test("falls back to review when the direct publication preflight finds a trigger
   await expect(review.getByRole("alert")).toContainText("GET /orders/{id}");
   await expect(review.getByRole("alert").locator(".wf-publication-selection")).toHaveText("http:GET:/orders");
   await review.getByRole("button", { name: "Technical details", exact: true }).click();
-  await expect(review.locator(".wf-publication-technical")).toContainText("GET /orders/{id}");
-  await expect(review.locator(".wf-publication-technical")).toContainText("http:GET:/orders");
+  await expect(review.locator(".studio-technical-details")).toContainText("GET /orders/{id}");
+  await expect(review.locator(".studio-technical-details")).toContainText("http:GET:/orders");
   await expect(review).toContainText("channel default");
   const calls = await readApiCalls(page);
   expect(calls.filter(call => call.method === "PUT")).toHaveLength(0);

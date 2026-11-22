@@ -11,10 +11,10 @@ test("keeps the publication decision calm and actions visible at constrained hei
   await expect(dialog.getByText("Publishing options")).toBeVisible();
   await expect(dialog.getByText("Technical details", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Version 2.0.0", { exact: true })).toBeVisible();
-  await expect(dialog.locator(".wf-publication-technical")).not.toHaveAttribute("open");
+  await expect(dialog.getByRole("button", { name: "Technical details", exact: true })).toHaveAttribute("aria-expanded", "false");
   await expect(dialog).toContainText("Ready to publish");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Publish" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
 
   const dialogBox = await dialog.boundingBox();
   const footerBox = await dialog.locator(".wf-publication-footer").boundingBox();
@@ -34,7 +34,7 @@ test("creates a named Publication channel and refreshes review automatically", a
 
   await expect(dialog.getByText("Publish your changes to canary.")).toBeVisible();
   await expect(dialog).toContainText("Ready to publish");
-  await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 });
 
 test("offers exact version editing only when the server advertises support", async ({ page }) => {
@@ -47,7 +47,7 @@ test("offers exact version editing only when the server advertises support", asy
 
   await expect(dialog).toContainText("2.3.0-rc.1");
   await expect(dialog).toContainText("Ready to publish");
-  await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 
   await page.goto("/?mode=publication-review&exact=unsupported");
   const unsupportedDialog = page.getByRole("dialog", { name: "Publish workflow" });
@@ -58,7 +58,7 @@ test("offers exact version editing only when the server advertises support", asy
 test("success and retained-promotion recovery keep their actions in the fixed footer", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 520 });
   await page.goto("/?mode=publication-review&theme=dark");
-  await page.getByRole("button", { name: "Publish" }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
 
   const success = page.getByRole("dialog", { name: "Published" });
   await expect(success).toContainText("Version 2.0.0 is active in default.");
@@ -66,7 +66,7 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
   await expect(success.getByRole("button", { name: "View published workflow" })).toBeVisible();
 
   await page.goto("/?mode=publication-review&outcome=recovery&theme=dark");
-  await page.getByRole("button", { name: "Publish" }).click();
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
   const recovery = page.getByRole("dialog", { name: "Couldn’t publish" });
   await expect(recovery).toContainText("Version 2.0.0 was retained. Channel default was not activated.");
   await expect(recovery.getByRole("button", { name: "Close" })).toBeVisible();
@@ -83,7 +83,7 @@ test("shows a conflict descriptor as the primary label and the raw key as muted 
   await expect(alert).toContainText("GET /orders/{id}");
   await expect(alert.locator(".wf-publication-selection")).toHaveText(
     "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7");
-  await expect(dialog.getByRole("button", { name: "Publish" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
 });
 
 test("shows a generic primary label and the raw key as muted detail when no descriptor is present", async ({ page }) => {
@@ -99,17 +99,17 @@ test("shows a generic primary label and the raw key as muted detail when no desc
 test("shows trigger counts while keeping exact identifiers in an explicit technical disclosure", async ({ page }) => {
   await page.goto("/?mode=publication-review&theme=dark");
   const dialog = page.getByRole("dialog", { name: "Publish workflow" });
-  const technical = dialog.locator(".wf-publication-technical");
+  const technical = dialog.locator(".studio-technical-details");
   const changes = dialog.locator("details").filter({ has: page.getByText("Review changes", { exact: true }) });
   await changes.locator("summary").click();
   await expect(changes).toContainText("1 added");
   await expect(changes).not.toContainText("sha256:");
   await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
 
-  await technical.locator("summary").click();
+  await technical.getByRole("button", { name: "Technical details", exact: true }).click();
   await expect(technical.locator(".wf-publication-claims")).toContainText("httpendpoint:sha256:");
   await expect(technical.locator(".wf-publication-claims")).toBeVisible();
-  await technical.locator("summary").click();
+  await technical.getByRole("button", { name: "Technical details", exact: true }).click();
   await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
   await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 });
@@ -127,9 +127,9 @@ test("lists validation warnings without blocking Publish", async ({ page }) => {
   await expect(warnings.getByRole("listitem").last()).toContainText("make the undo safe to retry with an idempotency key.");
   await expect(warnings).toContainText("These do not block publishing.");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 
-  await dialog.getByRole("button", { name: "Publish" }).click();
+  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Published" })).toContainText("Version 2.0.0 is active in default.");
 });
 
@@ -142,7 +142,7 @@ for (const theme of ["light", "dark"]) {
       const warnings = dialog.getByRole("region", { name: "Warnings" });
       await expect(warnings).toBeVisible();
       await expect(warnings.getByRole("listitem").first()).toContainText("no action is needed");
-      await expect(dialog.locator(".wf-publication-footer").getByRole("button", { name: "Publish" })).toBeVisible();
+      await expect(dialog.locator(".wf-publication-footer").getByRole("button", { name: "Publish", exact: true })).toBeVisible();
 
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
       const box = await warnings.boundingBox();
