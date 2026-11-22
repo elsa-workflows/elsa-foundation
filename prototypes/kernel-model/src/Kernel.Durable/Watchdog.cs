@@ -115,6 +115,7 @@ public sealed class WatchedStore(Watchdog watchdog, IKernelStore inner) : IKerne
 {
     public Func<long>? FoundationClock => inner.FoundationClock;
     public bool SupportsCommitWindow => inner.SupportsCommitWindow;
+    bool IKernelStore.SupportsCascadePages => inner.SupportsCascadePages;
     public bool SupportsJobTrialClear => inner.SupportsJobTrialClear;
     public bool CreationIdentityAvailable => inner.CreationIdentityAvailable;
     public bool PhysicalRetirementAvailable => inner.PhysicalRetirementAvailable;

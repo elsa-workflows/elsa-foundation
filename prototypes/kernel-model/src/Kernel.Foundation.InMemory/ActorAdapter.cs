@@ -87,6 +87,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (input.Row is { ParkRecovery: not null } recovering &&
             message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
             return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
+        if (message.CascadeOrigin && !Durable.CreationProtocol.MatchesCascadeParent(input.Row, message))
+            return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "WrongParent");
         if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
             return OpenDiscard(input);
         if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
@@ -161,9 +163,18 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         if (message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete ||
             message.Kind == Contract.Kinds.Terminate && input.Row is { } row && store.FoundationTurnHeader(row).Park is not null)
             return Durable.CreationProtocol.Refuse(input.Actor, input.Row, input.Taken, "ResolutionUnavailable");
-        if (message is { ActorAuthored: true, Kind: Contract.Kinds.Terminate } &&
-            input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
-            return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
+        if (message.Kind == Contract.Kinds.Terminate && input.Row is { Status: not Durable.InstanceStatus.Running } terminal)
+        {
+            if (terminal.Cascade is not null || message.ActorAuthored || message.CascadeOrigin && terminal is { Children: null, Jobs: null })
+                return new(input.Actor) { Consumed = [.. input.Taken], Status = terminal.Status };
+            if (!message.CascadeOrigin) return null;
+            var next = terminal with { Revision = checked(terminal.Revision + 1) };
+            return Durable.CascadeProtocol.Open(new(input.Actor)
+            {
+                Row = next, Expected = terminal.Revision, Revision = next.Revision, Status = terminal.Status,
+                Consumed = [.. input.Taken]
+            }, Durable.CascadeRegistry.From(terminal));
+        }
         if (message.Kind != Contract.Kinds.ChildFinished) return null;
 
         if (!IsChildNotice(input.Row, message))
@@ -256,6 +267,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var jobs = Durable.JobRegistry.Read(row.Jobs).Count;
         var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
             + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
+        if (row.Cascade is { Entries: var entries })
+            registryBytes += entries.Children.Length * (long)TerminalChildBytes + entries.Jobs.Length * (long)TerminalJobBytes;
         var headerBytes = row.Status == Durable.InstanceStatus.Running ? HeaderLimits.VariableHeaderReserve
             : Bytes(header.TypeData) + header.Labels.Sum(label => Bytes(label.Key) + Bytes(label.Value));
         var bytes = TerminalHeaderReserve + registryBytes + headerBytes

@@ -417,6 +417,9 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **What the review's trace needed.** The fourth round's RT-1 supplied the binding in its fixture before its live
     termination (`ParentBound`, `experiments/Review4.Blockers/Rt1.cs` 329–330, used at 352–357). The proposal puts
     that check in the actor type's control path, ahead of `Terminate`, for cascade-marked terminates.
+    The in-memory origin slice checks the actual committing sender and creation and binds delivery to the recipient's
+    recorded parent. The real Worker checks an unrelated parent, a stale parent creation, and the ordinary terminate
+    control. Paged cascades, Park termination and retirement obligations have separate cases.
   - **An operator's terminate is not parent-bound.** It is an outside add, whose scope the entry point resets to the
     ordinary one (`Messages.cs` 49), so it never has an issued origin or the mark, whatever `Sender` it names. Its
     authority is the terminate permission checked at ingress, and at a parked or draining row its `ParkSelection`,
@@ -462,10 +465,10 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
     It acts only when its full key equals `Cascade.Control`; any other is consumed and dropped (reason control). It
     passes withholding, is never a suspect and is exempt from the poison check, as `kernel.drain` is. At a marker the
     worker's refusal path consumes it as `RetiredCreation` and, for the outstanding control, composes the next page
-    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark: a cascade starts
-    only at a row that has ended, at a marker, or under a discard, expiry, terminate or delete drain, whose Open
-    cleared any mark; a model end clears the mark in its own commit, and so does a terminate's commit at a running
-    row, which ends the model.
+    in the same commit, as it composes the parent's cascade. It never waits behind a `Cohort` mark. An ended row,
+    a marker or an open discard, expiry, terminate or delete drain has cleared that mark. A Foundation actor may
+    consume Terminate and stay Running under FC-8. Its cascade control runs before its next authored turn, including
+    any remaining cohort input. The actor retains its Running status and the cohort resumes after the discharge.
   - **The idempotent cancel** (R5-B1). A job entry names the ticket whose key derives from (instance id, creation,
     job key, `JobGeneration`). The owner decides the ticket's presence under its own fence: a job ticket of instance
     A lives in A's partition inbox, which only A's current owner consumes, so what the owner reads in its memory, or
@@ -558,6 +561,15 @@ public sealed record ParkSelection(string Tenant, string Instance, long Creation
   - **The check.** Termination is feasible for every admitted registry: each page is bounded by `P_cascade` and moves
     the cursor by at least one entry, so a list of n entries ends in ⌈n / `P_cascade`⌉ page commits. The review's
     10,001 children end in 11.
+  - **In-memory live path.** The ending commit moves the live registry to the durable obligation and sends the
+    first page. A consumed Terminate still starts the cascade when the actor keeps its Running status (FC-8).
+    That actor discharges the captured registry before its next authored turn. Qualified Delete carries forward
+    an existing discharge on an ended actor. The Worker handles the outstanding control at the live row or its
+    retirement marker and the store checks the exact successor before applying
+    the page. `--cascade-pages-check` covers the 1,000, 1,001 and 10,001 entry boundaries, job and result
+    settlement, lost outcomes, Delete and keyed reuse, and the real Native tree with 1,001 live children. This
+    evidence covers live discharge and its transfer on Delete. Starting from a held retirement marker, Park
+    terminate paths, and `ThenDelete` have separate cases. Physical provider encoding and cost remain at K4 and K12.
 - **Which path each fan-out takes.** A combiner's FailFast is the application send above. Release 1's parallel
   ForEach runs its bodies as frames inside one instance ([large fan-out](large-fan-out.md)), so its FailFast cancels
   frames in the model and sends no kernel terminate; a body's child workflow is cancelled through its parent's

@@ -49,11 +49,13 @@ internal sealed record ParkDrainEnvelope(long Creation, long ParkRevision, long 
         expiry.Armed is { } key && key == Key(row, expiry.Serial) && Matches(message, row, key, Kinds.ParkExpiry);
 
     internal static bool IsInDomain(Message message) =>
-        message.Kind is Kinds.Drain or Kinds.ParkExpiry || message.InboxScope == Scope;
+        message.Kind is Kinds.Drain or Kinds.ParkExpiry or Kinds.Cascade || message.InboxScope == Scope;
 }
 
 public sealed partial class InMemoryStore
 {
+    private static bool IsParkControl(Message message) => message.Kind != Kinds.Cascade && ParkDrainEnvelope.IsInDomain(message);
+
     private (long At, bool Due)? ValidateParkDrain(TurnCommit turn, InstanceRow? previous,
         IReadOnlyDictionary<int, long> epochs, long now)
     {
@@ -92,7 +94,7 @@ public sealed partial class InMemoryStore
         if (next is not null && (previous?.ParkTimerDispositions != next.ParkTimerDispositions || previous?.ParkRestartedJobs != next.ParkRestartedJobs) &&
             !(before is not null && after is null && next.ParkDiscarded && next.ParkTimerDispositions is null && next.ParkRestartedJobs is null))
             throw InvalidDrain();
-        if (!takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(ParkDrainEnvelope.IsInDomain) &&
+        if (!takesOutstanding && turn.FoundationParkClear is null && !turn.Sent.Any(IsParkControl) &&
             (next is null || turn.Delete || before == after &&
             (previous?.ParkDiscarded ?? false) == next.ParkDiscarded &&
             (previous?.ParkResolutionGeneration ?? 0) == next.ParkResolutionGeneration))
@@ -114,7 +116,7 @@ public sealed partial class InMemoryStore
             input.Target.Id != next.Id || input.TargetCreation != next.Creation)
             throw InvalidDrain();
 
-        var controls = turn.Sent.Where(ParkDrainEnvelope.IsInDomain).ToArray();
+        var controls = turn.Sent.Where(IsParkControl).ToArray();
         var envelope = ParkDrainEnvelope.For(next, park);
         if (input.Kind == Kinds.ParkExpiry && after is null)
         {

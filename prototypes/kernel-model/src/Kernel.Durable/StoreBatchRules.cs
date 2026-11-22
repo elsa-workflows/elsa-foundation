@@ -50,7 +50,7 @@ public static class StoreBatchRules
             if (!supportsFoundationParkResolution && (turn.FoundationRetry is not null || turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
                 turn.FoundationRecoverySubscriptions is not null || turn.FoundationCatchUpStep is not null ||
                 turn.FoundationCatchUpFailed is not null || turn.FoundationCatchUpBefore is not null ||
-                turn.FoundationCatchUpExpected is not null || turn.FoundationPublicationSequence is not null ||
+                turn.FoundationCatchUpExpected is not null || turn.FoundationPublicationSequence is not null || turn.FoundationCascade is not null || turn.Row?.Cascade is not null ||
                 turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
                 throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
@@ -74,7 +74,7 @@ public static class StoreBatchRules
                     marker.Creation == 0 && !CreationProtocol.IsPhysicalAddress(marker.Id) ||
                     marker.Status == InstanceStatus.Running || expected == long.MaxValue ||
                     marker != new InstanceRow(marker.Id,"","",marker.Status,"null",expected+1,null,
-                        History:History.Minimal,Creation:marker.Creation,Retired:true)))
+                        History:History.Minimal,Creation:marker.Creation,Retired:true) { Cascade = marker.Cascade }))
                     throw new StoreException(Failure.Definite,"A row-bearing Delete must be a canonical retirement marker.");
             }
             if (turn.Row is { } value) ValidateIdentity(value);
@@ -188,13 +188,18 @@ public static class StoreBatchRules
 
     internal static void ValidateActorSends(TurnCommit turn, InstanceRow? previous)
     {
-        List<CreationAddress>? children = null;
+        IReadOnlyCollection<CreationAddress>? children = null;
         foreach (var message in turn.Sent)
         {
+            if (message.CascadeOrigin && (message.Kind != Kinds.Terminate || !message.HasIssuedTicket ||
+                message.InboxScope != InboxKey.Issued(message.Id).Scope || (turn.Row ?? previous) is not { } issuer ||
+                message.Sender != issuer.Id || message.SenderCreation != issuer.Creation || issuer.Id != turn.Instance))
+                throw new StoreException(Failure.Definite, "A cascade terminate requires an issued origin from the committing creation.");
             if (!message.ActorControl) continue;
             if (message.Kind == Kinds.Terminate && message.TargetCreation is > 0 && !RequestsOperatorDelete(message.Payload))
             {
-                children ??= ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
+                children ??= turn.FoundationCascade is { Input: null } opening ? opening.Entries.Children :
+                    ChildRegistry.Read(turn.Row is { } row ? row.Children : previous?.Children);
                 if (children.Contains(new CreationAddress(message.Target.Id, message.TargetCreation.Value))) continue;
             }
 

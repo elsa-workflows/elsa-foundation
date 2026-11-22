@@ -25,6 +25,7 @@ public sealed record InstanceRow(string Id, string Model, string Definition, Ins
     internal ParkRelease? ParkCohort { get; init; }
     internal bool EndedDuringParkRecovery { get; init; }
     internal bool ParkDiscarded { get; init; }
+    internal CascadeDischarge? Cascade { get; init; }
 
     internal InstanceRow WithoutInlineBirth() => FoundationInlineBirth is null
         ? this : this with { FoundationInlineBirth = null, FoundationInlineHeader = null };
@@ -174,6 +175,7 @@ public sealed record TurnCommit(
     internal int? FoundationCatchUpExpected { get; init; }
     internal ParkCatchUpFailure? FoundationCatchUpFailed { get; init; }
     internal long? FoundationPublicationSequence { get; init; }
+    internal CascadeCommit? FoundationCascade { get; init; }
 }
 
 internal sealed record FoundationHeaderChange(string TypeData, IReadOnlyDictionary<string, string> Labels);
@@ -231,6 +233,7 @@ public sealed record Committed(bool Landed, long Now, IReadOnlyList<long> Seqs)
 {
     // Timers minted by the commit clock rather than supplied in TurnCommit.Sent.
     internal IReadOnlyList<Stored> ParkExpiries { get; init; } = [];
+    internal IReadOnlyDictionary<string, IReadOnlyList<InboxKey>>? CascadeRemovals { get; init; }
 }
 
 public sealed record CommitWindow(long FromInclusive, long UntilExclusive)
@@ -263,6 +266,7 @@ public interface IKernelStore : IMembership
 
     /// <summary>A supported store validates a guarded transaction against its clock before making its writes visible.</summary>
     bool SupportsCommitWindow => false;
+    bool SupportsCascadePages => false;
     /// <summary>Qualified creation headers, retired high-water marks and exact target envelopes; default unavailable.</summary>
     bool CreationIdentityAvailable => false;
     /// <summary>Irreversible empty markers for generated physical addresses, independent of positive generations.</summary>
