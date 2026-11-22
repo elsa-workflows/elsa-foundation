@@ -1,4 +1,4 @@
-import { StudioPageHeader } from "../ui";
+import { AdvancedSection, StatusChip, StudioPageHeader } from "../ui";
 import React from "react";
 import { StudioButton } from "../ui/forms/Button";
 import { useTheme } from "../components/ThemeProvider";
@@ -118,8 +118,7 @@ export function AppearancePage({
         />
       </AppearanceCard>
 
-      <details className="settings-theme-presets">
-        <summary>Theme presets</summary>
+      <AdvancedSection label="Theme presets">
         <AppearanceCard
           title="Theme preset"
           description="Apply an original theme's complete combination, clearing workspace and color overrides."
@@ -136,7 +135,7 @@ export function AppearancePage({
             onChange={setTheme}
           />}
         </AppearanceCard>
-      </details>
+      </AdvancedSection>
 
       <AppearanceCard
         title="Navigation"
@@ -241,7 +240,7 @@ function RadioCardGroup({
   return (
     <div className="settings-card-grid" role="radiogroup" aria-label={ariaLabel} onKeyDown={handleKeyDown}>
       {options.map(option => (
-        <button
+        <StudioButton
           key={option.value}
           ref={element => { optionRefs.current[option.value] = element; }}
           type="button"
@@ -270,10 +269,10 @@ function RadioCardGroup({
           ) : null}
           <span className="settings-radio-card-title">
             {option.label}
-            {option.defaultValue ? <span className="settings-default-badge">Default</span> : null}
+            {option.defaultValue ? <StatusChip>Default</StatusChip> : null}
           </span>
           {option.description ? <small className="settings-radio-description">{option.description}</small> : null}
-        </button>
+        </StudioButton>
       ))}
     </div>
   );

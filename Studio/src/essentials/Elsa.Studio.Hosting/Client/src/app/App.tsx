@@ -1,5 +1,5 @@
 import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
-import { StudioPageHeader } from "./ui";
+import { StudioIconButton, StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -843,7 +843,7 @@ export function ShellFrame({
               <small>{branding.subtitle}</small>
             </span>
           </a>
-          <button
+          <StudioIconButton
             type="button"
             className="sidebar-collapse-toggle"
             aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -852,7 +852,7 @@ export function ShellFrame({
             onClick={toggleNavCollapsed}
           >
             {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
+          </StudioIconButton>
         </div>
 
         <label className="sidebar-search">
@@ -1208,7 +1208,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           })}
         </div>
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
-          <button
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
@@ -1216,8 +1216,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleCollapsed}
           >
             {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-          <button
+          </StudioIconButton>
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
@@ -1225,7 +1225,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleMaximized}
           >
             {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          </StudioIconButton>
         </div>
       </div>
       <div

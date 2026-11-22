@@ -100,7 +100,8 @@ describe("theme management with an empty selectable default", () => {
     expect(customButton).toBeTruthy();
     await update(() => customButton!.click());
     expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBe("Managed Theme");
-    const deleteButton = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-actions button")).find(button => button.textContent?.trim() === "Delete");
+    await update(() => container.querySelector<HTMLButtonElement>('[aria-label="Theme actions"]')!.click());
+    const deleteButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.trim() === "Delete theme");
     expect(deleteButton?.disabled).toBe(false);
     await update(() => deleteButton!.click());
 
@@ -141,7 +142,8 @@ describe("theme management with an empty selectable default", () => {
     const context = { http: { getJson: async () => wire, putJson } } as unknown as StudioEndpointContext;
     const api = { host: context, notifications, dialogs: { confirm: async () => true } } as unknown as ElsaStudioModuleApi;
     await update(() => root.render(<ThemeProvider storeContext={context}><ThemeBuilderPage api={api} /></ThemeProvider>));
-    const duplicate = Array.from(container.querySelectorAll<HTMLButtonElement>(".theme-builder-actions button")).find(button => button.textContent?.trim() === "Duplicate")!;
+    await update(() => container.querySelector<HTMLButtonElement>('[aria-label="Theme actions"]')!.click());
+    const duplicate = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent?.trim() === "Duplicate")!;
     await update(() => duplicate.click());
     expect(putJson).toHaveBeenCalledTimes(1);
     expect(requestStudioNavigation("/theme-builder", "/theme-builder", "probe")).toBe(false);

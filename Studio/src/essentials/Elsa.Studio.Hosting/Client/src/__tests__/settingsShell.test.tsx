@@ -166,7 +166,7 @@ describe("settings shell and appearance", () => {
     await act(() => modes.find(option => option.getAttribute("aria-label") === "System (default)")!.click());
     expect(theme!.modePreference).toBe("system");
 
-    await act(() => container.querySelector<HTMLButtonElement>("button.studio-button")!.click());
+    await act(() => Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === "Reset appearance")!.click());
     expect(localStorage.getItem("elsa-studio-theme")).toBeNull();
     expect(localStorage.getItem("elsa-studio-theme-mode")).toBeNull();
     expect(localStorage.getItem("elsa-studio-nav-mode")).toBeNull();
