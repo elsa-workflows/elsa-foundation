@@ -2476,6 +2476,13 @@ public sealed class Worker : IScopeActivation, ITurnServices
                 if (_items.TryGetValue(key, out var ticket) && ticket.Key is not null)
                     ticket.AwaitingJobMark = !handOver && !Has(Flaw.RunBeforeMark);
         var turns = units.Select(PrepareCommit).ToList();
+        if (turns.Exists(turn => turn.FoundationReleasedHolds is { Count: > 0 }))
+        {
+            var removed = turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet();
+            for (var index = 0; index < turns.Count; index++)
+                if (turns[index] is { FoundationReleasedHolds: { Count: > 0 } released } turn)
+                    turns[index] = turn with { FoundationReleasedHolds = released.Where(id => !removed.Contains(id)).ToArray() };
+        }
         List<InboxKey> seen = [.. marks.Select(i => i.Message.InboxKey)], tried = [.. trial.Select(i => i.Message.InboxKey)];
         // A store without owned sets gets only today's positional batch, one partition per batch (a worker of several
         // partitions cannot take on it). With owned sets, one partition held is that same batch, and several are one
@@ -2615,7 +2622,7 @@ public sealed class Worker : IScopeActivation, ITurnServices
         }
         var releases = unit.Row is { } row && _type.SupportsFoundationOperator(row) && unit.Consumed is [var stimulus] &&
             _type.RevisitsHeld(row.Model, row, stimulus)
-            ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
+            ? unit.Slot!.Inbox.Where(i => i.Held && i.Durable && !i.Taken && i.InboxOrder < stimulus.InboxOrder).Select(i => i.Message.InboxKey).ToArray()
             : null;
         return new TurnCommit(unit.Instance, unit.Row, unit.Expected,
             Has(Flaw.KeepConsumedMessages) ? [] : [.. consumed, .. settled, .. cancelled],

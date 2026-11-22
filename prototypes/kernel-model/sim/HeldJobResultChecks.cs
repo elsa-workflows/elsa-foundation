@@ -10,7 +10,7 @@ internal static class HeldJobResultChecks
     public static async Task Run(Action<bool, string> check, Flaw flaws)
     {
         foreach (var inline in new[] { false, true })
-            foreach (var shape in new[] { "outside-release", "self-release", "poll-one", "singleton", "send-cap" })
+            foreach (var shape in new[] { "outside-release", "self-release", "poll-one", "singleton", "singleton-cancel", "send-cap" })
                 await Schedule(inline, shape, flaws, (ok, name) => check(ok, $"{(inline ? "inline first write" : "durable")}, {shape}: {name}"));
         foreach (var shape in new[] { "cut-same-owner", "cut-takeover" })
             await Schedule(false, shape, flaws, (ok, name) => check(ok, $"{shape}: {name}"));
@@ -77,9 +77,24 @@ internal static class HeldJobResultChecks
                 !store.Messages.ContainsKey(ticket) && store.Messages.GetValueOrDefault(result) is { Held: true, Message.FoundationJobResult: true },
                 "the landed Hold keeps the original completion and removes its runnable ticket");
 
-            if (shape == "singleton")
+            if (shape is "singleton" or "singleton-cancel")
             {
                 var child = store.Messages.Values.Single(delivery => delivery.Message.Kind == Kinds.Start).Message.Target.Id;
+                if (shape == "singleton-cancel" && !flaws.HasFlag(Flaw.HoldRetainsJobTicket))
+                {
+                    var checkpoint = new TurnCommit(row.Id, row with { Revision = row.Revision + 1 }, row.Revision,
+                        [], [], [], [], [], Json.Write(new[] { "must not land" })) { FoundationReleasedHolds = [result] };
+                    var differentTurn = new TurnCommit(child, null, null, [result], [], [], [], [], null);
+                    var fence = worker.Fences.Single();
+                    var batch = new CommitBatch(fence.Partition, fence.Epoch, fence.Position, TimeSpan.FromSeconds(10),
+                        false, [differentTurn, checkpoint], [], []);
+                    var refused = false;
+                    try { await store.CommitAsync(batch); }
+                    catch (StoreException error) when (error.Failure == Failure.Definite) { refused = true; }
+                    check(refused && store.Instances[row.Id].Revision == row.Revision && store.Messages.GetValueOrDefault(result) is { Held: true } &&
+                        !store.Journal.Values.Any(entry => entry.Revision > row.Revision && entry.Instance == row.Id),
+                        "a cross-turn consume and release conflict is refused before any write");
+                }
                 await worker.PollAsync();
                 await worker.LoadAsync();
                 worker.RunTurn(child);
@@ -88,7 +103,16 @@ internal static class HeldJobResultChecks
                 await worker.LoadAsync();
                 worker.RunTurn(row.Id);
                 await worker.FlushAsync();
-                check(store.Instances[row.Id].State == "released" && !store.Messages[result].Held,
+                if (shape == "singleton-cancel")
+                {
+                    check(worker.Owns && store.Instances[row.Id] is { State: "cancelled job", Jobs: null } &&
+                        !store.Messages.ContainsKey(result) && actor.Applied == 0 &&
+                        store.Messages.Values.Count(message => message.Message.Kind == "committed-side-effect") == 1 &&
+                        store.Journal.Values.Count(entry => entry.Entries == Json.Write(new[] { "cancelled in child notice" })) == 1,
+                        "the singleton cancel lands atomically and adds no release for the consumed result");
+                    return;
+                }
+                check(store.Instances[row.Id].State == "released" && store.Messages.GetValueOrDefault(result) is { Held: false },
                     "the singleton child notice durably releases the completion in its own commit");
             }
 
@@ -174,7 +198,13 @@ internal static class HeldJobResultChecks
                         turn.StartJob(JobKey);
                         break;
                     case Contract.Kinds.ChildFinished:
-                        turn.State = "released";
+                        if (shape == "singleton-cancel")
+                        {
+                            turn.CancelJob(JobKey);
+                            turn.Send(turn.Header.Ref, "committed-side-effect", dueAt: turn.Now + 1000);
+                            turn.Record("cancelled in child notice");
+                        }
+                        turn.State = shape == "singleton-cancel" ? "cancelled job" : "released";
                         break;
                     case Contract.Kinds.Terminate:
                         turn.End(Contract.ActorStatus.Cancelled);
@@ -183,7 +213,7 @@ internal static class HeldJobResultChecks
                         if (turn.State != "released" && !turn.Inbox.Any(input => input.Kind == "release"))
                         {
                             if (Handle is null && shape is "self-release" or "poll-one") turn.Send(turn.Header.Ref, "release");
-                            if (Handle is null && shape == "singleton") turn.Start(new(Type, "child", null));
+                            if (Handle is null && shape is "singleton" or "singleton-cancel") turn.Start(new(Type, "child", null));
                             if (shape == "send-cap")
                                 for (var i = 0; i < 10_000; i++) turn.Send(turn.Header.Ref, "overflow");
                             Handle ??= message.Id;
