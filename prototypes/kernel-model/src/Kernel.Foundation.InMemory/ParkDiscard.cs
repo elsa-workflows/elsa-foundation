@@ -17,7 +17,9 @@ internal sealed partial class ActorAdapter
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "StaleSelection");
 
         var next = row with { ParkResolutionGeneration = checked(row.ParkResolutionGeneration + 1) };
-        return AdvanceDiscard(input, row, next, park, null, 0, 1);
+        var outcome = AdvanceDiscard(input, row, next, park, message.Id, null, 0, 1);
+        outcome.ReplyTo(input.Taken[input.From], "started");
+        return outcome;
     }
 
     private Durable.TurnOutcome ContinueDiscard(Durable.TurnInput input)
@@ -32,22 +34,22 @@ internal sealed partial class ActorAdapter
         if (page is null)
             return Durable.CreationProtocol.Refuse(input.Actor, row, input.Taken, "InvalidControl");
         if (page.Count > 0)
-            return AdvanceDiscard(input, row, row, park, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1));
+            return AdvanceDiscard(input, row, row, park, drain.Operation, page, checked(drain.Cleared + page.Count), checked(drain.Serial + 1));
 
         var completed = row with { ParkDiscard = null, ParkDiscarded = true };
         var outcome = DiscardCheckpoint(input, row, completed);
-        outcome.Journal = Durable.Json.Write(new { Outcome = "discarded", drain.Cleared });
+        outcome.Journal = Durable.Json.Write(new { Outcome = "discarded", drain.Operation, drain.Cleared });
         if (outcome.Row!.Parent is not null)
             outcome.Sent.Add(Notice(outcome.Row, null, final: true));
         return outcome;
     }
 
     private static Durable.TurnOutcome AdvanceDiscard(Durable.TurnInput input, Durable.InstanceRow row,
-        Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, IReadOnlyList<Durable.ParkPageRow>? page,
+        Durable.InstanceRow next, Durable.InMemoryStore.FoundationParkMark park, string operation, IReadOnlyList<Durable.ParkPageRow>? page,
         long cleared, long serial)
     {
         var control = Durable.ParkDrainEnvelope.For(next, park).Issue(next, serial);
-        var drain = new Durable.ParkDiscardDrain(page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey);
+        var drain = new Durable.ParkDiscardDrain(operation, page is null ? null : page[^1].Cursor, cleared, serial, control.InboxKey);
         var outcome = DiscardCheckpoint(input, row, next with { ParkDiscard = drain });
         outcome.Sent.Add(control);
         if (page is not null)
