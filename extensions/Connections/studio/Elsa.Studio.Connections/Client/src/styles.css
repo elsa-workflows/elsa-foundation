@@ -1,4 +1,6 @@
 .connections-shell,
+.connections-create-shell,
+.connections-detail-shell,
 .connections-modal,
 .connection-picker-editor {
   --connections-bg: var(--studio-bg);
@@ -359,3 +361,10 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
 }
 
 .connections-search-control { flex: 1; min-width: 0; }
+
+.studio-dialog:is(.connections-create-shell, .connections-detail-shell) { width: min(44rem, calc(100vw - 2rem)); }
+.connections-detail-shell .connections-dialog-body { padding: 0; }
+.studio-dialog.connections-create-shell { grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.connections-create-shell > form { display: flex; flex-direction: column; min-height: 0; }
+.connections-create-shell .connections-create-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.connections-detail-shell .studio-dialog-footer-leading { display: flex; flex-wrap: wrap; gap: .5rem; }

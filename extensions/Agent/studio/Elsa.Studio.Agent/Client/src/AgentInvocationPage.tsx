@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, RefreshCw } from "lucide-react";
+import { Bot } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { StatusChip, StudioButton, StudioPage, StudioPageHeader, StudioShellBreadcrumbs, StudioResultState } from "@elsa-workflows/studio-ui";
 import { InvocationEvidenceDetails, applicationText } from "./InvocationEvidence";
@@ -94,10 +94,7 @@ function InvocationScreen({ context, reference, refreshInterval }:
         compact
         title={<>{invocation.agent.version} <StatusChip tone={tone(invocation.activityStatus)}>{invocation.activityStatus}</StatusChip></>}
         description={<span role="status" data-testid="invocation-summary">{summary(invocation.activityStatus, turn ? applicationText(turn.application) : null)}</span>}
-        actions={<>
-
-          <StudioButton aria-label="Refresh invocation" onClick={() => void refresh()}><RefreshCw aria-hidden="true" size={14} /> Refresh</StudioButton>
-        </>} />
+        refresh={{ id: "agent-invocation", label: "Refresh invocation", onRefresh: refresh }} />
       {failures > 0 ? <p className="agent-playground__hint" role="status" data-testid="invocation-stale">
         The latest evidence could not be read; showing the last loaded state.{failures >= maximumRefreshFailures ? " It is no longer refreshed automatically." : ""}</p> : null}
       <section className="agent-playground__run" aria-label="Invocation evidence">

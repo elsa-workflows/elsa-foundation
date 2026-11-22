@@ -34,7 +34,8 @@ type Section = "overview" | "drafts" | "versions" | "relationships";
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; originDraftId?: string | null; originVersionId?: string | null; returnPlanId?: string | null; draftActionVersionId?: string | null; publicationReview?: boolean };
 type DefinitionPrivacyFailure = { definitionId: string; kind: "unavailable" | "forbidden" | "not-found" };
 
-export function ActivityDefinitionWorkbench({ context, definitionId, section, selectedDraftId, selectedVersionId, originDraftId, originVersionId, returnPlanId, requestedDraftActionVersionId, requestedPublicationReview = false, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
+export function ActivityDefinitionWorkbench({ agentWorkspace = false, context, definitionId, section, selectedDraftId, selectedVersionId, originDraftId, originVersionId, returnPlanId, requestedDraftActionVersionId, requestedPublicationReview = false, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
+  agentWorkspace?: boolean;
   context: StudioEndpointContext;
   definitionId: string;
   section: string | null;
@@ -200,7 +201,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   if (!detail && detailQuery.isPending && !detailFailure) return <main className="ad-page ad-workbench" aria-busy="true"><div className="ad-skeleton" role="status">Loading the Activity Definition workbench…</div></main>;
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
-      <StudioShellBreadcrumbs items={[{ label: "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
+      <StudioShellBreadcrumbs items={[{ label: agentWorkspace ? "Agents" : "Activity definitions", onClick: () => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null }) }]} current="Activity unavailable" />
       <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Retry</button></section>
     </main>;
   }
@@ -252,7 +253,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
     <StudioShellBreadcrumbs items={[
-      { href: "/workflows/activity-definitions", label: "Activity definitions" },
+      { href: agentWorkspace ? "/agents" : "/workflows/activity-definitions", label: agentWorkspace ? "Agents" : "Activity definitions" },
       ...(returnDesignerHref ? [{ href: returnDesignerHref, label: "Designer" }] : [])
     ]} current={detail.definition.displayName} renderLink={item =>
       <StudioLink href={item.href} navigateToStudioPath={item.href === returnDesignerHref ? returnToDesigner :
