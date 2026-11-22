@@ -200,6 +200,7 @@ and token contract while keeping each resource's domain columns and operations:
 |---|---|---|
 | Button (today) | `exists` | `ui/forms/Button` (`StudioButton`): variants `primary`, `default`, `ghost`, `danger`; sizes `sm` / `md`. Use `danger` for destructive actions: “Delete” destroys a record; “Remove” detaches an item from a list or parent. Focus ring is `--studio-focus` (there is no `--studio-ring`). See the [worked examples](../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/README.md#worked-examples). |
 | Field (today) | `exists` | `ui/forms/Field` (`StudioField`) wraps a control with its label and optional description/meta. It is exported by the public `@elsa-workflows/studio-ui` package for host pages and independently bundled modules; see the UI README. |
+| Icon-only button | `exists` | `StudioIconButton`: 28px control with a 16px lucide icon, a required `aria-label` and a tooltip that defaults to that label. Use `variant="danger"` for destructive hover treatment. |
 | Button (additions) | `target, phase 3` | Pressed state (`:active` translate) and a spinner while pending. |
 | Button (new variant) | `target, phase 4` | `outline` variant. Until it exists, use `default` / `ghost` and do not name `outline` in new call sites. |
 | Tabs | `exists` | `ui/layout/Tabs` (`StudioTabs`). Sentence case; overflow collapse is `target, phase 1`. |
