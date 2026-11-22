@@ -100,7 +100,7 @@ test.describe("customizable Home", () => {
     await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Tasks", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create a workflow" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "New workflow" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
     await expect(page.getByRole("link", { name: "Needs attention" })).toHaveAttribute("href", /\/workflows\/instances\?.*incidentHealth=active/);
     await expect(page.getByRole("link", { name: "Open the designer" })).toBeVisible();
@@ -138,7 +138,7 @@ test.describe("customizable Home", () => {
         await page.setViewportSize(viewport);
         await page.goto(`/?mode=home&theme=${theme}`);
         await expect(page.getByRole("heading", { name: "Workflow tasks" })).toBeVisible();
-        await expect(page.getByRole("link", { name: "Create workflow" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "New workflow" })).toBeVisible();
         await expect(page.getByRole("button", { name: /Continue editing/ })).toBeVisible();
         await expect(page.getByRole("link", { name: "Needs attention" })).toBeVisible();
         await expect(page.locator(".dashboard-grid")).toBeVisible();
@@ -158,7 +158,7 @@ test.describe("customizable Home", () => {
   test("gates only Needs attention by authenticated runtime read and preserves design actions", async ({ page }) => {
     await page.goto("/?mode=home&runtimeAccess=denied&drafts=multiple&keep=one#home-anchor");
     const tasks = page.getByRole("region", { name: "Workflow tasks" });
-    await expect(tasks.getByRole("link", { name: "Create workflow" })).toBeVisible();
+    await expect(tasks.getByRole("link", { name: "New workflow" })).toBeVisible();
     await expect(tasks.getByRole("link", { name: "Needs attention" })).toHaveCount(0);
     await expect(tasks.locator(".home-task-card[aria-disabled='true']")).toContainText("Requires access to read workflow runs.");
     const continueButton = tasks.getByRole("button", { name: /Continue editing/ });
@@ -186,7 +186,7 @@ test.describe("customizable Home", () => {
 
   test("navigates Create once and keeps Browse as the ordinary definitions route", async ({ page }) => {
     await page.goto("/?mode=home&keep=one#home-anchor");
-    await page.getByRole("link", { name: "Create workflow" }).click();
+    await page.getByRole("link", { name: "New workflow" }).click();
 
     let location = new URL(page.url());
     expect(location.pathname).toBe("/workflows/definitions");
@@ -323,7 +323,7 @@ test.describe("customizable Home", () => {
       "home.recent-workflows"
     ]);
     await expect(page.locator('[data-widget-id="workflows.run-health"] [role="img"]')).toHaveAttribute("aria-label", /Run starts by hour: 12 starts/);
-    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("12");
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .studio-stat-tile-value')).toHaveText("12");
     await expect(page.getByRole("link", { name: "View all failed runs for Orders" })).toHaveAttribute("href", "/workflows/instances?definitionId=orders&status=Faulted&runKind=PublishedRun");
 
     await page.getByText("View exact bucket counts").click();
@@ -344,10 +344,10 @@ test.describe("customizable Home", () => {
     await page.goto("/?mode=home-dashboard&state=empty");
     const health = page.locator('[data-widget-id="workflows.run-health"]');
     await expect(health.getByText("No workflow starts in this window.")).toBeVisible();
-    await expect(health.locator('[data-metric="Started"] .workflow-dashboard-metric__value')).toHaveText("0");
-    await expect(health.locator('[data-metric="Running now"] .workflow-dashboard-metric__value')).toHaveText("2");
+    await expect(health.locator('[data-metric="Started"] .studio-stat-tile-value')).toHaveText("0");
+    await expect(health.locator('[data-metric="Running now"] .studio-stat-tile-value')).toHaveText("2");
     await expect(health.getByRole("img")).toHaveCount(0);
-    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("0");
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .studio-stat-tile-value')).toHaveText("0");
 
     await page.goto("/?mode=home-dashboard&state=unavailable");
     await expect(page.getByText("Run statistics are unavailable.")).toBeVisible();
@@ -398,7 +398,7 @@ test.describe("customizable Home", () => {
     expect(savedOptions).toMatchObject({ range: "7d", includeTestRuns: true, keepVisible: true });
     await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("day");
     await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("Test runs included");
-    await page.locator('[data-widget-id="workflows.run-health"] summary').click();
+    await page.getByRole("button", { name: "View exact bucket counts", exact: true }).click();
     await expect(page.locator('[data-widget-id="workflows.run-health"] tbody tr')).toHaveCount(7);
   });
 
@@ -417,12 +417,17 @@ test.describe("customizable Home", () => {
     const dialog = page.getByRole("dialog", { name: "Fixture settings settings" });
     const message = dialog.getByLabel("Message");
     await expect(message).toBeFocused();
+    const close = dialog.getByRole("button", { name: "Close dialog" });
+    await page.keyboard.press("Shift+Tab");
+    await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(dialog.getByRole("button", { name: "Save" })).toBeFocused();
     await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(message).toBeFocused();
 
-    const editHome = page.getByRole("button", { name: "Edit home" });
+    const editHome = page.getByRole("button", { name: "Edit home", includeHidden: true });
     const bounds = await editHome.boundingBox();
     if (!bounds) throw new Error("Edit Home control was not measurable behind the settings dialog.");
     await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);

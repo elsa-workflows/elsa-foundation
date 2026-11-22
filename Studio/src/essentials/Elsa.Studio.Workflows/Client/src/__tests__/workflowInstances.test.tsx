@@ -220,7 +220,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
       .toBe("Pinned occurrence");
   });
 
-  it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {
+  it("focuses only an outer activity execution that exists in the loaded Run data", () => {
     const activities = [
       { activityExecutionId: "outer-activity" },
       { activityExecutionId: "child-activity" }
@@ -390,7 +390,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
 
     const onViewInput = vi.fn();
     renderIncidentList([targetIncident], associationActivities, vi.fn(), onViewInput);
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onViewInput).toHaveBeenCalledWith(targetIncident);
   });
 
@@ -507,7 +507,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
 
     const onViewInput = vi.fn();
     renderIncidentList([targetIncident], activities, vi.fn(), onViewInput);
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onViewInput).toHaveBeenCalledWith(targetIncident);
   });
 
@@ -698,7 +698,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
     expect(summary?.textContent).not.toContain("Start");
     expect(mounted?.container.querySelector(".wf-incident-technical-details")?.textContent).toContain("ExpressionEvaluationFailed");
     click(buttonByText(mounted!.container, "Show affected activity"));
-    click(buttonByText(mounted!.container, "View input evidence"));
+    click(buttonByText(mounted!.container, "View input data"));
     expect(onShowAffectedActivity).toHaveBeenCalledWith(affectedIncident);
     expect(onViewInput).toHaveBeenCalledWith(affectedIncident);
 
@@ -780,7 +780,7 @@ describe("Incident diagnostic presentation", () => {
     const container = mounted!.container;
     click(buttonByText(container, "Open incident details"));
 
-    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const dialog = document.querySelector<HTMLElement>("[role=dialog]")!;
     const content = dialog.textContent ?? "";
     expect(content).toContain("Next step");
     expect(content.indexOf("Next step")).toBeLessThan(content.indexOf("Failure type"));
@@ -845,7 +845,7 @@ describe("Incident diagnostic presentation", () => {
     expect(trigger).toBeDefined();
     trigger!.focus();
     click(trigger);
-    const dialog = container.querySelector<HTMLElement>("[role=dialog]")!;
+    const dialog = document.querySelector<HTMLElement>("[role=dialog]")!;
     expect(dialog).not.toBeNull();
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     await new Promise(resolve => requestAnimationFrame(resolve));
@@ -861,8 +861,8 @@ describe("Incident diagnostic presentation", () => {
     } finally {
       window.removeEventListener("keydown", surroundingEscape);
     }
-    expect(container.querySelector("[role=dialog]")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });
 

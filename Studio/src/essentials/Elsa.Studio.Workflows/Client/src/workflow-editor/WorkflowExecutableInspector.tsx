@@ -1,9 +1,9 @@
 import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, type Edge, type Node } from "@xyflow/react";
-import { Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { AlertCircle, Fingerprint, ListTree, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioWeaverRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, StudioBreadcrumbs, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioResultState, CopyableIdentifier, StudioShellBreadcrumbs, StudioButton, StudioTimestamp } from "@elsa-workflows/studio-ui";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -36,8 +36,6 @@ import {
 } from "../workflowAdapter";
 import { buildExecutableActivityGraph, ghostNodeLabel, isGhostFact, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { ConversionPlanCaption } from "../ConversionPlanCaption";
-import { formatDate } from "../workflowFormatting";
-import { WfErrorCard } from "./StatusViews";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ExecutableReferenceList, ExecutableRunStatusLine } from "./executableShared";
@@ -83,6 +81,7 @@ import {
 // The Inspector never mutates the executable; Run dispatches it, everything else reads.
 
 interface ExecutableInspectionData {
+  context: StudioEndpointContext;
   detail: WorkflowExecutableDetails;
   activityCatalog: ActivityCatalogItem[];
   inputSources: WorkflowExecutableInputSources | null;
@@ -118,7 +117,9 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
   const sidePanelLayout = useSidePanelLayout(undefined, { palettePresent: false });
   const explainAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
+  const loadId = useRef(0);
   const load = useCallback(async () => {
+    const requestId = ++loadId.current;
     if (!artifactId) {
       setError("No executable artifact id was provided.");
       setState("failed");
@@ -135,16 +136,19 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       // The summary tree redacts binding source details (literals, pinned conversion plans); the
       // compiled bindings live behind the input-sources endpoint. Best effort — inspection still
       // renders from the summary tree when the endpoint or permission is unavailable.
+      if (requestId !== loadId.current) return;
       const chosenReferenceId = detail.chosenReference?.sourceReferenceId ?? null;
       const inputSources = chosenReferenceId
         ? await getExecutableInputSources(context, detail.artifactId, chosenReferenceId).catch(() => null)
         : null;
-      setData({ detail, activityCatalog: activityCatalog.activities, inputSources, requestedSourceReferenceId: sourceReferenceId });
+      if (requestId !== loadId.current) return;
+      setData({ context, detail, activityCatalog: activityCatalog.activities, inputSources, requestedSourceReferenceId: sourceReferenceId });
       setFrames([]);
       setSelectedNodeId(null);
       setActiveInspectorTab("identity");
       setState("ready");
     } catch (e) {
+      if (requestId !== loadId.current) return;
       setData(null);
       setError(formatExecutableLoadError(e, artifactId));
       setState("failed");
@@ -153,9 +157,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
 
   useEffect(() => {
     void load();
+    return () => { loadId.current++; };
   }, [load]);
 
-  const currentData = state === "ready" && data?.detail.artifactId === artifactId
+  const currentData = state === "ready" && data?.context === context && data.detail.artifactId === artifactId
     && data.requestedSourceReferenceId === sourceReferenceId ? data : null;
   const chosenReference = useMemo(() => findChosenReference(currentData?.detail ?? null), [currentData]);
   const requestedDefinitionId = chosenReference?.definitionId?.trim() || null;
@@ -281,9 +286,9 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
       ) : null}
       <WorkflowEditorToolbarFrame
         className="wf-executable-toolbar"
-        identity={<StudioBreadcrumbs items={[{ href: "/workflows/executables", label: "Executables" }]} current={
-          <h2 className="wf-editor-title"><strong title={pageTitle}>{pageTitle}</strong></h2>
-        } renderLink={item => <StudioLink href={item.href}>{item.label}</StudioLink>} />}
+        identity={<><StudioShellBreadcrumbs items={[{ href: "/workflows/executables", label: "Executables" }]} current={pageTitle}
+          renderLink={item => <StudioLink href={item.href}>{item.label}</StudioLink>} />
+          <h2 className="wf-editor-title"><strong title={pageTitle}>{pageTitle}</strong></h2></>}
         metadata={chosenReference ? <span className="wf-executable-header-meta">{formatExecutableSourceKind(chosenReference.sourceKind)} · {formatReferenceScope(chosenReference.scope)}</span> : null}
         actions={<>
           <StudioButton type="button" size="sm" aria-label="Refresh executable" title="Refresh executable" onClick={() => void load()}><RotateCcw size={14} /> Refresh</StudioButton>
@@ -308,10 +313,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, weaver, runI
           ) : null}
         </>}
       />
-      {runError ? <WfErrorCard message={runError} title="The executable could not be run" /> : null}
+      {runError ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} description={runError || "Please try again, or check that the Elsa server is reachable."} title="The executable could not be run" /> : null}
       {runStatus ? <ExecutableRunStatusLine status={runStatus} run={lastRun} /> : null}
       {state === "loading" ? <div className="wf-empty">Loading executable...</div> : null}
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <StudioResultState tone="danger" icon={<AlertCircle size={18} aria-hidden />} title="Something went wrong" description={error || "Please try again, or check that the Elsa server is reachable."} /> : null}
       {currentData && graph ? (
         <GraphAuthoringWorkbench
           layout={sidePanelLayout}
@@ -541,10 +546,10 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
           <section className="wf-instance-section">
             <h4>Identity</h4>
             <dl className="wf-instance-meta">
-              <dt>Artifact ID</dt>
-              <dd><CopyableIdentifier label="Artifact ID" value={detail.artifactId} labelPlacement="external" /></dd>
-              <dt>Artifact hash</dt>
-              <dd><CopyableIdentifier label="Artifact hash" value={detail.artifactHash} labelPlacement="external" /></dd>
+              <dt>Executable ID</dt>
+              <dd><CopyableIdentifier label="Executable ID" value={detail.artifactId} labelPlacement="external" /></dd>
+              <dt>Executable hash</dt>
+              <dd><CopyableIdentifier label="Executable hash" value={detail.artifactHash} labelPlacement="external" /></dd>
               <dt>Root activity</dt>
               <dd className="wf-identity-cell">
                 <span>{rootActivityLabel}</span>
@@ -555,7 +560,7 @@ function WorkflowExecutablePanelContent({ activeTab, detail, activityCatalog, gr
               <dt>Resume targets</dt>
               <dd>{detail.resumeTargetCount}</dd>
               <dt>Created</dt>
-              <dd>{formatDate(detail.createdAt)}</dd>
+              <dd><StudioTimestamp value={detail.createdAt} format="date-time" fallback="—" /></dd>
             </dl>
           </section>
           <section className="wf-instance-section">

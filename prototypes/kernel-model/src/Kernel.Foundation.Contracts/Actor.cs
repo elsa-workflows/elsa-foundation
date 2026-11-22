@@ -37,9 +37,21 @@ public sealed record ChildFinished(ActorRef Child, ActorStatus Status, string? O
 
 public sealed record TimerSpec(string Id, string Kind, string? Payload, long Due);
 
-public sealed record JobSpec(string Key, string? Arguments);
+public sealed record JobSpec(string Key, string? Arguments)
+{
+    /// <summary>The original absolute deadline on the actor's clock, when the job has a timeout.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public long? Deadline { get; init; }
+}
 
 public sealed record SubscriptionSpec(string Key, string Wait, bool Keep);
+
+/// <summary>A supplied field is outside the foundation's representable metadata and message budget.</summary>
+public sealed class MetadataLimitExceeded(string? parameter, int limitBytes)
+    : ArgumentException($"The field must be representable in its text encoding and fit in {limitBytes:N0} bytes.", parameter)
+{
+    public int LimitBytes { get; } = limitBytes;
+}
 
 public sealed record RestorePlan(
     IReadOnlyList<TimerSpec> Timers,

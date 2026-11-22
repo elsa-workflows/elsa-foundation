@@ -108,7 +108,8 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
             "ContentJson",
             "PayloadJson",
             "MetadataJson",
-            "CleanupSafeFailureJson");
+            "CleanupSafeFailureJson",
+            "TimerHistoryOwnerJson");
         modelBuilder.IndexSchemaVersionStamps();
     }
 

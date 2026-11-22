@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { Save, SlidersHorizontal, Star } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
@@ -13,7 +13,6 @@ import {
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
 import { StudioLink } from "../StudioLink";
-import { useDialogFocus } from "./useDialogFocus";
 import "./workflowOrganization.css";
 
 type Support = Awaited<ReturnType<typeof workflowOrganizationSupport>>;
@@ -172,14 +171,14 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
     </div>
     {unknownView ? <p role="alert">This saved view is unavailable. Its URL filters are retained; choose an available view or save a new one.</p> : null}
     {modifiedView ? <p className="wf-library-help">The current filters differ from the saved view. Save to update it or choose the view again to restore its filters.</p> : null}
-    {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <button type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</button></p> : null}
-    {error ? <p role="alert">{error} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</button></p> : null}
+    {support.folders && location.includeDescendants && typeof location.folderSelection !== "object" ? <p role="alert">The subfolder filter requires a selected folder. <StudioButton type="button" onClick={() => change({ includeDescendants: false })}>Clear subfolder filter</StudioButton></p> : null}
+    {error ? <p role="alert">{error} <StudioButton type="button" onClick={() => setRefresh(value => value + 1)}>Retry organization</StudioButton></p> : null}
 
     {filtersOpen && (support.tags || support.folders || support.queryOptions) ? <div className="wf-library-filter-panel" id={filtersId}>
       {support.queryOptions ? <StudioField label="Publication"><select aria-label="Publication filter" value={location.publicationState ?? ""} onChange={event => change({ publicationState: event.target.value || undefined })}>
         <option value="">Any publication state</option><option value="published">Published</option>{location.publicationState && location.publicationState !== "published" ? <option value={location.publicationState}>Unsupported state: {location.publicationState}</option> : null}
       </select></StudioField> : null}
-      {support.tags && support.queryOptions ? <><form className="wf-library-control-row" onSubmit={searchTags}><StudioField label="Find tag"><input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></StudioField><button type="submit" disabled={catalogLoading}>Find tags</button>{catalogCursor ? <button type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</button> : null}</form>
+      {support.tags && support.queryOptions ? <><form className="wf-library-control-row" onSubmit={searchTags}><StudioField label="Find tag"><input aria-label="Find tags for filters" value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} /></StudioField><StudioButton type="submit" disabled={catalogLoading}>Find tags</StudioButton>{catalogCursor ? <StudioButton type="button" disabled={catalogLoading} onClick={() => void loadMoreTags()}>Load more tags</StudioButton> : null}</form>
       {catalogResultsReady && !catalogLoading && catalogTerm.trim() && !filterTags.length ? <p role="status">No workflow tags match “{catalogTerm}”. Search for another tag, or clear the search and find tags to browse available tags.</p> : null}
       <p className="wf-library-help">Tag filter choices use the results of this search. Clear the search and find tags to browse available tags.</p>
       {(location.tagFilters ?? []).map((filter, index) => {
@@ -200,11 +199,11 @@ export function WorkflowLibraryControls({ context, support, location, onChange, 
             {filter.valueIds?.filter(id => !tag?.values.some(value => value.id === id)).map(id => <span key={id} role="alert">Unavailable value: {id}</span>)}
           </fieldset> : null}
           {!tag && !catalogLoading ? <span role="alert">Load this tag or repair this filter; it remains applied.</span> : null}
-          <button type="button" aria-label={`Remove tag filter ${index + 1}`} onClick={() => change({ tagFilters: location.tagFilters?.filter((_, position) => position !== index) })}>Remove</button>
+          <StudioButton type="button" aria-label={`Remove tag filter ${index + 1}`} onClick={() => change({ tagFilters: location.tagFilters?.filter((_, position) => position !== index) })}>Remove</StudioButton>
         </div>;
       })}
-      <div className="wf-library-control-row"><button type="button" disabled={!filterTags.length || (location.tagFilters?.length ?? 0) >= 16} onClick={() => change({ tagFilters: [...(location.tagFilters ?? []), { tagId: filterTags[0].id, operator: "exists" }] })}>Add tag filter</button>
-        {activeCount ? <button type="button" onClick={() => change({ tagFilters: [], publicationState: undefined })}>Clear filters</button> : null}
+      <div className="wf-library-control-row"><StudioButton type="button" disabled={!filterTags.length || (location.tagFilters?.length ?? 0) >= 16} onClick={() => change({ tagFilters: [...(location.tagFilters ?? []), { tagId: filterTags[0].id, operator: "exists" }] })}>Add tag filter</StudioButton>
+        {activeCount ? <StudioButton type="button" onClick={() => change({ tagFilters: [], publicationState: undefined })}>Clear filters</StudioButton> : null}
       </div>
       <p className="wf-library-help">All tag conditions must match. Selected alternatives within a condition match any value, unless “Every selected value” is chosen.</p>
       </> : null}
@@ -218,13 +217,12 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
   context: StudioEndpointContext; location: WorkflowDefinitionBrowseLocation; existing?: WorkflowLibraryView;
   canShare: boolean; onClose(): void; onSaved(): void; onDeleted(): void;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  const titleId = useId();
+  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(existing?.name ?? "");
   const [shared, setShared] = useState(canShare && (existing?.shared ?? false));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useDialogFocus(ref, busy ? null : onClose);
+  const cannotSave = busy || !name.trim() || (shared && !canShare);
   const save = async (replace: boolean) => {
     setBusy(true); setError("");
     try { await saveWorkflowView(context, { name: name.trim(), query: workflowBrowseQuery(location), shared, columns: location.columns ?? [], ...(replace ? { revision: existing?.revision } : {}) }, replace ? existing?.id : undefined); onSaved(); }
@@ -238,28 +236,41 @@ function WorkflowViewDialog({ context, location, existing, canShare, onClose, on
     catch (caught) { setError(message(caught, "Couldn't delete this view.")); }
     finally { setBusy(false); }
   };
-  return <div className="wf-dialog-backdrop" role="presentation"><section ref={ref} className="wf-dialog wf-organization-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-    <form onSubmit={event => { event.preventDefault(); void save(false); }}>
-      <h3 id={titleId}>Save workflow view</h3>
-      <StudioField label="View name"><input aria-label="View name" required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} /></StudioField>
-      <label className="wf-library-check"><input type="checkbox" checked={shared} disabled={busy || !canShare} onChange={event => setShared(event.target.checked)} /> Share within this tenant</label>
-      {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
-      <p className="wf-library-help">Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access.</p>
-      {error ? <p role="alert">{error}</p> : null}
-      <StudioDialogFooter
-        className="wf-dialog-actions"
-        extra={<>
-          {error ? <StudioButton disabled={busy} onClick={onSaved}>Reload view list</StudioButton> : null}
-          {existing?.canDelete ? <StudioButton disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
-          {existing?.canEdit ? <StudioButton disabled={busy || !name.trim() || (shared && !canShare)} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
-        </>}
-        onCancel={onClose}
-        cancelDisabled={busy}
-        confirmLabel={busy ? "Saving…" : "Save as new view"}
-        confirmDisabled={busy || !name.trim() || (shared && !canShare)}
-      />
-    </form>
-  </section></div>;
+  return <StudioDialog
+    open
+    title="Save workflow view"
+    description="Saves the current folder, filters, sort and optional columns. Each reader sees only workflows they can access."
+    onClose={onClose}
+    initialFocusRef={nameRef}
+    dismissDisabled={busy}
+    dismissOnOutsideClick={false}
+    onSubmit={event => {
+      event.preventDefault();
+      if (!cannotSave) void save(false);
+    }}
+    footer={<StudioDialogFooter
+      leading={existing && <>
+        {existing?.canDelete ? <StudioButton size="sm" variant="danger" disabled={busy} onClick={() => void remove()}>Delete saved view</StudioButton> : null}
+        {existing?.canEdit ? <StudioButton size="sm" disabled={cannotSave} onClick={() => void save(true)}>Update saved view</StudioButton> : null}
+      </>}
+      onCancel={onClose}
+      cancelDisabled={busy}
+      confirmLabel={busy ? "Saving…" : "Save as new view"}
+      confirmDisabled={cannotSave}
+    />}
+  >
+    <StudioField label="View name">
+      <input ref={nameRef} required maxLength={200} value={name} disabled={busy} onChange={event => setName(event.target.value)} />
+    </StudioField>
+    <label className="wf-library-check">
+      <input type="checkbox" checked={shared} disabled={busy || !canShare} onChange={event => setShared(event.target.checked)} />
+      Share within this tenant
+    </label>
+    {!canShare ? <p className="wf-library-help">You can save private views. Sharing requires additional permission.</p> : null}
+    {error ? <StudioAlert tone="danger">
+      {error}{" "}<StudioButton size="sm" disabled={busy} onClick={onSaved}>Reload view list</StudioButton>
+    </StudioAlert> : null}
+  </StudioDialog>;
 }
 
 function mergeTags(current: WorkflowTag[], next: WorkflowTag[]) {

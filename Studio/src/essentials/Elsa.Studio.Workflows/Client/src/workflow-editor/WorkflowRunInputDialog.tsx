@@ -1,5 +1,5 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
-import { Component, useEffect, useId, useRef, useState, type ErrorInfo, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
+import { Component, useId, useRef, useState, type ErrorInfo, type FormEvent, type ReactNode } from "react";
 import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowInput } from "../workflowTypes";
 import { formatArgumentType } from "../workflowReferenceAuthoring";
@@ -18,17 +18,10 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
   onSubmit(values: WorkflowRunInputValues): void;
   onCancel(): void;
 }) {
-  const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
+  const firstInput = useRef<HTMLElement | null>(null);
   const [drafts, setDrafts] = useState<WorkflowRunInputDrafts>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failedEditorKeys, setFailedEditorKeys] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialogRef.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
-    return () => previouslyFocused?.focus();
-  }, []);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -47,70 +40,52 @@ export function WorkflowRunInputDialog({ inputs, editors = [], busy = false, onS
   };
 
   return (
-    <div className="wf-dialog-backdrop" role="presentation">
-      <section
-        ref={dialogRef}
-        className="wf-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onKeyDown={event => {
-          if (event.key === "Escape" && !busy) onCancel();
-          if (event.key === "Tab") trapFocus(event, dialogRef.current);
-        }}
-      >
-        <form onSubmit={submit} noValidate>
-          <div className="wf-dialog-heading">
-            <div>
-              <h3 id={titleId}>Run workflow</h3>
-              <p>Provide the workflow inputs for this run.</p>
-            </div>
-          </div>
-          <div className="wf-run-input-list">
-            {inputs.map(input => (
-              <WorkflowRunInputField
-                key={input.referenceKey}
-                input={input}
-                editors={failedEditorKeys.has(input.referenceKey) ? [] : editors}
-                value={ownValue(drafts, input.referenceKey) ?? ""}
-                error={ownValue(errors, input.referenceKey)}
-                disabled={busy}
-                onEditorFailure={() => {
-                  const label = input.displayName || input.name;
-                  setFailedEditorKeys(current => new Set(current).add(input.referenceKey));
-                  setErrors(current => ({ ...current, [input.referenceKey]: `The ${label} editor failed. Enter a JSON value instead.` }));
-                }}
-                onChange={value => {
-                  setDrafts(current => ({ ...current, [input.referenceKey]: value }));
-                  setErrors(current => {
-                    if (!ownValue(current, input.referenceKey)) return current;
-                    const next = { ...current };
-                    delete next[input.referenceKey];
-                    return next;
-                  });
-                }}
-                onOmit={Object.prototype.hasOwnProperty.call(drafts, input.referenceKey) ? () => {
-                  setDrafts(current => {
-                    const next = { ...current };
-                    delete next[input.referenceKey];
-                    return next;
-                  });
-                  setErrors(current => {
-                    const next = { ...current };
-                    delete next[input.referenceKey];
-                    return next;
-                  });
-                } : undefined}
-              />
-            ))}
-          </div>
-          <div className="wf-dialog-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
-            <button type="submit" disabled={busy}>{busy ? "Starting..." : "Run workflow"}</button>
-          </div>
-        </form>
-      </section>
-    </div>
+    <StudioDialog open title="Run workflow" description="Provide the workflow inputs for this run."
+      onClose={onCancel} initialFocusRef={firstInput} dismissDisabled={busy} dismissOnOutsideClick={false}
+      noValidate onSubmit={submit}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={busy} confirmDisabled={busy}
+        confirmLabel={busy ? "Starting…" : "Run workflow"} />}>
+      <div className="wf-run-input-list" ref={element => {
+        firstInput.current = element?.querySelector<HTMLElement>("input, select, textarea, button") ?? null;
+      }}>
+        {inputs.map(input => (
+          <WorkflowRunInputField
+            key={input.referenceKey}
+            input={input}
+            editors={failedEditorKeys.has(input.referenceKey) ? [] : editors}
+            value={ownValue(drafts, input.referenceKey) ?? ""}
+            error={ownValue(errors, input.referenceKey)}
+            disabled={busy}
+            onEditorFailure={() => {
+              const label = input.displayName || input.name;
+              setFailedEditorKeys(current => new Set(current).add(input.referenceKey));
+              setErrors(current => ({ ...current, [input.referenceKey]: `The ${label} editor failed. Enter a JSON value instead.` }));
+            }}
+            onChange={value => {
+              setDrafts(current => ({ ...current, [input.referenceKey]: value }));
+              setErrors(current => {
+                if (!ownValue(current, input.referenceKey)) return current;
+                const next = { ...current };
+                delete next[input.referenceKey];
+                return next;
+              });
+            }}
+            onOmit={Object.prototype.hasOwnProperty.call(drafts, input.referenceKey) ? () => {
+              setDrafts(current => {
+                const next = { ...current };
+                delete next[input.referenceKey];
+                return next;
+              });
+              setErrors(current => {
+                const next = { ...current };
+                delete next[input.referenceKey];
+                return next;
+              });
+            } : undefined}
+          />
+        ))}
+      </div>
+    </StudioDialog>
   );
 }
 
@@ -259,21 +234,4 @@ function renderInputControl(
 
 function ownValue<T>(record: Record<string, T>, key: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
-}
-
-function trapFocus(event: ReactKeyboardEvent, dialog: HTMLElement | null) {
-  if (!dialog) return;
-  const focusable = [...dialog.querySelectorAll<HTMLElement>(
-    "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])"
-  )];
-  if (focusable.length === 0) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
 }

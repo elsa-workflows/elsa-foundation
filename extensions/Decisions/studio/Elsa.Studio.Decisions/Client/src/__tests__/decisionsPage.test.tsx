@@ -8,7 +8,7 @@ import { EvaluationPanel } from "../EvaluationPanel";
 import { createNotificationController, studioNavigationRequestedEvent, studioWorkspaceTabRequestedEvent, type StudioWorkspaceTabRequest } from "@elsa-workflows/studio-sdk";
 import { editTable, newDecisionXml, parseTable } from "../decisionXml";
 import { decisionFailure, failureMessage } from "../decisionsApi";
-import { asset, button, click, render, select, stubApi, type } from "./helpers";
+import { beginDecision, asset, button, click, render, select, stubApi, type } from "./helpers";
 const disposals: Array<() => void> = [];
 afterEach(() => { disposals.splice(0).forEach(dispose => dispose()); });
 function mount(content: React.ReactNode) { const result = render(content); disposals.push(result.dispose); return result; }
@@ -45,6 +45,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       const inputs = Array.from(host.querySelectorAll<HTMLInputElement>(".decision-metadata input"));
@@ -67,6 +68,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const { host } = mount(<DecisionsPage api={stubApi()} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(host.querySelector(".decision-metadata input")).not.toBeNull());
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("New decision");
       await vi.waitFor(() => expect(frames).toHaveLength(1));
@@ -83,7 +85,8 @@ describe("Decisions Studio journeys", () => {
     const current = breadcrumb.querySelector<HTMLElement>('[aria-current="page"]')!;
     const link = breadcrumb.querySelector<HTMLAnchorElement>('a[href="/decisions"]')!;
     expect(title.textContent).toBe("Approval");
-    expect(current.contains(title)).toBe(true);
+    expect(current.textContent).toBe(title.textContent);
+    expect(current.contains(title)).toBe(false);
     expect(link.textContent).toBe("Decisions");
     await vi.waitFor(() => expect(document.activeElement).toBe(title));
 
@@ -147,6 +150,7 @@ describe("Decisions Studio journeys", () => {
     const animation = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => frames.push(callback));
     try {
       const api = stubApi(), { host, update } = mount(<DecisionsPage api={api} navigate={vi.fn()} isNew />);
+    await beginDecision();
       await vi.waitFor(() => expect(frames).toHaveLength(1));
       update(<DecisionsPage api={api} navigate={vi.fn()} assetId={asset.id} />);
       expect(host.querySelector("h1#decision-title")?.textContent).toBe("Loading decision");
@@ -164,6 +168,7 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(); api.backend.http.postJson.mockResolvedValue(asset as never);
     const navigate = (path: string) => update(<DecisionsPage api={api} navigate={navigate} assetId={new URL(path, "https://studio.test").searchParams.get("decision") ?? undefined} />);
     const { host, update } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Name")!, asset.name);
     click(button(host, "Save decision"));
@@ -172,8 +177,8 @@ describe("Decisions Studio journeys", () => {
     expect(decisionMenuItem(host, "Publish").disabled).toBe(false);
     api.backend.http.postJson.mockResolvedValue({ success: true, diagnostics: [] } as never);
     decisionAction(host, "Validate");
-    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid"));
-    expect(api.notifications.notify).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid") })));
+    expect(api.notifications.notify).toHaveBeenCalledTimes(2);
   });
 
   it("distinguishes a populated collection, an unmatched search and an empty collection", async () => {
@@ -203,12 +208,12 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.postJson.mockImplementation(async path => { if (path.endsWith("/recycle")) recycled = true; return { id: asset.id, revision: "r2" } as never; });
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/recycle"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
     expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Move decision to recycle bin", confirmLabel: "Move to recycle bin", tone: "danger" }));
-    await vi.waitFor(() => expect(host.textContent).toContain("Approval was moved to the recycle bin."));
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("Decision moved to recycle bin") })));
     expect(host.querySelector("tbody tr")).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
     expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision moved to recycle bin" });
@@ -217,21 +222,21 @@ describe("Decisions Studio journeys", () => {
     const api = stubApi(), { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
     api.dialogs.confirm.mockResolvedValue(false);
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     expect(api.backend.http.postJson).not.toHaveBeenCalled();
     expect(host.querySelector("tbody tr")).not.toBeNull();
 
     const readOnly = stubApi(["read"]), view = mount(<DecisionsPage api={readOnly} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(view.host.textContent).toContain("Purchase approval"));
-    expect(collectionMenuItem(view.host, "Approval", "Delete").disabled).toBe(true);
+    expect(collectionMenuItem(view.host, "Approval", "Move to recycle bin").disabled).toBe(true);
   });
   it("ignores a row-delete confirmation after leaving the active collection", async () => {
     const api = stubApi(); let confirmDelete!: (confirmed: boolean) => void;
     api.dialogs.confirm.mockImplementation(() => new Promise(resolve => { confirmDelete = resolve; }));
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalled());
     click(button(host, "Recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("Recycle bin is empty"));
@@ -244,7 +249,7 @@ describe("Decisions Studio journeys", () => {
     api.backend.http.postJson.mockRejectedValue(conflict);
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(collectionMenuItem(host, "Approval", "Delete"));
+    click(collectionMenuItem(host, "Approval", "Move to recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("The decision changed. Refresh and try again."));
     expect(host.querySelector("tbody tr")).not.toBeNull();
     expect(host.querySelector(".decision-conflict")).toBeNull();
@@ -281,12 +286,12 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionsPage api={api} navigate={vi.fn()} />);
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
     click(button(host, "Recycle bin"));
-    await vi.waitFor(() => expect(host.textContent).toContain("Recycled"));
-    click(button(host, "Restore"));
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Recycled decisions table"] time')?.getAttribute("datetime")).toBe(recycled.deletedAt));
+    click(collectionMenuItem(host, "Approval", "Restore"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/restore"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
-    expect(host.textContent).toContain("restored as an unpublished decision");
+    expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("restored as an unpublished decision") }));
   });
   it("requires a destructive confirmation before permanently purging a recycled decision", async () => {
     const api = stubApi(), recycled = { ...asset, deletedAt: "2026-11-20T12:00:00Z" };
@@ -295,7 +300,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("No decisions yet"));
     click(button(host, "Recycle bin"));
     await vi.waitFor(() => expect(host.textContent).toContain("Purchase approval"));
-    click(button(host, "Delete permanently"));
+    click(collectionMenuItem(host, "Approval", "Delete permanently"));
     await vi.waitFor(() => expect(api.backend.http.postJson).toHaveBeenCalledWith(
       expect.stringContaining("/decisions/approval/purge"), expect.objectContaining({ expectedRevision: asset.revision, operationId: expect.any(String) })
     ));
@@ -303,6 +308,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("creates a decision through the authenticated API and navigates after the write settles", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     api.backend.http.postJson.mockResolvedValue(asset as never);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector(".decision-draft-bar")?.textContent).toContain("Unsaved decision"); expect(host.querySelector(".decision-draft-bar")?.textContent).not.toContain("Saved draft");
@@ -313,9 +319,11 @@ describe("Decisions Studio journeys", () => {
     expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Decision saved" });
     expect(host.textContent).not.toContain("Decision saved");
   });
-  it.each(["description", "sensitivity"])("guards a new decision's %s-only edit before its name is entered", async field => {
+  it.each(["description", "sensitivity"])("guards a new decision's %s edit after its name is cleared", async field => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
+    type(host.querySelector<HTMLInputElement>('.decision-metadata input')!, "");
     if (field === "description") type(Array.from(host.querySelectorAll<HTMLInputElement>("input")).find(input => input.labels?.[0]?.textContent === "Description")!, "Only unsaved metadata");
     else click(host.querySelector<HTMLInputElement>('.decision-metadata input[type="checkbox"]')!);
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe); expect(probe.defaultPrevented).toBe(true);
@@ -445,7 +453,7 @@ describe("Decisions Studio journeys", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     expect(host.querySelector("h1#decision-title")?.textContent).toBe(asset.name);
     expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(asset.name);
-    expect(host.querySelector(".decision-draft-status")?.textContent).toBe("Version 1 · Read only");
+    expect(host.querySelector(".decision-editor-title .studio-status-chip")?.textContent).toBe("Version 1 · Read only");
     expect(host.querySelector('[role="grid"]')?.getAttribute("aria-readonly")).toBe("true");
     click(button(host, "Clone to draft"));
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval"));
@@ -459,11 +467,10 @@ describe("Decisions Studio journeys", () => {
     const { host } = mount(<DecisionsPage api={api} navigate={navigate} assetId={asset.id} />);
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     decisionAction(host, "Validate");
-    await vi.waitFor(() => expect(host.textContent).toContain("The saved draft is valid for the supported DMN profile."));
-    expect(api.notifications.notify).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(api.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ title: expect.stringContaining("The saved draft is valid for the supported DMN profile.") })));
     decisionAction(host, "Publish");
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith("/decisions?decision=approval&version=v1"));
-    expect(api.notifications.notify).toHaveBeenCalledOnce(); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
+    expect(api.notifications.notify).toHaveBeenCalledTimes(2); expect(api.notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Version 1 published" });
     expect(host.textContent).not.toContain("Version 1 published");
   });
   it("keeps failed saves inline and confirms only the successful retry", async () => {
@@ -624,6 +631,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("blocks dirty navigation probes without showing a dialog and confirms an actual leave", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     const probe = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "probe" } }); window.dispatchEvent(probe);
@@ -690,6 +698,7 @@ describe("Decisions Studio journeys", () => {
   });
   it("keeps a dirty workspace tab open on close intent without navigating to another screen", async () => {
     const api = stubApi(), navigate = vi.fn(), { host } = mount(<DecisionsPage api={api} navigate={navigate} isNew />);
+    await beginDecision();
     await vi.waitFor(() => expect(host.querySelector('[role="grid"]')).not.toBeNull());
     editGridCell(host, "Rule 1, input amount", "<= 1000");
     const close = new CustomEvent(studioNavigationRequestedEvent, { cancelable: true, detail: { fromPath: "/decisions?new=1", toPath: "/workflows", intent: "close" } }); window.dispatchEvent(close);

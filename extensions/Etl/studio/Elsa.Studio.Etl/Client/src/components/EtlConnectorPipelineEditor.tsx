@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioAlert, StudioField } from "@elsa-workflows/studio-ui";
 import React, { useId } from "react";
 import type { EtlColumn, EtlConnectorBindingSummary, EtlDiagnostic, EtlPipelineV2 } from "../etlTypes";
 import { EtlConnectorBudgetsEditor } from "./EtlConnectorBudgetsEditor";
@@ -49,7 +49,7 @@ export function EtlConnectorPipelineEditor({
       </ol>
 
       {bindingsLoading ? <p className="etl-notice" role="status" aria-live="polite">Loading current approved connector aliases. Existing pipeline selections remain available while they load.</p> : null}
-      {bindingsUnavailable ? <p className="etl-error" role="alert">Approved connector aliases could not be loaded. Retry loading bindings before choosing a replacement.</p> : null}
+      {bindingsUnavailable ? <StudioAlert tone="danger">Approved connector aliases could not be loaded. Retry loading bindings before choosing a replacement.</StudioAlert> : null}
       {diagnostics.length > 0 ? (
         <div className="etl-editor-diagnostics" role="status" aria-live="polite">
           <h3>Validation feedback</h3>

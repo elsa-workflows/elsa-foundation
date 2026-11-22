@@ -221,3 +221,7 @@ closed safe failure code and the original domain exception/cause passed to the l
 held-terminal processing and backlog-position settlement continue, preserving per-execution pump backoff.
 Partial deletion counts do not claim the failed run was fully purged, and its mailbox is not reaped.
 Requested cancellation and access drift still escape; no further work runs under a changed context.
+
+## Native compensation and child-control history
+
+`ActivityHistory` materializes native structural owner facts at the admitted continuation's actual return boundary. V5 compensation inputs stay before coalescing; v3/v4 retain their previous source envelope. `StructuralChildControlContribution` adds safe acceptance/application facts only when the final returned consumer decision commits the exact inbox/cursor contribution, including returned Fault and Cancel. Buffered acceptance creates no application; replayed acceptance creates no second receipt; a throw/disposal fault without committed inbox state creates neither fact. These use Core checkpoint/source contracts and do not add an execution or persistence boundary. See Runtime's [native owner contract](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#native-child-compensation-control-and-boundary-retry-history-3849).

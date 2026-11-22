@@ -50,9 +50,8 @@ public sealed partial class RuntimeModelMigrationTests
         await upgraded.Database.MigrateAsync();
         var history = await History(connection);
         Assert.Equal(previousHistory, history.Take(previousHistory.Length));
-        Assert.EndsWith("_StandaloneTriggers", history[previousHistory.Length]);
-        Assert.EndsWith("_RunHistoryTimeline", history[previousHistory.Length + 1]);
-        Assert.Equal(previousHistory.Length + 2, history.Length);
+        Assert.Equal(["StandaloneTriggers", "RunHistoryTimeline", "TimerHistoryOwnership"], history.Skip(previousHistory.Length).Select(id => id[(id.LastIndexOf('_') + 1)..]));
+        Assert.Equal(previousHistory.Length + 3, history.Length);
         var after = await LegacyRows(connection);
         foreach (var (table, bytes) in before) Assert.Equal(bytes, after[table]);
         Assert.Equal(before.Count + 12, after.Count);

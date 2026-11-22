@@ -37,7 +37,7 @@ export function register(api: ElsaStudioModuleApi) {
     const views = [["list", collection], ["create", `${collection}/new`], ["detail", `${collection}/:resourceId`]] as const;
     const routes = kind === "dashboard" ? [["list", collection], ["create", `${collection}/new`], ["edit", `${collection}/:resourceId/edit`], ["detail", `${collection}/:resourceId`]] as const : views;
     for (const [view, path] of routes) {
-      api.routes.add({ id: `saved-${kind}:${view}`, label: view === "list" ? `${kind === "dashboard" ? "Dashboards" : "Questions"}` : view === "create" ? `Create ${kind}` : view === "edit" ? `Edit ${kind}` : `Saved ${kind}`, path, requiresBackend,
+      api.routes.add({ id: `saved-${kind}:${view}`, label: view === "list" ? `${kind === "dashboard" ? "Dashboards" : "Questions"}` : view === "create" ? `New ${kind}` : view === "edit" ? `Edit ${kind}` : `Saved ${kind}`, path, requiresBackend,
         workspace: view === "detail" || view === "edit" ? { resourceKey: location => { const segments = location.pathname.split("/").filter(Boolean); return `${kind}:${segments[segments.length - (view === "edit" ? 2 : 1)]}`; } } : undefined,
         component: ({ navigate }) => <Suspense fallback={<section role="status">Loading {kind}…</section>}><NamedDashboardsRoute api={api} kind={kind} view={view} authoring={dashboardAuthoring} navigate={navigate} /></Suspense>
       });

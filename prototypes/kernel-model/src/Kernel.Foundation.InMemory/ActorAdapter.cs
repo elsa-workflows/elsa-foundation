@@ -45,30 +45,90 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public bool Withholds(Durable.InstanceRow row, Durable.ITurnServices services)
     {
         var checkpoint = store.FoundationTurnHeader(row);
-        return checkpoint.Park is not null || actor.Withholds(Header(checkpoint));
+        if (row.ParkRecovery is not null)
+            return row.Status == Durable.InstanceStatus.Running && RecoveryWithholds(Header(checkpoint));
+        return checkpoint.Park is not null || !row.ParkDiscarded && actor.Withholds(Header(checkpoint));
     }
 
     bool Durable.IActorType.SettlesWhileWithheld(Durable.InstanceRow row, Durable.Delivery delivery) =>
-        (delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null) &&
-        store.FoundationTurnHeader(row).Park is null;
+        row.ParkRecovery is null && store.FoundationTurnHeader(row).Park is not null
+            ? !delivery.Message.IsControl
+            : SettlesEndedChildNotice(row, delivery.Message) ||
+                delivery.Message.Kind == Durable.Kinds.JobDeadline || delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null;
+
+    private static bool SettlesEndedChildNotice(Durable.InstanceRow? row, Durable.Message message) =>
+        message.Kind == Contract.Kinds.ChildFinished && row is
+            { EndedDuringParkRecovery: true, Status: not Durable.InstanceStatus.Running, ParkRecovery: null, ParkDiscarded: false };
+
+    private static bool CapturesParkArrival(Durable.Delivery delivery) => !delivery.Message.IsControl && !delivery.IsWorkerJobCompletion;
 
     public bool SingleMessage(Durable.Message message) => message.Kind is Contract.Kinds.ChildFinished or Durable.Kinds.JobDeadline;
 
     public bool SelectsAlone(string? model, Durable.InstanceRow? row, Durable.Delivery delivery) =>
+        SettlesEndedChildNotice(row, delivery.Message) ||
         !delivery.Held && (SingleMessage(delivery.Message) || delivery.Message.ReplyTo is not null ||
-            delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null);
+            delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || IsParked(row)));
+
+    private bool IsParked(Durable.InstanceRow? row) => row is { Status: Durable.InstanceStatus.Faulted, ParkRecovery: null } &&
+        store.FoundationTurnHeader(row).Park is not null;
 
     public Durable.TurnOutcome? Command(Durable.TurnInput input)
     {
         var delivery = input.Taken[input.From];
         var message = delivery.Message;
-        if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
+        if (input.Row is null && input.Spec is { } spec && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(input.Actor, null, input.Taken, "StartHeaderTooLarge");
+        if (message.Kind == Durable.Kinds.ParkExpiry)
+            return ExpirePark(input);
+        if (message.Kind == Durable.Kinds.Drain)
+            return input.Row?.ParkRecovery is null ? ContinueDiscard(input) : ContinueRecover(input);
+        if (input.Row is { ParkDiscard: not null } draining)
+            return Durable.CreationProtocol.Refuse(input.Actor, draining, input.Taken, "ResolutionOpen");
+        if (input.Row is { ParkRecovery: not null } recovering &&
+            message.Kind is Contract.Kinds.Recover or Contract.Kinds.Discard or Contract.Kinds.Delete or Contract.Kinds.Terminate)
+            return Durable.CreationProtocol.Refuse(input.Actor, recovering, input.Taken, "ResolutionOpen");
+        if (message.Kind == Contract.Kinds.Discard && message.Operator is not null)
+            return OpenDiscard(input);
+        if (message.Kind == Contract.Kinds.Recover && message.Operator is not null)
+            return OpenRecover(input);
+        if (input.Row is { } terminalParent && SettlesEndedChildNotice(terminalParent, message))
+        {
+            if (!IsChildNotice(terminalParent, message) || message.Payload is null)
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            try
+            {
+                if (message.Read<Completion>() is not { Final: true })
+                    return new(input.Actor) { Consumed = [.. input.Taken], Status = terminalParent.Status };
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return Durable.CreationProtocol.Refuse(input.Actor, terminalParent, input.Taken, "InvalidChildCompletion");
+            }
+            var children = Durable.ChildRegistry.Read(terminalParent.Children);
+            children.Remove(new(message.Sender!, message.SenderCreation));
+            return ParkCheckpoint(input, terminalParent, terminalParent with { Children = Durable.ChildRegistry.Write(children) });
+        }
+        if (input.Row is { ParkRecovery: not null, Status: not Durable.InstanceStatus.Running } endedDuringRecovery && !message.IsControl)
+            return Durable.CreationProtocol.Refuse(input.Actor, endedDuringRecovery, input.Taken, "Ended");
+        if (input.Row is { ParkDiscarded: true } discarded && !message.IsControl)
+            return Durable.CreationProtocol.Refuse(input.Actor, discarded, input.Taken, "Ended");
+        var parked = IsParked(input.Row);
+        if (parked && CapturesParkArrival(delivery) &&
+            input.Taken.All(item => item.Attempts < input.MaxAttempts || item.Message.Kind == Durable.Kinds.JobFinished))
+        {
+            var checkpoint = input.Row!;
+            var revision = checked(checkpoint.Revision + 1);
+            return new(input.Actor)
+            {
+                Expected = checkpoint.Revision, Row = checkpoint with { Revision = revision }, Revision = revision, Status = checkpoint.Status,
+                Consumed = [.. input.Taken], FoundationKeep = Durable.ParkKeepReason.Arrived
+            };
+        }
         if (message.Kind == Durable.Kinds.JobDeadline)
             return TimeoutJob(input, message);
-        if (delivery.IsWorkerJobCompletion && delivery.JobDeadline is not null && input.Row is { } completedRow &&
+        if (delivery.IsWorkerJobCompletion && (delivery.JobDeadline is not null || parked) && input.Row is { } completedRow &&
             delivery.Original?.Read<Durable.JobTicket>() is { } ticket)
-            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), ticket.Timer, cancel: false);
+            return SettleJob(input, completedRow, message.Read<Durable.JobFinished>(), message.JobGeneration, ticket.Timer, cancel: false, keepCheckpoint: parked);
         if (message.Operator is { Selection: { } selection } && input.Row is { } selected)
         {
             var identity = store.FoundationIdentity(selected.Id, selected.Creation);
@@ -118,28 +178,37 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
             message.Sender != row.Id || message.SenderCreation != row.Creation)
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row?.Status };
         var key = message.Read<Durable.JobDeadline>().Key;
-        var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key);
-        if (ticket is null && input.VolatileMessage(Durable.InboxKey.Ticket(row.Id, key, row.Creation)) is { Kind: Durable.Kinds.Job } local)
+        if (Durable.JobRegistry.Generation(row, key) is not { } generation)
+            return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
+        var (ticket, attempts) = store.FoundationJob(row.Id, row.Creation, key, generation);
+        if (ticket is null && input.VolatileMessage(Durable.InboxKey.Ticket(row.Id, key, row.Creation, generation)) is { Kind: Durable.Kinds.Job } local)
             ticket = local.Read<Durable.JobTicket>();
         if (ticket is null || ticket.Timer != message.Id || ticket.Deadline != message.Due || attempts >= input.MaxAttempts)
             return new(input.Actor) { Consumed = [.. input.Taken], Status = row.Status };
 
-        return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), null, cancel: true);
+        return SettleJob(input, row, new Durable.JobFinished(key, null, "timeout"), generation, null, cancel: true);
     }
 
     private Durable.TurnOutcome SettleJob(Durable.TurnInput input, Durable.InstanceRow row, Durable.JobFinished result,
-        string? timer, bool cancel)
+        long generation, string? timer, bool cancel, bool keepCheckpoint = false)
     {
-        var turn = new Durable.DurableTurn(input);
+        var turn = new Durable.DurableTurn(input, foundation: true);
         if (cancel) turn.CancelJob(result.Key);
         else if (timer is not null && (store.HasStoredJobDeadline(row.Id, row.Creation, timer) ||
             input.VolatileMessage(Durable.InboxKey.Issued(timer)) is { Kind: Durable.Kinds.JobDeadline })) turn.Recall(timer);
-        turn.ReportFoundationJobResult(result);
+        turn.ReportFoundationJobResult(result, generation);
         // The logical job remains pending until the actor applies or cancels this recorded result.
         var checkpoint = row with { Revision = turn.Revision };
         var outcome = turn.Outcome(row.Status);
         outcome.FoundationHeader = row.FoundationInlineHeader;
-        return turn.Seal(outcome, checkpoint, input.State, PendingJournal(input.Pending));
+        turn.Seal(outcome, checkpoint, input.State, PendingJournal(input.Pending));
+        if (keepCheckpoint)
+        {
+            // A parked job's conversion only replaces its counted ticket. A later Park arrival consumes the result.
+            outcome.Row = null;
+            outcome.Expected = null;
+        }
+        return outcome;
     }
 
     private static bool IsChildNotice(Durable.InstanceRow? parent, Durable.Message message) =>
@@ -169,6 +238,10 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
                 Labels = outcome.FoundationHeader?.Labels ?? header.Labels
             };
             ValidateTerminalEnvelope(nextRow, nextHeader);
+            if (nextRow.ParkCohort is { } cohort && (nextRow.Status != Durable.InstanceStatus.Running ||
+                store.FirstUnheldRecoveryInput(nextRow, cohort, key =>
+                    outcome.Consumed.Exists(input => input.Message.InboxKey == key) || outcome.Cancelled.Contains(key)) is null))
+                outcome.Row = nextRow with { ParkCohort = null };
             if (nextRow.Status == Durable.InstanceStatus.Running && outcome.FoundationHeader is not null)
                 outcome.FoundationWithholds = actor.Withholds(nextHeader);
         }
@@ -180,7 +253,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         var growth = row.Status == Durable.InstanceStatus.Running ? actor.TerminalGrowth(header, row.State) : 0;
         // This is the built-in in-memory encoding. Keep enough space for the terminal registry even when the live row is smaller.
         var children = row.Children is null ? 0 : Durable.ChildRegistry.Read(row.Children).Count;
-        var jobs = row.Jobs is null ? 0 : Durable.DurableKeyJson.ReadKeys(row.Jobs).Count;
+        var jobs = Durable.JobRegistry.Read(row.Jobs).Count;
         var registryBytes = Math.Max(Bytes(row.Children), children * (long)TerminalChildBytes)
             + Math.Max(Bytes(row.Jobs), jobs * (long)TerminalJobBytes);
         var headerBytes = row.Status == Durable.InstanceStatus.Running ? HeaderLimits.VariableHeaderReserve
@@ -194,7 +267,8 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     }
 
     private static Durable.InboxKey AmbientDelivery(Durable.Message message) => message.EventMatch is { } match
-        ? new(message.Target.Id, Durable.InboxKey.EventDeliveryScope, match)
+        ? new(message.Target.Id, Durable.InboxKey.EventDeliveryScope,
+            Durable.FoundationEventDelivery.HasDigest(message) ? message.EventStartAmbientKey ?? message.Id : match)
         : message.InboxKey;
 
     public ValueTask<object?> ExecuteJobAsync(string type, Durable.IJob job, CancellationToken cancellationToken)
@@ -212,7 +286,7 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
     public Durable.TurnOutcome Park(Durable.InstanceRow? row, string address,
         IReadOnlyList<Durable.Delivery> taken, Durable.StartSpec? spec, string error, object? pending)
     {
-        if (row is null && spec is not null && !HeaderLimits.FitsStart(spec.Model, spec.Definition))
+        if (row is null && spec is not null && !HeaderLimits.FitsStart(spec.Model, spec.Definition, spec.Input))
             return Durable.CreationProtocol.Refuse(address, null, taken, "StartHeaderTooLarge");
 
         var result = new Durable.TurnOutcome(address) { Expected = row?.Revision, Spec = spec, Consumed = [.. taken] };
@@ -227,16 +301,27 @@ internal sealed partial class ActorAdapter(Durable.InMemoryStore store, Contract
         {
             Status = running ? Durable.InstanceStatus.Faulted : next.Status,
             Fault = running ? BoundFaultText(error) : next.Fault,
-            Revision = checked(next.Revision + 1)
+            Revision = checked(next.Revision + 1),
+            ParkRecovery = null,
+            ParkCohort = null
         };
         result.Row = next;
         result.Status = next.Status;
         result.Revision = next.Revision;
         result.Unsubscribe = true;
+        if (running || row is not null && store.FoundationTurnHeader(row).Park is not null)
+            result.FoundationKeep = Durable.ParkKeepReason.Consumed;
         result.Journal = pending is List<object> entries
             ? Durable.Json.Write((object[])[.. entries, "parked"])
             : Durable.Json.Write(new[] { "parked" });
         result.FoundationHeader = next.FoundationInlineHeader ?? (row is null ? InitialHeader(next.Definition) : null);
+        if (row?.ParkRecovery is { } recovery)
+        {
+            result.Cancelled.Add(recovery.Control);
+            if (store.FoundationTurnHeader(row).Park is { } mark && store.FoundationExpiry(row) is { } expiry)
+                result.Sent.Add(Durable.ParkDrainEnvelope.For(next, mark).Issue(next, checked(recovery.Serial + 1), expiryAt: expiry.At));
+            return result;
+        }
         if (running && next.Parent is not null) result.Sent.Add(Notice(next, null, final: false));
         return result;
     }

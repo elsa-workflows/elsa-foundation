@@ -251,11 +251,11 @@ public sealed class CompensationScope : StructuralActivity,
         if (navigator.Steps.Count == 0)
         {
             var empty = CompensationScopeState.Initial with { Phase = CompensationScopePhase.Completed };
-            return ValueTask.FromResult(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), empty));
+            return ValueTask.FromResult(Stage(runtimeContext, RuntimeStructuralContinuation.Complete(), empty));
         }
 
         var state = ScheduleStep(runtimeContext, navigator, CompensationScopeState.Initial, schedulingActivityExecutionId: null);
-        return ValueTask.FromResult(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state));
+        return ValueTask.FromResult(Stage(runtimeContext, RuntimeStructuralContinuation.Defer, state));
     }
 
     public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
@@ -361,7 +361,7 @@ public sealed class CompensationScope : StructuralActivity,
         var continuation = notification.Code switch
         {
             Notifications.Register => OnHandOver(context, state, notification),
-            Notifications.Confirm => OnConfirm(state, navigator, notification),
+            Notifications.Confirm => OnConfirm(context, state, navigator, notification),
             Notifications.Compensate => OnCompensateRequested(context, navigator, state, notification),
             _ => null
         };
@@ -412,12 +412,12 @@ public sealed class CompensationScope : StructuralActivity,
             : journaled with { HandOversInProgress = [.. others, new CompensationHandOverProgress(handOver.OriginScope, batches)] };
 
         // In recovery the new entries are eligible: the next handler to run picks the newest (late result, FR-306).
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, journaled);
+        return Stage(runtimeContext, RuntimeStructuralContinuation.Defer, journaled);
     }
 
     // Confirms every entry still eligible, while the scope runs forward (FR-310). During recovery the scope decides
     // alone, so a Confirm then changes nothing (spec 258 research R11).
-    private static RuntimeStructuralContinuation? OnConfirm(CompensationScopeState state, CompensationScopeNavigator navigator, ActivityChildNotifiedContext notification)
+    private static RuntimeStructuralContinuation? OnConfirm(IRuntimeActivityExecutionContext runtimeContext, CompensationScopeState state, CompensationScopeNavigator navigator, ActivityChildNotifiedContext notification)
     {
         if (state.Phase != CompensationScopePhase.Running || navigator.StepIndexOfForward(notification.ViaChildExecutableNodeId) is null)
             return null;
@@ -427,7 +427,7 @@ public sealed class CompensationScope : StructuralActivity,
         if (state.Confirmations.Any(confirmation => StringComparer.Ordinal.Equals(confirmation.ActivityExecutionId, confirmingActivityExecutionId)))
             return null;
 
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, ConfirmEligible(state, confirmingActivityExecutionId));
+        return Stage(runtimeContext, RuntimeStructuralContinuation.Defer, ConfirmEligible(state, confirmingActivityExecutionId));
     }
 
     private static CompensationScopeState ConfirmEligible(CompensationScopeState state, string confirmingActivityExecutionId)
@@ -487,7 +487,7 @@ public sealed class CompensationScope : StructuralActivity,
         // does so at once and leaves the step to the next scope out, whose absorption of the fault cancels it, or to an
         // operator (research R11).
         if (NextEligible(navigator, compensating) is null && FinishFault(navigator, compensating) is { } fault)
-            return CompensationScopeStatePersister.Stage(
+            return Stage(runtimeContext,
                 RuntimeStructuralContinuation.Faulted(fault),
                 compensating with { Phase = CompensationScopePhase.Compensated });
 
@@ -545,7 +545,7 @@ public sealed class CompensationScope : StructuralActivity,
         };
         var notUndone = abandoned.Entries.Count(candidate => candidate.Status is
             CompensationEntryStatus.Registered or CompensationEntryStatus.Uncertain or CompensationEntryStatus.Failed or CompensationEntryStatus.Compensating);
-        return CompensationScopeStatePersister.Stage(
+        return Stage(runtimeContext,
             RuntimeStructuralContinuation.Faulted(AbandonedFault(runtimeContext.ExecutableNode.AuthoredActivityId, notUndone)),
             abandoned);
     }
@@ -631,7 +631,7 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
         {
             var finished = compensating with { Phase = CompensationScopePhase.Compensated };
-            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished);
+            return Stage(runtimeContext, RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished);
         }
 
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
@@ -656,7 +656,7 @@ public sealed class CompensationScope : StructuralActivity,
         var compensating = state with { Phase = CompensationScopePhase.Compensating, Cause = state.Cause ?? cause };
 
         if (NextEligible(navigator, compensating) is null && target is not null)
-            return CompensationScopeStatePersister.Stage(
+            return Stage(runtimeContext,
                 RuntimeStructuralContinuation.Faulted(CompensateRequestedFault(target)),
                 compensating with { Phase = CompensationScopePhase.Compensated });
 
@@ -697,7 +697,7 @@ public sealed class CompensationScope : StructuralActivity,
 
         var compensating = state with { Phase = CompensationScopePhase.Compensating };
         if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
-            return CompensationScopeStatePersister.Stage(
+            return Stage(runtimeContext,
                 RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)),
                 compensating with { Phase = CompensationScopePhase.Compensated });
 
@@ -742,7 +742,7 @@ public sealed class CompensationScope : StructuralActivity,
             $"The compensation of step '{entry.Step}' failed on all {MaxAttempts} attempts; an operator must retry, resolve or abandon it.",
             metadataForOperator,
             Decisions.Offer);
-        return CompensationScopeStatePersister.Stage(
+        return Stage(runtimeContext,
             RuntimeStructuralContinuation.Defer,
             Replace(state, failed) with { Phase = CompensationScopePhase.AwaitingIntervention });
     }
@@ -798,7 +798,7 @@ public sealed class CompensationScope : StructuralActivity,
         if (state.NextStepIndex < navigator.Steps.Count)
         {
             var next = ScheduleStep(runtimeContext, navigator, state, completedActivityExecutionId);
-            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, next);
+            return Stage(runtimeContext, RuntimeStructuralContinuation.Defer, next);
         }
 
         // Done. The runtime clears a completed scope's private state, so whatever stays compensable moves to the nearest
@@ -807,11 +807,11 @@ public sealed class CompensationScope : StructuralActivity,
         if (ConfirmOnComplete)
         {
             var confirmed = ConfirmEligible(state, scopeActivityExecutionId) with { Phase = CompensationScopePhase.Completed };
-            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), confirmed);
+            return Stage(runtimeContext, RuntimeStructuralContinuation.Complete(), confirmed);
         }
 
         HandOver(runtimeContext, navigator, state);
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), state with { Phase = CompensationScopePhase.Completed });
+        return Stage(runtimeContext, RuntimeStructuralContinuation.Complete(), state with { Phase = CompensationScopePhase.Completed });
     }
 
     // Sends the entries still eligible to the nearest enclosing scope, at most HandOverBatchSize per message, all in the
@@ -873,7 +873,7 @@ public sealed class CompensationScope : StructuralActivity,
             var continuation = FinishFault(navigator, state) is { } fault
                 ? RuntimeStructuralContinuation.Faulted(fault)
                 : RuntimeStructuralContinuation.Complete(CompensatedOutcome);
-            return CompensationScopeStatePersister.Stage(continuation, finished);
+            return Stage(runtimeContext, continuation, finished);
         }
 
         return ScheduleHandler(runtimeContext, navigator, state, next);
@@ -963,7 +963,7 @@ public sealed class CompensationScope : StructuralActivity,
                 new CompensationHandlerAttempt(CompensationAttemptResult.Running, notBefore: notBefore, delayClamped: wait is { Clamped: true } ? true : null)
             ]
         };
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, Replace(state, compensating));
+        return Stage(runtimeContext, RuntimeStructuralContinuation.Defer, Replace(state, compensating));
     }
 
     // Recovery undoes completed entries and uncertain entries that have a handler, newest first (spec 251 FR-207).
@@ -1077,7 +1077,7 @@ public sealed class CompensationScope : StructuralActivity,
             },
             Decisions.Offer);
         var waiting = entry with { InterventionIncidentId = incidentId };
-        return CompensationScopeStatePersister.Stage(
+        return Stage(runtimeContext,
             RuntimeStructuralContinuation.Defer,
             Replace(state, waiting) with { Phase = CompensationScopePhase.AwaitingIntervention });
     }
@@ -1215,6 +1215,14 @@ public sealed class CompensationScope : StructuralActivity,
 
     private static CompensationScopeNavigator Navigator(IRuntimeActivityExecutionContext runtimeContext) =>
         runtimeContext.ExecutableNode.GetOrAddRoutingStructure(CompensationScopeNavigator.From);
+
+    // The native scope owns both typed decisions. Capture uses the committed pre-decision state and
+    // this exact continuation, before its private document or intermediate transitions can be folded.
+    private static RuntimeStructuralContinuation Stage(IRuntimeActivityExecutionContext context,
+        RuntimeStructuralContinuation continuation, CompensationScopeState decided) =>
+        CompensationScopeStatePersister.Stage(continuation, decided).WithHistorySourceFacts(at =>
+            CompensationHistory.Facts(CompensationScopeStatePersister.Load(context.ActivityExecutionState) ?? CompensationScopeState.Initial,
+                decided, context.ActivityExecutionState.InvocationId, at));
 
     private static CompensationScopeState LoadState(IRuntimeActivityExecutionContext runtimeContext) =>
         CompensationScopeStatePersister.Load(runtimeContext.ActivityExecutionState)

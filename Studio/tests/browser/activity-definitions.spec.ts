@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"]) {
       await expect(page.getByRole("tab", { name: "Drafts", exact: true })).toHaveAttribute("aria-selected", "true");
       await page.getByRole("button", { name: "Open editor", exact: true }).click();
       await expect(page.getByLabel("Activity Graph designer")).toBeVisible();
-      await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+      await page.getByRole("link", { name: /^activity definitions$/i }).click();
       await expect(page.getByRole("row", { name: "Open Activity Definition Browser graph activity" })).toBeVisible();
     });
   }
@@ -271,14 +271,14 @@ for (const theme of ["light", "dark"]) {
       }));
       await page.setViewportSize({ width: viewport.width, height: 900 });
       await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
-      const header = page.locator(".ad-definition-header");
+      const header = page.locator(".ad-workbench .studio-page-header");
       await expect(header.getByRole("heading", { name: detail.definition.displayName })).toBeVisible();
       await expect(header.getByRole("button", { name: "Edit draft", exact: true })).toBeEnabled();
       await expect(header.locator(".ad-kicker")).toHaveCount(0);
       const geometry = await page.evaluate(() => {
         const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-        const header = bounds(".ad-definition-header"), heading = bounds("#activity-definition-title"),
-          actions = bounds(".ad-definition-header .ad-header-actions"), tabs = bounds(".ad-tabs");
+        const header = bounds(".ad-workbench .studio-page-header"), heading = bounds("#activity-definition-title"),
+          actions = bounds(".ad-workbench .studio-page-actions"), tabs = bounds('.ad-workbench [role="tablist"]');
         return { height: header.height, gap: tabs.top - header.bottom, titleCenter: heading.top + heading.height / 2,
           actionCenter: actions.top + actions.height / 2, actionsTop: actions.top, headingBottom: heading.bottom,
           overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
@@ -295,7 +295,7 @@ for (const theme of ["light", "dark"]) {
       await page.screenshot({ path: testInfo.outputPath(`header-${theme}-${viewport.width}.png`) });
       await page.getByText("Advanced", { exact: true }).click();
       await expect(page.getByText("Finance", { exact: true })).toBeVisible();
-      const back = header.getByRole("button", { name: "Activity Definitions", exact: true });
+      const back = page.getByRole("link", { name: "Activity definitions", exact: true });
       await back.focus();
       await back.press("Enter");
       await expect(page.getByRole("heading", { name: "Activity definitions", exact: true })).toBeVisible();
@@ -305,8 +305,8 @@ for (const theme of ["light", "dark"]) {
   test(`Activity Definition header preserves source-owned read-only controls (${theme})`, async ({ page }) => {
     await mockActivityDraftManagement(page, { sourceOwned: true });
     await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
-    const header = page.locator(".ad-definition-header");
-    await expect(header.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    const header = page.locator(".ad-workbench .studio-page-header");
+    await expect(header.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i })).toBeEnabled();
     await expect(header.locator(".ad-primary-action")).toHaveCount(0);
     await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
   });
@@ -488,7 +488,7 @@ test("Activity Definitions stays usable without viewport overflow at 360, 768, a
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/?mode=activity-definitions");
     await expect(page.getByRole("heading", { name: "Activity Definitions" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh activity definitions", exact: true })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   }
@@ -577,10 +577,10 @@ test("Activity Definitions restores each collection origin through real browser 
 
   await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
-  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await page.getByRole("link", { name: /^activity definitions$/i }).click();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
   const firstAppReturn = requests.length;
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(firstAppReturn).some(request => request.search === "first-origin" &&
     request.limit === "50" && request.cursor === firstCursor)).toBe(true);
   await expect(page).not.toHaveURL(/cursor=/);
@@ -591,7 +591,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await expect.poll(() => requests.some(request => request.search === "second-origin" && request.cursor === secondCursor)).toBe(true);
   await page.getByRole("row", { name: "Open Activity Definition Invoice evaluator" }).click();
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
-  await page.getByRole("button", { name: "Activity Definitions", exact: true }).click();
+  await page.getByRole("link", { name: /^activity definitions$/i }).click();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
 
   let requestStart = requests.length;
@@ -599,7 +599,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
   await page.goBack();
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
     request.limit === "50" && request.cursor === secondCursor)).toBe(true);
 
@@ -609,7 +609,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goBack();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("first-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "first-origin" &&
     request.limit === "50" && request.cursor === firstCursor)).toBe(true);
 
@@ -619,7 +619,7 @@ test("Activity Definitions restores each collection origin through real browser 
   await page.goForward();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("second-origin");
   await expect(page.getByText("Page 2", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i }).click();
   await expect.poll(() => requests.slice(requestStart).some(request => request.search === "second-origin" &&
     request.limit === "50" && request.cursor === secondCursor)).toBe(true);
 
@@ -722,7 +722,7 @@ test("Activity Definitions retains confirmed rows when refresh fails and keeps e
   try {
     await page.goto("/?mode=activity-definitions");
     await expect(page.getByText("Invoice evaluator")).toBeVisible();
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     const initialPresentation = await refresh.evaluate(button => {
       const style = getComputedStyle(button);
       const bounds = button.getBoundingClientRect();
@@ -787,7 +787,7 @@ test("Activity Definition search keeps result positions stable while requests ar
 
     await search.fill("missing");
     await missingRequestStarted;
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     await expect(refresh).toBeEnabled();
     await expect(refresh).not.toHaveAttribute("aria-busy", "true");
     await refresh.click();
@@ -861,8 +861,8 @@ for (const width of [1440, 390]) {
     await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions");
 
     const breadcrumbs = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
-    await expect(page.getByRole("link", { name: "Back to designer", exact: true })).toHaveCount(0);
-    await expect(breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true })).toHaveAttribute("href", "/workflows/activity-definitions");
+    await expect(page.getByRole("link", { name: "Designer", exact: true })).toHaveCount(0);
+    await expect(breadcrumbs.getByRole("link", { name: /^activity definitions$/i })).toHaveAttribute("href", "/workflows/activity-definitions");
     await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("Invoice evaluator");
     const versionRow = page.getByRole("button", { name: /1\.0\.0/ });
     await expect(versionRow).toContainText("Active");
@@ -876,7 +876,7 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/version=version-1/);
     await expect(versionRow).toHaveAttribute("aria-expanded", "true");
     const selected = page.getByLabel("Selected exact version");
-    await expect(selected.getByText("Immutable public contract")).toBeVisible();
+    await expect(selected.getByText("Published inputs, outputs and outcomes")).toBeVisible();
     const versionDetails = selected.locator("details.ad-version-details");
     await expect(versionDetails).toHaveJSProperty("open", false);
     await versionDetails.locator(":scope > summary").focus();
@@ -888,7 +888,7 @@ for (const width of [1440, 390]) {
     await page.keyboard.press("Enter");
     await expect(versionRow).toHaveAttribute("aria-expanded", "false");
     await expect(page).not.toHaveURL(/version=version-1/);
-    await breadcrumbs.getByRole("link", { name: "Activity Definitions", exact: true }).click();
+    await breadcrumbs.getByRole("link", { name: /^activity definitions$/i }).click();
     await expect(page).toHaveURL(/\/workflows\/activity-definitions(?:\?|$)/);
     await expect(breadcrumbs).toHaveCount(0);
   });
@@ -905,7 +905,7 @@ test("Activity Definition draft History returns to the exact editor and preserve
   await expect(page).toHaveURL(/section=versions.*originDraft=activity-draft-browser.*returnPlan=plan-exact/);
 
   await page.reload();
-  const returnLink = page.getByRole("link", { name: "Back to designer", exact: true });
+  const returnLink = page.getByRole("link", { name: "Designer", exact: true });
   await expect(returnLink).toHaveAttribute("href", /section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
   await returnLink.click();
   await expect(page).toHaveURL(/section=editor.*draft=activity-draft-browser.*returnPlan=plan-exact/);
@@ -924,7 +924,7 @@ test("Activity Definition published-version History returns to its origin after 
   await expect(page).toHaveURL(/version=version-2.*originVersion=version-1/);
   await page.reload();
 
-  const backToDesigner = page.getByRole("link", { name: "Back to designer", exact: true });
+  const backToDesigner = page.getByRole("link", { name: "Designer", exact: true });
   await expect(backToDesigner).toHaveAttribute("href", /section=editor.*version=version-1/);
   await page.getByRole("tab", { name: "Drafts", exact: true }).click();
   await expect(page).toHaveURL(/section=drafts.*originVersion=version-1/);
@@ -1055,7 +1055,7 @@ test("draft management dialog traps and restores focus, supports keyboard clone 
   await clone.focus();
   await page.keyboard.press("Space");
   await expect(clone).toBeChecked();
-  const version = dialog.getByRole("combobox", { name: "Exact immutable version" });
+  const version = dialog.getByRole("combobox", { name: "Published version" });
   await expect(version.locator("option")).toHaveCount(2);
   await version.selectOption("version-1");
   await expect(version).toHaveValue("version-1");
@@ -1107,7 +1107,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("button", { name: "Close Test Run" })).toBeFocused();
   const modalLayout = await dialog.evaluate(element => {
-    const backdrop = element.parentElement!;
+    const backdrop = document.querySelector<HTMLElement>(".studio-dialog-overlay")!;
     const dialogBounds = element.getBoundingClientRect();
     const backdropBounds = backdrop.getBoundingClientRect();
     return {
@@ -1171,13 +1171,13 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   const artifactId = `wrapper-artifact-${"a".repeat(48)}-1`;
   const sourceReferenceId = `source-reference-${"b".repeat(48)}-1`;
   const testRunId = `activity-test-run-${"9".repeat(48)}-1`;
-  const evidence = dialog.getByRole("region", { name: "Recorded activity evidence" });
+  const evidence = dialog.getByRole("region", { name: "Recorded activity data" });
   await evidence.getByRole("tab", { name: "Outputs" }).click();
   await expect(evidence.getByText("recorded output")).toBeVisible();
   await dialog.getByText("Technical details", { exact: true }).click();
   const workflowLink = dialog.getByRole("link", { name: "Open Workflow execution" });
   const activityLink = dialog.getByRole("link", { name: "Open Outer activity execution" });
-  const artifactLink = dialog.getByRole("link", { name: "Open Wrapper artifact" });
+  const artifactLink = dialog.getByRole("link", { name: "Open Wrapper executable" });
   const sourceReferenceLink = dialog.getByRole("link", { name: "Open Source Reference" });
   await expect(workflowLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
   await expect(activityLink).toHaveAttribute("href", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}?activityExecutionId=${encodeURIComponent(activityExecutionId)}`);
@@ -1201,7 +1201,7 @@ test("Activity Definition Test Run opens as a modal and links compact evidence i
   await expect(page).toHaveURL(draftUrl);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
-  await dialog.getByRole("button", { name: "Open focused Runtime Evidence" }).click();
+  await dialog.getByRole("button", { name: "Open focused run data" }).click();
   await expect(page).toHaveURL(new RegExp(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}\\?activityExecutionId=${encodeURIComponent(activityExecutionId)}`));
 });
 
@@ -1242,7 +1242,7 @@ test("Activity Definition Test Run separates Runtime rejection and reconciles am
 
   state.testRunMode = "ambiguous";
   state.testRunReceiptMisses = 1;
-  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
+  await dialog.getByRole("button", { name: "Rerun as new run data" }).click();
   await expect(dialog.getByText(/dispatch response was ambiguous/i)).toBeVisible();
   await expect(dialog.getByText("Dispatch accepted")).toBeVisible({ timeout: 5_000 });
   await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
@@ -1267,9 +1267,9 @@ test("Activity Definition Test Run cancels active evidence and distinguishes ful
 
   state.testRunExpired = true;
   state.testRunStatuses = ["Completed"];
-  await dialog.getByRole("button", { name: "Rerun as new evidence" }).click();
-  await expect(dialog.getByText("Test Run evidence expired")).toBeVisible({ timeout: 5_000 });
-  await expect(dialog.getByText("Neither its Source Reference nor Runtime Evidence remains available.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Rerun as new run data" }).click();
+  await expect(dialog.getByText("Test Run data expired")).toBeVisible({ timeout: 5_000 });
+  await expect(dialog.getByText("Neither its Source Reference nor run data remains available.")).toBeVisible();
   await expect(dialog.getByRole("link")).toHaveCount(0);
   await expect(dialog.getByText("Immutable rerun history (2)")).toBeVisible();
   expect(state.testRunWrites).toBe(2);
@@ -1346,7 +1346,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
   await dialog.getByRole("button", { name: "Restore exact version" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByLabel("Selected exact version")).toContainText("Active");
+  await expect(page.locator('button[aria-controls="activity-version-details-version-2"]')).toContainText("Active");
   expect(state.recommendedVersionId).toBeNull();
 
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
@@ -1355,7 +1355,7 @@ test("Activity Definition lifecycle review moves recommendation, retires, clears
   await expect(dialog.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(dialog.getByText("DerivedProjection")).toBeVisible();
   await expect(dialog).toContainText("7/18/2026");
-  await expect(dialog).toContainText("Runtime Evidence are preserved");
+  await expect(dialog).toContainText(/run data are preserved/i);
   await dialog.getByRole("textbox", { name: /Type semantic version/ }).fill("1.0.0");
   await dialog.getByRole("textbox", { name: /Reason/ }).fill("Security response");
   await dialog.getByRole("checkbox", { name: /I reviewed/ }).check();
@@ -1475,7 +1475,7 @@ for (const theme of ["light", "dark"]) {
       await apply.click();
       await expect(apply).toBeDisabled();
       await member.getByRole("tab", { name: "Advanced", exact: true }).click();
-      await expect(member.getByRole("combobox", { name: "Durable storage driver", exact: true })).toBeVisible();
+      await expect(member.getByRole("combobox", { name: "Storage provider", exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath("advanced.png"), fullPage: true });
       await general.click();
       await expect(member.getByRole("textbox", { name: "Value", exact: true })).toHaveValue("A pending topic");
@@ -1490,12 +1490,12 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.goto("/?mode=activity-definitions");
   await expect(page.getByText("No designed activities yet")).toBeVisible();
 
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
   await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
   await selectSequenceComposition(page);
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
@@ -1532,10 +1532,10 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await selectSequenceStep(page, "Write line");
-  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   const removeConfirmation = page.getByRole("dialog");
-  await expect(removeConfirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
-  await expect(removeConfirmation.getByRole("button", { name: "Remove", exact: true })).toHaveAttribute("data-tone", "danger");
+  await expect(removeConfirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
+  await expect(removeConfirmation.getByRole("button", { name: "Delete", exact: true })).toHaveAttribute("data-tone", "danger");
   await removeConfirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await expectSavedRevision(page, 6);
@@ -1570,7 +1570,7 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await deleteSequenceStep.focus();
   await deleteSequenceStep.press("Enter");
   let confirmation = page.getByRole("dialog");
-  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
+  await expect(confirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
   await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await expectSavedRevision(page, 2);
@@ -1579,17 +1579,17 @@ test("Activity Definition activity removal uses Studio confirmations in the insp
   await deleteSequenceStep.focus();
   await deleteSequenceStep.press("Enter");
   confirmation = page.getByRole("dialog");
-  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(0);
   await expectSavedRevision(page, 3);
 
   await selectSequenceStep(page, "Write line");
-  const removeInspectorActivity = page.getByRole("button", { name: "Remove", exact: true });
+  const removeInspectorActivity = page.getByRole("button", { name: "Delete", exact: true });
   await removeInspectorActivity.focus();
   await removeInspectorActivity.press("Enter");
   confirmation = page.getByRole("dialog");
-  await expect(confirmation).toContainText("Remove this activity and any nested graph content? This change will autosave.");
-  await confirmation.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(confirmation).toContainText("Delete this activity and any nested graph content? This change will autosave.");
+  await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(0);
   await expectSavedRevision(page, 4);
   expect(state.draft.revision).toBe(4);
@@ -1601,8 +1601,8 @@ test("Activity Definition provider contract proposals require review and apply a
 
   await page.getByRole("tab", { name: /^Inputs \(\d+\)$/ }).click();
   const suggestions = page.locator("details.ad-interface-suggestions");
-  await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
-  await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
+  await expect(suggestions.getByText("Technical details", { exact: true }).first()).toBeAttached();
+  await expect(suggestions.getByText("Technical details", { exact: true })).toHaveCount(2);
   await page.locator("details.ad-interface-suggestions > summary").click();
   await expect(page.getByText("Add input Currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
@@ -1626,9 +1626,9 @@ test("Activity Definition provider contract proposals require review and apply a
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
   await expectSavedRevision(page, 1);
   await openAdvancedDetails(page);
 
@@ -1721,10 +1721,14 @@ for (const theme of ["light", "dark"]) {
       const state = await mockActivityDefinitionAuthoring(page);
       await page.setViewportSize({ width, height: 900 });
       await createBrowserActivity(page, theme);
-      await expect(page.locator(".ad-draft-heading h1")).toHaveCSS("font-size", "16px");
+      await expect(page.locator("#activity-draft-title")).toHaveCSS("font-size", "16px");
       await page.locator("details.ad-authoring-advanced > summary").click();
       const toolbar = page.locator(".ad-authoring-toolbar-actions");
-      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];
+      // The graph editor contributes its Blocks menu after the designer loads.
+      // Capture the complete toolbar before comparing publication and save statuses.
+      await expect(toolbar.getByRole("button", { name: "Blocks", exact: true })).toBeVisible();
+      // While publication review is modal these actions are inert, but their layout must remain stable.
+      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.locator("button").filter({ hasText: /^\s*Test Run\s*$/ }), toolbar.locator("button").filter({ hasText: /^\s*Save now\s*$/ })];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
@@ -1823,7 +1827,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   await createBrowserActivity(page);
   const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
   const changesRegion = publicationDialog.getByRole("region", { name: "Changes", exact: true });
-  const summarizedVersion = publicationDialog.locator(".ad-publication-summary").first().locator("dd").first();
+  const summarizedVersion = publicationDialog.locator("dt").filter({ hasText: /^Version$/ }).locator("+ dd");
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
@@ -1833,7 +1837,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
   await page.getByText("Review initial activity contents", { exact: true }).click();
   await expect(changesRegion).toBeVisible();
-  await page.locator(".ad-impact-group details summary").first().click();
+  await changesRegion.getByRole("button", { name: "Show exact values", exact: true }).first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
   const firstVersion = await openPublicationVersion(publicationDialog);
@@ -1871,9 +1875,9 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
 
   await page.getByRole("button", { name: "Review & publish" }).click();
-  await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(page.getByText("Compared with latest published version")).toBeVisible();
   await expect(summarizedVersion).toHaveText("2.1.0");
-  await publicationDialog.locator("summary").filter({ hasText: /^Changes$/ }).click();
+  await publicationDialog.getByRole("button", { name: "Changes", exact: true }).click();
   await expect(changesRegion).toBeVisible();
   const nextVersion = await openPublicationVersion(publicationDialog);
   await expect(nextVersion).toHaveValue("2.1.0");
@@ -1895,7 +1899,7 @@ test("Activity Definition publication keeps first and later recommendation seman
 });
 
 async function openPublicationVersion(dialog: Locator) {
-  await dialog.locator("summary").filter({ hasText: /^Version$/ }).click();
+  await dialog.getByRole("button", { name: "Version", exact: true }).click();
   return dialog.getByRole("textbox", { name: "Publication version" });
 }
 
@@ -1952,7 +1956,13 @@ test("reusable activity Run Overview stays readable with keyboard disclosures at
   await page.keyboard.press("Enter");
   await expect(technical).toHaveAttribute("open", "");
   await expect(technical.getByText("activity-def-browser", { exact: true })).toBeVisible();
-  await internals.getByRole("tab", { name: "Definition", exact: true }).click();
+  await internals.getByRole("tab", { name: "Steps", exact: true }).focus();
+  await page.keyboard.press("End");
+  const definitionTab = internals.getByRole("tab", { name: "Definition", exact: true });
+  await expect(definitionTab).toBeFocused();
+  await expect(internals.getByRole("tabpanel", { name: "Definition", exact: true })).toBeVisible();
+  await definitionTab.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("activity-boundary-tabs.png") });
   await expect(internals.getByRole("link", { name: "View activity definition" })).toBeVisible();
 
   const technicalWidth = await technical.evaluate(element => ({ client: element.clientWidth, scroll: element.scrollWidth }));
@@ -1973,7 +1983,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   const version = await openPublicationVersion(page.getByRole("dialog", { name: "Review & publish" }));
   await version.fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
-  await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Published Browser graph activity 2.0.0" })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
   const journey = await mockReusableBoundaryJourney(page);
@@ -2103,6 +2113,10 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   expect(rowGeometry.rowHeights.every(height => height === 88)).toBe(true);
   expect(rowGeometry.rowTops.slice(1).every((top, index) => top - rowGeometry.rowTops[index]! === 88)).toBe(true);
   expect(rowGeometry.overlappingRows).toBe(0);
+  // Return to the responsive inspector after exercising the fixed-width stress case.
+  await internals.evaluate(element => {
+    for (const property of ["width", "max-width", "box-sizing"]) (element as HTMLElement).style.removeProperty(property);
+  });
   await longRow.focus();
   await page.keyboard.press("ArrowDown");
   await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeFocused();
@@ -2249,7 +2263,9 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "valid";
   state.publishMode = "stale";
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
+  const readiness = page.getByRole("dialog", { name: "Review & publish" }).locator("dt").filter({ hasText: /^Readiness$/ }).locator("+ dd");
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toHaveText("Ready to publish");
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
   expect(state.publicationWrites).toBe(1);
@@ -3980,10 +3996,10 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
 
 async function createBrowserActivity(page: Page, theme = "light") {
   await page.goto(`/?mode=activity-definitions&theme=${theme}`);
-  await page.locator(".studio-page-header").getByRole("button", { name: "Create activity" }).click();
+  await page.locator(".studio-page-header").getByRole("button", { name: "New activity definition" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
-  await page.getByRole("button", { name: "Create definition" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
   await expectSavedRevision(page, 1, 15_000);
   await openAdvancedDetails(page);
 }
@@ -4048,6 +4064,7 @@ function authoringDraft(draftId: string, revision: number, payload: unknown) {
     },
     provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: `sha256:${revision}`, payload },
     layout: [] as unknown[],
+    activityPresentation: [] as unknown[],
     validation: null,
     createdAt: "2026-07-17T10:00:00Z",
     updatedAt: "2026-07-17T10:00:00Z",
@@ -4145,7 +4162,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
         rowTop: element.getBoundingClientRect().top
       }));
     });
-    await expect(header.getByRole("columnheader")).toHaveCount(6);
+    await expect(header.getByRole("columnheader")).toHaveText(["Activity", "Definition ID", "Provider", "Identifiers", "State", "Updated", "Actions"]);
     for (const column of alignment) {
       expect(column.leftGap).toBeLessThanOrEqual(1);
       expect(column.rowTopGap).toBeLessThanOrEqual(16);
@@ -4208,7 +4225,7 @@ for (const width of [320, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?mode=activity-definitions&theme=${theme}`);
     await expect(page.getByRole("heading", { name: "No designed activities yet", exact: true })).toBeVisible();
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    const refresh = page.getByRole("button", { name: /^Refresh(?: activity definitions?)?$/i });
     const tools = page.locator(".ad-tools-disclosure > summary");
     const advanced = page.locator(".ad-advanced-filters > summary");
     expect((await tools.boundingBox())!.height).toBe((await refresh.boundingBox())!.height);

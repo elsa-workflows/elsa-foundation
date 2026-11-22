@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <ProjectReference Include="../../../../../../../src/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="../../../../../../../src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../../src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="../../../../../../../src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../../src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="../../../../../../Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <Compile Include="../../../../../../Activities/Scheduling/Tests/DelayTestExecutable.cs" Link="DelayTestExecutable.cs" />
+  </ItemGroup>
+</Project>

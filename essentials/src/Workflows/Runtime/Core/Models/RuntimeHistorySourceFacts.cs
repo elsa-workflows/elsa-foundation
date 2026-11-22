@@ -81,11 +81,22 @@ public static class RuntimeHistorySourceFacts
         }).ToArray();
         return changed ? commit with { PostCommitIntents = intents, StateChanges = commit.StateChanges.WithPostCommitOutbox(outbox) } : commit;
 
+        // A native terminal child checkpoint owns the resume addressed to its parent. The exact
+        // admitted dispatch edge, terminal state and deterministic intent identity are indispensable.
+        bool OwnsIntent(RuntimePostCommitIntent intent) => intent.WorkflowExecutionId == commit.WorkflowExecutionId ||
+            intent.Kind == WorkflowDispatchLifecycle.ResumeParentIntentKind &&
+            commit.StateChanges.WorkflowExecution?.State is { } child && child.WorkflowExecutionId == commit.WorkflowExecutionId && child.Status.IsTerminal() &&
+            commit.StateChanges.WorkflowDispatches.Any(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+                change.State is { } dispatch && dispatch.ChildWorkflowExecutionId == commit.WorkflowExecutionId &&
+                dispatch.ParentWorkflowExecutionId == intent.WorkflowExecutionId && dispatch.ParentActivityExecutionId == intent.ActivityExecutionId &&
+                dispatch.Mode == WorkflowDispatchMode.WaitForCompletion && WorkflowDispatchLifecycle.IsTerminal(dispatch.Status) &&
+                new WorkflowDispatchIdentity(dispatch.ParentWorkflowExecutionId, dispatch.ParentActivityExecutionId).ParentResumeIntentId == intent.IntentId);
+
         RuntimePostCommitIntent Stamp(RuntimePostCommitIntent intent, out bool owned)
         {
             var cause = ownerFactory(intent); owned = cause is not null;
             if (cause is null) return intent;
-            if (intent.WorkflowExecutionId != commit.WorkflowExecutionId || cause.WorkflowExecutionId != commit.WorkflowExecutionId ||
+            if (!OwnsIntent(intent) || cause.WorkflowExecutionId != commit.WorkflowExecutionId ||
                 string.IsNullOrWhiteSpace(cause.HistoryEventId) || cause.DeliveryId != RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, intent.IntentId) ||
                 new[] { cause.HistoryEventId, cause.WorkflowExecutionId, cause.DeliveryId, cause.CommandId, cause.SchedulerWorkItemId }
                     .Any(value => value is not null && (string.IsNullOrWhiteSpace(value) || value.Length > 1024)))
@@ -102,7 +113,9 @@ public static class RuntimeHistorySourceFacts
         }
     }
 
-    public static bool IsFinalProfile(RuntimeHistoryCapturePolicy? policy) => policy is { PolicyId: "runtime-history-v3", Version: 3 };
+    public static bool IsFinalProfile(RuntimeHistoryCapturePolicy? policy) => policy is
+        { PolicyId: "runtime-history-v3", Version: 3 } or { PolicyId: "runtime-history-v4", Version: 4 } or
+        { PolicyId: "runtime-history-v5", Version: 5 };
     public static string EventName(RuntimeHistorySourceFactKind kind) => kind switch
     {
         RuntimeHistorySourceFactKind.IncidentCreated => "IncidentRecorded",

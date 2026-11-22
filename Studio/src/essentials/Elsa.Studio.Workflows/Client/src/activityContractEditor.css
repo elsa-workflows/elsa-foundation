@@ -268,7 +268,7 @@
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .04em;
 }
 
@@ -401,27 +401,9 @@
   line-height: 1.45;
 }
 
-.ad-contract-workbench-advanced {
-  border-top: 1px solid var(--studio-border);
-  padding-top: 12px;
-}
 
-.ad-contract-workbench-advanced > summary {
-  width: fit-content;
-  color: var(--studio-text-muted);
-  font-weight: 600;
-  cursor: pointer;
-}
 
-.ad-contract-workbench-advanced[open] > summary {
-  margin-bottom: 12px;
-}
 
-.ad-contract-workbench-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
 
 .ad-contract-workbench-classification {
   display: grid;
@@ -489,7 +471,6 @@
   }
 
   .ad-contract-workbench-member .ad-contract-fields,
-  .ad-contract-workbench-facts,
   .ad-contract-workbench-classification {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -527,9 +508,6 @@
 .ad-output-primary { display: grid; min-width: 0; gap: 20px; }
 .ad-output-primary.has-value-editor { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .ad-output-declaration { align-content: start; }
-.ad-output-disclosure { min-width: 0; padding-block: 12px; border-top: 1px solid var(--studio-border); }
-.ad-output-disclosure > summary { cursor: pointer; color: var(--studio-text-muted); font-weight: 600; }
-.ad-output-disclosure[open] > summary { margin-bottom: 16px; }
 .ad-output-value-source { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 12px; min-width: 0; border-left: 1px solid var(--studio-border); padding-left: 20px; }
 .ad-output-value-source > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .ad-output-value-source h4, .ad-output-value-source p { margin: 0; }

@@ -1,3 +1,4 @@
+import { timelineDiagnosticsJourney } from "./timelineDiagnosticsJourney";
 import { scopedExpressionReferencesJourney } from "./scopedExpressionReferencesJourney";
 import { activityValidationReportingJourney } from "./activityValidationReportingJourney";
 import { nativeBlockValidationJourney } from "./nativeBlockValidationJourney";
@@ -16,7 +17,11 @@ import { templateToastJourney } from "./templateToastJourney";
 import { executableDesignerJourney } from "./executableDesignerJourney";
 import { compactInputsJourney } from "./compactInputsJourney";
 import { executionNavigationJourney } from "./executionNavigationJourney";
+import { historyOccurrenceQualificationJourney } from "./historyOccurrenceQualificationJourney";
+import { nativeHistoryOwnersJourney } from "./nativeHistoryOwnersJourney";
+import { timerHistoryJourney } from "./timerHistoryJourney";
 import { timelineSelectionJourney } from "./timelineSelectionJourney";
+import { playbackTransportJourney, playbackSeekingJourney, playbackLiveWaitJourney, playbackCoverageJourney } from "./activityPlaybackJourney";
 import { writeFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { userTaskAuthoringJourney } from "./userTaskAuthoringJourney";
@@ -77,6 +82,15 @@ type CreatedWorkflow = { url: string; authorization?: string; id: string };
 const createdWorkflows = new WeakMap<Page, CreatedWorkflow[]>();
 const ownedCleanups = new WeakMap<Page, Array<() => Promise<void>>>();
 const designerDefinitions = new WeakMap<Page, string[]>();
+
+test("native child and compensation history navigation", async ({ page }, info) => nativeHistoryOwnersJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+
+test("durable timer history and bookmark resumption", async ({ page }, info) => timerHistoryJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+
+test("recorded activity playback transport", async ({ page }, info) => playbackTransportJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback ordinal seeking", async ({ page }, info) => playbackSeekingJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback live bounds and waits", async ({ page }, info) => playbackLiveWaitJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
+test("recorded activity playback coverage and access", async ({ page }, info) => playbackCoverageJourney(page, info, capture, cleanup => ownedCleanups.get(page)!.push(cleanup)));
 
 test("user tasks inbox and response", async ({ page }, info) => userTasksJourney(page, info, capture));
 test("native dashboard questions and sharing", async ({ page }, info) => nativeDashboardsJourney(page, info, capture));
@@ -252,7 +266,7 @@ test("feature filtering and settings dialogs", async ({ page }, info) => {
   await expect(settings).toBeHidden();
   await edit.click();
   await settings.getByLabel(/^Child-start maximum delivery attempts/).fill("5");
-  await settings.getByRole("button", { name: "Save draft", exact: true }).click();
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect(settings).toBeHidden();
   await edit.click();
   await expect(settings.getByLabel(/^Child-start maximum delivery attempts/)).toHaveValue("5");
@@ -274,10 +288,8 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("region", { name: "Connections management", exact: true }).getByRole("heading", { name: "Connections", exact: true })).toBeVisible();
   // A fresh run starts with no connections; later projects use the same disposable store and exercise search recovery.
   const search = page.getByRole("searchbox", { name: /search connections/i });
-  // The heading precedes the initial list/descriptor response; Enter cannot submit while Search is disabled.
-  await expect(page.getByRole("button", { name: "Search", exact: true })).toBeEnabled();
+  await expect(search).toBeVisible();
   await search.fill(`absent-${stamp}`);
-  await search.press("Enter");
   await expect(page.getByRole("button", { name: /clear search/i })).toBeVisible();
   await capture(page, info, "no-matches");
   await page.getByRole("button", { name: /clear search/i }).press("Enter");
@@ -285,13 +297,13 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("table", { name: "Connections", exact: true })).not.toHaveAttribute("aria-busy", "true");
   await capture(page, info, "connections-list");
   if (info.project.name === "desktop-light") {
-    await expect(page.getByRole("table", { name: "Connections", exact: true }).getByRole("button", { name: "Create connection", exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Connections", exact: true }).getByRole("button", { name: "New connection", exact: true })).toBeVisible();
   }
 
   await page.goto("/security/secrets");
   const secretName = `DbConnectionString-${stamp}`;
-  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
-  const secret = page.getByRole("region", { name: "Create secret", exact: true });
+  await page.getByRole("button", { name: "New secret", exact: true }).first().click();
+  const secret = page.getByRole("dialog", { name: "New secret", exact: true });
   const technicalName = secret.getByLabel("Technical name", { exact: true });
   await technicalName.fill(` ${secretName} `);
   await technicalName.press("Tab");
@@ -302,7 +314,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(secret).toBeHidden();
   await expect(page.locator(".studio-toast").filter({ hasText: "Secret created." })).toBeVisible();
   const secretHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: "Secret created." }));
-  await expect(page.locator(".secrets-notification")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   await capture(page, info, "secret-created-toast");
   // Secrets uses the lowest first-party modal layer, so the shared toast must stay below it too.
   const createdSecretRow = page.getByRole("row").filter({ hasText: secretName });
@@ -320,15 +332,15 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(integrations).toBeVisible();
   if (await integrations.getAttribute("aria-expanded") === "false") await integrations.press("Enter");
   await page.getByRole("link", { name: "Connections", exact: true }).press("Enter");
-  const openConnection = page.getByRole("button", { name: "Create connection", exact: true }).first();
+  const openConnection = page.getByRole("button", { name: "New connection", exact: true }).first();
   await expect(openConnection).toBeEnabled();
   await openConnection.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Create connection", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New connection", exact: true });
   const name = dialog.getByLabel("Name", { exact: true });
   await expect(name).toBeFocused();
   await name.fill("invalid name");
   await dialog.getByLabel("Auth scheme", { exact: true }).selectOption("api-key");
-  await dialog.getByLabel("Existing Secret for API key", { exact: true }).selectOption(secretName);
+  await dialog.getByLabel("Existing secret for API key", { exact: true }).selectOption(secretName);
   await dialog.getByLabel("Base URL", { exact: true }).fill("https://example.invalid");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(name).toHaveAttribute("aria-invalid", "true");
@@ -345,7 +357,7 @@ test("collections and connection creation", async ({ page }, info) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` })).toBeVisible();
   const connectionHold = await holdToastForPlacement(page, page.locator(".studio-toast").filter({ hasText: `Connection 'qa-${stamp}' created.` }));
-  await expect(page.locator(".connections-notice")).toHaveCount(0);
+  await expect(page.locator(".studio-alert-dismissible")).toHaveCount(0);
   const createdRow = page.getByRole("row").filter({ hasText: `qa-${stamp}` });
   await expect(createdRow).toBeVisible();
   const nameLink = createdRow.getByRole("button", { name: `qa-${stamp}`, exact: true });
@@ -353,7 +365,7 @@ test("collections and connection creation", async ({ page }, info) => {
   expect((await nameLink.boundingBox())!.width).toBeGreaterThan(100);
   expect((await createdRow.boundingBox())!.height).toBeLessThan(160);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Create connection", exact: true }).first()).toBeFocused();
+  await expect(page.getByRole("button", { name: "New connection", exact: true }).first()).toBeFocused();
   await capture(page, info, "completed");
   // A toast must not obscure the primary action or the shell chrome. Keyboard focus alone
   // cannot detect the pointer obstruction caused by the former top-right placement.
@@ -427,12 +439,12 @@ test("collections and connection creation", async ({ page }, info) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   await secretRow.getByRole("button", { name: `Copy technical name ${secretName}`, exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(secretName);
-  await secretRow.getByRole("button", { name: `Edit ${secretName}`, exact: true }).click();
+  await secretRow.locator(`a[data-secret-open="${secretName}"]`).click();
   const editor = page.getByRole("region", { name: "Edit secret", exact: true });
   await expect(editor.locator("code")).toHaveText(secretName);
   await capture(page, info, "secret-detail");
-  await editor.getByRole("button", { name: "Back to secrets", exact: true }).click();
-  await page.getByRole("button", { name: "Create secret", exact: true }).first().click();
+  await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Secrets", exact: true }).click();
+  await page.getByRole("button", { name: "New secret", exact: true }).first().click();
   await technicalName.fill(secretName.toUpperCase());
   await secret.getByLabel("Value", { exact: true }).fill("disposable-duplicate-value");
   await secret.getByRole("button", { name: "Create", exact: true }).click();
@@ -443,7 +455,7 @@ test("collections and connection creation", async ({ page }, info) => {
   // The failed duplicate leaves an unsaved draft, so leaving asks before discarding it.
   await page.getByRole("dialog", { name: "Discard secret edits?", exact: true }).getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(secret).toBeHidden();
-  await expect(page.getByRole("button", { name: "Create secret", exact: true }).first()).toBeFocused();
+  await expect(page.getByRole("button", { name: "New secret", exact: true }).first()).toBeFocused();
 
 });
 
@@ -585,15 +597,15 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("main").getByRole("heading", { name: "Workflow tags", exact: true })).toBeVisible();
   await capture(page, info, "tags-list");
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await page.getByRole("button", { name: "New tag", exact: true }).click();
   await expect(page).toHaveURL(/\/workflows\/tags\/new(?:\?|$)/);
   await page.reload();
   await expect(build).toHaveAttribute("aria-expanded", "true");
   await expect(navLink("Workflows")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("main").getByRole("heading", { name: "Create workflow tag", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "New workflow tag", exact: true })).toBeVisible();
   await capture(page, info, "tags-create");
   await page.getByRole("textbox", { name: "Tag name", exact: true }).fill(`navigation-${info.project.name}-${Date.now()}`);
-  await page.getByRole("button", { name: "Create tag", exact: true }).click();
+  await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("main").getByRole("heading", { name: "Edit workflow tag", exact: true })).toBeVisible();
   // A real saved tag bookmark must also reveal the group after a fresh document load.
   await page.reload();
@@ -656,10 +668,10 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   const settingsDocument = await page.evaluate(() => performance.timeOrigin);
   if (compactSettings) {
     const backendBefore = new URL(page.url()).searchParams.get("backend");
-    await settingsSelect.selectOption({ label: "Runtime evidence settings" });
+    await settingsSelect.selectOption({ label: "Runtime diagnostics" });
     await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
-    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
+    await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime diagnostics");
     await settingsSelect.selectOption({ label: "Activity availability" });
     await expect(page.locator(".settings-pane").getByRole("heading", { name: "Activity availability", exact: true })).toBeVisible();
     await expect(settingsSelect.locator("option:checked")).toHaveText("Activity availability");
@@ -667,10 +679,10 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
     await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
   } else {
-    await settingsSections.getByRole("link", { name: "Runtime evidence settings", exact: true }).click({ modifiers: ["Alt"] });
+    await settingsSections.getByRole("link", { name: "Runtime diagnostics", exact: true }).click({ modifiers: ["Alt"] });
     await expect(screens.getByRole("tab")).toHaveCount(sectionTabCount + 1);
     await expect(page).toHaveURL(/\/settings\/workflows-runtime-diagnostics(?:\?|$)/);
-    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
+    await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(settingsDocument);
     const originalSettingsUrl = page.url();
     const nativeSectionPage = page.context().waitForEvent("page");
@@ -690,8 +702,8 @@ test("grouped navigation and moved destinations", async ({ page }, info) => {
   }
   // Existing bookmarked routes must resolve to their new Settings surface as well.
   await page.goto("/workflows/runtime-diagnostics");
-  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime evidence settings", exact: true })).toBeVisible();
-  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime evidence settings");
+  await expect(page.locator(".settings-pane").getByRole("heading", { name: "Runtime diagnostics", exact: true })).toBeVisible();
+  if (compactSettings) await expect(settingsSelect.locator("option:checked")).toHaveText("Runtime diagnostics");
   else await expect(settingsSections).toContainText("Runtime");
   await expect(navLink("Settings")).toHaveAttribute("aria-current", "page");
   await capture(page, info, "runtime-settings");
@@ -975,9 +987,9 @@ test("workflow template metadata defaults", async ({ page }, info) => {
   };
 
   await page.goto("/workflows/definitions");
-  const open = page.getByRole("button", { name: "Create workflow", exact: true }).first();
+  const open = page.getByRole("button", { name: "New workflow", exact: true }).first();
   await open.click();
-  const dialog = page.getByRole("dialog", { name: "Create Workflow", exact: true });
+  const dialog = page.getByRole("dialog", { name: "New workflow", exact: true });
   const startingPoint = dialog.getByRole("combobox", { name: "Starting point", exact: true });
   const name = dialog.getByRole("textbox", { name: "Display name", exact: true });
   const description = dialog.getByRole("textbox", { name: "Description", exact: true });
@@ -1095,6 +1107,10 @@ test("timeline selection retains its tab and exact occurrence", async ({ page },
   await timelineSelectionJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });
 
+test("production history occurrence and approval qualification", async ({ page }, info) => {
+  await historyOccurrenceQualificationJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
+});
+
 test("explicit authored activity names survive publication and execution", async ({ page }, info) => {
   await authoredActivityNamesJourney(page, info, capture);
 });
@@ -1128,4 +1144,9 @@ test("native BPMN workflow blocks retain authoring boundaries", async ({ page },
 
 test("native BPMN reusable blocks retain authoring boundaries", async ({ page }, info) => {
   await bpmnNamedBlocksJourney(page, info, capture, "authoring", ["activity"]);
+});
+
+test("timeline durable diagnostics and process restart", async ({ page }, info) => {
+  test.setTimeout(1_200_000);
+  await timelineDiagnosticsJourney(page, info, capture, cleanup => { ownedCleanups.get(page)!.push(cleanup); });
 });

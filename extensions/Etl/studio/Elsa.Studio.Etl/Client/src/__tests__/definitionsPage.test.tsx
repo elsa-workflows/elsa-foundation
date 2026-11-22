@@ -99,7 +99,7 @@ describe("ETL definitions page", () => {
     }, expect.any(AbortSignal));
     change(inputByLabel(rendered.host, "Output field 1 name"), "displayName");
     expect(buttonByText(rendered.host, "Validate saved revision").disabled).toBe(true);
-    click(buttonByText(rendered.host, "Save draft"));
+    click(buttonByText(rendered.host, "Save"));
     await waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Saved new-pipeline at revision 2") })));
     expect(rendered.host.querySelector(".etl-notice")?.textContent ?? "").not.toContain("Saved new-pipeline at revision 2");
     expect(updateEtlConnectorDraft).toHaveBeenCalledWith(context, "new-pipeline", expect.objectContaining({
@@ -166,7 +166,7 @@ describe("ETL definitions page", () => {
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: orders"));
 
     change(inputByLabel(rendered.host, "Output field 1 name"), "displayName");
-    click(buttonByText(rendered.host, "Save draft"));
+    click(buttonByText(rendered.host, "Save"));
     await waitFor(() => expect(notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ level: "success", title: expect.stringContaining("Saved orders at revision 5") })));
     expect(rendered.host.querySelector(".etl-notice")?.textContent ?? "").not.toContain("Saved orders at revision 5");
     expect(updateEtlDraft).toHaveBeenCalledWith(context, "orders", expect.objectContaining({
@@ -212,14 +212,16 @@ describe("ETL definitions page", () => {
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: orders"));
     change(inputByLabel(rendered.host, "Output field 1 name"), "edited-name");
 
-    click(buttonContaining(rendered.host, "returns")!);
+    click(buttonByText(rendered.host, "Back to definitions"));
     await waitFor(() => expect(dialogs.confirm).toHaveBeenCalledTimes(1));
     expect(getEtlDefinition).toHaveBeenCalledTimes(1);
     expect(inputByLabel(rendered.host, "Output field 1 name").value).toBe("edited-name");
     expect(rendered.host.textContent).toContain("Draft: orders");
-    await waitFor(() => expect(buttonContaining(rendered.host, "returns")!.disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.host, "Back to definitions").disabled).toBe(false));
 
     vi.mocked(dialogs.confirm).mockResolvedValue(true);
+    click(buttonByText(rendered.host, "Back to definitions"));
+    await waitFor(() => expect(buttonContaining(rendered.host, "returns")).toBeTruthy());
     click(buttonContaining(rendered.host, "returns")!);
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: returns"));
     expect(getEtlDefinition).toHaveBeenCalledTimes(2);
@@ -250,12 +252,12 @@ describe("ETL definitions page", () => {
     click(buttonContaining(rendered.host, "orders")!);
     await waitFor(() => expect(rendered.host.textContent).toContain("Draft: orders"));
     change(inputByLabel(rendered.host, "Output field 1 name"), "local-edits-stay");
-    click(buttonByText(rendered.host, "Save draft"));
+    click(buttonByText(rendered.host, "Save"));
 
     await waitFor(() => expect(rendered.host.textContent).toContain("local edits were preserved"));
     expect(getEtlDefinition).toHaveBeenCalledTimes(1);
     expect(inputByLabel(rendered.host, "Output field 1 name").value).toBe("local-edits-stay");
-    expect(buttonByText(rendered.host, "Save draft").disabled).toBe(false);
+    expect(buttonByText(rendered.host, "Save").disabled).toBe(false);
     expect(buttonByText(rendered.host, "Publish immutable version").disabled).toBe(true);
 
     click(buttonByText(rendered.host, "Reload draft"));
@@ -269,6 +271,7 @@ describe("ETL definitions page", () => {
     click(buttonByText(rendered.host, "Reload draft"));
     await waitFor(() => expect(inputByLabel(rendered.host, "Output field 1 name").value).toBe("name"));
     expect(getEtlDefinition).toHaveBeenCalledTimes(2);
+    click(buttonByText(rendered.host, "Back to definitions"));
     await waitFor(() => expect(buttonContaining(rendered.host, "orders")?.textContent).toContain("Revision 8 · published through v1"));
     expect(dialogs.confirm).toHaveBeenLastCalledWith(expect.objectContaining({ confirmLabel: "Reload saved draft" }));
   });

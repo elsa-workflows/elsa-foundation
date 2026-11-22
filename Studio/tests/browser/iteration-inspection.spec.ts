@@ -1,6 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { openExecutionInputs, openRunData } from "./executionDetails";
 import axe from "axe-core";
+
+async function showRunData(page: Page, host: string) {
+  if (host !== "instance") return;
+  const data = page.getByRole("complementary", { name: "Run details panel", exact: true }).getByRole("tab", { name: "Data", exact: true });
+  if (await data.getAttribute("aria-selected") !== "true") await data.press("Enter");
+}
 
 for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
   test(`selects exact occurrences without redundant controls (${host}, ${theme}, ${width}px)`, async ({ page }) => {
@@ -12,6 +18,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     }
     const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
+    if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas).toBeVisible();
     await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).click();
     const details = host === "instance" ? page.getByRole("complementary", { name: "Run details panel", exact: true })
       : page.getByRole("complementary", { name: "Inspector panel", exact: true });
@@ -25,6 +33,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     await list.getByRole("button", { name: /^Execution 1 (Completed|Running)/ }).press("Enter");
     await expect(list).toBeHidden();
     await expect(chooser).toBeFocused();
+    await showRunData(page, host);
+    await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
     await expect(chooser).toContainText("Execution 1 of 10");
     await openExecutionInputs(details);
     await expect(page.getByText("Current: 1", { exact: true })).toBeVisible();
@@ -68,6 +78,8 @@ for (const host of ["editor", "instance"]) test(`keeps the occurrence chooser sc
   }
   if (host === "editor") await page.getByRole("button", { name: "Collapse inspector panel", exact: true }).click();
   const canvas = host === "instance" ? page.getByRole("region", { name: "Workflow run canvas", exact: true }) : page.getByLabel("Workflow canvas", { exact: true });
+  if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(canvas).toBeVisible();
   await canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ }).press("Enter");
   const chooser = page.locator(".wf-execution-choice");
   await chooser.press("Enter");

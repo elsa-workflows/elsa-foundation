@@ -28,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = {'desktop-light', 'desktop-dark', 'narrow-light', 'narrow-dark', 'narrow-390-light', 'narrow-390-dark'}
 TOUCH_PROJECTS = {f'touch-{width}-{mode}' for width in (360, 390, 1440) for mode in ('light', 'dark')}
 CAPTURES = {
+    'native child and compensation history navigation': ['reference', 'child-dispatch', 'child-journal', 'child-consumed-bookmark', 'child-settlement', 'child-cause', 'compensation-confirmed', 'compensation-recovery', 'compensation-journal'],
+    'durable timer history and bookmark resumption': ['reference', 'timer-waiting-journal', 'timer-active-bookmark', 'timer-dispatched', 'timer-cause', 'timer-consumed-bookmark'],
     'native BPMN workflow blocks preserve reviewed XML bindings': ['reference'] + [f'workflow-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'native BPMN reusable blocks preserve reviewed XML bindings': ['reference'] + [f'activity-bpmn-{state}' for state in ('selection', 'preview', 'nested', 'nested-edit', 'nested-reopened', 'reopened', 'import-review', 'imported', 'ungrouped')],
     'native BPMN workflow blocks retain authoring boundaries': ['reference'] + [f'workflow-bpmn-{state}' for state in ('inspector-toolbar', 'empty-preview', 'empty-nested', 'empty-reloaded', 'empty-ungrouped', 'refused', 'captured-input', 'readonly')],
@@ -74,7 +76,13 @@ CAPTURES = {
     'native dashboard questions and sharing': ['reference', 'dashboard-native-reference', 'questions-empty', 'question-controls', 'question-validation', 'question-preview', 'question-drill', 'question-drill-values', 'question-saved', 'question-refreshed', 'question-editor-preview-appearance-1', 'question-editor-preview-appearance-2', 'question-saved-refresh-drill', 'question-saved-refresh-drill-values', 'question-history', 'question-copy', 'question-records', 'question-navigation-cancelled', 'question-retained-tab', 'question-navigation-confirmed', 'dashboard-layout', 'dashboard-reopened', 'dashboard-multi-tile', 'dashboards-collection-appearance-1', 'dashboards-collection-appearance-2', 'dashboard-and-dependency-dialogs-appearance-1-dashboard', 'dashboard-and-dependency-dialogs-appearance-1-share-review', 'dashboard-and-dependency-dialogs-appearance-1-copy-review', 'dashboard-and-dependency-dialogs-appearance-2-dashboard', 'dashboard-and-dependency-dialogs-appearance-2-share-review', 'dashboard-and-dependency-dialogs-appearance-2-copy-review', 'dashboard-refresh-cancelled', 'dashboard-refresh-retried', 'dashboard-tile-settings', 'dashboard-drill', 'dashboard-drill-values', 'dashboard-copy-dependency-review', 'dashboard-copy-independent-question', 'dashboard-copy', 'question-share', 'dashboard-share-dependency-review', 'dashboard-share', 'question-shared-search', 'shared-question', 'shared-dashboard', 'question-source-unavailable', 'question-repair-blank', 'question-repair-reopened', 'question-revoke', 'question-access-lost', 'dashboard-unavailable-tiles', 'question-new-reuse-confirmation', 'questions-collection-appearance-1', 'questions-collection-appearance-2', 'question-conflict', 'question-conflict-recovered'],
     'existing home widgets and layout defaults': ['reference', 'home-widgets', 'home-module-picker-1', 'home-module-picker-2', 'home-module-run-health', 'home-module-portfolio', 'home-module-settings', 'home-module-settings-reopened', 'home-layout-edit', 'home-layout-reopened', 'home-populated-appearance-1', 'home-populated-appearance-2', 'home-widget-picker', 'home-server-default', 'home-existing-aliases'],
     'execution navigation keeps keyboard focus and exact evidence': ['reference', 'standalone-exact', 'standalone-menu', 'completed-while-observation-paused', 'attached-first-boundary', 'retained-middle-occurrence', 'restored-exact-occurrence'],
+    'timeline durable diagnostics and process restart': ['reference', 'diagnostics-approval-before-restart', 'diagnostics-approval-restored', 'diagnostics-approval-consumed', 'diagnostics-approval-consumed-action', 'diagnostics-approval-retained-after-restart', 'diagnostics-approval-retained-action', 'diagnostics-passive-expiry', 'diagnostics-passive-expiry-explanation', 'diagnostics-passive-expiry-journal', 'diagnostics-duplicate-delivery', 'diagnostics-single-consumption', 'diagnostics-single-consumption-action', 'diagnostics-history-stale', 'diagnostics-history-recovered'],
+    'production history occurrence and approval qualification': ['reference', 'history-wait', 'history-completed', 'history-fault', 'history-retained-boundary'],
     'timeline selection retains its tab and exact occurrence': ['reference', 'timeline-populated', 'timeline-click', 'timeline-keyboard', 'activity-details', 'timeline-return'],
+    'recorded activity playback transport': ['reference', 'playback-transport-next', 'playback-transport-paused', 'playback-transport-diagram', 'playback-transport-activity', 'playback-transport-return', 'playback-transport-repeat-first', 'playback-transport-repeat-second', 'playback-transport-end', 'playback-transport-scoped', 'playback-transport-retry-source', 'playback-transport-retry'],
+    'recorded activity playback ordinal seeking': ['reference', 'playback-seek-older-repeat', 'playback-seek-pending', 'playback-seek-latest', 'playback-seek-failed', 'playback-seek-retried'],
+    'recorded activity playback live bounds and waits': ['reference', 'playback-live-waiting', 'playback-live-frozen', 'playback-live-refreshed', 'playback-live-recorded-wait'],
+    'recorded activity playback coverage and access': ['reference', 'playback-access-metadata-only', 'playback-access-pending', 'playback-access-revoked', 'playback-coverage-invalidated', 'playback-coverage-retained', 'playback-coverage-pin-unavailable', 'playback-coverage-disabled', 'playback-coverage-uncaptured', 'playback-coverage-unsupported'],
 }
 NATIVE_RESULT_CAPTURES = ('provenance', 'coverage-periods', 'series-1', 'series-2', 'series-3', 'exact-values', 'exact-values-end')
 CAPTURES['native dashboard questions and sharing'] += (
@@ -142,6 +150,14 @@ def configure_activity_data(backend_shells, studio_shells, composition, journeys
         for key in ('JavaScriptExpressionEditorStudio', 'LiquidExpressionEditorStudio'):
             studio.pop(key, None)
 ADDITIONAL_ARTIFACTS = {
+    'native child and compensation history navigation': {'native-history-owners-oracle.json'},
+    'durable timer history and bookmark resumption': {'timer-history-oracle.json'},
+    'recorded activity playback transport': {'playback-transport-oracle.json'},
+    'recorded activity playback ordinal seeking': {'playback-seeking-oracle.json'},
+    'recorded activity playback live bounds and waits': {'playback-live-oracle.json'},
+    'recorded activity playback coverage and access': {'playback-coverage-oracle.json'},
+    'timeline durable diagnostics and process restart': {'timeline-diagnostics-oracle.json'},
+    'production history occurrence and approval qualification': {'history-production-oracle.json'},
     'Double activity output binds to text': {'numeric-binding-proof.json'},
     'set output assigns reusable activity output': {'set-output-proof.json'},
     **{journey: {'activity-data-proof.json', 'activity-data-copy-proof.json'} for journey in COPY_JOURNEYS},
@@ -200,10 +216,14 @@ def configure_dashboard_qualification(settings, shells):
               'workflows/runtime:read', 'workflows/design:read']
     no_source = [grant for grant in native if grant not in
                  {'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'}]
+    history = ['api-capabilities:read', 'workflows/runtime:read', 'workflows/activity-executions:inspect']
     settings['Qualification'] = {
         'Principals': [{'subject': 'dashboard-qa-reader', 'tenant': 'default',
-                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native}],
-        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source},
+                        'username': 'dashboard-reader', 'password': 'Password123!', 'exactDirectPermissions': native},
+                       {'subject': 'history-qa-reader', 'tenant': 'default',
+                        'username': 'history-reader', 'password': 'Password123!', 'exactDirectPermissions': history}],
+        'GrantProfiles': {'dashboard-native-reader': native, 'dashboard-native-no-source': no_source,
+                          'history-reader': history, 'history-no-structure': history[:-1]},
     }
     # Keep the selected adapter composed, with inference explicitly unavailable in this native-only run.
     features = shells['CShells']['Shells']['default']['Features']
@@ -246,7 +266,7 @@ def stop_group(process, *, graceful_timeout=15):
         process.wait(timeout=10)
 
 
-def command(args, log, *, cwd=ROOT, env=None):
+def command(args, log, *, cwd=ROOT, env=None, pump=None):
     # Keep stage timing in the Actions log even if the outer job is interrupted.
     # Emit only the log basename: arguments/environment may contain private fixture values.
     started = time.monotonic()
@@ -254,7 +274,14 @@ def command(args, log, *, cwd=ROOT, env=None):
     with log.open('w') as output:
         process = subprocess.Popen(args, cwd=cwd, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            result = process.wait()
+            while True:
+                if pump is not None:
+                    pump()
+                try:
+                    result = process.wait(timeout=.1 if pump is not None else None)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
             print(json.dumps({'event': 'ux-command-finished', 'log': log.name,
                               'exitCode': result, 'elapsedSeconds': round(time.monotonic() - started, 3)}), flush=True)
             if result:
@@ -718,12 +745,14 @@ def free_port():
 
 
 @contextmanager
-def host(directory, dll, url, ready_path, log, env):
+def host(directory, dll, url, ready_path, log, env, on_started=None):
     # No dotnet run / launch profile: its project directory and URL could target an existing development store.
     with log.open('w') as output:
         process = subprocess.Popen(['dotnet', str(directory / dll), '--contentRoot', str(directory), '--urls', url],
                                    cwd=directory, env=env, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         try:
+            if on_started is not None:
+                on_started(process)
             deadline = time.monotonic() + 180
             while True:
                 if process.poll() is not None:
@@ -750,6 +779,82 @@ def host(directory, dll, url, ready_path, log, env):
             stop_group(process, graceful_timeout=45)
 
 
+class OwnedBackendRestart:
+    """Private file rendezvous, pumped ONLY by the runner's main thread.
+
+    The owned Node child can request one fixed operation. It cannot supply a PID,
+    command, path, URL or configuration. Nothing is exposed by the product host.
+    Every generation has an idempotently closed child stack and an append-only receipt.
+    """
+    def __init__(self, owned, item, output, env, processes, report, control):
+        self.owned, self.item, self.output, self.env = owned, item, output, env
+        self.processes, self.report, self.control = processes, report, control
+        control.mkdir(mode=0o700)
+        self.generation, self.completed = 0, {}
+        self.receipts = report.setdefault('backendRestarts', [])
+        self.identity = fingerprints(item['backend'])
+        self.start()
+        self.write('state.json', {'generation': self.generation})
+
+    def write(self, name, value):
+        temporary = self.control / (name + '.tmp')
+        temporary.write_text(json.dumps(value))
+        temporary.replace(self.control / name)
+
+    def start(self):
+        self.stack = self.owned.enter_context(ExitStack())
+        name = 'backend' if self.generation == 0 else f'backend-generation-{self.generation}'
+        # host() also records/cleans failed starts through the ordinary observer.
+        def record(process):
+            self.started = time.time_ns()
+            self.processes[name] = process
+            self.report['ownedPids'][name] = process.pid
+        self.process = self.stack.enter_context(host(self.item['backend'], 'Elsa.Workbench.dll',
+            self.item['backendUrl'], '/__qualification/ready', self.output / f'{name}.log', self.env, on_started=record))
+
+    def pump(self):
+        path = self.control / 'request.json'
+        if not path.exists():
+            return
+        if path.is_symlink() or path.stat().st_size > 512:
+            raise ValueError('Unsafe owned restart request')
+        data = json.loads(path.read_text())
+        path.unlink()
+        if set(data) != {'requestId', 'expectedGeneration'} or not re.fullmatch('[a-f0-9]{32}', str(data.get('requestId', ''))):
+            raise ValueError('Invalid owned restart request')
+        request_id = data['requestId']
+        if request_id in self.completed:
+            previous, result = self.completed[request_id]
+            if previous != data:
+                raise ValueError('Owned restart request ID reused with a different fence')
+            self.write('reply.json', result)
+            return
+        if type(data['expectedGeneration']) is not int or data['expectedGeneration'] != self.generation:
+            self.write('reply.json', {'requestId': request_id, 'error': 'stale-generation'})
+            return
+        if self.identity != fingerprints(self.item['backend']):
+            raise ValueError('Owned backend inputs changed before restart')
+        old, old_started = self.process, self.started
+        self.stack.close()  # callback drained once; outer cleanup cannot signal a recycled old PGID
+        if old.returncode != 0:
+            raise ValueError('Owned backend did not stop cleanly')
+        members = subprocess.check_output(['ps', '-axo', 'pgid=,stat='], text=True)
+        if any(len(parts := line.split()) == 2 and int(parts[0]) == old.pid and not parts[1].startswith('Z') for line in members.splitlines()):
+            raise ValueError('Retired owned backend group remains alive')
+        self.generation += 1
+        self.start()  # SAME content root, environment, binary, URL and stores; never prepare/configure
+        if self.process.pid == old.pid or self.identity != fingerprints(self.item['backend']):
+            raise ValueError('Owned restart did not preserve inputs in a distinct process')
+        result = {'requestId': request_id, 'generation': self.generation, 'beforePid': old.pid,
+            'afterPid': self.process.pid, 'beforeSpawnObservedNs': str(old_started), 'afterSpawnObservedNs': str(self.started),
+            'beforeExitCode': old.returncode, 'oldGroupGone': True, 'sameOwnedStoreRoot': True,
+            'sameBinaryAndConfiguration': True, 'readyOnSameUrl': True}
+        self.receipts.append(result)
+        self.completed[request_id] = (data, result)
+        self.write('state.json', {'generation': self.generation})
+        self.write('reply.json', result)
+
+
 def prepare_host(project, destination):
     output = project.parent / 'bin/Debug/net10.0'
     shutil.copytree(output, destination, ignore=shutil.ignore_patterns("*.db*", "*.sqlite*", "nuplane.lock.json", ".elsa", ".nuplane", "packages", "appsettings*.json", "shells*.json"))
@@ -759,6 +864,51 @@ def prepare_host(project, destination):
             file.unlink()
     for name in ['appsettings.json', 'shells.json']:
         shutil.copy2(project.parent / name, destination / name)
+
+
+def playback_profiles(stack, data, backend_project, studio_project, output, env, owned_processes, owned_pids, profiles):
+    """Separate normal compositions, never a live switch of one host's capture singleton."""
+    for name in ('disabled', 'uncaptured', 'unsupported'):
+        directory = data / f'playback-{name}'
+        backend, studio = directory / 'workbench', directory / 'studio'
+        prepare_host(backend_project, backend)
+        prepare_host(studio_project, studio)
+        backend_url, studio_url = f'http://localhost:{free_port()}', f'http://localhost:{free_port()}'
+        settings = json.loads((backend / 'appsettings.json').read_text(encoding='utf-8-sig'))
+        shells = json.loads((backend / 'shells.json').read_text(encoding='utf-8-sig'))
+        settings['Cors']['AllowedOrigins'] = [studio_url]
+        features = shells['CShells']['Shells']['default']['Features']
+        features['FoundationIdentityAspNetCoreIdentity']['AllowedReturnUrlOrigins'] = [studio_url]
+        configure_dashboard_qualification(settings, shells)
+        removed = []
+        if name == 'disabled':
+            # Object-map child properties are feature settings, not FeatureEntryState switches.
+            features['WorkflowsRuntimeHistory'] = {'Enabled': False}
+        else:
+            removed.append('WorkflowsRuntimeHistory')
+            if name == 'unsupported':
+                # Keep coherent EF native execution/design/publishing. The conditional host's fixed
+                # post-composition feature omits the optional reader and its dependent write facets.
+                features['PlaybackQualificationWithoutHistory'] = {}
+            for feature in removed:
+                features.pop(feature, None)
+        (backend / 'appsettings.json').write_text(json.dumps(settings))
+        (backend / 'shells.json').write_text(json.dumps(shells))
+        studio_shells = json.loads((studio / 'shells.json').read_text(encoding='utf-8-sig'))
+        # Retain the actual private configuration before startup, including failed readiness.
+        profiles[name] = {'backendUrl': backend_url, 'studioUrl': studio_url, 'removedFeatures': removed,
+                          'captureSetting': False if name == 'disabled' else None,
+                          'historyReaderOmission': 'PlaybackQualificationWithoutHistory' if name == 'unsupported' else None,
+                          'features': {'backend': sorted(features), 'studio': sorted(studio_shells['CShells']['Shells']['Default']['Features'])},
+                          'binaryAndConfigHashes': {'backend': fingerprints(backend), 'studio': fingerprints(studio)}}
+        backend_process = stack.enter_context(host(backend, 'Elsa.Workbench.dll', backend_url, '/__qualification/ready', output / f'playback-{name}-backend.log', env))
+        owned_processes[f'playback-{name}-backend'] = backend_process
+        owned_pids[f'playback-{name}-backend'] = backend_process.pid
+        studio_process = stack.enter_context(host(studio, 'Elsa.Studio.Web.dll', studio_url, '/studio-runtime.js', output / f'playback-{name}-studio.log',
+                                 dict(env, Studio__BackendBaseUrl=backend_url)))
+        owned_processes[f'playback-{name}-studio'] = studio_process
+        owned_pids[f'playback-{name}-studio'] = studio_process.pid
+    return profiles
 
 
 def compose_shells(shells, studio_url, remove=(), seed=None):
@@ -930,6 +1080,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
     studio_sha, studio_dirty = source_state(studio_root)
     head = os.environ.get('UX_PR_HEAD_SHA', sha)
     selected = selected_journeys(journey, composition)
+    coverage_profiles = 'recorded activity playback coverage and access' in selected
     fixture_built = False
     owned_processes = {}
     backend_project = ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj'
@@ -966,7 +1117,7 @@ def run(output, journey=None, studio_root=None, composition='normal'):
         gallery = output / 'outlined-gallery'
         gallery_port = free_port()
         command(['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/browser/playwright.outlined-fields.config.ts'],
-                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port)))
+                output / 'outlined-gallery.log', cwd=studio_root / 'Studio', env=dict(os.environ, OUTLINED_EVIDENCE=str(gallery), OUTLINED_PORT=str(gallery_port), DEBUG="vite:deps,vite:transform"))
         gallery_report = json.loads((gallery / 'playwright.json').read_text())
         gallery_url = gallery_report.get('config', {}).get('metadata', {}).get('outlinedBaseURL')
         report['isolatedFieldGallery'] = {'executed': field_gallery_verdict(gallery_report, gallery, gallery_port),
@@ -996,6 +1147,9 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                 # Activity-data modes belong only to the combined host. Never re-add Design to an API subset.
                 if item['name'] == 'combined':
                     backend_shells = json.loads((item['backend'] / 'shells.json').read_text(encoding='utf-8-sig'))
+                    if coverage_profiles or 'timeline durable diagnostics and process restart' in selected:
+                        # Only this disposable combined host changes; a genuine material READ must reach EF.
+                        backend_shells['CShells']['Shells']['default']['Features']['WorkflowsRuntimeEntityFrameworkCore']['CacheWorkflowExecutables'] = False
                     studio_shells = json.loads((item['studio'] / 'shells.json').read_text(encoding='utf-8-sig'))
                     configure_activity_data(backend_shells, studio_shells, composition, selected)
                     (item['backend'] / 'shells.json').write_text(json.dumps(backend_shells))
@@ -1056,21 +1210,33 @@ def run(output, journey=None, studio_root=None, composition='normal'):
                 backend_env = dict(env, LANG='nl_NL.UTF-8', LC_ALL='nl_NL.UTF-8')
                 report['backendLocale'] = backend_env['LC_ALL']
             with ExitStack() as owned:
+                restart = None
                 for item in hosts:
                     prefix = '' if item['name'] == 'combined' else f"{item['name']}-"
-                    backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
+                    if item['name'] == 'combined' and 'timeline durable diagnostics and process restart' in selected:
+                        restart = OwnedBackendRestart(owned, item, output, backend_env, owned_processes, report, data / 'restart-control')
+                        browser_env['UX_RESTART_CONTROL_DIR'] = str(restart.control)
+                        backend_process = restart.process
+                    else:
+                        backend_process = owned.enter_context(host(item['backend'], 'Elsa.Workbench.dll', item['backendUrl'], '/__qualification/ready' if item['name'] == 'combined' else '/health/ready', output / f"{item['prefix']}backend.log", backend_env))
                     owned_processes[f'{prefix}backend'] = backend_process
                     report['ownedPids'][f'{prefix}backend'] = backend_process.pid
                     studio_process = owned.enter_context(host(item['studio'], 'Elsa.Studio.Web.dll', item['studioUrl'], '/studio-runtime.js', output / f"{item['prefix']}studio.log",
                                              dict(env, Studio__BackendBaseUrl=item['backendUrl'])))
                     owned_processes[f'{prefix}studio'] = studio_process
                     report['ownedPids'][f'{prefix}studio'] = studio_process.pid
+                if coverage_profiles:
+                    profiles = {}
+                    report['playbackHostProfiles'] = profiles
+                    report['playbackPinReadPolicy'] = 'Owned default copy has executable cache disabled for an exact native READ fault'
+                    playback_profiles(owned, data, backend_project, studio_project, output, env, owned_processes, report['ownedPids'], profiles)
+                    browser_env['UX_PLAYBACK_PROFILES'] = json.dumps(profiles)
                 report['stage'] = 'journeys'
                 browser_command = ['pnpm', 'exec', 'playwright', 'test', '--config', 'tests/acceptance/playwright.config.ts']
                 if journey is not None:
                     # Playwright greps project/file/title together; anchor the exact final title.
                     browser_command.extend(['--grep', r'(?:^|\s)(?:' + '|'.join(re.escape(name) for name in sorted(selected)) + ')$'])
-                command(browser_command, output / 'journeys.log', cwd=studio_root / 'Studio', env=browser_env)
+                command(browser_command, output / 'journeys.log', cwd=studio_root / 'Studio', env=browser_env, pump=restart.pump if restart is not None else None)
                 report['executed'] = verdict(json.loads((output / 'playwright.json').read_text()), output, selected, composition)
         report['hostExitCodes'] = {key: process.returncode for key, process in owned_processes.items()}
         report['ownedRootRemoved'] = not data.exists()

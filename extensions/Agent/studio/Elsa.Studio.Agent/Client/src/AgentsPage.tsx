@@ -3,7 +3,7 @@ import { Bot, Plus, RefreshCw } from "lucide-react";
 import { StudioHttpError, useOptionalAuthContext, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import {
   SkeletonRows, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioCollectionToolbar, StudioDataGrid,
-  StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
+  StudioDialog, StudioDialogFooter, StudioField, StudioPage, StudioPageHeader, StudioResultState, StudioSearchInput, StudioTimestamp, type StudioDataGridColumn
 } from "@elsa-workflows/studio-ui";
 import {
   createAgent, getAgentAuthoring, listActiveAgentDrafts, listAgents, agentProviderKey, type AgentRow, type AgentAuthoring
@@ -41,7 +41,7 @@ export function agentRowPath(row: AgentRow, drafts: string[] | null) {
   if (published) return activityDefinitionVersionPath(row.definition.definitionId, published.versionId);
   if (drafts?.length === 1) return activityDefinitionPath(row.definition.definitionId, drafts[0]);
   // Several drafts, or a lookup that could not answer: the definition's drafts, where the author chooses explicitly.
-  return `/workflows/activity-definitions?${new URLSearchParams({ definition: row.definition.definitionId, section: "drafts" }).toString()}`;
+  return `/agents/definitions?${new URLSearchParams({ definition: row.definition.definitionId, section: "drafts" }).toString()}`;
 }
 
 function publishedVersion(row: AgentRow) {
@@ -52,14 +52,14 @@ function publishedVersion(row: AgentRow) {
 }
 
 export function activityDefinitionVersionPath(definitionId: string, versionId: string) {
-  return `/workflows/activity-definitions?${new URLSearchParams({ definition: definitionId, version: versionId }).toString()}`;
+  return `/agents/definitions?${new URLSearchParams({ definition: definitionId, version: versionId }).toString()}`;
 }
 
 /** Where the generic activity editor opens one definition, or one of its drafts. */
 export function activityDefinitionPath(definitionId: string, draftId?: string) {
   const parameters = new URLSearchParams({ definition: definitionId });
   if (draftId) { parameters.set("section", "editor"); parameters.set("draft", draftId); }
-  return `/workflows/activity-definitions?${parameters.toString()}`;
+  return `/agents/definitions?${parameters.toString()}`;
 }
 
 /**
@@ -160,12 +160,6 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
   };
 
   const canCreate = mayCreate && authoring !== "loading" && authoring !== null;
-  if (creating && canCreate) return <StudioPage className="agent-agents-page" data-testid="agents-page">
-    <CreateAgentForm context={context} authoring={authoring}
-      onCancel={() => { restoreFocus.current = true; setCreating(false); }}
-      onCreated={(definitionId, draftId) => navigate(activityDefinitionPath(definitionId, draftId))} />
-  </StudioPage>;
-
   const columns: StudioDataGridColumn<AgentRow>[] = [
     { id: "name", header: "Agent", render: row => (
       <span className="agent-row-name">
@@ -175,7 +169,7 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
     ) },
     { id: "status", header: "Status", render: row => <AgentStatus row={row} /> },
     { id: "authority", header: "Defined in", render: row => <AgentAuthority row={row} /> },
-    { id: "updated", header: "Updated", render: row => <StudioTimestamp value={row.updatedAt} fallback={formatDate(row.updatedAt)} /> }
+    { id: "updated", header: "Updated", render: row => <StudioTimestamp value={row.updatedAt} fallback="Unavailable" invalidFallback="Unavailable" /> }
   ];
 
   return (
@@ -184,7 +178,8 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
         title="Agents"
         icon={<Bot aria-hidden="true" />}
         description="Agents you define here or in configuration. Each one is a reusable activity with typed inputs and results that workflows and BPMN processes can use."
-        actions={<>{canCreate ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null}<StudioButton onClick={reload} disabled={collection.kind === "loading"}><RefreshCw aria-hidden="true" /> Refresh</StudioButton></>} />
+        refresh={{ id: "agents", label: "Refresh agents", refreshing: collection.kind === "loading", disabled: creating, autoRefresh: true, onRefresh: loadFirst }}
+        actions={canCreate ? <StudioButton ref={newAgentRef} variant="primary" onClick={() => setCreating(true)}><Plus aria-hidden="true" /> New agent</StudioButton> : null} />
 
       <StudioCollectionToolbar>
         <StudioSearchInput aria-label="Search agents" placeholder="Search agents" value={search} onChange={event => setSearch(event.target.value)} />
@@ -220,6 +215,9 @@ export function AgentsPage({ context, navigate }: { context: StudioEndpointConte
           </StudioCollectionFooter>
         </>
       ) : null}
+      {creating && canCreate ? <CreateAgentForm context={context} authoring={authoring}
+        onCancel={() => { restoreFocus.current = true; setCreating(false); }}
+        onCreated={(definitionId, draftId) => { setCreating(false); navigate(activityDefinitionPath(definitionId, draftId)); }} /> : null}
     </StudioPage>
   );
 }
@@ -269,7 +267,6 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { nameRef.current?.focus(); }, []);
   useEffect(() => { if (error) errorRef.current?.focus(); }, [error]);
 
   const submit = async (event: React.FormEvent) => {
@@ -290,26 +287,17 @@ function CreateAgentForm({ context, authoring, onCancel, onCreated }: {
   };
 
   return (
-    <form className="agent-create-form" aria-labelledby={`${nameId}-title`} onSubmit={submit}
-      onKeyDown={event => { if (event.key === "Escape" && !submitting) onCancel(); }}>
-      <StudioPageHeader title="New agent" titleId={`${nameId}-title`}
-        description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next." />
+    <StudioDialog open title="New agent" description="Give it a name and a purpose. Choose its model, instructions, inputs and results in the editor next."
+      initialFocusRef={nameRef} dismissDisabled={submitting} onClose={onCancel} onSubmit={submit}
+      footer={<StudioDialogFooter onCancel={onCancel} cancelDisabled={submitting}
+        confirmLabel={submitting ? "Creating…" : "Create"} confirmDisabled={!name.trim() || submitting} />}>
       <StudioField label="Name">
         <input ref={nameRef} id={nameId} value={name} required maxLength={200} disabled={submitting} onChange={event => setName(event.target.value)} />
       </StudioField>
-      <StudioField label="Purpose" description="Optional. Shown wherever the agent is picked.">
+      <StudioField label="Purpose" description="Shown wherever the agent is picked.">
         <textarea value={purpose} rows={2} maxLength={2000} disabled={submitting} onChange={event => setPurpose(event.target.value)} />
       </StudioField>
       {error ? <div ref={errorRef} tabIndex={-1}><StudioAlert tone="danger">{error}</StudioAlert></div> : null}
-      <div className="agent-create-actions">
-        <StudioButton type="submit" variant="primary" disabled={!name.trim() || submitting}>{submitting ? "Creating…" : "Create and edit"}</StudioButton>
-        <StudioButton disabled={submitting} onClick={onCancel}>Cancel</StudioButton>
-      </div>
-    </form>
+    </StudioDialog>
   );
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }

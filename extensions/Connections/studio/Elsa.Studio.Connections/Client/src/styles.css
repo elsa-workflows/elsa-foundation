@@ -1,4 +1,6 @@
 .connections-shell,
+.connections-create-shell,
+.connections-detail-shell,
 .connections-modal,
 .connection-picker-editor {
   --connections-bg: var(--studio-bg);
@@ -28,7 +30,6 @@
   font-size: var(--studio-label-size);
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .connections-search,
 .connections-danger-actions { display: flex; align-items: center; gap: 0.5rem; }
@@ -80,38 +81,14 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
   background: color-mix(in srgb, var(--connections-accent) 10%, var(--connections-surface));
   color: var(--connections-accent);
 }
-.connections-shell button.connections-name-link { display: block; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; font-weight: 600; overflow-wrap: anywhere; }
-.connections-shell button.connections-name-link:hover { background: transparent; color: var(--connections-accent); text-decoration: underline; }
 .connections-name code { color: var(--connections-text-muted); font-size: var(--studio-label-size); overflow-wrap: anywhere; }
-.connection-status {
-  --connection-status-color: var(--connections-text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  max-width: 100%;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--connection-status-color) 30%, transparent);
-  border-radius: var(--studio-radius-sm);
-  background: color-mix(in srgb, var(--connection-status-color) 10%, transparent);
-  color: var(--connection-status-color);
-  font-size: var(--studio-label-size);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.connection-status--success { --connection-status-color: var(--studio-success-fg); }
-.connection-status--warning { --connection-status-color: var(--studio-warning-fg); }
-.connection-status--danger { --connection-status-color: var(--studio-danger-fg); }
 .connections-date { font-size: var(--studio-label-size); white-space: nowrap; }
-.connections-shell button.connections-details-action { white-space: nowrap; }
 .connections-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .connections-table td.connections-empty-cell { padding: 0; text-align: center; }
 .connections-empty p { margin: 0; color: var(--connections-text-muted); }
 .connections-limit,
 .connections-load-error { margin: 1rem 1.25rem; font-size: var(--studio-label-size); color: var(--connections-text-muted); overflow-wrap: anywhere; }
 .connections-load-error { color: var(--studio-danger-fg); }
-.connections-notice { display: flex; align-items: center; gap: 0.5rem; margin: 1rem 1.25rem; padding: 0.75rem; border: 1px solid color-mix(in srgb, var(--studio-success-fg) 25%, var(--connections-border)); border-radius: var(--connections-radius); color: var(--studio-success-fg); background: color-mix(in srgb, var(--studio-success-fg) 8%, var(--connections-surface)); }
-.connections-notice span { flex: 1; overflow-wrap: anywhere; }
-.connections-notice--error { color: var(--studio-danger-fg); border-color: color-mix(in srgb, var(--studio-danger-fg) 25%, var(--connections-border)); background: color-mix(in srgb, var(--studio-danger-fg) 8%, var(--connections-surface)); }
 .connections-shell button.connections-icon-button,
 .connections-modal button.connections-icon-button,
 .connections-modal button.connections-create-close { flex: 0 0 auto; width: 2rem; min-height: 2rem; padding: 0; background: transparent; }
@@ -207,27 +184,8 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
   font-size: var(--studio-label-size);
 }
 
-.connection-credential-sources {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 
-.connection-credential-sources label {
-  display: inline-flex;
-  min-height: 2.25rem;
-  align-items: center;
-  gap: 0.4rem;
-}
 
-.connection-credential-sources input[type="radio"] {
-  flex: 0 0 auto;
-  width: 1rem;
-  height: 1rem;
-  min-height: 0;
-  padding: 0;
-  accent-color: var(--connections-accent);
-}
 
 .connection-secret-picker {
   display: grid;
@@ -337,7 +295,6 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
 .connections-dialog-title h2 { margin: 0.25rem 0; overflow-wrap: anywhere; }
 .connections-dialog-title code { font-size: var(--studio-label-size); color: var(--connections-text-muted); overflow-wrap: anywhere; }
 .connections-dialog-body { display: grid; gap: 1.5rem; padding: 1.5rem; }
-.connections-dialog-body .connections-notice { margin: 0; }
 .connections-detail-status { display: grid; gap: 0.5rem; justify-items: start; }
 .connections-detail-status p { color: var(--connections-text-muted); }
 .connections-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 1.5rem; margin: 0; }
@@ -373,7 +330,7 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
 
 @media (max-width: 40rem) {
   .connections-name { min-width: 0; }
-  .connections-date, .connection-status { white-space: normal; }
+  .connections-date { white-space: normal; }
 }
 
 .connections-create-dialog .studio-disclosure-fold-trigger { justify-content: flex-start; }
@@ -384,3 +341,10 @@ html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { 
 }
 
 .connections-search-control { flex: 1; min-width: 0; }
+
+.studio-dialog:is(.connections-create-shell, .connections-detail-shell) { width: min(44rem, calc(100vw - 2rem)); }
+.connections-detail-shell .connections-dialog-body { padding: 0; }
+.studio-dialog.connections-create-shell { grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.connections-create-shell > form { display: flex; flex-direction: column; min-height: 0; }
+.connections-create-shell .connections-create-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.connections-detail-shell .studio-dialog-footer-leading { display: flex; flex-wrap: wrap; gap: .5rem; }

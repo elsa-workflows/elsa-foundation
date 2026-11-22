@@ -1,4 +1,5 @@
-import { StudioPageHeader } from "./ui";
+import { StudioShellBreadcrumbTarget } from "@elsa-workflows/studio-ui";
+import { TechnicalDetails, StudioAlert, StudioButton, StudioIconButton, StudioPageHeader, StudioResultState } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -44,7 +45,7 @@ import type {
   StudioFeatureAreaContribution,
   StudioContributionAvailability
 } from "../sdk";
-import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isStudioWorkspaceTabClick, openStudioWorkspaceTab, qualifyStudioBackendPath, reviewStudioNavigation, settleStudioNavigationReview, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -60,6 +61,7 @@ import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeSto
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
+import { dialogs } from "./dialogs";
 import { DialogHost } from "./ui/dialog/DialogHost";
 import { NotificationCenter } from "./ui/feedback/NotificationCenter";
 import { ToastHost } from "./ui/feedback/ToastHost";
@@ -68,7 +70,7 @@ import { readToastDurationPreference, saveToastDurationPreference, type ToastDur
 import { useNotificationScope } from "./useNotificationScope";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
-import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
+import { StudioTabs, StudioTabPanel, tabElementIds } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
@@ -139,12 +141,12 @@ type DiagnosticsWidgetBoundaryState = {
 // (The HostHealthRegistry/HostHealthEntry types that #192 added here alongside this map now live in
 // hooks/useHostHealth.ts after the #189 Query migration, so they are intentionally not re-added.)
 const navIconColors = {
-  dashboard: "#0ea5e9",
-  weather: "#14b8a6",
-  diagnostics: "#10b981",
-  modules: "#8b5cf6",
-  feeds: "#f59e0b",
-  themes: "#0f766e"
+  dashboard: "var(--studio-nav-icon-blue)",
+  weather: "var(--studio-nav-icon-teal)",
+  diagnostics: "var(--studio-success-fg)",
+  modules: "var(--studio-nav-icon-violet)",
+  feeds: "var(--studio-nav-icon-amber)",
+  themes: "var(--studio-nav-icon-teal)"
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
@@ -481,7 +483,13 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}</div> : null}
+        {!screenSettingsSurface && RouteComponent ? route.availability.state === "available" ? <RouteComponent navigate={navigateTo} /> : <section className="studio-page">
+          <StudioPageHeader headingLevel={2} title={route.label} />
+          <StudioResultState title="Page unavailable" description={route.availability.source === "runtime"
+            ? "This page is unavailable on the selected backend." : route.availability.reason}>
+            {route.availability.source === "runtime" && route.availability.reason ? <TechnicalDetails>{route.availability.reason}</TechnicalDetails> : null}
+          </StudioResultState>
+        </section> : null}
         {!screenSettingsSurface && !RouteComponent && !builtIn ? (
           <div className="empty-state" role="status">
             {area
@@ -520,8 +528,7 @@ function AppContent({ authManager,backendSession,connections,modules,manifest }:
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
-    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-    ?? activeRoute?.label
+    ?? screenLabel(path, activeRoute, navigation)
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
   const tabViews: WorkspaceTabView[] = workspace.state.tabs.map(tab => {
@@ -608,11 +615,16 @@ export function describeScreen(
     return { title: route.label, detail: value ? value.length > 10 ? `${value.slice(0, 8)}…` : value : undefined };
   }
   return {
-    title: navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
-      ?? route?.label
+    title: screenLabel(path, route, navigation)
       ?? findFeatureAreaForPath(featureAreas, path)?.title
       ?? (path === "/" ? "Home" : "Studio")
   };
+}
+
+function screenLabel(path: string, route: { path: string; label: string } | undefined, navigation: StudioNavigationContribution[]) {
+  const active = navigation.find(item => isNavigationItemActive(item, path, navigation));
+  if (route?.path === path && active?.path !== path) return route.label;
+  return active?.label ?? route?.label;
 }
 
 /** Shell rendering must survive a malformed restored address; fall back to the raw segment. */
@@ -749,6 +761,7 @@ export function ShellFrame({
     return () => media.removeEventListener("change", update);
   }, []);
   const [groupChoices, setGroupChoices] = useState(() => readNavigationGroups());
+  const [breadcrumbTarget, setBreadcrumbTarget] = useState<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLElement>(null);
   useShellHeaderBottom(topbarRef);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
@@ -841,7 +854,7 @@ export function ShellFrame({
               <small>{branding.subtitle}</small>
             </span>
           </a>
-          <button
+          <StudioIconButton
             type="button"
             className="sidebar-collapse-toggle"
             aria-label={navCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -850,7 +863,7 @@ export function ShellFrame({
             onClick={toggleNavCollapsed}
           >
             {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
+          </StudioIconButton>
         </div>
 
         <label className="sidebar-search">
@@ -967,6 +980,7 @@ export function ShellFrame({
       <div className="main-frame">
         <header ref={topbarRef} className="topbar">
           <div>
+            <div ref={setBreadcrumbTarget} className="studio-shell-breadcrumb-outlet" />
             <span className="breadcrumb">Studio / {title}</span>
             <h1>{title}</h1>
           </div>
@@ -984,7 +998,9 @@ export function ShellFrame({
           </div>
         </header>
         {tabStrip}
-        <main className="content" ref={contentRef}>{children}</main>
+        <main className="content" ref={contentRef}>
+          <StudioShellBreadcrumbTarget.Provider value={breadcrumbTarget}>{children}</StudioShellBreadcrumbTarget.Provider>
+        </main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {toastHost}
@@ -1015,14 +1031,6 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const activePanelIndex = panels.indexOf(activePanel);
   const ActivePanelComponent = activePanel.component;
   const tabsBaseId = useId();
-  const panelKeyDown = useTablistKeyboard(
-    panels.map(panel => panel.id),
-    activePanel.id,
-    id => {
-      setActivePanelId(id);
-      setCollapsed(false);
-    }
-  );
 
   useEffect(() => {
     if (activePanelId && !panels.some(panel => panel.id === activePanelId)) {
@@ -1177,33 +1185,20 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
         />
       ) : null}
       <div className="bottom-panel-tabs">
-        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
-          {panels.map((panel, index) => {
-            const isActive = panel.id === activePanel.id;
-            const ids = tabElementIds(tabsBaseId, index);
-            return (
-              <button
-                key={panel.id}
-                id={ids.tabId}
-                data-tab-id={panel.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={ids.panelId}
-                tabIndex={isActive ? 0 : -1}
-                className={isActive ? "active" : ""}
-                onClick={() => {
-                  setActivePanelId(panel.id);
-                  setCollapsed(false);
-                }}
-              >
-                {panel.title}
-              </button>
-            );
-          })}
-        </div>
+        <StudioTabs
+          className="bottom-panel-tab-list"
+          ariaLabel="Bottom panels"
+          baseId={tabsBaseId}
+          compact
+          tabs={panels.map(panel => ({ id: panel.id, label: panel.title }))}
+          activeTab={activePanel.id}
+          onSelect={id => {
+            setActivePanelId(id);
+            setCollapsed(false);
+          }}
+        />
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
-          <button
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={collapsed ? "Expand bottom panel" : "Collapse bottom panel"}
@@ -1211,8 +1206,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleCollapsed}
           >
             {collapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-          <button
+          </StudioIconButton>
+          <StudioIconButton
             type="button"
             className="bottom-panel-action-button"
             aria-label={maximized ? "Restore bottom panel" : "Maximize bottom panel"}
@@ -1220,9 +1215,12 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
             onClick={toggleMaximized}
           >
             {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          </StudioIconButton>
         </div>
       </div>
+      {panels.map((panel, index) => panel.id === activePanel.id ? null : (
+        <StudioTabPanel key={panel.id} baseId={tabsBaseId} index={index} hidden>{null}</StudioTabPanel>
+      ))}
       <div
         className="bottom-panel-content"
         role="tabpanel"
@@ -1712,7 +1710,7 @@ function getDefaultNavIconColor(id: string) {
   if (id.includes("modules")) return navIconColors.modules;
   if (id.includes("theme")) return navIconColors.themes;
   if (id.includes("feeds")) return navIconColors.feeds;
-  return "var(--primary)";
+  return "var(--studio-accent)";
 }
 
 export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";
@@ -1872,7 +1870,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   let owned:typeof boot=null;
   const abort=new AbortController();
   const configuration=getStudioRuntimeConfig();
-  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
+  void initializeStudioModules(manifestQuery.data.modules,{host:hostContext,identity:hostIdentity,dialogs,authManager,configuration:configuration as Readonly<Record<string,unknown>>,signal:abort.signal},manifestQuery.data)
    .then(result=>{
     if(abort.signal.aborted){for(const {instance} of [...result.instances].reverse())disposeStudioModuleInstance(instance);return;}
     const connection=result.instances.find(item=>item.instance.connection)?.instance.connection
@@ -1892,7 +1890,27 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const reset=watchStudioModuleChanges({canReload:()=>!boot?.connection.getSnapshot().active?.pendingWrites,resetDocument:path=>window.location.assign(path),onPending:()=>setResetPending(true)});
   return ()=>reset.dispose();
  },[boot]);
- return <>{resetPending?<div role="status" className="backend-connection-notice">Studio modules changed. Finish or reset the current draft, then <button type="button" onClick={()=>{if(!boot?.connection.getSnapshot().active?.pendingWrites && requestStudioNavigation(currentRelativeLocation(),"/"))window.location.assign("/");}}>Reload Studio</button>.</div>:null}{boot?<ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest}/>:<ThemeProvider storeContext={hostContext}><div role="status">{error ?? (manifestQuery.isError ? String(manifestQuery.error) : "Loading Studio modules…")}</div></ThemeProvider>}</>;
+ function reloadAfterDraft() {
+   const origin = currentRelativeLocation();
+   if (boot?.connection.getSnapshot().active?.pendingWrites) return;
+   settleStudioNavigationReview(reviewStudioNavigation(origin, "/"), allowed => {
+     if (allowed && currentRelativeLocation() === origin && !boot?.connection.getSnapshot().active?.pendingWrites) window.location.assign("/");
+   });
+ }
+
+ const startupError = error ?? (manifestQuery.isError ? String(manifestQuery.error) : null);
+ return <>
+   {resetPending ? <StudioAlert tone="info">
+     Studio modules changed. Finish or reset the current draft, then reload Studio.
+     <StudioButton onClick={reloadAfterDraft}>Reload Studio</StudioButton>
+   </StudioAlert> : null}
+   {boot ? <ConnectionApplication authManager={authManager} connections={boot.connection} modules={boot.modules} manifest={boot.manifest} /> :
+     <ThemeProvider storeContext={hostContext}>
+       {startupError ? <StudioResultState tone="danger" title="Studio modules could not load" description={startupError}
+         actions={<StudioButton onClick={() => window.location.reload()}>Reload Studio</StudioButton>} /> :
+         <SkeletonRows rows={3} label="Loading Studio modules" />}
+     </ThemeProvider>}
+ </>;
 }
 
 function ConnectionApplication({authManager,connections,modules,manifest}:{authManager:AuthProviderManager|null;connections:StudioConnectionController;modules:StudioLoadedModule[];manifest:StudioModulesResponse}) {
@@ -1906,9 +1924,22 @@ function ConnectionApplication({authManager,connections,modules,manifest}:{authM
   const stopRestore=reloadConnectionOnPageRestore(connections);
   return()=>{mounted=false;stopRestore();};
  },[connections]);
- const navigate=(path:string)=>window.location.assign(path);
+ const navigate=async(path:string)=>{
+  const from=currentRelativeLocation();
+  const session=connections.getSnapshot().active;
+  if(await reviewStudioNavigation(from,path) && from===currentRelativeLocation() && session===connections.getSnapshot().active && !session?.pendingWrites)window.location.assign(path);
+ };
  if(!snapshot.active || !initialized || snapshot.loading || initializationError)return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[]} panels={[]} path="/" title="Connection" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} onNavigate={navigate} accountAction={<UserMenu/>} backendAction={<ShellContributions modules={modules} placement="connection" navigate={navigate}/>}>
- {(!initialized || snapshot.loading) && !initializationError?<SkeletonRows rows={3} label="Connecting to backend"/>:<><div role="status">{initializationError ?? snapshot.error}</div><button type="button" onClick={()=>window.location.assign("/")}>Return Home</button><ShellContributions modules={modules} placement="notice" navigate={navigate}/><ShellContributions modules={modules} placement="recovery" navigate={navigate}/></>}
+ {(!initialized || snapshot.loading) && !initializationError ? <SkeletonRows rows={3} label="Connecting to backend" /> : <>
+   <StudioResultState
+     tone={initializationError || snapshot.error ? "danger" : "neutral"}
+     title={initializationError || snapshot.error ? "Backend connection failed" : "Choose a backend connection"}
+     description={initializationError ?? snapshot.error}
+     actions={<StudioButton onClick={() => window.location.assign("/")}>Return Home</StudioButton>}
+   />
+   <ShellContributions modules={modules} placement="notice" navigate={navigate} />
+   <ShellContributions modules={modules} placement="recovery" navigate={navigate} />
+ </>}
  </ShellFrame></ThemeProvider>;
  const content=<SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} modules={modules} manifest={manifest}/>;
  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager===authManager ? content : snapshot.active.manager?<AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider>:<AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;

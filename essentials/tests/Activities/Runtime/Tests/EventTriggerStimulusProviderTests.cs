@@ -109,7 +109,8 @@ public sealed class EventTriggerStimulusProviderTests
             {
                 [nameof(Event.EventName)] = "order-shipped",
                 [nameof(Event.CorrelationId)] = "order-7",
-                [nameof(Event.CanStartWorkflow)] = true
+                [nameof(Event.CanStartWorkflow)] = true,
+                [nameof(Event.ExpiresAt)] = null
             });
         var activity = Assert.IsType<Event>(activation.Activity);
         var context = new SimpleActivityExecutionContext(
@@ -302,7 +303,8 @@ public sealed class EventTriggerStimulusProviderTests
             {
                 [nameof(Event.EventName)] = "order-shipped",
                 [nameof(Event.CorrelationId)] = correlationId,
-                [nameof(Event.CanStartWorkflow)] = canStartWorkflow
+                [nameof(Event.CanStartWorkflow)] = canStartWorkflow,
+                [nameof(Event.ExpiresAt)] = null
             });
         return Assert.IsType<Event>(activation.Activity);
     }

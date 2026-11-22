@@ -120,12 +120,13 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
 
   await page.goto("/settings/theme-builder");
   const theme = page.locator(".theme-builder-page:visible");
-  const views = theme.getByRole("tablist", { name: "Theme Builder views", exact: true });
+  const views = theme.getByRole("tablist", { name: "Theme builder views", exact: true });
   await expect(views).toBeVisible();
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-overview");
   await read("theme-overview-content", theme.getByRole("textbox", { name: "Name", exact: true }));
-  await theme.getByRole("button", { name: "Duplicate", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
   const name = theme.getByRole("textbox", { name: "Name", exact: true });
   await expect(name).toBeEditable();
   const edited = `Panel navigation ${info.project.name}`;
@@ -153,7 +154,7 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await assertLinkedTabs(theme);
   await capture(page, info, "theme-preview");
   await read("theme-preview-content", theme.locator(".theme-preview-card"));
-  await read("theme-preview-validation", theme.getByRole("button", { name: "Apply preview", exact: true }));
+  await read("theme-preview-validation", theme.getByRole("button", { name: "Preview theme", exact: true }));
   await selectByKey(views, "Home", /^Overview$/);
   await expect(name).toHaveValue(edited);
   await assertLinkedTabs(theme);
@@ -162,7 +163,8 @@ export async function settingsTabsJourney(page: Page, info: TestInfo, capture: (
   await expect(primary).toHaveValue(editedPrimary);
   await selectByKey(views, "Home", /^Overview$/);
   await expect(name).toHaveValue(edited);
-  await theme.getByRole("button", { name: "Delete", exact: true }).click();
+  await theme.getByRole("button", { name: "Theme actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete theme", exact: true }).click();
   await page.getByRole("dialog", { name: "Delete theme", exact: true }).getByRole("button", { name: "Delete theme", exact: true }).click();
   await expect(name).toBeDisabled();
   await assertLinkedTabs(theme);
@@ -182,14 +184,16 @@ async function checkFeedIconActions(page: Page, section: Locator, capture: (name
   const deleteButton = feeds.getByRole("button", { name: /^Delete / }).first();
 
   await edit.press("Enter");
-  const editor = feeds.getByRole("dialog");
+  const editor = page.getByRole("dialog", { name: "Edit feed" });
   const close = editor.getByRole("button", { name: "Close edit feed", exact: true });
   await expect(close).toHaveAttribute("title", "Close edit feed");
-  for (const button of [refresh, edit, deleteButton, close]) {
+  for (const button of [refresh, edit, deleteButton]) {
     await expect(button).toHaveCSS("width", "28px");
     await expect(button).toHaveCSS("height", "28px");
     await expect(button.locator("svg")).toHaveCSS("width", "16px");
   }
+  await expect(close).toHaveClass(/studio-dialog-close/);
+  await expect(close.locator("svg")).toHaveCSS("width", "16px");
   await capture("feeds-edit-dialog");
   await close.press("Enter");
   await expect(editor).toBeHidden();

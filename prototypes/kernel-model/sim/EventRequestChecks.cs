@@ -161,9 +161,11 @@ internal static class EventRequestChecks
             "the legacy discovery and direct route cannot borrow a bound start subscription's authority");
         var request = publication with { FoundationTenant = "acme", Payload = "tenant" };
         var receipt = store.PublishRequest(request, "local-registration");
+        var lease = (await store.TakeAsync(0, "event-shape", Defaults.Lease))!;
+        var polled = await store.PollAsync(0, lease.Epoch, TimeSpan.Zero, 50);
         check(receipt is [{ Added: true, Target: var started }] && started != legacy.Target &&
-            store.Messages.Values.Any(row => row.Message.Target == started && row.Message.Payload == "tenant") &&
-            store.Messages.Values.Any(row => row.Message.Target == legacy.Target && row.Message.Payload == "legacy"),
+            polled.Messages.Any(row => row.Message.Target == started && row.Message.Payload == "tenant") &&
+            polled.Messages.Any(row => row.Message.Target == legacy.Target && row.Message.Payload == "legacy"),
             "a retained legacy match cannot suppress a scoped delivery of the same key, id and wait");
     }
 

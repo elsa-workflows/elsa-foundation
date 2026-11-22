@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioAlert, StudioButton, StudioField, StudioSidePanelActions, StudioSidePanelResizeHandle, StudioTabPanel, StudioTabs, useStudioSidePanelLayout } from "@elsa-workflows/studio-ui";
 import { Copy, GripVertical, MoveDown, MoveUp, Plus, Trash2 } from "lucide-react";
 import { ContributedTaskForm } from "./TaskForm";
 import { createFieldRowId, duplicateTaskField, validateTaskFields } from "./formDesignerModel";
@@ -27,8 +27,8 @@ interface FieldRow {
 interface FormDesignerProps {
   fields: TaskField[];
   onFieldsChange: (fields: TaskField[]) => void;
-  form?: Pick<TaskForm, "id" | "version" | "name"> & Partial<Pick<TaskForm, "provider">>;
-  onFormChange?: (update: Partial<Pick<TaskForm, "id" | "name">>) => void;
+  form?: Pick<TaskForm, "id" | "version" | "name"> & Partial<Pick<TaskForm, "provider" | "description">>;
+  onFormChange?: (update: Partial<Pick<TaskForm, "id" | "name" | "description">>) => void;
   description?: React.ReactNode;
   versionLabel?: string;
   formIdReadOnly?: boolean;
@@ -96,6 +96,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
     id: form?.id ?? "",
     version: form?.version ?? "1",
     name: form?.name ?? "",
+    ...(form?.description ? { description: form.description } : {}),
     provider: form?.provider ?? basicProvider,
     fields: rowFields
   };
@@ -114,13 +115,16 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
   };
   const applySourceForm = (nextForm: TaskForm) => {
     const rowsByKey = new Map(rows.map(row => [row.field.key, row]));
+    const nextKeys = new Set(nextForm.fields.map(field => field.key));
     const nextRows = nextForm.fields.map((field, index) => {
-      const existing = rowsByKey.get(field.key) ?? rows[index];
+      const atIndex = rows[index];
+      const renamed = atIndex && !nextKeys.has(atIndex.field.key) ? atIndex : undefined;
+      const existing = rowsByKey.get(field.key) ?? renamed;
       return { id: existing?.id ?? createFieldRowId(), field: structuredClone(field) };
     });
     publishFields(nextRows);
     setSelectedId(current => nextRows.some(row => row.id === current) ? current : nextRows[0]?.id ?? null);
-    if (form && onFormChange && nextForm.name !== form.name) onFormChange({ name: nextForm.name });
+    if (form && onFormChange && (nextForm.name !== form.name || nextForm.description !== form.description)) onFormChange({ name: nextForm.name, description: nextForm.description });
   };
   const updateUnappliedSource = (unapplied: boolean) => {
     setUnappliedSource(unapplied);
@@ -210,7 +214,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
   return <section className="user-task-designer" aria-label="Form designer" data-field-order={rowFields.map(field => field.key).join(",")}>
     <header className="user-task-designer__header">
       <div className="user-task-designer__heading">
-        {compactHeader && form ? <small>{versionLabel ?? `Version ${form.version}`}</small> : form ? <><span>Forms / {form.name || "Untitled form"}</span><h2>{form.name || "Untitled form"}</h2><small>{versionLabel ?? `Version ${form.version}`}</small><p>{description ?? "Changes apply only to new tasks after this version is published."}</p></> : <><h2>Design the form</h2><p>Add fields, arrange them, then review the recipient experience.</p></>}
+        {compactHeader && form ? <small>{versionLabel ?? `Version ${form.version}`}</small> : form ? <><h2>{form.name || "Untitled form"}</h2><small>{versionLabel ?? `Version ${form.version}`}</small><p>{description ?? "Changes apply only to new tasks after this version is published."}</p></> : <><h2>Design the form</h2><p>Add fields, arrange them, then review the recipient experience.</p></>}
       </div>
       <div className="user-task-designer__toolbar-actions">
         {toolbarActions}
@@ -269,6 +273,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                   <StudioField label="Form ID"><input value={form.id} aria-invalid={!form.id.trim()} disabled={canvasDisabled || formIdReadOnly} onChange={event => onFormChange({ id: event.target.value })} /></StudioField>
                   <StudioField label="Version" description="Assigned automatically when the form is published."><output className="user-task-version-value">{versionLabel ?? form.version}</output></StudioField>
                   <StudioField label="Name"><input value={form.name} aria-invalid={!form.name.trim()} disabled={canvasDisabled} onChange={event => onFormChange({ name: event.target.value })} /></StudioField>
+                  <StudioField label="Description"><textarea maxLength={2000} value={form.description ?? ""} disabled={canvasDisabled} onChange={event => onFormChange({ description: event.target.value })} /></StudioField>
                 </div> : selectedRow ? <>
                   <h4>Field properties</h4>
                   <StudioField label="Label"><input value={selectedRow.field.label} disabled={canvasDisabled} aria-invalid={fieldErrors[selectedIndex].some(error => error.includes("label"))} onChange={event => updateField(selectedRow.id, { label: event.target.value })} /></StudioField>
@@ -289,8 +294,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                   <StudioField label="Help text"><textarea rows={2} value={selectedRow.field.help ?? ""} disabled={canvasDisabled} onChange={event => updateField(selectedRow.id, { help: event.target.value || undefined })} /></StudioField>
                   {selectedControl?.status === "available" && selectedControl.control ? <>
                     <h4>{selectedControl.control.label} properties</h4>
-                    {selectedControl.control.propertiesEditor ? <>{selectedControl.control.propertiesLabel ? <details className="user-task-designer__advanced">
-                      <summary>{selectedControl.control.propertiesLabel}</summary>
+                    {selectedControl.control.propertiesEditor ? <>{selectedControl.control.propertiesLabel ? <AdvancedSection label={selectedControl.control.propertiesLabel}>
                       <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
                         if (typeof value !== "object" || value === null) return;
                         const candidate = value as Partial<TaskField>;
@@ -300,7 +304,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                         }
                         updateField(selectedRow.id, update);
                       }} />
-                    </details> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
+                    </AdvancedSection> : <selectedControl.control.propertiesEditor field={selectedRow.field} disabled={canvasDisabled} onChange={value => {
                       if (typeof value !== "object" || value === null) return;
                       const candidate = value as Partial<TaskField>;
                       const update: Partial<TaskField> = {};
@@ -309,7 +313,7 @@ export function FormDesigner({ fields, onFieldsChange, form, onFormChange, descr
                       }
                       updateField(selectedRow.id, update);
                     }} />}</> : null}
-                  </> : <p role="alert">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</p>}
+                  </> : <StudioAlert tone="danger">{selectedControl?.reason ?? "This field control is not available."} The original field configuration has been preserved.</StudioAlert>}
                   {fieldErrors[selectedIndex].length ? <ul className="user-task-designer__property-errors" aria-label="Selected field errors">{fieldErrors[selectedIndex].map(error => <li key={error}>{error}</li>)}</ul> : null}
                 </> : <p>Select a field in the canvas to edit its properties, or open Form settings.</p>}
               </div>

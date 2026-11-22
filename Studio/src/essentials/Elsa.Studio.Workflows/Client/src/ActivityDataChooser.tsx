@@ -1,3 +1,4 @@
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import {
   createContext,
   useCallback,
@@ -389,7 +390,7 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
         const ownReason = shared ? null : option.unavailableReason;
         const reasonId = shared ? sharedReasonId : `${labelId}-${option.source.id}`;
         return (
-          <button
+          <StudioButton
             key={option.source.id}
             type="button"
             role="option"
@@ -410,7 +411,7 @@ function ProducerGroup({ group, current, waitingFor, onChoose }: {
             {option.typeLabel ? <><span className="wf-visually-hidden">, </span><span className="wf-data-chooser-option-type">{option.typeLabel}</span></> : null}
             {binding ? null : <><span className="wf-visually-hidden">, </span><span className="wf-data-chooser-option-tag">Not available</span></>}
             {ownReason ? <small id={reasonId} aria-hidden="true">{ownReason}</small> : null}
-          </button>
+          </StudioButton>
         );
       })}
     </div>
@@ -421,7 +422,7 @@ function ChooserNotice({ tone, message, action }: { tone: "info" | "danger"; mes
   return (
     <div className="wf-data-chooser-notice" data-tone={tone} role={tone === "danger" ? "alert" : "status"}>
       <span>{message}</span>
-      {action ? <button type="button" onClick={action.run}>{action.label}</button> : null}
+      {action ? <StudioButton type="button" onClick={action.run}>{action.label}</StudioButton> : null}
     </div>
   );
 }
@@ -467,7 +468,7 @@ export function ChooseDataButton({ target, inputLabel, open, disabled, onToggle,
   if (!host) return null;
   return (
     <>
-      <button
+      <StudioButton
         ref={triggerRef}
         type="button"
         className={open ? "wf-choose-data-trigger open" : "wf-choose-data-trigger"}
@@ -479,7 +480,7 @@ export function ChooseDataButton({ target, inputLabel, open, disabled, onToggle,
         onClick={onToggle}
       >
         <ActivityOutputIcon size={14} aria-hidden="true" />
-      </button>
+      </StudioButton>
       {open ? (
         <ActivityDataBrowser
           key={`${target.nodeId}\u001f${target.inputKey}`}
@@ -584,22 +585,22 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
           <AlertTriangle size={13} aria-hidden="true" />
           <span>{problem}</span>
           {preview?.rejection && canSerializeJsonString && openConversion ? (
-            <button type="button" className="wf-data-reference-conversion" onClick={openConversion}>Choose conversion</button>
+            <StudioButton type="button" className="wf-data-reference-conversion" onClick={openConversion}>Choose conversion</StudioButton>
           ) : null}
         </p>
       ) : null}
       <div className="wf-data-reference-actions">
         {reference && producer && host?.revealActivity ? (
-          <button
+          <StudioButton
             type="button"
             aria-label={`Go to ${producerLabel}${disambiguation ? ` · ${disambiguation}` : ""}`}
             onClick={() => host.revealActivity?.(reference.producerNodeId)}
           >
             <LocateFixed size={13} aria-hidden="true" /> Go to
-          </button>
+          </StudioButton>
         ) : null}
         {canBrowse ? (
-          <button
+          <StudioButton
             ref={replaceRef}
             type="button"
             className="wf-data-reference-replace"
@@ -609,10 +610,10 @@ function WholeActivityResultReferenceEditor({ descriptor, value, disabled, initi
             onClick={() => (browsing ? closeBrowser("none") : setBrowsingFor(targetKey))}
           >
             {reference ? "Replace" : "Choose data"}
-          </button>
+          </StudioButton>
         ) : null}
         {!disabled ? (
-          <button type="button" aria-label={`Clear data for ${inputLabel}`} onClick={() => onChange(null)}>Clear</button>
+          <StudioButton type="button" aria-label={`Clear data for ${inputLabel}`} onClick={() => onChange(null)}>Clear</StudioButton>
         ) : null}
       </div>
       {browsing && host && canBrowse ? (
@@ -728,10 +729,10 @@ function ActivityDataMemberReferenceEditor({ descriptor, syntax, value, disabled
     {problem ? <p className="wf-data-reference-problem">{problem}</p> : null}
     {!host || !changeBinding ? <p className="wf-data-chooser-note">Source selection is unavailable in this editor. The reference is preserved.</p> : null}
     {canBrowse ? <div className="wf-data-reference-actions">
-      {member?.producerNodeId && host.describeActivity(member.producerNodeId) && host.revealActivity ? <button type="button" onClick={() => host.revealActivity?.(member.producerNodeId!)}>Go to</button> : null}
-      <button ref={replaceRef} type="button" aria-label={`Replace data for ${descriptor.displayName || descriptor.name}`} aria-haspopup="dialog"
-        aria-expanded={browsingFor === targetKey} onClick={() => setBrowsingFor(targetKey)}>Replace</button>
-      <button type="button" aria-label={`Clear data for ${descriptor.displayName || descriptor.name}`} onClick={() => onChange(null)}>Clear</button>
+      {member?.producerNodeId && host.describeActivity(member.producerNodeId) && host.revealActivity ? <StudioButton type="button" onClick={() => host.revealActivity?.(member.producerNodeId!)}>Go to</StudioButton> : null}
+      <StudioButton ref={replaceRef} type="button" aria-label={`Replace data for ${descriptor.displayName || descriptor.name}`} aria-haspopup="dialog"
+        aria-expanded={browsingFor === targetKey} onClick={() => setBrowsingFor(targetKey)}>Replace</StudioButton>
+      <StudioButton type="button" aria-label={`Clear data for ${descriptor.displayName || descriptor.name}`} onClick={() => onChange(null)}>Clear</StudioButton>
     </div> : null}
     {canBrowse && browsingFor === targetKey ? <ActivityDataBrowser key={targetKey} host={host} target={target}
       inputLabel={descriptor.displayName || descriptor.name} anchorRef={replaceRef} open current={null} onSelect={changeBinding} onClose={close} /> : null}

@@ -1,9 +1,11 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 test("a module-owned field control is authored, previewed, saved, reopened, and published through the shared Slot", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html?custom-control");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("textbox", { name: "Form ID" }).fill("ratings");
   await page.getByRole("textbox", { name: "Name" }).fill("Rating form");
   await page.getByRole("button", { name: "Rating", exact: true }).click();
@@ -19,12 +21,11 @@ test("a module-owned field control is authored, previewed, saved, reopened, and 
   await expect(preview.locator('input[type="number"]')).toHaveAttribute("max", "7");
   await page.screenshot({ path: testInfo.outputPath("field-control-preview-desktop.png"), animations: "disabled" });
 
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "ratings" });
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   await page.getByRole("tab", { name: "Source", exact: true }).click();
   await expect(source).toContainText('"controlId": "example.rating/1"');
   await expect(source).toContainText('"max": 7');
@@ -44,8 +45,7 @@ test("missing control modules preserve JSON and block publication", async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/form-designer.html?missing-control");
   const row = page.getByRole("row").filter({ hasText: "contact" });
-  await row.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  await row.press("Enter");
   await page.getByRole("button", { name: "Select Rating", exact: true }).click();
 
   await expect(page.locator(".user-task-designer__properties")).toContainText("Field control “example.rating/1” is unavailable");

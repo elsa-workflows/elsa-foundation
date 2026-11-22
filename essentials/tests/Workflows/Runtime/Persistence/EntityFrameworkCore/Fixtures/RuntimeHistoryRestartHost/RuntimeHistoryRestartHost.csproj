@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <ProjectReference Include="../../../../../../../src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../../src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <Compile Include="../../Tests/RuntimeEventExecutableTestFixture.cs" Link="RuntimeEventExecutableTestFixture.cs" />
+  </ItemGroup>
+</Project>

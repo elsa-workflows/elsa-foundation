@@ -74,6 +74,13 @@ public class DispatchWorkflowRuntimeFeature : IShellFeature
             options.MaxDeliveryAttempts = deliveryOptions.MaxDeliveryAttempts;
             options.RetryDelay = deliveryOptions.RetryDelay;
         });
+        services.TryAddScoped(ChildStartExecutor.Create);
+        services.TryAddScoped(ParentResumeExecutor.Create);
+        services.AddSingleton(RuntimeHistorySourceSupport.ForSourceOwner(WorkflowDispatchLifecycle.StartChildIntentKind,
+            [RuntimeHistorySourceFactKind.ChildWorkflowDispatchRequested]));
+        services.AddSingleton(RuntimeHistorySourceSupport.ForSourceOwner(WorkflowDispatchLifecycle.ResumeParentIntentKind,
+            [RuntimeHistorySourceFactKind.ChildWorkflowSettled]));
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchHistoryEnricher>());
         services.AddRuntimePostCommitIntentHandler<ChildStartExecutor>(
             DispatchWorkflowConstants.StartChildIntentKind,
             new RuntimePostCommitRetryPolicy(deliveryOptions.MaxDeliveryAttempts, deliveryOptions.RetryDelay));

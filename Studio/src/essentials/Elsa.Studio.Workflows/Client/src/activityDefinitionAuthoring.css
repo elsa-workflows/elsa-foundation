@@ -46,8 +46,7 @@
 /* Status occupies its own final row, so feedback never moves the action targets. */
 .ad-publication-toolbar { display: contents; }
 
-.ad-authoring-toolbar-actions > button,
-.ad-publication-toolbar-trigger,
+.ad-authoring-toolbar-actions > button:not(.studio-button),
 .ad-authoring-advanced > summary,
 .ad-authoring-history > summary {
   display: inline-flex;
@@ -69,14 +68,12 @@
   /* Fit the longest review label without shifting the following actions. */
   width: 16rem;
   max-width: 100%;
-  border-color: var(--studio-accent);
-  color: var(--studio-accent-text);
-  background: var(--studio-accent);
 }
 
 .ad-publication-toolbar-status {
   order: 1;
   grid-column: 1 / -1;
+  flex: 1 1 100%;
   contain: inline-size;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
@@ -157,22 +154,13 @@
 .ad-authoring-advanced-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .ad-authoring-advanced-actions > button { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
 
-.ad-publication-dialog-backdrop { z-index: 1100; }
-.ad-publication-dialog {
-  display: block;
-  width: min(58rem, 100%);
-  padding: 0;
-}
+.studio-dialog.ad-publication-dialog { width: min(58rem, calc(100vw - 32px)); }
+.ad-publication-dialog .ad-publication-review { display: grid; gap: 1rem; }
 
-.ad-publication-dialog .ad-publication-review { display: grid; gap: 1rem; padding: 1.15rem; }
-.ad-publication-dialog .ad-publication-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: .75rem; }
-.ad-publication-dialog .ad-publication-header h2 { margin: .2rem 0 .35rem; }
-.ad-publication-dialog .ad-publication-header p { max-width: 52rem; }
-.ad-publication-dialog-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 2.4rem; min-height: 2.4rem; padding: 0; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
 .ad-publication-prepare-row { display: flex; justify-content: flex-start; }
 .ad-publication-technical-details { margin-top: .75rem; }
 .ad-publication-technical-details > summary { color: var(--studio-text-muted); cursor: pointer; }
-.ad-publication-technical-details .ad-publication-summary { margin-top: .5rem; }
+.ad-publication-technical-details .studio-fact-list { margin-top: .5rem; }
 .ad-publication-dialog .ad-publication-impact details > summary,
 .ad-publication-dialog .ad-readiness-grid details > summary { color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
 .ad-publication-dialog .ad-readiness-grid details code { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
@@ -184,6 +172,11 @@
 }
 
 @media (max-width: 600px) {
+  /* Standalone hosts render the breadcrumb inside the editor instead of the shell. */
+  .ad-draft-editor .wf-editor-identity:has(.studio-breadcrumbs) { flex-direction: column; align-items: stretch; }
+  .ad-draft-editor .wf-editor-identity .studio-breadcrumbs { white-space: nowrap; }
+  .ad-draft-editor .wf-editor-identity .studio-breadcrumb-current { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .ad-draft-editor .wf-editor-title > strong { min-height: 2lh; align-content: center; white-space: normal; overflow-wrap: anywhere; }
   .ad-draft-editor .ad-authoring-toolbar-actions { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .ad-draft-editor .ad-authoring-toolbar-actions:has(.ad-authoring-history) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ad-authoring-toolbar-actions .ad-publication-toolbar-trigger { grid-column: 1 / -1; width: 100%; max-width: none; }
@@ -210,14 +203,11 @@
 
 @media (max-width: 560px) {
   .ad-authoring-identity { grid-template-columns: 1fr; }
-  .ad-publication-dialog-backdrop { padding: .5rem; }
-  .ad-publication-dialog { max-height: calc(100vh - 1rem); }
 }
 .ad-publication-dialog .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }
 .ad-interface-suggestions { margin: 1rem 0; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
 .ad-interface-suggestions > summary { color: var(--studio-text-muted); cursor: pointer; font-weight: 600; }
 .ad-interface-suggestions[open] > summary { margin-bottom: 1rem; }
-.ad-draft-editor .ad-publication-toolbar-trigger { color: var(--studio-accent-text); }
 
 /* Keep routine authoring views visually separate from technical controls. */
 .ad-draft-editor .ad-authoring-view-tabs {
@@ -257,7 +247,7 @@
 .ad-draft-editor .ad-interface-suggestions > .ad-publication-review { margin: 0; padding: 16px 0; border: 0; background: transparent; }
 .ad-proposal-technical > summary,
 .ad-mapping-technical > summary { width: fit-content; color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
-.ad-proposal-technical .ad-publication-summary { margin-top: 12px; }
+.ad-proposal-technical .studio-fact-list { margin-top: 12px; }
 .ad-interface-connections-header h2 { margin: 0 0 4px; font-size: var(--studio-section-title-size); }
 .ad-interface-connections-header p { margin: 0; color: var(--studio-text-muted); }
 .ad-public-interface-view { display: grid; gap: 24px; width: 100%; max-width: 84rem; min-width: 0; margin-inline: 0; }
@@ -301,24 +291,8 @@
 .ad-graph-outcome-mapping-add select:focus-visible,
 .ad-graph-output-mapping > label select:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 
-.ad-test-run-backdrop { z-index: 1100; }
-.ad-dialog.ad-test-run-dialog {
-  width: min(72rem, 100%);
-  max-height: min(50rem, calc(100vh - 2rem));
-  max-height: min(50rem, calc(100dvh - 2rem));
-}
+.studio-dialog.ad-test-run-dialog { width: min(72rem, calc(100vw - 32px)); }
 
-.ad-test-run-dialog > header,
-.ad-test-run-dialog > footer {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: .75rem;
-}
-
-.ad-test-run-dialog > header h2 { margin: .2rem 0 0; font-size: var(--studio-section-title-size); }
-.ad-test-run-dialog > header p { margin: .4rem 0 0; color: var(--studio-text-muted); }
-.ad-test-run-dialog > footer { align-items: center; justify-content: flex-end; padding-top: .75rem; border-top: 1px solid var(--studio-border); }
 .ad-test-run-dialog .ad-test-run-identity { display: flex; align-items: center; gap: .35rem; }
 .ad-test-run-dialog .ad-test-run-identity > a { min-width: 0; color: var(--studio-accent); }
 .ad-test-run-dialog .ad-test-run-identity code { display: block; max-width: 100%; overflow-wrap: anywhere; }
@@ -329,10 +303,7 @@
 .ad-test-run-dialog .ad-test-run-history li > code { min-width: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 560px) {
-  .ad-dialog-backdrop.ad-test-run-backdrop { padding: .5rem; }
-  .ad-dialog.ad-test-run-dialog { max-height: calc(100vh - 1rem); max-height: calc(100dvh - 1rem); padding: .7rem; }
   .ad-test-run-dialog .ad-test-run-technical { grid-template-columns: minmax(0, 1fr); }
-  .ad-test-run-dialog > footer { align-items: stretch; flex-wrap: wrap; }
 }
 
 @media (max-width: 1100px) {

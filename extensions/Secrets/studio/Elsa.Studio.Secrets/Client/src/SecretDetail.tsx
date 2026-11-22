@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { StudioNotificationApi } from "@elsa-workflows/studio-sdk";
-import { useDialogFocus } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioDialogFooter } from "@elsa-workflows/studio-ui";
+import { StudioDialog, StudioDialogFooter } from "@elsa-workflows/studio-ui";
 import { CopySecretNameButton } from "./CopySecretNameButton";
 import { ScopeMatchingHint } from "./SecretScopePicker";
 import { SecretFormField } from "./SecretFormField";
@@ -23,20 +22,19 @@ export function SecretDetail(props: SecretDetailProps) {
   return props.presentation === "page" ? <SecretMetadataForm {...props} /> : <SecretDetailDialog {...props} />;
 }
 function SecretDetailDialog(props: SecretDetailProps) {
-  const ref = useRef<HTMLElement>(null);
+  const initialField = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
-  useDialogFocus(ref, busy ? null : props.onClose);
   const { onStateChange } = props;
   const report = useCallback((state: SecretEditorState) => { setBusy(state.busy); onStateChange?.(state); }, [onStateChange]);
-  return <div className="secrets-editor-backdrop" role="presentation"><section ref={ref} className="secrets-editor-dialog" role="dialog" aria-modal="true" aria-label="Edit secret" tabIndex={-1}>
-    <header><h3>Edit secret</h3><StudioButton aria-label="Close editor" onClick={props.onClose} disabled={busy}>Close</StudioButton></header>
-    <SecretMetadataForm {...props} onStateChange={report} />
-  </section></div>;
+  return <StudioDialog open title="Edit secret" closeLabel="Close editor" onClose={props.onClose} dismissDisabled={busy}
+    dismissOnOutsideClick={false} initialFocusRef={initialField} className="secrets-edit-shell">
+    <SecretMetadataForm {...props} initialField={initialField} onStateChange={report} />
+  </StudioDialog>;
 }
-function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange, notifications, copyScope }: SecretDetailProps) {
+function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose, onStateChange, notifications, copyScope, initialField }: SecretDetailProps & { initialField?: React.RefObject<HTMLElement | null> }) {
   const formRef = useRef<HTMLFormElement>(null);
   const initiallyFocused = useRef(false);
-  useLayoutEffect(() => { if (!initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus(); } }, []);
+  useLayoutEffect(() => { if (!initialField && !initiallyFocused.current) { initiallyFocused.current = true; formRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus(); } }, [initialField]);
   const [displayName, setDisplayName] = useState(secret.displayName ?? "");
   const [description, setDescription] = useState(secret.description ?? "");
   const [saving, setSaving] = useState(false);
@@ -61,8 +59,11 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
     catch (failure) { setError(failure instanceof Error ? failure.message : "Secret metadata could not be updated."); }
     finally { savingRef.current = false; setSaving(false); }
   }
-  return <form ref={formRef} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
-    <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></p>
+  return <form ref={element => {
+    formRef.current = element;
+    if (initialField) initialField.current = element?.querySelector<HTMLElement>("[data-dialog-initial-focus]") ?? null;
+  }} className="secrets-edit-form secrets-tabbed-form" aria-busy={cannotClose} onSubmit={event => void submit(event)}>
+    <div className="secrets-technical-name"><CopySecretNameButton name={secret.name} notifications={notifications} scope={copyScope} /></div>
     {error ? <p ref={errorRef} className="secrets-field-error" role="alert" tabIndex={-1}>{error}</p> : null}
     <fieldset className="secrets-editor-fields" disabled={cannotClose}>
     <SecretEditorTabs active={active} onSelect={setActive}>
@@ -87,7 +88,7 @@ function SecretMetadataForm({ secret, descriptors, busy = false, onSave, onClose
       </> }}
     </SecretEditorTabs>
     </fieldset>
-    <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save changes"} confirmDisabled={!changed || cannotClose} />
+    <StudioDialogFooter className="secrets-dialog-actions" onCancel={onClose} cancelDisabled={cannotClose} confirmLabel={saving ? "Saving…" : "Save"} confirmDisabled={!changed || cannotClose} />
   </form>;
 }
 function formatDate(value?: string | null) { return value ? new Date(value).toLocaleString() : "-"; }

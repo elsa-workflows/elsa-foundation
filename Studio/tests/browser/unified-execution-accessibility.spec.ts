@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { openExecutionInputs, openExecutionOutputs } from "./executionDetails";
 import axe from "axe-core";
 
@@ -14,6 +14,8 @@ for (const host of ["editor", "instance"]) for (const theme of ["light", "dark"]
     const canvas = host === "instance"
       ? page.getByRole("region", { name: "Workflow run canvas", exact: true })
       : page.getByLabel("Workflow canvas", { exact: true });
+    if (host === "instance") await expect(page.getByRole("button", { name: "Diagram", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas).toBeVisible();
     const source = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
     const narrowInstance = host === "instance" && width === 390;
     await expect(source).toHaveAccessibleName(/Run state: Completed/);

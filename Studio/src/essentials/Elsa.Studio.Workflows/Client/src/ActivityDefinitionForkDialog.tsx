@@ -1,5 +1,5 @@
 import { activityDiagnosticSeverity } from "./activityDiagnosticSeverity";
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -24,7 +24,6 @@ import {
   migrationProviderChoices
 } from "./activityDefinitionDraftManagementShared";
 import { ActivityDefinitionManagementDialogActions, ActivityDefinitionManagementDialogShell } from "./ActivityDefinitionManagementDialogShell";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 export function ActivityDefinitionForkDialog({
   context,
@@ -60,9 +59,7 @@ export function ActivityDefinitionForkDialog({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewAttempt = useRef<{ material: string; idempotencyKey: string } | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
   const submitting = previewing || applying;
-  useDialogFocus(dialogRef, submitting ? null : onClose);
 
   useEffect(() => {
     if (!choices.some(choice => choiceValue(choice) === target)) {
@@ -160,9 +157,7 @@ export function ActivityDefinitionForkDialog({
   );
 
   return <ActivityDefinitionManagementDialogShell
-    dialogRef={dialogRef}
     title={preview ? "Review activity fork" : "Fork recommended activity version"}
-    kicker="Source-owned to Design-owned"
     submitting={submitting}
     onClose={onClose}
   >
@@ -182,7 +177,9 @@ export function ActivityDefinitionForkDialog({
       {choice && !choice.contribution ? <div className="ad-inline-error" role="alert">The exact Studio editor for this target provider schema is unavailable. Forking is disabled.</div> : null}
     </> : <ForkReview preview={preview} />}
     {error ? <div className="ad-inline-error" role="alert">{error}</div> : null}
-    {preview ? <footer><button type="button" onClick={editRequest} disabled={submitting}>Edit request</button><button type="button" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="ad-primary-action" onClick={() => void apply()} disabled={submitting || !canApply}>{applying ? "Applying atomically…" : "Apply reviewed fork"}</button></footer>
+    {preview ? <StudioDialogFooter confirmType="button" leading={<StudioButton onClick={editRequest} disabled={submitting}>Edit request</StudioButton>}
+      onCancel={onClose} cancelDisabled={submitting} confirmLabel={applying ? "Applying changes…" : "Apply reviewed fork"}
+      confirmDisabled={submitting || !canApply} onConfirm={() => void apply()} />
       : <ActivityDefinitionManagementDialogActions submitting={submitting} submitLabel="Create fork preview" canSubmit={canPreview} onClose={onClose} onSubmit={requestPreview} />}
   </ActivityDefinitionManagementDialogShell>;
 }
@@ -191,7 +188,7 @@ function ForkReview({ preview }: { preview: ActivityDefinitionForkPreview }) {
   return <>
     <dl className="ad-review-facts">
       <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code>{preview.source.versionId}</code></dd></div>
-      <div><dt>New Activity Type Key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
+      <div><dt>New activity type key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
       <div><dt>New definition</dt><dd><code>{preview.target.definitionId}</code></dd></div>
       <div><dt>Initial draft</dt><dd><code>{preview.target.draftId}</code></dd></div>
       <div><dt>Provider conversion</dt><dd><code>{preview.providerMigration.sourceProviderKey}</code> schema {preview.providerMigration.sourceProviderSchemaVersion} → <code>{preview.providerMigration.targetProviderKey}</code> schema {preview.providerMigration.targetProviderSchemaVersion}</dd></div>

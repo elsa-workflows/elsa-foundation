@@ -16,5 +16,7 @@
     <Using Include="Kernel.Durable" />
     <Using Include="Kernel.Workflows" />
     <Using Include="Kernel.Native" />
+    <Using Include="Kernel.ReviewFixtures" />
+    <Compile Include="../ModeledTicket.cs" Link="ModeledTicket.cs" />
   </ItemGroup>
 </Project>

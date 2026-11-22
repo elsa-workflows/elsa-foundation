@@ -69,6 +69,55 @@ if (args.Contains("--held-job-result-check"))
     await HeldJobResultChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; }, flaws);
     return failed ? 1 : 0;
 }
+if (args.Contains("--park-kept-check"))
+{
+    var failed = false;
+    await ParkKeptChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-recovery-check"))
+{
+    var failed = false;
+    await ParkKeptChecks.CheckRecoverArrivals((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-recovery-native-check"))
+{
+    var failed = false;
+    await ContractNativeChecks.CheckRecoveryTimers((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    await ParkKeptChecks.CheckInvalidTimerRecoveryPlan((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-recovery-subscription-check"))
+{
+    var failed = false;
+    await ContractNativeChecks.CheckRecoveredSubscription((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--park-recovery-job-check"))
+{
+    var failed = false;
+    await ParkKeptChecks.CheckRecoverJobResult((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--private-kinds-check"))
+{
+    var failed = false;
+    await PrivateKindsChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--metadata-envelope-check"))
+{
+    var failed = false;
+    await MetadataEnvelopeChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
+if (args.Contains("--event-identity-check"))
+{
+    var failed = false;
+    await EventIdentityChecks.Run((ok, name) => { Console.WriteLine($"{(ok ? "ok" : "FAIL")} {name}"); failed |= !ok; });
+    return failed ? 1 : 0;
+}
 
 if (args.Contains("--contract-jobs"))
     return await ContractActorWorkload.RunJobTree(int.Parse(Arg("--seed") ?? Arg("--from") ?? "1"),

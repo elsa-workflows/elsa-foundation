@@ -1,20 +1,19 @@
 import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Plus, Server } from "lucide-react";
-import { qualifyStudioBackendPath, requestStudioNavigation, studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
-import { studioRowInteraction, AnchoredPopover, StudioBreadcrumbs, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
+import { qualifyStudioBackendPath, useStudioWorkspaceTab, studioNavigationRequestedEvent, useStudioRouteLocation, type StudioApiCapabilityDocument, type StudioNavigationRequest, type StudioBackendProfile } from "@elsa-workflows/studio-sdk";
+import { studioRowInteraction, AnchoredPopover, StudioShellBreadcrumbs, StudioPageHeader, StudioButton, StudioAlert, StudioTabs, StudioTabPanel, StudioField, StudioTableContainer, type StudioBreadcrumbLink } from "@elsa-workflows/studio-ui";
 import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
 export const backendNavigation = {id:"backends",label:"Backends",path:"/settings/backends",activePathPrefix:"/settings/backends",placement:"settings" as const,order:20};
 
 function BackendBreadcrumbs({items,current,navigate}:{items:StudioBreadcrumbLink[];current:React.ReactNode;navigate:(path:string)=>void}) {
-  return <StudioBreadcrumbs items={items} current={current} renderLink={item => {
+  return <StudioShellBreadcrumbs items={items} current={current} renderLink={item => {
     const href = qualifyStudioBackendPath(item.href);
     return <a href={href} onClick={event => {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      const from = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (requestStudioNavigation(from,href)) navigate(href);
+      navigate(href);
     }}>{item.label}</a>;
   }} />;
 }
@@ -55,7 +54,7 @@ export function BackendConnectionNotice({connections}:{connections:BackendConnec
   return <div className="backend-connection-notice" role="status" aria-live="polite">
     {snapshot.error ? <StudioAlert tone="warning">{snapshot.error}</StudioAlert> : null}
     {snapshot.busy ? <span>Checking backend connection… <StudioButton type="button" onClick={() => connections.cancelConnection()}>Cancel</StudioButton></span> : null}
-    {snapshot.signInProfile ? <StudioButton type="button" onClick={() => {void connections.signIn().catch(error => window.alert(connectionError(error)));}}>Sign in to {snapshot.profiles.find(profile => profile.id === snapshot.signInProfile)?.name}</StudioButton> : null}
+    {snapshot.signInProfile ? <StudioButton type="button" disabled={snapshot.busy} onClick={() => {void connections.signIn();}}>Sign in to {snapshot.profiles.find(profile => profile.id === snapshot.signInProfile)?.name}</StudioButton> : null}
   </div>;
 }
 
@@ -63,6 +62,12 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   // A background workspace tab can re-render on a connection change while another tab owns the address bar.
   const routeLocation = useStudioRouteLocation();
   const path = explicitPath ?? routeLocation.pathname;
+  const routeOwner = useStudioWorkspaceTab();
+  const currentPath = useRef<string | null>(path);
+  useEffect(() => {
+    currentPath.current = path;
+    return () => {currentPath.current = null;};
+  }, [path]);
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   const segment = path.slice("/settings/backends".length).split("/").filter(Boolean);
   const create = segment[0] === "new";
@@ -76,7 +81,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
     <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current="Unavailable profile" navigate={navigate} />
     <StudioAlert tone="warning">This backend profile is no longer available.</StudioAlert>
   </div></div>;
-  if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} />;
+  if (profile) return <BackendDetails key={profile.id} connections={connections} profile={profile} navigate={navigate} detailPath={detailPath} featureManagementAvailable={featureManagementAvailable} onRemoved={() => {if (currentPath.current === path && (!routeOwner || routeOwner.isActive())) navigate("/settings/backends");}} />;
   return <section className="backends-page" aria-label="Backends">
     <div className="backends-heading"><div><h2>Backends</h2><p>Choose where you design and run workflows.</p></div>{connections.allowPersonal ? <StudioButton variant="primary" type="button" onClick={() => navigate("/settings/backends/new")}><Plus size={16} aria-hidden="true" />Add backend</StudioButton> : null}</div>
     {snapshot.profileError ? <StudioAlert tone="warning">{snapshot.profileError}</StudioAlert> : null}
@@ -87,7 +92,7 @@ export function BackendsPage({connections,navigate,path:explicitPath,featureMana
   </section>;
 }
 
-function BackendDetails({connections,profile,navigate,detailPath,featureManagementAvailable}:{connections:BackendConnections;profile:StudioBackendProfile;navigate:(path:string)=>void;detailPath:string;featureManagementAvailable:boolean}) {
+function BackendDetails({connections,profile,navigate,detailPath,featureManagementAvailable,onRemoved}:{connections:BackendConnections;profile:StudioBackendProfile;navigate:(path:string)=>void;detailPath:string;featureManagementAvailable:boolean;onRemoved():void}) {
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
   const [tab,setTab] = useState("connection");
   const tabsId = useId();
@@ -96,8 +101,26 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
   const capabilities = active ? snapshot.active?.capabilities ?? null : inspectedCapabilities;
   const [error,setError] = useState<string|null>(null);
   const [checking,setChecking] = useState(false);
+  const tabOwner = useStudioWorkspaceTab();
+  const [deleting,setDeleting] = useState(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current=true;return () => {mounted.current=false;}; },[]);
+  async function remove() {
+    setDeleting(true);
+    setError(null);
+    const current = () => mounted.current && (!tabOwner || tabOwner.isActive());
+    try {
+      const confirmed = await connections.dialogs.confirm({title:"Delete backend profile?",message:`Remove “${profile.name}” from your personal profiles? Its backend data will remain available.`,confirmLabel:"Delete",tone:"danger"});
+      const latest = connections.getSnapshot();
+      if (!confirmed || !current() || !latest.profiles.includes(profile) || latest.active?.profile.id === profile.id) return;
+      await connections.remove(profile.id);
+      onRemoved();
+    } catch (error) {
+      if (current()) setError(connectionError(error));
+    } finally {
+      if (mounted.current) setDeleting(false);
+    }
+  }
   async function inspect() {
     setChecking(true);setError(null);
     try { const document = await connections.inspect(profile.id); if (mounted.current) setCapabilities(document); }
@@ -105,20 +128,20 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
     finally {if (mounted.current) setChecking(false);}
   }
   return <section className="backends-page" aria-label={`${profile.name} backend`}>
-    <div className="backends-heading"><div><BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
-      <h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
+    <BackendBreadcrumbs items={[{href:"/settings/backends",label:"Backends"}]} current={profile.name} navigate={navigate} />
+    <StudioPageHeader compact headingLevel={2} title={profile.name} description={profile.baseUrl} actions={<>
       <StudioButton variant="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.disposed && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.disposed && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</StudioButton>
       <StudioButton type="button" disabled={checking || snapshot.busy} onClick={() => {void inspect();}}>{checking ? "Checking…" : "Test connection"}</StudioButton>
       {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" onClick={() => navigate(`${detailPath}/edit`)}>Edit</StudioButton> : null}
       {active && featureManagementAvailable ? <StudioButton type="button" onClick={() => navigate("/features?target=server")}>Manage features</StudioButton> : null}
-    </div></div>
+    </>} />
     {error ? <StudioAlert tone="warning">{error}</StudioAlert> : null}
     <StudioTabs baseId={tabsId} tabs={[{id:"connection",label:"Connection"},{id:"capabilities",label:"Capabilities"}]} activeTab={tab} onSelect={setTab} ariaLabel="Backend details" />
     <StudioTabPanel baseId={tabsId} index={0} hidden={tab !== "connection"}>
       <dl className="backend-properties"><div><dt>Backend API URL</dt><dd className="backend-url">{profile.baseUrl}</dd></div><div><dt>Environment</dt><dd className={profile.environment === "Production" ? "backend-production" : ""}>{profile.environment}</dd></div><div><dt>Managed by</dt><dd>{profile.source === "configuration" ? "Studio configuration" : "You · personal profile"}</dd></div><div><dt>Connection</dt><dd>{active ? snapshot.active?.discoveryError ? "Unavailable" : "Active in this tab" : "Inactive"}</dd></div></dl>
       <p className="backend-note">{profile.source === "configuration" ? "This profile is managed in your Studio host configuration." : connections.hostIdentity.status === "authenticated" ? "This is a personal profile scoped to your Studio host, user and tenant." : "This personal profile is saved in this browser for the anonymous demo session."}</p>
       {!active && featureManagementAvailable ? <p className="backend-note">Connect to this backend before managing its features and per-feature settings.</p> : null}
-      {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" className="backend-remove" disabled={active} onClick={() => { if (window.confirm(`Remove connection profile “${profile.name}”? Backend data is unchanged.`)) void connections.remove(profile.id).then(() => navigate("/settings/backends")).catch(error => setError(connectionError(error))); }}>Remove backend</StudioButton> : null}
+      {profile.source === "personal" && connections.allowPersonal ? <StudioButton type="button" className="backend-remove" disabled={active || deleting} onClick={() => {void remove();}}>Delete profile</StudioButton> : null}
     </StudioTabPanel>
     <StudioTabPanel baseId={tabsId} index={1} hidden={tab !== "capabilities"}>
       <p className="backend-note">API functionality advertised by this backend. Feature enablement and settings are managed separately in Features.</p>
@@ -136,18 +159,34 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
   const [error,setError] = useState<string|null>(null);
   const [saving,setSaving] = useState(false);
   const saved = useRef(false);
+  const writing = useRef(false);
+  const owner = useStudioWorkspaceTab();
   const dirty = name !== (profile?.name ?? "") || baseUrl !== (profile?.baseUrl ?? "") || environment !== (profile?.environment ?? "Development") || authenticationProfile !== (profile?.authenticationProfile ?? "");
   useEffect(() => {
+    let registered = true;
+    const active = () => registered && (!owner || owner.isActive());
     const guard = (event:Event) => {
-      if (saved.current) return;
-      // A probe only asks whether unsaved work exists; it must not prompt.
-      if ((event as CustomEvent<StudioNavigationRequest>).detail?.intent === "probe") {if (saving || dirty) event.preventDefault();return;}
-      if (saving || dirty && !window.confirm("Discard the unsaved backend profile?")) event.preventDefault();
+      if (saved.current || !active() || !dirty && !writing.current) return;
+      const detail = (event as CustomEvent<StudioNavigationRequest>).detail;
+      if (writing.current || detail?.intent === "probe" || !detail?.confirmWith) {
+        event.preventDefault();
+        return;
+      }
+      detail.confirmWith(async () => {
+        if (!active() || writing.current) return false;
+        const confirmed = await connections.dialogs.confirm({title:"Discard backend profile changes?",message:"Your unsaved changes to this backend profile will be lost.",confirmLabel:"Discard",tone:"danger"});
+        return confirmed && active() && !writing.current;
+      });
     };
-    const unload = (event:BeforeUnloadEvent) => {if (saving || dirty && !saved.current) event.preventDefault();};
-    window.addEventListener(studioNavigationRequestedEvent,guard);window.addEventListener("beforeunload",unload);
-    return () => {window.removeEventListener(studioNavigationRequestedEvent,guard);window.removeEventListener("beforeunload",unload);};
-  },[dirty,saving]);
+    const unload = (event:BeforeUnloadEvent) => {if (!saved.current && (dirty || writing.current)) event.preventDefault();};
+    window.addEventListener(studioNavigationRequestedEvent,guard);
+    window.addEventListener("beforeunload",unload);
+    return () => {
+      registered = false;
+      window.removeEventListener(studioNavigationRequestedEvent,guard);
+      window.removeEventListener("beforeunload",unload);
+    };
+  },[connections,owner,dirty,name,baseUrl,environment,authenticationProfile]);
   if (!connections.allowPersonal || profile?.source === "configuration") return <StudioAlert tone="warning">This profile is managed by your Studio host.</StudioAlert>;
   const cancel = () => navigate(profile ? `/settings/backends/${encodeURIComponent(profile.id)}` : "/settings/backends");
   return <section className="backends-page" aria-label={profile ? "Edit backend" : "Add backend"}>
@@ -157,11 +196,14 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
       current={profile ? "Edit" : "Add backend"} navigate={navigate} />
       <h2>{profile ? "Edit backend" : "Add backend"}</h2><p>Save a personal connection profile. Your active backend stays unchanged.</p></div></div>
     <form className="backend-form" onSubmit={event => {
-      event.preventDefault();setError(null);setSaving(true);
+      event.preventDefault();
+      if (writing.current) return;
+      setError(null);
       let url:string;
-      try {url=canonicalBackendUrl(baseUrl);} catch(error) {setError(connectionError(error));setSaving(false);return;}
+      try {url=canonicalBackendUrl(baseUrl);} catch(error) {setError(connectionError(error));return;}
       const entry:StudioBackendProfile={id:profile?.id ?? `personal-${backendConnectionNonce()}`,name,baseUrl:url,environment,source:"personal",...(authenticationProfile ? {authenticationProfile} : {})};
-      void connections.save(entry).then(() => {saved.current=true;navigate(`/settings/backends/${encodeURIComponent(entry.id)}`);}).catch(error => setError(connectionError(error))).finally(() => setSaving(false));
+      writing.current=true;setSaving(true);
+      void connections.save(entry).then(() => {saved.current=true;navigate(`/settings/backends/${encodeURIComponent(entry.id)}`);}).catch(error => setError(connectionError(error))).finally(() => {writing.current=false;setSaving(false);});
     }}>
       <StudioField label="Name"><input required maxLength={80} value={name} onChange={event => setName(event.target.value)} disabled={saving} /></StudioField>
       <StudioField label="Backend API URL"><input required type="url" aria-label="Backend API URL" maxLength={2048} value={baseUrl} onChange={event => setBaseUrl(event.target.value)} disabled={saving} /><small>Include the full shell path, when applicable.</small></StudioField>
@@ -169,7 +211,7 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
       {Object.keys(connections.config.backends?.authenticationProfiles ?? {}).length ? <StudioField label="Authentication"><select value={authenticationProfile} onChange={event => setAuthenticationProfile(event.target.value)} disabled={saving}><option value="">Discover on connection</option>{Object.keys(connections.config.backends?.authenticationProfiles ?? {}).map(id => <option key={id}>{id}</option>)}</select></StudioField> : null}
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       <p className="backend-note">Credentials are requested when you connect and are never saved in this profile.</p>
-      <div className="backend-actions"><StudioButton type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save changes" : "Create backend"}</StudioButton><StudioButton type="button" onClick={cancel} disabled={saving}>Cancel</StudioButton></div>
+      <div className="backend-actions"><StudioButton type="submit" variant="primary" disabled={saving}>{saving ? "Saving…" : profile ? "Save" : "Create backend"}</StudioButton><StudioButton type="button" onClick={cancel} disabled={saving}>Cancel</StudioButton></div>
     </form>
   </section>;
 }

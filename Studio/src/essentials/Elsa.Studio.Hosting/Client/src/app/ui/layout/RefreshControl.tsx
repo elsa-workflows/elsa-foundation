@@ -8,6 +8,8 @@ export interface StudioRefreshContribution {
   label: string;
   onRefresh(): void | Promise<void>;
   refreshing?: boolean;
+  /** Keep keyboard focus and layout stable while refreshing an interactive collection. */
+  keepButtonStable?: boolean;
   disabled?: boolean;
   autoRefresh?: boolean;
   active?: boolean;
@@ -127,10 +129,10 @@ export function StudioRefreshControl({ refresh }: { refresh: StudioRefreshContri
           aria-label={refresh.label}
           aria-busy={busy}
           aria-describedby={[autoEnabled && interval > 0 ? intervalId : "", error ? errorId : ""].filter(Boolean).join(" ") || undefined}
-          disabled={refresh.disabled || busy}
+          disabled={refresh.disabled || (busy && !refresh.keepButtonStable)}
           onClick={() => void runRefresh(false)}
         >
-          {busy ? "Refreshing…" : "Refresh"}
+          {busy && !refresh.keepButtonStable ? "Refreshing…" : "Refresh"}
         </StudioButton>
         {autoEnabled && (
           <StudioButton

@@ -8,7 +8,7 @@ import { NamedDashboardsRoute } from "../NamedDashboards";
 import { QueryControls } from "../QueryControls";
 import { ResultView } from "../ResultView";
 import { initialDefinition, serializeTiles, type DashboardResource, type DatasetDeclaration, type QueryResult } from "../types";
-import { stubApi, waitUntil } from "../../__tests__/testSupport";
+import { beginNamedDraft, stubApi, waitUntil } from "../../__tests__/testSupport";
 import { createDashboardAuthoringController } from "../authoring";
 
 const dataset: DatasetDeclaration = { id: "acme.processing", ownerModuleId: "Acme.Processing", schemaRevision: "1", title: "Processing records", description: "Explicitly exposed processing records.", availability: "ready", fields: [{ id: "category", label: "Customer category", type: "string", filterOperators: ["eq", "ne", "in"], nullable: false, groupable: true, sortable: true, projectable: true, businessDimension: true }, { id: "duration", label: "Processing time", type: "decimal", filterOperators: ["gt"], nullable: true, groupable: false, sortable: true, projectable: true, aggregates: ["average"] }], metrics: [{ id: "processing.duration", revision: "1", label: "Average processing time", unit: "seconds", description: "Elapsed processing time for eligible records." }] };
@@ -18,7 +18,7 @@ const mounted: (() => void)[] = [];
 function render(content: React.ReactNode) { const container = document.createElement("div"); document.body.append(container); const root = createRoot(container); flushSync(() => root.render(content)); mounted.push(() => { flushSync(() => root.unmount()); container.remove(); }); return container; }
 function click(container: HTMLElement, text: string) { const button = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(button).toBeDefined(); flushSync(() => button!.click()); }
 function changeLimit(container: HTMLElement, value: string) {
-  const input = [...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.querySelector("input")!;
+  const input = ([...container.querySelectorAll("label")].find(label => label.textContent === "Maximum result rows/groups")!.control as HTMLInputElement);
   const disclosure = input.closest("details");
   if (disclosure && !disclosure.open) flushSync(() => disclosure.querySelector("summary")!.click());
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
@@ -36,21 +36,21 @@ describe("question query authoring hierarchy", () => {
     expect(view.textContent).not.toContain("Query form");
     expect(view.textContent).not.toContain("Group by");
     expect(view.textContent).not.toContain("Metrics");
-    expect(view.querySelector(".named-query-controls details")).toBeNull();
+    expect(view.querySelector(".named-query-controls .studio-advanced-section")).toBeNull();
   });
 
   it("keeps essential controls visible and optional query sections collapsed with configured indicators", () => {
     const definition = initialDefinition(dataset);
     definition.query.filters = { field: "category", operator: "eq", value: { type: "string", literal: "retail" } };
     const view = render(<QueryControls definition={definition} datasets={[dataset]} disabled={false} onChange={vi.fn()} />);
-    const filterSection = [...view.querySelectorAll<HTMLDetailsElement>("details")].find(item => item.dataset.queryPath === "query.filters");
+    const filterSection = view.querySelector('[data-query-path="query.filters"]');
 
     expect(view.textContent).toContain("Query form");
     expect(view.textContent).toContain("Group by");
     expect(view.textContent).toContain("Metrics");
     expect(filterSection).toBeDefined();
-    expect(filterSection?.open).toBe(false);
-    expect(filterSection?.querySelector("summary")?.textContent).toContain("1 condition");
+    expect(filterSection?.querySelector("[aria-expanded]")?.getAttribute("aria-expanded")).toBe("false");
+    expect(filterSection?.querySelector("button")?.textContent).toContain("1 condition");
     expect(filterSection?.querySelector<HTMLInputElement>('input[value="retail"]')).not.toBeNull();
   });
 
@@ -63,11 +63,11 @@ describe("question query authoring hierarchy", () => {
     const definition = initialDefinition(timedDataset);
     definition.query.time = { field: "createdAt", from: "", to: "", timeZone: "UTC", weekStart: "monday" };
     const view = render(<QueryControls definition={definition} datasets={[timedDataset]} disabled={false} onChange={vi.fn()} problems={[{ code: "required", path: "query.time.from", message: "Choose a start time." }]} validationAttempt={1} />);
-    const timeSection = [...view.querySelectorAll<HTMLDetailsElement>("details")].find(item => item.dataset.queryPath === "query.time");
-    const start = [...view.querySelectorAll("label")].find(item => item.textContent === "From (inclusive UTC instant)")?.querySelector("input");
+    const timeSection = view.querySelector('[data-query-path="query.time"]');
+    const start = ([...view.querySelectorAll("label")].find(item => item.textContent === "Start time (UTC, inclusive)")?.control as HTMLInputElement | null);
 
-    await waitUntil(() => timeSection?.open === true && document.activeElement === start);
-    expect(timeSection?.open).toBe(true);
+    await waitUntil(() => timeSection?.querySelector("button")?.getAttribute("aria-expanded") === "true" && document.activeElement === start);
+    expect(timeSection?.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
   });
 });
 
@@ -123,7 +123,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     api.backend.http.putJson = put as typeof api.backend.http.putJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="detail" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
     await waitUntil(() => view.textContent?.includes("Metadata-only save preserves its query") === true);
-    const name = [...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
+    const name = ([...view.querySelectorAll("label")].find(label => label.textContent === "Name")!.control as HTMLInputElement);
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Safe metadata update");
     flushSync(() => name.dispatchEvent(new Event("input", { bubbles: true })));
     click(view, "Save question"); await waitUntil(() => put.mock.calls.length === 1);
@@ -221,8 +221,9 @@ describe("native dashboard authorization and persistence boundary", () => {
     });
     api.backend.http.postJson = post as typeof api.backend.http.postJson;
     const view = render(<AnonymousAuthProvider><NamedDashboardsRoute api={api} kind="question" view="create" authoring={authoring} navigate={vi.fn()} /></AnonymousAuthProvider>);
+    await beginNamedDraft("Source preview");
     await waitUntil(() => Boolean(view.querySelector(".named-query-controls option[value='acme.processing']")));
-    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls > label > select")!;
+    const selected = view.querySelector<HTMLSelectElement>(".named-query-controls [data-query-path='query.dataset'] select")!;
     flushSync(() => { selected.value = dataset.id; selected.dispatchEvent(new Event("change", { bubbles: true })); });
     click(view, "Preview question"); await waitUntil(() => view.textContent?.includes("retail") === true);
     expect(view.querySelector("tbody td:nth-child(2)")?.textContent).toBe("41");
@@ -267,7 +268,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => authoring.snapshots.size === 1);
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "View matching records");
-    await waitUntil(() => view.textContent?.includes("The current matching records are unavailable") === true);
+    await waitUntil(() => document.body.textContent?.includes("The current matching records are unavailable") === true);
     expect(post.mock.calls[1][0]).toBe("https://backend.example/_elsa/studio/questions/q1/drill");
     expect(post.mock.calls[1][2]).toMatchObject({ headers: { "If-Match": '"r1"' } });
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");
@@ -293,7 +294,8 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, mode === "preview" ? "Refresh results" : "View matching records"); await waitUntil(() => typeof complete === "function");
-    click(view, mode === "preview" ? "Cancel query" : "Close");
+    if (mode === "preview") click(view, "Cancel query");
+    else flushSync(() => document.querySelector<HTMLButtonElement>('[aria-label="Close Matching source records"]')!.click());
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     expect(view.textContent).toContain(mode === "preview" ? "Query cancelled" : "Investigation cancelled");
     expect(view.textContent).toContain("Previous result values are withheld"); expect(view.querySelector(".named-query-controls")).not.toBeNull();
@@ -317,7 +319,7 @@ describe("native dashboard authorization and persistence boundary", () => {
     await waitUntil(() => [...view.querySelectorAll("button")].some(button => button.textContent === "Refresh results"));
     click(view, "Refresh results"); await waitUntil(() => view.textContent?.includes("retail") === true);
     click(view, "Refresh results"); await waitUntil(() => typeof complete === "function");
-    click(view, "View matching records"); await waitUntil(() => view.textContent?.includes("Current source disclosure could not be established") === true);
+    click(view, "View matching records"); await waitUntil(() => document.body.textContent?.includes("Current source disclosure could not be established") === true);
     expect(signal.aborted).toBe(true); expect(view.querySelectorAll(".named-result")).toHaveLength(0);
     complete(result()); await new Promise(resolve => setTimeout(resolve, 0));
     expect(view.querySelectorAll(".named-result")).toHaveLength(0); expect(view.textContent).not.toContain("retail");
@@ -346,7 +348,7 @@ describe("ordinary query editing and truthful results", () => {
     const compact = render(<ResultView result={detailed} visualization={{ kind: "table", y: [] }} compactProvenance stale outdated />);
     const details = compact.querySelector<HTMLDetailsElement>(".named-result-details")!;
     const visible = [...compact.querySelector(".named-result-provenance")!.children].filter(child => child !== details).map(child => child.textContent).join(" ");
-    expect(details.open).toBe(false); expect(details.querySelector("summary")?.textContent).toBe("Result details");
+    expect(details.querySelector("button")?.getAttribute("aria-expanded")).toBe("false"); expect(details.querySelector("button")?.textContent).toBe("Result details");
     expect(visible).toContain("Coverage: unknown"); expect(visible).toContain("Stale result."); expect(visible).toContain("Stale result. Definition changed."); expect(visible).not.toContain(interpretation);
     const content = details.querySelector(".named-result-details-content")!;
     expect(content.textContent).toContain(interpretation); expect(content.textContent).toContain("History collection cannot attest completeness.");

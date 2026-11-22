@@ -39,7 +39,7 @@ for (const theme of ["light", "dark"]) {
     if (dismissal === "manual") await toast.getByRole("button", { name: "Dismiss notification" }).click();
     await expect(toast).toHaveCount(0, { timeout: 10_000 });
     const runtime = page.getByRole("region", { name: "Test run summary" });
-    await expect(runtime.locator(".wf-status-badge")).toHaveText("Completed");
+    await expect(runtime.locator(".studio-status-chip")).toHaveText("Completed");
     await runtime.getByRole("button", { name: "Return to editing", exact: true }).click();
     await runtime.getByRole("button", { name: "Show execution", exact: true }).click();
     await expect(page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ })).toHaveAccessibleName(/Run state: Completed/);
@@ -174,7 +174,7 @@ for (const theme of ["light", "dark"]) {
     await node.click();
     const inspector = page.getByLabel("Inspector panel", { exact: true });
     await expect(inspector.getByRole("tab", { name: "Run data", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(inspector.getByText("Choose a recorded execution to inspect its evidence.")).toBeVisible();
+    await expect(inspector.getByText("Choose a recorded execution to inspect its run data.")).toBeVisible();
     await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
     await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
     await inspector.getByRole("tablist", { name: "Activity execution details" }).getByRole("tab", { name: "Inputs", exact: true }).click();

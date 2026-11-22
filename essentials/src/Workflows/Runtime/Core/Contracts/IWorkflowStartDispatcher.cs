@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowStartDispatcher
 {
+    /// <summary>Explicitly qualify native child source preservation through awaited actor activation; legacy transports refuse.</summary>
+    bool CanDispatchChildHistorySource(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Qualifies saved-source causal transport against the selected history pair; does not invent a target receipt.</summary>
     /// <exception cref="Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitSourceBoundaryException">Selected provider qualification failed; preserves kind, cause and unavailable classification.</exception>
     bool CanPreserveHistoryCausation(string intentKind, IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;

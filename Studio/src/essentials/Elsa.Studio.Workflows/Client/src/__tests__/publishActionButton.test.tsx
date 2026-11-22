@@ -196,6 +196,7 @@ function mount(
   document.body.appendChild(host);
   const root: Root = createRoot(host);
   flushSync(() => root.render(<PublishActionButton busy={busy} saving={saving} onPublish={onPublish} />));
+  vi.spyOn(publishOptionsButton(host), "getBoundingClientRect").mockReturnValue(new DOMRect(8, 8, 28, 32));
   let mounted = true;
   const unmount = () => {
     if (!mounted) return;
@@ -215,7 +216,7 @@ function mount(
 }
 
 function primaryButton(host: HTMLElement) {
-  return host.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
+  return host.querySelector<HTMLButtonElement>(".studio-split-button-primary")!;
 }
 
 function publishOptionsButton(host: HTMLElement) {

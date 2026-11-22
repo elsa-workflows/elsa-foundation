@@ -1,4 +1,4 @@
-import { StudioField } from "@elsa-workflows/studio-ui";
+import { StatusChip, StudioButton, StudioDialog, StudioDialogFooter, StudioField } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -14,9 +14,6 @@ import {
   CheckCircle2,
   CircleStop,
   ExternalLink,
-  Play,
-  RotateCcw,
-  X
 } from "lucide-react";
 import {
   StudioHttpError,
@@ -56,7 +53,6 @@ import type { ActivityExecutionStateSummary } from "./workflowTypes";
 import { WorkflowActivityExecutionDetails } from "./workflow-editor/WorkflowActivityExecutionDetails";
 import { WorkflowRunInputField } from "./workflow-editor/WorkflowRunInputDialog";
 import { CopyValueButton } from "./workflow-editor/executableShared";
-import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { StudioLink } from "./StudioLink";
 
 type PreparationPhase = "saving" | "validating" | "ready" | "failed";
@@ -76,6 +72,7 @@ export function ActivityDefinitionTestRunDialog({
   prepareExactRevision,
   onFocusDiagnostic,
   onClose,
+  restoreFocus,
   onOpenRun
 }: {
   context: StudioEndpointContext;
@@ -86,10 +83,10 @@ export function ActivityDefinitionTestRunDialog({
   prepareExactRevision(onPhase: (phase: "saving" | "validating") => void): Promise<PreparedActivityTestRunRevision | null>;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onClose(): void;
+  restoreFocus?(): void;
   onOpenRun(path: string): void;
 }) {
   const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const prepareExactRevisionRef = useRef(prepareExactRevision);
   const preparationTaskRef = useRef<Promise<PreparedActivityTestRunRevision | null> | null>(null);
@@ -207,7 +204,7 @@ export function ActivityDefinitionTestRunDialog({
         recordRun(next);
       } catch {
         if (!active) return;
-        setOperationError("Latest Runtime Evidence is temporarily unavailable. Studio will keep reconciling this Test Run.");
+        setOperationError("The latest run data is temporarily unavailable. Studio will keep reconciling this Test Run.");
         pollTimerRef.current = window.setTimeout(() => {
           setCurrentRun(current => current ? { ...current } : current);
         }, 900);
@@ -275,7 +272,7 @@ export function ActivityDefinitionTestRunDialog({
       recordRun(await cancelActivityDraftTestRun(context, currentRun.testRunId));
     } catch {
       setDispatchPhase("tracking");
-      setOperationError("Cancellation acknowledgement is unavailable. The current Runtime Evidence remains authoritative.");
+      setOperationError("Cancellation acknowledgement is unavailable. The current run data remains authoritative.");
     }
   };
 
@@ -283,23 +280,12 @@ export function ActivityDefinitionTestRunDialog({
   const busy = blocksClose;
   const canRerun = Boolean(stage && isTerminalActivityTestRun(stage));
   const activityUrl = currentRun ? activityTestRunActivityUrl(currentRun) : null;
-  useDialogFocus(dialogRef, busy ? null : onClose);
 
   return (
-    <div className="ad-dialog-backdrop ad-test-run-backdrop" role="presentation" onMouseDown={event => {
-      if (!busy && event.target === event.currentTarget) onClose();
-    }}>
-      <section ref={dialogRef} className="ad-dialog ad-test-run-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <header>
-          <div>
-            <span className="ad-kicker">Activity Definition Test Run</span>
-            <h2 id={titleId}>{definitionLabel}</h2>
-            <p>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable Runtime Evidence without publishing this Activity Definition.</p>
-          </div>
-          <button type="button" className="ad-icon-action" aria-label="Close Test Run" onClick={onClose} disabled={busy}>
-            <X size={17} aria-hidden />
-          </button>
-        </header>
+    <StudioDialog open className="ad-test-run-dialog" title={definitionLabel} onClose={onClose}
+      closeLabel="Close Test Run" dismissDisabled={busy}
+      onCloseAutoFocus={restoreFocus ? event => { event.preventDefault(); restoreFocus(); } : undefined}
+      description={<>Exact draft revision {prepared?.revision ?? draft.revision}. Dispatch creates immutable run data without publishing this Activity Definition.</>}>
 
         {preparation !== "ready" ? (
           <section className="ad-historical-contract ad-test-run-preparation" role={preparation === "failed" ? "alert" : "status"} aria-live="polite">
@@ -401,31 +387,19 @@ export function ActivityDefinitionTestRunDialog({
 
         {operationError ? <p className="ad-inline-error ad-test-run-operation-error" role="alert">{operationError}</p> : null}
 
-        <footer>
-          <button type="button" onClick={onClose} disabled={busy}>Close</button>
-          {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ? (
-            <button type="button" onClick={() => void cancel()} disabled={busy}>
-              <CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}
-            </button>
-          ) : null}
-          {activityUrl ? (
-            <button type="button" onClick={() => onOpenRun(activityUrl)}>
-              <ExternalLink size={16} aria-hidden /> Open focused Runtime Evidence
-            </button>
-          ) : null}
-          {canRerun ? (
-            <button type="button" onClick={() => void dispatch()} disabled={busy}>
-              <RotateCcw size={16} aria-hidden /> Rerun as new evidence
-            </button>
-          ) : null}
-          {!currentRun && validation?.isValid ? (
-            <button type="button" className="ad-primary-action" onClick={() => void dispatch()} disabled={busy}>
-              <Play size={16} aria-hidden /> {dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run"}
-            </button>
-          ) : null}
-        </footer>
-      </section>
-    </div>
+        <StudioDialogFooter
+          confirmType="button"
+          leading={<>
+            {currentRun?.cancellation.capabilityAdvertised && currentRun.cancellation.available && stage && !isTerminalActivityTestRun(stage) ?
+              <StudioButton onClick={() => void cancel()} disabled={busy}><CircleStop size={16} aria-hidden /> {dispatchPhase === "cancelling" ? "Requesting cancellation…" : "Cancel Test Run"}</StudioButton> : null}
+            {activityUrl ? <StudioButton onClick={() => onOpenRun(activityUrl)}><ExternalLink size={16} aria-hidden /> Open focused run data</StudioButton> : null}
+          </>}
+          onCancel={onClose} cancelDisabled={busy} cancelLabel={currentRun ? "Close" : "Cancel"}
+          confirmLabel={canRerun ? "Rerun as new run data" : !currentRun && validation?.isValid ?
+            (dispatchPhase === "dispatching" ? "Dispatching…" : dispatchPhase === "reconciling" ? "Reconciling…" : "Dispatch Test Run") : undefined}
+          confirmDisabled={busy} onConfirm={() => void dispatch()}
+        />
+    </StudioDialog>
   );
 }
 
@@ -458,11 +432,11 @@ function ActivityTestRunEvidence({
     <section className={`ad-historical-contract ad-test-run-evidence is-${stage}`} aria-labelledby="activity-test-run-evidence-title">
       <div className="ad-section-heading-row ad-test-run-section-heading">
         <div>
-          <span className="ad-kicker">Runtime Evidence</span>
+          <span className="ad-kicker">Run data</span>
           <h3 id="activity-test-run-evidence-title">{copy.title}</h3>
           <p>{copy.description}</p>
         </div>
-        <span className="ad-badge ad-test-run-stage" role="status" aria-live="polite">{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</span>
+        <span role="status" aria-live="polite"><StatusChip>{dispatchPhase === "cancelling" ? "Cancellation requested" : copy.label}</StatusChip></span>
       </div>
       <p className="ad-selected-record ad-test-run-subject"><strong>{definitionLabel}</strong> · exact draft revision {view.draftRevision}</p>
       {view.failure ? (
@@ -489,15 +463,15 @@ function ActivityTestRunEvidence({
           <ActivityTestRunTechnicalIdentity label="Test Run" value={view.testRunId} copiedLabel="Test Run ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityTestRunTechnicalIdentity label="Workflow execution" value={view.workflowExecutionId} href={activityTestRunWorkflowUrl(view)} onOpenRun={onOpenRun} copiedLabel="workflow execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           {view.outerActivityExecutionId ? <ActivityTestRunTechnicalIdentity label="Outer activity execution" value={view.outerActivityExecutionId} href={activityTestRunActivityUrl(view)} onOpenRun={onOpenRun} copiedLabel="outer activity execution ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
-          {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper artifact" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
+          {view.artifactId ? <ActivityTestRunTechnicalIdentity label="Wrapper executable" value={view.artifactId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="wrapper artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
           {view.sourceReferenceId ? <ActivityTestRunTechnicalIdentity label="Source Reference" value={view.sourceReferenceId} href={executableUrl} onOpenRun={onOpenRun} copiedLabel="Source Reference ID" onCopied={markCopied} onCopyFailed={markCopyFailed} /> : null}
           {view.commandDispatchStatus ? <div><dt>Command dispatch</dt><dd>{view.commandDispatchStatus}</dd></div> : null}
         </dl>
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </details>
       {canInspectActivity && view.outerActivityExecutionId ? (
-        <section className="ad-historical-contract ad-test-run-recorded-evidence" aria-label="Recorded activity evidence">
-          <h4>Recorded activity evidence</h4>
+        <section className="ad-historical-contract ad-test-run-recorded-evidence" aria-label="Recorded activity data">
+          <h4>Recorded activity data</h4>
           <ActivityTestRunRecordedActivity
             context={context}
             workflowExecutionId={view.workflowExecutionId}
@@ -595,8 +569,8 @@ function ActivityTestRunRecordedActivity({ context, workflowExecutionId, activit
     };
   }, [activityExecutionId, context, identity, status, updatedAt, workflowExecutionId]);
 
-  if (!current) return <p role="status">Loading recorded activity evidence…</p>;
-  if (current.failed || !current.execution) return <p role="status">Recorded activity evidence is unavailable.</p>;
+  if (!current) return <p role="status">Loading recorded activity data…</p>;
+  if (current.failed || !current.execution) return <p role="status">Recorded activity data is unavailable.</p>;
   return <WorkflowActivityExecutionDetails
     context={context}
     activity={current.execution}
@@ -617,27 +591,27 @@ function ExpirationEvidence({ view }: { view: ActivityDraftTestRunView }) {
     return <p className="ad-test-run-expiry">Source Reference expires {formatTime(expiration.sourceReferenceExpiresAt)}. The durable receipt expires {formatTime(expiration.receiptExpiresAt)}.</p>;
   }
   if (expiration.runStillActive) {
-    return <p className="ad-test-run-expiry"><strong>Run still active.</strong> The Source Reference lifetime elapsed, but Runtime continues this already-started execution and retains its evidence.</p>;
+    return <p className="ad-test-run-expiry"><strong>Run still active.</strong> The Source Reference lifetime elapsed, but Runtime continues this already-started execution and retains its run data.</p>;
   }
   if (expiration.evidenceRetained) {
-    return <p className="ad-test-run-expiry"><strong>Source Reference expired.</strong> Runtime Evidence is retained independently and remains available.</p>;
+    return <p className="ad-test-run-expiry"><strong>Source Reference expired.</strong> Run data is retained independently and remains available.</p>;
   }
-  return <p className="ad-test-run-expiry"><strong>Test Run expired.</strong> Neither its Source Reference nor Runtime Evidence remains available.</p>;
+  return <p className="ad-test-run-expiry"><strong>Test Run expired.</strong> Neither its Source Reference nor run data remains available.</p>;
 }
 
 function stageCopy(stage: ActivityTestRunStage) {
   switch (stage) {
-    case "accepted": return { label: "Accepted", title: "Dispatch accepted", description: "Runtime accepted the command. Acceptance is not execution success; Studio is waiting for scheduling evidence." };
+    case "accepted": return { label: "Accepted", title: "Dispatch accepted", description: "Runtime accepted the command. Acceptance is not execution success; Studio is waiting for scheduling details." };
     case "waiting": return { label: "Waiting for scheduling", title: "Waiting for scheduling", description: "The durable receipt exists, but the outer activity execution boundary is not available yet." };
     case "running": return { label: "Running", title: "Activity Definition is running", description: "Runtime has scheduled the outer activity execution boundary." };
-    case "suspended": return { label: "Suspended", title: "Activity Definition is suspended", description: "Runtime Evidence is retained while the execution waits for a resume condition." };
+    case "suspended": return { label: "Suspended", title: "Activity Definition is suspended", description: "Run data is retained while the execution waits for a resume condition." };
     case "completed": return { label: "Completed", title: "Activity Definition completed", description: "Runtime reports terminal completion for this exact Test Run." };
-    case "faulted": return { label: "Faulted", title: "Activity Definition faulted", description: "Runtime reports terminal fault evidence for this exact Test Run." };
-    case "cancelled": return { label: "Cancelled", title: "Activity Definition was cancelled", description: "Runtime reports terminal cancellation evidence." };
+    case "faulted": return { label: "Faulted", title: "Activity Definition faulted", description: "Runtime reports a terminal fault for this exact Test Run." };
+    case "cancelled": return { label: "Cancelled", title: "Activity Definition was cancelled", description: "Runtime reports terminal cancellation run data." };
     case "validation-rejected": return { label: "Validation rejected", title: "Draft validation rejected dispatch", description: "The server rejected the exact draft revision before Runtime dispatch." };
     case "dispatch-rejected": return { label: "Runtime rejected", title: "Runtime rejected dispatch", description: "Draft validation and Runtime dispatch are separate. Runtime did not accept this command." };
     case "dispatch-ambiguous": return { label: "Reconciling", title: "Dispatch outcome is ambiguous", description: "Studio is reconciling the durable receipt and will not issue a second dispatch." };
-    case "expired": return { label: "Expired", title: "Test Run evidence expired", description: "The transient Source Reference and Runtime Evidence are no longer retained." };
+    case "expired": return { label: "Expired", title: "Test Run data expired", description: "The transient Source Reference and run data are no longer retained." };
   }
 }
 

@@ -1238,6 +1238,18 @@
           "defaultValue": null,
           "defaultSyntax": null,
           "uiSpecifications": null
+        },
+        {
+          "key": "ExpiresAt",
+          "name": "ExpiresAt",
+          "type": "DateTimeOffset?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
         }
       ],
       "outputs": [

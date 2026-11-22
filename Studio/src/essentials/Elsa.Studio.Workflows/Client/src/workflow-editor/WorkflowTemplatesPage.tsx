@@ -4,7 +4,7 @@ import "./WorkflowTemplatesPage.css";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
-import { ChevronDown, Plus, RefreshCw, Copy } from "lucide-react";
+import { ChevronDown, Plus, Copy } from "lucide-react";
 import { listActivities } from "../api/activityDesign";
 import { createDefinition } from "../api/workflowDesign";
 import type { ActivityCatalogItem } from "../workflowTypes";
@@ -113,9 +113,9 @@ export function WorkflowTemplatesPage(props: Props) {
     </section>
   );
   return <section className="studio-page wf-page wf-templates-page">
-    <StudioPageHeader title="Workflow templates" description="Create reusable starting points. Workflows created from a template are independent copies." actions={<>
+    <StudioPageHeader title="Workflow templates" description="Create reusable starting points. Workflows created from a template are independent copies."
+      refresh={{ id: "workflow-templates", label: "Refresh workflow templates", onRefresh: reload, refreshing: loading, disabled: busy, autoRefresh: !dialog && !busy }} actions={<>
       <StudioButton variant="primary" disabled={loading || !supported} onClick={() => begin("template")}><Plus size={15} /> New template</StudioButton>
-      <StudioButton disabled={loading || busy} onClick={() => void reload()}><RefreshCw size={15} /> Refresh</StudioButton>
     </>} />
     <div className="studio-collection-toolbar">
       <StudioSearchInput aria-label="Search templates" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search templates" />
@@ -159,7 +159,7 @@ export function WorkflowTemplatesPage(props: Props) {
         })}
       </section>
     </section>
-    {dialog ? <Suspense fallback={<p role="status">Loading template dialog…</p>}><CreateWorkflowDialog context={context} title={dialog.kind === "template" ? "Create template" : "Create Workflow"} submitLabel={dialog.kind === "template" ? "Create template" : "Create"} draft={dialog.draft} catalog={catalog} creating={busy} submitError={error} ai={ai} onChange={draft => setDialog({ ...dialog, draft })} onClose={() => setDialog(null)} onSubmit={() => void submit()} /></Suspense> : null}
+    {dialog ? <Suspense fallback={<p role="status">Loading template dialog…</p>}><CreateWorkflowDialog context={context} title={dialog.kind === "template" ? "Create template" : "New workflow"} submitLabel={dialog.kind === "template" ? "Create template" : "Create"} draft={dialog.draft} catalog={catalog} creating={busy} submitError={error} ai={ai} onChange={draft => setDialog({ ...dialog, draft })} onClose={() => setDialog(null)} onSubmit={() => void submit()} /></Suspense> : null}
   </section>;
 }
 

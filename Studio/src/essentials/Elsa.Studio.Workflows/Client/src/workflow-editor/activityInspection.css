@@ -4,7 +4,7 @@
 
 .wf-runtime-evidence-heading .wf-input-inspection-caption {
   color: var(--studio-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   font-weight: 400;
   text-transform: none;
 }
@@ -40,7 +40,7 @@
 .wf-input-inspection-value {
   min-width: 0;
   color: var(--studio-text);
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   line-height: 1.45;
 }
 
@@ -51,7 +51,7 @@
 
 .wf-input-inspection-value .wf-runtime-input-value {
   font-family: var(--studio-font-mono);
-  font-size: 13px;
+  font-size: var(--studio-body-size);
   line-height: 1.5;
 }
 
@@ -63,13 +63,13 @@
   display: grid;
   gap: 4px;
   font-family: var(--studio-font-mono);
-  font-size: 13px;
+  font-size: var(--studio-body-size);
 }
 
 .wf-input-inspection-authored-fallback small {
   color: var(--studio-text-muted);
   font-family: var(--studio-font-sans);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-input-inspection-authored-fallback :is(code, pre) {
@@ -175,16 +175,15 @@
 .wf-activity-overview-eyebrow,
 .wf-activity-meta-item dt {
   color: var(--studio-text-muted);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--studio-label-size);
+  font-weight: var(--studio-title-weight, 700);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .wf-instance-section .wf-activity-overview-title h4 {
   margin: 0;
   color: var(--studio-text);
-  font-size: 15px;
+  font-size: var(--studio-section-title-size);
   letter-spacing: 0;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -195,7 +194,7 @@
 .wf-activity-overview-description {
   margin: 2px 0;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -216,7 +215,7 @@
 .wf-activity-overview-type > span:first-child {
   overflow: hidden;
   color: var(--studio-text-muted);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -265,7 +264,7 @@
   gap: 4px;
   margin: 3px 0 0;
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-activity-meta-value {
@@ -276,7 +275,7 @@
 
 .wf-activity-meta-value code {
   font-family: var(--studio-font-mono);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
 }
 
@@ -306,7 +305,7 @@
   gap: var(--studio-space-2);
   color: var(--studio-text);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   font-weight: 650;
   list-style: none;
   padding: var(--studio-space-2) var(--studio-space-3);
@@ -350,7 +349,7 @@
 
 .wf-activity-execution-details > summary small {
   color: var(--studio-text-muted);
-  font-size: 10px;
+  font-size: var(--studio-label-size);
   font-weight: 600;
 }
 
@@ -404,7 +403,7 @@
   gap: var(--studio-space-2);
   margin: 0;
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -423,7 +422,7 @@
   border-radius: var(--studio-radius-sm);
   background: var(--studio-surface-muted);
   color: var(--studio-text-muted);
-  font-size: 10px;
+  font-size: var(--studio-label-size);
   line-height: 1.4;
   padding: 2px 6px;
 }
@@ -438,7 +437,7 @@
 .wf-instance-section.wf-activity-incidents > p {
   margin: 0;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
 }
 
@@ -455,14 +454,14 @@
   border-radius: var(--studio-radius-sm);
   background: var(--studio-surface-muted);
   color: var(--studio-text);
-  font-size: 11px;
+  font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
   padding: 4px 8px;
 }
 
 .wf-activity-incidents .wf-runtime-evidence-heading h4 {
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   letter-spacing: 0;
   text-transform: none;
 }
@@ -485,7 +484,7 @@
 .wf-activity-incidents li p {
   margin: 0;
   color: var(--studio-text-muted);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 @container workflow-activity-overview (max-width: 30rem) {
@@ -562,14 +561,14 @@
 
 .wf-input-inspection-detail {
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.5;
 }
 
 .wf-input-inspection-detail > h5 {
   margin: 0 0 8px;
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
 }
 
 .wf-input-inspection-detail p {
@@ -635,7 +634,7 @@
   border-radius: var(--studio-radius-sm);
   background: var(--studio-surface-muted);
   color: var(--studio-text);
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   line-height: 1.3;
   padding: 4px 8px;
 }
@@ -653,7 +652,7 @@
   padding: 12px;
   color: var(--studio-text-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--studio-label-size);
   list-style: none;
 }
 

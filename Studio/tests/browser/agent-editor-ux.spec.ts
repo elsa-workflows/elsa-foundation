@@ -7,8 +7,8 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     await page.goto(url);
     const editor = page.getByTestId("agent-editor");
     await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toBeVisible();
-    const advanced = editor.locator("details.agent-advanced");
-    await expect(advanced).not.toHaveAttribute("open");
+    const advanced = editor.locator(".studio-disclosure-fold").filter({ has: page.getByRole("button", { name: /Advanced settings/ }) });
+    await expect(advanced.getByRole("button", { name: /Advanced settings/ })).toHaveAttribute("aria-expanded", "false");
     await expect(editor.getByRole("combobox", { name: /^Model connection/ })).toBeEnabled();
     if (width >= 1440) {
       const [instructions, model] = await editor.locator(".agent-instructions, .agent-model").evaluateAll(elements => elements.map(element => { const b = element.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width }; }));
@@ -17,15 +17,15 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     }
     await editor.getByRole("textbox", { name: /^Instructions/ }).fill("Proofread the text and return concise suggestions.");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
-    await advanced.locator("summary").press("Enter");
+    await advanced.getByRole("button", { name: /Advanced settings/ }).press("Enter");
     const calls = advanced.getByRole("textbox", { name: /^Maximum model calls/ });
     await calls.fill("2");
     await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
     await page.reload();
     await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toHaveValue("Proofread the text and return concise suggestions.");
-    await advanced.locator("summary").click();
+    await advanced.getByRole("button", { name: /Advanced settings/ }).click();
     await expect(calls).toHaveValue("2");
-    await advanced.locator("summary").click();
+    await advanced.getByRole("button", { name: /Advanced settings/ }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath("agent-designer.png"), fullPage: true });
     await page.getByRole("tab", { name: /^Outcomes \(\d+\)$/ }).click();
@@ -37,7 +37,7 @@ for (const width of [390, 1440, 2552]) for (const theme of ["light", "dark"]) {
     const contract = page.locator(".ad-contract-editor");
     const tabs = page.locator(".ad-authoring-view-tabs");
     expect(Math.abs((await contract.boundingBox())!.x - (await tabs.boundingBox())!.x)).toBeLessThanOrEqual(2);
-    await expect(page.locator(".ad-contract-workbench-advanced")).not.toHaveAttribute("open");
+    await expect(page.getByRole("button", { name: /Advanced interface details/ })).toHaveAttribute("aria-expanded", "false");
     await page.screenshot({ path: testInfo.outputPath("agent-inputs-outputs.png"), fullPage: true });
   });
 }
@@ -95,12 +95,12 @@ test("module-owned icons reach all three main navigation entries", async ({ page
 test("saved invalid limits are revealed and read-only settings remain inspectable", async ({ page }) => {
   await page.goto("/?mode=activity-authoring&provider=agent&invalid-limits");
   const editor = page.getByTestId("agent-editor");
-  const advanced = editor.locator(".agent-advanced");
-  await expect(advanced).toHaveAttribute("open");
+  const advanced = editor.locator(".studio-disclosure-fold").filter({ has: page.getByRole("button", { name: /Advanced settings/ }) });
+  await expect(advanced.getByRole("button", { name: /Advanced settings/ })).toHaveAttribute("aria-expanded", "true");
   await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toHaveAttribute("aria-invalid", "true");
   await page.goto("/?mode=activity-authoring&provider=agent&read-only");
   await expect(editor.getByRole("textbox", { name: /^Instructions/ })).toBeDisabled();
-  await advanced.locator("summary").click();
+  await advanced.getByRole("button", { name: /Advanced settings/ }).click();
   await expect(advanced.getByRole("textbox", { name: /^Maximum model calls/ })).toBeDisabled();
   await expect(advanced.getByRole("textbox", { name: /^Timeout/ })).toBeDisabled();
 });

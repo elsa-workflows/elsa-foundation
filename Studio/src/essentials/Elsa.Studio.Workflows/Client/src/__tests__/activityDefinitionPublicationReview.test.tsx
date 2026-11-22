@@ -34,7 +34,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).toContain("Publication preflight could not be confirmed");
     expect(postJson).toHaveBeenCalledTimes(1);
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(buttonByText(harness.container, "Review & publish"));
     click(buttonByText(harness.container, "Review & publish"));
@@ -74,13 +74,13 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(blockers.textContent).toContain(diagnostic.message);
     expect(blockers.textContent).toContain(diagnostic.remediation);
     expect(blockers.querySelectorAll(".ad-publication-diagnostics li")).toHaveLength(1);
-    const summary = harness.container.querySelector(".ad-publication-summary")!;
+    const summary = harness.container.querySelector(".studio-fact-list")!;
     expect(blockers.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const publish = buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement;
     expect(publish.disabled).toBe(true);
     expect(publish.getAttribute("aria-describedby")).toBe(blockers.id);
     expect(harness.container.querySelector(".ad-publication-version")).toBeNull();
-    expect(blockers.querySelector<HTMLDetailsElement>(".ad-publication-diagnostic-details")?.open).toBe(false);
+    expect(blockers.querySelector(".studio-technical-details")?.getAttribute("data-open")).toBe("false");
     click(buttonByText(blockers, "Choose model connection"));
     await waitFor(() => expect(harness.onFocusDiagnostic).toHaveBeenCalledWith(diagnostic, expect.any(HTMLButtonElement)));
     expect(harness.container.querySelector("[role='dialog']")).toBeNull();
@@ -152,8 +152,8 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const issue = harness.container.querySelector(".ad-publication-diagnostics li")!;
     expect(issue.querySelector("strong")?.textContent).toBe(message);
     expect(issue.querySelector("code")?.textContent).toBe(code);
-    expect(issue.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
-    expect(issue.querySelector("button")).toBeNull();
+    expect(issue.querySelector(".studio-technical-details")?.getAttribute("data-open")).toBe("false");
+    expect(issue.querySelector("button:not([aria-expanded])")).toBeNull();
   });
 
   it.each(["Rejected", "Failed"])("keeps earlier readiness distinct after a %s receipt", async status => {
@@ -171,7 +171,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const readiness = harness.container.querySelector(".ad-publication-readiness")!;
     expect(readiness.textContent).toContain("Checks from the earlier review");
     expect(readiness.textContent).not.toContain("Ready to publish");
-    expect(harness.container.querySelector(".ad-publication-summary")?.textContent).toContain("Blocked");
+    expect(harness.container.querySelector(".studio-fact-list")?.textContent).toContain("Blocked");
     expect(harness.container.querySelector(".ad-publication-blockers")?.textContent).toContain("Publication did not complete");
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -195,7 +195,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(harness.container.textContent).not.toContain("Other impact · additive");
     expect(harness.container.querySelector('[role="dialog"]')?.textContent).toContain("Ready to publish");
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).toBeNull());
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("");
@@ -214,11 +214,11 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
     const impact = harness.container.querySelector(".ad-publication-impact")!;
-    expect(impact.closest("details")?.open).toBe(false);
+    expect(impact.closest(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
     const readiness = harness.container.querySelector(".ad-publication-readiness")!;
-    expect(readiness.closest("details")?.open).toBe(false);
+    expect(readiness.closest(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
     expect(harness.container.textContent).toContain("Publish the first version for use in workflows.");
-    expect(buttonByText(harness.container, "Publish 1.0.0").closest("details")).toBeNull();
+    expect(buttonByText(harness.container, "Publish 1.0.0").closest(".studio-disclosure-fold")).toBeNull();
   });
 
   it("keeps changes to an existing version and failed readiness checks visible", async () => {
@@ -226,10 +226,10 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const harness = renderReview({ postJson: async () => ({ ...preflight, hasBaseline: true, isPublishable: false }) });
     click(buttonByText(harness.container, "Review & publish"));
     await waitFor(() => expect(harness.container.querySelector(".ad-publication-impact")).not.toBeNull());
-    const changesDisclosure = harness.container.querySelector(".ad-publication-impact")?.closest("details");
-    expect(changesDisclosure?.querySelector("summary")?.textContent).toBe("Changes");
-    expect(changesDisclosure?.open).toBe(false);
-    expect(harness.container.querySelector(".ad-publication-readiness")?.closest("details")).toBeNull();
+    const changesDisclosure = harness.container.querySelector(".ad-publication-impact")?.closest(".studio-disclosure-fold");
+    expect(changesDisclosure?.querySelector("button[aria-expanded]")?.textContent).toBe("Changes");
+    expect(changesDisclosure?.getAttribute("data-open")).toBe("false");
+    expect(harness.container.querySelector(".ad-publication-readiness")?.closest(".studio-disclosure-fold")).toBeNull();
     expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -255,10 +255,10 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(buttonByText(harness.container, "Publishing atomically…")).toBeTruthy());
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     harness.container.querySelector<HTMLButtonElement>(".ad-publication-toolbar-trigger")!.focus();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(harness.container.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
     expect(publicationPending).toHaveBeenCalledWith(true);
     expect(publicationPending).not.toHaveBeenCalledWith(false);
@@ -293,7 +293,7 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(harness.container.textContent).toContain("Reconcile authoritative status"));
 
     expect((buttonByText(harness.container, "Close publication review") as HTMLButtonElement).disabled).toBe(true);
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(harness.container.textContent).not.toContain("private transport detail");
     expect(publicationPending.mock.calls.map(call => call[0])).toEqual([true]);
@@ -342,7 +342,7 @@ function renderReview({
     container.remove();
   };
   unmounts.push(unmount);
-  return { container, unmount, onFocusDiagnostic, render };
+  return { container: document.body, unmount, onFocusDiagnostic, render };
 }
 
 function endpoint(postJson: (url: string, body: unknown) => Promise<unknown>, getJson?: (url: string) => Promise<unknown>): StudioEndpointContext {

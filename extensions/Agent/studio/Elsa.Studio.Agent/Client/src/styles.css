@@ -111,25 +111,13 @@
 .agent-instructions { min-width: 0; }
 .agent-instructions textarea { min-height: 18rem; resize: vertical; line-height: 1.6; }
 .agent-editor fieldset { max-width: none; margin: 0; }
-.agent-advanced {
-  border-top: 1px solid var(--studio-border);
-  min-width: 0;
-}
-.agent-advanced > summary {
-  display: list-item;
-  list-style-position: inside;
-  padding: var(--studio-space-3) 0;
-  cursor: pointer;
-  font-weight: 600;
-}
-.agent-advanced > summary span { margin-left: var(--studio-space-2); color: var(--studio-text-muted); font-weight: 400; font-size: var(--studio-label-size); }
-.agent-advanced .agent-limits {
+.agent-limits {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .agent-continuity { margin-top: var(--studio-space-3); }
 .agent-continuity input { flex: 0 0 auto; width: 1rem; height: 1rem; padding: 0; }
 @media (max-width: 800px) {
-  .agent-main, .agent-advanced .agent-limits { grid-template-columns: minmax(0, 1fr); }
+  .agent-main, .agent-limits { grid-template-columns: minmax(0, 1fr); }
 }
 
 .agent-create-form {
@@ -173,7 +161,7 @@
   margin: 0;
 }
 .agent-playground__error {
-  color: var(--studio-danger, #b42318);
+  color: var(--studio-danger);
   margin: 0;
 }
 .agent-playground__text {

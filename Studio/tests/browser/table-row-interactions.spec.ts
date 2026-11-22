@@ -37,7 +37,7 @@ for (const theme of ["light", "dark"]) {
     const region = page.getByRole("region", { name: "Decisions table", exact: true });
     const table = page.locator("table.decision-assets");
     await expect(table).toHaveClass(/studio-table/);
-    await expect(table.locator("thead th")).toHaveCount(3);
+    await expect(table.getByRole("columnheader")).toHaveText(["Decision", "Status", "Updated", "Actions"]);
     await expect(region).toHaveAttribute("tabindex", "0");
     const styles = await page.evaluate(() => {
       const root = getComputedStyle(document.documentElement);
@@ -169,12 +169,12 @@ for (const theme of ["light", "dark"]) {
     await feedback(page, row, row.locator(".studio-row-link"), info, "task-");
     await row.press("Enter");
     await expect(page.getByRole("region", { name: /^Review purchase request/ })).toBeVisible();
-    await page.goto(`/user-tasks-ux.html?forms&populated-forms&theme=${theme}`);
+    await page.goto(`/user-tasks-ux.html?forms&backend=legacy&legacy-forms&theme=${theme}`);
     row = page.locator(".user-task-forms-table [data-studio-row-interactive]").first();
     await feedback(page, row, row.locator(".studio-row-link"), info, "form-");
     await row.locator("td").nth(1).click();
     await expect(page.getByRole("region", { name: "Published form", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Back to forms", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "Forms", exact: true }).click();
     await expect(row.locator(".studio-row-link")).toBeFocused();
   });
 

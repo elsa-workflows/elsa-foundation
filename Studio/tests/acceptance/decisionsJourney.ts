@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { holdToastForPlacement } from "./toastPlacementControl";
@@ -117,12 +118,15 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     if (!await entry.isVisible()) await build.click();
     await expect(entry.locator("svg.lucide-scale")).toBeVisible();
   }
-  await button("New decision").click(); await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
-  await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible(); await expect(surface.getByText("Saved draft", { exact: true })).toHaveCount(0);
+  await button("New decision").click();
+  const creation = page.getByRole("dialog", { name: "New decision", exact: true });
+  await expect(creation.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
   await tabTitle("New decision");
-  await part("decision-create", surface.getByLabel("Name", { exact: true }));
-  await surface.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Decisions", exact: true }).click(); await expect(button("New decision")).toBeFocused(); await tabTitle("Decisions");
-  await button("New decision").click(); await surface.getByLabel("Name", { exact: true }).fill(`Approval policy ${suffix}`);
+  await part("decision-create", creation.getByRole("textbox", { name: "Name", exact: true }));
+  await creation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(button("New decision")).toBeFocused(); await tabTitle("Decisions");
+  await button("New decision").click(); await confirmNewResource(page, "decision", `Approval policy ${suffix}`);
+  await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();
   await surface.getByLabel("Description", { exact: true }).fill("Determine purchase approval requirements.");
   await view("Rules");
   await surface.getByRole("textbox", { name: "Output 1 name", exact: true }).fill("approvalLevel");
@@ -135,7 +139,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
     await surface.getByRole("textbox", { name: `Rule ${index + 1}, output approvalLevel`, exact: true }).fill(row[2]);
   }
   const asset = await save(); await confirmation("decision-saved-toast", "Decision saved"); await tabTitle(`Approval policy ${suffix} · Draft`); await decisionAction("Validate");
-  await expect(surface.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
+  await expect(page.getByText("The saved draft is valid for the supported DMN profile.", { exact: true })).toBeVisible();
   await page.reload(); await expect(surface.getByRole("textbox", { name: "Rule 4, output approvalLevel", exact: true })).toHaveValue('"Account owner"');
   await tabTitle(`Approval policy ${suffix} · Draft`);
   await part("decision-table", surface.getByRole("heading", { name: "Rules", exact: true }));
@@ -244,6 +248,7 @@ export async function decisionsJourney(page: Page, info: TestInfo, capture: Capt
       const shortcut = page.getByRole("button", { name: "New decision", exact: true });
       await part("decision-picker", shortcut);
       await shortcut.focus(); await page.keyboard.press("Enter");
+      await confirmNewResource(page, "decision", `Picker-created policy ${suffix}`);
       const opened = page.getByRole("tablist", { name: "Open screens", exact: true }).getByRole("tab", { selected: true });
       await expect(surface.getByRole("heading", { name: "New decision", exact: true })).toBeVisible();
       await expect(surface.getByText("Unsaved decision", { exact: true })).toBeVisible();

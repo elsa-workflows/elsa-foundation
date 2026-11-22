@@ -9,12 +9,14 @@ public sealed partial class InMemoryStore
     private sealed record CreatedRoot(string Reference, long DeduplicateUntil);
     private readonly Dictionary<(string Tenant, string Operation), CreatedRoot> _foundationStarts = [];
     private readonly Dictionary<string, long> _foundationSendReceipts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Reference, long Until)> _foundationOperatorReceipts = new(StringComparer.Ordinal);
 
     internal FoundationStartReceipt AdmitGeneratedFoundationStart(string tenant, string id, StartSpec spec,
         long? due, TimeSpan? keepFor, string? replyTo = null, Worker? inlineOwner = null)
     {
         if (spec.Parent is not null || spec.Creation is not null)
             throw new ArgumentException("The foundation assigns the generated actor's creation.", nameof(spec));
+        FoundationMetadataLimits.RequireContent(spec.Input, nameof(spec), FoundationMetadataLimits.StartContentBytes);
         var partition = inlineOwner?.Fences.FirstOrDefault()?.Partition;
         var window = FoundationIngressWindow(keepFor);
         var operation = Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
@@ -29,7 +31,8 @@ public sealed partial class InMemoryStore
             var exact = spec with { Creation = new CreationStart(1, 0, operation) };
             var creator = new Message(id, address, Kinds.Start, spec.Input, Start: exact, Due: due, ReplyTo: replyTo, TargetCreation: 1)
             {
-                StorageId = "root:" + address.Id
+                StorageId = "root:" + address.Id,
+                StoreStartInputOnce = true
             };
             var until = checked(now + (long)window.TotalMilliseconds);
             var reference = partition is { } local
@@ -66,6 +69,8 @@ public sealed partial class InMemoryStore
         foreach (var key in expired) _foundationStarts.Remove(key);
         var sends = _foundationSendReceipts.Where(pair => pair.Value < now).Select(pair => pair.Key).ToArray();
         foreach (var key in sends) _foundationSendReceipts.Remove(key);
-        return expired.Length + sends.Length;
+        var operations = _foundationOperatorReceipts.Where(pair => pair.Value.Until < now).Select(pair => pair.Key).ToArray();
+        foreach (var key in operations) _foundationOperatorReceipts.Remove(key);
+        return expired.Length + sends.Length + operations.Length;
     }
 }

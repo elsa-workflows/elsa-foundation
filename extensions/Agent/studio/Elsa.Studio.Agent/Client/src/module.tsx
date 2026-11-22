@@ -1,5 +1,6 @@
 import { Bot } from "lucide-react";
 import React from "react";
+import { flushSync } from "react-dom";
 import type { ElsaStudioModuleApi, StudioActivityDefinitionImplementationEditorContribution, StudioIncidentRootCauseProviderContribution, StudioIncidentStateSummary } from "@elsa-workflows/studio-sdk";
 import { AgentsPage } from "./AgentsPage";
 import { HumanReviewPage } from "./HumanReviewPage";
@@ -42,8 +43,8 @@ export const agentEditorContributions: StudioActivityDefinitionImplementationEdi
     let target = field ? editorElement.querySelector<HTMLElement>(`[data-agent-field="${field}"]`) : null;
     if (!target && location.jsonPointer === "/settings") target = editorElement.querySelector<HTMLElement>("[data-agent-field='model-group']");
     if (!target) return { kind: "unsupported", announcement: "Return to Designer and review the agent settings described by this issue." };
-    const disclosure = target.closest<HTMLDetailsElement>("details");
-    if (disclosure) disclosure.open = true;
+    const trigger = target.closest(".studio-disclosure-fold")?.querySelector<HTMLButtonElement>(":scope > button[aria-expanded='false']");
+    if (trigger) flushSync(() => trigger.click());
     if (target.matches(":disabled")) {
       target = target.closest<HTMLElement>(".studio-field") ?? target.parentElement ?? target;
       target.tabIndex = -1;
@@ -100,7 +101,7 @@ export function register(api: ElsaStudioModuleApi) {
     requiresBackend: [{ id: "elsa.api.agent-reviews", contractVersion: "1" }],
     path: "/agents/reviews/:workflowExecutionId/:activityExecutionId",
     label: "Review",
-    component: () => <HumanReviewPage context={api.backend} />
+    component: ({ navigate }) => <HumanReviewPage context={api.backend} navigate={navigate} />
   });
   // Provide tailored root cause guidance for agent model turn failures.
   const agentIncidentProvider: StudioIncidentRootCauseProviderContribution = {

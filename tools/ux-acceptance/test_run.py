@@ -1,4 +1,4 @@
-from contextlib import closing, contextmanager, redirect_stdout
+from contextlib import closing, contextmanager, ExitStack, redirect_stdout
 import copy
 import importlib.util
 import io
@@ -469,10 +469,14 @@ class VerdictTests(unittest.TestCase):
         acceptance.configure_dashboard_qualification(settings, shells)
         self.assertFalse(settings['Elsa']['Readiness']['WarmDefaultShell'])
         qualification = settings['Qualification']
-        self.assertEqual(1, len(qualification['Principals']))
+        self.assertEqual(2, len(qualification['Principals']))
         self.assertEqual('default', qualification['Principals'][0]['tenant'])
         profiles = qualification['GrantProfiles']
-        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source'}, set(profiles))
+        self.assertEqual({'dashboard-native-reader', 'dashboard-native-no-source', 'history-reader', 'history-no-structure'}, set(profiles))
+        self.assertEqual({'workflows/activity-executions:inspect'},
+                         set(profiles['history-reader']) - set(profiles['history-no-structure']))
+        self.assertEqual({'api-capabilities:read', 'workflows/runtime:read'}, set(profiles['history-no-structure']))
+        self.assertEqual('history-reader', qualification['Principals'][1]['username'])
         self.assertEqual({'workflows/dashboard-queries:read', 'workflows/activity-executions:inspect'},
                          set(profiles['dashboard-native-reader']) - set(profiles['dashboard-native-no-source']))
         self.assertFalse(any('*' in grant or 'agent' in grant or grant.endswith(':manage') or grant.endswith(':share')
@@ -804,22 +808,26 @@ class OrchestrationTests(unittest.TestCase):
                 (assets / f'synthetic-workflow-module-{index:04d}.js').touch()
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 seed = None
+                features = {}
                 if dll == 'Elsa.Workbench.dll':
                     shells = json.loads((directory / 'shells.json').read_text())
-                    seed = shells['CShells']['Shells']['default']['Features'][acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
+                    features = shells['CShells']['Shells']['default']['Features']
+                    seed = features[acceptance.IDENTITY_SEED_FEATURE]['SeedAdminUserName']
                 settings = json.loads((directory / 'appsettings.json').read_text()) if dll == 'Elsa.Workbench.dll' else {}
                 principals = settings.get('Qualification', {}).get('Principals', [])
-                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready))
+                events.append(('start', directory.name, dll, url, log.name, seed, env.get('Studio__BackendBaseUrl'), len(principals), ready, tuple(sorted(item['username'] for item in principals)), {'history': features.get('WorkflowsRuntimeHistory'), 'omitted': 'PlaybackQualificationWithoutHistory' in features, 'cache': features.get('WorkflowsRuntimeEntityFrameworkCore', {}).get('CacheWorkflowExecutables')}))
                 process = SimpleNamespace(pid=1000 + len(events), returncode=None)
+                if on_started is not None:
+                    on_started(process)
                 try:
                     yield process
                 finally:
                     process.returncode = 0
                     events.append(('stop', directory.name, dll))
 
-            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None, pump=None):
                 if log.name == 'copy-asset-diagnostics.log':
                     diagnostics = Path(args[args.index('--outDir') + 1])
                     diagnostics.mkdir(parents=True)
@@ -869,11 +877,13 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(('workbench', 'Elsa.Workbench.dll', 'backend-restricted-seed.log', acceptance.RESTRICTED_USER), (seed[1], seed[2], seed[4], seed[5]))
         self.assertEqual(('stop', 'workbench', 'Elsa.Workbench.dll'), events[1], 'The seed boot stops before any acceptance host starts')
         self.assertEqual(0, seed[7], 'The first-boot seed must not create the Dashboard reader before grant narrowing')
-        self.assertEqual(1, owned[0][7], 'Only the combined acceptance boot creates the independent Dashboard reader')
+        self.assertEqual(2, owned[0][7], 'Combined acceptance has only the independent Dashboard and history readers')
+        self.assertEqual(('dashboard-reader', 'history-reader'), owned[0][9])
+        self.assertIs(owned[0][10]['cache'], False)
         self.assertEqual('/__qualification/ready', owned[0][8])
         self.assertEqual(0, owned[2][7], 'The runtime-only subset does not receive Dashboard qualification principals')
         self.assertEqual(('restrict', 'workbench'), events[2])
-        self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'],
+        self.assertEqual(['workbench', 'studio', 'runtime-api-subset-workbench', 'runtime-api-subset-studio'] + ['workbench', 'studio'] * 3,
                          [event[1] for event in owned])
         self.assertEqual(seed[3], owned[0][3], 'The seed boot uses the combined host origin it later serves')
         self.assertTrue(all(event[5] in ('admin', None) for event in owned), 'Acceptance boots seed only the ordinary admin')
@@ -881,6 +891,23 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(owned[2][3], owned[3][6])
         browser = next(event[1] for event in events if event[0] == 'browser')
         self.assertEqual((owned[3][3], owned[2][3]), (browser['UX_RUNTIME_STUDIO_URL'], browser['UX_RUNTIME_BACKEND_URL']))
+        profiles = json.loads(browser['UX_PLAYBACK_PROFILES'])
+        self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+        for index, name in enumerate(('disabled', 'uncaptured', 'unsupported')):
+            backend, studio = owned[4 + index * 2:6 + index * 2]
+            self.assertEqual(('dashboard-reader', 'history-reader'), backend[9])
+            self.assertEqual('/__qualification/ready', backend[8])
+            self.assertEqual(backend[3], studio[6])
+            self.assertEqual((backend[3], studio[3]), (profiles[name]['backendUrl'], profiles[name]['studioUrl']))
+            self.assertTrue(all(profiles[name]['binaryAndConfigHashes'].values()))
+        self.assertEqual({'Enabled': False}, owned[4][10]['history'])
+        self.assertIsNone(owned[6][10]['history'])
+        self.assertIs(owned[8][10]['omitted'], True)
+        expected_processes = {'restrictedSeedBackend', 'backend', 'studio', 'runtime-api-subset-backend', 'runtime-api-subset-studio'} | {
+            f'playback-{name}-{kind}' for name in profiles for kind in ('backend', 'studio')}
+        self.assertEqual(expected_processes, set(report['ownedPids']))
+        self.assertEqual(expected_processes, set(report['hostExitCodes']))
+        self.assertTrue(all(code == 0 for code in report['hostExitCodes'].values()))
         self.assertNotIn('UX_DESIGN_STUDIO_URL', browser)
         self.assertEqual(report['ownedRoot'], browser['UX_ACCEPTANCE_OWNED_ROOT'])
         self.assertNotIn('UX_WORKFLOW_ASSET_SHA256S', browser)
@@ -899,13 +926,53 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual({'combined', 'runtime-api-subset'}, set(report['compositions']))
         self.assertEqual(acceptance.SUBSET_COMPOSITIONS['runtime-api-subset']['remove'], report['compositions']['runtime-api-subset']['removedFeatures'])
 
+    def test_failed_playback_profile_keeps_started_process_and_configuration_receipts(self):
+        processes, pids, profiles, stopped = {}, {}, {}, []
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+
+            def prepare(project, destination):
+                destination.mkdir(parents=True)
+                for name in ('appsettings.json', 'shells.json'):
+                    (destination / name).write_bytes((project.parent / name).read_bytes())
+
+            @contextmanager
+            def failing_host(_directory, _dll, _url, _ready, log, _env):
+                if log.name == 'playback-unsupported-backend.log':
+                    raise RuntimeError('Unsupported host readiness failed')
+                process = SimpleNamespace(pid=3000 + len(processes), returncode=None)
+                try:
+                    yield process
+                finally:
+                    process.returncode = 0
+                    stopped.append(process.pid)
+
+            with patch.object(acceptance, 'prepare_host', prepare), patch.object(acceptance, 'host', failing_host):
+                with self.assertRaisesRegex(RuntimeError, 'Unsupported host readiness failed'), ExitStack() as stack:
+                    acceptance.playback_profiles(stack, data, acceptance.ROOT / 'apps/Elsa.Workbench/Elsa.Workbench.csproj',
+                        acceptance.ROOT / 'Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj', data, {}, processes, pids, profiles)
+            expected = {f'playback-{name}-{kind}' for name in ('disabled', 'uncaptured') for kind in ('backend', 'studio')}
+            self.assertEqual(expected, set(pids))
+            self.assertEqual(expected, set(processes))
+            self.assertEqual([process.pid for process in reversed(list(processes.values()))], stopped)
+            self.assertTrue(all(process.returncode == 0 for process in processes.values()))
+            self.assertEqual({'disabled', 'uncaptured', 'unsupported'}, set(profiles))
+            for profile in profiles.values():
+                for kind in ('backend', 'studio'):
+                    self.assertTrue(profile['features'][kind])
+                    hashes = profile['binaryAndConfigHashes'][kind]
+                    self.assertEqual({'appsettings.json', 'shells.json'}, set(hashes))
+                    self.assertTrue(all(len(value) == 64 for value in hashes.values()))
+            self.assertNotIn('WorkflowsRuntimeHistory', profiles['uncaptured']['features']['backend'])
+            self.assertIn('PlaybackQualificationWithoutHistory', profiles['unsupported']['features']['backend'])
+
     def test_scoped_ordinary_journey_starts_only_the_combined_hosts(self):
         starts = []
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'out'
 
             @contextmanager
-            def fake_host(directory, dll, url, ready, log, env):
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
                 starts.append(directory.name)
                 process = SimpleNamespace(pid=2000 + len(starts), returncode=None)
                 try:
@@ -913,7 +980,7 @@ class OrchestrationTests(unittest.TestCase):
                 finally:
                     process.returncode = 0
 
-            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None):
+            def fake_command(args, log, *, cwd=acceptance.ROOT, env=None, pump=None):
                 if log.name == 'outlined-gallery.log':
                     self.write_gallery_fixture(args, env)
                     return
@@ -1208,6 +1275,91 @@ class FieldGalleryVerdictTests(unittest.TestCase):
                     if change == 'inline-only': row['results'][0]['attachments'] = [{'contentType': 'image/png', 'body': 'inline-only'}]
                     if change == 'external-image': row['results'][0]['attachments'][0]['path'] = str(root.parent / 'outside.png')
                     with self.assertRaises(ValueError): acceptance.field_gallery_verdict(broken, root)
+
+
+class OwnedRestartTests(unittest.TestCase):
+    def exercise(self, callback, fail_generation=None):
+        with tempfile.TemporaryDirectory() as temp, ExitStack() as outer:
+            root = Path(temp); backend = root / 'backend'; backend.mkdir()
+            (backend / 'host.dll').write_bytes(b'unchanged-owned-binary')
+            events, processes, report = [], {}, {'ownedPids': {}}
+            @contextmanager
+            def fake_host(directory, dll, url, ready, log, env, on_started=None):
+                process = SimpleNamespace(pid=10000 + len(events), returncode=None)
+                events.append(('start', directory, url, dict(env), log.name))
+                on_started(process)
+                try:
+                    if len(events) == fail_generation:
+                        raise RuntimeError('Owned fixture readiness failed')
+                    yield process
+                finally:
+                    process.returncode = 0
+                    events.append(('stop', process.pid))
+            with patch.object(acceptance, 'host', fake_host), patch.object(acceptance.subprocess, 'check_output', return_value=''):
+                owner = acceptance.OwnedBackendRestart(outer, {'backend': backend, 'backendUrl': 'http://localhost:12345'}, root,
+                    {'OWNED_FIXTURE': 'same-value'}, processes, report, root / 'control')
+                callback(owner, root, events, processes, report)
+                outer.close()
+                self.assertEqual(len([x for x in events if x[0] == 'start']), len([x for x in events if x[0] == 'stop']))
+
+    def request(self, owner, expected=0, request_id='a' * 32):
+        (owner.control / 'request.json').write_text(json.dumps({'requestId': request_id, 'expectedGeneration': expected}))
+        owner.pump()
+        return json.loads((owner.control / 'reply.json').read_text())
+
+    def test_restart_preserves_inputs_and_all_lifetimes_close_once(self):
+        def check(owner, root, events, processes, report):
+            first = self.request(owner)
+            self.assertEqual(first['generation'], 1)
+            self.assertNotEqual(first['beforePid'], first['afterPid'])
+            self.assertTrue(first['sameBinaryAndConfiguration'] and first['oldGroupGone'])
+            second = self.request(owner, 1, 'b' * 32)
+            self.assertEqual(second['generation'], 2)
+            starts = [x for x in events if x[0] == 'start']
+            self.assertEqual(len({x[1] for x in starts}), 1)
+            self.assertEqual(len({x[2] for x in starts}), 1)
+            self.assertTrue(all(x[3] == starts[0][3] for x in starts))
+            self.assertEqual(len({x[4] for x in starts}), 3)
+            self.assertEqual(len(processes), 3)
+        self.exercise(check)
+
+    def test_duplicate_request_is_idempotent(self):
+        def check(owner, *_):
+            first = self.request(owner)
+            self.assertEqual(first, self.request(owner))
+            self.assertEqual(owner.generation, 1)
+        self.exercise(check)
+
+    def test_stale_generation_never_stops_current_process(self):
+        def check(owner, root, events, *_):
+            result = self.request(owner, 7)
+            self.assertEqual(result['error'], 'stale-generation')
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_changed_inputs_refuse_before_stopping(self):
+        def check(owner, root, events, *_):
+            (owner.item['backend'] / 'host.dll').write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError, 'inputs changed'):
+                self.request(owner)
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_arbitrary_command_refused_before_stopping(self):
+        def check(owner, root, events, *_):
+            (owner.control / 'request.json').write_text(json.dumps({'requestId': 'a' * 32, 'expectedGeneration': 0, 'command': 'ignored'}))
+            with self.assertRaises(ValueError): owner.pump()
+            self.assertEqual(len(events), 1)
+        self.exercise(check)
+
+    def test_failed_readiness_stays_in_append_only_cleanup_receipt(self):
+        def check(owner, root, events, processes, report):
+            with self.assertRaisesRegex(RuntimeError, 'readiness failed'):
+                self.request(owner)
+            self.assertEqual(len(processes), 2)
+            self.assertEqual(len(report['ownedPids']), 2)
+            self.assertTrue(all(p.returncode == 0 for p in processes.values()))
+        self.exercise(check, fail_generation=3)
 
 
 if __name__ == '__main__':

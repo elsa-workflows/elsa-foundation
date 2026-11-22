@@ -499,6 +499,8 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         var replacementWork = replacementIntent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.CreateBookmark, replacementWork.CommandKind);
         Assert.Equal(replacement.RegistrationId, replacementWork.Payload!.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.BookmarkId);
+        Assert.Equal(ResuspendingApprovalActivity.Deadline, replacementWork.Payload.Value.Deserialize<RuntimeCreateBookmarkCommandPayload>()!.ExpiresAt);
+        Assert.DoesNotContain("ExpiresAt", JsonSerializer.Serialize(replacement));
         Assert.True(Assert.Single(activator.Activities).Disposed);
     }
 
@@ -836,6 +838,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
 
     private sealed class ResuspendingApprovalActivity : StatefulActivity<ActivityUnit, ApprovalState, ApprovalTrigger>, IDisposable
     {
+        internal static readonly DateTimeOffset Deadline = DateTimeOffset.UnixEpoch.AddYears(80);
         public bool Disposed { get; private set; }
 
         protected override ValueTask<ActivityTransition<ActivityUnit, ApprovalState>> ExecuteAsync(ActivityExecutionContext context) =>
@@ -849,7 +852,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                     "resume-target:delivery",
                     "delivery-status",
                     "sha256:delivery-status:order-124",
-                    ActivityTriggerDeduplicationMode.IdempotencyKey)]));
+                    ActivityTriggerDeduplicationMode.IdempotencyKey) { ExpiresAt = Deadline }]));
 
         public void Dispose() => Disposed = true;
     }

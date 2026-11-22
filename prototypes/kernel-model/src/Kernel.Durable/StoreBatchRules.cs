@@ -7,7 +7,7 @@ namespace Kernel.Durable;
 public static class StoreBatchRules
 {
     public static void Validate(CommitBatch batch,bool deferUpdateAliases=false,bool deferInsertAliases=false,bool ownedSets=false,
-        bool supportsJobTrialClear=false)
+        bool supportsJobTrialClear=false,bool supportsFoundationParkResolution=false)
     {
         if (batch.ClearJobTrials.Count > 0 && (!supportsJobTrialClear || batch.HandOver || batch.Turns.Count > 0 ||
             batch.Seen.Count > 0 || batch.Trial.Count > 0 || batch.ClearJobTrials.Distinct().Count() != batch.ClearJobTrials.Count))
@@ -15,14 +15,45 @@ public static class StoreBatchRules
         if (batch.Fences is { } fences) ValidateFences(batch,fences,ownedSets);
         var changed = new HashSet<string>(StringComparer.Ordinal);
         var rows = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<InboxKey>? consumedControls = null;
         var removed = batch.Turns.Any(turn => turn.FoundationReleasedHolds is { Count: > 0 })
             ? batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done)).ToHashSet() : null;
+        ValidateParkPages(batch);
+        if (batch.Turns.Any(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 }))
+        {
+            var restoring = batch.Turns.Where(turn => turn.FoundationRecoverySubscriptions is { Count: > 0 })
+                .Select(turn => turn.Instance).ToHashSet(StringComparer.Ordinal);
+            if (batch.Turns.Any(turn => (turn.FoundationRecoverySubscriptions is null &&
+                    turn.Subscribed.Concat(turn.Unsubscribed).Any(row => restoring.Contains(row.Instance))) ||
+                    turn.Unsubscribe && restoring.Contains(turn.Instance)))
+                throw new StoreException(Failure.Definite, "Other writes in a batch cannot change subscriptions recovery restores.");
+        }
+        if (batch.Turns.Any(turn => turn.FoundationKept is { Count: > 0 }))
+        {
+            var kept = batch.Turns.SelectMany(turn => turn.FoundationKept?.Keys ?? []).ToHashSet();
+            if (batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])).Concat(batch.Trial)
+                .Where(kept.Contains).GroupBy(key => key).Any(group => group.Skip(1).Any()))
+                throw new StoreException(Failure.Definite, "A Park's kept delivery may be mutated only once in a batch.");
+        }
         foreach (var turn in batch.Turns)
         {
+            if (!supportsFoundationParkResolution && (turn.FoundationParkClear is not null || turn.FoundationRecoveryPage is not null || turn.FoundationRecoveryTimers is not null || turn.FoundationRecoveryJobs is not null ||
+                turn.FoundationRecoverySubscriptions is not null ||
+                turn.Row is { ParkResolutionGeneration: > 0 } or { ParkRecovery: not null } || turn.Sent.Any(ParkDrainEnvelope.IsInDomain)))
+                throw new StoreException(Failure.Definite, "This store does not support Park resolution.");
             if (turn.FoundationReleasedHolds is { Count: > 0 } releases &&
                 (turn.Row is null || releases.Distinct().Count() != releases.Count || releases.Any(removed!.Contains) ||
                     releases.Intersect(turn.Held ?? []).Any()))
                 throw new StoreException(Failure.Definite, "Held releases must name distinct, unconsumed rows at a checkpoint.");
+            if (turn.Sent.Any(Kinds.IsUnissuedPrivate))
+                throw new StoreException(Failure.Definite, Kinds.UnissuedPrivateKind);
+            if ((batch.Seen.Count != 0 || batch.Trial.Count != 0) && turn.Sent.Any(message => ParkDrainEnvelope.IsInDomain(message) &&
+                    (batch.Seen.Contains(message.InboxKey) || batch.Trial.Contains(message.InboxKey))))
+                throw new StoreException(Failure.Definite, "A new Park control cannot also carry a poll or trial mark.");
+            if (turn.Consumed.Concat(turn.Done).Any(key => key.Scope == ParkDrainEnvelope.Scope &&
+                    !(consumedControls ??= []).Add(key)) ||
+                (turn.Held ?? []).Any(key => key.Scope == ParkDrainEnvelope.Scope))
+                throw new StoreException(Failure.Definite, "Each protected control may be consumed only once and may not be held.");
             if (turn.Delete)
             {
                 if (turn.Expected is not { } expected)
@@ -43,6 +74,50 @@ public static class StoreBatchRules
             if ((turn.Row is not null || turn.Delete) && !changed.Add(turn.Instance))
                 throw new StoreException(Failure.Definite,"A batch cannot mutate the same actor row twice.");
         }
+    }
+
+    private static void ValidateParkPages(CommitBatch batch)
+    {
+        HashSet<InboxKey>? changed = null;
+        HashSet<InboxKey>? preserved = null;
+        foreach (var turn in batch.Turns)
+        {
+            if (turn.FoundationRecoveryTimers is { Preserved.Count: > 0 } observed)
+                (preserved ??= []).UnionWith(observed.Preserved);
+            if (turn.FoundationRecoveryJobs is { } observedJobs && (observedJobs.Pending.Count != 0 || observedJobs.Retained.Count != 0))
+            {
+                (preserved ??= []).UnionWith(observedJobs.Pending);
+                preserved.UnionWith(observedJobs.Retained);
+            }
+            if (turn.FoundationRecoveryTimers is { Rearms.Count: > 0 } timers)
+            {
+                changed ??= [];
+                if (timers.Rearms.Any(rearm => !changed.Add(rearm.Envelope.InboxKey)))
+                    throw new StoreException(Failure.Definite, "Each re-armed timer must have a distinct full key.");
+            }
+            if (turn.FoundationRecoveryJobs is { Writes.Count: > 0 } jobs)
+            {
+                changed ??= [];
+                if (jobs.Writes.Any(job => !changed.Add(job.InboxKey)))
+                    throw new StoreException(Failure.Definite, "Each restarted job write must have a distinct full key.");
+            }
+            var rows = turn.FoundationParkClear?.Rows ?? turn.FoundationRecoveryPage?.Writes().ToArray();
+            if (rows is null) continue;
+            changed ??= [];
+            if ((turn.FoundationParkClear is not null && turn.FoundationRecoveryPage is not null) ||
+                turn.OpensPark || turn.Delete || rows.Count is 0 or > InMemoryStore.ParkPageLimit ||
+                rows.Any(row => !changed.Add(row.Cursor.Key)))
+                throw new StoreException(Failure.Definite, "A Park page must write a bounded set of distinct keys.");
+        }
+        if (preserved is not null && ((changed is not null && preserved.Overlaps(changed)) ||
+            batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])
+                .Concat(turn.FoundationReleasedHolds ?? []).Concat(turn.Sent.Select(message => message.InboxKey))).Any(preserved.Contains)))
+            throw new StoreException(Failure.Definite, "Other writes in a batch cannot change a wait that recovery preserves.");
+        if (changed is not null && batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials).Concat(batch.Turns.SelectMany(turn =>
+                turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? []).Concat(turn.FoundationReleasedHolds ?? [])
+                    .Concat(turn.Sent.Select(message => message.InboxKey))))
+            .Any(changed.Contains))
+            throw new StoreException(Failure.Definite, "A Park page input cannot be changed elsewhere in the batch.");
     }
 
     /// <summary>

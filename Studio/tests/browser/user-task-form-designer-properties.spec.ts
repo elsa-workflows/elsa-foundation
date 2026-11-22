@@ -1,9 +1,11 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 test("native task form designer communicates field count and capacity", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
   const counter = palette.locator("small");
   await expect(counter).toHaveText("0 fields in form · maximum 100");
@@ -19,7 +21,8 @@ test("native task form designer keeps palette icons compact without shrinking th
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
       await page.goto("/form-designer.html");
-      await page.getByRole("button", { name: "Create form", exact: true }).click();
+      await page.getByRole("button", { name: "New form", exact: true }).click();
+      await confirmNewResource(page, "form", "New form");
       const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
       if (viewport.width <= 600) await page.getByRole("button", { name: "Expand controls panel" }).click();
       const button = palette.getByRole("button", { name: "Text input", exact: true });
@@ -39,33 +42,34 @@ test("native task form designer keeps palette icons compact without shrinking th
 test("native task form designer only shows advanced options supported by the selected type", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   const palette = page.getByRole("complementary", { name: "Field palette", exact: true });
   await palette.getByRole("button", { name: "Text input", exact: true }).click();
   const properties = page.getByRole("complementary", { name: "Field properties", exact: true });
-  const advanced = properties.locator(".user-task-designer__advanced").first();
-  await expect(advanced.locator("summary")).toHaveText("Validation");
-  await advanced.locator("summary").click();
+  const advanced = properties.locator(".studio-advanced-section").first();
+  await expect(advanced.getByRole("button")).toHaveText("Validation");
+  await advanced.getByRole("button").click();
   await properties.getByRole("spinbutton", { name: "Maximum characters" }).fill("120");
 
   const type = properties.getByLabel("Type");
   await type.selectOption("boolean");
-  await expect(advanced.locator("summary")).toHaveText("Validation");
+  await expect(advanced.getByRole("button")).toHaveText("Validation");
   await expect(advanced.getByRole("checkbox", { name: "Must be checked" })).toBeVisible();
   await expect(properties.getByLabel("Display")).toBeVisible();
   await expect(properties.getByText("Answer labels", { exact: true })).toBeVisible();
   await type.selectOption("date");
   await expect(advanced).toHaveCount(0);
   await type.selectOption("number");
-  await expect(advanced.locator("summary")).toHaveText("Validation");
-  await advanced.locator("summary").click();
+  await expect(advanced.getByRole("button")).toHaveText("Validation");
+  await advanced.getByRole("button").click();
   await expect(advanced.getByRole("spinbutton", { name: "Minimum" })).toBeVisible();
   await expect(advanced.getByRole("spinbutton", { name: "Maximum" })).toBeVisible();
   await type.selectOption("multiline");
-  await expect(advanced.locator("summary")).toHaveText("Validation");
+  await expect(advanced.getByRole("button")).toHaveText("Validation");
   await expect(advanced.getByRole("spinbutton", { name: "Maximum characters" })).toBeVisible();
   await type.selectOption("choice");
-  await expect(advanced.locator("summary")).toHaveText("Choices");
+  await expect(advanced.getByRole("button")).toHaveText("Choices");
   const choices = advanced.getByRole("textbox", { name: "Choices, one per line" });
   await choices.fill("First\nSecond");
   await expect(choices).toHaveValue("First\nSecond");
@@ -76,7 +80,8 @@ test("primary Forms editor shares resizable panels while preserving its own save
   await page.addInitScript(() => localStorage.setItem("elsa-studio-workflow-palette-width", "380"));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
 
   const controlsResize = page.getByRole("separator", { name: "Resize controls panel" });
   const originalWidth = Number(await controlsResize.getAttribute("aria-valuenow"));
@@ -109,10 +114,11 @@ test("primary Forms editor shares resizable panels while preserving its own save
 test("primary Forms editor previews, publishes immutably, and starts the next draft from that publication", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
-  await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
+  await expect(page.getByText("Form ID is required.", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(page.getByText("Form ID is required. Form name is required.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Form ID is required.", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Form ID" }).fill("new-contact");
   await page.getByRole("textbox", { name: "Name" }).fill("New contact");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
@@ -128,13 +134,13 @@ test("primary Forms editor previews, publishes immutably, and starts the next dr
   expect(JSON.stringify(requests[0].body)).toContain('"key":"text1"');
   expect(JSON.stringify(requests[0].body)).not.toContain("recipient@example.test");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("table", { name: "Reusable task forms" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Task forms" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "new-contact" });
   await expect(row).toContainText("Published · v1");
-  await row.getByRole("button", { name: "New contact", exact: true }).click();
+  await row.press("Enter");
   await expect(page.getByRole("textbox", { name: "Form ID" })).toBeDisabled();
   await page.getByRole("textbox", { name: "Name" }).fill("New contact revision");
-  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByText("Published · version 2", { exact: true }).first()).toBeVisible();

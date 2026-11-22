@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertCircle, LoaderCircle, Send, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { StudioButton, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
+import { StudioButton, StudioDialog, StudioDialogFooter, StudioResultState, StudioField } from "@elsa-workflows/studio-ui";
 import { EditableCombobox } from "../EditableCombobox";
 import { HttpRequestHeadersEditor } from "./HttpRequestHeadersEditor";
 import { makeHttpTestRequestHeaders, type HttpTestRequestHeader } from "./httpTestRequestHeaders";
@@ -20,7 +20,6 @@ import {
   resolveHttpTestEndpointPath,
   type PublishedHttpEndpoint
 } from "./httpTestRequest";
-import { useDialogFocus } from "./useDialogFocus";
 import "./HttpTestRequestDialog.css";
 
 type HttpTestLoadFailure = "missing-literals" | "publish-required" | "error" | "";
@@ -59,7 +58,7 @@ export function HttpTestRequestDialog({
   onOpenPublishedVersion?(): void;
   publicationUnavailableReason?: string;
 }) {
-  const dialogRef = useRef<HTMLElement>(null);
+  const formId = useId();
   const activeRequest = useRef<AbortController | null>(null);
   const sending = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -84,8 +83,6 @@ export function HttpTestRequestDialog({
     request?.abort();
     onClose();
   }, [onClose]);
-
-  useDialogFocus(dialogRef, close);
 
   useEffect(() => {
     if (!open) {
@@ -237,110 +234,90 @@ export function HttpTestRequestDialog({
   const currentRequestPath = path.trim();
 
   return (
-    <div className="wf-dialog-backdrop" role="presentation" onMouseDown={event => {
-      if (event.target === event.currentTarget) close();
-    }}>
-      <section
-        ref={dialogRef}
-        className="wf-dialog wf-http-test-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="http-test-title"
-        aria-describedby="http-test-description"
-        tabIndex={-1}
-      >
-        <header className="wf-http-test-heading">
-          <div>
-            <span>Published workflow</span>
-            <h3 id="http-test-title">Send an HTTP test request</h3>
-            <p id="http-test-description">Uses the published endpoint’s methods and settings. Publish draft changes before testing them.</p>
-          </div>
-          <button type="button" className="wf-icon-button" aria-label="Close test request" onClick={close}>
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
+    <StudioDialog open title="Send an HTTP test request" closeLabel="Close test request" className="wf-http-test-dialog"
+      description="Uses the published endpoint’s methods and settings. Publish draft changes before testing them." onClose={close}
+      onEscapeKeyDown={event => {
+        if (event.target instanceof Element && event.target.closest('[role="combobox"][aria-expanded="true"], .cm-content')) event.preventDefault();
+      }}
+      footer={endpoint ? <StudioDialogFooter onCancel={close} cancelLabel="Close"
+        confirmLabel={isSending ? "Sending request…" : "Send request"} confirmDisabled={!currentRequestPath || isSending}
+        confirmProps={{ form: formId }} /> : undefined}>
+      <div className="wf-http-test-body">
+        {loading ? <p className="wf-http-test-state" role="status"><LoaderCircle size={16} className="wf-http-test-spinner" /> Loading published endpoint…</p> : null}
+        {loadError && (loadFailure === "missing-literals" || loadFailure === "publish-required") ? (
+          <StudioResultState
+            headingLevel={3}
+            tone="danger"
+            icon={<AlertCircle size={18} aria-hidden="true" />}
+            title={loadFailure === "publish-required" ? publicationUnavailableReason ? "Published endpoint unavailable" : "Publish this workflow" : "Cannot build a test request"}
+            description={loadFailure === "publish-required" && publicationUnavailableReason ? publicationUnavailableReason : loadError}
+            actions={httpTestRecoveryAction({ loadFailure, onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason })}
+          />
+        ) : null}
+        {loadError && loadFailure === "error" ? <p className="wf-http-test-error" role="alert">{loadError}</p> : null}
 
-        <div className="wf-http-test-body">
-          {loading ? <p className="wf-http-test-state" role="status"><LoaderCircle size={16} className="wf-http-test-spinner" /> Loading published endpoint…</p> : null}
-          {loadError && (loadFailure === "missing-literals" || loadFailure === "publish-required") ? (
-            <StudioResultState
-              headingLevel={3}
-              tone="danger"
-              icon={<AlertCircle size={18} aria-hidden="true" />}
-              title={loadFailure === "publish-required" ? publicationUnavailableReason ? "Published endpoint unavailable" : "Publish this workflow" : "Cannot build a test request"}
-              description={loadFailure === "publish-required" && publicationUnavailableReason ? publicationUnavailableReason : loadError}
-              actions={httpTestRecoveryAction({ loadFailure, onPublishDraft, onOpenPublishedVersion, publicationUnavailableReason })}
-            />
-          ) : null}
-          {loadError && loadFailure === "error" ? <p className="wf-http-test-error" role="alert">{loadError}</p> : null}
-
-          {endpoint ? (
-            <form onSubmit={event => { event.preventDefault(); void sendRequest(); }}>
-              <div className="wf-http-test-request-line">
-                <StudioField className="wf-form-field wf-http-test-method" label={<><span>Method</span></>}><select aria-label="HTTP method" value={method} disabled={isSending} onChange={event => setMethod(event.target.value)}>
-                    {endpoint.supportedMethods.map(supportedMethod => <option key={supportedMethod} value={supportedMethod}>{supportedMethod}</option>)}
-                  </select></StudioField>
-                <div className="wf-form-field wf-http-test-path">
-                  <span>Request path</span>
-                  <div className="wf-http-test-path-input">
-                    <StudioField label="Workflow HTTP mount"><input
-                      className="wf-http-test-mount"
-                      aria-label="Workflow HTTP mount"
-                      value={workflowHttpBasePath ?? ""}
-                      size={(workflowHttpBasePath?.length ?? 0) + 1}
-                      readOnly
-                      spellCheck={false}
-                    /></StudioField>
-                    <StudioField label="Endpoint path"><input
-                      aria-label="Endpoint path"
-                      aria-describedby="http-test-path-hint"
-                      value={path}
-                      disabled={isSending}
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      onChange={event => setPath(event.target.value)}
-                      placeholder="/orders/1"
-                    /></StudioField>
-                  </div>
+        {endpoint ? (
+          <form id={formId} onSubmit={event => { event.preventDefault(); void sendRequest(); }}>
+            <div className="wf-http-test-request-line">
+              <StudioField className="wf-form-field wf-http-test-method" label={<><span>Method</span></>}><select aria-label="HTTP method" value={method} disabled={isSending} onChange={event => setMethod(event.target.value)}>
+                  {endpoint.supportedMethods.map(supportedMethod => <option key={supportedMethod} value={supportedMethod}>{supportedMethod}</option>)}
+                </select></StudioField>
+              <div className="wf-form-field wf-http-test-path">
+                <span>Request path</span>
+                <div className="wf-http-test-path-input">
+                  <StudioField label="Workflow HTTP mount"><input
+                    className="wf-http-test-mount"
+                    aria-label="Workflow HTTP mount"
+                    value={workflowHttpBasePath ?? ""}
+                    size={(workflowHttpBasePath?.length ?? 0) + 1}
+                    readOnly
+                    spellCheck={false}
+                  /></StudioField>
+                  <StudioField label="Endpoint path"><input
+                    aria-label="Endpoint path"
+                    aria-describedby="http-test-path-hint"
+                    value={path}
+                    disabled={isSending}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onChange={event => setPath(event.target.value)}
+                    placeholder="/orders/1"
+                  /></StudioField>
                 </div>
-                <StudioButton type="submit" variant="primary" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>
-                  {isSending ? <LoaderCircle size={15} className="wf-http-test-spinner" /> : <Send size={15} />}
-                  {isSending ? "Sending request…" : "Send request"}
-                </StudioButton>
               </div>
-              <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
+            </div>
+            <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
 
-              <HttpRequestHeadersEditor rows={requestHeaders} disabled={isSending} onChange={setRequestHeaders} />
+            <HttpRequestHeadersEditor rows={requestHeaders} disabled={isSending} onChange={setRequestHeaders} />
 
-              <EditableCombobox
-                  className="wf-form-field wf-http-test-content-type"
-                  label="Request content type"
-                  value={contentType}
-                  suggestions={contentTypeSuggestions}
-                  disabled={bodyDisabled || isSending}
-                  onChange={setContentType}
-                  spellCheck={false}
-                />
-              <div className="wf-form-field wf-http-test-body-editor">
-                <span>Request body</span>
-                <HttpMessageBodyEditor
-                  label="Request body"
-                  contentType={contentType}
-                  value={requestBody}
-                  readOnly={bodyDisabled || isSending}
-                  onChange={setRequestBody}
-                />
-                {bodyDisabled ? <small>GET and HEAD requests do not send a body.</small> : <small>You can edit this example to test your own request.</small>}
-              </div>
-            </form>
-          ) : null}
+            <EditableCombobox
+                className="wf-form-field wf-http-test-content-type"
+                label="Request content type"
+                value={contentType}
+                suggestions={contentTypeSuggestions}
+                disabled={bodyDisabled || isSending}
+                onChange={setContentType}
+                spellCheck={false}
+              />
+            <div className="wf-form-field wf-http-test-body-editor">
+              <span>Request body</span>
+              <HttpMessageBodyEditor
+                label="Request body"
+                contentType={contentType}
+                value={requestBody}
+                readOnly={bodyDisabled || isSending}
+                onChange={setRequestBody}
+              />
+              {bodyDisabled ? <small>GET and HEAD requests do not send a body.</small> : <small>You can edit this example to test your own request.</small>}
+            </div>
+          </form>
+        ) : null}
 
-          {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
-          {result ? <HttpTestResponse result={result} context={context} /> : null}
-        </div>
-      </section>
-    </div>
+        {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
+        {result ? <HttpTestResponse result={result} context={context} /> : null}
+      </div>
+    </StudioDialog>
   );
 }
 

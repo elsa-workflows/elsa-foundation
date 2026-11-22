@@ -38,8 +38,8 @@ describe("registered integration navigation", () => {
     const visible = filterAccessibleNavigation(api.navigation.list(), access);
     const operate = getTopLevelNavigationItemsByPlacement(visible, "operate");
     expect(operate.map(item => ({ label: item.label, path: item.path }))).toEqual([
-      { label: "User Tasks", path: "/user-tasks" },
-      { label: "Forms", path: "/user-tasks/forms" }
+      { label: "User tasks", path: "/user-tasks" },
+      { label: "Task forms", path: "/user-tasks/forms" }
     ]);
     expect(getTopLevelNavigationItemsByPlacement(filterAccessibleNavigation(api.navigation.list(), { authenticated: true, permissions: [] }), "operate")).toEqual([]);
   });

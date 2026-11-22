@@ -26,7 +26,7 @@
 .ad-dependency-table td > button, .ad-dependency-table td > a { display: inline-flex; min-height: 2.2rem; margin: 0 .3rem .3rem 0; padding: .35rem .55rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
 .ad-dependency-path { display: grid; gap: .75rem; padding: .9rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 .ad-dependency-path header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
-.ad-dependency-path header span { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; text-transform: uppercase; }
+.ad-dependency-path header span { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; text-transform: none; }
 .ad-dependency-path h3 { margin: .2rem 0 0; overflow-wrap: anywhere; font-size: var(--studio-section-title-size); }
 .ad-dependency-path ol { display: grid; gap: .4rem; margin: 0; padding: 0; list-style: none; }
 .ad-dependency-path li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .55rem; border-radius: var(--studio-radius); background: var(--studio-surface-muted); }

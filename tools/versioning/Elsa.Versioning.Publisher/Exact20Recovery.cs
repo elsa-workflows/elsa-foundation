@@ -28,6 +28,7 @@ internal sealed record Exact20RecoveryPins(
     public const string Repository = "elsa-workflows/elsa-foundation";
     public const string RepositoryApi = "https://api.github.com/repos/elsa-workflows/elsa-foundation/";
     public const string MainRef = "refs/heads/main";
+    // Retain the retired workflow identity so the execute checks still fail closed on main.
     public const string RecoveryWorkflowPath = ".github/workflows/publish-exact20-recovery.yml";
     public const string FeedIndex = "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json";
     public const string FeedKeyName = "FEEDZ_API_KEY";

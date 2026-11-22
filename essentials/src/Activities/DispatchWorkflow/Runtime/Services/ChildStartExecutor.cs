@@ -6,11 +6,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 
 /// <summary>Delivers a committed child-start intent through the existing workflow start dispatcher.</summary>
-public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
+public sealed class ChildStartExecutor : IRuntimePostCommitDurableSourceIntentHandler
 {
     private const string DeliveryFailureCode = "child-start-delivery-failed";
     private const string DeliveryFailureSummary = "The child workflow could not be started.";
@@ -22,6 +23,34 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
+
+    private IServiceProvider? _historyServices;
+    internal static ChildStartExecutor Create(IServiceProvider services) => new(services.GetRequiredService<IWorkflowStartDispatcher>(),
+        services.GetRequiredService<IOptions<DispatchWorkflowOptions>>(), services.GetService<IWorkflowDispatchStore>(),
+        services.GetRequiredService<TimeProvider>(), services.GetService<IWorkflowExecutionStateStore>()) { _historyServices = services };
+
+    bool IRuntimePostCommitDurableSourceIntentHandler.CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) =>
+        ChildDispatchHistory.CanRecord(_historyServices, _timeProvider, writer, reader) &&
+        ReferenceEquals(_workflowStartDispatcher, _historyServices?.GetService<IWorkflowStartDispatcher>()) &&
+        _workflowStartDispatcher.CanPreserveHistoryCausation(WorkflowDispatchLifecycle.StartChildIntentKind, writer, reader) &&
+        _workflowStartDispatcher.CanDispatchChildHistorySource(writer, reader);
+
+    async ValueTask IRuntimePostCommitDurableSourceIntentHandler.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        var policy = await ChildDispatchHistory.VerifyAsync(_historyServices, _timeProvider, source, cancellationToken);
+        var receipt = Guid.NewGuid().ToString("N");
+        await ChildDispatchHistory.ObserveAsync(_historyServices!, _timeProvider, source, policy, receipt, false, "handler-invocation-observed", cancellationToken);
+        try { await HandleCoreAsync(source.Intent, source, cancellationToken); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception primary)
+        {
+            try { await ChildDispatchHistory.ObserveAsync(_historyServices!, _timeProvider, source, policy, receipt, true, "handler-failed-observed", cancellationToken); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception observationFailure) { primary.Data["Elsa.Runtime.History.ChildObservationFailure"] = observationFailure; }
+            throw;
+        }
+        await ChildDispatchHistory.ObserveAsync(_historyServices!, _timeProvider, source, policy, receipt, true, "handler-returned-observed", cancellationToken);
+    }
 
     public ChildStartExecutor(IWorkflowStartDispatcher workflowStartDispatcher)
         : this(workflowStartDispatcher, Options.Create(new DispatchWorkflowOptions()), null, TimeProvider.System)
@@ -67,7 +96,15 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         _timeProvider = timeProvider;
     }
 
-    public async ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    public ValueTask HandleAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (intent.HistoryCausation is not null)
+            throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind, new InvalidOperationException("Captured child starts require their physical source."), false);
+        return HandleCoreAsync(intent, null, cancellationToken);
+    }
+
+    private async ValueTask HandleCoreAsync(RuntimePostCommitIntent intent, PostCommitDeliveryContext? source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(intent);
         if (!StringComparer.Ordinal.Equals(intent.Kind, DispatchWorkflowConstants.StartChildIntentKind))
@@ -159,6 +196,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         WorkflowExecutionStartDispatchResult result;
         try
         {
+            if (source is not null) _ = await ChildDispatchHistory.VerifyAsync(_historyServices, _timeProvider, source, cancellationToken);
             result = await _workflowStartDispatcher.DispatchAsync(
                 new WorkflowExecutionStartDispatchRequest(
                     artifactId: childExecutable.ArtifactId,
@@ -191,7 +229,7 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
                             payload.DispatchNodeId!)
                         : null,
                     dispatchNestingDepth: payload.DispatchNestingDepth,
-                    testScope: testScope),
+                    testScope: testScope) { ChildHistorySource = source },
                 WorkflowExecutableReferenceScope.Published,
                 cancellationToken: cancellationToken);
         }
@@ -199,6 +237,8 @@ public sealed class ChildStartExecutor : IRuntimePostCommitIntentHandler
         {
             throw;
         }
+        catch (RuntimePostCommitSourceBoundaryException) { throw; }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
         catch (Exception exception) when (RuntimeCheckpointCommitValidationException.IsCauseOf(exception))
         {
             // The child's runtime faults a child a checkpoint rule refused, which ends its dispatch and queues the parent's

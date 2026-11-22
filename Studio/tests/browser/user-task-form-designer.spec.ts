@@ -1,16 +1,18 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, test } from "@playwright/test";
 
 test("native task form designer supports recipient preview and accessible editing at desktop and phone widths", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await expect(page.getByRole("complementary", { name: "Field palette", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Form canvas", exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Field properties", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Number", exact: true }).click();
-  await expect(page.locator(".user-task-designer__advanced")).not.toHaveAttribute("open");
+  await expect(page.locator(".studio-advanced-section button[aria-expanded]")).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Select Text field 1", exact: true }).click();
   await page.getByRole("textbox", { name: "Label", exact: true }).fill("Customer note");
   await page.screenshot({ path: testInfo.outputPath("form-designer-desktop.png") });
@@ -43,7 +45,8 @@ test("native task form designer supports recipient preview and accessible editin
 test("native task form designer reorders fields by pointer drag", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/form-designer.html");
-  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("button", { name: "New form", exact: true }).click();
+  await confirmNewResource(page, "form", "New form");
   await page.getByRole("button", { name: "Text input", exact: true }).click();
   await page.getByRole("button", { name: "Number", exact: true }).click();
   const first = page.getByRole("button", { name: "Reorder Text field 1", exact: true });

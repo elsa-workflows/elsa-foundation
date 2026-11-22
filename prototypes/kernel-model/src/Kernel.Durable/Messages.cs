@@ -34,17 +34,29 @@ public readonly record struct InboxKey(string Id, long Scope = 0, string? Match 
     public bool HasIssuedOrigin => Scope == -1 || Scope > 0;
     public static InboxKey Issued(string id) => new(id, -1);
     public static InboxKey Custom(string actor, string id) => new(id, (long)int.MaxValue + 2 + actor.Length);
-    public static InboxKey Ticket(string actor, string key, long creation = 0) => new(Worker.TicketId(actor, key, creation), (long)CreationProtocol.Origin(actor, creation).Length + 1);
-    internal static InboxKey JobResult(string actor, string key, long creation)
+    public static InboxKey Ticket(string actor, string key, long creation = 0) => Ticket(actor, key, creation, 0);
+
+    internal static InboxKey Ticket(string actor, string key, long creation, long generation)
     {
-        var ticket = Ticket(actor, key, creation);
+        if (generation < 0 || generation > 0 && creation <= 0) throw new ArgumentOutOfRangeException(nameof(generation));
+        var id = Worker.TicketId(actor, key, creation);
+        if (generation > 0) id += FormattableString.Invariant($"#g{generation}");
+        return new(id, (long)CreationProtocol.Origin(actor, creation).Length + 1);
+    }
+
+    internal static InboxKey JobResult(string actor, string key, long creation, long generation = 0)
+    {
+        var ticket = Ticket(actor, key, creation, generation);
         return ticket with { Id = ticket.Id + "/result" };
     }
     public static implicit operator InboxKey(string ordinaryId) => new(ordinaryId);
     public override string ToString() => Id;
 }
 
-internal sealed record FoundationOperatorCommand(string? Selection);
+internal sealed record FoundationOperatorCommand(string? Selection)
+{
+    internal ParkRecoveryMode? RecoverMode { get; init; }
+}
 
 /// <summary>A message. Times are database time in milliseconds.</summary>
 public sealed record Message(
@@ -54,11 +66,26 @@ public sealed record Message(
     [System.Text.Json.Serialization.JsonIgnore]
     public long InboxScope { get; private init; }
     internal bool BindFoundationChild { get; init; }
+    internal bool StoreStartInputOnce { get; init; }
+    internal Message? StoredEnvelope { get; init; }
+    internal EventMatch? ProjectedEvent { get; init; }
+    internal string? EventStartAmbientKey { get; init; }
     internal FoundationOperatorCommand? Operator { get; init; }
-    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind);
+    internal bool IsControl => Operator is not null || Kinds.IsControl(Kind) || Kind is Kinds.Drain or Kinds.ParkExpiry;
     internal bool ActorAuthored { get; init; }
     internal bool FoundationJobResult { get; init; }
+    internal long JobGeneration { get; init; }
     internal bool FoundationHeldJobResult { get; init; }
+    private WeakReference<Message>? _issuedTicket;
+    internal bool HasIssuedTicket => _issuedTicket?.TryGetTarget(out var issued) == true && ReferenceEquals(issued, this);
+    internal Message WithoutTicketAuthority() => this with { _issuedTicket = null };
+
+    internal Message AsKernelTicket()
+    {
+        // Authority belongs to the final emitted envelope. A record copy cannot carry it to another message.
+        _issuedTicket = new(this);
+        return this;
+    }
     internal long DeliveryOrder(long seq) => FoundationHeldJobResult ? -seq : seq;
     internal bool ActorControl => ActorAuthored && Kind.StartsWith("kernel.", StringComparison.Ordinal);
     [System.Text.Json.Serialization.JsonIgnore]
@@ -81,10 +108,13 @@ public sealed record JobFinished([property: System.Text.Json.Serialization.JsonC
 
 public static class Kinds
 {
+    internal const string ChildFinished = "child-finished";
     public const string Start = "start";
     public const string JobFinished = "job-finished";
     public const string Event = "event";
     internal const string JobDeadline = "kernel.job-deadline";
+    internal const string Drain = "kernel.drain";
+    internal const string ParkExpiry = "kernel.park-expiry";
     public const string Job = "kernel.job";    // a job's ticket: the intent while the work is in flight, the result afterwards
     public const string Meet = "kernel.meet";  // "read the events for the keys this commit subscribed"
 
@@ -97,9 +127,15 @@ public static class Kinds
 
     public static void RequireApplicationSend(string kind)
     {
-        if (kind is Job or JobDeadline) throw new ArgumentException("The foundation issues job tickets and deadlines.", nameof(kind));
-        if (kind is Meet or Publish) throw new ArgumentException("Event tickets must be created by DurableTurn.Subscribe or Publish.", nameof(kind));
+        if (IsPrivateKernelKind(kind))
+            throw new ArgumentException("The foundation reserves this message kind.", nameof(kind));
     }
+
+    internal static bool IsPrivateKernelKind(string kind) => kind.StartsWith("kernel.", StringComparison.Ordinal) &&
+        !IsControl(kind) && kind is not ("kernel.recover" or "kernel.discard" or "kernel.migrate");
+
+    internal const string UnissuedPrivateKind = "The outcome includes a private kernel kind with no issuer.";
+    internal static bool IsUnissuedPrivate(Message message) => IsPrivateKernelKind(message.Kind) && !message.HasIssuedTicket;
 
     public static bool IsControl(string kind) => kind is Suspend or Resume or Terminate or Delete;
     public const string Publish = "kernel.publish";    // NATIVE N1: "publish this event now that the commit has landed"

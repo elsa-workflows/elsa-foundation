@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { StudioHttpError, type StudioActivityDefinitionImplementationEditorProps } from "@elsa-workflows/studio-sdk";
-import { StudioAlert, StudioButton, StudioField } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, StudioAlert, StudioButton, StudioCheckboxField, StudioField } from "@elsa-workflows/studio-ui";
 import {
   connectionPickerLimit, listModelConnections, listModelProviders, readModelCapabilities,
   type ModelCapabilities, type ModelConnection, type ModelProvider
@@ -151,8 +151,6 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
 
   const advancedHasProblems = ["tokens", "calls", "timeout"].some(field => fieldMessage(field as NumberField,
     field === "tokens" ? problems.outputTokens : field === "calls" ? problems.modelCalls : problems.timeout));
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  useEffect(() => { if (advancedHasProblems) setAdvancedOpen(true); }, [advancedHasProblems]);
 
   const retry = <StudioButton size="sm" onClick={() => setReload(current => current + 1)}>Retry</StudioButton>;
 
@@ -226,7 +224,7 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
         {model && !model.supportsJsonSchema ? <StudioAlert tone="warning">This model does not declare structured JSON results, so the agent cannot be published with it.</StudioAlert> : null}
         {modelId || connectionName ? (
           <p className="agent-model-summary" data-testid="agent-model">
-            Model: <code>{modelId || "none"}</code>{provider ? ` from ${provider.displayName}` : ""}{model ? ` · up to ${model.maximumOutputTokens.toLocaleString()} output tokens` : ""}
+            {modelId ? <>Model: <code>{modelId}</code>{provider ? ` from ${provider.displayName}` : ""}</> : "No model selected"}{model ? ` · up to ${model.maximumOutputTokens.toLocaleString()} output tokens` : ""}
           </p>
         ) : null}
         {temperature ? numberInput("temperature", "Temperature", `Optional.${temperature.minimum != null || temperature.maximum != null ? ` This model accepts ${[temperature.minimum != null ? `from ${temperature.minimum}` : "", temperature.maximum != null ? `up to ${temperature.maximum}` : ""].filter(Boolean).join(" ")}.` : ""}`,
@@ -241,23 +239,20 @@ export function AgentEditor({ context, value, readOnly, onChange, providerSchema
       </fieldset>
 
       </div>
-      <details className="agent-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
-        <summary>Advanced settings<span>Limits and conversation</span></summary>
+      <AdvancedSection label="Advanced settings" summary="Limits and conversation" hasError={Boolean(advancedHasProblems)}>
       <fieldset className="agent-limits" disabled={readOnly}>
         <legend>Limits</legend>
-        {numberInput("tokens", "Maximum output tokens", model ? `Optional. At most ${model.maximumOutputTokens.toLocaleString()} for this model.` : "Optional.", problems.outputTokens, { min: 1, max: model?.maximumOutputTokens })}
+        {numberInput("tokens", "Maximum output tokens", model ? `At most ${model.maximumOutputTokens.toLocaleString()} for this model.` : undefined, problems.outputTokens, { min: 1, max: model?.maximumOutputTokens })}
         {numberInput("calls", "Maximum model calls", "Per invocation.", problems.modelCalls, { min: agentBounds.modelCalls.minimum, max: agentBounds.modelCalls.maximum })}
         {numberInput("timeout", "Timeout (seconds)", undefined, problems.timeout, { min: agentBounds.timeoutSeconds.minimum, max: agentBounds.timeoutSeconds.maximum })}
       </fieldset>
 
       {providerSchemaVersion === continuitySchemaVersion ? (
-        <label className="agent-continuity">
-          <input type="checkbox" checked={manifest.allowContinuity === true} disabled={readOnly}
-            onChange={event => patch({ allowContinuity: event.target.checked })} />
-          <span>Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one.</span>
-        </label>
+        <StudioCheckboxField className="agent-continuity" checked={manifest.allowContinuity === true} disabled={readOnly}
+          onChange={allowContinuity => patch({ allowContinuity })}
+          label="Allow callers to continue a conversation. Each invocation is fresh unless a caller explicitly continues one." />
       ) : null}
-      </details>
+      </AdvancedSection>
     </div>
   );
 }

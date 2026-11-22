@@ -51,6 +51,11 @@ internal static class RuntimeSchemaWriteVersion
         For(context, StandaloneTriggersEfModule.SchemaFamily, StandaloneTriggersEfModule.SchemaVersion, storedVersion);
     internal static string TriggerBinding(RuntimeDbContext context, string? storedVersion = null) =>
         For(context, RuntimeTriggerBindingEfModule.SchemaFamily, RuntimeTriggerBindingEfModule.SchemaVersion, storedVersion);
+    internal static bool SupportsTimerHistory(RuntimeDbContext context) =>
+        CanWrite(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.TimerHistorySchemaVersion);
+
+    internal static string TimerHistory(RuntimeDbContext context, string? storedVersion = null) =>
+        For(context, RuntimeOperationalStateEfModule.SchemaFamily, RuntimeOperationalStateEfModule.TimerHistorySchemaVersion, storedVersion);
 
     private static bool CanWrite(RuntimeDbContext context, string familyName, string minimum)
     {

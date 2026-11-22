@@ -60,7 +60,7 @@ test("Feature Management settings preserve edit, reset, cancel, and local draft 
   await migrationOptions.fill('{"useTransactions":false}');
   await expect(migrationOptions).toHaveAttribute("aria-invalid", "false");
 
-  await dialog.getByRole("button", { name: "Save draft" }).click();
+  await dialog.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("button", { name: "Edit settings" })).toBeVisible();
   await expect(page.locator(".feature-management-card.selected")).toContainText("Pending changes");
   await page.getByRole("button", { name: "Edit settings" }).click();
@@ -69,7 +69,7 @@ test("Feature Management settings preserve edit, reset, cancel, and local draft 
   await expect(dialog.getByRole("checkbox", { name: "Pooled contexts" })).toBeChecked();
   await expect(dialog.getByLabel("Provider")).toHaveValue('"SqlServer"');
   await expect(dialog.getByRole("textbox", { name: "Migration options" })).toHaveValue('{\n  "useTransactions": false\n}');
-  await expect(dialog.getByRole("button", { name: "Save draft" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save" })).toBeVisible();
 });
 
 test("Feature Management settings fit narrow light and dark viewports", async ({ page }, testInfo) => {
@@ -85,10 +85,10 @@ test("Feature Management settings fit narrow light and dark viewports", async ({
       documentScrollWidth: document.documentElement.scrollWidth,
       footerFits: (() => {
         const dialogRect = element.getBoundingClientRect();
-        const footerRect = element.querySelector(".feature-management-dialog-actions")!.getBoundingClientRect();
+        const footerRect = element.querySelector(".studio-dialog-footer")!.getBoundingClientRect();
         return footerRect.top >= dialogRect.top && footerRect.bottom <= dialogRect.bottom;
       })(),
-      footerHeight: element.querySelector(".feature-management-dialog-actions")!.clientHeight,
+      footerHeight: element.querySelector(".studio-dialog-footer")!.clientHeight,
       bodyHeight: element.querySelector(".feature-management-dialog-body")!.clientHeight
     }));
     const bodyFits = await body.evaluate(element => element.scrollWidth <= element.clientWidth);
@@ -99,7 +99,7 @@ test("Feature Management settings fit narrow light and dark viewports", async ({
     expect(geometry.footerHeight).toBeLessThanOrEqual(220);
     expect(geometry.bodyHeight).toBeGreaterThan(200);
     expect(bodyFits).toBe(true);
-    await expect(dialog.getByRole("button", { name: "Save draft" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeVisible();
     await expect(dialog.getByRole("textbox", { name: "Connection name" })).toBeVisible();
     const screenshot = await page.screenshot({ path: `artifacts/feature-management-settings-narrow-${colorScheme}.png`, animations: "disabled" });
     await testInfo.attach(`feature-management-settings-narrow-${colorScheme}.png`, { body: screenshot, contentType: "image/png" });

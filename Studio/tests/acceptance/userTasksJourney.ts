@@ -1,3 +1,4 @@
+import { confirmNewResource } from "../newResourceDialog";
 import { expect, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
 type Capture = (page: Page, info: TestInfo, name: string) => Promise<void>;
@@ -21,11 +22,11 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
   const operate = page.locator(".sidebar").getByRole("navigation", { name: "Operate", exact: true });
   const operateToggle = operate.getByRole("button", { name: "Operate", exact: true });
   if (await operateToggle.getAttribute("aria-expanded") === "false") await operateToggle.click();
-  await operate.getByRole("link", { name: "User Tasks", exact: true }).click();
+  await operate.getByRole("link", { name: "User tasks", exact: true }).click();
   await expect(page).toHaveURL(/\/user-tasks(?:\?|$)/);
   expect(new URL(page.url()).searchParams.get("backend")).toBe("legacy");
   await expect(page.getByRole("heading", { name: "No tasks here", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "User Tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "User tasks management", exact: true }).getByRole("complementary")).toHaveCount(0);
   await capture(page, info, "tasks-empty");
   const who = await get("/runtime/user-task-identity");
   const suffix = `${info.project.name}-${Date.now()}`;
@@ -84,7 +85,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(await retainedNote!.evaluate(element => element.isConnected)).toBe(true);
     await expect(note).toHaveValue("Reviewed purchase request");
     await capture(page, info, "task-tab-return");
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await page.getByRole("dialog", { name: "Discard task response?", exact: true }).getByRole("button", { name: "Keep editing", exact: true }).click();
     await expect(note).toHaveValue("Reviewed purchase request");
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "task-detail");
@@ -112,8 +113,8 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(await record.evaluate(element => { const frame = element.closest(".studio-form-control"); const style = frame ? getComputedStyle(frame) : null; return { border: style?.borderTopWidth, opacity: style?.opacity }; })).toEqual({ border: "0px", opacity: "1" });
     await expect(detail.locator(".user-task-actions")).toHaveCount(0);
     await detail.getByRole("heading").scrollIntoViewIfNeeded(); await capture(page, info, "completed");
-    await expect(detail.getByRole("button", { name: "Back to task list", exact: true })).toBeEnabled();
-    await detail.getByRole("button", { name: "Back to task list", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toBeEnabled();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).click();
     await expect(page.getByRole("region", { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveValue("Review purchase");
     await expect(row).toHaveCount(0);
@@ -124,10 +125,10 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await page.goto(`/user-tasks/absent-${suffix}?backend=legacy`);
     await expect(page.getByRole("heading", { name: "Task not found", exact: true })).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toHaveCount(0);
-    // #4068: the not-found body offers its own way back, beside the header link.
-    await expect(page.getByRole("button", { name: "Back to task list", exact: true })).toHaveCount(2);
+    // The missing task preserves the collection return path in the active shell.
+    await expect(page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true })).toHaveCount(1);
     await capture(page, info, "task-not-found");
-    await page.getByRole("button", { name: "Back to task list", exact: true }).last().click();
+    await page.getByRole("navigation", { name: "Breadcrumb", exact: true }).getByRole("button", { name: "User tasks", exact: true }).last().click();
     await expect(page.getByRole("searchbox", { name: "Search tasks", exact: true })).toBeVisible();
     await page.goto("/user-tasks/forms");
     await expect(page.getByRole("table", { name: "Reusable task forms", exact: true }).getByText(form.id, { exact: true })).toBeVisible();
@@ -149,7 +150,8 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     expect(nameBox!.x).toBeGreaterThanOrEqual(0); expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await capture(page, info, "task-forms");
     await nextVersion.scrollIntoViewIfNeeded(); await capture(page, info, "task-form-versions");
-    await page.getByRole("button", { name: "Create form version", exact: true }).first().press("Enter");
+    await page.getByRole("button", { name: "New form", exact: true }).first().press("Enter");
+    await confirmNewResource(page, "form", "New form");
     await expect(page.getByRole("textbox", { name: "Form ID", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Add field", exact: true }).click();
     // #4068: the automatically assigned version is shown as a value, not as an editable-looking box.
@@ -157,7 +159,7 @@ export async function userTasksJourney(page: Page, info: TestInfo, capture: Capt
     await page.getByRole("textbox", { name: "Form ID", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-editor");
     await page.getByRole("button", { name: "Cancel", exact: true }).scrollIntoViewIfNeeded(); await capture(page, info, "task-form-actions");
     await page.getByRole("button", { name: "Cancel", exact: true }).press("Enter");
-    await expect(page.getByRole("button", { name: "Create form version", exact: true }).first()).toBeFocused();
+    await expect(page.getByRole("button", { name: "New form", exact: true }).first()).toBeFocused();
   } finally {
     // This definition belongs to this test's disposable host; keep the reference
     // collection empty for the next project without affecting any developer store.

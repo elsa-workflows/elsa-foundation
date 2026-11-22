@@ -18,6 +18,12 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { formatCaptureMode, formatSnapshotPayload, runtimeValueContextId, RuntimeValueEvidenceCard, RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import "./activityInspection.css";
 import type { PreparedAttachedExecution } from "./prepareAttachedExecution";
+import type { RunHistorySelection, RuntimeHistoryEvent } from "../runtimeHistoryTypes";
+import { PanelTabList } from "./PanelTabList";
+
+const ActivityHistoryJournal = lazy(async () => ({ default: (await import("./run-history/RunHistoryTimeline")).ActivityHistoryJournal }));
+const ActivityBookmarkHistory = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).ActivityBookmarkHistory }));
+const HistoryInspection = lazy(async () => ({ default: (await import("./run-history/HistoryInspection")).HistoryInspection }));
 
 const ReusableBoundaryInspector = lazy(async () => ({ default: (await import("./ReusableBoundaryInspector")).ReusableBoundaryInspector }));
 const activityExecutionDetailTabs = [
@@ -70,9 +76,17 @@ export function WorkflowActivityExecutionDetails({
   onSelectEvidence,
   refreshKey = 0,
   compact = false,
-  prepared
+  prepared,
+  initialView = "data",
+  historyRefreshKey,
+  onSelectHistory,
+  onFocusHistory
 }: {
   prepared?: PreparedAttachedExecution;
+  initialView?: "journal" | "bookmarks" | "data";
+  historyRefreshKey?: string | number;
+  onSelectHistory?(selection: RunHistorySelection): void;
+  onFocusHistory?(activityExecutionId: string): void;
   compact?: boolean;
   refreshKey?: number;
   executionNavigation?: ReactNode;
@@ -102,12 +116,23 @@ export function WorkflowActivityExecutionDetails({
     error: ""
   });
   const [copyStatus, setCopyStatus] = useState("");
+  const bookmarkRefreshKey = historyRefreshKey ?? JSON.stringify([activity?.status, activity?.completedAt, activity?.bookmarkCount, activity?.bookmarkIds]);
+  const historyIdentity = JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId]);
+  const [historyView, setHistoryView] = useState<{ identity: string; tab: "journal" | "bookmarks" | "data"; selection: RunHistorySelection } | null>(null);
+  const activeHistoryView = historyView?.identity === historyIdentity ? historyView : { identity: historyIdentity, tab: initialView, selection: null };
+  const selectHistory = (selection: RunHistorySelection) => {
+    if (onSelectHistory) onSelectHistory(selection);
+    else setHistoryView({ ...activeHistoryView, selection });
+  };
+  useEffect(() => {
+    if (focusInputKey) setHistoryView({ identity: historyIdentity, tab: "data", selection: null });
+  }, [focusInputKey, historyIdentity]);
   const [activeDetailTab, setActiveDetailTab] = useState("overview");
   const detailTabsId = useId();
 
   useEffect(() => {
     if (focusInputKey) setActiveDetailTab("inputs");
-  }, [focusInputKey]);
+  }, [focusInputKey, historyIdentity]);
 
   const requestedRevision = useRef(refreshKey); requestedRevision.current = refreshKey;
   const refreshInspection = useRef<(() => void) | null>(null);
@@ -138,7 +163,7 @@ export function WorkflowActivityExecutionDetails({
             if (controller.signal.aborted) return;
             if (inspection.workflowExecutionId !== workflowExecutionId || inspection.activityExecutionId !== activityExecutionId) {
               setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity,
-                status: "failed", inspection: null, error: "Execution evidence identity did not match the selected occurrence." });
+                status: "failed", inspection: null, error: "Run identity did not match the selected occurrence." });
             } else setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection, error: "" });
           } catch (error) {
             if (controller.signal.aborted) return;
@@ -201,14 +226,14 @@ export function WorkflowActivityExecutionDetails({
   const executionDetailRows = [
     ...(compact ? [
       { label: "Started", value: startedLabel, copiedLabel: "start time" },
-      { label: "Duration", value: durationLabel, copiedLabel: "duration" },
+      { label: "Elapsed", value: durationLabel, copiedLabel: "duration" },
       { label: "Incidents", value: incidentCount == null ? "Unavailable" : String(incidentCount), copiedLabel: "incident count" }
     ] : []),
     { label: "Activity Execution ID", value: activity.activityExecutionId, copiedLabel: "activity execution ID", code: true },
     { label: "Authored Activity ID", value: activity.authoredActivityId, copiedLabel: "authored activity ID", code: true },
     { label: "Activity type", value: `${activity.activityType}@${activity.activityTypeVersion}`, copiedLabel: "activity type", code: true },
     { label: "Completed", value: completedLabel, copiedLabel: "completion time" },
-    { label: "Bookmarks", value: bookmarkCount == null ? "Unavailable" : String(bookmarkCount), copiedLabel: "bookmark count" },
+    { label: "Current bookmarks", value: bookmarkCount == null ? "Unavailable" : String(bookmarkCount), copiedLabel: "bookmark count" },
     ...(executionAttempt ? [{
       label: "Attempt",
       value: `${executionAttempt.attemptNumber} of ${executionAttempt.totalAttempts ?? "?"}`,
@@ -274,6 +299,18 @@ export function WorkflowActivityExecutionDetails({
       {executionNavigation}
       {childExecutions}
       <WorkflowRunRelatedLinks context={context} session={backendSession} activity={activity} contributions={runRelatedLinks} refreshKey={refreshKey} />
+      <PanelTabList label="Activity execution views" activeTabId={activeHistoryView.tab}
+        tabs={[{ id: "journal", title: "Journal", icon: null, order: 0, render: () => null }, { id: "bookmarks", title: "Bookmarks", icon: null, order: 1, render: () => null }, { id: "data", title: "Data", icon: null, order: 2, render: () => null }]}
+        onSelect={tab => setHistoryView({ identity: historyIdentity, tab: tab as "journal" | "bookmarks" | "data", selection: null })} />
+      {activeHistoryView.selection ? <Suspense fallback={<p role="status">Loading recorded history…</p>}><HistoryInspection context={context}
+        workflowExecutionId={activity.workflowExecutionId} selection={activeHistoryView.selection} refreshKey={bookmarkRefreshKey} onSelect={selectHistory}
+        onBack={() => setHistoryView({ ...activeHistoryView, selection: null })} onFocusTimeline={onFocusHistory} /></Suspense>
+        : activeHistoryView.tab === "journal" ? <Suspense fallback={<p role="status">Loading activity journal…</p>}><ActivityHistoryJournal
+          key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId}
+          onSelectEvent={(event: RuntimeHistoryEvent) => selectHistory({ kind: "event", id: event.historyEventId })} onOpenTimeline={onFocusHistory} /></Suspense>
+          : activeHistoryView.tab === "bookmarks" ? <Suspense fallback={<p role="status">Loading recorded bookmarks…</p>}><ActivityBookmarkHistory
+            key={historyIdentity} context={context} workflowExecutionId={activity.workflowExecutionId} activityExecutionId={activity.activityExecutionId} refreshKey={bookmarkRefreshKey} onSelect={selectHistory} /></Suspense> : null}
+      {!activeHistoryView.selection && activeHistoryView.tab === "data" ? <>
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
         <StudioTabs
           baseId={detailTabsId}
@@ -336,12 +373,13 @@ export function WorkflowActivityExecutionDetails({
             state={currentInspectionState}
             subject="ActivityOutput"
             title="Outputs"
-            loadingText="Loading runtime output evidence..."
-            failureText="Runtime output evidence is unavailable."
+            loadingText="Loading recorded outputs..."
+            failureText="Recorded outputs are unavailable."
             emptyText="No runtime output snapshots were recorded for this execution."
           />
         </StudioTabPanel>
       </RuntimeValueEvidenceResolutionProvider>
+      </> : null}
     </>
   );
 }
@@ -470,14 +508,14 @@ function WorkflowActivityInputEvidence({
         </h4>
         <span className="wf-input-inspection-caption">Runtime values</span>
       </header>
-      {state.status === "loading" ? <p>Loading runtime input evidence...</p> : null}
+      {state.status === "loading" ? <p>Loading recorded inputs...</p> : null}
       {state.status === "failed" ? (
         <>
-          <p>Runtime input evidence is unavailable. Authored source remains independently inspectable where permitted.</p>
+          <p>Recorded inputs are unavailable. Authored source remains independently inspectable where permitted.</p>
           {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
         </>
       ) : null}
-      {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or runtime input evidence are available for this execution.</p> : null}
+      {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or recorded inputs are available for this execution.</p> : null}
       {rows.length > 0 ? (
         <div className="wf-runtime-input-list wf-input-inspection-list" role="list">
           {rows.map(row => (
@@ -575,10 +613,10 @@ function InputInspectionRowCard({
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
             inspectionStatus === "loading" ? <p className="wf-input-inspection-unavailable">Loading captured value…</p>
-              : inspectionStatus === "failed" ? <p className="wf-input-inspection-unavailable">Runtime evidence unavailable</p>
+              : inspectionStatus === "failed" ? <p className="wf-input-inspection-unavailable">Run data unavailable</p>
               : sourceValueFallback(row, shownSource, sourceProtected)
                 ? <AuthoredSourceValueFallback source={shownSource} />
-                : <p className="wf-input-inspection-unavailable">No evaluation evidence recorded</p>
+                : <p className="wf-input-inspection-unavailable">No evaluation data recorded</p>
           )}
         </div>
         <StudioButton
@@ -614,7 +652,7 @@ function InputInspectionRowCard({
             expressionEditors={expressionEditors}
           />
         </section>
-        <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
+        <section className="wf-input-inspection-detail" aria-label={`${row.name} run data`}>
           <h5>Capture details</h5>
           <dl className="wf-input-inspection-metadata">
             {[
@@ -777,8 +815,8 @@ function formatInputInspectionState(state: InputInspectionState) {
     missingDeclaration: "Declaration unavailable",
     missingAuthoredSource: "Authored source unavailable",
     missingCompiledBinding: "Compiled binding unavailable",
-    noEvaluation: "Evaluation evidence not recorded",
-    orphanEvidence: "Orphan runtime evidence",
+    noEvaluation: "No evaluation data recorded",
+    orphanEvidence: "Unmatched run data",
     compiledOnly: "Compiled source only",
     sourceUnavailable: "Source unavailable",
     duplicateKey: "Duplicate input key",
@@ -843,7 +881,7 @@ function WorkflowActivityValueEvidence({
   const captureModeByKey = new Map(snapshots.map(snapshot => [formatCaptureMode(snapshot.captureMode).toLowerCase(), snapshot.captureMode]));
   const captureModes = [...captureModeByKey.values()];
   const homogeneousCaptureMode = captureModes.length === 1;
-  const captureModeLabel = homogeneousCaptureMode ? formatCaptureMode(captureModes[0] ?? "Evidence") : "Mixed evidence";
+  const captureModeLabel = homogeneousCaptureMode ? formatCaptureMode(captureModes[0] ?? "Run data") : "Mixed capture modes";
 
   return (
     <section className="wf-instance-section">

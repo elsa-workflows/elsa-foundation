@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IBookmarkResumeDispatcher
 {
+    /// <summary>Explicitly qualify native child source preservation through awaited actor activation; legacy transports refuse.</summary>
+    bool CanDispatchChildHistorySource(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
+
     /// <summary>Qualify the actual delivery observer and selected history reader; legacy dispatchers refuse.</summary>
     bool CanRecordHistory(IRuntimeHistoryObservationWriter writer, IRuntimeHistoryStore reader) => false;
 

@@ -12,12 +12,12 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
         ArgumentNullException.ThrowIfNull(scope);
         cancellationToken.ThrowIfCancellationRequested();
         var refused = new Admission(AdmissionOutcome.Refused);
-        if (authorize?.Invoke(scope, kind) != true || !Durable.InMemoryStore.IsOutsideMessageId(id) ||
-            kind is Kinds.Recover or Kinds.Discard)
+        if (authorize?.Invoke(scope, kind) != true || !Durable.InMemoryStore.IsOutsideMessageId(id))
             return new(refused);
 
         string? selection = null;
-        if (kind is Kinds.Terminate or Kinds.Delete)
+        Durable.ParkRecoveryMode? recoverMode = null;
+        if (kind is Kinds.Terminate or Kinds.Delete or Kinds.Discard or Kinds.Recover)
         {
             OperatorCommand? command;
             try { command = payload is null ? null : JsonSerializer.Deserialize<OperatorCommand>(payload); }
@@ -25,11 +25,17 @@ internal sealed class OperatorIngress(Durable.InMemoryStore store, Func<BoundSco
             if (command?.ThenDelete == true) return new(refused);
             if (command is not { Selection.Length: > 0 })
                 return new(new Admission(AdmissionOutcome.Refused, Reason: RefusalReason.StaleSelection));
+            if (kind == Kinds.Recover)
+            {
+                if (command is not { Mode: RecoverMode.Resume or RecoverMode.RetryAll, Handles: null or { Count: 0 } })
+                    return new(refused);
+                recoverMode = command.Mode == RecoverMode.RetryAll ? Durable.ParkRecoveryMode.RetryAll : Durable.ParkRecoveryMode.Resume;
+            }
             selection = command.Selection;
         }
 
         var receipt = store.AdmitFoundationOperator(scope.Tenant, (target as Target.Ref)?.Actor.Id,
-            (target as Target.Key)?.CallerKey, id, kind, payload, options?.DueAt, options?.KeepFor, selection, replyTo);
+            (target as Target.Key)?.CallerKey, id, kind, payload, options?.DueAt, options?.KeepFor, selection, replyTo, recoverMode);
         return new(receipt.Outcome switch
         {
             Durable.InMemoryStore.OperatorAdmission.Accepted => new Admission(AdmissionOutcome.Accepted, new ActorRef(receipt.Reference!)),

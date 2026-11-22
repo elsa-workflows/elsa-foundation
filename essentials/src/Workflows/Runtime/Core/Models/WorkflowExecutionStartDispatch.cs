@@ -5,6 +5,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class WorkflowExecutionStartDispatchRequest
 {
+    /// <summary>In-process native child history responsibility; never serialized and never start authority.</summary>
+    [JsonIgnore]
+    public PostCommitDeliveryContext? ChildHistorySource { get; init; }
+
     public WorkflowExecutionStartDispatchRequest(
         string artifactId,
         string requestedBy,

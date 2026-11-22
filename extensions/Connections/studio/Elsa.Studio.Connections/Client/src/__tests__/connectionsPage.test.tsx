@@ -19,7 +19,7 @@ describe("Connections page", () => {
     const { context } = endpointContext();
     const { host } = renderPage(context);
 
-    await waitFor(() => detailsButton(host) !== null);
+    await waitFor(() => connectionRow(host) !== null);
     const timestamp = host.querySelector<HTMLTimeElement>(".connections-date .studio-timestamp");
     const testedAt = new Date(connection.lastTestedAt!);
 
@@ -32,8 +32,8 @@ describe("Connections page", () => {
     const { context } = endpointContext();
     const { host } = renderPage(context);
 
-    await waitFor(() => detailsButton(host) !== null);
-    const opener = detailsButton(host)!;
+    await waitFor(() => connectionRow(host) !== null);
+    const opener = connectionRow(host)!;
     expect(host.querySelector('[role="dialog"]')).toBeNull();
 
     opener.focus();
@@ -45,10 +45,10 @@ describe("Connections page", () => {
     expect(dialog!.querySelector("h2")?.id).toBe(titleId);
     expect(dialog!.querySelector("h2")?.textContent).toBe(connection.displayName);
 
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    flushSync(() => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 
     expect(host.querySelector('[role="dialog"]')).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it("distinguishes an empty collection from an empty search and clears the search", async () => {
@@ -59,7 +59,6 @@ describe("Connections page", () => {
 
     await waitFor(() => host.textContent?.includes("No connections yet") === true);
     changeSearch(host, "missing-service");
-    click(button(host, "Search"));
 
     await waitFor(() => host.textContent?.includes("No matching connections") === true);
     expect(host.textContent).toContain("Try a different name or clear your search.");
@@ -85,20 +84,19 @@ describe("Connections page", () => {
     const { host } = renderPage(context);
 
     await waitFor(() => listQueries.length === 1);
-    await waitFor(() => button(host, "Search").disabled === false);
+    await waitFor(() => !button(host, "New connection").disabled);
     changeSearch(host, "customer");
-    click(button(host, "Search"));
     await waitFor(() => listQueries.length === 2);
     expect(listQueries).toEqual(["", "customer"]);
-    await waitFor(() => detailsButton(host) !== null);
+    await waitFor(() => connectionRow(host) !== null);
     changeSearch(host, "draft-only");
     await createConnection(host, created.name);
 
     await waitFor(() => notifications.notify.mock.calls.length === 1);
     expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection 'billing-api' created." });
-    expect(host.querySelector(".connections-notice")).toBeNull();
-    expect(listQueries).toEqual(["", "customer", "customer"]);
-    expect(host.querySelector<HTMLInputElement>('input[aria-label="Search connections"]')?.value).toBe("customer");
+    expect(host.querySelector(".studio-alert-dismissible")).toBeNull();
+    expect(listQueries).toEqual(["", "customer", "draft-only", "draft-only"]);
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Search connections"]')?.value).toBe("draft-only");
     expect(host.querySelector('[role="dialog"]')).toBeNull();
   });
 
@@ -133,20 +131,20 @@ describe("Connections page", () => {
     });
     const { host } = renderPage(context);
 
-    await waitFor(() => listCalls === 1 && findButton(host, "Create connection")?.disabled === false);
+    await waitFor(() => listCalls === 1 && findButton(host, "New connection")?.disabled === false);
     await createConnection(host, created.name);
 
-    await waitFor(() => detailsButton(host) !== null);
+    await waitFor(() => connectionRow(host) !== null);
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection 'customer-api' created." });
-    expect(host.querySelector(".connections-notice")).toBeNull();
+    expect(host.querySelector(".studio-alert-dismissible")).toBeNull();
   });
 
   it.each(["leave", "switch backend"])("does not announce a delayed create after %s", async action => {
     const pending = deferred<ConnectionMetadata>();
     const { context, http } = endpointContext({ postJson: () => pending.promise });
     const view = renderPage(context);
-    await waitFor(() => detailsButton(view.host) !== null);
+    await waitFor(() => connectionRow(view.host) !== null);
     await createConnection(view.host, "delayed-api");
     expect(http.postJson).toHaveBeenCalledTimes(1);
     if (action === "leave") view.leave();
@@ -174,14 +172,13 @@ describe("Connections page", () => {
     });
     const { host } = renderPage(context);
 
-    await waitFor(() => detailsButton(host) !== null);
+    await waitFor(() => connectionRow(host) !== null);
     changeSearch(host, "customer");
-    click(button(host, "Search"));
     await waitFor(() => host.textContent?.includes("Connections could not be loaded") === true);
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Connections could not be loaded");
 
     click(button(host, "Retry"));
-    await waitFor(() => detailsButton(host) !== null);
+    await waitFor(() => connectionRow(host) !== null);
     expect(listQueries).toEqual(["", "customer", "customer"]);
   });
 
@@ -192,8 +189,8 @@ describe("Connections page", () => {
     const { context } = endpointContext({ postJson });
     const { host } = renderPage(context, dialogs);
 
-    await waitFor(() => detailsButton(host) !== null);
-    click(detailsButton(host)!);
+    await waitFor(() => connectionRow(host) !== null);
+    click(connectionRow(host)!);
     click(button(host, "Test"));
     await waitFor(() => findButton(host, "Testing…") !== null);
 
@@ -208,7 +205,7 @@ describe("Connections page", () => {
     await waitFor(() => findButton(host, "Test") !== null);
     expect(notifications.notify).toHaveBeenCalledWith({ level: "success", title: "Connection test succeeded.", message: "Connection is available." });
     expect(notifications.notify).toHaveBeenCalledTimes(1);
-    expect(host.querySelector(".connections-notice")).toBeNull();
+    expect(host.querySelector(".studio-alert-dismissible")).toBeNull();
   });
 
   it("announces an unsuccessful connection test as an error", async () => {
@@ -216,13 +213,13 @@ describe("Connections page", () => {
     const { context } = endpointContext({ postJson });
     const { host } = renderPage(context);
 
-    await waitFor(() => detailsButton(host) !== null);
-    click(detailsButton(host)!);
+    await waitFor(() => connectionRow(host) !== null);
+    click(connectionRow(host)!);
     click(button(host, "Test"));
-    await waitFor(() => host.querySelector('[role="alert"].connections-notice') !== null);
+    await waitFor(() => host.querySelector('.studio-alert-dismissible [role="alert"]') !== null);
 
-    expect(host.querySelector('[role="alert"].connections-notice')?.textContent).toContain("Authorization has expired.");
-    expect(host.querySelector('[role="status"].connections-notice')).toBeNull();
+    expect(host.querySelector('.studio-alert-dismissible [role="alert"]')?.textContent).toContain("Authorization has expired.");
+    expect(host.querySelector('.studio-alert-dismissible [role="status"]')).toBeNull();
     expect(notifications.notify).not.toHaveBeenCalled();
   });
 
@@ -232,13 +229,13 @@ describe("Connections page", () => {
     const { context, http } = endpointContext();
     const { host } = renderPage(context, dialogs);
 
-    await waitFor(() => detailsButton(host) !== null);
-    click(detailsButton(host)!);
+    await waitFor(() => connectionRow(host) !== null);
+    click(connectionRow(host)!);
     click(button(host, action));
     await waitFor(() => confirm.mock.calls.length === 1);
     await waitFor(() => findButton(host, action)?.disabled === false);
 
-    expect(confirm).toHaveBeenCalledWith({ message: `${action} ${connection.name}?`, tone: "danger" });
+    expect(confirm).toHaveBeenCalledWith({ title: `${action} connection`, confirmLabel: action, message: `${action} ${connection.name}?`, tone: "danger" });
     expect(http.postJson).not.toHaveBeenCalled();
     expect(http.deleteJson).not.toHaveBeenCalled();
     expect(notifications.notify).not.toHaveBeenCalled();
@@ -309,15 +306,15 @@ function renderPage(context: StudioEndpointContext, dialogs = createDialogs()) {
     host.remove();
   });
   return {
-    host,
+    host: document.body,
     leave: () => flushSync(() => root.render(<p>Another page</p>)),
     changeContext: (next: StudioEndpointContext) => render(next),
     setVisible: (visible: boolean) => render(context, visible ? "visible" : "hidden")
   };
 }
 
-function detailsButton(host: HTMLElement) {
-  return host.querySelector<HTMLButtonElement>('button[aria-label="Details for Customer API"]');
+function connectionRow(host: HTMLElement) {
+  return host.querySelector<HTMLTableRowElement>('tr[data-studio-row-interactive]');
 }
 
 function button(host: HTMLElement, text: string) {
@@ -347,10 +344,10 @@ function changeInput(input: HTMLInputElement, value: string) {
 }
 
 async function createConnection(host: HTMLElement, name: string) {
-  click(button(host, "Create connection"));
-  await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']") !== null);
-  const input = host.querySelector<HTMLInputElement>(".connections-create-dialog input[autocomplete='off']");
-  if (!input) throw new Error("Create connection name input not found.");
+  click(button(host, "New connection"));
+  await waitFor(() => host.querySelector<HTMLInputElement>(".connections-create-shell input[autocomplete='off']") !== null);
+  const input = host.querySelector<HTMLInputElement>(".connections-create-shell input[autocomplete='off']");
+  if (!input) throw new Error("New connection name input not found.");
   changeInput(input, name);
   click(button(host, "Create"));
 }

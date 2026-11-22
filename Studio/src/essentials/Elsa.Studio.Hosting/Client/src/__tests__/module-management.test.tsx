@@ -76,8 +76,8 @@ describe("module management page", () => {
     expect(gridPanel?.textContent).toContain("Elsa.Studio.FeatureManagement");
     expect(gridPanel?.textContent).toContain("Source kind");
     expect(gridPanel?.textContent).toContain("static-web-asset");
-    expect(gridPanel?.textContent).not.toContain("Upload Packages");
-    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload Packages");
+    expect(gridPanel?.textContent).not.toContain("Upload packages");
+    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload packages");
     expect(container.textContent).not.toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
     await clickSourceButton(container, "Nuplane");
@@ -87,10 +87,10 @@ describe("module management page", () => {
     expect(activeGridPanel(container)?.textContent).toContain("studio-local-packages");
     expect(activeGridPanel(container)?.textContent).toContain("installed");
     expect(activeGridPanel(container)?.textContent).toContain("Drop .nupkg files here");
-    expect(activeGridPanel(container)?.textContent).toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).toContain("Upload packages");
     expect(activeGridPanel(container)?.textContent).toContain("Staged uploads");
     expect(activeGridPanel(container)?.textContent).toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
-    expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
+    expect(document.querySelector(".studio-dialog-overlay")).toBeNull();
 
     await unmount();
   });
@@ -110,10 +110,10 @@ describe("module management page", () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");
 
-    expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
+    expect(document.querySelector(".studio-dialog-overlay")).toBeNull();
     expect(container.textContent).not.toContain("Package drop folder");
 
-    const uploadPackagesButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Upload Packages");
+    const uploadPackagesButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Upload packages");
     expect(uploadPackagesButton).toBeTruthy();
     expect(stagedUploads(container)?.textContent).toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
@@ -122,7 +122,7 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(container.querySelector(".modules-dialog-backdrop")).toBeNull();
+    expect(document.querySelector(".studio-dialog-overlay")).toBeNull();
 
     const packageTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Package");
     expect(packageTab).toBeTruthy();
@@ -145,7 +145,7 @@ describe("module management page", () => {
 
     expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Operations");
     expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Host operations");
-    expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Add feed");
+    expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("New feed");
     expect(container.querySelector(".modules-inspector")?.textContent).not.toContain("Save retention");
 
     await unmount();
@@ -240,9 +240,9 @@ describe("module management page", () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");
 
-    const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
+    const input = document.querySelector<HTMLInputElement>(".modules-hidden-input");
     const uploadPackagesButton = Array.from(activeGridPanel(container)?.querySelectorAll("button") ?? [])
-      .find(button => button.textContent === "Upload Packages");
+      .find(button => button.textContent === "Upload packages");
     expect(input).toBeTruthy();
     expect(uploadPackagesButton).toBeTruthy();
     const clickSpy = vi.spyOn(input!, "click").mockImplementation(() => undefined);
@@ -263,7 +263,7 @@ describe("module management page", () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi({ hostGetJson }));
     await clickSourceButton(container, "Nuplane");
 
-    const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
+    const input = document.querySelector<HTMLInputElement>(".modules-hidden-input");
     expect(input).toBeTruthy();
     Object.defineProperty(input, "files", {
       configurable: true,
@@ -292,7 +292,7 @@ describe("module management page", () => {
     const { container, unmount } = await renderModuleManagementPage(stubApi());
     await clickSourceButton(container, "Nuplane");
 
-    const input = container.querySelector<HTMLInputElement>(".modules-hidden-input");
+    const input = document.querySelector<HTMLInputElement>(".modules-hidden-input");
     expect(input).toBeTruthy();
     Object.defineProperty(input, "files", {
       configurable: true,
@@ -453,7 +453,7 @@ describe("module management page", () => {
     expect(container.textContent).toContain("Package feeds");
     expect(container.textContent).not.toContain("Studio host");
     expect(container.textContent).toContain("studio-local-packages");
-    expect(container.textContent).toContain("Add feed");
+    expect(container.textContent).toContain("New feed");
     expect(container.textContent).toContain("Retention");
     expect(container.textContent).toContain("Reconcile");
     expect(container.textContent).toContain("Preview cleanup");
@@ -466,7 +466,7 @@ describe("module management page", () => {
     expect(operationsPanel?.textContent).not.toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Retention");
     expect(retentionPanel?.textContent).toContain("Save retention");
-    expect(container.querySelector("[aria-label='Feed name']")).toBeNull();
+    expect(container.querySelector("[name='feedName']")).toBeNull();
 
     const refresh = container.querySelector<HTMLButtonElement>("button[aria-label='Refresh package feeds']");
     expect(refresh?.title).toBe("Refresh package feeds");
@@ -481,12 +481,12 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
-    expect(container.querySelector<HTMLInputElement>("[aria-label='Feed name']")?.value).toBe("studio-local-packages");
-    expect(container.querySelector<HTMLInputElement>("[aria-label='Directory path']")?.value).toBe("packages");
-    expect(container.textContent).toContain("Save feed");
+    expect(document.querySelector("[role=dialog]")).toBeTruthy();
+    expect(document.querySelector<HTMLInputElement>("[name='feedName']")?.value).toBe("studio-local-packages");
+    expect(document.querySelector<HTMLInputElement>("[name='directoryPath']")?.value).toBe("packages");
+    expect(document.querySelector("[role=dialog] button[type=submit]")?.textContent).toBe("Save");
 
-    const closeEditFeedButton = container.querySelector<HTMLButtonElement>("button[aria-label='Close edit feed']");
+    const closeEditFeedButton = document.querySelector<HTMLButtonElement>("button[aria-label='Close edit feed']");
     expect(closeEditFeedButton?.title).toBe("Close edit feed");
 
     flushSync(() => {
@@ -494,7 +494,7 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    const addFeedButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Add feed");
+    const addFeedButton = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "New feed");
     expect(addFeedButton).toBeTruthy();
 
     flushSync(() => {
@@ -502,9 +502,11 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(container.querySelector(".modules-dialog-backdrop")).toBeTruthy();
-    expect(container.querySelector("[aria-label='Feed name']")).toBeTruthy();
-    expect(container.querySelector("[aria-label='Include all packages']")).toBeTruthy();
+    expect(document.querySelector("[role=dialog]")).toBeTruthy();
+    expect(document.querySelector("[role=dialog] [name='feedName']")).toBeTruthy();
+    expect(document.querySelector("[role=dialog] [aria-label='Include all packages']")).toBeTruthy();
+    flushSync(() => document.querySelector<HTMLButtonElement>("[aria-label='Close add feed']")!.click());
+    await flushPromises();
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     expect(serverTab).toBeTruthy();
@@ -526,22 +528,23 @@ describe("module management page", () => {
   it.each(["add", "edit"] as const)("focuses, contains, and restores focus for the %s feed dialog", async mode => {
     const { container, unmount } = await renderPackageFeedsPage(stubApi());
     const opener = mode === "add"
-      ? Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!
+      ? Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "New feed")!
       : container.querySelector<HTMLButtonElement>("[aria-label='Edit studio-local-packages']")!;
     opener.focus();
     flushSync(() => opener.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await flushPromises();
     await flushAnimationFrame();
 
-    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
-    const name = dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")!;
+    const dialog = document.querySelector<HTMLElement>("[role='dialog']")!;
+    const name = dialog.querySelector<HTMLInputElement>("[name=feedName]")!;
     expect(document.activeElement).toBe(name);
     const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)")];
     focusable[0]!.focus();
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
     expect(document.activeElement).toBe(focusable.at(-1));
-    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-    expect(container.querySelector("[role='dialog']")).toBeNull();
+    flushSync(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await flushPromises();
+    expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(document.activeElement).toBe(opener);
 
     await unmount();
@@ -550,13 +553,13 @@ describe("module management page", () => {
   it("submits a new package feed through the form when Enter requests submission", async () => {
     const fetchMock = mockFetch();
     const { container, unmount } = await renderPackageFeedsPage(stubApi());
-    const addFeedButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!;
+    const addFeedButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "New feed")!;
     flushSync(() => addFeedButton.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await flushPromises();
     await flushAnimationFrame();
 
-    const form = container.querySelector<HTMLFormElement>("#package-feed-form")!;
-    const name = form.querySelector<HTMLInputElement>("[aria-label='Feed name']")!;
+    const form = document.querySelector<HTMLFormElement>("form[role=dialog]")!;
+    const name = form.querySelector<HTMLInputElement>("[name='feedName']")!;
     setInputValue(name, "test-feed");
     flushSync(() => form.requestSubmit());
     await flushPromises();
@@ -565,7 +568,7 @@ describe("module management page", () => {
       "https://studio.example/_elsa/module-management/feeds",
       expect.objectContaining({ method: "POST", body: expect.stringContaining('"name":"test-feed"') })
     );
-    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.querySelector("[role='dialog']")).toBeNull();
     await unmount();
   });
 
@@ -654,7 +657,7 @@ describe("module management page", () => {
     await clickSourceButton(container, "Nuplane");
     expect(activeGridPanel(container)?.textContent).toContain("Elsa.Samples.Nuplane.Activities");
     expect(activeGridPanel(container)?.textContent).toContain("local-packages");
-    expect(activeGridPanel(container)?.textContent).not.toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).not.toContain("Upload packages");
     expect(activeGridPanel(container)?.textContent).toContain("read-only in Studio");
 
     await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
@@ -664,7 +667,7 @@ describe("module management page", () => {
     expect(inspector).toContain("local-packages");
     expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
     expect(inspector).toContain("Elsa.Activities.Design.Core");
-    expect(container.textContent).not.toContain("Upload Packages");
+    expect(container.textContent).not.toContain("Upload packages");
 
     await unmount();
   });
@@ -753,12 +756,12 @@ describe("module management page", () => {
     await flushPromises();
 
     const panel = activeGridPanel(container)?.parentElement ?? container.querySelector("[role='tabpanel']:not([hidden])")!;
-    expect(panel.textContent).toContain("Privileged host management is not configured");
-    expect(panel.textContent).toContain("It is optional, but required to manage Server modules");
+    expect(panel.textContent).toContain("Server module management is not connected");
+    expect(panel.textContent).toContain("Ask your administrator to connect this server");
     expect(panel.textContent).toContain("Studio:BackendServerBaseUrl");
     expect(panel.textContent).toContain("Studio:BackendBaseUrl");
     expect(panel.textContent).toContain("Studio:BackendModuleManagementApiKey");
-    expect(panel.textContent?.match(/Privileged host management/g)).toHaveLength(1);
+    expect(panel.textContent?.match(/Server module management is not connected/g)).toHaveLength(1);
     expect(panel.querySelector('[role="alert"]')).toBeNull();
     expect(panel.querySelector(".studio-empty-state")).not.toBeNull();
     expect(activeGridPanel(container)).toBeNull();

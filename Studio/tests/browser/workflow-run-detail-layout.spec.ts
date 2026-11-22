@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 test("run detail fills the shell cell and switches responsive inspector modes", async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });
@@ -119,7 +119,7 @@ for (const width of [390, 1440]) {
     const expandPanel = details.getByRole("button", { name: "Expand inspector panel", exact: true });
     if (await expandPanel.count()) await expandPanel.click();
     await expect(details.getByRole("tab", { name: "Identity", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(details.getByRole("button", { name: "Copy Artifact ID", exact: true })).toBeVisible();
+    await expect(details.getByRole("button", { name: "Copy Executable ID", exact: true })).toBeVisible();
     const provenance = details.locator(".wf-executable-layout-provenance");
     await expect(provenance).toHaveText("No source reference; automatic layout");
     await expect(provenance).toHaveCSS("white-space", "normal");
@@ -190,7 +190,7 @@ for (const width of [390, 1440]) {
     const identity = details.getByRole("heading", { name: "Identity", exact: true }).locator("xpath=..");
     const source = details.getByRole("heading", { name: "Source", exact: true }).locator("xpath=..");
     const artifactHash = "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
-    const identityHashRow = identity.locator("dt").filter({ hasText: "Artifact hash" });
+    const identityHashRow = identity.locator("dt").filter({ hasText: "Executable hash" });
     const identityHashValue = identityHashRow.locator("xpath=following-sibling::dd[1]");
     const definitionIdRow = source.locator("dt").filter({ hasText: "Definition ID" });
     const definitionId = "definition-reference-0123456789abcdef0123456789abcdef";
@@ -199,8 +199,8 @@ for (const width of [390, 1440]) {
     const definitionVersionValue = definitionVersionRow.locator("xpath=following-sibling::dd[1]");
 
     for (const [label, row, value] of [
-      ["Artifact ID", identity.locator("dt").filter({ hasText: "Artifact ID" }), identity.locator("dt").filter({ hasText: "Artifact ID" }).locator("xpath=following-sibling::dd[1]")],
-      ["Artifact hash", identityHashRow, identityHashValue],
+      ["Executable ID", identity.locator("dt").filter({ hasText: "Executable ID" }), identity.locator("dt").filter({ hasText: "Executable ID" }).locator("xpath=following-sibling::dd[1]")],
+      ["Executable hash", identityHashRow, identityHashValue],
       ["Definition ID", definitionIdRow, definitionIdValue],
       ["Definition version ID", definitionVersionRow, definitionVersionValue]
     ] as const) {

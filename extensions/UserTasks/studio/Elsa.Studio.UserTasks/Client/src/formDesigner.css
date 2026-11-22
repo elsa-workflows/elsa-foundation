@@ -57,9 +57,6 @@
 .user-task-designer__validation-summary, .user-task-designer__property-errors { display: grid; gap: var(--studio-space-1); margin: 0; padding-inline-start: var(--studio-space-4); color: var(--studio-danger); }
 .user-task-designer__checkbox { display: flex; align-items: center; gap: var(--studio-space-2); }
 .user-task-designer__checkbox input { width: 1rem; height: 1rem; margin: 0; }
-.user-task-designer__advanced { display: grid; gap: var(--studio-space-3); }
-.user-task-designer__advanced summary { cursor: pointer; font-weight: 650; }
-.user-task-designer__advanced[open] { gap: var(--studio-space-3); }
 .user-task-designer__properties h4 { margin: 0; font-size: var(--studio-label-size); }
 .user-task-designer__form-settings-toggle { justify-self: start; border: 0; background: transparent; color: var(--studio-accent); cursor: pointer; font: inherit; font-weight: 600; padding: 0; text-align: left; }
 .user-task-designer__form-settings { display: grid; gap: var(--studio-space-3); }
@@ -77,7 +74,7 @@
 
 @media (width <= 700px) {
   .user-task-designer__header { align-items: flex-start; flex-wrap: wrap; }
-  .user-task-designer__toolbar-actions { justify-content: flex-start; }
+  .user-task-designer__toolbar-actions { width: 100%; min-width: 0; justify-content: flex-start; }
   .user-task-designer__source-toolbar { align-items: flex-start; flex-direction: column; }
   .user-task-designer__source-actions { justify-content: flex-end; width: 100%; }
   .user-task-designer__field-heading { grid-template-columns: auto minmax(0, 1fr); }

@@ -36,7 +36,7 @@
 .backend-switcher-trigger svg { flex-shrink:0; }
 .backend-switcher-popover { max-width:min(310px,calc(100vw - 40px)); z-index:80; border:1px solid var(--studio-border); background:var(--studio-surface); border-radius:var(--studio-radius); box-shadow:var(--studio-shadow-sm); overflow-x:hidden; overflow-y:auto; }
 .backend-switcher-popover-content { display:flex; flex-direction:column; gap:0; }
-.backend-switcher-popover-header { padding:10px 12px 8px; font-size:12px; font-weight:600; color:var(--studio-text-muted); text-transform:uppercase; letter-spacing:0.5px; }
+.backend-switcher-popover-header { padding:10px 12px 8px; font-size:12px; font-weight:600; color:var(--studio-text-muted); letter-spacing:0.5px; }
 .backend-switcher-popover-profiles { padding:4px 8px; }
 .backend-switcher-popover-profile { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; text-align:left; padding:8px; margin:0; border-radius:var(--studio-radius-sm); }
 .backend-switcher-popover-profile:hover:not(:disabled) { background:var(--studio-surface-hover); }

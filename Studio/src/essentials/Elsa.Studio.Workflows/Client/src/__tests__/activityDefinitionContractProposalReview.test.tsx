@@ -73,8 +73,8 @@ describe("Activity Definition contract proposal review", () => {
     expect(harness.container.textContent).not.toContain("private.default.expression");
 
     const addition = articleByText(harness.container, "Add input Currency");
-    expect(addition.querySelector("details")?.open).toBe(false);
-    expect(addition.querySelector("details")?.textContent).toContain("Reference key: currency");
+    expect(addition.querySelector(".studio-disclosure-fold")?.getAttribute("data-open")).toBe("false");
+    expect(addition.querySelector(".studio-technical-details")?.textContent).toContain("Reference key: currency");
     const remove = articleByText(harness.container, "Remove input Order");
     expect(buttonByText(remove, "Reject").getAttribute("aria-pressed")).toBe("true");
     expect(buttonByText(remove, "Accept").getAttribute("aria-pressed")).toBe("false");
@@ -122,7 +122,7 @@ describe("Activity Definition contract proposal review", () => {
     const postJson = vi.fn(async (_url: string, body: unknown) => proposal((body as { expectedRevision: number }).expectedRevision));
     const harness = renderReview({ context: endpoint(postJson), draft: exactDraft() });
     await vi.advanceTimersByTimeAsync(900);
-    await vi.waitFor(() => expect(harness.container.querySelector("[aria-label='Exact proposal binding']")).not.toBeNull());
+    await vi.waitFor(() => expect(harness.container.querySelector("[aria-label='Draft used for this proposal']")).not.toBeNull());
     expect(harness.container.textContent).toContain("sha256:implementation-3");
 
     harness.render({ draft: exactDraft({ revision: 4, manifestFingerprint: "sha256:implementation-4" }), enabled: true });

@@ -46,17 +46,21 @@ public sealed partial class InMemoryStore
                 timer.Target.Id == actor && timer.TargetCreation == creation;
     }
 
-    internal bool HasFoundationJobResult(string actor, long creation, string key)
+    internal bool HasFoundationJobResult(string actor, long creation, string key, long? generation = null)
     {
         lock (_gate)
-            return Messages.GetValueOrDefault(InboxKey.JobResult(actor, key, creation)) is
+        {
+            var row = Instances.GetValueOrDefault(actor);
+            var current = generation ?? (row?.Creation == creation ? JobRegistry.Generation(row, key) : null) ?? 0;
+            return Messages.GetValueOrDefault(InboxKey.JobResult(actor, key, creation, current)) is
                 { Done: false, Message: { Kind: Kinds.JobFinished, FoundationJobResult: true } };
+        }
     }
 
-    internal (JobTicket? Ticket, int Attempts) FoundationJob(string actor, long creation, string key)
+    internal (JobTicket? Ticket, int Attempts) FoundationJob(string actor, long creation, string key, long generation)
     {
         lock (_gate)
-            return Messages.GetValueOrDefault(InboxKey.Ticket(actor, key, creation)) is { Done: false, Message: { Kind: Kinds.Job } ticket } stored
+            return Messages.GetValueOrDefault(InboxKey.Ticket(actor, key, creation, generation)) is { Done: false, Message: { Kind: Kinds.Job } ticket } stored
                 ? (ticket.Read<JobTicket>(), stored.Attempts) : default;
     }
 
@@ -261,7 +265,7 @@ public sealed partial class InMemoryStore
             throw new StoreException(Failure.Definite, "Actor headers carry at most four labels, with each name and value at most 1,024 bytes.");
     }
 
-    private void RecordFoundationMetadata(TurnCommit turn, InstanceRow row, long now)
+    private void RecordFoundationMetadata(TurnCommit turn, InstanceRow row, InstanceRow? previous, long now, Message? firstExpiry)
     {
         if (_referenceBirths.Count == 0) return;
         var address = new CreationAddress(row.Id, row.Creation);
@@ -278,10 +282,18 @@ public sealed partial class InMemoryStore
         if (row.Status == InstanceStatus.Running)
         {
             _foundationEnds.Remove(address);
-            _foundationParks.Remove(address);
+            if (row.ParkRecovery is null) _foundationParks.Remove(address);
         }
         else
             _foundationEnds.TryAdd(address, now);
+        if (previous?.ParkRecovery is not null && row.ParkRecovery is null && turn.FoundationKept is null)
+        {
+            _foundationParks.Remove(address);
+            _foundationParkExpiries.Remove(address);
+        }
+        else RecordParkExpiry(turn, row, address, firstExpiry);
+        if (row.ParkDiscarded && _foundationParks.Remove(address))
+            _foundationEnds[address] = now;
         if (turn.OpensPark)
             _foundationParks[address] = new(row.Revision, now);
     }
@@ -291,9 +303,15 @@ public sealed partial class InMemoryStore
         _foundationEnds.Remove(address);
         _foundationHeaders.Remove(address);
         _foundationParks.Remove(address);
+        _foundationParkExpiries.Remove(address);
     }
 
-    internal static bool IsOutsideMessageId(string id) => !id.StartsWith('~') && !id.StartsWith("key/", StringComparison.Ordinal);
+    internal static bool IsOutsideMessageId(string id) => !ReservedMessageId(id) && FoundationMetadataLimits.FitsName(id);
+
+    private static bool ReservedMessageId(string id) => id.StartsWith('~') || id.StartsWith("key/", StringComparison.Ordinal);
+
+    private static string FoundationSendReceipt(string reference, string id) =>
+        reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
 
     /// <summary>Resolve an outside exact send and insert its delivery and deduplication marker in one operation.</summary>
     /// <returns>Null for an unavailable reference, false for a duplicate, true for a new delivery.</returns>
@@ -301,8 +319,10 @@ public sealed partial class InMemoryStore
         long? dueAt = null, TimeSpan? keepFor = null, bool keyed = false, string? replyTo = null, FoundationOperatorCommand? @operator = null)
     {
         Kinds.RequireApplicationSend(kind);
-        if (!keyed && !IsOutsideMessageId(id))
+        if (!keyed && ReservedMessageId(id))
             throw new ArgumentException("The foundation reserves the issued ID namespace.", nameof(id));
+        if ((!keyed && !FoundationMetadataLimits.FitsName(id)) || !FoundationMetadataLimits.FitsKind(kind) || !FoundationMetadataLimits.FitsContent(payload))
+            return null;
         var window = FoundationIngressWindow(keepFor);
         lock (_gate)
         {
@@ -318,9 +338,10 @@ public sealed partial class InMemoryStore
             if (!live && !starting) return null;
 
             // The receipt expires independently of delivery. A delayed input can still be pending when the id is reused.
-            var receipt = binding.Reference + "/" + Convert.ToHexString(SHA256.HashData(DurableKeyJson.CodeUnits(id)));
+            var operatorKey = @operator is not null ? FoundationOperatorKey(tenant, id) : null;
+            var receipt = operatorKey is null ? FoundationSendReceipt(binding.Reference, id) : "operator/" + operatorKey;
             var now = clock();
-            if (_foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
+            if (operatorKey is null && _foundationSendReceipts.TryGetValue(receipt, out var previousUntil) && previousUntil >= now)
                 return false;
 
             var occurrence = checked(_seq + 1);
@@ -332,7 +353,8 @@ public sealed partial class InMemoryStore
             if (!CreationIdentityAvailable) CreationProtocol.RejectUnsupported(message);
             Messages.Add(message.InboxKey, new MessageRow(message, occurrence, 0));
             _seq = occurrence;
-            _foundationSendReceipts[receipt] = until;
+            if (operatorKey is null) _foundationSendReceipts[receipt] = until;
+            else _foundationOperatorReceipts[operatorKey] = (reference, until);
             return true;
         }
     }
