@@ -4,9 +4,9 @@
 
 **Created**: 2026-11-22
 
-**Status**: In progress
+**Status**: Implemented
 
-The requirements are approved. Implementation continues in the same PR under the coordinator's explicit delivery instruction; final review and initiative merge gates still apply.
+The approved capability is implemented in the same PR under the coordinator's explicit delivery instruction. Exact-head validation, independent review and evidence are recorded on PR #5410; final initiative integration and coordinator merge gates remain separate.
 
 **Input**: Run the activity of every matching Switch case in MatchAny mode, including faithfully imported Elsa 3 Switch definitions.
 

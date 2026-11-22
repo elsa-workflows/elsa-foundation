@@ -124,7 +124,9 @@ export async function switchMatchAnyJourney(page: Page, info: TestInfo, capture:
     const name = cases().getByRole("textbox", { name: `Case ${index + 1} label`, exact: true });
     await name.fill(index ? "Approved" : label); await name.press("Enter");
     if (index) {
-      await expect(cases().getByRole("alert")).toContainText("already used");
+      const duplicate = cases().getByRole("alert");
+      await expect(duplicate).toContainText("already used");
+      await duplicate.scrollIntoViewIfNeeded();
       await capture(page, info, "invalid-label");
       await name.fill(label); await name.press("Enter");
       await expect(cases().getByRole("alert")).toHaveCount(0);

@@ -7,6 +7,7 @@ Run in the isolated S-12 checkout. The coordinator approved the prepared require
 - Current initiative/approved spec, .NET 10, pinned Studio toolchain, Playwright Chromium and existing persistence/host prerequisites.
 - Isolated checkout and disposable stores. Use the normal build-slot wrapper. On Linux inspect `uptime`/`nproc`; inspect equivalent processor/load evidence on Windows before classifying timing failures.
 - Retain Windows Application Control errors and use an established permitted Linux path if necessary. Never disable policy; record remaining not-run checks.
+- The default EF test-project build copies the ignored spec 1017 `runtime.sqlite.gz` baseline. If that fixture is absent, retain the copy failure. A filtered Switch recovery run may omit only that unavailable copy item through an external local MSBuild target; it must not suppress tests or qualify the unrelated baseline scenarios. The PR records the exact affected command and platform limit.
 
 ## Affected .NET checks
 
