@@ -60,7 +60,7 @@ async function savePublishAndConsume(j: TriggerJourney, authored: Authored, expe
 export async function verifyDefaultAndNullWorkerEditor(j: TriggerJourney) {
   // Keep this producer distinct from earlier appearances while deliberately deduplicating its logical publication below.
   const defaultMessage = `worker default ${j.stamp}`;
-  const defaults = [{ ...input("message"), defaultValue: defaultMessage, defaultSyntax: "Literal" },
+  const defaults = [{ ...input("message"), isNullable: true, defaultValue: defaultMessage, defaultSyntax: "Literal" },
     { ...input("count", "Int32"), defaultValue: 7, defaultSyntax: "Literal" }];
   const producer = await j.echo("Original default worker producer", defaults);
   const logicalName = "Logical default worker publication";
