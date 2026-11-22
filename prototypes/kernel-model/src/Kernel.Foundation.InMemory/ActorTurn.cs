@@ -213,8 +213,9 @@ internal sealed partial class ActorAdapter
             var sender = message.Sender == _row.Id && message.SenderCreation == _row.Creation ? Header.Ref
                 : _store.FoundationReferenceOf(Header.Tenant, message.Sender, message.SenderCreation) is { } reference
                     ? new Contract.ActorRef(reference) : (Contract.ActorRef?)null;
+            var logicalId = message.Kind == Contract.Kinds.JobFinished && !message.FoundationJobResult ? message.Id + "/result" : message.Id;
             var id = (message.InboxKey.HasIssuedOrigin || message.InboxScope == Durable.InboxKey.EventCreatorScope) && message.StorageId is null
-                ? _store.MessageHandle("inbox:" + message.Id) : message.Id;
+                ? _store.MessageHandle("inbox:" + logicalId) : message.Id;
             if (message.Start is null && message.EventMatch is { } encoded)
             {
                 var match = Durable.EventMatch.Decode(encoded);

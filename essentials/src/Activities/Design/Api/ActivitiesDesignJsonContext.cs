@@ -77,7 +77,6 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ListReusableActivityDefinitions))]
 [JsonSerializable(typeof(GetReusableActivityDefinition))]
 [JsonSerializable(typeof(UpdateReusableActivityDefinition))]
-[JsonSerializable(typeof(RestoreReusableActivityDefinition))]
 [JsonSerializable(typeof(SetRecommendedReusableActivityVersion))]
 [JsonSerializable(typeof(ListRecommendedActivityDefinitions))]
 [JsonSerializable(typeof(ListReusableActivityDrafts))]

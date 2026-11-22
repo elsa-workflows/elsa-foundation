@@ -44,8 +44,6 @@ public sealed record UpdateReusableActivityDefinition(
 
 public sealed record ArchiveReusableActivityDefinition([property: JsonIgnore] string DefinitionId) : ICommand;
 
-public sealed record RestoreReusableActivityDefinition([property: JsonIgnore] string DefinitionId) : ICommand;
-
 public sealed record CreateReusableActivityDraft(
     [property: JsonIgnore] string DefinitionId,
     string? SourceVersionId,
@@ -180,8 +178,7 @@ public sealed record ListReusableActivityDefinitions(
     string? Search = null,
     string? Authority = null,
     string? ProviderKey = null,
-    string Sort = "identity-asc",
-    bool ArchivedOnly = false) : IRequest<ActivityManagementPageView<ReusableActivityDefinitionManagementView>>;
+    string Sort = "identity-asc") : IRequest<ActivityManagementPageView<ReusableActivityDefinitionManagementView>>;
 
 public sealed record GetReusableActivityDefinition(string DefinitionId) : IRequest<ReusableActivityDefinitionManagementView>;
 

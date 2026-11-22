@@ -21,16 +21,7 @@ function render(children: React.ReactNode) {
   const dispose = () => { flushSync(() => root.unmount()); container.remove(); };
   disposers.push(dispose); return { container, dispose };
 }
-function button(container: HTMLElement, text: string) {
-  const action = text === "Preview question" || text === "Refresh results" ? "Preview" : text;
-  const findTarget = () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.trim() === action);
-  let target = findTarget();
-  if (!target && container.querySelector('[aria-label="More question actions"]')) {
-    flushSync(() => container.querySelector<HTMLButtonElement>('[aria-label="More question actions"]')!.click());
-    target = findTarget();
-  }
-  expect(target).toBeDefined(); flushSync(() => target!.click());
-}
+function button(container: HTMLElement, text: string) { const target = [...container.querySelectorAll("button")].find(item => item.textContent?.trim() === text); expect(target).toBeDefined(); flushSync(() => target!.click()); }
 function openDisclosure(container: HTMLElement, selector: string) { const details = container.querySelector<HTMLDetailsElement>(selector)!; if (!details.open) flushSync(() => details.querySelector("summary")!.click()); expect(details.open).toBe(true); }
 function inputValue(input: HTMLInputElement, value: string) { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true }))); }
 afterEach(() => { disposers.splice(0).forEach(dispose => { try { dispose(); } catch { /* An explicitly closed surface was already unmounted. */ } }); vi.restoreAllMocks(); });
@@ -50,8 +41,6 @@ describe("native authoring proposal binding", () => {
     expect(outcome.outcome).toBe("applied");
     await waitUntil(() => [...container.querySelectorAll("button")].some(item => item.textContent === "Undo applied proposal"));
     expect(post.mock.calls).toHaveLength(1); expect(put).not.toHaveBeenCalled();
-    const parameters = [...container.querySelectorAll<HTMLAnchorElement>(".named-query-section-nav a")].find(item => item.textContent?.startsWith("Parameters"))!;
-    flushSync(() => parameters.click());
     expect(container.querySelector<HTMLInputElement>('input[value="retail"]')).not.toBeNull();
     button(container, "Undo applied proposal");
     await waitUntil(() => [...controller.snapshots.values()][0].definition.query.groupBy.length === 0);
@@ -70,7 +59,6 @@ describe("native authoring proposal binding", () => {
     const snapshot = [...controller.snapshots.values()][0];
     const pending = controller.useProposal(snapshot.generationId, { ...snapshot, definition: { ...snapshot.definition, query: { ...snapshot.definition.query, groupBy: ["category"] } } });
     await waitUntil(() => typeof finish === "function");
-    button(container, "Properties");
     const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
     inputValue(name, "User changed the draft");
     finish({ isValid: true, problems: [] });
@@ -94,11 +82,10 @@ describe("private draft recovery", () => {
     const session = { status: "authenticated" as const, subject: "viewer", tenantId: "tenant", roles: [], permissions: ["studio/questions:create"] };
     const manager = { getSession: () => session, initialize: async () => session, getCapabilities: async () => ({ ownershipMode: "foundation-owned" as const, providers: [] }), login: async () => undefined, logout: async () => undefined, handleCallback: async () => session, getAccessToken: async () => null, refresh: async () => session };
     const { container } = render(<AuthProvider manager={manager}><NamedDashboardsRoute api={api} kind="question" view="detail" navigate={navigate} /></AuthProvider>);
-    await waitUntil(() => [...container.querySelectorAll("button")].some(item => item.textContent?.trim() === "Properties"));
-    button(container, "Properties");
-    await waitUntil(() => [...container.querySelectorAll("label")].some(label => label.textContent === "Name"));
+    await waitUntil(() => Boolean(container.querySelector('input[value="Question q1"]')));
     const name = [...container.querySelectorAll("label")].find(label => label.textContent === "Name")!.querySelector("input")!;
     inputValue(name, "My unsaved refinement");
+    openDisclosure(container, ".named-question-actions");
     button(container, "Save draft as new question"); await waitUntil(() => container.textContent?.includes("Connection lost after create attempt") === true);
     expect(name.value).toBe("My unsaved refinement");
     button(container, "Save draft as new question"); await waitUntil(() => navigate.mock.calls.length > 0);

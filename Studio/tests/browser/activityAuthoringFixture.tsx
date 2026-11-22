@@ -4,9 +4,7 @@ import { register as registerConnections } from "../../../extensions/Connections
 import { createStudioRegistry } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry";
 import { AnonymousAuthProvider, createEndpointContext, StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { initialAgentManifest } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/agentManifest";
-import { AgentWorkspace } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentWorkspace";
-import { AgentsPage } from "../../../extensions/Agent/studio/Elsa.Studio.Agent/Client/src/AgentsPage";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ActivityDefinitionDraftEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor";
 import { activityGraphSchema2ImplementationEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
@@ -19,11 +17,8 @@ import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 
 const scenario = new URLSearchParams(location.search);
 const agent = scenario.get("provider") === "agent";
-const agentWorkspace = scenario.has("agent-workspace");
-const agentCollection = scenario.has("agents-collection");
-const agentShell = agentWorkspace || agentCollection;
 const outcomeOnly = agent || scenario.get("contract") === "outcome-only";
-const storageKey = `activity-authoring-2994-fixture${scenario.has("contract-diagnostics") ? ":contract-diagnostics" : ""}${agent ? ":agent" : ""}${agentWorkspace ? ":agent-workspace" : ""}${agentCollection ? ":agents-collection" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}${scenario.has("unavailable-connection") ? ":unavailable-connection" : ""}`;
+const storageKey = `activity-authoring-2994-fixture${scenario.has("contract-diagnostics") ? ":contract-diagnostics" : ""}${agent ? ":agent" : ""}${scenario.has("invalid") ? ":invalid" : ""}${scenario.has("invalid-limits") ? ":invalid-limits" : ""}${outcomeOnly ? ":outcome-only" : ""}${scenario.has("read-only") ? ":read-only" : ""}${scenario.has("unavailable-connection") ? ":unavailable-connection" : ""}`;
 const timestamp = "2026-10-19T09:00:00Z";
 const contractType = { alias: "Decimal", collectionKind: "Single", supportsDurability: true };
 const input = (name: string, referenceKey: string, description: string) => ({
@@ -42,7 +37,7 @@ function initialDraft(): ActivityDefinitionDraftView {
         location: { jsonPointer: `/contract/${section}/0/name`, referenceKey: section === "inputs" ? "subtotal" : section === "outputs" ? "amount" : "quoted" }, metadata: {}
       }))
     } : agent && scenario.has("invalid") ? { draftId: "quote-draft", revision: 1, isValid: false, validatedAt: timestamp, diagnostics: [{ code: "agent.manifest.invalid", severity: "Info", message: "Choose a model connection and add instructions.", subject: { kind: "ActivityDefinitionDraft", id: "quote-draft", revision: 1 }, location: { providerKey: "elsa.agent", jsonPointer: "/instructions" }, metadata: {} }] } : null,
-    contract: { contractSchemaVersion: "1", inputs: agentWorkspace || agentCollection ? [{ ...input("Text", "text", "The text to proofread."), type: { alias: "String", collectionKind: "Single", supportsDurability: true } }] : outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
+    contract: { contractSchemaVersion: "1", inputs: outcomeOnly ? [] : [subtotal, { ...input("Shipping", "shipping", "The shipping charge to include."), isRequired: false, default: { syntax: "Literal", value: 0 } }],
       outputs: outcomeOnly ? [] : [{ ...subtotal, referenceKey: "amount", name: "Amount", displayName: "Amount", description: "The amount returned to the calling workflow." }],
       outcomes: [{ referenceKey: outcomeOnly ? "done" : "quoted", name: outcomeOnly ? "Done" : "Quoted", isEmitted: true, description: "The quote is ready." }] },
     provider: agent ? { providerKey: "elsa.agent", schemaVersion: "2", manifestFingerprint: "sha256:agent-fixture", payload: { ...initialAgentManifest(), ...(scenario.has("invalid") || scenario.has("publication-blocked") ? {} : { instructions: "Proofread the supplied text. Return clear, concise suggestions.", model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" } }), ...(scenario.has("unavailable-connection") ? { model: { providerKey: "azure-openai", connectionName: "openai", modelId: "gpt-4o" } } : {}), ...(scenario.has("invalid-limits") ? { limits: { maximumModelCalls: 0, timeoutMilliseconds: 30000 } } : {}) } } : { providerKey: "elsa.activity-graph", schemaVersion: "2", manifestFingerprint: "sha256:quote-fixture-1",
@@ -53,46 +48,13 @@ function initialDraft(): ActivityDefinitionDraftView {
 export function ActivityAuthoringFixture() {
   const parameters = useMemo(() => new URLSearchParams(window.location.search), []);
   writeAppearancePreferences({ themeId: "classic", mode: parameters.get("theme") === "light" ? "light" : "dark", navigation: "left" });
-  const [workspacePath, setWorkspacePath] = useState(() => {
-    if (!agentShell) return "";
-    const path = agentCollection
-      ? location.pathname.startsWith("/agents") ? location.pathname : "/agents"
-      : location.pathname.startsWith("/agents/workspace/") ? location.pathname : "/agents/workspace/quote-activity";
-    if (path !== location.pathname) history.replaceState({}, "", `${path}${location.search}`);
-    return path;
-  });
-  const navigate = useCallback((path: string) => {
-    history.pushState({}, "", `${path}${location.search}`);
-    setWorkspacePath(path);
-  }, []);
   const draft = useRef<ActivityDefinitionDraftView>(readDraft());
   const client = useMemo(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }), []);
   const context = useMemo(() => ({
     baseUrl: "activity-authoring-2994",
     http: {
       getJson: async (url: string) => {
-        if (url === "/design/activities/authoring-capabilities") return {
-          contractSchemaVersions: ["1"], providers: [{ providerKey: "elsa.agent", manifestSchemas: [{ schemaVersion: "2", isAuthorable: true }], requiredOutcomes: [{ referenceKey: "done", name: "Done", isEmitted: true }] }]
-        };
-        if (url.startsWith("/design/activities/definitions?")) return {
-          items: [{ definition: { definitionId: "quote-activity", activityTypeKey: "Agents.Proofreader", category: "Agents", displayName: "Proofreader", description: "Proofread supplied text.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" } },
-            lifecycle: { draftCount: 1, versionCount: 1, head: { versionId: "proofreader-v1", version: "1.0.0", lifecycle: "Active", providerKey: "elsa.agent", providerSchemaVersion: "2" }, recommendation: { versionId: "proofreader-v1", version: "1.0.0", lifecycle: "Active", providerKey: "elsa.agent", providerSchemaVersion: "2" } },
-            actions: [{ action: "edit-definition", allowed: true }], updatedAt: timestamp }], count: 1, totalCount: 1, hasMore: false, continuation: null
-        };
         if (url === "/agent/model-providers") return { items: [{ providerKey: "azure-openai", displayName: "Azure OpenAI", connectionTypeName: "azure-openai" }] };
-        if (url.startsWith("/design/activities/definitions/quote-activity/drafts?")) return { items: [{ draft: { draftId: draft.current.draftId, revision: draft.current.revision, presentationLabel: "Proofreader", updatedAt: draft.current.updatedAt } }] };
-        if (url === "/design/activities/drafts/quote-draft") return structuredClone(draft.current);
-        if (url === "/agent/test-runs/run-fixture/evidence") return {
-          testRunId: "run-fixture", draftId: draft.current.draftId, draftRevision: draft.current.revision, workflowExecutionId: "workflow-fixture", status: "Completed", valuesPermitted: true,
-          invocation: {
-            workflowExecutionId: "workflow-fixture", activityExecutionId: "activity-fixture",
-            agent: { definitionId: draft.current.definitionId, definitionVersionId: "candidate-fixture", version: "0.1.0", templateHash: "sha256:template", artifactId: "artifact-fixture", artifactHash: "sha256:artifact", allowContinuity: false },
-            model: { providerKey: "azure-openai", connectionName: "proofreader", modelId: "editor-model" },
-            limits: { maximumModelCalls: 5, timeoutMilliseconds: 30000 }, activityStatus: "Completed",
-            output: { captureMode: "Json", value: { suggestions: ["Tighten the opening paragraph."] } },
-            turn: { status: "Accepted", application: "Applied", deadline: timestamp, maximumModelCalls: 5, modelRequests: [], usage: { observedAt: timestamp, usageAvailable: true, inputTokens: 20, outputTokens: 8, totalTokens: 28 }, conversation: null }
-          }
-        };
         if (url === "/capabilities") return { capabilities: [
           { id: "elsa.api.activity-design", contractVersion: "1", links: [
             ["activity-definition", "definitions/{definitionId}"], ["activity-definition-draft", "drafts/{draftId}"],
@@ -133,10 +95,6 @@ export function ActivityAuthoringFixture() {
       },
       postJson: async (url: string, body?: unknown) => {
         const current = draft.current;
-        if (url === "/publishing/activity-drafts/quote-draft/test-runs") {
-          localStorage.setItem(`${storageKey}:test-run-request`, JSON.stringify(body));
-          return { testRunId: "run-fixture", status: "Started" };
-        }
         if (url === "/connections/picker") return { items: parameters.has("unavailable-connection") ? [] : [{ name: "proofreader", displayName: "Proofreader model", status: "Ready", settings: { modelId: "editor-model" } }] };
         if (url === "/agent/model-capabilities") {
           if (parameters.has("unavailable-connection")) throw new StudioHttpError(422, "Unprocessable");
@@ -173,10 +131,8 @@ export function ActivityAuthoringFixture() {
     return api;
   }, []);
   const navigation = getStudioNavigation([{ id: "home", label: "Home", path: "/dashboard", placement: "main" }, { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" }, { id: "activities", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "main" }, ...registry.navigation.list()]);
-  const isWorkspacePath = agentShell && workspacePath.startsWith("/agents/workspace/");
-  const shellPath = agentShell ? workspacePath || "/agents/workspace/quote-activity" : "/workflows/activity-definitions";
-  return <ThemeProvider><AnonymousAuthProvider><ShellFrame navigation={navigation} panels={[]} path={shellPath} title={agentShell ? "Agents" : "Activity definitions"} backendBaseUrl="https://backend.example" enabledFeatures={["Elsa.Studio.Workflows"]} onNavigate={navigate}>
-    <QueryClientProvider client={client}>{isWorkspacePath ? <AgentWorkspace context={context} navigate={navigate} activityEditors={agentEditorContributions} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} testRunAvailable={!parameters.has("no-test-run")} /> : agentCollection ? <AgentsPage context={context} navigate={navigate} /> : <ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={agent ? agentEditorContributions : [activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} />}</QueryClientProvider>
+  return <ThemeProvider><AnonymousAuthProvider><ShellFrame navigation={navigation} panels={[]} path="/workflows/activity-definitions" title="Activity definitions" backendBaseUrl="https://backend.example" enabledFeatures={["Elsa.Studio.Workflows"]} onNavigate={() => undefined}>
+    <QueryClientProvider client={client}><ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={agent ? agentEditorContributions : [activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} /></QueryClientProvider>
   </ShellFrame></AnonymousAuthProvider></ThemeProvider>;
 }
 

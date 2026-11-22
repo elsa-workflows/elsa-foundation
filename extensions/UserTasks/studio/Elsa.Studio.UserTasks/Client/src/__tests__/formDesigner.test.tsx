@@ -147,7 +147,7 @@ describe("native form designer", () => {
     expect(container.querySelector(".user-task-designer__palette .user-task-designer__panel-content > small")?.textContent).toBe("0 fields in form · maximum 100");
     await click("Text input");
     expect(container.querySelector(".user-task-designer__palette .user-task-designer__panel-content > small")?.textContent).toBe("1 field in form · maximum 100");
-    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-label")?.textContent).toBe("Validation");
+    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
 
     const selectType = async (kind: string) => {
       const select = container.querySelector<HTMLSelectElement>(".user-task-designer__properties select");
@@ -158,38 +158,22 @@ describe("native form designer", () => {
       });
     };
 
-    const advanced = container.querySelector<HTMLElement>(".studio-advanced-section");
+    const advanced = container.querySelector<HTMLDetailsElement>(".user-task-designer__advanced");
     expect(advanced).toBeTruthy();
-    await act(() => advanced!.querySelector(".studio-disclosure-fold-trigger")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    advanced!.open = true;
     await selectType("boolean");
-    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-label")?.textContent).toBe("Validation");
+    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
     expect(container.textContent).toContain("Must be checked");
     await selectType("date");
-    expect(container.querySelector(".studio-advanced-section")).toBeNull();
-    expect([...container.querySelectorAll(".user-task-designer__properties h4")].map(heading => heading.textContent)).toEqual(["Field properties"]);
+    expect(container.querySelector(".user-task-designer__advanced")).toBeNull();
     await selectType("number");
-    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-label")?.textContent).toBe("Validation");
-    const numberAdvanced = container.querySelector<HTMLElement>(".studio-advanced-section");
-    await act(() => numberAdvanced!.querySelector(".studio-disclosure-fold-trigger")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(container.querySelectorAll('.user-task-designer__advanced-content input[type="number"]')).toHaveLength(2);
+    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
+    expect(container.querySelectorAll('.user-task-designer__advanced input[type="number"]')).toHaveLength(2);
     await selectType("multiline");
-    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-label")?.textContent).toBe("Validation");
+    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Validation");
     await selectType("choice");
-    expect(container.querySelector(".studio-advanced-section .studio-disclosure-fold-label")?.textContent).toBe("Choices");
-    expect(container.querySelector(".user-task-designer__advanced-content textarea")?.getAttribute("rows")).toBe("4");
-  });
-
-  it("keeps common field properties without an empty Date-specific section", async () => {
-    await render();
-    await click("Date");
-
-    const properties = container.querySelector<HTMLElement>(".user-task-designer__properties");
-    expect(properties).toBeTruthy();
-    expect([...properties!.querySelectorAll("h4")].map(heading => heading.textContent)).toEqual(["Field properties"]);
-    expect(properties!.textContent).not.toContain("Date properties");
-    expect(properties!.querySelector("select")?.value).toBe("date");
-    expect(properties!.querySelectorAll("input[type=checkbox]")).toHaveLength(2);
-    expect(properties!.querySelector("textarea")).toBeTruthy();
+    expect(container.querySelector(".user-task-designer__advanced summary")?.textContent).toBe("Choices");
+    expect(container.querySelector(".user-task-designer__advanced textarea")?.getAttribute("rows")).toBe("4");
   });
 
   it("offers only supported presentation settings and clears incompatible settings on type changes", async () => {

@@ -12,12 +12,7 @@ test("enables autosave by default without writing when opening an unchanged publ
   await row.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
 
-  const actions = page.getByRole("button", { name: "Form actions" });
-  await actions.focus();
-  await actions.press("ArrowDown");
-  const autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
-  await expect(autosave).toHaveAttribute("aria-checked", "true");
-  await autosave.press("Escape");
+  await expect(page.getByRole("checkbox", { name: "Auto-save" })).toBeChecked();
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Contact form");
   await page.waitForTimeout(1400);
   expect(await draftRequests(page)).toHaveLength(0);
@@ -37,7 +32,7 @@ test("debounces draft saves, serializes revisions, and keeps editing during a sl
   await expect(name).toBeEnabled();
   await name.fill("Latest draft");
 
-  await expect(page.getByText("Autosaved", { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("Draft saved", { exact: true })).toBeVisible({ timeout: 10000 });
   await expect(name).toHaveValue("Latest draft");
   const selectedField = page.getByRole("button", { name: "Select Text field 1", exact: true });
   await expect(selectedField).toHaveAttribute("aria-pressed", "true");
@@ -68,47 +63,18 @@ test("pauses autosave after an error and allows an explicit retry", async ({ pag
   await expect(name).toHaveValue("Still local");
 });
 
-test("autosave can be paused and resumed from the toolbar menu", async ({ page }) => {
-  for (const width of [1280, 360]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto("/form-designer.html");
-    await page.getByRole("button", { name: "Create form", exact: true }).click();
+test("turning autosave off keeps edits local until an explicit save", async ({ page }) => {
+  await page.goto("/form-designer.html");
+  await page.getByRole("button", { name: "Create form", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Auto-save" }).uncheck();
+  await page.getByRole("textbox", { name: "Form ID", exact: true }).fill("manual-only");
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("Manual only");
+  await page.waitForTimeout(1400);
+  expect(await draftRequests(page)).toHaveLength(0);
 
-    const actions = page.getByRole("button", { name: "Form actions" });
-    await actions.focus();
-    await actions.press("ArrowDown");
-    let autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
-    await expect(autosave).toHaveAttribute("aria-checked", "true");
-    await autosave.press("Space");
-    await expect(actions).toHaveAttribute("aria-expanded", "false");
-
-    await actions.focus();
-    await actions.press("ArrowDown");
-    autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
-    await expect(autosave).toHaveAttribute("aria-checked", "false");
-    await autosave.press("Escape");
-
-    const formId = page.getByRole("textbox", { name: "Form ID", exact: true });
-    if (!await formId.isVisible()) await page.getByRole("button", { name: "Expand properties panel" }).click();
-    await formId.fill(`manual-only-${width}`);
-    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Manual only");
-    await page.waitForTimeout(1400);
-    expect(await draftRequests(page)).toHaveLength(0);
-
-    await page.getByRole("button", { name: "Save draft", exact: true }).click();
-    await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
-    expect(await draftRequests(page)).toHaveLength(1);
-
-    await actions.focus();
-    await actions.press("ArrowDown");
-    autosave = page.getByRole("menuitemcheckbox", { name: /Autosave/ });
-    await expect(autosave).toHaveAttribute("aria-checked", "false");
-    await autosave.press("Enter");
-    await page.getByRole("textbox", { name: "Name", exact: true }).fill("Resumed autosave");
-    await expect(page.getByText("Autosaved", { exact: true })).toBeVisible({ timeout: 5000 });
-    await expect.poll(async () => (await draftRequests(page)).length).toBe(2);
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  }
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved", { exact: true })).toBeVisible();
+  expect(await draftRequests(page)).toHaveLength(1);
 });
 
 test("Cancel flushes pending autosave changes before leaving the editor", async ({ page }) => {

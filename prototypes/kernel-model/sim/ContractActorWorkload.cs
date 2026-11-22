@@ -81,7 +81,7 @@ internal static partial class ContractActorWorkload
             if (action % 16 == 15) await driver.TakeOver();
             else if (random.Next(3) == 0) await driver.Pass(4);
         }
-        await driver.Pass(actions + 12);
+        await SettleCounters();
 
         var appliedLeft = await CheckCounter(left, leftInputs, []);
         Require(appliedLeft.Length > 1 && appliedLeft.Take(2).All(entry => entry.Definition == "c") &&
@@ -141,6 +141,20 @@ internal static partial class ContractActorWorkload
             await driver.Pass(8);
         }
         await CheckFamily(finishing, finishingChildren, Contract.ActorStatus.Finished);
+
+        async Task SettleCounters()
+        {
+            // Recovery fences inherited inputs one at a time, including forwards and each hold's self-nudge.
+            var maxPasses = 8L * actions + 64;
+            for (var passes = 0L; passes < maxPasses; passes += 16)
+            {
+                await driver.Pass((int)Math.Min(16, maxPasses - passes));
+                if ((await driver.Reads.InboxAsync(scope, left)).Items.Count == 0 &&
+                    (await driver.Reads.InboxAsync(scope, right)).Items.Count == 0)
+                    return;
+            }
+            throw new InvalidOperationException($"the counter inboxes did not drain in {maxPasses} owner passes");
+        }
 
         async Task<Contract.ActorRef> Begin(string callerKey, Models.WorkflowStart start)
         {

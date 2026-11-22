@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyStudioNavigationGuardReleased, qualifyStudioBackendPath, studioNavigationRequestedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { OverflowMenu, studioRowInteraction, StatusChip, StudioAlert, StudioButton, StudioCollectionEmptyState, StudioCollectionFooter, StudioPage, StudioPageHeader, StudioResultState, StudioTableContainer, StudioVersionHistory, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
-import { AlertTriangle, Check, LoaderCircle, Save as SaveIcon } from "lucide-react";
 import { FormDesigner } from "./FormDesigner";
 import { validateTaskForm } from "./formDesignerModel";
 import { actor, basicProvider, deleteForm, discardFormDraft, formDefinition, formDefinitions as listFormDefinitions, formVersions, message, publishForm, saveFormDraft, statusOf, supportsFormDeletion, type FormDefinition, type FormVersion, type TaskActor, type TaskForm } from "./taskApi";
@@ -38,7 +37,6 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   const [deleteAvailable, setDeleteAvailable] = useState(false);
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false); const [autosaveEnabled, setAutosaveEnabled] = useState(true);
-  const [lastSaveSource, setLastSaveSource] = useState<"manual" | "autosave" | null>(null);
   const [autosavePaused, setAutosavePaused] = useState(false); const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState(""); const [deleteError, setDeleteError] = useState(""); const [formError, setFormError] = useState(""); const [conflict, setConflict] = useState(false);
   const [editing, setEditing] = useState(false); const [editorLoading, setEditorLoading] = useState(false);
@@ -153,7 +151,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
       baseFormRef.current = openedForm; savedFormRef.current = definition.draft?.form ? cloneForm(definition.draft.form) : null;
       revisionRef.current = definition.revision; setDesignerGeneration(value => value + 1);
       lastRequestedSignature.current = formSignature(openedForm);
-      autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle"); setLastSaveSource(null); setError("");
+      autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle"); setError("");
     } catch (failure) {
       if (currentOwner.current === owner && currentIdRef.current === id && (request === editorRequest.current || editorElement.current?.isConnected)) { setFormError(message(failure)); setEditing(false); }
     } finally {
@@ -169,7 +167,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     setForm(emptyForm); setBaseForm(emptyForm); setSavedForm(null); baseFormRef.current = emptyForm; savedFormRef.current = null;
     revisionRef.current = 0; setDesignerGeneration(value => value + 1);
     lastRequestedSignature.current = formSignature(emptyForm);
-    autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle"); setLastSaveSource(null);
+    autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle");
     setFormError(""); setConflict(false); setShowValidation(false); setEditorLoading(false); setEditing(true);
   };
 
@@ -181,7 +179,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
     currentIdRef.current = null;
     persistedIdRef.current = null;
     editorRequest.current++; clearHistory(); setEditing(false); setEditorLoading(false); setBusy(false); setFormError(""); setConflict(false); setShowValidation(false);
-    setSavingDraft(false); setAutosaveStatus("idle"); setLastSaveSource(null);
+    setSavingDraft(false); setAutosaveStatus("idle");
     setHasUnappliedSource(false);
     unappliedSourceRef.current = false;
     requestAnimationFrame(() => {
@@ -265,7 +263,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
         baseFormRef.current = saved; savedFormRef.current = saved;
         setCurrentId(id); setIsNew(false); setCurrentDefinition(definition); setBaseForm(saved); setSavedForm(saved);
         setForm(current => current.id === id ? current : { ...current, id });
-        setAutosaveStatus("saved"); setLastSaveSource(source === "autosave" ? "autosave" : "manual");
+        setAutosaveStatus("saved");
         upsertDefinition(definition);
         if (source === "manual" && notificationGeneration === visibilityGeneration.current) api.notifications?.notify({ level: "success", title: "Draft saved", message: "You can reopen and continue editing this draft." });
         return true;
@@ -382,7 +380,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
       revisionRef.current = definition.revision; currentIdRef.current = id; persistedIdRef.current = id;
       setCurrentDefinition(definition); setCurrentId(id); setForm(publishedForm); setBaseForm(publishedForm); setSavedForm(null); setIsNew(false);
       lastRequestedSignature.current = formSignature(publishedForm); setDesignerGeneration(value => value + 1);
-      autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle"); setLastSaveSource(null);
+      autosavePausedRef.current = false; setAutosavePaused(false); setAutosaveStatus("idle");
       upsertDefinition(definition); setHistory(current => appendVersions(current, [publication])); setSelectedHistoryVersion(publication.form.version);
       if (request === editorRequest.current && notificationGeneration === visibilityGeneration.current) api.notifications?.notify({ level: "success", title: "Form published", message: "The new immutable version is available to new tasks." });
     } catch (failure) {
@@ -414,7 +412,7 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
         formRef.current = published;
         baseFormRef.current = published; savedFormRef.current = null;
         setForm(published); setBaseForm(published); setIsNew(false); lastRequestedSignature.current = formSignature(published); setDesignerGeneration(value => value + 1);
-        setAutosaveStatus("idle"); setLastSaveSource(null); autosavePausedRef.current = false; setAutosavePaused(false);
+        setAutosaveStatus("idle"); autosavePausedRef.current = false; setAutosavePaused(false);
       } else {
         await refresh();
         if (currentOwner.current === owner && request === editorRequest.current) closeEditor();
@@ -448,34 +446,25 @@ export function FormLifecyclePage({ api }: { api: ElsaStudioModuleApi }) {
   const title = editing ? (isNew && !form.name ? "Design the form" : form.name || "Untitled form") : "Reusable task forms";
   const hasFormAccess = !identity || identity.canReadForms || identity.canManageForms;
   const saveStatusLabel = hasUnappliedSource ? "Unapplied source"
-    : savingDraft || autosaveStatus === "saving" ? "Saving draft"
+    : autosaveStatus === "saving" ? "Saving draft"
       : autosaveStatus === "pending" ? "Saving automatically…"
         : autosaveStatus === "error" ? "Save failed"
-          : hasChanges ? "Unsaved changes" : savedForm ? lastSaveSource === "autosave" ? "Autosaved" : "Draft saved" : "No draft saved";
-  const savePending = savingDraft || autosaveStatus === "pending" || autosaveStatus === "saving";
-  const saveNeedsAttention = autosaveStatus === "error" || hasUnappliedSource || hasChanges && !savePending;
-  const saveSucceeded = Boolean(savedForm) && !savePending && !saveNeedsAttention;
-  const toggleAutosave = () => {
-    const enabled = !autosaveEnabled;
-    setAutosaveEnabled(enabled);
-    if (!enabled && autosaveTimer.current !== null) {
-      window.clearTimeout(autosaveTimer.current); autosaveTimer.current = null;
-      setAutosaveStatus(hasDirtyContent ? "idle" : savedForm ? "saved" : "idle");
-    }
-  };
-  const formMenuItems: OverflowMenuItem[] = [
-    { id: "autosave", label: "Autosave", checked: autosaveEnabled, value: autosaveEnabled ? "On" : "Off", onSelect: toggleAutosave },
-    ...(savedForm ? [{ id: "discard-draft", label: "Discard draft", destructive: true, disabled: busy || hasUnappliedSource, onSelect: () => void discardDraft() }] : [])
-  ];
+          : hasChanges ? "Unsaved changes" : savedForm ? "Draft saved" : "No draft saved";
+  const saveStatusTone: "danger" | "neutral" | "success" | "warning" = autosaveStatus === "error" ? "danger"
+    : hasUnappliedSource || hasChanges || autosaveStatus === "pending" ? "warning" : savedForm ? "success" : "neutral";
   const formToolbarActions = readOnly ? null : <>
     {hasUnappliedSource ? <span className="user-task-form-source-pending" role="status">Unapplied source edits · Apply or reset before saving.</span> : null}
-    <span className="user-task-form-save-status" role="status" aria-live="polite" aria-atomic="true" title={saveStatusLabel}
-      data-pending={savePending || undefined} data-attention={saveNeedsAttention || undefined} data-success={saveSucceeded || undefined} data-error={autosaveStatus === "error" || undefined}>
-      {savePending ? <LoaderCircle size={14} aria-hidden="true" /> : saveSucceeded ? <Check size={14} aria-hidden="true" /> : autosaveStatus === "error" ? <AlertTriangle size={14} aria-hidden="true" /> : null}
-      <span>{saveStatusLabel}</span>
-    </span>
-    <StudioButton className="user-task-form-save-button" aria-label="Save draft" title="Save draft" disabled={busy || savingDraft || !canSave} onClick={() => void saveDraft()}><SaveIcon size={16} aria-hidden="true" /><span className="user-task-form-sr-only">Save draft</span></StudioButton>
-    <OverflowMenu ariaLabel="Form actions" items={formMenuItems} />
+    <label className="user-task-form-autosave"><input type="checkbox" aria-label="Auto-save" checked={autosaveEnabled} onChange={event => {
+      const enabled = event.target.checked;
+      setAutosaveEnabled(enabled);
+      if (!enabled && autosaveTimer.current !== null) {
+        window.clearTimeout(autosaveTimer.current); autosaveTimer.current = null;
+        setAutosaveStatus(hasDirtyContent ? "idle" : savedForm ? "saved" : "idle");
+      }
+    }} />Auto-save</label>
+    <StatusChip tone={saveStatusTone}>{saveStatusLabel}</StatusChip>
+    <StudioButton disabled={busy || !canSave} onClick={() => void saveDraft()}>{savingDraft ? "Saving…" : "Save draft"}</StudioButton>
+    {savedForm ? <StudioButton disabled={busy || hasUnappliedSource} onClick={() => void discardDraft()}>Discard draft</StudioButton> : null}
     <StudioButton variant="primary" disabled={busy || hasUnappliedSource} onClick={() => void publish()}>{busy ? "Publishing…" : "Publish"}</StudioButton>
     <StudioButton disabled={busy} onClick={() => void leaveEditor(true)}>Cancel</StudioButton>
   </>;

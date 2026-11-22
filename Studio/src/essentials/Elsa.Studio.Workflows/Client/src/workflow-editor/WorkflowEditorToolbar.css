@@ -96,10 +96,6 @@
   color: var(--studio-text-muted);
 }
 
-.wf-editor-save-status[data-attention] {
-  color: var(--studio-warning-fg);
-}
-
 .wf-editor-toolbar .wf-editor-actions {
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -115,23 +111,6 @@
   background: var(--studio-accent);
   color: var(--studio-accent-text);
   font-weight: 600;
-}
-
-.wf-editor-toolbar .wf-run-published-button {
-  border-color: var(--studio-accent);
-  background: var(--studio-accent);
-  color: var(--studio-accent-text);
-  font-weight: 600;
-}
-
-.wf-editor-toolbar .wf-run-published-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
-}
-
-.wf-editor-toolbar .wf-run-published-button:disabled {
-  background: var(--studio-surface-muted);
-  border-color: var(--studio-border);
-  color: var(--studio-text-muted);
 }
 
 .wf-editor-toolbar .wf-run-button {

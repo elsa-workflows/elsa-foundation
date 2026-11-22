@@ -808,27 +808,6 @@ export interface StudioActivityPropertyEditorProps {
   onValidationChange?: (hasError: boolean) => void;
 }
 
-export interface StudioActivityPropertyEditorGroupInput {
-  descriptor: StudioActivityInputDescriptor;
-  /** Literal value, or the expression value for a non-literal syntax. */
-  value: unknown;
-  syntax: string;
-  /** Kept separately so an empty expression remains distinguishable from a missing assignment. */
-  expressionValue?: unknown;
-  readOnly: boolean;
-}
-
-export interface StudioActivityPropertyEditorGroupProps {
-  inputs: StudioActivityPropertyEditorGroupInput[];
-  context: StudioActivityPropertyEditorContext;
-  disabled: boolean;
-  /** Renders the host's regular syntax and expression editor for one input in this group. */
-  renderExpressionEditor(inputKey: string): ReactNode;
-  /** Updates one literal input; use context.setLiteralInputs for related atomic changes. */
-  onChange(inputKey: string, value: unknown): void;
-  onValidationChange?: (hasError: boolean) => void;
-}
-
 /** Designer-side issue a property or expression editor can contribute to the draft validation surface. */
 export interface StudioDraftValidationIssue {
   type: string;
@@ -852,11 +831,6 @@ export interface StudioActivityPropertyEditorContribution extends StudioBackendA
     id: string;
     label: string;
     description?: string;
-    /** Input keys required before the group component replaces its individual rows. */
-    inputKeys?: string[];
-    /** Keeps sibling inputs unchanged when an expression editor changes this group. */
-    preserveSiblingOnExpression?: boolean;
-    component?: ComponentType<StudioActivityPropertyEditorGroupProps>;
   };
   order?: number;
   /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */

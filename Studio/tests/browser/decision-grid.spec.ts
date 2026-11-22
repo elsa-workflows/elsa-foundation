@@ -87,49 +87,6 @@ async function openComposedDecision(page: import("@playwright/test").Page, theme
 }
 
 for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as const) {
-  test(`shows adjacent Save and Publish controls in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
-    const grid = await openComposedDecision(page, theme, width);
-    const actions = page.locator(".decision-actions");
-    const save = actions.getByRole("button", { name: "Save", exact: true });
-    const publish = actions.getByRole("button", { name: "Publish", exact: true });
-    await expect(save).toBeVisible();
-    await expect(save).toBeDisabled();
-    await expect(publish).toBeVisible();
-    await expect(publish).toBeEnabled();
-    expect(await save.evaluate(element => element.parentElement === document.querySelector(".decision-actions"))).toBe(true);
-    const saveBounds = await save.boundingBox();
-    const publishBounds = await publish.boundingBox();
-    expect(saveBounds).not.toBeNull();
-    expect(publishBounds).not.toBeNull();
-    if (width > 600) {
-      expect(Math.abs(saveBounds!.y - publishBounds!.y)).toBeLessThan(2);
-      expect(publishBounds!.x).toBeGreaterThan(saveBounds!.x + saveBounds!.width);
-    }
-
-    const trigger = actions.getByRole("button", { name: "More decision actions", exact: true });
-    await trigger.click();
-    const menu = page.getByRole("menu", { name: "More decision actions", exact: true });
-    await expect(menu.getByRole("menuitem", { name: "Validate", exact: true })).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Export DMN", exact: true })).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "Publish", exact: true })).toHaveCount(0);
-    await page.keyboard.press("Escape");
-    const screenshotPath = testInfo.outputPath(`decision-save-publish-${theme}-${width}.png`);
-    await page.screenshot({ path: screenshotPath, fullPage: true, animations: "disabled" });
-    await testInfo.attach(`decision-save-publish-${theme}-${width}.png`, { path: screenshotPath, contentType: "image/png" });
-
-    const cell = grid.getByRole("gridcell").first();
-    await cell.click();
-    await cell.press("Enter");
-    const editor = page.getByRole("textbox", { name: "Edit selected cell", exact: true });
-    await editor.fill(">= 20");
-    await editor.press("Enter");
-    await expect(save).toBeEnabled();
-    await expect(publish).toBeDisabled();
-    if (width < 600) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-  });
-}
-
-for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as const) {
   test(`navigates through the decision breadcrumb in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
     await openComposedDecision(page, theme, width);
     const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
@@ -163,10 +120,10 @@ for (const theme of ["light", "dark"] as const) {
     const grid = await openComposedDecision(page, theme);
     await expect(page.locator(".decision-editor-tabs")).toHaveClass(/studio-tabs/);
     await expect(page.getByRole("heading", { name: "Rules", exact: true })).toHaveCount(1);
-    await expect(grid.locator("tbody tr")).toHaveCount(4);
+    await expect(grid.locator("tbody tr")).toHaveCount(2);
     await expect(page.locator(".decision-editor-workspace .decision-table-section")).toHaveCount(1);
     await expect(page.locator(".decision-expression-help")).toHaveCount(0);
-    await expect(page.locator(".decision-grid-footer")).toContainText("4 rules · 2 inputs · 1 output");
+    await expect(page.locator(".decision-grid-footer")).toContainText("2 rules · 1 input · 1 output");
     const workspaceWidth = await page.locator(".decision-editor-workspace").evaluate(element => element.getBoundingClientRect().width);
     const gridWidth = await page.locator(".decision-table-scroll").evaluate(element => element.getBoundingClientRect().width);
     expect(gridWidth).toBeGreaterThan(workspaceWidth * .95);
@@ -176,11 +133,6 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator(".decision-table-section")).toHaveCount(1);
       if (view === "Rules") await expect(page.getByRole("tabpanel", { name: "Rules" })).toBeVisible();
       else await expect(page.getByRole("tabpanel", { name: "Rules" })).toBeHidden();
-      if (view === "Settings") {
-        const screenshot = `test-results/decision-workspace-settings-${theme}.png`;
-        await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
-        await testInfo.attach(`decision-workspace-settings-${theme}.png`, { path: screenshot, contentType: "image/png" });
-      }
     }
     await page.getByRole("tab", { name: "Rules", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
@@ -248,9 +200,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("menuitem", { name: "Expression help", exact: true }).click();
     await expect(page.getByRole("note", { name: "Expression syntax help" })).toContainText("The server validates the supported profile.");
     await page.getByRole("button", { name: "Hide expression help", exact: true }).click();
-    const rulesScreenshot = `test-results/decision-workspace-rules-${theme}.png`;
-    await page.screenshot({ path: rulesScreenshot, fullPage: true, animations: "disabled" });
-    await testInfo.attach(`decision-workspace-rules-${theme}.png`, { path: rulesScreenshot, contentType: "image/png" });
+    await testInfo.attach(`decision-page-default-${theme}.png`, { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
 
     const settings = page.getByRole("button", { name: "Settings for input 1", exact: true });
     await expect(settings).toHaveAttribute("aria-expanded", "false");
@@ -306,60 +256,11 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
-  test(`fills the host authoring cell and retains test state in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
-    await openComposedDecision(page, theme, width);
-    const shell = page.locator(".browser-decision-shell"), content = page.locator(".content"), workspace = page.locator(".decision-editor-workspace");
-    const geometry = await page.evaluate(() => ({
-      shell: document.querySelector(".browser-decision-shell")!.getBoundingClientRect().height,
-      content: document.querySelector(".content")!.getBoundingClientRect().height,
-      workspace: document.querySelector(".decision-editor-workspace")!.getBoundingClientRect().height,
-      documentWidth: document.documentElement.scrollWidth,
-      documentHeight: document.documentElement.scrollHeight
-    }));
-    expect(geometry.shell).toBe(900);
-    expect(geometry.content).toBeGreaterThan(geometry.shell * .9);
-    expect(geometry.workspace).toBeGreaterThan(geometry.shell * .75);
-    expect(geometry.documentWidth).toBeLessThanOrEqual(width);
-    expect(geometry.documentHeight).toBeLessThanOrEqual(geometry.shell);
-    await expect(shell).toBeVisible();
-    await expect(content).toBeVisible();
-    await expect(workspace).toBeVisible();
-
-    await page.getByRole("tab", { name: "Tests", exact: true }).click();
-    await expect(page.getByRole("tabpanel", { name: "Tests" })).toBeVisible();
-    const caseRow = page.getByRole("row", { name: /Under age boy/ });
-    await caseRow.getByRole("button", { name: "Actions for Under age boy" }).click();
-    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
-    const name = page.getByRole("textbox", { name: "Case name", exact: true });
-    await name.fill("Retained test draft");
-    await page.getByRole("button", { name: "Save case", exact: true }).click();
-    const updatedCaseRow = page.getByRole("row", { name: /Retained test draft/ });
-    await expect(updatedCaseRow).toBeVisible();
-    await expect(page.locator('[role="dialog"]')).toBeHidden();
-    await page.getByRole("tab", { name: "Rules", exact: true }).click();
-    await page.getByRole("tab", { name: "Tests", exact: true }).click();
-    await updatedCaseRow.getByRole("button", { name: "Actions for Retained test draft", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "Case name", exact: true })).toHaveValue("Retained test draft");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Saved cases", exact: true })).toBeInViewport();
-
-    const history = page.locator(".decision-history");
-    await history.locator("summary").click();
-    await page.getByRole("button", { name: "Load test history", exact: true }).click();
-    await expect(history).toContainText("Failed");
-    const screenshot = `test-results/decision-workspace-${theme}-${width}.png`;
-    await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
-    await testInfo.attach(`decision-workspace-${theme}-${width}.png`, { path: screenshot, contentType: "image/png" });
-  });
-}
-
 for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as const) {
   test(`separates saved-case actions from the table in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
     await openComposedDecision(page, theme, width);
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
-    const heading = page.locator(".decision-test-cases > .decision-section-heading");
+    const heading = page.locator(".decision-cases > .decision-section-heading");
     const table = page.getByRole("region", { name: "Saved decision cases table", exact: true });
     await expect(heading.getByRole("heading", { name: "Saved cases", exact: true })).toBeVisible();
     await expect(heading.getByRole("button", { name: "Add case", exact: true })).toBeVisible();
@@ -401,87 +302,13 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await testInfo.attach(`saved-cases-menu-open-${theme}-${width}.png`, { path: openScreenshot, contentType: "image/png" });
     await page.keyboard.press("Escape");
     await expect(actions).toBeFocused();
-    const tableBeforeEdit = await table.boundingBox();
     await actions.click();
     await menu.getByRole("menuitem", { name: "Edit", exact: true }).click();
     const editForm = page.getByRole("form", { name: "Edit decision case", exact: true });
     await expect(editForm).toBeVisible();
-    const dialog = page.getByRole("dialog", { name: "Edit case", exact: true });
-    const caseInputs = dialog.locator(".decision-case-form-fields > fieldset").first().locator(".decision-case-value-grid > .decision-value-field");
-    await expect(caseInputs).toHaveCount(2);
-    await expect(caseInputs.nth(0).locator(".decision-value-name")).toHaveText("amount");
-    await expect(caseInputs.nth(1).locator(".decision-value-name")).toHaveText("customerCategory");
-    const inputRows = await caseInputs.evaluateAll(rows => rows.map(row => {
-      const bounds = row.getBoundingClientRect();
-      const kind = row.querySelector<HTMLElement>(".decision-value-kind")!.getBoundingClientRect();
-      const value = row.querySelector<HTMLElement>(".decision-value-input")!.getBoundingClientRect();
-      return { top: bounds.top, height: bounds.height, kindRight: kind.right, valueLeft: value.left, joined: Math.abs(kind.right - value.left) <= 1, equalControlHeight: Math.abs(kind.height - value.height) <= 1 };
-    }));
-    expect(inputRows.every(row => row.height < 80 && row.joined && row.equalControlHeight), JSON.stringify(inputRows)).toBe(true);
-    expect(inputRows[1].top).toBeGreaterThan(inputRows[0].top);
-    const caseName = dialog.getByRole("textbox", { name: "Case name", exact: true });
-    await expect(caseName).toBeFocused();
-    await expect(page.getByText("Unsaved case changes", { exact: true })).toHaveCount(0);
-    const tableAfterOpen = await table.boundingBox();
-    expect(tableAfterOpen).toEqual(tableBeforeEdit);
-    const dialogBeforeTyping = await dialog.boundingBox();
-    expect(dialogBeforeTyping).not.toBeNull();
-    expect(dialogBeforeTyping!.x).toBeGreaterThanOrEqual(0);
-    expect(dialogBeforeTyping!.y).toBeGreaterThanOrEqual(0);
-    expect(dialogBeforeTyping!.x + dialogBeforeTyping!.width).toBeLessThanOrEqual(width);
-    expect(dialogBeforeTyping!.y + dialogBeforeTyping!.height).toBeLessThanOrEqual(900);
-    const footerSpacing = await dialog.locator(".studio-dialog-footer").evaluate(footer => {
-      const dialogBounds = footer.closest(".decision-case-dialog")!.getBoundingClientRect();
-      const fieldsBounds = footer.parentElement!.querySelector<HTMLElement>(".decision-case-form-fields")!.getBoundingClientRect();
-      const saveBounds = footer.querySelector<HTMLElement>('button[type="submit"]')!.getBoundingClientRect();
-      return {
-        rightInset: dialogBounds.right - saveBounds.right,
-        bottomInset: dialogBounds.bottom - saveBounds.bottom,
-        fieldsToSaveGap: saveBounds.top - fieldsBounds.bottom
-      };
-    });
-    expect(footerSpacing.rightInset, JSON.stringify(footerSpacing)).toBeGreaterThanOrEqual(16);
-    expect(footerSpacing.bottomInset, JSON.stringify(footerSpacing)).toBeGreaterThanOrEqual(12);
-    expect(footerSpacing.fieldsToSaveGap, JSON.stringify(footerSpacing)).toBeGreaterThanOrEqual(12);
-    await page.keyboard.press("Shift+Tab");
-    await expect(dialog.getByRole("button", { name: "Save case", exact: true })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(caseName).toBeFocused();
-    await caseName.fill("Canceled boundary");
-    const fieldBefore = await caseName.boundingBox();
-    const dialogAfterTyping = await dialog.boundingBox();
-    expect(dialogAfterTyping).toEqual(dialogBeforeTyping);
-    expect(await caseName.boundingBox()).toEqual(fieldBefore);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.locator(".decision-case-dialog-backdrop").click({ position: { x: 1, y: 1 } });
-    await expect(dialog).toBeVisible();
-    await expect(caseName).toHaveValue("Canceled boundary");
-    const dialogScreenshot = `test-results/saved-case-dialog-${theme}-${width}.png`;
-    await page.screenshot({ path: dialogScreenshot, fullPage: true, animations: "disabled" });
-    await testInfo.attach(`saved-case-dialog-${theme}-${width}.png`, { path: dialogScreenshot, contentType: "image/png" });
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("row", { name: /Under age boy/ })).toBeVisible();
-    await expect(actions).toBeFocused();
-    await actions.click();
-    await menu.getByRole("menuitem", { name: "Edit", exact: true }).click();
-    await expect(dialog).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
+    await expect(editForm).toBeHidden();
     await expect(actions).toBeFocused();
-    await actions.click();
-    await menu.getByRole("menuitem", { name: "Edit", exact: true }).click();
-    await dialog.getByRole("textbox", { name: "Case name", exact: true }).fill("Updated boundary");
-    await dialog.getByRole("button", { name: "Save case", exact: true }).click();
-    const updatedRow = page.getByRole("row", { name: /Updated boundary/ });
-    await expect(updatedRow).toBeVisible();
-    const updatedActions = updatedRow.getByRole("button", { name: "Actions for Updated boundary", exact: true });
-    await expect(updatedActions).toBeFocused();
-    await updatedActions.click();
-    await page.getByRole("menu", { name: "Actions for Updated boundary", exact: true }).getByRole("menuitem", { name: "Edit", exact: true }).click();
-    await expect(dialog.getByRole("textbox", { name: "Case name", exact: true })).toHaveValue("Updated boundary");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(updatedActions).toBeFocused();
   });
 }
 
@@ -625,40 +452,18 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
   });
 }
 
-for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as const) {
+for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
   test(`recovers from a saved-case compilation failure in ${theme} theme at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/decision-grid.html?page=full&recovery=1&theme=${theme}`);
     await expect(page.getByRole("heading", { level: 1, name: "Approval", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
     await page.getByRole("button", { name: "Run saved cases", exact: true }).click();
-    const alert = page.getByRole("alert");
-    await expect(alert).toContainText("The exact candidate cannot be evaluated.");
+    await expect(page.getByRole("alert")).toContainText("The exact candidate cannot be evaluated.");
     const diagnostics = page.getByLabel("Decision compilation diagnostics");
     await expect(diagnostics).toContainText("This condition is not supported by the selected profile.");
     await expect(diagnostics).toContainText("Rule 1 · Column amount");
-    await expect(diagnostics.locator(".decision-diagnostic-group")).toHaveCount(1);
-    await expect(diagnostics.locator(".decision-diagnostic-locations button")).toHaveCount(12);
     await expect(diagnostics).not.toContainText("decision_");
-    await expect(page.getByRole("heading", { name: "Saved cases could not run", exact: true })).toBeVisible();
-    const guidance = diagnostics.locator(".decision-expression-guidance");
-    await expect(guidance).toHaveCount(1);
-    await expect(guidance).toContainText("< 21");
-    await expect(guidance).toContainText('"male"');
-    const recovery = page.locator(".decision-case-run-recovery");
-    await expect(recovery).toContainText("Review the affected cells in Rules. Correct the expressions, save the draft, then run the cases again.");
-    const alertBounds = await alert.boundingBox();
-    const diagnosticsBounds = await diagnostics.boundingBox();
-    const recoveryBounds = await recovery.boundingBox();
-    expect(alertBounds).not.toBeNull();
-    expect(diagnosticsBounds).not.toBeNull();
-    expect(recoveryBounds).not.toBeNull();
-    expect(diagnosticsBounds!.y - alertBounds!.y - alertBounds!.height).toBeGreaterThanOrEqual(16);
-    expect(recoveryBounds!.y - diagnosticsBounds!.y - diagnosticsBounds!.height).toBeGreaterThanOrEqual(16);
-    if (width < 600) {
-      await recovery.scrollIntoViewIfNeeded();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    }
     const failedScreenshot = testInfo.outputPath(`decision-test-failure-${theme}-${width}.png`);
     await page.screenshot({ path: failedScreenshot, fullPage: true, animations: "disabled" });
     await testInfo.attach(`decision-test-failure-${theme}-${width}.png`, { path: failedScreenshot, contentType: "image/png" });
@@ -666,14 +471,14 @@ for (const [theme, width] of [["light", 1440], ["dark", 1440], ["dark", 390]] as
     await page.getByRole("button", { name: "Review rules", exact: true }).click();
     const cell = page.getByRole("gridcell", { name: "Rule 1, input amount", exact: true });
     await expect(cell).toBeFocused();
-    await expect(cell.locator(".decision-cell-diagnostic")).toContainText("This condition is not supported by the selected profile.");
-    await expect(page.getByRole("region", { name: "Compatibility and validation" })).toContainText("Rule 1 · Column amount");
+    await expect(page.getByRole("note")).toContainText("This condition is not supported by the selected profile.");
+    await expect(page.locator(".decision-diagnostics")).toContainText("Rule 1 · Column amount");
     await cell.press("Enter");
     const editor = page.getByRole("textbox", { name: "Edit selected cell", exact: true });
     await editor.fill("< 21");
     await editor.press("Enter");
     await expect(cell).toHaveText("< 21");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Save decision", exact: true }).click();
     await expect.poll(() => page.evaluate(() => document.querySelector(".decision-draft-status")?.textContent)).toBe("Saved draft");
 
     await page.getByRole("tab", { name: "Tests", exact: true }).click();
