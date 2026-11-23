@@ -15,6 +15,7 @@
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />

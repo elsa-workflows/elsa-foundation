@@ -106,6 +106,12 @@
           "OpenIddict.EntityFrameworkCore.Models": "7.5.0"
         }
       },
+      "System.IO.Hashing": {
+        "type": "Direct",
+        "requested": "[10.0.8, )",
+        "resolved": "10.0.8",
+        "contentHash": "+dJsbPJ3FyUbTZNplFj0RCKePFizmv6ewDV46JE9q/IVH4c3xTCftHfHelLsAKf0jryIPqgMb5GpS0x7TAY3mg=="
+      },
       "xunit": {
         "type": "Direct",
         "requested": "[2.9.3, )",

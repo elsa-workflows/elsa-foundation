@@ -50,6 +50,13 @@ public sealed class JsonHashReferenceGraphTests
             private static Func<byte[], byte[]> AlgorithmProperty => Algorithm;
             public static byte[] Alias(byte[] value) => Digest.HashData(value);
             public static byte[] StaticImport(byte[] value) => HashData(value);
+            public static byte[] Incremental(byte[] value)
+            {
+                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                hash.AppendData(value);
+                return hash.GetHashAndReset();
+            }
+            public static byte[] NonCryptographic(byte[] value) => System.IO.Hashing.Crc32.Hash(value);
             public static byte[] Twice(byte[] value) { _ = SHA256.HashData(value); return SHA256.HashData(value); }
             public static byte[] Field(byte[] value) => Algorithm(value);
             public static byte[] Property(byte[] value) => AlgorithmProperty(value);
@@ -88,7 +95,7 @@ public sealed class JsonHashReferenceGraphTests
         """;
 
     private static readonly Lazy<JsonHashReferenceGraph> Fixture = new(() =>
-        JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("JsonHashReferenceFixture", Source, [typeof(JsonHashInput).Assembly]))]));
+        JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("JsonHashReferenceFixture", Source, [typeof(JsonHashInput).Assembly, typeof(System.IO.Hashing.Crc32).Assembly]))]));
 
     [Theory]
     [InlineData("Alias")]
@@ -135,7 +142,7 @@ public sealed class JsonHashReferenceGraphTests
         var original = Fixture.Value;
         var helper = Assert.Single(original.Definitions.Values, item => item.Name == "PhysicalHelper");
         var modified = Source.Replace("public static byte[] JsonViaHelper", "public static byte[] NewlyAdmitted(string json) => PhysicalHelper(json); public static byte[] JsonViaHelper", StringComparison.Ordinal);
-        var after = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("JsonHashReferenceFixture", modified, [typeof(JsonHashInput).Assembly]))]);
+        var after = JsonHashReferenceGraph.Scan([Assembly.Load(FixtureCompiler.Compile("JsonHashReferenceFixture", modified, [typeof(JsonHashInput).Assembly, typeof(System.IO.Hashing.Crc32).Assembly]))]);
         Assert.Empty(after.Errors);
         Assert.Single(original.ObservedCallers(helper.Identity));
         Assert.Equal(2, after.ObservedCallers(helper.Identity).Count);
@@ -158,6 +165,21 @@ public sealed class JsonHashReferenceGraphTests
         var sites = Fixture.Value.References.Where(item => Owner(item, "Mixed")).ToArray();
         Assert.Contains(sites, item => item.Role == "json-hash-input");
         Assert.Contains(sites, item => item.Role == "digest-primitive");
+    }
+
+    [Fact]
+    public void Actual_incremental_hash_operations_are_not_mistaken_for_ordinary_calls()
+    {
+        var references = Fixture.Value.References.Where(item => Owner(item, "Incremental") && item.Role == "digest-primitive").ToArray();
+        foreach (var name in new[] { "CreateHash", "AppendData", "GetHashAndReset" })
+            Assert.Contains(references, reference => reference.Target.Contains("System.Security.Cryptography.IncrementalHash::" + name, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_real_noncryptographic_algorithm_keeps_its_actual_primitive_identity()
+    {
+        var reference = Assert.Single(Fixture.Value.References, item => Owner(item, "NonCryptographic") && item.Role == "digest-primitive");
+        Assert.Contains("System.IO.Hashing|System.IO.Hashing.Crc32::Hash", reference.Target, StringComparison.Ordinal);
     }
 
     [Fact]
