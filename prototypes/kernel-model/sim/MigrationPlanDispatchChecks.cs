@@ -185,6 +185,7 @@ internal static class MigrationPlanDispatchChecks
 
         public async ValueTask AcknowledgeAsync(Contract.BoundScope scope, Contract.ActorRef plan, long batch, string operationId, CancellationToken stop)
         {
+            // The closed fixture supplies all plan control inputs. The product host must authorize them.
             var sent = await ingress.SendAsync(scope, new Contract.Target.Ref(plan), operationId, "dispatched", Json.Write(batch), cancellationToken: stop);
             if (sent.Actor != plan || sent.Outcome is not (Contract.AdmissionOutcome.Accepted or Contract.AdmissionOutcome.Duplicate))
                 throw new InvalidOperationException("The fixture did not admit the acknowledgment for the selected plan.");

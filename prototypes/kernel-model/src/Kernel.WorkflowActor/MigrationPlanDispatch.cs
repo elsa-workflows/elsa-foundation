@@ -8,7 +8,7 @@ internal sealed record MigrationDispatchBatch(long Number, string From, string T
 internal sealed record MigrationRequest(string From, string To, ActorRef Plan);
 internal sealed record MigrationDispatchReceipt(int Accepted, int Duplicate, int Unavailable);
 
-/// <summary>The committed plan read and the authorized acknowledgment path.</summary>
+/// <summary>Reads committed plan state and acknowledges dispatch through a host-provided control path.</summary>
 internal interface IMigrationDispatchState
 {
     ValueTask<MigrationDispatchBatch?> ReadPendingAsync(BoundScope scope, ActorRef plan, CancellationToken cancellationToken);
