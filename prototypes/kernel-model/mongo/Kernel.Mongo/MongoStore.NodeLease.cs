@@ -14,11 +14,21 @@ public sealed partial class MongoStore
     private static BsonElement FenceWrite() =>
         new("fenced", new BsonDocument("$add", new BsonArray { new BsonDocument("$ifNull", new BsonArray { "$fenced", 0L }), 1L }));
 
-    /// <summary>The node document's write: <c>seenAt</c> at the primary's time, <c>leaseUntil</c> at that time plus the lease.</summary>
-    private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan lease) => Builders<BsonDocument>.Update.Pipeline(new BsonDocument[]
+    /// <summary>A heartbeat records the issuing binary's readable kernel formats alongside primary time.
+    /// A membership-only heartbeat keeps the existing lease unchanged.</summary>
+    private static UpdateDefinition<BsonDocument> NodeRenewal(TimeSpan? lease = null)
     {
-        new("$set", new BsonDocument { { "seenAt", NowMs }, { "leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)lease.TotalMilliseconds }) } }),
-    });
+        var fields = new BsonDocument
+        {
+            { "seenAt", NowMs },
+            { "readableStoreSchema", new BsonArray { StoreSchema } },
+            { "readableMessageProtocol", new BsonArray { MessageProtocol } },
+            { "readableJournalCodec", new BsonArray { JournalCodec } }
+        };
+        if (lease is { } duration)
+            fields.Add("leaseUntil", new BsonDocument("$add", new BsonArray { NowMs, (long)duration.TotalMilliseconds }));
+        return Builders<BsonDocument>.Update.Pipeline(new BsonDocument[] { new("$set", fields) });
+    }
 
     /// <summary>
     /// A transaction that a write conflict with this process's own heartbeat (a single-document write to its node document)
