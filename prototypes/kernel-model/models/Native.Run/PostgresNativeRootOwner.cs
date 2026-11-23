@@ -35,7 +35,7 @@ internal sealed class PostgresNativeRootOwner
     private static async Task<PostgresNativeRootOwner> PrepareAsync(EfStore store, string node, EfStore.WorkerRoots root,
         WorkflowRegistry registry, int pollLimit, CancellationToken cancellationToken, Action<InstanceRef, IReadOnlyList<Message>, long>? onTurn, int partitions)
     {
-        var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]));
+        var adapter = new ActorAdapter(new Headers(root), new PublicActor([new NativeExecutionModel(registry)]), store.RootSelfIssuer);
         var worker = new Worker(node, root.Partition, store, adapter, new WorkerOptions { PollLimit = pollLimit, OnTurn = onTurn, Partitions = partitions });
         var host = new DurableHost([worker]);
         var prepared = new PostgresNativeRootOwner(host, root.Partition);

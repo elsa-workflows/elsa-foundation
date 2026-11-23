@@ -33,11 +33,14 @@ if (args is ["variants", var variantMode]) return await VariantChecks.RunAsync(v
 if (args is ["replay-variants"]) return await ReplayVariantChecks.RunAsync();
 if (args is ["join-variants", var joinMode]) return await JoinVariantChecks.RunAsync(joinMode);
 if (args is ["join-replay-variants"]) return await JoinReplayVariantChecks.RunAsync();
-if (args is ["pg-flowchart-preview", "birth", var birthRoute and ("manual" or "automatic")])
-    return await PostgresFlowchartPreview.RunAsync(birthRoute);
-if (args is ["pg-flowchart-preview", "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
+if (args is [var birthMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "birth", var birthRoute and ("manual" or "automatic")])
+    return await PostgresFlowchartPreview.RunAsync(birthRoute, durable: birthMode == "pg-durable-flowchart-preview");
+if (args is ["pg-durable-flowchart-preview", "wait", var waitRoute and ("manual" or "automatic"), var seededRef, var seededEpoch] &&
+    long.TryParse(seededEpoch, out var priorFlowEpoch) && priorFlowEpoch > 0)
+    return await PostgresFlowchartPreview.RunAsync(waitRoute, seededRef, previousEpoch: priorFlowEpoch, durable: true, reachWait: true);
+if (args is [var resumedMode and ("pg-flowchart-preview" or "pg-durable-flowchart-preview"), "restart", var resumedRoute and ("manual" or "automatic"), var flowRef, var flowBookmark, var flowEpoch] &&
     long.TryParse(flowEpoch, out var previousEpoch) && previousEpoch > 0)
-    return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch);
+    return await PostgresFlowchartPreview.RunAsync(resumedRoute, flowRef, flowBookmark, previousEpoch, durable: resumedMode == "pg-durable-flowchart-preview");
 if (args is ["pg-flowchart-preview", "merge-early"])
 {
     try { return await PostgresFlowchartPreview.RunAsync("automatic", mergeEarly: true); }

@@ -13,6 +13,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly (Durable.Requests Requests, string Node)? local;
     private readonly Func<Contract.ActorHeader, TimeSpan?>? retentionWindow;
     private readonly IRootDispatchHeaders? roots;
+    private readonly Func<string, string>? issueSelf;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -24,7 +25,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         this.retentionWindow = retentionWindow;
     }
 
-    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor) => (this.roots, this.actor) = (roots, actor);
+    internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Func<string, string>? issueSelf = null) =>
+        (this.roots, this.actor, this.issueSelf) = (roots, actor, issueSelf);
 
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -321,7 +323,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
-        var turn = new ActorTurn(inMemory, input, header, ambient);
+        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf);
         input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
         await actor.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;

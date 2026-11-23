@@ -145,10 +145,16 @@ parallel. The risk review finishes, and a second Embedded host process takes the
 the risk operation with a finance payload leaves the checkpoint and journal unchanged. Finance then completes the
 last live branch. The journal shows one join, and the terminal checkpoint contains both decisions.
 
-Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The distinct
-inactive risk branch cannot hold the join open. This is the Balanced and direct-input PostgreSQL preview. The scoped
-PostgreSQL owner still needs support for internally scheduled Native continuation messages before it can qualify
-Durable Flowchart execution.
+Run with `automatic` on a separate fresh database to select the bypass path. Finance still has to finish. The inactive risk branch cannot hold the join open.
+
+For Durable persistence, run `models/Native.Run/run-flowchart-preview.sh manual durable` (or `automatic durable`).
+The first Embedded process exits with an immediate self-send in the inbox. The fixture checks that this envelope
+and the initial checkpoint share a PostgreSQL transaction ID. The next process picks up the continuation and runs
+to the finance wait. A third process resumes the same workflow using its saved journal cursor. The manual route
+replays the risk approval with a changed body and checks the saved result. Both routes require one join, no remaining
+self inputs, and an unchanged journal on final replay. `KERNEL_PREVIEW_FENCE=checked` or `in-batch` selects the
+fence mode. This scoped path supports immediate sends back to the exact generated actor creation. Scheduled sends,
+cross-actor sends and other authored effects remain outside this preview.
 
 On a fresh database, `dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-flowchart-preview merge-early`
 replaces the join with a merge. The waiting assertion detects the premature finish.

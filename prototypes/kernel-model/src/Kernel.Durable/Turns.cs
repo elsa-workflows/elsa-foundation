@@ -429,9 +429,19 @@ public sealed class DurableTurn
         return Send(id, target, kind, payload, new SendOptions(TargetCreation: targetCreation, DueAt: dueAt), actorAuthored: true);
     }
 
+    internal string SendImmediateToSelf(Func<string, string> issue, string kind, string? payload)
+    {
+        Kinds.RequireApplicationSend(kind);
+        var id = issue(FoundationSelfSend.Seed(Origin, Revision, _ordinal++));
+        _sent.Add(FoundationSelfSend.Create(Id, _input.Creation, id, kind, payload));
+        return id;
+    }
+
     internal string SendFromActor(InMemoryStore store, InstanceRef target, long targetCreation, string kind, string? payload, long? dueAt)
     {
         Kinds.RequireApplicationSend(kind);
+        if (target == Actor && targetCreation == _input.Creation && dueAt is null)
+            return SendImmediateToSelf(store.MessageHandle, kind, payload);
         var issued = FormattableString.Invariant($"{Origin}#{Revision}.{_ordinal++:D4}");
         var id = dueAt is not null && target == Actor && targetCreation == _input.Creation
             ? store.FoundationTimerHandle(Origin, issued) : store.MessageHandle("send:" + issued);

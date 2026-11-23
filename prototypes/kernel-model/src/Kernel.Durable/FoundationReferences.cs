@@ -220,7 +220,7 @@ public sealed partial class InMemoryStore
     }
 
     internal string MessageHandle(string id) =>
-        "~" + Convert.ToHexString(HMACSHA256.HashData(_referenceKey.Value, DurableKeyJson.CodeUnits(id)));
+        FoundationSelfSend.Handle(_referenceKey.Value, id);
 
     internal string DeliveryHandle(string reference, long seq, InboxKey key) =>
         MessageHandle("delivery:" + Json.Write(new

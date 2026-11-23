@@ -384,6 +384,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
 
     private async ValueTask<Committed> CommitAsync(CommitBatch batch, QualifiedRootCheckpoint? root, CancellationToken cancellationToken)
     {
+        if (root is null && batch.Turns.Any(t => t.Sent.Any(m => m.InboxKey.Scope == -1 && m.Kind == RootSelfWire))) throw RootShape();
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
             .Any(key => key.Scope == InboxKey.FoundationOccurrenceScope) ||
@@ -633,7 +634,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     // The poll, with {0} partition, {1} epoch, {2} horizon in milliseconds and {3} limit.
     private string RootPollFilter => _ordinaryRoots is null ? "" :
         (_ordinaryRoots.Discover ? "" : """ AND m."Target" = ANY({4})""") + $"""
-             AND (m."InboxScope" <> {InboxKey.FoundationOccurrenceScope} OR EXISTS (
+             AND (m."InboxScope" NOT IN ({InboxKey.FoundationOccurrenceScope}, -1) OR EXISTS (
                  SELECT 1 FROM "Instances" i JOIN "FoundationRootBirths" life
                      ON life."Actor" = i."Id" AND life."Partition" = i."Partition" AND life."Creation" = 1
                      AND life."Tenant" = i."FoundationTenant" AND life."Reference" = i."FoundationReference"
@@ -645,7 +646,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
         ? $"""
            ("Messages" m JOIN "FoundationRootBirths" b ON b."Actor" = m."Target" AND b."Partition" = m."Partition"
               AND b."Creation" = 1 AND m."EventMatch" IS NULL
-              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope}))
+              AND ((m."InboxScope" = 0 AND m."Id" = b."Creator") OR m."InboxScope" = {InboxKey.FoundationOccurrenceScope} OR (m."InboxScope" = -1 AND m."Kind" = '{RootSelfWire}')))
            """
         : "\"Messages\" m";
     private string PollSql => Engine?.Poll ??
@@ -672,10 +673,10 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
                 var entity = new MessageEntity { Id = r.Id!, InboxScope = key.Scope, Target = r.Target, Kind = r.Kind!,
                     Start = r.Start, Payload = r.Payload, Sender = r.Sender, Due = r.Due!.Value, ReplyTo = r.ReplyTo, KeepUntil = r.KeepUntil };
                 var message = key.Scope == 0 ? PostgresRootAdmission.DecodeCreator(entity) with { FoundationRootBinding = (root.Actor, root.Tenant, root.Reference) }
-                    : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
+                    : key.Scope == -1 ? DecodeRootSelf(entity, RootSelfIssuer) : PostgresRootAdmission.DecodeDirect(entity, root.Reference);
                 return new Stored(message, r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
             }
-            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start))
+            if (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) || key.Scope == -1 && r.Kind == RootSelfWire)
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo).WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);

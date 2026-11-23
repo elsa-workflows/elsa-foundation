@@ -5,7 +5,7 @@ namespace Kernel.EntityFramework;
 public sealed partial class EfStore
 {
     private sealed record RootTurnCheckpoint(string Tenant, string Reference, RootImage Current, InstanceStatus Status,
-        string State, string Header, int StateVersion, Message[] Inputs) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
+        string State, string Header, int StateVersion, Message[] Inputs, Func<string, string>? Issue) : QualifiedRootCheckpoint(checked(Current.Revision + 1))
     {
         internal override async Task<bool> BindCheckpointAsync(KernelDb db, CancellationToken cancellationToken)
         {
@@ -24,7 +24,7 @@ public sealed partial class EfStore
             var old = DurableKeyJson.Read<RootHeader>(headers[0]);
             if (old.Model != Current.Model || old.Definition != Current.Definition) return false;
 
-            if (!await SettleDirectInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, cancellationToken))
+            if (!await SettleRootInputsAsync(db, Reference, Current.Actor, Inputs.Select(input => input.InboxKey).ToArray(), Inputs, Issue, cancellationToken))
                 return false;
             var finished = Status == InstanceStatus.Finished;
             // This preview cannot create or discharge qualified waits. A terminal commit may fulfil
@@ -44,27 +44,33 @@ public sealed partial class EfStore
     }
 
     // Both a model turn and a terminal no-turn disposition settle the same due FIFO prefix.
-    private static async Task<bool> SettleDirectInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
-        Message[]? expectedEnvelopes, CancellationToken cancellationToken)
+    private static async Task<bool> SettleRootInputsAsync(KernelDb db, string reference, CreationAddress actor, IReadOnlyList<InboxKey> expected,
+        Message[]? expectedEnvelopes, Func<string, string>? issue, CancellationToken cancellationToken)
     {
         var home = new InstanceRef(actor.Id).Partition;
         var rows = await db.Messages.FromSqlInterpolated($"""
             SELECT * FROM "Messages" WHERE "Target" = {actor.Id} AND "Partition" = {home}
-                AND "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "EventMatch" IS NULL
+                AND ("InboxScope" = {InboxKey.FoundationOccurrenceScope} OR ("InboxScope" = -1 AND "Kind" = {RootSelfWire})) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Due" <= floor(extract(epoch from clock_timestamp()) * 1000)::bigint
             ORDER BY "Seq" LIMIT {expected.Count} FOR UPDATE
             """).AsNoTracking().ToListAsync(cancellationToken);
-        var messages = rows.Select(row => PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
-        if (!messages.Select(m => m.InboxKey).SequenceEqual(expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
+        var messages = rows.Select(row => row.InboxScope == -1 ? DecodeRootSelf(row, issue) : PostgresRootAdmission.DecodeDirect(row, reference)).ToArray();
+        if (!SameInputs(messages, expected) || messages.Any(m => m.TargetCreation != actor.Creation) ||
             expectedEnvelopes is not null && !messages.SequenceEqual(expectedEnvelopes)) return false;
 
-        var ids = expected.Select(key => key.Id).ToArray();
+        var consumed = expected.Where(k => k.Scope == -1).Select(k => k.Id).ToArray();
+        if (consumed.Length > 0 && await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM "Messages" WHERE "InboxScope" = -1 AND "Id" = ANY({consumed}) AND "Kind" = {RootSelfWire}
+                 AND "Target" = {actor.Id} AND "Partition" = {home} AND NOT "Done" AND "EventMatch" IS NULL AND "KeepUntil" IS NULL
+            """, cancellationToken) != consumed.Length) return false;
+        var ids = expected.Where(k => k.Scope == InboxKey.FoundationOccurrenceScope).Select(k => k.Id).ToArray();
+        if (ids.Length == 0) return true;
         var settled = await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE "Messages" SET "Done" = true, "Payload" = NULL, "Start" = NULL
             WHERE "InboxScope" = {InboxKey.FoundationOccurrenceScope} AND "Id" = ANY({ids}) AND "EventMatch" IS NULL
                 AND NOT "Done" AND "Target" = {actor.Id} AND "Partition" = {home} AND "KeepUntil" IS NOT NULL
             """, cancellationToken);
-        return settled == expected.Count;
+        return settled == ids.Length;
     }
 
     internal ValueTask<Committed> CommitRootTurnAsync(string tenant, string reference, RootImage current,
@@ -74,7 +80,7 @@ public sealed partial class EfStore
 
     private PreparedRoot PrepareRootTurn(string tenant, string reference, RootImage current,
         IReadOnlyList<Message> inputs, PartitionFence fence, InstanceStatus status, string? state, int stateVersion,
-        string typeData, IReadOnlyDictionary<string, string> labels, string journal)
+        string typeData, IReadOnlyDictionary<string, string> labels, string? journal)
     {
         if (!postgres || Engine is not null) throw new NotSupportedException("Qualified root turns require PostgreSQL.");
         if (current is not { Revision: >= 1, Status: InstanceStatus.Running, Actor.Creation: 1 } ||
@@ -82,7 +88,7 @@ public sealed partial class EfStore
             status is not (InstanceStatus.Running or InstanceStatus.Finished))
             throw new ArgumentException("Invalid running root or target disposition.", nameof(current));
         var accepted = inputs.ToArray();
-        if (accepted.Length == 0 || accepted.Any(message => message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope ||
+        if (accepted.Length == 0 || accepted.Any(message => (message.InboxKey.Scope != InboxKey.FoundationOccurrenceScope && (RootSelfIssuer is null || !FoundationSelfSend.IsImmediate(message, current.Actor.Id, current.Actor.Creation))) ||
             message.InboxKey.Match is not null || message.Target.Id != current.Actor.Id || message.TargetCreation != current.Actor.Creation) ||
             accepted.Select(message => message.InboxKey).Distinct().Count() != accepted.Length)
             throw new ArgumentException("The turn requires distinct ordinary inputs for its exact actor creation.", nameof(inputs));
@@ -90,7 +96,7 @@ public sealed partial class EfStore
         var image = new InstanceRow(current.Actor.Id, "", "", status, "null", checked(current.Revision + 1), null)
             .WithFoundationState(stored);
         var root = new RootTurnCheckpoint(tenant, reference, current, status, PublicRootState + StoredState.Encode(image),
-            header, stateVersion, accepted);
+            header, stateVersion, accepted, RootSelfIssuer);
         var turn = new TurnCommit(image.Id, null, null, [], [], [], [], [], journal);
         return new(turn, root);
     }
