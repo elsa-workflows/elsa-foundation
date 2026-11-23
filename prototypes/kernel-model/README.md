@@ -454,6 +454,20 @@ the partition at a higher epoch, applies that exact continuation once, and runs 
 A changed-body approval replay preserves the original result. Two actor revisions are silent. The partition journal
 keeps consecutive positions. The check also runs with eight virtual partitions.
 
+For a Balanced StateMachine handover, point `KERNEL_PREVIEW_POSTGRES` at another fresh database and run:
+
+```sh
+dotnet models/Native.Run/bin/Release/net10.0/Kernel.Native.Run.dll pg-cluster-statechart 1024
+```
+
+A Native order chart starts on the peer. A declined payment commits the shipment-release wait. The driver
+admits the shipment acknowledgement while the peer is paused after that commit, then stops the peer process
+while holding the target fence row. The original shipment acknowledgement and the waiting checkpoint remain
+stored. At a higher epoch the surviving RuntimeNode applies that input once and enters the stock-release wait.
+The public journal shows the evaluated, exited, transitioned, entered and handled steps at one revision.
+A changed-payload replay leaves the checkpoint and journal unchanged. The check also runs with eight virtual
+partitions.
+
 For the grouped storage operations alone, run `pg-root-self-set owned <checked|in-batch>` with the same
 runner on a fresh database. This uses two homes with different epochs. Two checkpoints and their private
 continuations commit together. A stale sibling's fence rolls back a mixed consume, and the current set advances

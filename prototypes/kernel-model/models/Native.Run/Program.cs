@@ -54,6 +54,9 @@ if (args is ["sqlite-plan-projection", ..])
         """);
     return 2;
 }
+if (args is [var chartMode and ("pg-cluster-statechart" or "pg-cluster-statechart-peer"), var chartSize] &&
+    int.TryParse(chartSize, out var chartPartitions))
+    return await PostgresClusterChecks.RunAsync(chartPartitions, chartMode == "pg-cluster-statechart-peer", statechart: true);
 if (args is [var flowClusterMode and ("pg-cluster-flowchart" or "pg-cluster-flowchart-peer"), var flowSize] && int.TryParse(flowSize, out var flowPartitions))
     return await PostgresClusterChecks.RunAsync(flowPartitions, flowClusterMode == "pg-cluster-flowchart-peer", flowchart: true);
 if (args is [var clusterMode and ("pg-cluster-roots" or "pg-cluster-peer" or "pg-cluster-crash"), var size] && int.TryParse(size, out var clusterPartitions))
