@@ -122,17 +122,20 @@ internal static class PostgresRootSelfChecks
             "qualified owner consumes the exact input with the next silent checkpoint");
 
         if (!timers) return 0;
-        var nowDue = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Single();
-        Check(nowDue.Message == zero && nowDue.Message.Due == 0 && zero.Id != FoundationSelfSend.Issue(
+        var ready = (await cold.PollAsync(0, lease.Epoch, TimeSpan.Zero, 2, stop)).Messages.Select(m => m.Message).ToArray();
+        Check(ready.SequenceEqual([zero, sibling]) && ready[0].Due == 0 && zero.Id != FoundationSelfSend.Issue(
             scoped.RootSelfIssuer!.Handle, CreationProtocol.Origin(actor, 1), 2, 1, null),
             "cold poll distinguishes the explicit zero deadline from an immediate send");
         row = (await cold.LoadAsync([actor], stop)).Single();
         TurnCommit Advance(Message input) => new(actor, row with { Revision = row.Revision + 1 }, row.Revision, [input.InboxKey], [], [], [], [], null);
         Check((await cold.CommitAsync(Batch(Advance(zero)), stop)).Landed, "the zero-deadline timer can settle");
         row = (await cold.LoadAsync([actor], stop)).Single();
+        var settleSibling = new TurnCommit(actor, row with { Revision = 5 }, 4, [], [sibling.InboxKey], [], [], [], null);
+        Check((await cold.CommitAsync(Batch(settleSibling), stop)).Landed, "the direct sibling settles before the future timer");
+        row = (await cold.LoadAsync([actor], stop)).Single();
         Check(!(await cold.CommitAsync(Batch(Advance(future)), stop)).Landed, "the fenced settlement refuses the future timer");
         await using (var db = Open())
-            Check((await cold.LoadAsync([actor], stop)).Single().Revision == 4 &&
+            Check((await cold.LoadAsync([actor], stop)).Single().Revision == 5 &&
                 await db.Messages.CountAsync(m => m.Target == actor && !m.Done && m.InboxScope == EfStore.RootSelfScope &&
                     m.Id == future.InboxKey.Id && m.Due == long.MaxValue, stop) == 1,
                 "the pending future timer and checkpoint survive the early settlement attempt");
