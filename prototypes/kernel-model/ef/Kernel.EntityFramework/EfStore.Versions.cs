@@ -22,7 +22,7 @@ internal sealed class StoreVersionEntity
 
 public sealed partial class EfStore
 {
-    private static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
+    internal static async Task RequireStoreVersionsAsync(KernelDb db, CancellationToken cancellationToken)
     {
         StoreVersionEntity? stored;
         try
