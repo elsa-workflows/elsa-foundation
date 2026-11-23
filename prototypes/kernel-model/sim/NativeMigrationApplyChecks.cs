@@ -20,6 +20,58 @@ internal static class NativeMigrationApplyChecks
                 check(ok, $"{mode}, {(loseAfterLanding ? "after landing" : "before landing")}: {label}"));
         await VerifyVersionHoldAsync(check);
         await VerifyHeaderLimitAsync(check);
+        await VerifyQueuedJobTimeoutAsync(check);
+    }
+
+    private static async Task VerifyQueuedJobTimeoutAsync(Action<bool, string> check)
+    {
+        var store = new InMemoryStore(1, () => 1_701_800_000_000);
+        var scope = new Contract.BoundScope("acme");
+        Contract.IIngress edge = new InMemoryIngress(store, new Requests("queued-job-migration"), "queued-job-migration",
+            (_, kind) => kind == Contract.Kinds.Migrate);
+        Contract.IActorReads reads = new ActorList(store, 32);
+        var runtime = new PublicRuntime(edge, reads);
+        var registry = new WorkflowRegistry()
+            .Add(DefinitionWithJob("source", TimeSpan.FromSeconds(5)))
+            .Add(DefinitionWithJob("changed-timeout", TimeSpan.FromSeconds(6)))
+            .Add(DefinitionWithJob("same-timeout", TimeSpan.FromSeconds(5)));
+        var adapter = new ActorAdapter(store, new PublicWorkflow([new NativeExecutionModel(registry), new PlanSink()]));
+        var worker = new Worker("queued-job-migration", 0, store, adapter, new WorkerOptions { Monotonic = () => 0, PassTurnBudget = 1 });
+        await using var owner = (await new DurableHost([worker]).ActivateAsync(0))!;
+        var changedPlan = (await runtime.StartAsync(scope, "changed-plan", new(PlanSink.Key, "changed-plan"))).Actor!.Value;
+        var samePlan = (await runtime.StartAsync(scope, "same-plan", new(PlanSink.Key, "same-plan"))).Actor!.Value;
+        await PumpAsync(owner);
+
+        var actor = (await runtime.StartAsync(scope, "start-durable-job", NativeExecutionModel.Start("source", Modes.Durable))).Actor!.Value;
+        // These commands are admitted after the creator and before its first turn sends the Durable continuation.
+        var changed = await MigrateAsync("changed-timeout", changedPlan);
+        var same = await MigrateAsync("same-timeout", samePlan);
+        check(changed.Outcome == Contract.AdmissionOutcome.Accepted && same.Outcome == Contract.AdmissionOutcome.Accepted,
+            "both operator commands target the exact admitted Durable root before its background continuation");
+        await PumpAsync(owner, until: () => Row(actor) is not null);
+        var before = Row(actor)!;
+        var state = Json.Read<NativeState>(before.State);
+        check(state.Agenda is [{ Node: "background", Resume: false, Frame: var queued }] &&
+            !state.Frames.ContainsKey(queued) && state.Waits.Count == 0 && before.Jobs is null &&
+            !store.Messages.Values.Any(message => message.Message.Target.Id == before.Id && message.Message.Kind == Kinds.Job),
+            "the committed Durable agenda names the background node before a job wait or physical ticket exists");
+
+        await PumpAsync(owner);
+        check(Answers(changedPlan) is [{ Actor: var refused, Result: { Outcome: MigrationPlanOutcome.Refused, Finding: "AuthoredNode" } }] &&
+            refused == actor,
+            "changing the queued background node's timeout returns one AuthoredNode refusal for the exact root");
+        check(Answers(samePlan) is [{ Actor: var migrated, Result.Outcome: MigrationPlanOutcome.Migrated }] &&
+            migrated == actor && (await reads.GetAsync(scope, actor))?.Header.Labels.GetValueOrDefault("definition") == "same-timeout",
+            "keeping the queued background node's timeout allows the exact root to adopt the replacement definition");
+
+        InstanceRow? Row(Contract.ActorRef reference) => store.ReadFoundationActor(scope.Tenant, reference.Id).Actor?.Row;
+        PlanAnswer[] Answers(Contract.ActorRef plan) => Json.Read<PlanAnswer[]>(Row(plan)!.State);
+        ValueTask<Contract.Admission> MigrateAsync(string destination, Contract.ActorRef plan) =>
+            edge.SendAsync(scope, new Contract.Target.Ref(actor), destination, Contract.Kinds.Migrate,
+                Json.Write(new MigrationRequest("source", destination, plan)));
+
+        static Workflow DefinitionWithJob(string id, TimeSpan timeout) => Wf.Workflow(id, Wf.Sequence("sequence",
+            new Node("background", typeof(CallService)) { JobTimeout = timeout }));
     }
 
     private static async Task VerifyVersionHoldAsync(Action<bool, string> check)

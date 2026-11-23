@@ -85,6 +85,8 @@ if (args is ["pg-write-budget", var budgetWriter and ("owned" or "ef"), var budg
         budgetFence == "in-batch", budgetOptions.Length != 0);
 if (args is ["pg-timed-job-worker", var jobFence and ("checked" or "in-batch")])
     return await PostgresTimedJobChecks.RunAsync(jobFence == "in-batch");
+if (args is ["pg-root-timed-job-issuance", var timedFence and ("checked" or "in-batch"), .. var timedPhase])
+    return await PostgresRootTimedJobIssuance.RunAsync(timedFence, timedPhase);
 if (args is [var runtimeCluster and ("pg-runtime-cluster" or "pg-runtime-cluster-member"), .. var clusterOptions])
 {
     var wake = clusterOptions.LastOrDefault() == "wake";

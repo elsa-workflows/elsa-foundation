@@ -63,7 +63,11 @@ internal sealed class LegacyTurn : INativeTurn
     public void CancelChild(WaitEntry child) =>
         _turn.Send(new InstanceRef(child.Key), NativeKinds.Cancel, options: new SendOptions(TargetCreation: child.Creation > 0 ? child.Creation : null));
 
-    public void StartJob(string key, BackgroundArgs arguments) => _turn.StartJob(key, arguments);
+    public void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout)
+    {
+        if (timeout is not null) throw new NotSupportedException("Native job timeouts require the Actor Foundation.");
+        _turn.StartJob(key, arguments);
+    }
     public void CancelJob(string key) => _turn.CancelJob(key);
     public void Subscribe(string key, string wait) => _turn.Subscribe(key, wait);
     public void Unsubscribe(string key, string wait) => _turn.Unsubscribe(key, wait);

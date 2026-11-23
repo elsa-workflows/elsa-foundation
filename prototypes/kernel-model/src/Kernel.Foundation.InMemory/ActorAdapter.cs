@@ -15,6 +15,7 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     private readonly IRootDispatchHeaders? roots;
     private readonly Durable.FoundationSelfIssuer? issueSelf;
     private readonly Func<string, string>? rootJobHandle;
+    private readonly bool rootTimedJobIssuance;
     private Durable.InMemoryStore store => inMemory ?? throw new NotSupportedException("This provider does not implement this foundation operation.");
 
     internal ActorAdapter(Durable.InMemoryStore store, Contract.IActorType actor,
@@ -27,8 +28,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
     }
 
     internal ActorAdapter(IRootDispatchHeaders roots, Contract.IActorType actor, Durable.FoundationSelfIssuer? issueSelf = null,
-        Func<string, string>? rootJobHandle = null) =>
-        (this.roots, this.actor, this.issueSelf, this.rootJobHandle) = (roots, actor, issueSelf, rootJobHandle);
+        Func<string, string>? rootJobHandle = null, bool rootTimedJobIssuance = false) =>
+        (this.roots, this.actor, this.issueSelf, this.rootJobHandle, this.rootTimedJobIssuance) = (roots, actor, issueSelf, rootJobHandle, rootTimedJobIssuance);
 
     private const int TerminalEnvelopeLimit = 16_457_728;
     private const int TerminalHeaderReserve = 16_384;
@@ -327,8 +328,8 @@ internal sealed partial class ActorAdapter : Durable.IActorType
         var ambient = local is { } host && input.Taken.Count - input.From == 1 && delivery.Message.ReplyTo is { } address
             ? host.Requests.TakeLocalAmbient(address, host.Node, header.Tenant, input.Services.Now, AmbientDelivery(delivery.Message))
             : null;
-        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle);
-        input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray());
+        var turn = new ActorTurn(inMemory, input, header, ambient, issueSelf, rootJobHandle, rootTimedJobIssuance);
+        input.Started(input.Taken.Skip(input.From).Select(delivery => delivery.Message).ToArray(), turn.Now);
         await actor.TurnAsync(turn, CancellationToken.None);
         var thenDelete = delivery.Message.Operator?.DeleteTarget is not null;
         if (thenDelete) turn.EnsureTerminated();
