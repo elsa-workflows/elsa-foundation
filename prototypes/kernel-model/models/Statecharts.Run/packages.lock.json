@@ -71,7 +71,7 @@
       "kernel.statecharts.native": {
         "type": "Project",
         "dependencies": {
-          "Kernel.Native.Legacy": "[1.0.0, )",
+          "Kernel.Native": "[1.0.0, )",
           "Kernel.Statecharts": "[1.0.0, )"
         }
       },
