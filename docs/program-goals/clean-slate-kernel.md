@@ -312,6 +312,11 @@ must refuse before it processes any row, and the upgraded node keeps running. Th
 already holds partitions, and run the migration that raises a family version: the migration must refuse while that
 owner's node row is live. Record the floor this produces.
 
+The [PostgreSQL prototype rehearsal](../../prototypes/kernel-model/README.md#postgresql-different-version-rehearsal)
+uses separate runtime builds and checks the physical rows after each refusal. Its tested rollback floor
+is `6f38d98648` for the ordinary relational format (3, 2, 1). Shipped provider profiles and the published
+release floor remain K12 qualification items.
+
 ## Gate 2 review: counterexamples and answers
 
 The [independent architecture review](https://github.com/elsa-workflows/elsa-foundation/issues/4229#issuecomment-6949612272)
