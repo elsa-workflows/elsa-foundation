@@ -26,7 +26,7 @@ internal interface INativeTurn
     WaitEntry StartChild(string frame, string workflow, string mode, JsonObject? input);
     Contract.ActorRef StartDetached(string workflow, string mode, JsonObject? input);
     void CancelChild(WaitEntry child);
-    void StartJob(string key, BackgroundArgs arguments);
+    void StartJob(string key, BackgroundArgs arguments, TimeSpan? timeout);
     void CancelJob(string key);
     void Subscribe(string key, string wait);
     void Unsubscribe(string key, string wait);

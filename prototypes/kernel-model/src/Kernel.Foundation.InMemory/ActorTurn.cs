@@ -13,6 +13,7 @@ internal sealed partial class ActorAdapter
         private readonly Durable.InMemoryStore? _inMemory;
         private readonly Durable.FoundationSelfIssuer? _issueSelf;
         private readonly Func<string, string>? _rootJobHandle;
+        private readonly bool _rootTimedJobIssuance;
         private Durable.InMemoryStore Store => _inMemory ?? throw new NotSupportedException("The ordinary-root provider does not implement this authored effect.");
         private readonly Durable.TurnInput _input;
         private readonly Durable.DurableTurn _turn;
@@ -29,12 +30,14 @@ internal sealed partial class ActorAdapter
         private bool _migrated;
 
         public ActorTurn(Durable.InMemoryStore? store, Durable.TurnInput input, Contract.ActorHeader header, object? ambient,
-            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle)
+            Durable.FoundationSelfIssuer? issueSelf, Func<string, string>? rootJobHandle, bool rootTimedJobIssuance)
         {
             _inMemory = store;
             _issueSelf = issueSelf;
             _rootJobHandle = rootJobHandle;
+            _rootTimedJobIssuance = rootTimedJobIssuance;
             _input = input;
+            Now = input.Services.Now;
             _turn = new(input, foundation: true);
             Header = header;
             Ambient = ambient;
@@ -56,7 +59,7 @@ internal sealed partial class ActorAdapter
         public Contract.ActorStartSettings? StartSettings => _input.Spec is { } start
             ? new(start.Ephemeral, (Contract.History)start.History)
             : null;
-        public long Now => _input.Services.Now;
+        public long Now { get; }
         public IReadOnlyList<Contract.Message> Inbox { get; }
         public string? State { get; set; }
         public object? Ambient { get; }
@@ -115,7 +118,7 @@ internal sealed partial class ActorAdapter
         public void StartJob(string key, string? arguments = null, TimeSpan? timeout = null)
         {
             HeaderLimits.RequireName(key, nameof(key), preservesCodeUnits: true);
-            if (_rootJobHandle is not null && timeout is not null)
+            if (_rootJobHandle is not null && timeout is not null && !_rootTimedJobIssuance)
                 throw new NotSupportedException("This PostgreSQL job profile supports untimed jobs.");
             ArgumentOutOfRangeException.ThrowIfLessThan(timeout ?? TimeSpan.Zero, TimeSpan.Zero, nameof(timeout));
             long? deadline = timeout is { } period ? checked(Now + (long)period.TotalMilliseconds) : null;

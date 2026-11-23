@@ -121,8 +121,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
     private sealed class RootTimerDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootOperatorDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     private sealed class RootJobDb(DbContextOptions<KernelDb> options) : KernelDb(options);
+    private sealed class RootTimedJobIssuanceDb(DbContextOptions<KernelDb> options) : KernelDb(options);
     internal StoreFormat RequiredFormat => this switch
     {
+        RootTimedJobIssuanceDb => StoreFormat.RootTimedJobIssuance,
         RootJobDb => StoreFormat.RootJobs,
         RootOperatorDb => StoreFormat.RootOperators,
         RootTimerDb => StoreFormat.RootTimers,
@@ -130,8 +132,10 @@ public class KernelDb(DbContextOptions<KernelDb> options) : DbContext(options)
         _ => StoreFormat.Current
     };
     internal bool UsesRootSelfProtocol => this is RootSelfDb or RootTimerDb;
-    internal bool UsesRootJobProtocol => this is RootJobDb;
+    internal bool UsesRootJobProtocol => this is RootJobDb or RootTimedJobIssuanceDb;
+    internal bool UsesRootTimedJobIssuance => this is RootTimedJobIssuanceDb;
     internal static KernelDb ForPostgresRootJobs(DbContextOptions<KernelDb> options) => new RootJobDb(options);
+    internal static KernelDb ForPostgresRootTimedJobIssuance(DbContextOptions<KernelDb> options) => new RootTimedJobIssuanceDb(options);
     internal bool UsesRootOperatorProtocol => this is RootOperatorDb;
     internal static KernelDb ForPostgresRootOperators(DbContextOptions<KernelDb> options) => new RootOperatorDb(options);
     internal static KernelDb ForPostgresRootTimers(DbContextOptions<KernelDb> options) => new RootTimerDb(options);
@@ -448,9 +452,9 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
     {
         if (postgres && Engine is null && (batch.Seen.Concat(batch.Trial).Concat(batch.ClearJobTrials)
             .Concat(batch.Turns.SelectMany(turn => turn.Consumed.Concat(turn.Done).Concat(turn.Held ?? [])))
-            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope or RootJobScope)) ||
+            .Any(key => key.Match is null && (key.Scope is InboxKey.FoundationOccurrenceScope or RootSelfScope or RootJobScope or RootTimedJobScope)) ||
             batch.Turns.Any(turn => turn.Sent.Any(message => message.InboxKey is { Match: null } key &&
-                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && (key.Scope is RootSelfScope or RootJobScope))))))
+                (key.Scope == InboxKey.FoundationOccurrenceScope || root is null && (key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))))))
             throw new StoreException(Failure.Definite, "Qualified PostgreSQL inputs require their root checkpoint writer.");
         if (root is null && batch.Turns.Any(turn => turn.FoundationRootJobCompletion is not null))
             throw new StoreException(Failure.Definite, "Generated-root job completions require the qualified writer.");
@@ -785,7 +789,7 @@ public sealed partial class EfStore(Func<KernelDb> create, bool postgres, bool? 
             }
             if (key.Match is null &&
                 (PostgresRootAdmission.IsStoredCreator(r.Start) || PostgresRootAdmission.IsStoredDirect(r.Start) ||
-                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope is RootSelfScope or RootJobScope))
+                    PostgresRootAdmission.IsStoredOperator(r.Start) || key.Scope is RootSelfScope or RootJobScope or RootTimedJobScope))
                 throw new StoreException(Failure.Definite, "PostgreSQL public inputs require a qualified foundation owner.");
             return new Stored(new Message(key.Id, new InstanceRef(r.Target!), r.Kind!, r.Payload, r.Sender, r.Start is null ? null : Json.Read<StartSpec>(r.Start), r.Due == 0 ? null : r.Due, r.KeepUntil, r.ReplyTo) { JobGeneration = r.JobGeneration!.Value }.WithInboxScope(key.Scope, key.Match),
                 r.Seq!.Value, r.Seen!.Value, r.Attempts!.Value, r.Trial!.Value);
