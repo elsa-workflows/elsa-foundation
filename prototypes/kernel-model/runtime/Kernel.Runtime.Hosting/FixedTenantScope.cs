@@ -4,6 +4,14 @@ namespace Kernel.Runtime.Hosting;
 
 internal static class FixedTenantScope
 {
-    // The standalone host supplies its configured tenant before calling ingress.
-    internal static BoundScope Bind(string tenant) => new(tenant);
+    private static BoundScope? _scope;
+
+    internal static BoundScope Bind(string tenant)
+    {
+        var configured = new BoundScope(tenant);
+        var existing = Interlocked.CompareExchange(ref _scope, configured, null);
+        if (existing is null) return configured;
+        if (existing.Tenant == configured.Tenant) return existing;
+        throw new InvalidOperationException("The standalone host is already bound to its configured tenant.");
+    }
 }

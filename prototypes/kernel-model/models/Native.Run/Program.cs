@@ -15,6 +15,7 @@ WriteLine.Out = null;
 if (args is ["pg-root-history", var historyWriter and ("owned" or "ef"), var historyFence and ("checked" or "in-batch")])
     return await PostgresRootHistoryChecks.RunAsync(historyWriter == "owned", historyFence == "in-batch");
 if (args is ["pg-core-preview", "birth"]) return await PostgresPublicPreview.RunAsync("birth");
+if (args is ["pg-core-preview", "tenant-probe", var probeReference]) return await PostgresPublicPreview.RunAsync("tenant-probe", probeReference);
 if (args is ["pg-core-preview", var replayPhase and ("restart" or "terminal"), var actorReference, var journalBookmark])
     return await PostgresPublicPreview.RunAsync(replayPhase, actorReference, journalBookmark);
 if (args is ["pg-root-worker", "birth"]) return await PostgresRootWorkerChecks.RunAsync("birth", null);
